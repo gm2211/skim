@@ -1,0 +1,123 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Feed {
+    pub id: String,
+    pub title: String,
+    pub url: String,
+    pub site_url: Option<String>,
+    pub description: Option<String>,
+    pub icon_url: Option<String>,
+    pub feedly_id: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub last_fetched_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Article {
+    pub id: String,
+    pub feed_id: String,
+    pub title: String,
+    pub url: Option<String>,
+    pub author: Option<String>,
+    pub content_html: Option<String>,
+    pub content_text: Option<String>,
+    pub published_at: Option<i64>,
+    pub fetched_at: i64,
+    pub is_read: bool,
+    pub is_starred: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArticleWithFeed {
+    #[serde(flatten)]
+    pub article: Article,
+    pub feed_title: String,
+    pub feed_icon_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArticleSummary {
+    pub article_id: String,
+    pub bullet_summary: Option<String>,
+    pub full_summary: Option<String>,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Theme {
+    pub id: String,
+    pub label: String,
+    pub summary: Option<String>,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub article_count: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThemeWithArticles {
+    #[serde(flatten)]
+    pub theme: Theme,
+    pub articles: Vec<ArticleWithFeed>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArticleFilter {
+    pub feed_id: Option<String>,
+    pub theme_id: Option<String>,
+    pub is_read: Option<bool>,
+    pub is_starred: Option<bool>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppSettings {
+    pub ai: AiSettings,
+    pub appearance: AppearanceSettings,
+    pub sync: SyncSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiSettings {
+    pub provider: String,
+    pub api_key: Option<String>,
+    pub model: Option<String>,
+    pub endpoint: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppearanceSettings {
+    pub theme: String,
+    pub font_size: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncSettings {
+    pub refresh_interval_minutes: i32,
+    pub max_articles_per_feed: i32,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            ai: AiSettings {
+                provider: "none".to_string(),
+                api_key: None,
+                model: None,
+                endpoint: None,
+            },
+            appearance: AppearanceSettings {
+                theme: "dark".to_string(),
+                font_size: 14,
+            },
+            sync: SyncSettings {
+                refresh_interval_minutes: 30,
+                max_articles_per_feed: 200,
+            },
+        }
+    }
+}

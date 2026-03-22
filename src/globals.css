@@ -127,37 +127,44 @@ button, a, input, select, textarea, [role="button"] {
   margin-bottom: 0.5em;
 }
 
-/* Card flip animation */
-.card-flip-container {
+/* Triangular prism rotation — 3 faces at 120° on Y-axis (horizontal flip) */
+.prism-container {
   flex: 1 1 0%;
   min-height: 0;
   position: relative;
   overflow: hidden;
-  perspective: 2000px;
+  perspective: 4000px;
 }
 
-.card-flip-inner {
+.prism-inner {
   position: absolute;
   inset: 0;
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.card-flip-inner.flipped {
-  transform: rotateY(180deg);
-}
+.prism-inner[data-face="0"] { transform: rotateY(0deg); }
+.prism-inner[data-face="1"] { transform: rotateY(-120deg); }
+.prism-inner[data-face="2"] { transform: rotateY(-240deg); }
 
-.card-flip-front,
-.card-flip-back {
+.prism-face {
   position: absolute;
   inset: 0;
+  overflow-y: auto;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  overflow-y: auto;
 }
 
-.card-flip-back {
-  transform: rotateY(180deg);
+.prism-face-0 {
+  transform: rotateY(0deg) translateZ(var(--prism-z));
+}
+
+.prism-face-1 {
+  transform: rotateY(120deg) translateZ(var(--prism-z));
+}
+
+.prism-face-2 {
+  transform: rotateY(240deg) translateZ(var(--prism-z));
 }
 
 /* Full article content — render like the actual webpage */

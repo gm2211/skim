@@ -29,12 +29,10 @@ export const markAllRead = (feedId?: string | null) =>
   invoke<void>("mark_all_read", { feedId: feedId ?? null });
 export const toggleStar = (articleId: string) =>
   invoke<boolean>("toggle_star", { articleId });
+export const toggleRead = (articleId: string) =>
+  invoke<boolean>("toggle_read", { articleId });
 export const fetchFullArticle = (url: string) =>
-  invoke<{ html: string }>("fetch_full_article", { url });
-export const openArticleWebview = (url: string, title: string) =>
-  invoke<void>("open_article_webview", { url, title });
-export const closeArticleWebview = () =>
-  invoke<void>("close_article_webview");
+  invoke<{ html: string; raw_html: string }>("fetch_full_article", { url });
 
 // AI
 export const summarizeArticle = (articleId: string) =>

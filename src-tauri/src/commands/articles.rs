@@ -42,9 +42,19 @@ pub async fn mark_all_read(
     queries::mark_all_read(&conn, feed_id.as_deref()).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub async fn toggle_read(
+    db: State<'_, Database>,
+    article_id: String,
+) -> Result<bool, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::toggle_read(&conn, &article_id).map_err(|e| e.to_string())
+}
+
 #[derive(Debug, Serialize)]
 pub struct FullArticleContent {
     pub html: String,
+    pub raw_html: String,
 }
 
 #[tauri::command]
@@ -65,6 +75,8 @@ pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, Strin
         .text()
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    let raw_html = html.clone();
 
     // Extract body content — strip everything outside <body> if present
     let body_html = if let Some(start) = html.find("<body") {
@@ -131,7 +143,7 @@ pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, Strin
         }
     }
 
-    Ok(FullArticleContent { html: clean })
+    Ok(FullArticleContent { html: clean, raw_html })
 }
 
 #[tauri::command]

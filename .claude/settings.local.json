@@ -5,7 +5,8 @@
       "WebFetch(domain:crates.io)",
       "Bash(pkill -f \"tauri dev\")",
       "Bash(pkill -f \"cargo build\")",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

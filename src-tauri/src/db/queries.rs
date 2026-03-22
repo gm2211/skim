@@ -203,6 +203,20 @@ pub fn mark_articles_read(
     Ok(())
 }
 
+pub fn toggle_read(conn: &Connection, article_id: &str) -> Result<bool, rusqlite::Error> {
+    let is_read: bool = conn.query_row(
+        "SELECT is_read FROM articles WHERE id = ?1",
+        params![article_id],
+        |row| row.get(0),
+    )?;
+    let new_state = !is_read;
+    conn.execute(
+        "UPDATE articles SET is_read = ?1 WHERE id = ?2",
+        params![new_state, article_id],
+    )?;
+    Ok(new_state)
+}
+
 pub fn mark_all_read(conn: &Connection, feed_id: Option<&str>) -> Result<(), rusqlite::Error> {
     match feed_id {
         Some(fid) => {

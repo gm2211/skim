@@ -1,8 +1,10 @@
-import { useEffect, useState, useCallback } from "react";
-import { useArticle, useMarkRead, useToggleStar } from "../../hooks/useArticles";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useArticle, useMarkRead, useToggleStar, useToggleRead } from "../../hooks/useArticles";
 import { useSummarizeArticle } from "../../hooks/useAi";
 import { useUiStore } from "../../stores/uiStore";
 import { fetchFullArticle } from "../../services/commands";
+
+type ViewMode = "rss" | "reader" | "web";
 
 function formatDate(timestamp: number | null): string {
   if (!timestamp) return "";
@@ -101,18 +103,34 @@ export function ArticleDetail() {
   const { data: article } = useArticle(selectedArticleId);
   const markRead = useMarkRead();
   const toggleStar = useToggleStar();
+  const toggleRead = useToggleRead();
   const summarize = useSummarizeArticle();
   const [fullContent, setFullContent] = useState<string | null>(null);
+  const [rawHtml, setRawHtml] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
-  const [flipped, setFlipped] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("rss");
+  const prismRef = useRef<HTMLDivElement>(null);
+  const [prismZ, setPrismZ] = useState(200);
 
   // Reset state when article changes
   useEffect(() => {
     setFullContent(null);
+    setRawHtml(null);
     setFullError(null);
-    setFlipped(false);
+    setViewMode("rss");
   }, [selectedArticleId]);
+
+  // Calculate prism depth from container width (Y-axis rotation)
+  useEffect(() => {
+    if (!prismRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 600;
+      setPrismZ(w / (2 * Math.tan(Math.PI / 3)));
+    });
+    observer.observe(prismRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   // Mark as read when opened
   useEffect(() => {
@@ -121,24 +139,55 @@ export function ArticleDetail() {
     }
   }, [article?.id]);
 
-  const handleLoadFull = useCallback(async () => {
-    if (!article?.url) return;
-    if (fullContent) {
-      setFlipped(!flipped);
-      return;
-    }
+  const fetchFull = useCallback(async () => {
+    if (!article?.url || fullContent) return;
     setLoadingFull(true);
     setFullError(null);
     try {
       const result = await fetchFullArticle(article.url);
       setFullContent(stripFullArticleJunk(result.html));
-      setFlipped(true);
+      setRawHtml(result.raw_html);
     } catch (e) {
       setFullError(String(e));
     } finally {
       setLoadingFull(false);
     }
-  }, [article?.url, fullContent, flipped]);
+  }, [article?.url, fullContent]);
+
+  const handleReader = useCallback(async () => {
+    if (viewMode === "reader") {
+      setViewMode("rss");
+      return;
+    }
+    await fetchFull();
+    setViewMode("reader");
+  }, [viewMode, fetchFull]);
+
+  const handleWebView = useCallback(async () => {
+    if (viewMode === "web") {
+      setViewMode("rss");
+      return;
+    }
+    await fetchFull();
+    setViewMode("web");
+  }, [viewMode, fetchFull]);
+
+  // Arrow key navigation: right cycles rss→reader→web, left goes back
+  useEffect(() => {
+    if (!article?.url) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "ArrowRight") {
+        if (viewMode === "rss") handleReader();
+        else if (viewMode === "reader") handleWebView();
+      } else if (e.key === "ArrowLeft") {
+        if (viewMode === "web") handleReader();
+        else if (viewMode === "reader") setViewMode("rss");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [article?.url, viewMode, handleReader, handleWebView]);
 
   if (!article) {
     return (
@@ -155,6 +204,22 @@ export function ArticleDetail() {
     console.error("Failed to strip RSS junk:", e);
     rssHtml = article.content_html;
   }
+
+  const modeBtn = (mode: ViewMode, label: string, icon: JSX.Element) => (
+    <button
+      onClick={mode === "reader" ? handleReader : mode === "web" ? handleWebView : () => setViewMode("rss")}
+      disabled={loadingFull}
+      className={`flex items-center gap-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+        viewMode === mode
+          ? "border-accent/30 text-accent bg-accent/10"
+          : "border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20"
+      }`}
+      style={{ padding: "6px 12px", fontSize: 12 }}
+    >
+      {loadingFull && viewMode !== mode ? null : icon}
+      {label}
+    </button>
+  );
 
   return (
     <div className="flex-1 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
@@ -173,38 +238,32 @@ export function ArticleDetail() {
           </svg>
         </button>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {article.url && (
-            <button
-              onClick={handleLoadFull}
-              disabled={loadingFull}
-              className={`flex items-center gap-2 rounded-lg border transition-colors disabled:opacity-40 ${
-                flipped
-                  ? "border-accent/30 text-accent bg-accent/10"
-                  : "border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20"
-              }`}
-              style={{ padding: "6px 14px", fontSize: 13 }}
-              title={flipped ? "Show RSS preview" : "Load full article"}
-            >
-              {loadingFull ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                  <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8" />
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <>
+              {modeBtn("reader", "Reader",
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                   <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                 </svg>
               )}
-              {flipped ? "RSS View" : "Full Page"}
-            </button>
+              {modeBtn("web", "Web",
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="2" y1="12" x2="22" y2="12" />
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                </svg>
+              )}
+            </>
           )}
+
+          <div className="w-px h-5 bg-white/10" />
 
           <button
             onClick={() => summarize.mutate(article.id)}
             disabled={summarize.isPending}
             className="rounded-lg border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40"
-            style={{ padding: "6px 14px", fontSize: 13 }}
+            style={{ padding: "6px 12px", fontSize: 12 }}
           >
             {summarize.isPending ? "..." : "Summarize"}
           </button>
@@ -218,23 +277,25 @@ export function ArticleDetail() {
             }`}
             title={article.is_starred ? "Unstar" : "Star"}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill={article.is_starred ? "currentColor" : "none"}
-              stroke="currentColor"
-              strokeWidth="2"
-            >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill={article.is_starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
           </button>
 
+          <button
+            onClick={() => toggleRead.mutate(article.id)}
+            className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${
+              !article.is_read ? "text-accent" : "text-text-muted hover:text-text-primary"
+            }`}
+            title={article.is_read ? "Mark as unread" : "Mark as read"}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill={!article.is_read ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="5" />
+            </svg>
+          </button>
+
           {article.url && (
-            <a
-              href={article.url}
-              target="_blank"
-              rel="noopener noreferrer"
+            <a href={article.url} target="_blank" rel="noopener noreferrer"
               className="text-text-muted hover:text-text-primary p-2 rounded-lg hover:bg-white/10 transition-colors"
               title="Open in browser"
             >
@@ -252,11 +313,18 @@ export function ArticleDetail() {
         </div>
       )}
 
-      {/* Card flip area */}
-      <div className="card-flip-container">
-        <div className={`card-flip-inner ${flipped ? "flipped" : ""}`}>
-          {/* FRONT: RSS preview */}
-          <div className="card-flip-front">
+      {/* Triangular prism — 3 faces rotating on X-axis */}
+      <div
+        ref={prismRef}
+        className="prism-container"
+        style={{ "--prism-z": `${prismZ}px` } as React.CSSProperties}
+      >
+        <div
+          className="prism-inner"
+          data-face={viewMode === "rss" ? "0" : viewMode === "reader" ? "1" : "2"}
+        >
+          {/* Face 0: RSS preview */}
+          <div className="prism-face prism-face-0">
             <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 40px 80px" }}>
               <div style={{ marginBottom: 28 }}>
                 <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>
@@ -264,12 +332,7 @@ export function ArticleDetail() {
                 </h1>
                 <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
                   <span className="text-accent font-medium">{article.feed_title}</span>
-                  {article.author && (
-                    <>
-                      <span className="text-text-muted">·</span>
-                      <span className="text-text-secondary">{article.author}</span>
-                    </>
-                  )}
+                  {article.author && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{article.author}</span></>)}
                   <span className="text-text-muted">·</span>
                   <span className="text-text-muted">{formatDate(article.published_at)}</span>
                 </div>
@@ -300,49 +363,36 @@ export function ArticleDetail() {
               ) : (
                 <p className="text-text-muted" style={{ fontSize: 14 }}>No preview available.</p>
               )}
-
-              {article.url && (
-                <div style={{ marginTop: 32, textAlign: "center" }}>
-                  <div className="border-t border-white/5" style={{ marginBottom: 24 }} />
-                  <button
-                    onClick={handleLoadFull}
-                    disabled={loadingFull}
-                    className="text-accent hover:text-accent-hover transition-colors disabled:opacity-50 inline-flex items-center gap-2"
-                    style={{ fontSize: 15 }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                    </svg>
-                    Load full article
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
-          {/* BACK: Full article (reader mode) */}
-          <div className="card-flip-back">
+          {/* Face 1: Reader mode */}
+          <div className="prism-face prism-face-1">
             {fullContent && (
               <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 40px 80px" }}>
                 <div style={{ marginBottom: 28 }}>
-                  <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>
-                    {article.title}
-                  </h1>
+                  <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
                   <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
                     <span className="text-accent font-medium">{article.feed_title}</span>
-                    {article.author && (
-                      <>
-                        <span className="text-text-muted">·</span>
-                        <span className="text-text-secondary">{article.author}</span>
-                      </>
-                    )}
+                    {article.author && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{article.author}</span></>)}
                     <span className="text-text-muted">·</span>
                     <span className="text-text-muted">{formatDate(article.published_at)}</span>
                   </div>
                 </div>
                 <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
               </div>
+            )}
+          </div>
+
+          {/* Face 2: Web view */}
+          <div className="prism-face prism-face-2">
+            {rawHtml && (
+              <iframe
+                srcDoc={rawHtml}
+                sandbox="allow-same-origin"
+                style={{ width: "100%", height: "100%", border: "none", background: "white" }}
+                title="Article web view"
+              />
             )}
           </div>
         </div>

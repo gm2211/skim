@@ -39,6 +39,18 @@ export function useMarkAllRead() {
   });
 }
 
+export function useToggleRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: commands.toggleRead,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["article"] });
+      qc.invalidateQueries({ queryKey: ["feeds"] });
+    },
+  });
+}
+
 export function useToggleStar() {
   const qc = useQueryClient();
   return useMutation({

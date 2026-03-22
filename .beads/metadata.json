@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "skim",
+  "project_id": "8d0c10b6-a1b7-4a66-8bba-a5a3288d3186"
+}

@@ -2,9 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useArticle, useMarkRead, useToggleStar } from "../../hooks/useArticles";
 import { useSummarizeArticle } from "../../hooks/useAi";
 import { useUiStore } from "../../stores/uiStore";
-import { fetchFullArticle, openArticleWebview, closeArticleWebview } from "../../services/commands";
-
-type ViewMode = "rss" | "reader" | "web";
+import { fetchFullArticle } from "../../services/commands";
 
 function formatDate(timestamp: number | null): string {
   if (!timestamp) return "";
@@ -107,13 +105,13 @@ export function ArticleDetail() {
   const [fullContent, setFullContent] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("rss");
+  const [flipped, setFlipped] = useState(false);
 
   // Reset state when article changes
   useEffect(() => {
     setFullContent(null);
     setFullError(null);
-    setViewMode("rss");
+    setFlipped(false);
   }, [selectedArticleId]);
 
   // Mark as read when opened
@@ -123,53 +121,24 @@ export function ArticleDetail() {
     }
   }, [article?.id]);
 
-  const handleReaderMode = useCallback(async () => {
+  const handleLoadFull = useCallback(async () => {
     if (!article?.url) return;
-
-    // If we're in web mode, close the webview first
-    if (viewMode === "web") {
-      await closeArticleWebview().catch(() => {});
-    }
-
-    if (viewMode === "reader") {
-      setViewMode("rss");
-      return;
-    }
-
     if (fullContent) {
-      setViewMode("reader");
+      setFlipped(!flipped);
       return;
     }
-
     setLoadingFull(true);
     setFullError(null);
     try {
       const result = await fetchFullArticle(article.url);
       setFullContent(stripFullArticleJunk(result.html));
-      setViewMode("reader");
+      setFlipped(true);
     } catch (e) {
       setFullError(String(e));
     } finally {
       setLoadingFull(false);
     }
-  }, [article?.url, fullContent, viewMode]);
-
-  const handleWebView = useCallback(async () => {
-    if (!article?.url) return;
-
-    if (viewMode === "web") {
-      await closeArticleWebview().catch(() => {});
-      setViewMode("rss");
-      return;
-    }
-
-    try {
-      await openArticleWebview(article.url, article.title);
-      setViewMode("web");
-    } catch (e) {
-      setFullError(String(e));
-    }
-  }, [article?.url, article?.title, viewMode]);
+  }, [article?.url, fullContent, flipped]);
 
   if (!article) {
     return (
@@ -187,13 +156,6 @@ export function ArticleDetail() {
     rssHtml = article.content_html;
   }
 
-  const modeButtonClass = (mode: ViewMode) =>
-    `flex items-center gap-1.5 rounded-lg border transition-colors ${
-      viewMode === mode
-        ? "border-accent/30 text-accent bg-accent/10"
-        : "border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20"
-    }`;
-
   return (
     <div className="flex-1 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
       {/* Toolbar */}
@@ -202,10 +164,7 @@ export function ArticleDetail() {
         style={{ height: 52, padding: "0 24px" }}
       >
         <button
-          onClick={() => {
-            closeArticleWebview().catch(() => {});
-            setSelectedArticleId(null);
-          }}
+          onClick={() => setSelectedArticleId(null)}
           className="text-text-muted hover:text-text-primary p-2 rounded-lg hover:bg-white/10 transition-colors"
           title="Close"
         >
@@ -214,52 +173,38 @@ export function ArticleDetail() {
           </svg>
         </button>
 
-        <div className="flex items-center gap-2">
-          {/* View mode toggles */}
+        <div className="flex items-center gap-3">
           {article.url && (
-            <>
-              <button
-                onClick={handleReaderMode}
-                disabled={loadingFull}
-                className={modeButtonClass("reader")}
-                style={{ padding: "6px 12px", fontSize: 12 }}
-                title="Reader mode"
-              >
-                {loadingFull ? (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
-                    <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8" />
-                  </svg>
-                ) : (
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                  </svg>
-                )}
-                Reader
-              </button>
-              <button
-                onClick={handleWebView}
-                className={modeButtonClass("web")}
-                style={{ padding: "6px 12px", fontSize: 12 }}
-                title="Web view"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="2" y1="12" x2="22" y2="12" />
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            <button
+              onClick={handleLoadFull}
+              disabled={loadingFull}
+              className={`flex items-center gap-2 rounded-lg border transition-colors disabled:opacity-40 ${
+                flipped
+                  ? "border-accent/30 text-accent bg-accent/10"
+                  : "border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20"
+              }`}
+              style={{ padding: "6px 14px", fontSize: 13 }}
+              title={flipped ? "Show RSS preview" : "Load full article"}
+            >
+              {loadingFull ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+                  <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8" />
                 </svg>
-                Web
-              </button>
-            </>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                </svg>
+              )}
+              {flipped ? "RSS View" : "Full Page"}
+            </button>
           )}
-
-          <div className="w-px h-5 bg-white/10" />
 
           <button
             onClick={() => summarize.mutate(article.id)}
             disabled={summarize.isPending}
             className="rounded-lg border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40"
-            style={{ padding: "6px 12px", fontSize: 12 }}
+            style={{ padding: "6px 14px", fontSize: 13 }}
           >
             {summarize.isPending ? "..." : "Summarize"}
           </button>
@@ -307,100 +252,99 @@ export function ArticleDetail() {
         </div>
       )}
 
-      {/* Content */}
-      <div className="article-view-container">
-        <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 40px 80px" }}>
-          {/* Header */}
-          <div style={{ marginBottom: 28 }}>
-            <h1
-              className="text-text-primary"
-              style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}
-            >
-              {article.title}
-            </h1>
-            <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
-              <span className="text-accent font-medium">{article.feed_title}</span>
-              {article.author && (
-                <>
+      {/* Card flip area */}
+      <div className="card-flip-container">
+        <div className={`card-flip-inner ${flipped ? "flipped" : ""}`}>
+          {/* FRONT: RSS preview */}
+          <div className="card-flip-front">
+            <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 40px 80px" }}>
+              <div style={{ marginBottom: 28 }}>
+                <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>
+                  {article.title}
+                </h1>
+                <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
+                  <span className="text-accent font-medium">{article.feed_title}</span>
+                  {article.author && (
+                    <>
+                      <span className="text-text-muted">·</span>
+                      <span className="text-text-secondary">{article.author}</span>
+                    </>
+                  )}
                   <span className="text-text-muted">·</span>
-                  <span className="text-text-secondary">{article.author}</span>
-                </>
+                  <span className="text-text-muted">{formatDate(article.published_at)}</span>
+                </div>
+              </div>
+
+              {summarize.data && (
+                <div className="rounded-xl border border-white/10" style={{ padding: "20px", marginBottom: 28, background: "rgba(255,255,255,0.03)" }}>
+                  <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11, marginBottom: 10 }}>AI Summary</div>
+                  {summarize.data.bullet_summary && (
+                    <div className="text-text-primary whitespace-pre-wrap" style={{ fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>{summarize.data.bullet_summary}</div>
+                  )}
+                  {summarize.data.full_summary && (
+                    <div className="text-text-secondary leading-relaxed" style={{ fontSize: 14 }}>{summarize.data.full_summary}</div>
+                  )}
+                </div>
               )}
-              <span className="text-text-muted">·</span>
-              <span className="text-text-muted">{formatDate(article.published_at)}</span>
+
+              {summarize.isError && (
+                <div className="rounded-xl border border-danger/30 text-danger" style={{ padding: "12px 16px", marginBottom: 28, fontSize: 14, background: "rgba(248, 81, 73, 0.1)" }}>
+                  {String(summarize.error instanceof Error ? summarize.error.message : summarize.error)}
+                </div>
+              )}
+
+              {rssHtml ? (
+                <div className="article-content text-text-primary" dangerouslySetInnerHTML={{ __html: rssHtml }} />
+              ) : article.content_text ? (
+                <div className="article-content text-text-primary whitespace-pre-wrap">{article.content_text}</div>
+              ) : (
+                <p className="text-text-muted" style={{ fontSize: 14 }}>No preview available.</p>
+              )}
+
+              {article.url && (
+                <div style={{ marginTop: 32, textAlign: "center" }}>
+                  <div className="border-t border-white/5" style={{ marginBottom: 24 }} />
+                  <button
+                    onClick={handleLoadFull}
+                    disabled={loadingFull}
+                    className="text-accent hover:text-accent-hover transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+                    style={{ fontSize: 15 }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                    </svg>
+                    Load full article
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* AI Summary */}
-          {summarize.data && (
-            <div
-              className="rounded-xl border border-white/10"
-              style={{ padding: "20px", marginBottom: 28, background: "rgba(255,255,255,0.03)" }}
-            >
-              <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11, marginBottom: 10 }}>
-                AI Summary
+          {/* BACK: Full article (reader mode) */}
+          <div className="card-flip-back">
+            {fullContent && (
+              <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 40px 80px" }}>
+                <div style={{ marginBottom: 28 }}>
+                  <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>
+                    {article.title}
+                  </h1>
+                  <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
+                    <span className="text-accent font-medium">{article.feed_title}</span>
+                    {article.author && (
+                      <>
+                        <span className="text-text-muted">·</span>
+                        <span className="text-text-secondary">{article.author}</span>
+                      </>
+                    )}
+                    <span className="text-text-muted">·</span>
+                    <span className="text-text-muted">{formatDate(article.published_at)}</span>
+                  </div>
+                </div>
+                <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
               </div>
-              {summarize.data.bullet_summary && (
-                <div className="text-text-primary whitespace-pre-wrap" style={{ fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>
-                  {summarize.data.bullet_summary}
-                </div>
-              )}
-              {summarize.data.full_summary && (
-                <div className="text-text-secondary leading-relaxed" style={{ fontSize: 14 }}>
-                  {summarize.data.full_summary}
-                </div>
-              )}
-            </div>
-          )}
-
-          {summarize.isError && (
-            <div
-              className="rounded-xl border border-danger/30 text-danger"
-              style={{ padding: "12px 16px", marginBottom: 28, fontSize: 14, background: "rgba(248, 81, 73, 0.1)" }}
-            >
-              {String(summarize.error instanceof Error ? summarize.error.message : summarize.error)}
-            </div>
-          )}
-
-          {/* Article content — RSS or Reader mode */}
-          {viewMode === "reader" && fullContent ? (
-            <div
-              className="full-article-content"
-              dangerouslySetInnerHTML={{ __html: fullContent }}
-            />
-          ) : rssHtml ? (
-            <div
-              className="article-content text-text-primary"
-              dangerouslySetInnerHTML={{ __html: rssHtml }}
-            />
-          ) : article.content_text ? (
-            <div className="article-content text-text-primary whitespace-pre-wrap">
-              {article.content_text}
-            </div>
-          ) : (
-            <p className="text-text-muted" style={{ fontSize: 14 }}>
-              No preview available.
-            </p>
-          )}
-
-          {/* Load full article prompt */}
-          {article.url && viewMode === "rss" && (
-            <div style={{ marginTop: 32, textAlign: "center" }}>
-              <div className="border-t border-white/5" style={{ marginBottom: 24 }} />
-              <button
-                onClick={handleReaderMode}
-                disabled={loadingFull}
-                className="text-accent hover:text-accent-hover transition-colors disabled:opacity-50 inline-flex items-center gap-2"
-                style={{ fontSize: 15 }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                  <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-                </svg>
-                Load full article
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>

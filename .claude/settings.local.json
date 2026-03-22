@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./dev.sh)",
+      "WebFetch(domain:crates.io)",
+      "Bash(pkill -f \"tauri dev\")",
+      "Bash(pkill -f \"cargo build\")",
+      "Bash(curl:*)"
+    ]
+  }
+}

@@ -20,13 +20,16 @@ export function AddFeedDialog() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-bg-secondary border border-border rounded-xl w-full max-w-md mx-4 shadow-2xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border-light">
-          <h2 className="font-semibold text-base">Add Feed</h2>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div
+        className="border border-white/10 rounded-2xl w-full max-w-md mx-4 shadow-2xl overflow-hidden"
+        style={{ background: "rgba(22, 27, 34, 0.95)" }}
+      >
+        <div className="flex items-center justify-between" style={{ padding: "20px 24px 16px" }}>
+          <h2 style={{ fontSize: 18, fontWeight: 600 }} className="text-text-primary">Add Feed</h2>
           <button
             onClick={() => setShowAddFeed(false)}
-            className="text-text-muted hover:text-text-primary p-1"
+            className="text-text-muted hover:text-text-primary p-1 rounded-lg hover:bg-white/10 transition-colors"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />
@@ -34,9 +37,9 @@ export function AddFeedDialog() {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5">
-          <div className="mb-4">
-            <label className="block text-sm text-text-secondary mb-1.5">
+        <form onSubmit={handleSubmit} style={{ padding: "0 24px 24px" }}>
+          <div style={{ marginBottom: 20 }}>
+            <label className="block text-text-secondary" style={{ fontSize: 13, marginBottom: 8 }}>
               Feed URL
             </label>
             <input
@@ -45,28 +48,38 @@ export function AddFeedDialog() {
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com/feed.xml"
               autoFocus
-              className="w-full bg-bg-tertiary border border-border rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent"
+              className="w-full border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors"
+              style={{
+                background: "rgba(255, 255, 255, 0.05)",
+                padding: "12px 16px",
+                fontSize: 15,
+              }}
             />
           </div>
 
           {addFeed.isError && (
-            <div className="mb-4 p-3 rounded-lg border border-danger/30 bg-danger/10 text-sm text-danger">
-              {(addFeed.error as Error)?.message ?? "Failed to add feed"}
+            <div
+              className="rounded-xl border border-danger/30 text-danger"
+              style={{ padding: "12px 16px", marginBottom: 20, fontSize: 14, background: "rgba(248, 81, 73, 0.1)" }}
+            >
+              {String(addFeed.error instanceof Error ? addFeed.error.message : addFeed.error)}
             </div>
           )}
 
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-3">
             <button
               type="button"
               onClick={() => setShowAddFeed(false)}
-              className="px-4 py-2 text-sm text-text-secondary hover:text-text-primary rounded-lg hover:bg-bg-hover"
+              className="text-text-secondary hover:text-text-primary rounded-xl hover:bg-white/5 transition-colors"
+              style={{ padding: "10px 20px", fontSize: 14 }}
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={addFeed.isPending || !url.trim()}
-              className="px-4 py-2 text-sm bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-50 font-medium"
+              className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
+              style={{ padding: "10px 24px", fontSize: 14 }}
             >
               {addFeed.isPending ? "Adding..." : "Add Feed"}
             </button>

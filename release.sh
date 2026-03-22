@@ -117,7 +117,7 @@ pnpm install
 BUILD_CMD=(pnpm tauri build --target "$TARGET")
 
 if [[ "$SIGN" != true ]]; then
-  BUILD_CMD+=(-- --no-sign)
+  BUILD_CMD+=(--no-sign)
 fi
 
 echo "Running: ${BUILD_CMD[*]}"

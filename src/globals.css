@@ -29,8 +29,13 @@ html, body, #root {
   width: 100%;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  background: var(--color-bg-primary);
+  background: transparent;
   color: var(--color-text-primary);
+}
+
+/* Ensure interactive elements sit above the drag region */
+button, a, input, select, textarea, [role="button"] {
+  -webkit-app-region: no-drag;
 }
 
 /* Scrollbar styling */
@@ -120,4 +125,83 @@ html, body, #root {
 
 .article-content li {
   margin-bottom: 0.5em;
+}
+
+/* Article view transition */
+.article-view-container {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Full article content — render like the actual webpage */
+.full-article-content {
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--color-text-primary);
+}
+
+/* Neutralize absolute/fixed/sticky positioning from website styles */
+.full-article-content * {
+  position: static !important;
+  float: none !important;
+  z-index: auto !important;
+}
+
+.full-article-content [style*="position"],
+.full-article-content [style*="fixed"],
+.full-article-content [style*="absolute"],
+.full-article-content [style*="z-index"] {
+  position: static !important;
+}
+
+.full-article-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 1em 0;
+}
+
+.full-article-content a {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-decoration-color: rgba(88, 166, 255, 0.3);
+}
+
+.full-article-content a:hover {
+  text-decoration-color: var(--color-accent);
+}
+
+/* Hide common website UI junk that leaks into fetched articles */
+.full-article-content [class*="skip"],
+.full-article-content [class*="paywall"],
+.full-article-content [class*="subscribe"],
+.full-article-content [class*="newsletter"],
+.full-article-content [class*="toolbar"],
+.full-article-content [class*="topbar"],
+.full-article-content [class*="top-bar"],
+.full-article-content [class*="site-header"],
+.full-article-content [class*="site-nav"],
+.full-article-content [class*="ad-slot"],
+.full-article-content [class*="advert"],
+.full-article-content [class*="popup"],
+.full-article-content [class*="modal"],
+.full-article-content [class*="overlay"],
+.full-article-content [class*="cookie"],
+.full-article-content [class*="consent"],
+.full-article-content [class*="social-share"],
+.full-article-content [class*="related-posts"],
+.full-article-content [class*="comments"],
+.full-article-content [class*="story-settings"],
+.full-article-content [id*="skip"],
+.full-article-content [id*="paywall"],
+.full-article-content [id*="subscribe"],
+.full-article-content [id*="toolbar"],
+.full-article-content [id*="topbar"],
+.full-article-content [id*="ad-"],
+.full-article-content [aria-hidden="true"],
+.full-article-content [role="banner"],
+.full-article-content [role="navigation"],
+.full-article-content [role="complementary"] {
+  display: none !important;
 }

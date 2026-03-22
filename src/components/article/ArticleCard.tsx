@@ -25,40 +25,49 @@ export function ArticleCard({ article, isSelected, onSelect }: Props) {
   return (
     <div
       onClick={onSelect}
-      className={`px-3 py-2.5 border-b border-border-light cursor-pointer transition-colors ${
+      className={`cursor-pointer transition-colors border-b border-white/5 ${
         isSelected
-          ? "bg-bg-active"
-          : "hover:bg-bg-hover"
+          ? "bg-white/10"
+          : "hover:bg-white/5"
       }`}
+      style={{ padding: "14px 20px" }}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-[11px] text-accent truncate">
-              {article.feed_title}
-            </span>
-            <span className="text-[11px] text-text-muted">
-              {timeAgo(article.published_at ?? article.fetched_at)}
-            </span>
-          </div>
           <h3
-            className={`text-sm leading-snug line-clamp-2 ${
+            className={`leading-snug line-clamp-2 ${
               article.is_read
                 ? "text-text-muted font-normal"
                 : "text-text-primary font-medium"
             }`}
+            style={{ fontSize: 15, marginBottom: 6 }}
           >
             {article.title}
           </h3>
           {article.content_text && (
-            <p className="text-xs text-text-muted line-clamp-1 mt-0.5">
-              {article.content_text.slice(0, 120)}
+            <p
+              className="text-text-muted line-clamp-2"
+              style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 8 }}
+            >
+              {article.content_text.slice(0, 160)}
             </p>
           )}
+          <div className="flex items-center gap-2">
+            <span className="text-accent truncate" style={{ fontSize: 12 }}>
+              {article.feed_title}
+            </span>
+            <span className="text-text-muted" style={{ fontSize: 12 }}>
+              {timeAgo(article.published_at ?? article.fetched_at)}
+            </span>
+          </div>
         </div>
-        <div className="flex flex-col items-center gap-1 pt-0.5">
+        <div className="flex flex-col items-center gap-1.5 pt-1 flex-shrink-0">
           {!article.is_read && (
-            <div className="w-2 h-2 rounded-full bg-accent" title="Unread" />
+            <div
+              className="rounded-full bg-accent"
+              style={{ width: 8, height: 8 }}
+              title="Unread"
+            />
           )}
           {article.is_starred && (
             <svg

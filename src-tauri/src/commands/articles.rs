@@ -2,6 +2,7 @@ use crate::db::models::{ArticleFilter, ArticleWithFeed};
 use crate::db::queries;
 use crate::db::Database;
 use tauri::State;
+use serde::Serialize;
 
 #[tauri::command]
 pub async fn get_articles(
@@ -39,6 +40,98 @@ pub async fn mark_all_read(
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     queries::mark_all_read(&conn, feed_id.as_deref()).map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Serialize)]
+pub struct FullArticleContent {
+    pub html: String,
+}
+
+#[tauri::command]
+pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, String> {
+    let client = reqwest::Client::builder()
+        .user_agent("Skim/0.1 RSS Reader")
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch article: {}", e))?;
+
+    let html = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    // Extract body content — strip everything outside <body> if present
+    let body_html = if let Some(start) = html.find("<body") {
+        let content_start = html[start..].find('>').map(|i| start + i + 1).unwrap_or(start);
+        if let Some(end) = html[content_start..].find("</body>") {
+            html[content_start..content_start + end].to_string()
+        } else {
+            html[content_start..].to_string()
+        }
+    } else {
+        html
+    };
+
+    // Strip unwanted tags
+    let mut clean = body_html;
+    for tag in &[
+        "script", "style", "nav", "header", "footer", "noscript",
+        "aside", "form", "button", "svg", "iframe",
+    ] {
+        loop {
+            let open = format!("<{}", tag);
+            let close = format!("</{}>", tag);
+            let lower = clean.to_lowercase();
+            if let Some(start) = lower.find(&open) {
+                if let Some(end) = lower[start..].find(&close) {
+                    clean = format!("{}{}", &clean[..start], &clean[start + end + close.len()..]);
+                } else {
+                    // Self-closing or unclosed — remove to next >
+                    if let Some(end_bracket) = clean[start..].find('>') {
+                        clean = format!("{}{}", &clean[..start], &clean[start + end_bracket + 1..]);
+                    } else {
+                        break;
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Strip elements with common UI/paywall class patterns
+    let ui_patterns = [
+        "skip-to", "skip_to", "skipnav", "paywall", "subscriber",
+        "ad-slot", "ad_slot", "advert", "newsletter", "popup",
+        "toolbar", "topbar", "top-bar", "site-header", "site-nav",
+        "story-settings", "minimize-to-nav", "learn-more",
+    ];
+    for pattern in &ui_patterns {
+        // Remove any element whose opening tag contains the pattern
+        loop {
+            let lower = clean.to_lowercase();
+            if let Some(pos) = lower.find(pattern) {
+                // Walk back to find the opening <
+                let tag_start = clean[..pos].rfind('<').unwrap_or(pos);
+                // Find the closing > of this tag
+                if let Some(tag_end) = clean[pos..].find('>') {
+                    clean = format!("{}{}", &clean[..tag_start], &clean[pos + tag_end + 1..]);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    Ok(FullArticleContent { html: clean })
 }
 
 #[tauri::command]

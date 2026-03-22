@@ -58,13 +58,6 @@ pub struct Theme {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ThemeWithArticles {
-    #[serde(flatten)]
-    pub theme: Theme,
-    pub articles: Vec<ArticleWithFeed>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArticleFilter {
     pub feed_id: Option<String>,
     pub theme_id: Option<String>,

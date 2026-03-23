@@ -153,6 +153,14 @@ button, a, input, select, textarea, [role="button"] {
   overflow-y: auto;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  pointer-events: none;
+}
+
+/* Only the front-facing prism face should receive pointer events */
+.prism-inner[data-face="0"] .prism-face-0,
+.prism-inner[data-face="1"] .prism-face-1,
+.prism-inner[data-face="2"] .prism-face-2 {
+  pointer-events: auto;
 }
 
 .prism-face-0 {

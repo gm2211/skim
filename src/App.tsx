@@ -43,18 +43,6 @@ function App() {
             <ArticleDetail />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center bg-bg-primary/60">
-              <svg
-                width="48"
-                height="48"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1"
-                className="text-border mb-4"
-              >
-                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-              </svg>
               <p className="text-text-muted text-sm">Select an article to read</p>
             </div>
           )}

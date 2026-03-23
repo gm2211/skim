@@ -2,6 +2,7 @@ import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useThemes, useGenerateThemes } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
+import titleImg from "../../assets/title.png";
 
 export function Sidebar() {
   const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed } =
@@ -73,11 +74,9 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* App title — generous padding like Feedly */}
-      <div style={{ padding: "16px 24px 32px 24px" }}>
-        <h1 style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1 }} className="text-text-primary">
-          Skim
-        </h1>
+      {/* App title */}
+      <div style={{ padding: "8px 16px 24px 16px" }}>
+        <img src={titleImg} alt="Skim" style={{ width: 140, height: "auto" }} />
       </div>
 
       {/* Scrollable content */}

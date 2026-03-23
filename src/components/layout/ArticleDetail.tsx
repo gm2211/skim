@@ -111,6 +111,7 @@ export function ArticleDetail() {
   const [fullError, setFullError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("rss");
   const prismRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [prismZ, setPrismZ] = useState(200);
 
   // Reset state when article changes
@@ -173,20 +174,41 @@ export function ArticleDetail() {
   }, [viewMode, fetchFull]);
 
   // Arrow key navigation: right cycles rss→reader→web, left goes back
+  // Also listen on iframe contentWindow so it works when iframe has focus
   useEffect(() => {
     if (!article?.url) return;
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "ArrowRight") {
+        e.preventDefault();
         if (viewMode === "rss") handleReader();
         else if (viewMode === "reader") handleWebView();
       } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
         if (viewMode === "web") handleReader();
         else if (viewMode === "reader") setViewMode("rss");
       }
     };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+
+    // Also attach to iframe if it exists
+    const iframe = iframeRef.current;
+    let iframeWindow: Window | null = null;
+    try {
+      iframeWindow = iframe?.contentWindow ?? null;
+      iframeWindow?.addEventListener("keydown", handler as EventListener);
+    } catch {
+      // cross-origin, can't access
+    }
+
+    return () => {
+      window.removeEventListener("keydown", handler);
+      try {
+        iframeWindow?.removeEventListener("keydown", handler as EventListener);
+      } catch {
+        // ignore
+      }
+    };
   }, [article?.url, viewMode, handleReader, handleWebView]);
 
   if (!article) {
@@ -388,10 +410,38 @@ export function ArticleDetail() {
           <div className="prism-face prism-face-2">
             {rawHtml && (
               <iframe
-                srcDoc={rawHtml}
+                ref={iframeRef}
+                srcDoc={rawHtml.replace(
+                  /(<head[^>]*>)/i,
+                  `$1<style>
+                    html,body{margin:0!important;padding:0!important;overflow-x:hidden!important}
+                    *{position:static!important;top:auto!important;left:auto!important;right:auto!important;bottom:auto!important}
+                    body>*:first-child{margin-top:0!important;padding-top:0!important}
+                    [class*="nav"],[class*="header"],[class*="banner"],
+                    [class*="toolbar"],[class*="topbar"],[class*="masthead"],
+                    [role="banner"],[role="navigation"]{
+                      display:none!important;
+                    }
+                  </style>`
+                )}
                 sandbox="allow-same-origin"
                 style={{ width: "100%", height: "100%", border: "none", background: "white" }}
                 title="Article web view"
+                onLoad={() => {
+                  // Re-attach key listener when iframe loads
+                  try {
+                    const win = iframeRef.current?.contentWindow;
+                    if (win) {
+                      win.addEventListener("keydown", ((e: KeyboardEvent) => {
+                        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                          e.preventDefault();
+                          // Dispatch to parent
+                          window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
+                        }
+                      }) as EventListener);
+                    }
+                  } catch { /* cross-origin */ }
+                }}
               />
             )}
           </div>

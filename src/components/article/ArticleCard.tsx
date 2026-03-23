@@ -4,6 +4,7 @@ interface Props {
   article: Article;
   isSelected: boolean;
   onSelect: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }
 
 function timeAgo(timestamp: number | null): string {
@@ -21,10 +22,11 @@ function timeAgo(timestamp: number | null): string {
   });
 }
 
-export function ArticleCard({ article, isSelected, onSelect }: Props) {
+export function ArticleCard({ article, isSelected, onSelect, onContextMenu }: Props) {
   return (
     <div
       onClick={onSelect}
+      onContextMenu={onContextMenu}
       className={`cursor-pointer transition-colors border-b border-white/5 ${
         isSelected
           ? "bg-white/10"

@@ -99,7 +99,7 @@ function stripFullArticleJunk(html: string): string {
 }
 
 export function ArticleDetail() {
-  const { selectedArticleId, setSelectedArticleId } = useUiStore();
+  const { selectedArticleId, setSelectedArticleId, listCollapsed, sidebarCollapsed } = useUiStore();
   const { data: article } = useArticle(selectedArticleId);
   const markRead = useMarkRead();
   const toggleStar = useToggleStar();
@@ -250,15 +250,21 @@ export function ArticleDetail() {
         className="flex items-center justify-between relative z-20 flex-shrink-0"
         style={{ height: 52, padding: "0 24px" }}
       >
-        <button
-          onClick={() => setSelectedArticleId(null)}
-          className="text-text-muted hover:text-text-primary p-2 rounded-lg hover:bg-white/10 transition-colors"
-          title="Close"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M19 12H5M12 19l-7-7 7-7" />
-          </svg>
-        </button>
+        {!(sidebarCollapsed && listCollapsed) && (
+          <button
+            onClick={() => {
+              setSelectedArticleId(null);
+              const state = useUiStore.getState();
+              if (state.listCollapsed) state.toggleList();
+            }}
+            className="text-text-muted hover:text-text-primary p-2 rounded-lg hover:bg-white/10 transition-colors"
+            title="Close"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
 
         <div className="flex items-center gap-2">
           {article.url && (
@@ -414,13 +420,16 @@ export function ArticleDetail() {
                 srcDoc={rawHtml.replace(
                   /(<head[^>]*>)/i,
                   `$1<style>
-                    html,body{margin:0!important;padding:0!important;overflow-x:hidden!important}
-                    *{position:static!important;top:auto!important;left:auto!important;right:auto!important;bottom:auto!important}
-                    body>*:first-child{margin-top:0!important;padding-top:0!important}
-                    [class*="nav"],[class*="header"],[class*="banner"],
-                    [class*="toolbar"],[class*="topbar"],[class*="masthead"],
-                    [role="banner"],[role="navigation"]{
-                      display:none!important;
+                    html,body{margin:0!important;padding:0!important;padding-top:0!important;overflow-x:hidden!important}
+                    header,nav,
+                    [role="banner"],[role="navigation"],
+                    [class*="site-header"],[class*="site-nav"],[class*="masthead"],
+                    [class*="top-bar"],[class*="topbar"],[class*="toolbar"],
+                    [class*="cookie"],[class*="consent"],[class*="popup"],
+                    [class*="newsletter"],[class*="subscribe"],
+                    [class*="ad-slot"],[class*="advert"],
+                    [class*="skip"]{
+                      display:none!important;height:0!important;overflow:hidden!important;
                     }
                   </style>`
                 )}

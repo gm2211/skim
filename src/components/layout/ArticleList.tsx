@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
-import { useArticles, useMarkAllRead } from "../../hooks/useArticles";
+import { useMemo, useState, useCallback } from "react";
+import { useArticles, useMarkAllRead, useMarkRead, useToggleRead, useToggleStar } from "../../hooks/useArticles";
 import { useThemes } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
+import { ArticleContextMenu } from "../article/ArticleContextMenu";
 import type { ArticleFilter } from "../../services/types";
 
 function groupByDate(articles: { published_at: number | null; fetched_at: number }[]) {
@@ -42,9 +43,17 @@ function groupByDate(articles: { published_at: number | null; fetched_at: number
 }
 
 export function ArticleList() {
-  const { sidebarView, selectedArticleId, setSelectedArticleId, listFilter, setListFilter } = useUiStore();
+  const { sidebarView, selectedArticleId, setSelectedArticleId, listFilter, setListFilter, sidebarCollapsed, listCollapsed } = useUiStore();
   const markAllRead = useMarkAllRead();
+  const markRead = useMarkRead();
+  const toggleRead = useToggleRead();
+  const toggleStar = useToggleStar();
   const [searchQuery, setSearchQuery] = useState("");
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    articleIndex: number;
+  } | null>(null);
 
   const filter: ArticleFilter = useMemo(() => {
     const base: ArticleFilter = { limit: 200 };
@@ -121,10 +130,37 @@ export function ArticleList() {
 
   const displayTitle = title ?? feedTitle ?? "Articles";
 
+  const handleArticleContextMenu = useCallback(
+    (e: React.MouseEvent, index: number) => {
+      e.preventDefault();
+      setContextMenu({ x: e.clientX, y: e.clientY, articleIndex: index });
+    },
+    []
+  );
+
+  const contextArticle = contextMenu && filteredArticles
+    ? filteredArticles[contextMenu.articleIndex]
+    : null;
+
   return (
-    <div className="w-96 min-w-80 border-r border-white/5 bg-bg-secondary/70 flex flex-col h-full">
+    <div
+      className={`${listCollapsed ? '' : 'border-r border-white/5'} bg-bg-secondary/70 flex flex-col h-full overflow-hidden transition-all duration-300 ease-in-out`}
+      style={{ width: listCollapsed ? 0 : 384, minWidth: listCollapsed ? 0 : 320 }}
+    >
       {/* Top bar with mark-all-read, search, close */}
-      <div className="flex items-center justify-end gap-2 relative z-20" style={{ height: 40, paddingRight: 16 }}>
+      <div className="flex items-center justify-end gap-2 relative z-20" style={{ height: 40, paddingLeft: sidebarCollapsed ? 78 : undefined, paddingRight: 16 }}>
+        {sidebarCollapsed && (
+          <button
+            onClick={() => useUiStore.getState().toggleSidebar()}
+            className="text-text-muted hover:text-text-primary transition-colors mr-auto"
+            title="Expand sidebar"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M9 3v18" />
+            </svg>
+          </button>
+        )}
         <button
           onClick={handleMarkAllRead}
           className="text-text-muted hover:text-text-primary transition-colors"
@@ -228,6 +264,7 @@ export function ArticleList() {
                     article={article}
                     isSelected={selectedArticleId === article.id}
                     onSelect={() => setSelectedArticleId(article.id)}
+                    onContextMenu={(e) => handleArticleContextMenu(e, i)}
                   />
                 );
               })}
@@ -250,6 +287,34 @@ export function ArticleList() {
           </div>
         )}
       </div>
+
+      {contextMenu && contextArticle && filteredArticles && (
+        <ArticleContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          article={contextArticle}
+          onClose={() => setContextMenu(null)}
+          onToggleRead={() => toggleRead.mutate(contextArticle.id)}
+          onToggleStar={() => toggleStar.mutate(contextArticle.id)}
+          onMarkAboveRead={() => {
+            const ids = filteredArticles
+              .slice(0, contextMenu.articleIndex)
+              .filter((a) => !a.is_read)
+              .map((a) => a.id);
+            if (ids.length > 0) markRead.mutate(ids);
+          }}
+          onMarkBelowRead={() => {
+            const ids = filteredArticles
+              .slice(contextMenu.articleIndex + 1)
+              .filter((a) => !a.is_read)
+              .map((a) => a.id);
+            if (ids.length > 0) markRead.mutate(ids);
+          }}
+          onCopyLink={() => {
+            if (contextArticle.url) navigator.clipboard.writeText(contextArticle.url);
+          }}
+        />
+      )}
 
       {/* Bottom filter toolbar */}
       <div

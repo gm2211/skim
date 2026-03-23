@@ -7,7 +7,26 @@ import { useUiStore } from "./stores/uiStore";
 import { useEffect } from "react";
 
 function App() {
-  const { showAddFeed, showSettings, selectedArticleId } = useUiStore();
+  const { showAddFeed, showSettings, selectedArticleId, listCollapsed } = useUiStore();
+
+  // Responsive auto-collapse
+  useEffect(() => {
+    const apply = () => {
+      const width = document.documentElement.clientWidth;
+      useUiStore.getState().applyResponsiveLayout(width);
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(document.documentElement);
+    return () => observer.disconnect();
+  }, []);
+
+  // Disable default context menu
+  useEffect(() => {
+    const prevent = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener("contextmenu", prevent);
+    return () => document.removeEventListener("contextmenu", prevent);
+  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -21,6 +40,10 @@ function App() {
       if (e.key === "Escape") {
         useUiStore.getState().setShowAddFeed(false);
         useUiStore.getState().setShowSettings(false);
+      }
+      if (e.key === "[" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        useUiStore.getState().toggleSidebar();
       }
     };
     window.addEventListener("keydown", handler);
@@ -43,7 +66,20 @@ function App() {
             <ArticleDetail />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center bg-bg-primary/60">
-              <p className="text-text-muted text-sm">Select an article to read</p>
+              {listCollapsed ? (
+                <button
+                  onClick={() => useUiStore.getState().toggleList()}
+                  className="text-text-muted hover:text-text-primary transition-colors flex items-center gap-2"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M9 3v18" />
+                  </svg>
+                  <span className="text-sm">Show article list</span>
+                </button>
+              ) : (
+                <p className="text-text-muted text-sm">Select an article to read</p>
+              )}
             </div>
           )}
         </div>

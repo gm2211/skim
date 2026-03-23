@@ -2,7 +2,6 @@ import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useThemes, useGenerateThemes } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
-import titleImg from "../../assets/title.png";
 
 export function Sidebar() {
   const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed } =
@@ -75,8 +74,18 @@ export function Sidebar() {
       </div>
 
       {/* App title */}
-      <div style={{ padding: "8px 16px 24px 16px" }}>
-        <img src={titleImg} alt="Skim" style={{ width: 140, height: "auto" }} />
+      <div style={{ padding: "12px 24px 28px 24px" }}>
+        <h1 style={{
+          fontFamily: "'Aquire', sans-serif",
+          fontSize: 38,
+          fontWeight: 700,
+          letterSpacing: "0.15em",
+          transform: "scaleX(1.6)",
+          transformOrigin: "left",
+          color: "#e6edf3",
+          textShadow: "0 0 14px rgba(136, 200, 255, 0.35)",
+          lineHeight: 1,
+        }}>SKIM</h1>
       </div>
 
       {/* Scrollable content */}

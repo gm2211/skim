@@ -1,4 +1,19 @@
 @import "tailwindcss";
+@font-face {
+  font-family: 'Aquire';
+  src: url('./assets/fonts/Aquire.otf') format('opentype');
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Aquire';
+  src: url('./assets/fonts/AquireBold.otf') format('opentype');
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'Aquire';
+  src: url('./assets/fonts/AquireLight.otf') format('opentype');
+  font-weight: 300;
+}
 
 @theme {
   --color-bg-primary: #0d1117;

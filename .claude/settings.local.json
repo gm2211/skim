@@ -6,7 +6,10 @@
       "Bash(pkill -f \"tauri dev\")",
       "Bash(pkill -f \"cargo build\")",
       "Bash(curl:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(cp /tmp/aquire-font/Aquire-BW0ox.otf src/assets/fonts/Aquire.otf)",
+      "Bash(cp /tmp/aquire-font/AquireBold-8Ma60.otf src/assets/fonts/AquireBold.otf)",
+      "Bash(cp /tmp/aquire-font/AquireLight-YzE0o.otf src/assets/fonts/AquireLight.otf)"
     ]
   }
 }

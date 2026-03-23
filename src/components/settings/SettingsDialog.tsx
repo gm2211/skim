@@ -22,7 +22,7 @@ const needsEndpoint = (provider: string) =>
 
 type SettingsTab = "ai" | "sync" | "appearance";
 
-const TABS: { id: SettingsTab; label: string; icon: JSX.Element }[] = [
+const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   {
     id: "ai",
     label: "AI Provider",

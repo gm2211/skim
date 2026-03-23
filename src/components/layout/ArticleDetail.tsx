@@ -227,7 +227,7 @@ export function ArticleDetail() {
     rssHtml = article.content_html;
   }
 
-  const modeBtn = (mode: ViewMode, label: string, icon: JSX.Element) => (
+  const modeBtn = (mode: ViewMode, label: string, icon: React.ReactNode) => (
     <button
       onClick={mode === "reader" ? handleReader : mode === "web" ? handleWebView : () => setViewMode("rss")}
       disabled={loadingFull}

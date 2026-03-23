@@ -158,9 +158,7 @@ button, a, input, select, textarea, [role="button"] {
   transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.prism-inner[data-face="0"] { transform: rotateY(0deg); }
-.prism-inner[data-face="1"] { transform: rotateY(-120deg); }
-.prism-inner[data-face="2"] { transform: rotateY(-240deg); }
+/* Transform is now set via inline style for continuous forward rotation */
 
 .prism-face {
   position: absolute;

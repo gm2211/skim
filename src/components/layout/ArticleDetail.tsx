@@ -109,17 +109,39 @@ export function ArticleDetail() {
   const [rawHtml, setRawHtml] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("rss");
   const prismRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [prismZ, setPrismZ] = useState(200);
+  const [prismAngle, setPrismAngle] = useState(0);
+
+  // Derive viewMode from angle: 0°=rss, -120°=reader, -240°=web, -360°=rss, ...
+  const modes: ViewMode[] = ["rss", "reader", "web"];
+  const viewMode = modes[(((-prismAngle / 120) % 3) + 3) % 3];
+
+  const spinRight = useCallback(() => setPrismAngle((a) => a - 120), []);
+  const spinLeft = useCallback(() => setPrismAngle((a) => a + 120), []);
+
+  // Spin to a specific mode via shortest path
+  const spinTo = useCallback((target: ViewMode) => {
+    setPrismAngle((a) => {
+      const currentFace = (((-a / 120) % 3) + 3) % 3;
+      const targetFace = modes.indexOf(target);
+      if (currentFace === targetFace) return a;
+
+      // Shortest rotation: +1 or -1 step
+      let fwd = (targetFace - currentFace + 3) % 3; // steps right
+      let bwd = (currentFace - targetFace + 3) % 3; // steps left
+      if (fwd <= bwd) return a - fwd * 120;
+      return a + bwd * 120;
+    });
+  }, []);
 
   // Reset state when article changes
   useEffect(() => {
     setFullContent(null);
     setRawHtml(null);
     setFullError(null);
-    setViewMode("rss");
+    setPrismAngle(0);
   }, [selectedArticleId]);
 
   // Calculate prism depth from container width (Y-axis rotation)
@@ -157,23 +179,23 @@ export function ArticleDetail() {
 
   const handleReader = useCallback(async () => {
     if (viewMode === "reader") {
-      setViewMode("rss");
+      spinTo("rss");
       return;
     }
     await fetchFull();
-    setViewMode("reader");
-  }, [viewMode, fetchFull]);
+    spinTo("reader");
+  }, [viewMode, fetchFull, spinTo]);
 
   const handleWebView = useCallback(async () => {
     if (viewMode === "web") {
-      setViewMode("rss");
+      spinTo("rss");
       return;
     }
     await fetchFull();
-    setViewMode("web");
-  }, [viewMode, fetchFull]);
+    spinTo("web");
+  }, [viewMode, fetchFull, spinTo]);
 
-  // Arrow key navigation: right cycles rss→reader→web, left goes back
+  // Arrow key navigation: right/left spin the prism freely
   // Also listen on iframe contentWindow so it works when iframe has focus
   useEffect(() => {
     if (!article?.url) return;
@@ -181,12 +203,12 @@ export function ArticleDetail() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        if (viewMode === "rss") handleReader();
-        else if (viewMode === "reader") handleWebView();
+        fetchFull(); // preload content for reader/web faces
+        spinRight();
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        if (viewMode === "web") handleReader();
-        else if (viewMode === "reader") setViewMode("rss");
+        fetchFull();
+        spinLeft();
       }
     };
     window.addEventListener("keydown", handler);
@@ -209,7 +231,7 @@ export function ArticleDetail() {
         // ignore
       }
     };
-  }, [article?.url, viewMode, handleReader, handleWebView]);
+  }, [article?.url, fetchFull, spinRight, spinLeft]);
 
   if (!article) {
     return (
@@ -350,6 +372,7 @@ export function ArticleDetail() {
         <div
           className="prism-inner"
           data-face={viewMode === "rss" ? "0" : viewMode === "reader" ? "1" : "2"}
+          style={{ transform: `rotateY(${prismAngle}deg)` }}
         >
           {/* Face 0: RSS preview */}
           <div className="prism-face prism-face-0">

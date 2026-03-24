@@ -112,25 +112,23 @@ export function ArticleDetail() {
   const prismRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [prismZ, setPrismZ] = useState(200);
+  const [prismPerspective, setPrismPerspective] = useState(4000);
   const [prismAngle, setPrismAngle] = useState(0);
 
-  // Derive viewMode from angle: 0°=rss, -120°=reader, -240°=web, -360°=rss, ...
+  // Derive viewMode from angle
   const modes: ViewMode[] = ["rss", "reader", "web"];
   const viewMode = modes[(((-prismAngle / 120) % 3) + 3) % 3];
 
   const spinRight = useCallback(() => setPrismAngle((a) => a - 120), []);
   const spinLeft = useCallback(() => setPrismAngle((a) => a + 120), []);
 
-  // Spin to a specific mode via shortest path
   const spinTo = useCallback((target: ViewMode) => {
     setPrismAngle((a) => {
       const currentFace = (((-a / 120) % 3) + 3) % 3;
       const targetFace = modes.indexOf(target);
       if (currentFace === targetFace) return a;
-
-      // Shortest rotation: +1 or -1 step
-      let fwd = (targetFace - currentFace + 3) % 3; // steps right
-      let bwd = (currentFace - targetFace + 3) % 3; // steps left
+      const fwd = (targetFace - currentFace + 3) % 3;
+      const bwd = (currentFace - targetFace + 3) % 3;
       if (fwd <= bwd) return a - fwd * 120;
       return a + bwd * 120;
     });
@@ -144,12 +142,14 @@ export function ArticleDetail() {
     setPrismAngle(0);
   }, [selectedArticleId]);
 
-  // Calculate prism depth from container width (Y-axis rotation)
+  // Calculate prism depth from container width
   useEffect(() => {
     if (!prismRef.current) return;
     const observer = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width ?? 600;
-      setPrismZ(w / (2 * Math.tan(Math.PI / 3)));
+      const z = w / (2 * Math.tan(Math.PI / 3));
+      setPrismZ(z);
+      setPrismPerspective(Math.max(4000, z * 8));
     });
     observer.observe(prismRef.current);
     return () => observer.disconnect();
@@ -178,32 +178,25 @@ export function ArticleDetail() {
   }, [article?.url, fullContent]);
 
   const handleReader = useCallback(async () => {
-    if (viewMode === "reader") {
-      spinTo("rss");
-      return;
-    }
+    if (viewMode === "reader") { spinTo("rss"); return; }
     await fetchFull();
     spinTo("reader");
   }, [viewMode, fetchFull, spinTo]);
 
   const handleWebView = useCallback(async () => {
-    if (viewMode === "web") {
-      spinTo("rss");
-      return;
-    }
+    if (viewMode === "web") { spinTo("rss"); return; }
     await fetchFull();
     spinTo("web");
   }, [viewMode, fetchFull, spinTo]);
 
-  // Arrow key navigation: right/left spin the prism freely
-  // Also listen on iframe contentWindow so it works when iframe has focus
+  // Arrow key navigation
   useEffect(() => {
     if (!article?.url) return;
     const handler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        fetchFull(); // preload content for reader/web faces
+        fetchFull();
         spinRight();
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
@@ -212,25 +205,7 @@ export function ArticleDetail() {
       }
     };
     window.addEventListener("keydown", handler);
-
-    // Also attach to iframe if it exists
-    const iframe = iframeRef.current;
-    let iframeWindow: Window | null = null;
-    try {
-      iframeWindow = iframe?.contentWindow ?? null;
-      iframeWindow?.addEventListener("keydown", handler as EventListener);
-    } catch {
-      // cross-origin, can't access
-    }
-
-    return () => {
-      window.removeEventListener("keydown", handler);
-      try {
-        iframeWindow?.removeEventListener("keydown", handler as EventListener);
-      } catch {
-        // ignore
-      }
-    };
+    return () => window.removeEventListener("keydown", handler);
   }, [article?.url, fetchFull, spinRight, spinLeft]);
 
   if (!article) {
@@ -251,7 +226,7 @@ export function ArticleDetail() {
 
   const modeBtn = (mode: ViewMode, label: string, icon: React.ReactNode) => (
     <button
-      onClick={mode === "reader" ? handleReader : mode === "web" ? handleWebView : () => setViewMode("rss")}
+      onClick={mode === "reader" ? handleReader : mode === "web" ? handleWebView : () => spinTo("rss")}
       disabled={loadingFull}
       className={`flex items-center gap-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
         viewMode === mode
@@ -260,7 +235,7 @@ export function ArticleDetail() {
       }`}
       style={{ padding: "6px 12px", fontSize: 12 }}
     >
-      {loadingFull && viewMode !== mode ? null : icon}
+      {icon}
       {label}
     </button>
   );
@@ -363,11 +338,11 @@ export function ArticleDetail() {
         </div>
       )}
 
-      {/* Triangular prism — 3 faces rotating on X-axis */}
+      {/* Triangular prism — 3 faces */}
       <div
         ref={prismRef}
         className="prism-container"
-        style={{ "--prism-z": `${prismZ}px` } as React.CSSProperties}
+        style={{ "--prism-z": `${prismZ}px`, perspective: `${prismPerspective}px` } as React.CSSProperties}
       >
         <div
           className="prism-inner"
@@ -376,6 +351,7 @@ export function ArticleDetail() {
         >
           {/* Face 0: RSS preview */}
           <div className="prism-face prism-face-0">
+
             <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 40px 80px" }}>
               <div style={{ marginBottom: 28 }}>
                 <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>
@@ -419,6 +395,7 @@ export function ArticleDetail() {
 
           {/* Face 1: Reader mode */}
           <div className="prism-face prism-face-1">
+
             {fullContent && (
               <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 40px 80px" }}>
                 <div style={{ marginBottom: 28 }}>
@@ -442,32 +419,24 @@ export function ArticleDetail() {
                 ref={iframeRef}
                 srcDoc={rawHtml.replace(
                   /(<head[^>]*>)/i,
-                  `$1<style>
-                    html,body{margin:0!important;padding:0!important;padding-top:0!important;overflow-x:hidden!important}
-                    header,nav,
-                    [role="banner"],[role="navigation"],
-                    [class*="site-header"],[class*="site-nav"],[class*="masthead"],
-                    [class*="top-bar"],[class*="topbar"],[class*="toolbar"],
-                    [class*="cookie"],[class*="consent"],[class*="popup"],
-                    [class*="newsletter"],[class*="subscribe"],
-                    [class*="ad-slot"],[class*="advert"],
-                    [class*="skip"]{
-                      display:none!important;height:0!important;overflow:hidden!important;
-                    }
-                  </style>`
+                  '$1<meta name="color-scheme" content="dark"><style>:root{color-scheme:dark}</style>'
                 )}
-                sandbox="allow-same-origin"
+                sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock allow-presentation"
                 style={{ width: "100%", height: "100%", border: "none", background: "white" }}
                 title="Article web view"
                 onLoad={() => {
-                  // Re-attach key listener when iframe loads
                   try {
                     const win = iframeRef.current?.contentWindow;
                     if (win) {
+                      // Prevent context menu (Inspect Element) inside iframe
+                      win.document.addEventListener("contextmenu", (e: Event) => {
+                        e.preventDefault();
+                      });
+
+                      // Arrow key navigation for prism
                       win.addEventListener("keydown", ((e: KeyboardEvent) => {
                         if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
                           e.preventDefault();
-                          // Dispatch to parent
                           window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
                         }
                       }) as EventListener);

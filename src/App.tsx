@@ -31,6 +31,19 @@ function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Block devtools shortcuts everywhere
+      const key = e.key.toLowerCase();
+      if (
+        (key === "i" && (e.metaKey || e.ctrlKey) && e.altKey) || // Cmd+Option+I
+        (key === "j" && (e.metaKey || e.ctrlKey) && e.altKey) || // Cmd+Option+J
+        (key === "c" && (e.metaKey || e.ctrlKey) && e.shiftKey) || // Cmd+Shift+C
+        (key === "u" && (e.metaKey || e.ctrlKey)) || // Cmd+U (view source)
+        e.key === "F12"
+      ) {
+        e.preventDefault();
+        return;
+      }
+
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement

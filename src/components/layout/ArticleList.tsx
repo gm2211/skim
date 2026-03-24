@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { useArticles, useMarkAllRead, useMarkRead, useToggleRead, useToggleStar } from "../../hooks/useArticles";
+import { useArticles, useMarkAllRead, useMarkRead, useMarkUnread, useToggleRead, useToggleStar } from "../../hooks/useArticles";
 import { useThemes } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
@@ -46,6 +46,7 @@ export function ArticleList() {
   const { sidebarView, selectedArticleId, setSelectedArticleId, listFilter, setListFilter, sidebarCollapsed, listCollapsed } = useUiStore();
   const markAllRead = useMarkAllRead();
   const markRead = useMarkRead();
+  const markUnread = useMarkUnread();
   const toggleRead = useToggleRead();
   const toggleStar = useToggleStar();
   const [searchQuery, setSearchQuery] = useState("");
@@ -309,6 +310,20 @@ export function ArticleList() {
               .filter((a) => !a.is_read)
               .map((a) => a.id);
             if (ids.length > 0) markRead.mutate(ids);
+          }}
+          onMarkAboveUnread={() => {
+            const ids = filteredArticles
+              .slice(0, contextMenu.articleIndex)
+              .filter((a) => a.is_read)
+              .map((a) => a.id);
+            if (ids.length > 0) markUnread.mutate(ids);
+          }}
+          onMarkBelowUnread={() => {
+            const ids = filteredArticles
+              .slice(contextMenu.articleIndex + 1)
+              .filter((a) => a.is_read)
+              .map((a) => a.id);
+            if (ids.length > 0) markUnread.mutate(ids);
           }}
           onCopyLink={() => {
             if (contextArticle.url) navigator.clipboard.writeText(contextArticle.url);

@@ -142,13 +142,12 @@ button, a, input, select, textarea, [role="button"] {
   margin-bottom: 0.5em;
 }
 
-/* Triangular prism rotation — 3 faces at 120° on Y-axis (horizontal flip) */
+/* Triangular prism rotation — 3 faces at 120° on Y-axis */
 .prism-container {
   flex: 1 1 0%;
   min-height: 0;
   position: relative;
   overflow: hidden;
-  perspective: 4000px;
 }
 
 .prism-inner {
@@ -157,8 +156,6 @@ button, a, input, select, textarea, [role="button"] {
   transform-style: preserve-3d;
   transition: transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
 }
-
-/* Transform is now set via inline style for continuous forward rotation */
 
 .prism-face {
   position: absolute;
@@ -169,7 +166,6 @@ button, a, input, select, textarea, [role="button"] {
   pointer-events: none;
 }
 
-/* Only the front-facing prism face should receive pointer events */
 .prism-inner[data-face="0"] .prism-face-0,
 .prism-inner[data-face="1"] .prism-face-1,
 .prism-inner[data-face="2"] .prism-face-2 {
@@ -186,6 +182,7 @@ button, a, input, select, textarea, [role="button"] {
 
 .prism-face-2 {
   transform: rotateY(240deg) translateZ(var(--prism-z));
+  overflow: hidden;
 }
 
 /* Full article content — render like the actual webpage */

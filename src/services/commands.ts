@@ -25,6 +25,8 @@ export const getArticle = (articleId: string) =>
   invoke<Article>("get_article", { articleId });
 export const markArticlesRead = (articleIds: string[]) =>
   invoke<void>("mark_articles_read", { articleIds });
+export const markArticlesUnread = (articleIds: string[]) =>
+  invoke<void>("mark_articles_unread", { articleIds });
 export const markAllRead = (feedId?: string | null) =>
   invoke<void>("mark_all_read", { feedId: feedId ?? null });
 export const toggleStar = (articleId: string) =>

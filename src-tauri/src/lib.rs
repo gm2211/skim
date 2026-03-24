@@ -34,6 +34,7 @@ pub fn run() {
             commands::articles::get_articles,
             commands::articles::get_article,
             commands::articles::mark_articles_read,
+            commands::articles::mark_articles_unread,
             commands::articles::mark_all_read,
             commands::articles::toggle_star,
             commands::articles::toggle_read,

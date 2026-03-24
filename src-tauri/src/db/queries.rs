@@ -203,6 +203,19 @@ pub fn mark_articles_read(
     Ok(())
 }
 
+pub fn mark_articles_unread(
+    conn: &Connection,
+    article_ids: &[String],
+) -> Result<(), rusqlite::Error> {
+    for id in article_ids {
+        conn.execute(
+            "UPDATE articles SET is_read = 0 WHERE id = ?1",
+            params![id],
+        )?;
+    }
+    Ok(())
+}
+
 pub fn toggle_read(conn: &Connection, article_id: &str) -> Result<bool, rusqlite::Error> {
     let is_read: bool = conn.query_row(
         "SELECT is_read FROM articles WHERE id = ?1",

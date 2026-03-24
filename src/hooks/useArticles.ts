@@ -28,6 +28,18 @@ export function useMarkRead() {
   });
 }
 
+export function useMarkUnread() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: commands.markArticlesUnread,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["article"] });
+      qc.invalidateQueries({ queryKey: ["feeds"] });
+    },
+  });
+}
+
 export function useMarkAllRead() {
   const qc = useQueryClient();
   return useMutation({

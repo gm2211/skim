@@ -34,6 +34,15 @@ pub async fn mark_articles_read(
 }
 
 #[tauri::command]
+pub async fn mark_articles_unread(
+    db: State<'_, Database>,
+    article_ids: Vec<String>,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::mark_articles_unread(&conn, &article_ids).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn mark_all_read(
     db: State<'_, Database>,
     feed_id: Option<String>,

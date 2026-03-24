@@ -387,15 +387,20 @@ export function ArticleDetail() {
                 ref={iframeRef}
                 srcDoc={rawHtml.replace(
                   /(<head[^>]*>)/i,
-                  '$1<meta name="color-scheme" content="dark"><style>:root{color-scheme:dark}</style>'
+                  '$1<meta name="color-scheme" content="dark"><style>:root{color-scheme:dark}*::-webkit-scrollbar{width:6px!important}*::-webkit-scrollbar-track{background:#1a1a1a!important}*::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15)!important;border-radius:3px!important}*::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3)!important}html,body{scrollbar-color:rgba(255,255,255,0.15) #1a1a1a!important;scrollbar-width:thin!important}</style>'
                 )}
                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock allow-presentation"
-                style={{ width: "100%", height: "100%", border: "none", background: "white" }}
+                style={{ width: "100%", height: "100%", border: "none", background: "#1a1a1a" }}
                 title="Article web view"
                 onLoad={() => {
                   try {
                     const win = iframeRef.current?.contentWindow;
                     if (win) {
+                      // Re-inject scrollbar styles after page loads (overrides site CSS)
+                      const s = win.document.createElement("style");
+                      s.textContent = "*::-webkit-scrollbar{width:6px!important}*::-webkit-scrollbar-track{background:#1a1a1a!important}*::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15)!important;border-radius:3px!important}*::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3)!important}html,body{scrollbar-color:rgba(255,255,255,0.15) #1a1a1a!important;scrollbar-width:thin!important}";
+                      win.document.head.appendChild(s);
+
                       // Prevent context menu (Inspect Element) inside iframe
                       win.document.addEventListener("contextmenu", (e: Event) => {
                         e.preventDefault();

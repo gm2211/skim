@@ -1,3 +1,4 @@
+use crate::ai::local_provider::SharedModelState;
 use crate::ai::prompts;
 use crate::ai::provider::{ChatMessage, ChatRequest, create_provider};
 use crate::db::models::{ArticleFilter, ArticleSummary, Theme};
@@ -5,21 +6,213 @@ use crate::db::queries;
 use crate::db::Database;
 use chrono::Utc;
 use serde::Deserialize;
+use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use tauri::State;
+use tokio::sync::Mutex;
 use uuid::Uuid;
+
+const SUMMARY_CACHE_MAX: usize = 100;
+
+pub struct SummaryCache {
+    map: HashMap<String, ArticleSummary>,
+    order: VecDeque<String>,
+}
+
+impl SummaryCache {
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+            order: VecDeque::new(),
+        }
+    }
+
+    pub fn get(&self, article_id: &str) -> Option<&ArticleSummary> {
+        self.map.get(article_id)
+    }
+
+    pub fn insert(&mut self, summary: ArticleSummary) {
+        let id = summary.article_id.clone();
+        if self.map.contains_key(&id) {
+            // Move to back (most recent)
+            self.order.retain(|k| k != &id);
+        } else if self.order.len() >= SUMMARY_CACHE_MAX {
+            // Evict oldest
+            if let Some(oldest) = self.order.pop_front() {
+                self.map.remove(&oldest);
+            }
+        }
+        self.order.push_back(id.clone());
+        self.map.insert(id, summary);
+    }
+
+    pub fn remove(&mut self, article_id: &str) {
+        self.map.remove(article_id);
+        self.order.retain(|k| k != article_id);
+    }
+
+    pub fn clear(&mut self) {
+        self.map.clear();
+        self.order.clear();
+    }
+}
+
+pub type SharedSummaryCache = Arc<Mutex<SummaryCache>>;
+
+/// Strip ChatML artifacts and other model noise from output
+/// Clean raw model output: strip ChatML tokens, code fences
+fn clean_raw_output(text: &str) -> String {
+    let mut s = text.to_string();
+    // Remove ChatML tokens
+    for token in &["<|im_start|>", "<|im_end|>", "<|im_start|>system", "<|im_start|>user", "<|im_start|>assistant"] {
+        s = s.replace(token, "");
+    }
+    // Remove markdown code fences
+    let trimmed = s.trim();
+    if trimmed.starts_with("```") {
+        s = trimmed
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .to_string();
+    }
+    s.trim().to_string()
+}
+
+/// Extract the "summary" field from a JSON response, falling back to raw text.
+/// Handles both well-formed JSON and malformed model output where strings aren't properly quoted.
+fn extract_summary_field(raw: &str) -> String {
+    let cleaned = clean_raw_output(raw);
+
+    // First try proper JSON parsing
+    if let Some(json_str) = extract_json_object(&cleaned) {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
+            if let Some(summary) = val.get("summary").and_then(|s| s.as_str()) {
+                return summary.to_string();
+            }
+        }
+    }
+
+    // Fallback: extract text between "summary": and "notes": using string matching
+    if let Some(val) = extract_field_fuzzy(&cleaned, "summary") {
+        return val;
+    }
+
+    cleaned
+}
+
+/// Extract bullet points from a JSON response, falling back to raw text.
+fn extract_bullets_field(raw: &str) -> String {
+    let cleaned = clean_raw_output(raw);
+
+    // First try proper JSON parsing
+    if let Some(json_str) = extract_json_object(&cleaned) {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
+            if let Some(bullets) = val.get("bullets").and_then(|b| b.as_array()) {
+                return bullets
+                    .iter()
+                    .filter_map(|b| b.as_str())
+                    .map(|b| format!("• {}", b))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+            }
+        }
+    }
+
+    // Fallback: extract text between "bullets": and "notes":
+    if let Some(val) = extract_field_fuzzy(&cleaned, "bullets") {
+        return val;
+    }
+
+    cleaned
+}
+
+/// Fuzzy extraction: find "field_name": ... and grab the content until the next top-level key or end.
+/// This handles cases where the model outputs JSON-like structure but with unquoted multiline strings.
+fn extract_field_fuzzy(text: &str, field: &str) -> Option<String> {
+    // Look for "field": or "field" :
+    let patterns = [
+        format!("\"{}\":", field),
+        format!("\"{}\" :", field),
+    ];
+
+    let field_start = patterns.iter()
+        .filter_map(|p| text.find(p).map(|pos| pos + p.len()))
+        .min()?;
+
+    let after = text[field_start..].trim_start();
+
+    // Find where the next field starts ("notes": or end of object })
+    let end_markers = ["\"notes\"", "\"notes\" ", "}\n", "\n}"];
+    let end_pos = end_markers.iter()
+        .filter_map(|m| after.find(m))
+        .min()
+        .unwrap_or(after.len());
+
+    let value = after[..end_pos].trim();
+
+    // Clean up: strip surrounding quotes, trailing commas, brackets
+    let value = value.trim_start_matches('"')
+        .trim_start_matches('[')
+        .trim_end_matches('"')
+        .trim_end_matches(',')
+        .trim_end_matches(']')
+        .trim();
+
+    if value.is_empty() {
+        return None;
+    }
+
+    Some(value.to_string())
+}
+
+/// Find the first JSON object in a string (handles preamble text before the JSON)
+fn extract_json_object(text: &str) -> Option<&str> {
+    let start = text.find('{')?;
+    let mut depth = 0;
+    let mut in_string = false;
+    let mut escape_next = false;
+    for (i, ch) in text[start..].char_indices() {
+        if escape_next {
+            escape_next = false;
+            continue;
+        }
+        match ch {
+            '\\' if in_string => escape_next = true,
+            '"' => in_string = !in_string,
+            '{' if !in_string => depth += 1,
+            '}' if !in_string => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(&text[start..start + i + 1]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
 
 #[tauri::command]
 pub async fn summarize_article(
     db: State<'_, Database>,
+    model_state: State<'_, SharedModelState>,
+    summary_cache: State<'_, SharedSummaryCache>,
     article_id: String,
+    #[allow(unused_variables)]
+    force: Option<bool>,
+    summary_length: Option<String>,
+    summary_tone: Option<String>,
+    summary_format: Option<String>,
+    summary_custom_prompt: Option<String>,
 ) -> Result<ArticleSummary, String> {
-    // Check for cached summary
+    // Check in-memory cache (skip if force re-summarize)
     {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        if let Some(existing) = queries::get_article_summary(&conn, &article_id)
-            .map_err(|e| e.to_string())?
-        {
-            return Ok(existing);
+        let mut cache = summary_cache.lock().await;
+        if force.unwrap_or(false) {
+            cache.remove(&article_id);
+        } else if let Some(existing) = cache.get(&article_id) {
+            return Ok(existing.clone());
         }
     }
 
@@ -34,76 +227,102 @@ pub async fn summarize_article(
         (article, settings_json)
     };
 
-    let settings: crate::db::models::AppSettings = settings_json
+    let mut settings: crate::db::models::AppSettings = settings_json
         .as_deref()
         .map(|s| serde_json::from_str(s).unwrap_or_default())
         .unwrap_or_default();
+
+    // Apply per-article overrides
+    if let Some(len) = summary_length {
+        settings.ai.summary_length = Some(len);
+    }
+    if let Some(tone) = summary_tone {
+        settings.ai.summary_tone = Some(tone);
+    }
+    if let Some(fmt) = summary_format {
+        settings.ai.summary_format = Some(fmt);
+    }
+    if let Some(prompt) = summary_custom_prompt {
+        if !prompt.trim().is_empty() {
+            settings.ai.summary_custom_prompt = Some(prompt);
+        }
+    }
 
     if settings.ai.provider == "none" {
         return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
     }
 
     let provider = create_provider(
-        &settings.ai.provider,
-        settings.ai.api_key.as_deref(),
-        settings.ai.endpoint.as_deref(),
+        &settings.ai,
+        Some(model_state.inner().clone()),
     )?;
 
-    let model = settings.ai.model.unwrap_or_else(|| "gpt-4o-mini".to_string());
-    let text = article.article.content_text.as_deref().unwrap_or("");
+    let model = settings.ai.model.clone().unwrap_or_else(|| "gpt-4o-mini".to_string());
     let title = &article.article.title;
 
-    // Get bullet summary
-    let bullet_request = ChatRequest {
-        model: model.clone(),
-        messages: vec![
-            ChatMessage {
-                role: "system".to_string(),
-                content: prompts::article_summary_system_prompt().to_string(),
-            },
-            ChatMessage {
-                role: "user".to_string(),
-                content: prompts::article_bullet_summary_prompt(title, text),
-            },
-        ],
-        temperature: Some(0.2),
-        max_tokens: Some(512),
+    // Use the longest available content — prefer content_text, fall back to HTML stripped to text
+    let content_text = article.article.content_text.as_deref().unwrap_or("");
+    let html_as_text = article.article.content_html.as_deref()
+        .map(|h| html2text::from_read(h.as_bytes(), 10000))
+        .unwrap_or_default();
+    let text = if html_as_text.len() > content_text.len() { &html_as_text } else { content_text };
+
+    if text.trim().is_empty() {
+        return Err("No article content to summarize.".to_string());
+    }
+
+    let system_prompt = prompts::article_summary_system_prompt(&settings.ai);
+
+    // Get bullet summary (skip if format is paragraph-only)
+    let bullet_prompt = prompts::article_bullet_summary_prompt(title, text, &settings.ai);
+    let bullet_response = if !bullet_prompt.is_empty() {
+        let req = ChatRequest {
+            model: model.clone(),
+            messages: vec![
+                ChatMessage { role: "system".to_string(), content: system_prompt.clone() },
+                ChatMessage { role: "user".to_string(), content: bullet_prompt },
+            ],
+            temperature: Some(0.2),
+            max_tokens: Some(prompts::bullet_max_tokens(&settings.ai)),
+        };
+        Some(provider.chat(req).await?)
+    } else {
+        None
     };
 
-    let bullet_response = provider.chat(bullet_request).await?;
-
-    // Get full summary
-    let full_request = ChatRequest {
-        model: model.clone(),
-        messages: vec![
-            ChatMessage {
-                role: "system".to_string(),
-                content: prompts::article_summary_system_prompt().to_string(),
-            },
-            ChatMessage {
-                role: "user".to_string(),
-                content: prompts::article_full_summary_prompt(title, text),
-            },
-        ],
-        temperature: Some(0.3),
-        max_tokens: Some(1024),
+    // Get full summary (skip if format is bullets-only)
+    let full_prompt = prompts::article_full_summary_prompt(title, text, &settings.ai);
+    let full_response = if !full_prompt.is_empty() {
+        let req = ChatRequest {
+            model: model.clone(),
+            messages: vec![
+                ChatMessage { role: "system".to_string(), content: system_prompt },
+                ChatMessage { role: "user".to_string(), content: full_prompt },
+            ],
+            temperature: Some(0.3),
+            max_tokens: Some(prompts::full_max_tokens(&settings.ai)),
+        };
+        Some(provider.chat(req).await?)
+    } else {
+        None
     };
 
-    let full_response = provider.chat(full_request).await?;
+    let bullet_text = bullet_response.map(|r| extract_bullets_field(&r.content));
+    let full_text = full_response.map(|r| extract_summary_field(&r.content));
 
     let summary = ArticleSummary {
         article_id: article_id.clone(),
-        bullet_summary: Some(bullet_response.content),
-        full_summary: Some(full_response.content),
+        bullet_summary: bullet_text,
+        full_summary: full_text,
         provider: Some(provider.name().to_string()),
         model: Some(model),
         created_at: Utc::now().timestamp(),
     };
 
-    // Cache it
+    // Cache in memory
     {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        queries::insert_article_summary(&conn, &summary).map_err(|e| e.to_string())?;
+        let mut cache = summary_cache.lock().await;
+        cache.insert(summary.clone());
     }
 
     Ok(summary)
@@ -130,6 +349,7 @@ struct ThemeArticleRef {
 #[tauri::command]
 pub async fn generate_themes(
     db: State<'_, Database>,
+    model_state: State<'_, SharedModelState>,
 ) -> Result<Vec<Theme>, String> {
     let (articles, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -160,12 +380,11 @@ pub async fn generate_themes(
     }
 
     let provider = create_provider(
-        &settings.ai.provider,
-        settings.ai.api_key.as_deref(),
-        settings.ai.endpoint.as_deref(),
+        &settings.ai,
+        Some(model_state.inner().clone()),
     )?;
 
-    let model = settings.ai.model.unwrap_or_else(|| "gpt-4o-mini".to_string());
+    let model = settings.ai.model.clone().unwrap_or_else(|| "gpt-4o-mini".to_string());
 
     // Build article snippets for the AI
     let snippets: Vec<serde_json::Value> = articles

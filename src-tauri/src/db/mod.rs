@@ -8,6 +8,7 @@ use std::sync::Mutex;
 
 pub struct Database {
     pub conn: Mutex<Connection>,
+    pub data_dir: PathBuf,
 }
 
 impl Database {
@@ -19,6 +20,7 @@ impl Database {
         migrations::run_migrations(&conn)?;
         Ok(Database {
             conn: Mutex::new(conn),
+            data_dir: app_dir,
         })
     }
 }

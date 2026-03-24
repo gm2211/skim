@@ -1,6 +1,9 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+use super::local_provider::SharedModelState;
+use crate::db::models::AiSettings;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,
@@ -139,11 +142,25 @@ impl AiProvider for OpenAiCompatibleProvider {
 }
 
 pub fn create_provider(
-    provider_type: &str,
-    api_key: Option<&str>,
-    endpoint: Option<&str>,
+    settings: &AiSettings,
+    model_state: Option<SharedModelState>,
 ) -> Result<Box<dyn AiProvider>, String> {
-    match provider_type {
+    let api_key = settings.api_key.as_deref();
+    let endpoint = settings.endpoint.as_deref();
+
+    match settings.provider.as_str() {
+        "local" => {
+            let model_path = settings
+                .local_model_path
+                .as_deref()
+                .ok_or("No local model selected. Go to Settings to download one.")?;
+            let gpu_layers = settings.local_gpu_layers.unwrap_or(-1);
+            let state = model_state
+                .ok_or("Local model state not available")?;
+            Ok(Box::new(super::local_provider::LocalLlmProvider::new(
+                model_path, gpu_layers, state,
+            )))
+        }
         "openai" => Ok(Box::new(OpenAiCompatibleProvider::new(
             "https://api.openai.com",
             api_key,
@@ -153,11 +170,6 @@ pub fn create_provider(
             endpoint.unwrap_or("https://openrouter.ai/api"),
             api_key,
             "openrouter",
-        ))),
-        "litellm" => Ok(Box::new(OpenAiCompatibleProvider::new(
-            endpoint.unwrap_or("http://localhost:4000"),
-            api_key,
-            "litellm",
         ))),
         "ollama" => Ok(Box::new(OpenAiCompatibleProvider::new(
             endpoint.unwrap_or("http://localhost:11434"),
@@ -174,10 +186,15 @@ pub fn create_provider(
             None,
             "llamacpp",
         ))),
+        "groq" => Ok(Box::new(OpenAiCompatibleProvider::new(
+            "https://api.groq.com/openai",
+            api_key,
+            "groq",
+        ))),
         "custom" => {
             let ep = endpoint.ok_or("Custom provider requires an endpoint URL")?;
             Ok(Box::new(OpenAiCompatibleProvider::new(ep, api_key, "custom")))
         }
-        _ => Err(format!("Unknown AI provider: {}", provider_type)),
+        _ => Err(format!("Unknown AI provider: {}", settings.provider)),
     }
 }

@@ -1,15 +1,16 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(./dev.sh)",
-      "WebFetch(domain:crates.io)",
-      "Bash(pkill -f \"tauri dev\")",
-      "Bash(pkill -f \"cargo build\")",
-      "Bash(curl:*)",
-      "Bash(npx tsc:*)",
-      "Bash(cp /tmp/aquire-font/Aquire-BW0ox.otf src/assets/fonts/Aquire.otf)",
-      "Bash(cp /tmp/aquire-font/AquireBold-8Ma60.otf src/assets/fonts/AquireBold.otf)",
-      "Bash(cp /tmp/aquire-font/AquireLight-YzE0o.otf src/assets/fonts/AquireLight.otf)"
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; [[ \"$f\" == *.rs || \"$f\" == */Cargo.toml ]] && touch \"$f\" || true; }",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

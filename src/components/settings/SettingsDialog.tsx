@@ -2,23 +2,25 @@ import { useState, useEffect } from "react";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
 import type { AppSettings } from "../../services/types";
+import { ModelBrowser } from "./ModelBrowser";
 
 const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
-  { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
-  { value: "openai", label: "OpenAI", description: "api.openai.com" },
-  { value: "litellm", label: "LiteLLM", description: "Local LiteLLM proxy (default: localhost:4000)" },
-  { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
-  { value: "lmstudio", label: "LM Studio", description: "Local LM Studio (default: localhost:1234)" },
-  { value: "llamacpp", label: "llama.cpp", description: "Local llama.cpp server (default: localhost:8080)" },
+  { value: "local", label: "Local (Embedded)", description: "Run AI locally with llama.cpp — no server needed" },
   { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
+  { value: "groq", label: "Groq", description: "Fast inference — groq.com" },
+  { value: "llamacpp", label: "llama.cpp Server", description: "Local llama.cpp server (default: localhost:8080)" },
+  { value: "lmstudio", label: "LM Studio", description: "Local LM Studio (default: localhost:1234)" },
+  { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
+  { value: "openai", label: "OpenAI", description: "api.openai.com" },
+  { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
 ];
 
 const needsApiKey = (provider: string) =>
-  ["openai", "openrouter", "litellm", "custom"].includes(provider);
+  ["openai", "openrouter", "groq", "custom"].includes(provider);
 
 const needsEndpoint = (provider: string) =>
-  ["litellm", "ollama", "lmstudio", "llamacpp", "custom"].includes(provider);
+  ["ollama", "lmstudio", "llamacpp", "custom"].includes(provider);
 
 type SettingsTab = "ai" | "sync" | "appearance";
 
@@ -114,8 +116,8 @@ export function SettingsDialog() {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
       <div
-        className="border border-white/10 rounded-2xl w-full max-w-2xl mx-4 shadow-2xl overflow-hidden flex flex-col"
-        style={{ background: "rgba(22, 27, 34, 0.97)", height: 520 }}
+        className="border border-white/10 rounded-2xl w-full max-w-2xl mx-4 shadow-2xl overflow-hidden flex flex-col backdrop-blur-xl backdrop-saturate-150"
+        style={{ background: "rgba(22, 27, 34, 0.75)", height: local.ai.provider === "local" ? 640 : 520 }}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/5" style={{ padding: "16px 24px" }}>
@@ -177,6 +179,10 @@ export function SettingsDialog() {
                   </p>
                 </InputField>
 
+                {local.ai.provider === "local" && (
+                  <ModelBrowser ai={local.ai} updateAi={updateAi} />
+                )}
+
                 {needsApiKey(local.ai.provider) && (
                   <InputField label="API Key">
                     <input
@@ -211,7 +217,7 @@ export function SettingsDialog() {
                   </InputField>
                 )}
 
-                {local.ai.provider !== "none" && (
+                {local.ai.provider !== "none" && local.ai.provider !== "local" && (
                   <InputField
                     label="Model"
                     description="Leave blank for default model"
@@ -233,6 +239,84 @@ export function SettingsDialog() {
                       style={inputStyle}
                     />
                   </InputField>
+                )}
+
+                {local.ai.provider !== "none" && (
+                  <>
+                    <div className="border-t border-white/5" style={{ margin: "24px 0" }} />
+                    <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
+                      Summary
+                    </h3>
+
+                    <div className="flex gap-4" style={{ marginBottom: 24 }}>
+                      <InputField label="Length">
+                        <select
+                          value={local.ai.summary_length ?? "medium"}
+                          onChange={(e) => updateAi({ summary_length: e.target.value })}
+                          className={inputClass}
+                          style={{ ...inputStyle, width: 140 }}
+                        >
+                          <option value="short">Short (~50 words)</option>
+                          <option value="medium">Medium (~150 words)</option>
+                          <option value="long">Long (~300 words)</option>
+                          <option value="custom">Custom...</option>
+                        </select>
+                        {local.ai.summary_length === "custom" && (
+                          <input
+                            type="number"
+                            min={20}
+                            max={1000}
+                            placeholder="Word count"
+                            value={local.ai.summary_custom_word_count ?? ""}
+                            onChange={(e) => updateAi({ summary_custom_word_count: parseInt(e.target.value) || null } as any)}
+                            className={inputClass}
+                            style={{ ...inputStyle, width: 120, marginTop: 6 }}
+                          />
+                        )}
+                      </InputField>
+
+                      <InputField label="Tone">
+                        <select
+                          value={local.ai.summary_tone ?? "concise"}
+                          onChange={(e) => updateAi({ summary_tone: e.target.value })}
+                          className={inputClass}
+                          style={{ ...inputStyle, width: 140 }}
+                        >
+                          <option value="concise">Concise</option>
+                          <option value="detailed">Detailed</option>
+                          <option value="casual">Casual</option>
+                          <option value="technical">Technical</option>
+                        </select>
+                      </InputField>
+
+                      <InputField label="Format">
+                        <select
+                          value={local.ai.summary_format ?? "paragraph"}
+                          onChange={(e) => updateAi({ summary_format: e.target.value })}
+                          className={inputClass}
+                          style={{ ...inputStyle, width: 140 }}
+                        >
+                          <option value="both">Bullets + Prose</option>
+                          <option value="bullets">Bullets only</option>
+                          <option value="paragraph">Prose only</option>
+                        </select>
+                      </InputField>
+                    </div>
+
+                    <InputField
+                      label="Custom prompt"
+                      description="Override the default summary system prompt. Leave blank to use defaults."
+                    >
+                      <textarea
+                        value={local.ai.summary_custom_prompt ?? ""}
+                        onChange={(e) => updateAi({ summary_custom_prompt: e.target.value || null })}
+                        placeholder="e.g. You summarize articles for a technical audience. Focus on data and methodology..."
+                        className={inputClass}
+                        style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
+                        rows={3}
+                      />
+                    </InputField>
+                  </>
                 )}
               </>
             )}

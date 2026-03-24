@@ -80,6 +80,22 @@ pub struct AiSettings {
     pub api_key: Option<String>,
     pub model: Option<String>,
     pub endpoint: Option<String>,
+    #[serde(default)]
+    pub local_model_path: Option<String>,
+    #[serde(default)]
+    pub local_gpu_layers: Option<i32>,
+    #[serde(default)]
+    pub models_directory: Option<String>,
+    #[serde(default)]
+    pub summary_length: Option<String>,       // "short", "medium", "long"
+    #[serde(default)]
+    pub summary_tone: Option<String>,         // "concise", "detailed", "casual", "technical"
+    #[serde(default)]
+    pub summary_format: Option<String>,       // "bullets", "paragraph", "both"
+    #[serde(default)]
+    pub summary_custom_prompt: Option<String>, // advanced: override system prompt
+    #[serde(default)]
+    pub summary_custom_word_count: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +118,14 @@ impl Default for AppSettings {
                 api_key: None,
                 model: None,
                 endpoint: None,
+                local_model_path: None,
+                local_gpu_layers: None,
+                models_directory: None,
+                summary_length: None,
+                summary_tone: None,
+                summary_format: None,
+                summary_custom_prompt: None,
+                summary_custom_word_count: None,
             },
             appearance: AppearanceSettings {
                 theme: "dark".to_string(),

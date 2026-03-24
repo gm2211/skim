@@ -54,6 +54,10 @@ function App() {
         useUiStore.getState().setShowAddFeed(false);
         useUiStore.getState().setShowSettings(false);
       }
+      if (e.key === "," && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        useUiStore.getState().setShowSettings(true);
+      }
       if (e.key === "[" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         useUiStore.getState().toggleSidebar();

@@ -1,3 +1,5 @@
+use crate::db::models::AiSettings;
+
 pub fn theme_grouping_system_prompt() -> &'static str {
     "You organize news articles into coherent thematic groups. \
      You write clearly and precisely. No filler, no hedging, no emoji. \
@@ -32,45 +34,107 @@ Respond in this exact JSON format:
     )
 }
 
-pub fn article_summary_system_prompt() -> &'static str {
-    "You summarize articles precisely and concisely. \
-     No filler, no hedging, no emoji. Every bullet point conveys a specific fact or insight. \
-     Use clear, direct language."
+pub fn article_summary_system_prompt(settings: &AiSettings) -> String {
+    if let Some(ref custom) = settings.summary_custom_prompt {
+        if !custom.trim().is_empty() {
+            return custom.clone();
+        }
+    }
+
+    let tone = match settings.summary_tone.as_deref().unwrap_or("concise") {
+        "detailed" => "You provide thorough, detailed summaries that capture nuance and context.",
+        "casual" => "You write in a casual, accessible tone. Keep it conversational and easy to read.",
+        "technical" => "You write precise, technical summaries. Use domain-specific terminology where appropriate.",
+        _ => "You write concisely and precisely. No filler, no hedging.",
+    };
+
+    format!(
+        "{tone} Every point conveys a specific fact or insight. Use clear, direct language. No emoji."
+    )
 }
 
-pub fn article_bullet_summary_prompt(title: &str, text: &str) -> String {
+fn length_params(settings: &AiSettings) -> (String, String, i64, i64) {
+    // Returns (bullet_count, paragraph_desc, bullet_max_tokens, full_max_tokens)
+    if settings.summary_length.as_deref() == Some("custom") {
+        if let Some(words) = settings.summary_custom_word_count {
+            let bullets = std::cmp::max(2, words / 30);
+            let max_tokens = (words as i64) * 2; // ~2 tokens per word
+            return (
+                format!("{}-{}", bullets, bullets + 2),
+                format!("approximately {} words", words),
+                max_tokens,
+                max_tokens,
+            );
+        }
+    }
+    match settings.summary_length.as_deref().unwrap_or("medium") {
+        "short" => ("2-3".into(), "1 short paragraph (~50 words)".into(), 256, 384),
+        "long" => ("5-8".into(), "3-5 paragraphs (~300 words)".into(), 1024, 2048),
+        _ => ("3-5".into(), "2-3 paragraphs (~150 words)".into(), 512, 1024),
+    }
+}
+
+pub fn article_bullet_summary_prompt(title: &str, text: &str, settings: &AiSettings) -> String {
     let truncated = if text.len() > 6000 {
         &text[..6000]
     } else {
         text
     };
+    let (bullet_count, _, _, _) = length_params(settings);
+
+    if settings.summary_format.as_deref().unwrap_or("paragraph") == "paragraph" {
+        return String::new(); // skip bullets if paragraph-only
+    }
+
     format!(
-        r#"Summarize this article in 3-5 bullet points. Each bullet should be one clear sentence conveying a key fact or insight.
+        r#"Summarize this article in {bullet_count} bullet points. Each bullet should be one clear sentence conveying a key fact or insight.
 
 Title: {title}
 
 Content:
 {truncated}
 
-Respond in this exact JSON format:
+Respond with ONLY a JSON object in this exact format (no text before or after the JSON):
 {{
-  "bullets": ["string", "string", "string"]
+  "bullets": ["First key point", "Second key point", "Third key point"],
+  "notes": "Any meta-commentary or caveats. Put anything here that is NOT a bullet point."
 }}"#
     )
 }
 
-pub fn article_full_summary_prompt(title: &str, text: &str) -> String {
+pub fn article_full_summary_prompt(title: &str, text: &str, settings: &AiSettings) -> String {
     let truncated = if text.len() > 8000 {
         &text[..8000]
     } else {
         text
     };
+    let (_, paragraph_count, _, _) = length_params(settings);
+
+    match settings.summary_format.as_deref().unwrap_or("paragraph") {
+        "bullets" => return String::new(), // skip full summary if bullets-only
+        _ => {}
+    }
+
     format!(
-        r#"Write a comprehensive summary of this article in 2-3 paragraphs. Be specific and precise. Include key facts, figures, and conclusions.
+        r#"Summarize this article in {paragraph_count}. Be specific and precise. Include key facts, figures, and conclusions.
 
 Title: {title}
 
 Content:
-{truncated}"#
+{truncated}
+
+Respond with ONLY a JSON object in this exact format (no text before or after the JSON):
+{{
+  "summary": "The actual summary in markdown format. Use double newlines between paragraphs.",
+  "notes": "Any meta-commentary, caveats, or context you want to add about the summary. Put anything here that is NOT the summary itself."
+}}"#
     )
+}
+
+pub fn bullet_max_tokens(settings: &AiSettings) -> i64 {
+    length_params(settings).2
+}
+
+pub fn full_max_tokens(settings: &AiSettings) -> i64 {
+    length_params(settings).3
 }

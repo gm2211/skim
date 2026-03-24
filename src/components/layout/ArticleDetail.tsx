@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useArticle, useMarkRead, useToggleStar, useToggleRead } from "../../hooks/useArticles";
 import { useSummarizeArticle } from "../../hooks/useAi";
+import { useSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
 import { fetchFullArticle } from "../../services/commands";
 
@@ -105,6 +106,13 @@ export function ArticleDetail() {
   const toggleStar = useToggleStar();
   const toggleRead = useToggleRead();
   const summarize = useSummarizeArticle();
+  const { data: settings } = useSettings();
+  const [showSummarizeMenu, setShowSummarizeMenu] = useState(false);
+  const [perArticleLength, setPerArticleLength] = useState<string | undefined>();
+  const [perArticleTone, setPerArticleTone] = useState<string | undefined>();
+  const [perArticleFormat, setPerArticleFormat] = useState<string | undefined>();
+  const [perArticlePrompt, setPerArticlePrompt] = useState<string | undefined>();
+  const sumMenuRef = useRef<HTMLDivElement>(null);
   const [fullContent, setFullContent] = useState<string | null>(null);
   const [rawHtml, setRawHtml] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
@@ -121,7 +129,51 @@ export function ArticleDetail() {
     setRawHtml(null);
     setFullError(null);
     setViewMode("rss");
+    summarize.reset();
+    setShowSummarizeMenu(false);
+    setPerArticleLength(undefined);
+    setPerArticleTone(undefined);
+    setPerArticleFormat(undefined);
+    setPerArticlePrompt(undefined);
   }, [selectedArticleId]);
+
+  // Close summarize menu on click outside
+  useEffect(() => {
+    if (!showSummarizeMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (sumMenuRef.current && !sumMenuRef.current.contains(e.target as Node)) {
+        setShowSummarizeMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSummarizeMenu]);
+
+  const doSummarize = useCallback(
+    (force = false) => {
+      if (!article) return;
+      if (
+        !settings ||
+        settings.ai.provider === "none" ||
+        (settings.ai.provider === "local" && !settings.ai.local_model_path)
+      ) {
+        useUiStore.getState().setShowSettings(true);
+        return;
+      }
+      // Force re-summarize if any per-article override is set
+      const hasOverrides = perArticleLength || perArticleTone || perArticleFormat || perArticlePrompt;
+      summarize.mutate({
+        articleId: article.id,
+        force: force || !!hasOverrides,
+        summaryLength: perArticleLength,
+        summaryTone: perArticleTone,
+        summaryFormat: perArticleFormat,
+        summaryCustomPrompt: perArticlePrompt,
+      });
+      setShowSummarizeMenu(false);
+    },
+    [article, settings, summarize, perArticleLength, perArticleTone, perArticleFormat]
+  );
 
   // Mark as read when opened
   useEffect(() => {
@@ -257,14 +309,105 @@ export function ArticleDetail() {
 
           <div className="w-px h-5 bg-white/10" />
 
-          <button
-            onClick={() => summarize.mutate(article.id)}
-            disabled={summarize.isPending}
-            className="rounded-lg border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40"
-            style={{ padding: "6px 12px", fontSize: 12 }}
-          >
-            {summarize.isPending ? "..." : "Summarize"}
-          </button>
+          <div className="relative" ref={sumMenuRef}>
+            <div className="flex">
+              <button
+                onClick={() => doSummarize(false)}
+                disabled={summarize.isPending}
+                className="rounded-l-lg border border-r-0 border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40"
+                style={{ padding: "6px 12px", fontSize: 12 }}
+              >
+                {summarize.isPending ? "..." : "Summarize"}
+              </button>
+              <button
+                onClick={() => setShowSummarizeMenu(!showSummarizeMenu)}
+                disabled={summarize.isPending}
+                className="rounded-r-lg border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40"
+                style={{ padding: "6px 4px", fontSize: 12 }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+            </div>
+
+            {showSummarizeMenu && (
+              <div
+                className="absolute right-0 top-full mt-1 border border-white/10 rounded-xl shadow-xl z-50"
+                style={{ background: "rgba(22, 27, 34, 0.95)", backdropFilter: "blur(12px)", padding: "12px", width: 260 }}
+              >
+                <div style={{ marginBottom: 8 }}>
+                  <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Length</label>
+                  <select
+                    value={perArticleLength ?? settings?.ai.summary_length ?? "medium"}
+                    onChange={(e) => setPerArticleLength(e.target.value)}
+                    className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
+                    style={{ padding: "4px 8px", fontSize: 12 }}
+                  >
+                    <option value="short">Short (~50 words)</option>
+                    <option value="medium">Medium (~150 words)</option>
+                    <option value="long">Long (~300 words)</option>
+                  </select>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Tone</label>
+                  <select
+                    value={perArticleTone ?? settings?.ai.summary_tone ?? "concise"}
+                    onChange={(e) => setPerArticleTone(e.target.value)}
+                    className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
+                    style={{ padding: "4px 8px", fontSize: 12 }}
+                  >
+                    <option value="concise">Concise</option>
+                    <option value="detailed">Detailed</option>
+                    <option value="casual">Casual</option>
+                    <option value="technical">Technical</option>
+                  </select>
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Format</label>
+                  <select
+                    value={perArticleFormat ?? settings?.ai.summary_format ?? "paragraph"}
+                    onChange={(e) => setPerArticleFormat(e.target.value)}
+                    className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
+                    style={{ padding: "4px 8px", fontSize: 12 }}
+                  >
+                    <option value="both">Bullets + Prose</option>
+                    <option value="bullets">Bullets only</option>
+                    <option value="paragraph">Prose only</option>
+                  </select>
+                </div>
+                <div style={{ marginBottom: 10 }}>
+                  <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Custom prompt</label>
+                  <textarea
+                    value={perArticlePrompt ?? settings?.ai.summary_custom_prompt ?? ""}
+                    onChange={(e) => setPerArticlePrompt(e.target.value || undefined)}
+                    placeholder="e.g. Focus on financial implications..."
+                    className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5 placeholder-text-muted"
+                    style={{ padding: "6px 8px", fontSize: 11, minHeight: 48, resize: "vertical" }}
+                    rows={2}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => doSummarize(false)}
+                    className="flex-1 text-accent border border-accent/20 hover:bg-accent/10 rounded-lg transition-colors"
+                    style={{ padding: "5px 0", fontSize: 11 }}
+                  >
+                    Summarize
+                  </button>
+                  {summarize.data && (
+                    <button
+                      onClick={() => doSummarize(true)}
+                      className="flex-1 text-text-secondary border border-white/10 hover:bg-white/5 rounded-lg transition-colors"
+                      style={{ padding: "5px 0", fontSize: 11 }}
+                    >
+                      Re-summarize
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="w-px h-5 bg-white/10" />
 
@@ -333,6 +476,18 @@ export function ArticleDetail() {
                 </div>
               </div>
 
+              {summarize.isPending && (
+                <div className="rounded-xl border border-white/10" style={{ padding: "20px", marginBottom: 28, background: "rgba(255,255,255,0.03)" }}>
+                  <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11, marginBottom: 10 }}>AI Summary</div>
+                  <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 14 }}>
+                    <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                    </svg>
+                    Summarizing...
+                  </div>
+                </div>
+              )}
+
               {summarize.data && (
                 <div className="rounded-xl border border-white/10" style={{ padding: "20px", marginBottom: 28, background: "rgba(255,255,255,0.03)" }}>
                   <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11, marginBottom: 10 }}>AI Summary</div>
@@ -340,16 +495,55 @@ export function ArticleDetail() {
                     <div className="text-text-primary whitespace-pre-wrap" style={{ fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>{summarize.data.bullet_summary}</div>
                   )}
                   {summarize.data.full_summary && (
-                    <div className="text-text-secondary leading-relaxed" style={{ fontSize: 14 }}>{summarize.data.full_summary}</div>
+                    <div
+                      className="text-text-primary leading-relaxed prose prose-invert prose-sm max-w-none"
+                      style={{ fontSize: 14, opacity: 0.85 }}
+                      dangerouslySetInnerHTML={{
+                        __html: summarize.data.full_summary
+                          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                          .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                          .replace(/\n\n/g, '</p><p style="margin-top:12px">')
+                          .replace(/^/, '<p>').replace(/$/, '</p>')
+                      }}
+                    />
                   )}
                 </div>
               )}
 
-              {summarize.isError && (
-                <div className="rounded-xl border border-danger/30 text-danger" style={{ padding: "12px 16px", marginBottom: 28, fontSize: 14, background: "rgba(248, 81, 73, 0.1)" }}>
-                  {String(summarize.error instanceof Error ? summarize.error.message : summarize.error)}
-                </div>
-              )}
+              {summarize.isError && (() => {
+                const msg = String(summarize.error instanceof Error ? summarize.error.message : summarize.error);
+                const isConfigError = msg.toLowerCase().includes("no ai provider configured") || msg.toLowerCase().includes("no local model selected") || msg.toLowerCase().includes("go to settings");
+                const isModelLoadError = msg.toLowerCase().includes("failed to load model") || msg.toLowerCase().includes("null result from llama");
+                if (isConfigError) return (
+                  <div className="rounded-xl border border-white/10" style={{ padding: "12px 16px", marginBottom: 28, fontSize: 14, background: "rgba(255,255,255,0.03)" }}>
+                    <span className="text-text-secondary">AI not configured. </span>
+                    <button
+                      onClick={() => useUiStore.getState().setShowSettings(true)}
+                      className="text-accent hover:underline"
+                    >
+                      Open Settings
+                    </button>
+                    <span className="text-text-secondary"> to set up a provider.</span>
+                  </div>
+                );
+                if (isModelLoadError) return (
+                  <div className="rounded-xl border border-warning/30" style={{ padding: "12px 16px", marginBottom: 28, fontSize: 14, background: "rgba(255, 170, 50, 0.08)" }}>
+                    <span className="text-warning font-medium">Model failed to load. </span>
+                    <span className="text-text-secondary">It may be corrupted or too large for your system. </span>
+                    <button
+                      onClick={() => useUiStore.getState().setShowSettings(true)}
+                      className="text-accent hover:underline"
+                    >
+                      Try a different model
+                    </button>
+                  </div>
+                );
+                return (
+                  <div className="rounded-xl border border-danger/30 text-danger" style={{ padding: "12px 16px", marginBottom: 28, fontSize: 14, background: "rgba(248, 81, 73, 0.1)" }}>
+                    {msg}
+                  </div>
+                );
+              })()}
 
               {rssHtml ? (
                 <div className="article-content text-text-primary" dangerouslySetInnerHTML={{ __html: rssHtml }} />

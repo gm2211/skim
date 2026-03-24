@@ -66,6 +66,54 @@ export interface AiSettings {
   api_key: string | null;
   model: string | null;
   endpoint: string | null;
+  local_model_path: string | null;
+  local_gpu_layers: number | null;
+  models_directory: string | null;
+  summary_length: string | null;
+  summary_tone: string | null;
+  summary_format: string | null;
+  summary_custom_prompt: string | null;
+  summary_custom_word_count: number | null;
+}
+
+export interface HfModelInfo {
+  id: string;
+  author: string | null;
+  downloads: number | null;
+  likes: number | null;
+  tags: string[] | null;
+  pipeline_tag: string | null;
+  last_modified: string | null;
+  params_billions: number | null;
+  recommended_file_size: number | null;
+  summarization_rank: number | null;
+  summarization_score: number | null;
+}
+
+export interface HfModelFile {
+  filename: string;
+  size: number | null;
+}
+
+export interface LocalModel {
+  filename: string;
+  path: string;
+  size_bytes: number;
+  is_partial: boolean;
+  download_repo_id: string | null;
+}
+
+export interface SystemInfo {
+  total_memory_gb: number;
+  available_memory_gb: number;
+  max_model_size_gb: number;
+}
+
+export interface DownloadProgress {
+  filename: string;
+  downloaded: number;
+  total: number;
+  percent: number;
 }
 
 export interface AppearanceSettings {

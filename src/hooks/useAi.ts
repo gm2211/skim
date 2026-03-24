@@ -3,6 +3,20 @@ import * as commands from "../services/commands";
 
 export function useSummarizeArticle() {
   return useMutation({
-    mutationFn: commands.summarizeArticle,
+    mutationFn: (args: {
+      articleId: string;
+      force?: boolean;
+      summaryLength?: string;
+      summaryTone?: string;
+      summaryFormat?: string;
+      summaryCustomPrompt?: string;
+    }) =>
+      commands.summarizeArticle(args.articleId, {
+        force: args.force,
+        summaryLength: args.summaryLength,
+        summaryTone: args.summaryTone,
+        summaryFormat: args.summaryFormat,
+        summaryCustomPrompt: args.summaryCustomPrompt,
+      }),
   });
 }

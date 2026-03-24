@@ -6,6 +6,10 @@ import type {
   Theme,
   ArticleFilter,
   AppSettings,
+  HfModelInfo,
+  HfModelFile,
+  LocalModel,
+  SystemInfo,
 } from "./types";
 
 // Feeds
@@ -37,8 +41,18 @@ export const fetchFullArticle = (url: string) =>
   invoke<{ html: string; raw_html: string }>("fetch_full_article", { url });
 
 // AI
-export const summarizeArticle = (articleId: string) =>
-  invoke<ArticleSummary>("summarize_article", { articleId });
+export const summarizeArticle = (
+  articleId: string,
+  opts?: { force?: boolean; summaryLength?: string; summaryTone?: string; summaryFormat?: string; summaryCustomPrompt?: string }
+) =>
+  invoke<ArticleSummary>("summarize_article", {
+    articleId,
+    force: opts?.force ?? null,
+    summaryLength: opts?.summaryLength ?? null,
+    summaryTone: opts?.summaryTone ?? null,
+    summaryFormat: opts?.summaryFormat ?? null,
+    summaryCustomPrompt: opts?.summaryCustomPrompt ?? null,
+  });
 export const generateThemes = () => invoke<Theme[]>("generate_themes");
 export const getThemes = () => invoke<Theme[]>("get_themes");
 
@@ -46,3 +60,16 @@ export const getThemes = () => invoke<Theme[]>("get_themes");
 export const getSettings = () => invoke<AppSettings>("get_settings");
 export const updateSettings = (settings: AppSettings) =>
   invoke<void>("update_settings", { settings });
+
+// Models
+export const searchHfModels = (query: string) =>
+  invoke<HfModelInfo[]>("search_hf_models", { query });
+export const getHfModelFiles = (repoId: string) =>
+  invoke<HfModelFile[]>("get_hf_model_files", { repoId });
+export const downloadModel = (repoId: string, filename: string) =>
+  invoke<string>("download_model", { repoId, filename });
+export const cancelDownload = () => invoke<void>("cancel_download");
+export const listLocalModels = () => invoke<LocalModel[]>("list_local_models");
+export const deleteLocalModel = (path: string) =>
+  invoke<void>("delete_local_model", { path });
+export const getSystemInfo = () => invoke<SystemInfo>("get_system_info");

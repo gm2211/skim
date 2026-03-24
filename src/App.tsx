@@ -82,21 +82,22 @@ function App() {
           {selectedArticleId ? (
             <ArticleDetail />
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center bg-bg-primary/60">
-              {listCollapsed ? (
-                <button
-                  onClick={() => useUiStore.getState().toggleList()}
-                  className="text-text-muted hover:text-text-primary transition-colors flex items-center gap-2"
-                >
+            <div
+              className={`flex-1 flex flex-col items-center justify-center bg-bg-primary/60 select-none ${listCollapsed ? "cursor-pointer" : ""}`}
+              onClick={() => {
+                const state = useUiStore.getState();
+                if (state.listCollapsed) state.toggleList();
+              }}
+            >
+              <div className="text-text-muted flex items-center gap-2">
+                {listCollapsed && (
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="3" y="3" width="18" height="18" rx="2" />
                     <path d="M9 3v18" />
                   </svg>
-                  <span className="text-sm">Show article list</span>
-                </button>
-              ) : (
-                <p className="text-text-muted text-sm">Select an article to read</p>
-              )}
+                )}
+                <span className="text-sm">{listCollapsed ? "Show article list" : "Select an article to read"}</span>
+              </div>
             </div>
           )}
         </div>

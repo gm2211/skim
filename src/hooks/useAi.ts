@@ -8,14 +8,12 @@ export function useSummarizeArticle() {
       force?: boolean;
       summaryLength?: string;
       summaryTone?: string;
-      summaryFormat?: string;
       summaryCustomPrompt?: string;
     }) =>
       commands.summarizeArticle(args.articleId, {
         force: args.force,
         summaryLength: args.summaryLength,
         summaryTone: args.summaryTone,
-        summaryFormat: args.summaryFormat,
         summaryCustomPrompt: args.summaryCustomPrompt,
       }),
   });

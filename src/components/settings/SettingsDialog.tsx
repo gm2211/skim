@@ -251,12 +251,12 @@ export function SettingsDialog() {
                     <div className="flex gap-4" style={{ marginBottom: 24 }}>
                       <InputField label="Length">
                         <select
-                          value={local.ai.summary_length ?? "medium"}
+                          value={local.ai.summary_length ?? "short"}
                           onChange={(e) => updateAi({ summary_length: e.target.value })}
                           className={inputClass}
                           style={{ ...inputStyle, width: 140 }}
                         >
-                          <option value="short">Short (~50 words)</option>
+                          <option value="short">Short (~30 words)</option>
                           <option value="medium">Medium (~150 words)</option>
                           <option value="long">Long (~300 words)</option>
                           <option value="custom">Custom...</option>
@@ -289,18 +289,6 @@ export function SettingsDialog() {
                         </select>
                       </InputField>
 
-                      <InputField label="Format">
-                        <select
-                          value={local.ai.summary_format ?? "paragraph"}
-                          onChange={(e) => updateAi({ summary_format: e.target.value })}
-                          className={inputClass}
-                          style={{ ...inputStyle, width: 140 }}
-                        >
-                          <option value="both">Bullets + Prose</option>
-                          <option value="bullets">Bullets only</option>
-                          <option value="paragraph">Prose only</option>
-                        </select>
-                      </InputField>
                     </div>
 
                     <InputField

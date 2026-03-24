@@ -110,8 +110,8 @@ export function ArticleDetail() {
   const [showSummarizeMenu, setShowSummarizeMenu] = useState(false);
   const [perArticleLength, setPerArticleLength] = useState<string | undefined>();
   const [perArticleTone, setPerArticleTone] = useState<string | undefined>();
-  const [perArticleFormat, setPerArticleFormat] = useState<string | undefined>();
   const [perArticlePrompt, setPerArticlePrompt] = useState<string | undefined>();
+  const [perArticleWordCount, setPerArticleWordCount] = useState<number | undefined>();
   const sumMenuRef = useRef<HTMLDivElement>(null);
   const [fullContent, setFullContent] = useState<string | null>(null);
   const [rawHtml, setRawHtml] = useState<string | null>(null);
@@ -133,8 +133,8 @@ export function ArticleDetail() {
     setShowSummarizeMenu(false);
     setPerArticleLength(undefined);
     setPerArticleTone(undefined);
-    setPerArticleFormat(undefined);
     setPerArticlePrompt(undefined);
+    setPerArticleWordCount(undefined);
   }, [selectedArticleId]);
 
   // Close summarize menu on click outside
@@ -161,18 +161,17 @@ export function ArticleDetail() {
         return;
       }
       // Force re-summarize if any per-article override is set
-      const hasOverrides = perArticleLength || perArticleTone || perArticleFormat || perArticlePrompt;
+      const hasOverrides = perArticleLength || perArticleTone || perArticlePrompt;
       summarize.mutate({
         articleId: article.id,
         force: force || !!hasOverrides,
         summaryLength: perArticleLength,
         summaryTone: perArticleTone,
-        summaryFormat: perArticleFormat,
         summaryCustomPrompt: perArticlePrompt,
       });
       setShowSummarizeMenu(false);
     },
-    [article, settings, summarize, perArticleLength, perArticleTone, perArticleFormat]
+    [article, settings, summarize, perArticleLength, perArticleTone]
   );
 
   // Mark as read when opened
@@ -235,7 +234,13 @@ export function ArticleDetail() {
 
   if (!article) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-bg-primary/60">
+      <div
+        className="flex-1 flex items-center justify-center bg-bg-primary/60 cursor-pointer"
+        onClick={() => {
+          const state = useUiStore.getState();
+          if (state.listCollapsed) state.toggleList();
+        }}
+      >
         <span className="text-text-muted text-sm">Select an article to read</span>
       </div>
     );
@@ -339,15 +344,28 @@ export function ArticleDetail() {
                 <div style={{ marginBottom: 8 }}>
                   <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Length</label>
                   <select
-                    value={perArticleLength ?? settings?.ai.summary_length ?? "medium"}
+                    value={perArticleLength ?? settings?.ai.summary_length ?? "short"}
                     onChange={(e) => setPerArticleLength(e.target.value)}
                     className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
                     style={{ padding: "4px 8px", fontSize: 12 }}
                   >
-                    <option value="short">Short (~50 words)</option>
+                    <option value="short">Short (~30 words)</option>
                     <option value="medium">Medium (~150 words)</option>
                     <option value="long">Long (~300 words)</option>
+                    <option value="custom">Custom...</option>
                   </select>
+                  {(perArticleLength ?? settings?.ai.summary_length) === "custom" && (
+                    <input
+                      type="number"
+                      min={20}
+                      max={1000}
+                      placeholder="Word count"
+                      value={perArticleWordCount ?? settings?.ai.summary_custom_word_count ?? ""}
+                      onChange={(e) => setPerArticleWordCount(parseInt(e.target.value) || undefined)}
+                      className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
+                      style={{ padding: "4px 8px", fontSize: 12, marginTop: 4 }}
+                    />
+                  )}
                 </div>
                 <div style={{ marginBottom: 8 }}>
                   <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Tone</label>
@@ -361,19 +379,6 @@ export function ArticleDetail() {
                     <option value="detailed">Detailed</option>
                     <option value="casual">Casual</option>
                     <option value="technical">Technical</option>
-                  </select>
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Format</label>
-                  <select
-                    value={perArticleFormat ?? settings?.ai.summary_format ?? "paragraph"}
-                    onChange={(e) => setPerArticleFormat(e.target.value)}
-                    className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
-                    style={{ padding: "4px 8px", fontSize: 12 }}
-                  >
-                    <option value="both">Bullets + Prose</option>
-                    <option value="bullets">Bullets only</option>
-                    <option value="paragraph">Prose only</option>
                   </select>
                 </div>
                 <div style={{ marginBottom: 10 }}>
@@ -454,6 +459,82 @@ export function ArticleDetail() {
         </div>
       )}
 
+      {/* Summary — visible across all panels */}
+      {summarize.isPending && (
+        <div className="flex-shrink-0" style={{ maxWidth: 720, margin: "0 auto", padding: "0 40px 8px", width: "100%" }}>
+          <div className="rounded-xl border border-white/10" style={{ padding: "16px 20px", background: "rgba(255,255,255,0.03)" }}>
+            <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11, marginBottom: 8 }}>AI Summary</div>
+            <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 14 }}>
+              <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              Summarizing...
+            </div>
+          </div>
+        </div>
+      )}
+
+      {summarize.data && (
+        <div className="flex-shrink-0" style={{ maxWidth: 720, margin: "0 auto", padding: "0 40px 8px", width: "100%" }}>
+          <div className="rounded-xl border border-white/10" style={{ padding: "16px 20px", background: "rgba(255,255,255,0.03)", position: "relative" }}>
+            <button
+              onClick={() => summarize.reset()}
+              className="text-text-muted hover:text-text-primary transition-colors"
+              style={{ position: "absolute", top: 12, right: 12, padding: 4, lineHeight: 0 }}
+              title="Dismiss summary"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11, marginBottom: 8 }}>AI Summary</div>
+            {summarize.data.bullet_summary && (
+              <div className="text-text-primary whitespace-pre-wrap" style={{ fontSize: 14, marginBottom: 10, lineHeight: 1.6 }}>{summarize.data.bullet_summary}</div>
+            )}
+            {summarize.data.full_summary && (
+              <div
+                className="text-text-primary leading-relaxed prose prose-invert prose-sm max-w-none"
+                style={{ fontSize: 14, opacity: 0.85 }}
+                dangerouslySetInnerHTML={{
+                  __html: summarize.data.full_summary
+                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                    .replace(/\n\n/g, '</p><p style="margin-top:12px">')
+                    .replace(/^/, '<p>').replace(/$/, '</p>')
+                }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {summarize.isError && (() => {
+        const msg = String(summarize.error instanceof Error ? summarize.error.message : summarize.error);
+        const isConfigError = msg.toLowerCase().includes("no ai provider configured") || msg.toLowerCase().includes("no local model selected") || msg.toLowerCase().includes("go to settings");
+        const isModelLoadError = msg.toLowerCase().includes("failed to load model") || msg.toLowerCase().includes("null result from llama");
+        return (
+          <div className="flex-shrink-0" style={{ maxWidth: 720, margin: "0 auto", padding: "0 40px 8px", width: "100%" }}>
+            {isConfigError ? (
+              <div className="rounded-xl border border-white/10" style={{ padding: "12px 16px", fontSize: 14, background: "rgba(255,255,255,0.03)" }}>
+                <span className="text-text-secondary">AI not configured. </span>
+                <button onClick={() => useUiStore.getState().setShowSettings(true)} className="text-accent hover:underline">Open Settings</button>
+                <span className="text-text-secondary"> to set up a provider.</span>
+              </div>
+            ) : isModelLoadError ? (
+              <div className="rounded-xl border border-warning/30" style={{ padding: "12px 16px", fontSize: 14, background: "rgba(255, 170, 50, 0.08)" }}>
+                <span className="text-warning font-medium">Model failed to load. </span>
+                <span className="text-text-secondary">It may be corrupted or too large for your system. </span>
+                <button onClick={() => useUiStore.getState().setShowSettings(true)} className="text-accent hover:underline">Try a different model</button>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-danger/30 text-danger" style={{ padding: "12px 16px", fontSize: 14, background: "rgba(248, 81, 73, 0.1)" }}>
+                {msg}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Sliding panels */}
       <div className="slide-container">
         <div
@@ -475,75 +556,6 @@ export function ArticleDetail() {
                   <span className="text-text-muted">{formatDate(article.published_at)}</span>
                 </div>
               </div>
-
-              {summarize.isPending && (
-                <div className="rounded-xl border border-white/10" style={{ padding: "20px", marginBottom: 28, background: "rgba(255,255,255,0.03)" }}>
-                  <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11, marginBottom: 10 }}>AI Summary</div>
-                  <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 14 }}>
-                    <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                    </svg>
-                    Summarizing...
-                  </div>
-                </div>
-              )}
-
-              {summarize.data && (
-                <div className="rounded-xl border border-white/10" style={{ padding: "20px", marginBottom: 28, background: "rgba(255,255,255,0.03)" }}>
-                  <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11, marginBottom: 10 }}>AI Summary</div>
-                  {summarize.data.bullet_summary && (
-                    <div className="text-text-primary whitespace-pre-wrap" style={{ fontSize: 14, marginBottom: 12, lineHeight: 1.6 }}>{summarize.data.bullet_summary}</div>
-                  )}
-                  {summarize.data.full_summary && (
-                    <div
-                      className="text-text-primary leading-relaxed prose prose-invert prose-sm max-w-none"
-                      style={{ fontSize: 14, opacity: 0.85 }}
-                      dangerouslySetInnerHTML={{
-                        __html: summarize.data.full_summary
-                          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                          .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                          .replace(/\n\n/g, '</p><p style="margin-top:12px">')
-                          .replace(/^/, '<p>').replace(/$/, '</p>')
-                      }}
-                    />
-                  )}
-                </div>
-              )}
-
-              {summarize.isError && (() => {
-                const msg = String(summarize.error instanceof Error ? summarize.error.message : summarize.error);
-                const isConfigError = msg.toLowerCase().includes("no ai provider configured") || msg.toLowerCase().includes("no local model selected") || msg.toLowerCase().includes("go to settings");
-                const isModelLoadError = msg.toLowerCase().includes("failed to load model") || msg.toLowerCase().includes("null result from llama");
-                if (isConfigError) return (
-                  <div className="rounded-xl border border-white/10" style={{ padding: "12px 16px", marginBottom: 28, fontSize: 14, background: "rgba(255,255,255,0.03)" }}>
-                    <span className="text-text-secondary">AI not configured. </span>
-                    <button
-                      onClick={() => useUiStore.getState().setShowSettings(true)}
-                      className="text-accent hover:underline"
-                    >
-                      Open Settings
-                    </button>
-                    <span className="text-text-secondary"> to set up a provider.</span>
-                  </div>
-                );
-                if (isModelLoadError) return (
-                  <div className="rounded-xl border border-warning/30" style={{ padding: "12px 16px", marginBottom: 28, fontSize: 14, background: "rgba(255, 170, 50, 0.08)" }}>
-                    <span className="text-warning font-medium">Model failed to load. </span>
-                    <span className="text-text-secondary">It may be corrupted or too large for your system. </span>
-                    <button
-                      onClick={() => useUiStore.getState().setShowSettings(true)}
-                      className="text-accent hover:underline"
-                    >
-                      Try a different model
-                    </button>
-                  </div>
-                );
-                return (
-                  <div className="rounded-xl border border-danger/30 text-danger" style={{ padding: "12px 16px", marginBottom: 28, fontSize: 14, background: "rgba(248, 81, 73, 0.1)" }}>
-                    {msg}
-                  </div>
-                );
-              })()}
 
               {rssHtml ? (
                 <div className="article-content text-text-primary" dangerouslySetInnerHTML={{ __html: rssHtml }} />

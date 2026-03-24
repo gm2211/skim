@@ -10,7 +10,7 @@ use db::models::AppSettings;
 use db::{queries, Database};
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Manager, RunEvent};
 use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -95,6 +95,15 @@ pub fn run() {
             commands::models::delete_local_model,
             commands::models::get_system_info,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if let RunEvent::Exit = event {
+                // Drop the loaded model cleanly before the runtime tears down
+                let state = app.state::<SharedModelState>();
+                if let Ok(mut guard) = state.try_lock() {
+                    guard.take();
+                };
+            }
+        });
 }

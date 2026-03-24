@@ -49,7 +49,8 @@ pub fn article_summary_system_prompt(settings: &AiSettings) -> String {
     };
 
     format!(
-        "{tone} Every point conveys a specific fact or insight. Use clear, direct language. No emoji."
+        "{tone} Every point conveys a specific fact or insight. Use clear, direct language. No emoji. \
+         Lead with the single most important takeaway — the one sentence someone should remember if they read nothing else."
     )
 }
 
@@ -67,10 +68,11 @@ fn length_params(settings: &AiSettings) -> (String, String, i64, i64) {
             );
         }
     }
-    match settings.summary_length.as_deref().unwrap_or("medium") {
-        "short" => ("2-3".into(), "1 short paragraph (~50 words)".into(), 256, 384),
+    match settings.summary_length.as_deref().unwrap_or("short") {
+        "short" => ("2-3".into(), "1-2 sentences (~30 words)".into(), 128, 192),
         "long" => ("5-8".into(), "3-5 paragraphs (~300 words)".into(), 1024, 2048),
-        _ => ("3-5".into(), "2-3 paragraphs (~150 words)".into(), 512, 1024),
+        "medium" => ("3-5".into(), "2-3 paragraphs (~150 words)".into(), 512, 1024),
+        _ => ("2-3".into(), "1-2 sentences (~30 words)".into(), 128, 192),
     }
 }
 

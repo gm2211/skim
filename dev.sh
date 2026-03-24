@@ -23,10 +23,10 @@ install_if_missing cmake  brew install cmake
 
 pnpm install --silent 2>/dev/null
 
-# --clean flag forces a full rebuild
+# --clean flag rebuilds app code only (preserves llama-cpp and other deps)
 if [[ "${1:-}" == "--clean" ]]; then
-  echo "Cleaning build cache..."
-  cd src-tauri && cargo clean && cd ..
+  echo "Cleaning app build cache (keeping dependencies)..."
+  cd src-tauri && cargo clean --package skim && cd ..
 fi
 
 pnpm tauri dev

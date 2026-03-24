@@ -109,51 +109,19 @@ export function ArticleDetail() {
   const [rawHtml, setRawHtml] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
-  const prismRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [prismZ, setPrismZ] = useState(200);
-  const [prismPerspective, setPrismPerspective] = useState(4000);
-  const [prismAngle, setPrismAngle] = useState(0);
+  const [viewMode, setViewMode] = useState<ViewMode>("rss");
 
-  // Derive viewMode from angle
   const modes: ViewMode[] = ["rss", "reader", "web"];
-  const viewMode = modes[(((-prismAngle / 120) % 3) + 3) % 3];
-
-  const spinRight = useCallback(() => setPrismAngle((a) => a - 120), []);
-  const spinLeft = useCallback(() => setPrismAngle((a) => a + 120), []);
-
-  const spinTo = useCallback((target: ViewMode) => {
-    setPrismAngle((a) => {
-      const currentFace = (((-a / 120) % 3) + 3) % 3;
-      const targetFace = modes.indexOf(target);
-      if (currentFace === targetFace) return a;
-      const fwd = (targetFace - currentFace + 3) % 3;
-      const bwd = (currentFace - targetFace + 3) % 3;
-      if (fwd <= bwd) return a - fwd * 120;
-      return a + bwd * 120;
-    });
-  }, []);
+  const slideIndex = modes.indexOf(viewMode);
 
   // Reset state when article changes
   useEffect(() => {
     setFullContent(null);
     setRawHtml(null);
     setFullError(null);
-    setPrismAngle(0);
+    setViewMode("rss");
   }, [selectedArticleId]);
-
-  // Calculate prism depth from container width
-  useEffect(() => {
-    if (!prismRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 600;
-      const z = w / (2 * Math.tan(Math.PI / 3));
-      setPrismZ(z);
-      setPrismPerspective(Math.max(4000, z * 8));
-    });
-    observer.observe(prismRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   // Mark as read when opened
   useEffect(() => {
@@ -178,18 +146,18 @@ export function ArticleDetail() {
   }, [article?.url, fullContent]);
 
   const handleReader = useCallback(async () => {
-    if (viewMode === "reader") { spinTo("rss"); return; }
+    if (viewMode === "reader") { setViewMode("rss"); return; }
     await fetchFull();
-    spinTo("reader");
-  }, [viewMode, fetchFull, spinTo]);
+    setViewMode("reader");
+  }, [viewMode, fetchFull]);
 
   const handleWebView = useCallback(async () => {
-    if (viewMode === "web") { spinTo("rss"); return; }
+    if (viewMode === "web") { setViewMode("rss"); return; }
     await fetchFull();
-    spinTo("web");
-  }, [viewMode, fetchFull, spinTo]);
+    setViewMode("web");
+  }, [viewMode, fetchFull]);
 
-  // Arrow key navigation
+  // Arrow key navigation — right/left slide between panels
   useEffect(() => {
     if (!article?.url) return;
     const handler = (e: KeyboardEvent) => {
@@ -197,16 +165,21 @@ export function ArticleDetail() {
       if (e.key === "ArrowRight") {
         e.preventDefault();
         fetchFull();
-        spinRight();
+        setViewMode((prev) => {
+          const i = modes.indexOf(prev);
+          return i < 2 ? modes[i + 1] : prev;
+        });
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        fetchFull();
-        spinLeft();
+        setViewMode((prev) => {
+          const i = modes.indexOf(prev);
+          return i > 0 ? modes[i - 1] : prev;
+        });
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [article?.url, fetchFull, spinRight, spinLeft]);
+  }, [article?.url, fetchFull]);
 
   if (!article) {
     return (
@@ -226,7 +199,7 @@ export function ArticleDetail() {
 
   const modeBtn = (mode: ViewMode, label: string, icon: React.ReactNode) => (
     <button
-      onClick={mode === "reader" ? handleReader : mode === "web" ? handleWebView : () => spinTo("rss")}
+      onClick={mode === "reader" ? handleReader : mode === "web" ? handleWebView : () => setViewMode("rss")}
       disabled={loadingFull}
       className={`flex items-center gap-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
         viewMode === mode
@@ -338,19 +311,14 @@ export function ArticleDetail() {
         </div>
       )}
 
-      {/* Triangular prism — 3 faces */}
-      <div
-        ref={prismRef}
-        className="prism-container"
-        style={{ "--prism-z": `${prismZ}px`, perspective: `${prismPerspective}px` } as React.CSSProperties}
-      >
+      {/* Sliding panels */}
+      <div className="slide-container">
         <div
-          className="prism-inner"
-          data-face={viewMode === "rss" ? "0" : viewMode === "reader" ? "1" : "2"}
-          style={{ transform: `rotateY(${prismAngle}deg)` }}
+          className="slide-track"
+          style={{ transform: `translateX(-${slideIndex * 100}%)` }}
         >
-          {/* Face 0: RSS preview */}
-          <div className="prism-face prism-face-0">
+          {/* Panel 0: RSS preview */}
+          <div className="slide-panel">
 
             <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 40px 80px" }}>
               <div style={{ marginBottom: 28 }}>
@@ -393,8 +361,8 @@ export function ArticleDetail() {
             </div>
           </div>
 
-          {/* Face 1: Reader mode */}
-          <div className="prism-face prism-face-1">
+          {/* Panel 1: Reader mode */}
+          <div className="slide-panel">
 
             {fullContent && (
               <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 40px 80px" }}>
@@ -412,8 +380,8 @@ export function ArticleDetail() {
             )}
           </div>
 
-          {/* Face 2: Web view */}
-          <div className="prism-face prism-face-2">
+          {/* Panel 2: Web view */}
+          <div className="slide-panel slide-panel-web">
             {rawHtml && (
               <iframe
                 ref={iframeRef}

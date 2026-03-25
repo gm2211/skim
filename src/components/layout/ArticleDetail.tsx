@@ -4,6 +4,7 @@ import { useSummarizeArticle } from "../../hooks/useAi";
 import { useSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
 import { fetchFullArticle } from "../../services/commands";
+import { ChatDrawer } from "../chat/ChatPanel";
 
 type ViewMode = "rss" | "reader" | "web";
 
@@ -625,8 +626,12 @@ export function ArticleDetail() {
               />
             )}
           </div>
+
         </div>
       </div>
+
+      {/* Chat drawer — collapsible bottom pane */}
+      <ChatDrawer articleId={article.id} articleTitle={article.title} />
     </div>
   );
 }

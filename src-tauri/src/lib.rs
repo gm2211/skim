@@ -83,6 +83,9 @@ pub fn run() {
             commands::ai::summarize_article,
             commands::ai::generate_themes,
             commands::ai::get_themes,
+            // Chat
+            commands::chat::chat_with_article,
+            commands::chat::web_search,
             // Settings
             commands::settings::get_settings,
             commands::settings::update_settings,

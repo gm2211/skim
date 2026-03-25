@@ -77,11 +77,7 @@ fn length_params(settings: &AiSettings) -> (String, String, i64, i64) {
 }
 
 pub fn article_bullet_summary_prompt(title: &str, text: &str, settings: &AiSettings) -> String {
-    let truncated = if text.len() > 6000 {
-        &text[..6000]
-    } else {
-        text
-    };
+    let truncated: String = text.chars().take(6000).collect();
     let (bullet_count, _, _, _) = length_params(settings);
 
     if settings.summary_format.as_deref().unwrap_or("paragraph") == "paragraph" {
@@ -96,20 +92,19 @@ Title: {title}
 Content:
 {truncated}
 
-Respond with ONLY a JSON object in this exact format (no text before or after the JSON):
+CRITICAL: Respond with ONLY a valid JSON object. No text, explanation, or thinking before or after the JSON.
+If you need to reason about the article, put ALL reasoning in the "notes" field — NEVER in "bullets".
+The "bullets" field must contain ONLY the final bullet point strings.
+
 {{
   "bullets": ["First key point", "Second key point", "Third key point"],
-  "notes": "Any meta-commentary or caveats. Put anything here that is NOT a bullet point."
+  "notes": "Put any reasoning, thinking process, analysis, caveats, or meta-commentary here."
 }}"#
     )
 }
 
 pub fn article_full_summary_prompt(title: &str, text: &str, settings: &AiSettings) -> String {
-    let truncated = if text.len() > 8000 {
-        &text[..8000]
-    } else {
-        text
-    };
+    let truncated: String = text.chars().take(8000).collect();
     let (_, paragraph_count, _, _) = length_params(settings);
 
     match settings.summary_format.as_deref().unwrap_or("paragraph") {
@@ -125,10 +120,13 @@ Title: {title}
 Content:
 {truncated}
 
-Respond with ONLY a JSON object in this exact format (no text before or after the JSON):
+CRITICAL: Respond with ONLY a valid JSON object. No text, explanation, or thinking before or after the JSON.
+If you need to reason about the article, put ALL reasoning in the "notes" field — NEVER in "summary".
+The "summary" field must contain ONLY the final summary text.
+
 {{
-  "summary": "The actual summary in markdown format. Use double newlines between paragraphs.",
-  "notes": "Any meta-commentary, caveats, or context you want to add about the summary. Put anything here that is NOT the summary itself."
+  "summary": "The actual summary text only. No reasoning, no analysis, no thinking process.",
+  "notes": "Put any reasoning, thinking process, analysis, caveats, or meta-commentary here."
 }}"#
     )
 }

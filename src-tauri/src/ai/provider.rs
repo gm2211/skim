@@ -16,6 +16,8 @@ pub struct ChatRequest {
     pub messages: Vec<ChatMessage>,
     pub temperature: Option<f64>,
     pub max_tokens: Option<i64>,
+    #[serde(default)]
+    pub json_mode: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -91,12 +93,15 @@ impl AiProvider for OpenAiCompatibleProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, String> {
         let url = format!("{}/v1/chat/completions", self.base_url);
 
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "model": request.model,
             "messages": request.messages,
             "temperature": request.temperature.unwrap_or(0.3),
             "max_tokens": request.max_tokens.unwrap_or(2048),
         });
+        if request.json_mode {
+            body["response_format"] = serde_json::json!({"type": "json_object"});
+        }
 
         let mut req = self.client.post(&url).json(&body);
 

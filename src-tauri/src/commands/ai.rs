@@ -59,8 +59,8 @@ impl SummaryCache {
 
 pub type SharedSummaryCache = Arc<Mutex<SummaryCache>>;
 
-/// Strip ChatML artifacts and other model noise from output
-/// Clean raw model output: strip ChatML tokens, code fences
+/// Minimal cleanup: only strip ChatML tokens and code fences (structural, not heuristic).
+/// All real parsing is done by extract_json_object() which finds the first valid JSON object.
 fn clean_raw_output(text: &str) -> String {
     let mut s = text.to_string();
     // Remove ChatML tokens
@@ -167,7 +167,8 @@ fn extract_field_fuzzy(text: &str, field: &str) -> Option<String> {
 }
 
 /// Find the first JSON object in a string (handles preamble text before the JSON)
-fn extract_json_object(text: &str) -> Option<&str> {
+/// Find the first JSON object in a string (handles preamble text before the JSON)
+pub fn extract_json_object(text: &str) -> Option<&str> {
     let start = text.find('{')?;
     let mut depth = 0;
     let mut in_string = false;
@@ -284,6 +285,7 @@ pub async fn summarize_article(
             ],
             temperature: Some(0.2),
             max_tokens: Some(prompts::bullet_max_tokens(&settings.ai)),
+            json_mode: true,
         };
         Some(provider.chat(req).await?)
     } else {
@@ -301,6 +303,7 @@ pub async fn summarize_article(
             ],
             temperature: Some(0.3),
             max_tokens: Some(prompts::full_max_tokens(&settings.ai)),
+            json_mode: true,
         };
         Some(provider.chat(req).await?)
     } else {
@@ -424,6 +427,7 @@ pub async fn generate_themes(
         ],
         temperature: Some(0.3),
         max_tokens: Some(4096),
+        json_mode: true,
     };
 
     let response = provider.chat(request).await?;

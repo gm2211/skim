@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useLayoutEffect } from "react";
 import type { Article } from "../../services/types";
 
 interface Props {
@@ -29,6 +29,8 @@ export function ArticleContextMenu({
   onCopyLink,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ left: x, top: y });
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -45,16 +47,23 @@ export function ArticleContextMenu({
     };
   }, [onClose]);
 
-  // Adjust position to stay within viewport
-  useEffect(() => {
+  // Adjust position before paint to avoid flicker
+  useLayoutEffect(() => {
     if (!ref.current) return;
     const rect = ref.current.getBoundingClientRect();
-    if (rect.right > window.innerWidth) {
-      ref.current.style.left = `${x - rect.width}px`;
+    const pad = 8;
+    let left = x;
+    let top = y;
+    if (left + rect.width > window.innerWidth - pad) {
+      left = x - rect.width;
     }
-    if (rect.bottom > window.innerHeight) {
-      ref.current.style.top = `${y - rect.height}px`;
+    if (top + rect.height > window.innerHeight - pad) {
+      top = y - rect.height;
     }
+    if (left < pad) left = pad;
+    if (top < pad) top = pad;
+    setPos({ left, top });
+    setVisible(true);
   }, [x, y]);
 
   const item = (
@@ -82,11 +91,12 @@ export function ArticleContextMenu({
       ref={ref}
       className="fixed z-50 rounded-xl border border-white/10 shadow-2xl backdrop-blur-xl"
       style={{
-        left: x,
-        top: y,
+        left: pos.left,
+        top: pos.top,
         background: "rgba(30, 35, 45, 0.92)",
         padding: "6px",
-        minWidth: 220,
+        width: 240,
+        visibility: visible ? "visible" : "hidden",
       }}
     >
       {/* Article header */}
@@ -100,10 +110,13 @@ export function ArticleContextMenu({
         >
           {(article.feed_title || "?")[0].toUpperCase()}
         </div>
-        <div className="min-w-0">
-          <p className="text-text-primary font-medium truncate" style={{ fontSize: 13 }}>
+        <div className="min-w-0" style={{ overflow: "hidden" }}>
+          <div
+            className="text-text-primary font-medium ctx-menu-title"
+            style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+          >
             {article.title}
-          </p>
+          </div>
           <p className="text-text-muted truncate" style={{ fontSize: 11 }}>
             {article.feed_title}
           </p>

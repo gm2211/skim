@@ -10,6 +10,9 @@ import type {
   HfModelFile,
   LocalModel,
   SystemInfo,
+  ChatMessageInput,
+  ChatResponse,
+  SearchResult,
 } from "./types";
 
 // Feeds
@@ -55,6 +58,12 @@ export const summarizeArticle = (
   });
 export const generateThemes = () => invoke<Theme[]>("generate_themes");
 export const getThemes = () => invoke<Theme[]>("get_themes");
+
+// Chat
+export const chatWithArticle = (articleId: string, messages: ChatMessageInput[]) =>
+  invoke<ChatResponse>("chat_with_article", { articleId, messages });
+export const webSearch = (query: string) =>
+  invoke<SearchResult[]>("web_search", { query });
 
 // Settings
 export const getSettings = () => invoke<AppSettings>("get_settings");

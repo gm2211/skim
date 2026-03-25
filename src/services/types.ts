@@ -74,6 +74,27 @@ export interface AiSettings {
   summary_format: string | null;
   summary_custom_prompt: string | null;
   summary_custom_word_count: number | null;
+  chat_provider: string | null;
+  chat_model: string | null;
+  chat_api_key: string | null;
+  chat_endpoint: string | null;
+}
+
+export interface ChatMessageInput {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatResponse {
+  content: string;
+  provider: string;
+  model: string;
+}
+
+export interface SearchResult {
+  title: string;
+  url: string;
+  snippet: string;
 }
 
 export interface HfModelInfo {

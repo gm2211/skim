@@ -237,3 +237,16 @@ button, a, input, select, textarea, [role="button"] {
 .full-article-content [role="complementary"] {
   display: none !important;
 }
+
+/* Context menu title: scroll on hover when truncated */
+.ctx-menu-title {
+  transition: none;
+}
+.ctx-menu-title:hover {
+  animation: ctx-scroll 3s linear 0.3s;
+  text-overflow: clip;
+}
+@keyframes ctx-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(calc(-100% + 160px)); }
+}

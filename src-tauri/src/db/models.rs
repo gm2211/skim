@@ -96,6 +96,14 @@ pub struct AiSettings {
     pub summary_custom_prompt: Option<String>, // advanced: override system prompt
     #[serde(default)]
     pub summary_custom_word_count: Option<i32>,
+    #[serde(default)]
+    pub chat_provider: Option<String>,      // "same" or provider name; None = same as main
+    #[serde(default)]
+    pub chat_model: Option<String>,
+    #[serde(default)]
+    pub chat_api_key: Option<String>,
+    #[serde(default)]
+    pub chat_endpoint: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,6 +134,10 @@ impl Default for AppSettings {
                 summary_format: None,
                 summary_custom_prompt: None,
                 summary_custom_word_count: None,
+                chat_provider: None,
+                chat_model: None,
+                chat_api_key: None,
+                chat_endpoint: None,
             },
             appearance: AppearanceSettings {
                 theme: "dark".to_string(),

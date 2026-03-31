@@ -112,8 +112,6 @@ struct ProllmResponse {
 struct ProllmRecord {
     model_id: String,
     model_name: String,
-    #[allow(dead_code)]
-    model_size: Option<f64>,
     metric_accuracy: Option<f64>,
     metric_instruct: Option<f64>,
     metric_quality: Option<f64>,

@@ -7,20 +7,18 @@ import { ModelBrowser } from "./ModelBrowser";
 const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
   { value: "local", label: "Local (Embedded)", description: "Run AI locally with llama.cpp — no server needed" },
-  { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
-  { value: "groq", label: "Groq", description: "Fast inference — groq.com" },
-  { value: "llamacpp", label: "llama.cpp Server", description: "Local llama.cpp server (default: localhost:8080)" },
-  { value: "lmstudio", label: "LM Studio", description: "Local LM Studio (default: localhost:1234)" },
   { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
+  { value: "anthropic", label: "Claude (Anthropic)", description: "api.anthropic.com" },
   { value: "openai", label: "OpenAI", description: "api.openai.com" },
   { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
+  { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
 ];
 
 const needsApiKey = (provider: string) =>
-  ["openai", "openrouter", "groq", "custom"].includes(provider);
+  ["openai", "openrouter", "anthropic", "custom"].includes(provider);
 
 const needsEndpoint = (provider: string) =>
-  ["ollama", "lmstudio", "llamacpp", "custom"].includes(provider);
+  ["ollama", "custom"].includes(provider);
 
 type SettingsTab = "ai" | "sync" | "appearance";
 
@@ -188,7 +186,7 @@ export function SettingsDialog() {
                     <input
                       type="password"
                       value={local.ai.api_key ?? ""}
-                      onChange={(e) => updateAi({ api_key: e.target.value || null })}
+                      onChange={(e) => updateAi({ api_key: e.target.value.trim() || null })}
                       placeholder="sk-..."
                       className={inputClass}
                       style={inputStyle}
@@ -205,11 +203,7 @@ export function SettingsDialog() {
                       placeholder={
                         local.ai.provider === "ollama"
                           ? "http://localhost:11434"
-                          : local.ai.provider === "lmstudio"
-                            ? "http://localhost:1234"
-                            : local.ai.provider === "llamacpp"
-                              ? "http://localhost:8080"
-                              : "http://localhost:4000"
+                          : "https://api.example.com"
                       }
                       className={inputClass}
                       style={inputStyle}

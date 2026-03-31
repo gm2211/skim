@@ -8,3 +8,4 @@
 vendor/
 test_output.txt
 test_signal.txt
+.build_agent/

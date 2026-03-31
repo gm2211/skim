@@ -200,7 +200,6 @@ pub async fn summarize_article(
     model_state: State<'_, SharedModelState>,
     summary_cache: State<'_, SharedSummaryCache>,
     article_id: String,
-    #[allow(unused_variables)]
     force: Option<bool>,
     summary_length: Option<String>,
     summary_tone: Option<String>,
@@ -283,7 +282,7 @@ pub async fn summarize_article(
                 ChatMessage { role: "system".to_string(), content: system_prompt.clone() },
                 ChatMessage { role: "user".to_string(), content: bullet_prompt },
             ],
-            temperature: Some(0.2),
+            temperature: Some(0.5),
             max_tokens: Some(prompts::bullet_max_tokens(&settings.ai)),
             json_mode: true,
         };
@@ -310,8 +309,16 @@ pub async fn summarize_article(
         None
     };
 
-    let bullet_text = bullet_response.map(|r| extract_bullets_field(&r.content));
-    let full_text = full_response.map(|r| extract_summary_field(&r.content));
+    let bullet_text = bullet_response.map(|r| {
+        log::info!("Bullet raw response: {}", &r.content[..r.content.len().min(200)]);
+        extract_bullets_field(&r.content)
+    });
+    let full_text = full_response.map(|r| {
+        log::info!("Summary raw response: {}", &r.content[..r.content.len().min(500)]);
+        let result = extract_summary_field(&r.content);
+        log::info!("Extracted summary: {}", &result[..result.len().min(200)]);
+        result
+    });
 
     let summary = ArticleSummary {
         article_id: article_id.clone(),

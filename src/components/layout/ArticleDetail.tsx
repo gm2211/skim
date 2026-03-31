@@ -476,8 +476,8 @@ export function ArticleDetail() {
       )}
 
       {summarize.data && (
-        <div className="flex-shrink-0" style={{ maxWidth: 720, margin: "0 auto", padding: "0 40px 8px", width: "100%" }}>
-          <div className="rounded-xl border border-white/10" style={{ padding: "16px 20px", background: "rgba(255,255,255,0.03)", position: "relative" }}>
+        <div className="flex-shrink-0" style={{ maxWidth: 720, margin: "0 auto", padding: "0 40px 8px", width: "100%", maxHeight: "40vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div className="rounded-xl border border-white/10" style={{ padding: "16px 20px", background: "rgba(255,255,255,0.03)", position: "relative", overflowY: "auto" }}>
             <button
               onClick={() => summarize.reset()}
               className="text-text-muted hover:text-text-primary transition-colors"

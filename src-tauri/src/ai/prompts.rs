@@ -49,8 +49,9 @@ pub fn article_summary_system_prompt(settings: &AiSettings) -> String {
     };
 
     format!(
-        "{tone} Every point conveys a specific fact or insight. Use clear, direct language. No emoji. \
-         Lead with the single most important takeaway — the one sentence someone should remember if they read nothing else."
+        "{tone} Lead with the single most important takeaway. \
+         Always respond with a JSON object containing exactly two string keys: \"summary\" and \"notes\". \
+         Never use arrays, nested objects, or any other keys. Put your entire summary as a single string in \"summary\"."
     )
 }
 
@@ -68,11 +69,12 @@ fn length_params(settings: &AiSettings) -> (String, String, i64, i64) {
             );
         }
     }
+    // max_tokens includes JSON overhead (~50 tokens for keys/braces)
     match settings.summary_length.as_deref().unwrap_or("short") {
-        "short" => ("2-3".into(), "1-2 sentences (~30 words)".into(), 128, 192),
-        "long" => ("5-8".into(), "3-5 paragraphs (~300 words)".into(), 1024, 2048),
-        "medium" => ("3-5".into(), "2-3 paragraphs (~150 words)".into(), 512, 1024),
-        _ => ("2-3".into(), "1-2 sentences (~30 words)".into(), 128, 192),
+        "short" => ("2-3".into(), "1-2 sentences (~30 words)".into(), 200, 256),
+        "long" => ("5-8".into(), "3-5 paragraphs (~300 words)".into(), 1200, 2400),
+        "medium" => ("3-5".into(), "2-3 paragraphs (~150 words)".into(), 600, 1200),
+        _ => ("2-3".into(), "1-2 sentences (~30 words)".into(), 200, 256),
     }
 }
 
@@ -85,21 +87,20 @@ pub fn article_bullet_summary_prompt(title: &str, text: &str, settings: &AiSetti
     }
 
     format!(
-        r#"Summarize this article in {bullet_count} bullet points. Each bullet should be one clear sentence conveying a key fact or insight.
+        r#"Summarize the following article in {bullet_count} bullet points. Each bullet is one clear sentence.
 
-Title: {title}
+Article title: {title}
 
-Content:
+Article text:
 {truncated}
 
-CRITICAL: Respond with ONLY a valid JSON object. No text, explanation, or thinking before or after the JSON.
-If you need to reason about the article, put ALL reasoning in the "notes" field — NEVER in "bullets".
-The "bullets" field must contain ONLY the final bullet point strings.
+Write a JSON object with exactly two keys: "bullets" and "notes".
+Put your bullet points as a JSON array of strings in "bullets". Put any caveats in "notes".
 
-{{
-  "bullets": ["First key point", "Second key point", "Third key point"],
-  "notes": "Put any reasoning, thinking process, analysis, caveats, or meta-commentary here."
-}}"#
+Example of the expected output format:
+{{"bullets": ["CERN scientists discovered the Zephyr boson in LHC collisions.", "The particle does not fit the Standard Model."], "notes": "Preliminary findings only."}}
+
+Now write your JSON for the article above:"#
     )
 }
 
@@ -112,22 +113,22 @@ pub fn article_full_summary_prompt(title: &str, text: &str, settings: &AiSetting
         _ => {}
     }
 
+    let example = match settings.summary_length.as_deref().unwrap_or("short") {
+        "long" => r#"{"summary": "Scientists at CERN announced the discovery of a new subatomic particle called the Zephyr boson. The particle was detected during high-energy collisions in the Large Hadron Collider and has properties that challenge the Standard Model. If confirmed, this could open the door to new physics, potentially explaining dark matter and dark energy. The research team, led by Dr. Elena Vasquez, published their findings in Nature Physics. The discovery has generated significant excitement in the scientific community.", "notes": "none"}"#,
+        "medium" => r#"{"summary": "Scientists at CERN discovered a new subatomic particle called the Zephyr boson that challenges the Standard Model. If confirmed by independent experiments, it could reshape quantum physics and help explain dark matter and dark energy.", "notes": "none"}"#,
+        _ => r#"{"summary": "CERN scientists discovered the Zephyr boson, a particle that challenges the Standard Model.", "notes": "none"}"#,
+    };
+
     format!(
-        r#"Summarize this article in {paragraph_count}. Be specific and precise. Include key facts, figures, and conclusions.
+        r#"Summarize the following article in {paragraph_count}.
 
-Title: {title}
+Article title: {title}
 
-Content:
+Article text:
 {truncated}
 
-CRITICAL: Respond with ONLY a valid JSON object. No text, explanation, or thinking before or after the JSON.
-If you need to reason about the article, put ALL reasoning in the "notes" field — NEVER in "summary".
-The "summary" field must contain ONLY the final summary text.
-
-{{
-  "summary": "The actual summary text only. No reasoning, no analysis, no thinking process.",
-  "notes": "Put any reasoning, thinking process, analysis, caveats, or meta-commentary here."
-}}"#
+Respond with a JSON object with keys "summary" and "notes". Example:
+{example}"#
     )
 }
 

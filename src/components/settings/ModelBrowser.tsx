@@ -269,6 +269,7 @@ export function ModelBrowser({
   ai: AiSettings;
   updateAi: (patch: Partial<AiSettings>) => void;
 }) {
+  const [showBrowser, setShowBrowser] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [expandedRepo, setExpandedRepo] = useState<string | null>(null);
@@ -497,14 +498,62 @@ export function ModelBrowser({
         </div>
       )}
 
-      {/* Browse Models */}
-      <div>
-        <label
-          className="block text-text-primary"
-          style={{ fontSize: 14, fontWeight: 500, marginBottom: 8 }}
-        >
-          Get a Model
+      {/* Recommended Models */}
+      <div style={{ marginBottom: 16 }}>
+        <label className="block text-text-primary" style={{ fontSize: 14, fontWeight: 500, marginBottom: 8 }}>
+          Recommended Models
         </label>
+        <div className="flex flex-col gap-2">
+          {[
+            { repo: "bartowski/gemma-3-4b-it-GGUF", file: "gemma-3-4b-it-Q4_K_M.gguf", name: "Gemma 3 4B", size: "2.8 GB", desc: "Best for summarization — fast, accurate JSON output" },
+            { repo: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", file: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", name: "Llama 3.1 8B Instruct", size: "4.9 GB", desc: "Higher quality — good for chat and longer summaries" },
+          ].map((preset) => {
+            const installed = localModels.data?.some((m) => m.filename === preset.file);
+            const isDownloading = downloadModel.isPending;
+            return (
+              <div
+                key={preset.file}
+                className="flex items-center justify-between rounded-lg border border-white/10"
+                style={{ padding: "8px 12px" }}
+              >
+                <div>
+                  <span className="text-text-primary" style={{ fontSize: 13 }}>{preset.name}</span>
+                  <span className="text-text-muted" style={{ fontSize: 11, marginLeft: 8 }}>{preset.size}</span>
+                  <p className="text-text-muted" style={{ fontSize: 11 }}>{preset.desc}</p>
+                </div>
+                {installed ? (
+                  <span className="text-accent" style={{ fontSize: 11 }}>Installed</span>
+                ) : (
+                  <button
+                    onClick={() => downloadModel.mutate({ repoId: preset.repo, filename: preset.file })}
+                    disabled={isDownloading}
+                    className="text-accent border border-accent/20 hover:bg-accent/10 rounded-lg transition-colors disabled:opacity-40"
+                    style={{ padding: "4px 12px", fontSize: 11 }}
+                  >
+                    Download
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Browse Models — hidden by default */}
+      <div>
+        <button
+          onClick={() => setShowBrowser(!showBrowser)}
+          className="text-text-muted hover:text-text-primary transition-colors flex items-center gap-1"
+          style={{ fontSize: 12, marginBottom: showBrowser ? 8 : 0 }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            style={{ transform: showBrowser ? "rotate(90deg)" : "none", transition: "transform 0.2s" }}>
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+          Browse more models
+        </button>
+
+        {showBrowser && <>
 
         {sysInfo.data && (
           <p className="text-text-muted" style={{ fontSize: 11, marginBottom: 8 }}>
@@ -777,6 +826,7 @@ export function ModelBrowser({
             Failed to load models: {String(searchResults.error)}
           </p>
         )}
+        </>}
       </div>
 
       {/* GPU Layers — advanced */}

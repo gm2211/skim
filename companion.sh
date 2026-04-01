@@ -1,26 +1,25 @@
 #!/usr/bin/env bash
 #
-# Build Agent — file-based RPC for build/test commands only.
+# Companion — file-based RPC for sandbox → host operations.
 #
-# Claude writes a command name to .build_agent/command
+# Claude writes a command name to .companion/command
 # This script runs the corresponding hardcoded command and writes output
-# to .build_agent/result
+# to .companion/result
 #
-# Usage:  ./build_agent.sh
+# Usage:  bash companion.sh
 # Stop:   Ctrl-C or kill the process
 #
 # Security:
 #   - Commands are a fixed enum — no arguments, no interpolation, no eval
 #   - Each command maps to an exact hardcoded invocation
-#   - All execution is pinned to this directory
-#   - Once finalized: chmod 444 build_agent.sh
+#   - Self-locks on first run (chmod 444, chown root)
 #
 
 set -euo pipefail
 
 SCRIPT_PATH="$(realpath "$0")"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-AGENT_DIR="$PROJECT_DIR/.build_agent"
+AGENT_DIR="$PROJECT_DIR/.companion"
 COMMAND_FILE="$AGENT_DIR/command"
 RESULT_FILE="$AGENT_DIR/result"
 STATUS_FILE="$AGENT_DIR/status"
@@ -35,8 +34,8 @@ lockdown() {
     owner=$(stat -f "%Su" "$SCRIPT_PATH" 2>/dev/null || stat -c "%U" "$SCRIPT_PATH" 2>/dev/null)
 
     if [[ "$perms" != "444" || "$owner" != "root" ]]; then
-        echo "[build_agent] This script is not locked down yet."
-        echo "[build_agent] Locking: chmod 444 + chown root"
+        echo "[companion] This script is not locked down yet."
+        echo "[companion] Locking: chmod 444 + chown root"
         echo ""
 
         if [[ "$(uname)" == "Darwin" ]]; then
@@ -46,7 +45,7 @@ lockdown() {
         fi
         sudo chmod 444 "$SCRIPT_PATH"
 
-        echo "[build_agent] Locked. Re-run with: bash $SCRIPT_PATH"
+        echo "[companion] Locked. Re-run with: bash $SCRIPT_PATH"
         exit 0
     fi
 }
@@ -54,41 +53,31 @@ lockdown() {
 run_command() {
     case "$1" in
         check)
-            cargo check 2>&1
-            ;;
-        build)
-            cargo build 2>&1
-            ;;
-        build-release)
-            cargo build --release 2>&1
+            cd src-tauri && cargo check 2>&1
             ;;
         test)
-            cargo test 2>&1
+            cd src-tauri && cargo test 2>&1
             ;;
         clippy)
-            cargo clippy 2>&1
+            cd src-tauri && cargo clippy 2>&1
             ;;
         fmt)
-            cargo fmt 2>&1
-            ;;
-        fmt-check)
-            cargo fmt --check 2>&1
-            ;;
-        tauri-dev)
-            npx tauri dev 2>&1
-            ;;
-        tauri-build)
-            npx tauri build 2>&1
+            cd src-tauri && cargo fmt 2>&1
             ;;
         release)
-            cd "$PROJECT_DIR/.." && bash release.sh 2>&1
+            bash release.sh 2>&1
             ;;
         release-sign)
-            cd "$PROJECT_DIR/.." && bash release.sh --sign 2>&1
+            bash release.sh --sign 2>&1
+            ;;
+        open)
+            cp -r src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Skim.app /Applications/ 2>&1
+            open /Applications/Skim.app 2>&1
+            echo "Opened Skim.app"
             ;;
         *)
             echo "ERROR: Unknown command '$1'"
-            echo "Available: check build build-release test clippy fmt fmt-check tauri-dev tauri-build release release-sign"
+            echo "Available: check test clippy fmt release release-sign open"
             return 1
             ;;
     esac
@@ -97,7 +86,7 @@ run_command() {
 cleanup() {
     rm -f "$PID_FILE"
     echo "stopped" > "$STATUS_FILE"
-    echo "[build_agent] Stopped."
+    echo "[companion] Stopped."
     exit 0
 }
 trap cleanup EXIT INT TERM
@@ -110,13 +99,12 @@ echo "idle" > "$STATUS_FILE"
 : > "$COMMAND_FILE"
 : > "$RESULT_FILE"
 
-echo "[build_agent] Running in $PROJECT_DIR"
-echo "[build_agent] Commands: check build build-release test clippy fmt fmt-check tauri-dev tauri-build release release-sign"
+echo "[companion] Running in $PROJECT_DIR"
+echo "[companion] Commands: check test clippy fmt release release-sign open"
 echo ""
 
 while true; do
     if [[ -s "$COMMAND_FILE" ]]; then
-        # Read and sanitize: strip whitespace, take only first word
         CMD=$(head -1 "$COMMAND_FILE" | tr -d '[:space:]' | tr -cd 'a-z-')
         : > "$COMMAND_FILE"
 
@@ -124,7 +112,7 @@ while true; do
             continue
         fi
 
-        echo "[build_agent] Received: $CMD"
+        echo "[companion] Received: $CMD"
         echo "running" > "$STATUS_FILE"
 
         (
@@ -135,7 +123,7 @@ while true; do
         ) > "$RESULT_FILE" 2>&1
 
         echo "done" > "$STATUS_FILE"
-        echo "[build_agent] Done."
+        echo "[companion] Done."
     fi
     sleep 0.5
 done

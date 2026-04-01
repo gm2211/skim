@@ -32,3 +32,8 @@ src-tauri/gen/
 *.db
 .beads-credential-key
 .claude/settings.local.json
+
+# Companion agent runtime files
+.companion/
+.build_agent/
+src-tauri/.build_agent/

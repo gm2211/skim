@@ -185,7 +185,7 @@ export function SettingsDialog() {
                 {needsApiKey(local.ai.provider) && (
                   <InputField
                     label={local.ai.provider === "claude-cli" ? "Setup Token" : "API Key"}
-                    description={local.ai.provider === "claude-cli" ? "Run 'claude setup-token' in your terminal to get a token. Optional if already logged in." : undefined}
+                    description={local.ai.provider === "claude-cli" ? "Run 'claude setup-token' in your terminal to get a token." : undefined}
                   >
                     <input
                       type="password"

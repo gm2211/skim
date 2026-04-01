@@ -118,8 +118,8 @@ echo "Building Skim for $TARGET"
 echo "  Signing: $SIGN"
 echo ""
 
-# Clean llama-cpp cmake cache to pick up new deployment target
-find src-tauri/target -path "*/llama-cpp-sys-2-*/out" -type d -exec rm -rf {} + 2>/dev/null || true
+# Clean llama-cpp build artifacts entirely so cmake reruns with correct deployment target
+find src-tauri/target -name "llama-cpp-sys-2-*" -type d -exec rm -rf {} + 2>/dev/null || true
 
 # Install frontend dependencies
 pnpm install

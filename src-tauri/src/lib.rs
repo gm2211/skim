@@ -107,11 +107,14 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app, event| {
             if let RunEvent::Exit = event {
-                // Drop the loaded model cleanly before the runtime tears down
+                // Drop the loaded model before the runtime tears down
                 let state = app.state::<SharedModelState>();
                 if let Ok(mut guard) = state.try_lock() {
                     guard.take();
                 };
+                // Force-exit to skip C++ static destructors (llama.cpp Metal
+                // cleanup asserts on shutdown and crashes the process).
+                std::process::exit(0);
             }
         });
 }

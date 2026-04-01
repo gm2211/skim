@@ -5,9 +5,20 @@ import { AddFeedDialog } from "./components/feed/AddFeedDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { useUiStore } from "./stores/uiStore";
 import { useEffect } from "react";
+import { triageArticles } from "./services/commands";
+import { useQueryClient } from "@tanstack/react-query";
 
 function App() {
   const { showAddFeed, showSettings, selectedArticleId, listCollapsed } = useUiStore();
+  const qc = useQueryClient();
+
+  // Auto-triage on startup
+  useEffect(() => {
+    triageArticles(false).then(() => {
+      qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["triageStats"] });
+    }).catch(() => {});
+  }, []);
 
   // Responsive auto-collapse
   useEffect(() => {

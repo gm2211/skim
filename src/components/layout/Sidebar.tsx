@@ -123,43 +123,66 @@ export function Sidebar() {
         </div>
 
         {/* AI Inbox */}
-        <div style={{ marginBottom: 32 }}>
-          <div className="flex items-center justify-between" style={{ padding: "0 8px", marginBottom: 12 }}>
-            <div
-              onClick={() => setSidebarView({ type: "inbox" })}
-              className="flex items-center gap-3 cursor-pointer relative z-20 hover:text-text-primary"
-            >
+        <div style={{ marginBottom: 32, padding: "0 8px" }}>
+          <div
+            onClick={() => setSidebarView({ type: "inbox" })}
+            className={`flex items-center justify-between cursor-pointer transition-colors relative z-20 hover:text-text-primary ${
+              isActive({ type: "inbox" }) ? "text-text-primary" : "text-text-secondary"
+            }`}
+            style={{ padding: "6px 0", marginBottom: 8 }}
+          >
+            <div className="flex items-center gap-3">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
                 className={`flex-shrink-0 ${isActive({ type: "inbox" }) ? "opacity-100" : "opacity-50"}`}
               >
                 <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
                 <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" />
               </svg>
-              <span
-                className={isActive({ type: "inbox" }) ? "text-text-primary" : "text-text-secondary"}
-                style={{ fontSize: 17, fontWeight: 600 }}
-              >
+              <span style={{ fontSize: 17, fontWeight: 600 }}>
                 AI Inbox
               </span>
-              {triageStats && triageStats.total > 0 && (
-                <span className="text-text-muted tabular-nums" style={{ fontSize: 14 }}>
-                  {triageStats.total}
-                </span>
-              )}
             </div>
-            <button
-              onClick={() => triage.mutate(false)}
-              disabled={triage.isPending}
-              className={`text-text-muted hover:text-text-primary transition-colors relative z-20 ${
-                triage.isPending ? "animate-spin" : ""
-              }`}
-              title="Triage unread articles with AI"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M6 9l6-6 6 6M6 15l6 6 6-6" />
-              </svg>
-            </button>
+            {triageStats && triageStats.total > 0 && (
+              <span className="text-text-muted tabular-nums" style={{ fontSize: 14 }}>
+                {triageStats.total}
+              </span>
+            )}
           </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); triage.mutate(false); }}
+            disabled={triage.isPending}
+            className="flex items-center gap-2 w-full rounded-lg text-text-muted hover:text-accent hover:bg-white/5 transition-colors relative z-20"
+            style={{ padding: "8px", fontSize: 13 }}
+          >
+            {triage.isPending ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin flex-shrink-0">
+                  <path d="M21 12a9 9 0 11-6.219-8.56" />
+                </svg>
+                <span>Triaging...</span>
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                <span>Triage unread articles</span>
+              </>
+            )}
+          </button>
+          {triage.isError && (
+            <p className="text-red-400" style={{ fontSize: 12, padding: "4px 8px" }}>
+              {triage.error instanceof Error ? triage.error.message : "Triage failed"}
+            </p>
+          )}
+          {triage.isSuccess && triage.data && (
+            <p className="text-text-muted" style={{ fontSize: 12, padding: "4px 8px" }}>
+              {triage.data.triaged_count > 0
+                ? `Triaged ${triage.data.triaged_count} articles`
+                : "No new articles to triage"}
+              {triage.data.errors.length > 0 && ` (${triage.data.errors.length} errors)`}
+            </p>
+          )}
         </div>
 
         {/* Feeds section */}

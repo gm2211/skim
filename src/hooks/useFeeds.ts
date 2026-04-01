@@ -49,6 +49,11 @@ export function useRefreshAllFeeds() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["articles"] });
+      // Auto-triage new articles after refresh
+      commands.triageArticles(false).then(() => {
+        qc.invalidateQueries({ queryKey: ["inbox"] });
+        qc.invalidateQueries({ queryKey: ["triageStats"] });
+      }).catch(() => {});
     },
   });
 }

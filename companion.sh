@@ -84,8 +84,8 @@ run_command() {
 }
 
 cleanup() {
-    rm -f "$PID_FILE"
-    echo "stopped" > "$STATUS_FILE"
+    rm -f "$PID_FILE" 2>/dev/null
+    echo "stopped" > "$STATUS_FILE" 2>/dev/null
     echo "[companion] Stopped."
     exit 0
 }

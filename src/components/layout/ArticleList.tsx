@@ -1,10 +1,34 @@
 import { useMemo, useState, useCallback } from "react";
 import { useArticles, useMarkAllRead, useMarkRead, useMarkUnread, useToggleRead, useToggleStar } from "../../hooks/useArticles";
-import { useThemes } from "../../hooks/useThemes";
+import { useInboxArticles } from "../../hooks/useInbox";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
-import type { ArticleFilter } from "../../services/types";
+import type { ArticleFilter, ArticleWithTriage } from "../../services/types";
+
+const PRIORITY_GROUP_LABELS: Record<number, string> = {
+  5: "MUST READ",
+  4: "IMPORTANT",
+  3: "WORTH READING",
+  2: "ROUTINE",
+  1: "SKIP",
+};
+
+function groupByPriority(articles: ArticleWithTriage[]) {
+  const groups: { label: string; indices: number[] }[] = [];
+  let currentPriority = -1;
+
+  articles.forEach((article, i) => {
+    const p = article.priority ?? 3;
+    if (p !== currentPriority) {
+      groups.push({ label: PRIORITY_GROUP_LABELS[p] ?? `PRIORITY ${p}`, indices: [] });
+      currentPriority = p;
+    }
+    groups[groups.length - 1].indices.push(i);
+  });
+
+  return groups;
+}
 
 function groupByDate(articles: { published_at: number | null; fetched_at: number }[]) {
   const now = new Date();
@@ -56,6 +80,8 @@ export function ArticleList() {
     articleIndex: number;
   } | null>(null);
 
+  const isInbox = sidebarView.type === "inbox";
+
   const filter: ArticleFilter = useMemo(() => {
     const base: ArticleFilter = { limit: 200 };
     switch (sidebarView.type) {
@@ -67,6 +93,8 @@ export function ArticleList() {
       case "feed":
         base.feed_id = sidebarView.feedId;
         break;
+      case "inbox":
+        break; // handled by separate query
       case "theme":
         base.theme_id = sidebarView.themeId;
         break;
@@ -76,13 +104,13 @@ export function ArticleList() {
     return base;
   }, [sidebarView, listFilter]);
 
-  const { data: articles, isLoading } = useArticles(filter);
-  const { data: themes } = useThemes();
+  const { data: regularArticles, isLoading: regularLoading } = useArticles(filter);
+  const { data: inboxArticles, isLoading: inboxLoading } = useInboxArticles(
+    isInbox ? undefined : -1 // -1 disables the query when not in inbox view
+  );
 
-  const currentTheme = useMemo(() => {
-    if (sidebarView.type !== "theme") return null;
-    return themes?.find((t) => t.id === sidebarView.themeId);
-  }, [sidebarView, themes]);
+  const articles = isInbox ? inboxArticles : regularArticles;
+  const isLoading = isInbox ? inboxLoading : regularLoading;
 
   const title = useMemo(() => {
     switch (sidebarView.type) {
@@ -92,10 +120,12 @@ export function ArticleList() {
         return "Starred";
       case "feed":
         return null;
+      case "inbox":
+        return "AI Inbox";
       case "theme":
-        return currentTheme?.label ?? "Theme";
+        return "Theme";
     }
-  }, [sidebarView, currentTheme]);
+  }, [sidebarView]);
 
   const feedTitle = useMemo(() => {
     if (sidebarView.type === "feed" && articles && articles.length > 0) {
@@ -119,10 +149,11 @@ export function ArticleList() {
     return articles?.filter((a) => !a.is_read).length ?? 0;
   }, [articles]);
 
-  const dateGroups = useMemo(() => {
+  const articleGroups = useMemo(() => {
     if (!filteredArticles) return [];
+    if (isInbox) return groupByPriority(filteredArticles as ArticleWithTriage[]);
     return groupByDate(filteredArticles);
-  }, [filteredArticles]);
+  }, [filteredArticles, isInbox]);
 
   const handleMarkAllRead = () => {
     const feedId = sidebarView.type === "feed" ? sidebarView.feedId : null;
@@ -231,17 +262,6 @@ export function ArticleList() {
         </div>
       </div>
 
-      {/* Theme summary */}
-      {currentTheme?.summary && (
-        <div style={{ padding: "4px 20px 8px" }}>
-          <div className="rounded-lg bg-white/5" style={{ padding: "10px 12px" }}>
-            <p className="text-text-secondary leading-relaxed" style={{ fontSize: 12 }}>
-              {currentTheme.summary}
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Article list */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
@@ -249,7 +269,7 @@ export function ArticleList() {
             <span className="text-text-muted" style={{ fontSize: 14 }}>Loading...</span>
           </div>
         ) : filteredArticles && filteredArticles.length > 0 ? (
-          dateGroups.map((group) => (
+          articleGroups.map((group) => (
             <div key={group.label}>
               <div
                 className="text-text-muted uppercase tracking-wider font-semibold"
@@ -259,10 +279,15 @@ export function ArticleList() {
               </div>
               {group.indices.map((i) => {
                 const article = filteredArticles[i];
+                const triageData = isInbox ? {
+                  priority: (article as ArticleWithTriage).priority ?? 3,
+                  reason: (article as ArticleWithTriage).reason ?? "",
+                } : null;
                 return (
                   <ArticleCard
                     key={article.id}
                     article={article}
+                    triage={triageData}
                     isSelected={selectedArticleId === article.id}
                     onSelect={() => setSelectedArticleId(article.id)}
                     onContextMenu={(e) => handleArticleContextMenu(e, i)}

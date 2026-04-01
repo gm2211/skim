@@ -1,5 +1,5 @@
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
-import { useThemes, useGenerateThemes } from "../../hooks/useThemes";
+import { useTriageArticles, useTriageStats } from "../../hooks/useInbox";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 
@@ -7,9 +7,9 @@ export function Sidebar() {
   const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed } =
     useUiStore();
   const { data: feeds } = useFeeds();
-  const { data: themes } = useThemes();
+  const { data: triageStats } = useTriageStats();
   const refreshAll = useRefreshAllFeeds();
-  const generateThemes = useGenerateThemes();
+  const triage = useTriageArticles();
 
   const totalUnread = feeds?.reduce((sum, f) => sum + f.unread_count, 0) ?? 0;
 
@@ -122,56 +122,44 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Themes section */}
+        {/* AI Inbox */}
         <div style={{ marginBottom: 32 }}>
           <div className="flex items-center justify-between" style={{ padding: "0 8px", marginBottom: 12 }}>
-            <span style={{ fontSize: 17, fontWeight: 600 }} className="text-text-primary">
-              Themes
-            </span>
+            <div
+              onClick={() => setSidebarView({ type: "inbox" })}
+              className="flex items-center gap-3 cursor-pointer relative z-20 hover:text-text-primary"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+                className={`flex-shrink-0 ${isActive({ type: "inbox" }) ? "opacity-100" : "opacity-50"}`}
+              >
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" />
+              </svg>
+              <span
+                className={isActive({ type: "inbox" }) ? "text-text-primary" : "text-text-secondary"}
+                style={{ fontSize: 17, fontWeight: 600 }}
+              >
+                AI Inbox
+              </span>
+              {triageStats && triageStats.total > 0 && (
+                <span className="text-text-muted tabular-nums" style={{ fontSize: 14 }}>
+                  {triageStats.total}
+                </span>
+              )}
+            </div>
             <button
-              onClick={() => generateThemes.mutate()}
-              disabled={generateThemes.isPending}
-              className="text-text-muted hover:text-text-primary transition-colors relative z-20"
-              title="Generate themes with AI"
+              onClick={() => triage.mutate(false)}
+              disabled={triage.isPending}
+              className={`text-text-muted hover:text-text-primary transition-colors relative z-20 ${
+                triage.isPending ? "animate-spin" : ""
+              }`}
+              title="Triage unread articles with AI"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M6 9l6-6 6 6M6 15l6 6 6-6" />
               </svg>
             </button>
           </div>
-          {themes && themes.length > 0 ? (
-            <div className="space-y-1">
-              {themes.map((theme) => (
-                <div
-                  key={theme.id}
-                  onClick={() => setSidebarView({ type: "theme", themeId: theme.id })}
-                  className={`flex items-center justify-between rounded-lg cursor-pointer transition-colors relative z-20 ${
-                    isActive({ type: "theme", themeId: theme.id })
-                      ? "bg-white/10 text-text-primary"
-                      : "text-text-secondary hover:bg-white/5 hover:text-text-primary"
-                  }`}
-                  style={{ padding: "10px 8px" }}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="flex-shrink-0 opacity-60">
-                      <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
-                      <line x1="7" y1="7" x2="7.01" y2="7" />
-                    </svg>
-                    <span className="truncate" style={{ fontSize: 15 }}>{theme.label}</span>
-                  </div>
-                  {theme.article_count != null && (
-                    <span className="text-text-muted tabular-nums ml-2" style={{ fontSize: 14 }}>
-                      {theme.article_count}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-text-muted leading-relaxed" style={{ fontSize: 13, padding: "0 8px" }}>
-              Configure AI in settings, then click Generate to group articles by theme.
-            </p>
-          )}
         </div>
 
         {/* Feeds section */}

@@ -502,3 +502,149 @@ pub async fn get_themes(db: State<'_, Database>) -> Result<Vec<Theme>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     queries::get_themes(&conn).map_err(|e| e.to_string())
 }
+
+// ── Triage (AI Inbox) ──────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct TriageResponseItem {
+    id: String,
+    priority: i32,
+    reason: String,
+}
+
+#[derive(Deserialize)]
+struct TriageResponse {
+    triage: Vec<TriageResponseItem>,
+}
+
+#[tauri::command]
+pub async fn triage_articles(
+    db: State<'_, Database>,
+    model_state: State<'_, SharedModelState>,
+    force: Option<bool>,
+) -> Result<crate::db::models::TriageResult, String> {
+    let (articles, settings_json) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let articles = if force.unwrap_or(false) {
+            queries::clear_triage(&conn).map_err(|e| e.to_string())?;
+            let filter = ArticleFilter {
+                feed_id: None, theme_id: None,
+                is_read: Some(false), is_starred: None,
+                limit: Some(200), offset: None,
+            };
+            queries::get_articles(&conn, &filter).map_err(|e| e.to_string())?
+        } else {
+            queries::get_untriaged_article_ids(&conn, 200).map_err(|e| e.to_string())?
+        };
+        let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
+        (articles, settings_json)
+    };
+
+    if articles.is_empty() {
+        return Ok(crate::db::models::TriageResult { triaged_count: 0, batches: 0, errors: vec![] });
+    }
+
+    let settings: crate::db::models::AppSettings = settings_json
+        .as_deref()
+        .map(|s| serde_json::from_str(s).unwrap_or_default())
+        .unwrap_or_default();
+
+    if settings.ai.provider == "none" {
+        return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
+    }
+
+    let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
+    let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
+
+    let batch_size = match settings.ai.provider.as_str() {
+        "local" => 10,
+        "ollama" => 15,
+        _ => 25,
+    };
+
+    let mut triaged_count = 0i32;
+    let mut batch_count = 0i32;
+    let mut errors = Vec::new();
+    let now = Utc::now().timestamp();
+
+    for chunk in articles.chunks(batch_size) {
+        batch_count += 1;
+
+        let snippets: Vec<serde_json::Value> = chunk.iter().map(|a| {
+            let excerpt: String = a.article.content_text.as_deref().unwrap_or("").chars().take(300).collect();
+            serde_json::json!({
+                "id": a.article.id,
+                "title": a.article.title,
+                "source": a.feed_title,
+                "excerpt": excerpt,
+            })
+        }).collect();
+
+        let articles_json = serde_json::to_string_pretty(&snippets).map_err(|e| e.to_string())?;
+
+        let request = ChatRequest {
+            model: model.clone(),
+            messages: vec![
+                ChatMessage { role: "system".to_string(), content: prompts::triage_system_prompt().to_string() },
+                ChatMessage { role: "user".to_string(), content: prompts::triage_user_prompt(&articles_json) },
+            ],
+            temperature: Some(0.3),
+            max_tokens: Some((chunk.len() as i64) * 60),
+            json_mode: true,
+        };
+
+        match provider.chat(request).await {
+            Ok(response) => {
+                let content = response.content.trim();
+                let json_str = extract_json_object(content).unwrap_or(content);
+                match serde_json::from_str::<TriageResponse>(json_str) {
+                    Ok(parsed) => {
+                        let triage_items: Vec<crate::db::models::ArticleTriage> = parsed.triage.into_iter().map(|t| {
+                            crate::db::models::ArticleTriage {
+                                article_id: t.id,
+                                priority: t.priority.clamp(1, 5),
+                                reason: t.reason,
+                                provider: Some(provider.name().to_string()),
+                                model: Some(model.clone()),
+                                created_at: now,
+                            }
+                        }).collect();
+
+                        triaged_count += triage_items.len() as i32;
+                        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                        queries::upsert_triage_batch(&conn, &triage_items).map_err(|e| e.to_string())?;
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to parse triage batch {}: {}. Response: {}", batch_count, e, &content[..content.len().min(300)]);
+                        errors.push(format!("Batch {}: parse error: {}", batch_count, e));
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!("Triage batch {} failed: {}", batch_count, e);
+                errors.push(format!("Batch {}: {}", batch_count, e));
+            }
+        }
+    }
+
+    Ok(crate::db::models::TriageResult { triaged_count, batches: batch_count, errors })
+}
+
+#[tauri::command]
+pub async fn get_inbox_articles(
+    db: State<'_, Database>,
+    min_priority: Option<i32>,
+    is_read: Option<bool>,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Vec<crate::db::models::ArticleWithTriage>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::get_inbox_articles(&conn, min_priority, is_read, limit.unwrap_or(200), offset.unwrap_or(0))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_triage_stats(db: State<'_, Database>) -> Result<crate::db::models::TriageStats, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::get_triage_stats(&conn).map_err(|e| e.to_string())
+}

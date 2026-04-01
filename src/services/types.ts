@@ -147,8 +147,25 @@ export interface SyncSettings {
   max_articles_per_feed: number;
 }
 
+export interface ArticleWithTriage extends Article {
+  priority: number | null;
+  reason: string | null;
+}
+
+export interface TriageResult {
+  triaged_count: number;
+  batches: number;
+  errors: string[];
+}
+
+export interface TriageStats {
+  total: number;
+  by_priority: Record<number, number>;
+}
+
 export type SidebarView =
   | { type: "all" }
   | { type: "starred" }
   | { type: "feed"; feedId: string }
+  | { type: "inbox" }
   | { type: "theme"; themeId: string };

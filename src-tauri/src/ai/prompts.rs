@@ -132,6 +132,33 @@ Respond with a JSON object with keys "summary" and "notes". Example:
     )
 }
 
+pub fn triage_system_prompt() -> &'static str {
+    "You triage RSS articles for a busy reader. For each article, assign a priority (1-5) and write a one-line reason (under 80 chars) explaining why it matters or doesn't.\n\n\
+     Priority scale:\n\
+     5 = Breaking/urgent, directly relevant, actionable\n\
+     4 = Important development, significant news\n\
+     3 = Interesting, worth reading when time allows\n\
+     2 = Routine update, low novelty\n\
+     1 = Noise, promotional, or not useful\n\n\
+     Be opinionated. Most articles should be 2-3. Reserve 5 for genuinely important items. Reserve 1 for clear noise."
+}
+
+pub fn triage_user_prompt(articles_json: &str) -> String {
+    format!(
+        r#"Triage these articles. For each, return its id, a priority (1-5), and a reason (one sentence, under 80 chars).
+
+Articles:
+{articles_json}
+
+Respond in this exact JSON format:
+{{
+  "triage": [
+    {{"id": "article-id-here", "priority": 3, "reason": "Routine product update, nothing novel"}}
+  ]
+}}"#
+    )
+}
+
 pub fn bullet_max_tokens(settings: &AiSettings) -> i64 {
     length_params(settings).2
 }

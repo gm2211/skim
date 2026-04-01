@@ -13,6 +13,9 @@ import type {
   ChatMessageInput,
   ChatResponse,
   SearchResult,
+  ArticleWithTriage,
+  TriageResult,
+  TriageStats,
 } from "./types";
 
 // Feeds
@@ -58,6 +61,21 @@ export const summarizeArticle = (
   });
 export const generateThemes = () => invoke<Theme[]>("generate_themes");
 export const getThemes = () => invoke<Theme[]>("get_themes");
+export const triageArticles = (force?: boolean) =>
+  invoke<TriageResult>("triage_articles", { force: force ?? null });
+export const getInboxArticles = (opts?: {
+  minPriority?: number | null;
+  isRead?: boolean | null;
+  limit?: number | null;
+  offset?: number | null;
+}) =>
+  invoke<ArticleWithTriage[]>("get_inbox_articles", {
+    minPriority: opts?.minPriority ?? null,
+    isRead: opts?.isRead ?? null,
+    limit: opts?.limit ?? null,
+    offset: opts?.offset ?? null,
+  });
+export const getTriageStats = () => invoke<TriageStats>("get_triage_stats");
 
 // Chat
 export const chatWithArticle = (articleId: string, messages: ChatMessageInput[]) =>

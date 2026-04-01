@@ -54,6 +54,17 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS article_triage (
+            article_id  TEXT PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+            priority    INTEGER NOT NULL,
+            reason      TEXT NOT NULL,
+            provider    TEXT,
+            model       TEXT,
+            created_at  INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_triage_priority ON article_triage(priority DESC);
         ",
     )?;
     Ok(())

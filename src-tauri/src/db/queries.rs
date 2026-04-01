@@ -331,6 +331,146 @@ pub fn clear_themes(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+// Triage queries
+pub fn upsert_triage_batch(conn: &Connection, items: &[ArticleTriage]) -> Result<(), rusqlite::Error> {
+    let tx = conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare(
+            "INSERT OR REPLACE INTO article_triage (article_id, priority, reason, provider, model, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
+        )?;
+        for item in items {
+            stmt.execute(params![
+                item.article_id, item.priority, item.reason,
+                item.provider, item.model, item.created_at,
+            ])?;
+        }
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+pub fn get_inbox_articles(
+    conn: &Connection,
+    min_priority: Option<i32>,
+    is_read: Option<bool>,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<ArticleWithTriage>, rusqlite::Error> {
+    let mut sql = String::from(
+        "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred,
+                f.title as feed_title, f.icon_url as feed_icon_url,
+                t.priority, t.reason
+         FROM articles a
+         JOIN feeds f ON a.feed_id = f.id
+         JOIN article_triage t ON a.id = t.article_id
+         WHERE 1=1"
+    );
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(min_p) = min_priority {
+        param_values.push(Box::new(min_p));
+        sql.push_str(&format!(" AND t.priority >= ?{}", param_values.len()));
+    }
+    if let Some(read) = is_read {
+        param_values.push(Box::new(read as i32));
+        sql.push_str(&format!(" AND a.is_read = ?{}", param_values.len()));
+    }
+
+    sql.push_str(" ORDER BY t.priority DESC, COALESCE(a.published_at, a.fetched_at) DESC");
+    sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(params_ref.as_slice(), |row| {
+            Ok(ArticleWithTriage {
+                article: Article {
+                    id: row.get(0)?,
+                    feed_id: row.get(1)?,
+                    title: row.get(2)?,
+                    url: row.get(3)?,
+                    author: row.get(4)?,
+                    content_html: row.get(5)?,
+                    content_text: row.get(6)?,
+                    published_at: row.get(7)?,
+                    fetched_at: row.get(8)?,
+                    is_read: row.get::<_, i32>(9)? != 0,
+                    is_starred: row.get::<_, i32>(10)? != 0,
+                },
+                feed_title: row.get(11)?,
+                feed_icon_url: row.get(12)?,
+                priority: row.get(13)?,
+                reason: row.get(14)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+pub fn get_untriaged_article_ids(conn: &Connection, limit: i64) -> Result<Vec<ArticleWithFeed>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred,
+                f.title as feed_title, f.icon_url as feed_icon_url
+         FROM articles a
+         JOIN feeds f ON a.feed_id = f.id
+         LEFT JOIN article_triage t ON a.id = t.article_id
+         WHERE a.is_read = 0 AND t.article_id IS NULL
+         ORDER BY COALESCE(a.published_at, a.fetched_at) DESC
+         LIMIT ?1"
+    )?;
+    let rows = stmt
+        .query_map(params![limit], |row| {
+            Ok(ArticleWithFeed {
+                article: Article {
+                    id: row.get(0)?,
+                    feed_id: row.get(1)?,
+                    title: row.get(2)?,
+                    url: row.get(3)?,
+                    author: row.get(4)?,
+                    content_html: row.get(5)?,
+                    content_text: row.get(6)?,
+                    published_at: row.get(7)?,
+                    fetched_at: row.get(8)?,
+                    is_read: row.get::<_, i32>(9)? != 0,
+                    is_starred: row.get::<_, i32>(10)? != 0,
+                },
+                feed_title: row.get(11)?,
+                feed_icon_url: row.get(12)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+pub fn get_triage_stats(conn: &Connection) -> Result<TriageStats, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT t.priority, COUNT(*)
+         FROM article_triage t
+         JOIN articles a ON t.article_id = a.id
+         WHERE a.is_read = 0
+         GROUP BY t.priority"
+    )?;
+    let mut by_priority = std::collections::HashMap::new();
+    let mut total = 0i64;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get::<_, i32>(0)?, row.get::<_, i64>(1)?))
+    })?;
+    for row in rows {
+        let (priority, count) = row?;
+        total += count;
+        by_priority.insert(priority, count);
+    }
+    Ok(TriageStats { total, by_priority })
+}
+
+pub fn clear_triage(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute("DELETE FROM article_triage", [])?;
+    Ok(())
+}
+
 // Settings queries
 pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>, rusqlite::Error> {
     let mut stmt = conn.prepare("SELECT value FROM settings WHERE key = ?1")?;

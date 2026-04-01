@@ -1,8 +1,25 @@
 import { useMemo } from "react";
 import type { Article } from "../../services/types";
 
+const PRIORITY_COLORS: Record<number, string> = {
+  5: "#ef4444", // red
+  4: "#f97316", // orange
+  3: "#3b82f6", // blue
+  2: "#6b7280", // gray
+  1: "#4b5563", // dim gray
+};
+
+const PRIORITY_LABELS: Record<number, string> = {
+  5: "Must Read",
+  4: "Important",
+  3: "Worth Reading",
+  2: "Routine",
+  1: "Skip",
+};
+
 interface Props {
   article: Article;
+  triage?: { priority: number; reason: string } | null;
   isSelected: boolean;
   onSelect: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
@@ -33,7 +50,7 @@ function extractImageUrl(html: string | null): string | null {
   return src;
 }
 
-export function ArticleCard({ article, isSelected, onSelect, onContextMenu }: Props) {
+export function ArticleCard({ article, triage, isSelected, onSelect, onContextMenu }: Props) {
   const imageUrl = useMemo(() => extractImageUrl(article.content_html), [article.content_html]);
 
   return (
@@ -59,15 +76,29 @@ export function ArticleCard({ article, isSelected, onSelect, onContextMenu }: Pr
           >
             {article.title}
           </h3>
-          {article.content_text && (
+          {triage ? (
+            <p
+              className="line-clamp-2"
+              style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 8, color: PRIORITY_COLORS[triage.priority] ?? "#6b7280" }}
+            >
+              {triage.reason}
+            </p>
+          ) : article.content_text ? (
             <p
               className="text-text-muted line-clamp-2"
               style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 8 }}
             >
               {article.content_text.slice(0, 160)}
             </p>
-          )}
+          ) : null}
           <div className="flex items-center gap-2">
+            {triage && (
+              <span
+                className="rounded-full flex-shrink-0"
+                style={{ width: 8, height: 8, backgroundColor: PRIORITY_COLORS[triage.priority] ?? "#6b7280" }}
+                title={PRIORITY_LABELS[triage.priority]}
+              />
+            )}
             <span className="text-accent truncate" style={{ fontSize: 12 }}>
               {article.feed_title}
             </span>

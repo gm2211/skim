@@ -118,6 +118,39 @@ pub struct SyncSettings {
     pub max_articles_per_feed: i32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArticleTriage {
+    pub article_id: String,
+    pub priority: i32,
+    pub reason: String,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArticleWithTriage {
+    #[serde(flatten)]
+    pub article: Article,
+    pub feed_title: String,
+    pub feed_icon_url: Option<String>,
+    pub priority: Option<i32>,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriageResult {
+    pub triaged_count: i32,
+    pub batches: i32,
+    pub errors: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriageStats {
+    pub total: i64,
+    pub by_priority: std::collections::HashMap<i32, i64>,
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {

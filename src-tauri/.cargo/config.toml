@@ -1,0 +1,3 @@
+[env]
+# llama.cpp uses std::filesystem::path which requires macOS 10.15+
+MACOSX_DEPLOYMENT_TARGET = "10.15"

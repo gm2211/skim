@@ -110,6 +110,9 @@ echo "Building Skim for $TARGET"
 echo "  Signing: $SIGN"
 echo ""
 
+# llama.cpp uses std::filesystem which requires macOS 10.15+
+export MACOSX_DEPLOYMENT_TARGET="10.15"
+
 # Install frontend dependencies
 pnpm install
 

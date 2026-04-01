@@ -18,12 +18,38 @@
 
 set -euo pipefail
 
+SCRIPT_PATH="$(realpath "$0")"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 AGENT_DIR="$PROJECT_DIR/.build_agent"
 COMMAND_FILE="$AGENT_DIR/command"
 RESULT_FILE="$AGENT_DIR/result"
 STATUS_FILE="$AGENT_DIR/status"
 PID_FILE="$AGENT_DIR/agent.pid"
+
+# ──────────────────────────────────────────────
+# Self-lockdown: runs once on first invocation
+# ──────────────────────────────────────────────
+lockdown() {
+    local perms owner
+    perms=$(stat -f "%OLp" "$SCRIPT_PATH" 2>/dev/null || stat -c "%a" "$SCRIPT_PATH" 2>/dev/null)
+    owner=$(stat -f "%Su" "$SCRIPT_PATH" 2>/dev/null || stat -c "%U" "$SCRIPT_PATH" 2>/dev/null)
+
+    if [[ "$perms" != "444" || "$owner" != "root" ]]; then
+        echo "[build_agent] This script is not locked down yet."
+        echo "[build_agent] Locking: chmod 444 + chown root"
+        echo ""
+
+        if [[ "$(uname)" == "Darwin" ]]; then
+            sudo chown root:wheel "$SCRIPT_PATH"
+        else
+            sudo chown root:root "$SCRIPT_PATH"
+        fi
+        sudo chmod 444 "$SCRIPT_PATH"
+
+        echo "[build_agent] Locked. Re-run with: bash $SCRIPT_PATH"
+        exit 0
+    fi
+}
 
 run_command() {
     case "$1" in
@@ -54,9 +80,15 @@ run_command() {
         tauri-build)
             npx tauri build 2>&1
             ;;
+        release)
+            cd "$PROJECT_DIR/.." && bash release.sh 2>&1
+            ;;
+        release-sign)
+            cd "$PROJECT_DIR/.." && bash release.sh --sign 2>&1
+            ;;
         *)
             echo "ERROR: Unknown command '$1'"
-            echo "Available: check build build-release test clippy fmt fmt-check tauri-dev tauri-build"
+            echo "Available: check build build-release test clippy fmt fmt-check tauri-dev tauri-build release release-sign"
             return 1
             ;;
     esac
@@ -70,6 +102,8 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+lockdown
+
 mkdir -p "$AGENT_DIR"
 echo $$ > "$PID_FILE"
 echo "idle" > "$STATUS_FILE"
@@ -77,7 +111,7 @@ echo "idle" > "$STATUS_FILE"
 : > "$RESULT_FILE"
 
 echo "[build_agent] Running in $PROJECT_DIR"
-echo "[build_agent] Commands: check build build-release test clippy fmt fmt-check tauri-dev tauri-build"
+echo "[build_agent] Commands: check build build-release test clippy fmt fmt-check tauri-dev tauri-build release release-sign"
 echo ""
 
 while true; do

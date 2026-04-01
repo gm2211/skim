@@ -5,6 +5,14 @@ set -euo pipefail
 # release.sh — Build a distributable macOS .app for Skim
 # ───────────────────────────────────────────────────────
 
+# llama.cpp uses std::filesystem which requires macOS 10.15+
+# Must be set before any build tool runs
+export MACOSX_DEPLOYMENT_TARGET="10.15"
+export CMAKE_OSX_DEPLOYMENT_TARGET="10.15"
+# Force C++ compiler to target 10.15 (cmake may ignore env vars with cached builds)
+export CXXFLAGS="${CXXFLAGS:-} -mmacosx-version-min=10.15"
+export CFLAGS="${CFLAGS:-} -mmacosx-version-min=10.15"
+
 SIGN=false
 UNIVERSAL=false
 TARGET=""
@@ -110,8 +118,8 @@ echo "Building Skim for $TARGET"
 echo "  Signing: $SIGN"
 echo ""
 
-# llama.cpp uses std::filesystem which requires macOS 10.15+
-export MACOSX_DEPLOYMENT_TARGET="10.15"
+# Clean llama-cpp cmake cache to pick up new deployment target
+find src-tauri/target -path "*/llama-cpp-sys-2-*/out" -type d -exec rm -rf {} + 2>/dev/null || true
 
 # Install frontend dependencies
 pnpm install

@@ -8,14 +8,15 @@ const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
   { value: "local", label: "Local (Embedded)", description: "Run AI locally with llama.cpp — no server needed" },
   { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
-  { value: "anthropic", label: "Claude (Anthropic)", description: "api.anthropic.com" },
+  { value: "claude-cli", label: "Claude (Subscription)", description: "Uses Claude Code CLI — works with Pro/Max subscriptions" },
+  { value: "anthropic", label: "Claude (API Key)", description: "api.anthropic.com — requires API key with usage-based billing" },
   { value: "openai", label: "OpenAI", description: "api.openai.com" },
   { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
   { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
 ];
 
 const needsApiKey = (provider: string) =>
-  ["openai", "openrouter", "anthropic", "custom"].includes(provider);
+  ["openai", "openrouter", "anthropic", "custom", "claude-cli"].includes(provider);
 
 const needsEndpoint = (provider: string) =>
   ["ollama", "custom"].includes(provider);
@@ -182,12 +183,15 @@ export function SettingsDialog() {
                 )}
 
                 {needsApiKey(local.ai.provider) && (
-                  <InputField label="API Key">
+                  <InputField
+                    label={local.ai.provider === "claude-cli" ? "Setup Token" : "API Key"}
+                    description={local.ai.provider === "claude-cli" ? "Run 'claude setup-token' in your terminal to get a token. Optional if already logged in." : undefined}
+                  >
                     <input
                       type="password"
                       value={local.ai.api_key ?? ""}
                       onChange={(e) => updateAi({ api_key: e.target.value.trim() || null })}
-                      placeholder="sk-..."
+                      placeholder={local.ai.provider === "claude-cli" ? "Paste token from 'claude setup-token' (optional)" : "sk-..."}
                       className={inputClass}
                       style={inputStyle}
                     />
@@ -227,7 +231,9 @@ export function SettingsDialog() {
                             ? "anthropic/claude-3.5-sonnet"
                             : local.ai.provider === "ollama"
                               ? "llama3"
-                              : "model-name"
+                              : local.ai.provider === "claude-cli"
+                                ? "sonnet"
+                                : "model-name"
                       }
                       className={inputClass}
                       style={inputStyle}

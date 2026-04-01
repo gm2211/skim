@@ -247,178 +247,145 @@ impl AiProvider for AnthropicProvider {
     }
 }
 
-/// Provider that uses Claude Code's OAuth credentials from ~/.claude/.credentials.json.
-/// This lets users with Claude Pro/Max subscriptions use their subscription for API calls.
-pub struct ClaudeOAuthProvider {
-    client: reqwest::Client,
+/// Provider that uses the Claude Code CLI to make API calls.
+/// This lets users with Claude Pro/Max subscriptions use their subscription
+/// for summarization without needing an API key.
+pub struct ClaudeCliProvider {
+    api_key: Option<String>,
+}
+
+impl ClaudeCliProvider {
+    pub fn new(api_key: Option<&str>) -> Result<Self, String> {
+        // Verify claude CLI is available
+        let check = std::process::Command::new("which")
+            .arg("claude")
+            .output()
+            .map_err(|e| format!("Failed to check for claude CLI: {}", e))?;
+        if !check.status.success() {
+            return Err("Claude Code CLI not found. Install it from https://claude.ai/code".to_string());
+        }
+        Ok(Self {
+            api_key: api_key
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                // OAuth tokens don't work as ANTHROPIC_API_KEY — ignore them
+                .filter(|s| !s.starts_with("sk-ant-oat")),
+        })
+    }
 }
 
 #[derive(Deserialize)]
-struct CredentialsFile {
-    #[serde(rename = "claudeAiOauth")]
-    claude_ai_oauth: Option<OAuthCredentials>,
+struct ClaudeCliResponse {
+    result: Option<String>,
+    subtype: Option<String>,
+    is_error: Option<bool>,
+    usage: Option<ClaudeCliUsage>,
 }
 
-#[derive(Deserialize, Clone)]
-struct OAuthCredentials {
-    #[serde(rename = "accessToken")]
-    access_token: String,
-    #[serde(rename = "refreshToken")]
-    refresh_token: String,
-    #[serde(rename = "expiresAt")]
-    expires_at: u64,
-}
-
-impl ClaudeOAuthProvider {
-    pub fn new() -> Result<Self, String> {
-        // Verify credentials file exists
-        let creds_path = Self::credentials_path()?;
-        if !creds_path.exists() {
-            return Err("Claude Code not logged in. Run 'claude' in terminal and log in first.".to_string());
-        }
-        Ok(Self {
-            client: reqwest::Client::new(),
-        })
-    }
-
-    fn credentials_path() -> Result<std::path::PathBuf, String> {
-        let home = std::env::var("HOME").map_err(|_| "HOME not set")?;
-        Ok(std::path::PathBuf::from(home).join(".claude").join(".credentials.json"))
-    }
-
-    fn read_credentials() -> Result<OAuthCredentials, String> {
-        let path = Self::credentials_path()?;
-        let data = std::fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read credentials: {}", e))?;
-        let file: CredentialsFile = serde_json::from_str(&data)
-            .map_err(|e| format!("Failed to parse credentials: {}", e))?;
-        file.claude_ai_oauth
-            .ok_or("No OAuth credentials found. Run 'claude' and log in.".to_string())
-    }
-
-    async fn get_access_token(&self) -> Result<String, String> {
-        let creds = Self::read_credentials()?;
-
-        // Check if token is expired (with 60s buffer)
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-
-        if creds.expires_at > now_ms + 60_000 {
-            return Ok(creds.access_token);
-        }
-
-        // Token expired — refresh it
-        log::info!("OAuth token expired, refreshing...");
-        let resp = self.client
-            .post("https://platform.claude.com/v1/oauth/token")
-            .form(&[
-                ("grant_type", "refresh_token"),
-                ("refresh_token", &creds.refresh_token),
-            ])
-            .send()
-            .await
-            .map_err(|e| format!("Token refresh failed: {}", e))?;
-
-        if !resp.status().is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(format!("Token refresh failed: {}", body));
-        }
-
-        let new_creds: serde_json::Value = resp.json().await
-            .map_err(|e| format!("Failed to parse refresh response: {}", e))?;
-
-        let new_token = new_creds["access_token"].as_str()
-            .ok_or("No access_token in refresh response")?
-            .to_string();
-
-        // Update credentials file
-        if let Ok(path) = Self::credentials_path() {
-            if let Ok(data) = std::fs::read_to_string(&path) {
-                if let Ok(mut file) = serde_json::from_str::<serde_json::Value>(&data) {
-                    if let Some(oauth) = file.get_mut("claudeAiOauth") {
-                        oauth["accessToken"] = serde_json::json!(&new_token);
-                        if let Some(exp) = new_creds["expires_at"].as_u64()
-                            .or_else(|| new_creds["expires_in"].as_u64().map(|s| now_ms + s * 1000))
-                        {
-                            oauth["expiresAt"] = serde_json::json!(exp);
-                        }
-                        let _ = std::fs::write(&path, serde_json::to_string_pretty(&file).unwrap_or_default());
-                    }
-                }
-            }
-        }
-
-        Ok(new_token)
-    }
+#[derive(Deserialize)]
+struct ClaudeCliUsage {
+    input_tokens: Option<i64>,
+    output_tokens: Option<i64>,
 }
 
 #[async_trait]
-impl AiProvider for ClaudeOAuthProvider {
+impl AiProvider for ClaudeCliProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, String> {
-        let token = self.get_access_token().await?;
-
         let system_msg = request.messages.iter()
             .find(|m| m.role == "system")
             .map(|m| m.content.clone());
 
-        let messages: Vec<serde_json::Value> = request.messages.iter()
+        // Build the user prompt from non-system messages
+        let user_prompt = request.messages.iter()
             .filter(|m| m.role != "system")
-            .map(|m| serde_json::json!({"role": m.role, "content": m.content}))
-            .collect();
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n\n");
 
-        let mut body = serde_json::json!({
-            "model": request.model,
-            "messages": messages,
-            "max_tokens": request.max_tokens.unwrap_or(2048),
-        });
+        let model = request.model.clone();
+        let api_key = self.api_key.clone();
 
-        if let Some(temp) = request.temperature {
-            body["temperature"] = serde_json::json!(temp);
-        }
-        if let Some(sys) = &system_msg {
-            body["system"] = serde_json::json!(sys);
-        }
+        // Run claude CLI in a blocking task since it spawns a process
+        let result = tokio::task::spawn_blocking(move || {
+            let mut cmd = std::process::Command::new("claude");
+            cmd.args([
+                "-p", &user_prompt,
+                "--output-format", "json",
+                "--model", &model,
+                "--no-session-persistence",
+                "--max-budget-usd", "1",
+                // No tools — we just want a text response
+                "--tools", "",
+            ]);
 
-        let response = self.client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("Authorization", format!("Bearer {}", token))
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| format!("Anthropic request failed: {}", e))?;
+            if let Some(ref key) = api_key {
+                // Setup token or API key passed via env
+                cmd.env("ANTHROPIC_API_KEY", key);
+                // --bare: skip hooks/keychain, use ANTHROPIC_API_KEY only
+                cmd.arg("--bare");
+            }
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(format!("Anthropic API error ({}): {}", status, body));
-        }
+            if let Some(ref sys) = system_msg {
+                cmd.args(["--system-prompt", sys]);
+            }
 
-        let api_response: AnthropicResponse = response
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse Anthropic response: {}", e))?;
+            log::info!("ClaudeCliProvider: running claude CLI with model={}", &model);
 
-        let content = api_response.content
-            .first()
-            .and_then(|c| c.text.clone())
-            .unwrap_or_default();
+            let output = cmd
+                .output()
+                .map_err(|e| format!("Failed to run claude CLI: {}", e))?;
 
-        Ok(ChatResponse {
-            content,
-            model: api_response.model.unwrap_or(request.model),
-            usage: api_response.usage.map(|u| TokenUsage {
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+            if !stderr.is_empty() {
+                log::debug!("claude CLI stderr: {}", stderr);
+            }
+
+            if stdout.trim().is_empty() {
+                return Err(format!(
+                    "claude CLI returned no output. Exit code: {}. stderr: {}",
+                    output.status, stderr
+                ));
+            }
+
+            let cli_resp: ClaudeCliResponse = serde_json::from_str(&stdout)
+                .map_err(|e| format!("Failed to parse claude CLI output: {}. Output: {}", e, &stdout[..stdout.len().min(500)]))?;
+
+            if cli_resp.is_error.unwrap_or(false) {
+                return Err(format!(
+                    "claude CLI error: {}",
+                    cli_resp.result.unwrap_or_else(|| "unknown error".into())
+                ));
+            }
+
+            if cli_resp.subtype.as_deref() != Some("success") {
+                return Err(format!(
+                    "claude CLI non-success: subtype={:?}, result={:?}",
+                    cli_resp.subtype, cli_resp.result
+                ));
+            }
+
+            let content = cli_resp.result.unwrap_or_default();
+            let usage = cli_resp.usage.map(|u| TokenUsage {
                 prompt_tokens: u.input_tokens,
                 completion_tokens: u.output_tokens,
-            }),
+            });
+
+            Ok((content, usage))
+        })
+        .await
+        .map_err(|e| format!("claude CLI task panicked: {}", e))??;
+
+        Ok(ChatResponse {
+            content: result.0,
+            model: request.model,
+            usage: result.1,
         })
     }
 
     fn name(&self) -> &str {
-        "anthropic"
+        "claude-cli"
     }
 }
 
@@ -459,12 +426,10 @@ pub fn create_provider(
         ))),
         "anthropic" => {
             let key = api_key.ok_or("Anthropic requires an API key")?;
-            if key.starts_with("sk-ant-oat") {
-                // OAuth token — use Claude Code's credentials for Bearer auth
-                Ok(Box::new(ClaudeOAuthProvider::new()?))
-            } else {
-                Ok(Box::new(AnthropicProvider::new(key)))
-            }
+            Ok(Box::new(AnthropicProvider::new(key)))
+        }
+        "claude-cli" => {
+            Ok(Box::new(ClaudeCliProvider::new(api_key)?))
         }
         "custom" => {
             let ep = endpoint.ok_or("Custom provider requires an endpoint URL")?;

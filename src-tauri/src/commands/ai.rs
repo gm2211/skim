@@ -14,6 +14,15 @@ use uuid::Uuid;
 
 const SUMMARY_CACHE_MAX: usize = 100;
 
+pub fn default_model(provider: &str) -> String {
+    match provider {
+        "claude-cli" => "sonnet".to_string(),
+        "anthropic" => "claude-sonnet-4-5-20241022".to_string(),
+        "ollama" => "llama3".to_string(),
+        _ => "gpt-4o-mini".to_string(),
+    }
+}
+
 pub struct SummaryCache {
     map: HashMap<String, ArticleSummary>,
     order: VecDeque<String>,
@@ -257,7 +266,7 @@ pub async fn summarize_article(
         Some(model_state.inner().clone()),
     )?;
 
-    let model = settings.ai.model.clone().unwrap_or_else(|| "gpt-4o-mini".to_string());
+    let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
     let title = &article.article.title;
 
     // Use the longest available content — prefer content_text, fall back to HTML stripped to text
@@ -394,7 +403,7 @@ pub async fn generate_themes(
         Some(model_state.inner().clone()),
     )?;
 
-    let model = settings.ai.model.clone().unwrap_or_else(|| "gpt-4o-mini".to_string());
+    let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
 
     // Build article snippets for the AI
     let snippets: Vec<serde_json::Value> = articles

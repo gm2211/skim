@@ -48,7 +48,7 @@ pub async fn chat_with_article(
     }
 
     let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
-    let model = ai_settings.model.clone().unwrap_or_else(|| "gpt-4o-mini".to_string());
+    let model = ai_settings.model.clone().unwrap_or_else(|| crate::commands::ai::default_model(&ai_settings.provider));
 
     // Build article context
     let content_text = article.article.content_text.as_deref().unwrap_or("");

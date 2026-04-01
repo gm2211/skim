@@ -4,7 +4,7 @@ mod feed;
 mod ai;
 
 use ai::local_provider::{self, SharedModelState};
-use commands::ai::{SharedSummaryCache, SummaryCache};
+use commands::ai::{SharedSummaryCache, SummaryCache, SummaryGeneration};
 use commands::models::DownloadCancelFlag;
 use db::models::AppSettings;
 use db::{queries, Database};
@@ -60,6 +60,7 @@ pub fn run() {
             app.manage(model_state);
             app.manage(DownloadCancelFlag(Arc::new(AtomicBool::new(false))));
             app.manage(Arc::new(Mutex::new(SummaryCache::new())) as SharedSummaryCache);
+            app.manage(SummaryGeneration(std::sync::atomic::AtomicU64::new(0)));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -81,6 +82,7 @@ pub fn run() {
             commands::articles::fetch_full_article,
             // AI
             commands::ai::summarize_article,
+            commands::ai::cancel_summarize,
             commands::ai::generate_themes,
             commands::ai::get_themes,
             commands::ai::triage_articles,

@@ -59,6 +59,7 @@ export const summarizeArticle = (
     summaryFormat: opts?.summaryFormat ?? null,
     summaryCustomPrompt: opts?.summaryCustomPrompt ?? null,
   });
+export const cancelSummarize = () => invoke<void>("cancel_summarize");
 export const generateThemes = () => invoke<Theme[]>("generate_themes");
 export const getThemes = () => invoke<Theme[]>("get_themes");
 export const triageArticles = (force?: boolean) =>

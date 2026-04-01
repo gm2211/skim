@@ -8,11 +8,15 @@ use chrono::Utc;
 use serde::Deserialize;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::State;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
 const SUMMARY_CACHE_MAX: usize = 100;
+
+/// Monotonic counter — incrementing it cancels any in-flight summary.
+pub struct SummaryGeneration(pub AtomicU64);
 
 pub fn default_model(provider: &str) -> String {
     match provider {
@@ -204,10 +208,19 @@ pub fn extract_json_object(text: &str) -> Option<&str> {
 }
 
 #[tauri::command]
+pub async fn cancel_summarize(
+    generation: State<'_, SummaryGeneration>,
+) -> Result<(), String> {
+    generation.0.fetch_add(1, Ordering::SeqCst);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn summarize_article(
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     summary_cache: State<'_, SharedSummaryCache>,
+    generation: State<'_, SummaryGeneration>,
     article_id: String,
     force: Option<bool>,
     summary_length: Option<String>,
@@ -215,6 +228,7 @@ pub async fn summarize_article(
     summary_format: Option<String>,
     summary_custom_prompt: Option<String>,
 ) -> Result<ArticleSummary, String> {
+    let gen_id = generation.0.fetch_add(1, Ordering::SeqCst) + 1;
     // Check in-memory cache (skip if force re-summarize)
     {
         let mut cache = summary_cache.lock().await;
@@ -299,6 +313,11 @@ pub async fn summarize_article(
     } else {
         None
     };
+
+    // Check if cancelled between the two AI calls
+    if generation.0.load(Ordering::SeqCst) != gen_id {
+        return Err("Summary cancelled".to_string());
+    }
 
     // Get full summary (skip if format is bullets-only)
     let full_prompt = prompts::article_full_summary_prompt(title, text, &settings.ai);

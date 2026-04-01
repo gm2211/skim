@@ -3,7 +3,7 @@ import { useArticle, useMarkRead, useToggleStar, useToggleRead } from "../../hoo
 import { useSummarizeArticle } from "../../hooks/useAi";
 import { useSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
-import { fetchFullArticle } from "../../services/commands";
+import { fetchFullArticle, cancelSummarize } from "../../services/commands";
 import { ChatDrawer } from "../chat/ChatPanel";
 
 type ViewMode = "rss" | "reader" | "web";
@@ -124,8 +124,9 @@ export function ArticleDetail() {
   const modes: ViewMode[] = ["rss", "reader", "web"];
   const slideIndex = modes.indexOf(viewMode);
 
-  // Reset state when article changes
+  // Reset state when article changes — cancel any in-flight summary
   useEffect(() => {
+    cancelSummarize().catch(() => {});
     setFullContent(null);
     setRawHtml(null);
     setFullError(null);

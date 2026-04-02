@@ -302,7 +302,15 @@ impl AiProvider for ClaudeCliProvider {
             .collect::<Vec<_>>()
             .join("\n\n");
 
-        let model = request.model.clone();
+        // Map common model names to claude-cli compatible names
+        let model = match request.model.as_str() {
+            m if m.starts_with("claude-") || m == "sonnet" || m == "opus" || m == "haiku" => request.model.clone(),
+            // If a non-Claude model is configured, default to sonnet
+            other => {
+                log::warn!("claude-cli provider: model '{}' is not a Claude model, defaulting to sonnet", other);
+                "sonnet".to_string()
+            }
+        };
         let api_key = self.api_key.clone();
 
         // Run claude CLI in a blocking task since it spawns a process

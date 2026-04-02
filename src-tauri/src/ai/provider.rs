@@ -247,11 +247,6 @@ impl AiProvider for AnthropicProvider {
     }
 }
 
-/// Escape a string for safe inclusion in a shell command.
-fn shell_escape(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
-}
-
 /// Provider that uses the Claude Code CLI to make API calls.
 /// This lets users with Claude Pro/Max subscriptions use their subscription
 /// for summarization without needing an API key.

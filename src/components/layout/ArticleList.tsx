@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback } from "react";
 import { useArticles, useMarkAllRead, useMarkRead, useMarkUnread, useToggleRead, useToggleStar } from "../../hooks/useArticles";
 import { useInboxArticles } from "../../hooks/useInbox";
+import { useThemes } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
@@ -81,6 +82,7 @@ export function ArticleList() {
   } | null>(null);
 
   const isInbox = sidebarView.type === "inbox";
+  const { data: themes } = useThemes();
 
   const filter: ArticleFilter = useMemo(() => {
     const base: ArticleFilter = { limit: 200 };
@@ -124,8 +126,10 @@ export function ArticleList() {
         return null;
       case "inbox":
         return "AI Inbox";
-      case "theme":
-        return "Theme";
+      case "theme": {
+        const theme = themes?.find((t) => t.id === sidebarView.themeId);
+        return theme?.label ?? "Theme";
+      }
     }
   }, [sidebarView]);
 

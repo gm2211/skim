@@ -1,5 +1,6 @@
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats } from "../../hooks/useInbox";
+import { useThemes, useGenerateThemes } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 
@@ -10,6 +11,8 @@ export function Sidebar() {
   const { data: triageStats } = useTriageStats();
   const refreshAll = useRefreshAllFeeds();
   const triage = useTriageArticles();
+  const { data: themes } = useThemes();
+  const generateThemes = useGenerateThemes();
 
   const totalUnread = feeds?.reduce((sum, f) => sum + f.unread_count, 0) ?? 0;
 
@@ -182,6 +185,85 @@ export function Sidebar() {
                 : "No new articles to triage"}
               {triage.data.errors.length > 0 && ` (${triage.data.errors.length} errors)`}
             </p>
+          )}
+        </div>
+
+        {/* Themes section */}
+        <div style={{ marginBottom: 32, padding: "0 8px" }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+            <div className="flex items-center gap-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+                className="flex-shrink-0 opacity-50"
+              >
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+              </svg>
+              <span style={{ fontSize: 17, fontWeight: 600 }} className="text-text-primary">
+                Themes
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => generateThemes.mutate()}
+            disabled={generateThemes.isPending}
+            className="flex items-center gap-2 w-full rounded-lg text-text-muted hover:text-accent hover:bg-white/5 transition-colors relative z-20"
+            style={{ padding: "8px", fontSize: 13, marginBottom: 4 }}
+          >
+            {generateThemes.isPending ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin flex-shrink-0">
+                  <path d="M21 12a9 9 0 11-6.219-8.56" />
+                </svg>
+                <span>Grouping articles...</span>
+              </>
+            ) : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+                <span>Group by theme</span>
+              </>
+            )}
+          </button>
+          {generateThemes.isError && (
+            <p className="text-red-400" style={{ fontSize: 12, padding: "4px 8px" }}>
+              {generateThemes.error instanceof Error ? generateThemes.error.message : "Theme generation failed"}
+            </p>
+          )}
+          {themes && themes.length > 0 && (
+            <div className="space-y-1 mt-1">
+              {themes.map((theme) => (
+                <div
+                  key={theme.id}
+                  onClick={() => setSidebarView({ type: "theme", themeId: theme.id })}
+                  className={`rounded-lg cursor-pointer transition-colors relative z-20 ${
+                    isActive({ type: "theme", themeId: theme.id })
+                      ? "bg-white/10 text-text-primary"
+                      : "text-text-secondary hover:bg-white/5 hover:text-text-primary"
+                  }`}
+                  style={{ padding: "8px" }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="truncate" style={{ fontSize: 14 }}>{theme.label}</span>
+                    {theme.article_count != null && (
+                      <span className="text-text-muted tabular-nums ml-2 flex-shrink-0" style={{ fontSize: 13 }}>
+                        {theme.article_count}
+                      </span>
+                    )}
+                  </div>
+                  {theme.summary && (
+                    <p className="text-text-muted truncate" style={{ fontSize: 12, marginTop: 2 }}>
+                      {theme.summary}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
         </div>
 

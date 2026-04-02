@@ -335,20 +335,8 @@ impl AiProvider for ClaudeCliProvider {
                 cmd.args(["--system-prompt", sys]);
             }
 
-            // Clear inherited env and set only what's needed to prevent
-            // macOS TCC prompts (Photos, Desktop, Dropbox, etc.) from
-            // the subprocess being attributed to Skim.app.
-            let path = std::env::var("PATH").unwrap_or_else(|_| "/usr/local/bin:/usr/bin:/bin".to_string());
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-            cmd.env_clear();
-            cmd.env("PATH", path);
-            cmd.env("HOME", &home);
-            cmd.env("USER", std::env::var("USER").unwrap_or_default());
-            cmd.env("SHELL", "/bin/zsh");
-            cmd.env("TMPDIR", std::env::var("TMPDIR").unwrap_or_else(|_| "/tmp".to_string()));
-            // Ensure claude can find its config
-            cmd.env("XDG_CONFIG_HOME", format!("{}/.config", home));
             // Set working directory to /tmp to avoid scanning user directories
+            // which triggers macOS TCC prompts (Photos, Desktop, Dropbox).
             cmd.current_dir("/tmp");
 
             log::info!("ClaudeCliProvider: running claude CLI with model={}", &model);

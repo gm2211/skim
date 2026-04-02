@@ -16,7 +16,7 @@ const AI_PROVIDERS = [
 ];
 
 const needsApiKey = (provider: string) =>
-  ["openai", "openrouter", "anthropic", "custom", "claude-cli"].includes(provider);
+  ["openai", "openrouter", "anthropic", "custom"].includes(provider);
 
 const needsEndpoint = (provider: string) =>
   ["ollama", "custom"].includes(provider);

@@ -473,31 +473,6 @@ pub fn clear_triage(conn: &Connection) -> Result<(), rusqlite::Error> {
 
 // Interaction / learning queries
 
-pub fn upsert_interaction(
-    conn: &Connection,
-    interaction: &ArticleInteraction,
-) -> Result<(), rusqlite::Error> {
-    conn.execute(
-        "INSERT INTO article_interactions (article_id, reading_time_sec, chat_messages, feedback, priority_override, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-         ON CONFLICT(article_id) DO UPDATE SET
-           reading_time_sec = reading_time_sec + excluded.reading_time_sec,
-           chat_messages    = CASE WHEN excluded.chat_messages > 0 THEN excluded.chat_messages ELSE chat_messages END,
-           feedback         = COALESCE(excluded.feedback, feedback),
-           priority_override = COALESCE(excluded.priority_override, priority_override),
-           updated_at       = excluded.updated_at",
-        params![
-            interaction.article_id,
-            interaction.reading_time_sec,
-            interaction.chat_messages,
-            interaction.feedback,
-            interaction.priority_override,
-            interaction.updated_at,
-        ],
-    )?;
-    Ok(())
-}
-
 pub fn record_reading_time(
     conn: &Connection,
     article_id: &str,

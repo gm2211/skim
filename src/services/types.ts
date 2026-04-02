@@ -180,6 +180,20 @@ export interface UserPreferenceProfile {
   total_interactions: number;
 }
 
+export interface FeedlySubscription {
+  id: string;
+  title: string;
+  website: string | null;
+  icon_url: string | null;
+  categories: { id: string; label: string }[];
+}
+
+export interface FeedlyImportResult {
+  imported: number;
+  skipped: number;
+  errors: string[];
+}
+
 export type SidebarView =
   | { type: "all" }
   | { type: "starred" }

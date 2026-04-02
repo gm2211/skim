@@ -18,6 +18,8 @@ import type {
   TriageStats,
   ArticleInteraction,
   UserPreferenceProfile,
+  FeedlySubscription,
+  FeedlyImportResult,
 } from "./types";
 
 // Feeds
@@ -29,6 +31,10 @@ export const refreshFeed = (feedId: string) =>
   invoke<number>("refresh_feed", { feedId });
 export const refreshAllFeeds = () => invoke<number>("refresh_all_feeds");
 export const getTotalUnread = () => invoke<number>("get_total_unread");
+export const importFeedly = (token: string) =>
+  invoke<FeedlyImportResult>("import_feedly", { token });
+export const feedlyPreview = (token: string) =>
+  invoke<FeedlySubscription[]>("feedly_preview", { token });
 
 // Articles
 export const getArticles = (filter: ArticleFilter) =>

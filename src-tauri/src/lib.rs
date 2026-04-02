@@ -71,6 +71,8 @@ pub fn run() {
             commands::feeds::refresh_feed,
             commands::feeds::refresh_all_feeds,
             commands::feeds::get_total_unread,
+            commands::feeds::import_feedly,
+            commands::feeds::feedly_preview,
             // Articles
             commands::articles::get_articles,
             commands::articles::get_article,

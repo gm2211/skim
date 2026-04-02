@@ -471,6 +471,189 @@ pub fn clear_triage(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+// Interaction / learning queries
+
+pub fn upsert_interaction(
+    conn: &Connection,
+    interaction: &ArticleInteraction,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO article_interactions (article_id, reading_time_sec, chat_messages, feedback, priority_override, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(article_id) DO UPDATE SET
+           reading_time_sec = reading_time_sec + excluded.reading_time_sec,
+           chat_messages    = CASE WHEN excluded.chat_messages > 0 THEN excluded.chat_messages ELSE chat_messages END,
+           feedback         = COALESCE(excluded.feedback, feedback),
+           priority_override = COALESCE(excluded.priority_override, priority_override),
+           updated_at       = excluded.updated_at",
+        params![
+            interaction.article_id,
+            interaction.reading_time_sec,
+            interaction.chat_messages,
+            interaction.feedback,
+            interaction.priority_override,
+            interaction.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn record_reading_time(
+    conn: &Connection,
+    article_id: &str,
+    seconds: i64,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO article_interactions (article_id, reading_time_sec, chat_messages, updated_at)
+         VALUES (?1, ?2, 0, ?3)
+         ON CONFLICT(article_id) DO UPDATE SET
+           reading_time_sec = reading_time_sec + ?2,
+           updated_at = ?3",
+        params![article_id, seconds, now],
+    )?;
+    Ok(())
+}
+
+pub fn increment_chat_count(
+    conn: &Connection,
+    article_id: &str,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO article_interactions (article_id, reading_time_sec, chat_messages, updated_at)
+         VALUES (?1, 0, 1, ?2)
+         ON CONFLICT(article_id) DO UPDATE SET
+           chat_messages = chat_messages + 1,
+           updated_at = ?2",
+        params![article_id, now],
+    )?;
+    Ok(())
+}
+
+pub fn set_article_feedback(
+    conn: &Connection,
+    article_id: &str,
+    feedback: Option<&str>,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO article_interactions (article_id, reading_time_sec, chat_messages, feedback, updated_at)
+         VALUES (?1, 0, 0, ?2, ?3)
+         ON CONFLICT(article_id) DO UPDATE SET
+           feedback = ?2,
+           updated_at = ?3",
+        params![article_id, feedback, now],
+    )?;
+    Ok(())
+}
+
+pub fn set_priority_override(
+    conn: &Connection,
+    article_id: &str,
+    priority: i32,
+    now: i64,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO article_interactions (article_id, reading_time_sec, chat_messages, priority_override, updated_at)
+         VALUES (?1, 0, 0, ?2, ?3)
+         ON CONFLICT(article_id) DO UPDATE SET
+           priority_override = ?2,
+           updated_at = ?3",
+        params![article_id, priority, now],
+    )?;
+    Ok(())
+}
+
+/// Build a preference profile from interaction history.
+/// Returns top feeds, preferred/deprioritized topics extracted from article titles.
+pub fn build_preference_profile(conn: &Connection) -> Result<UserPreferenceProfile, rusqlite::Error> {
+    // Top feeds by engagement (reading_time weighted)
+    let mut stmt = conn.prepare(
+        "SELECT f.title, SUM(i.reading_time_sec) + SUM(i.chat_messages) * 60 as engagement
+         FROM article_interactions i
+         JOIN articles a ON i.article_id = a.id
+         JOIN feeds f ON a.feed_id = f.id
+         WHERE i.reading_time_sec > 10 OR i.chat_messages > 0 OR i.feedback = 'more'
+         GROUP BY f.id
+         ORDER BY engagement DESC
+         LIMIT 10"
+    )?;
+    let top_feeds: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Preferred topics: titles of articles with high engagement or "more" feedback
+    let mut stmt = conn.prepare(
+        "SELECT a.title
+         FROM article_interactions i
+         JOIN articles a ON i.article_id = a.id
+         WHERE i.feedback = 'more' OR i.reading_time_sec > 120 OR i.chat_messages >= 2
+             OR i.priority_override >= 4
+         ORDER BY i.updated_at DESC
+         LIMIT 30"
+    )?;
+    let preferred_topics: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Deprioritized: articles with "less" feedback or low priority override
+    let mut stmt = conn.prepare(
+        "SELECT a.title
+         FROM article_interactions i
+         JOIN articles a ON i.article_id = a.id
+         WHERE i.feedback = 'less' OR i.priority_override <= 1
+         ORDER BY i.updated_at DESC
+         LIMIT 20"
+    )?;
+    let deprioritized_topics: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    // Stats
+    let (avg_reading, total): (f64, i64) = conn.query_row(
+        "SELECT COALESCE(AVG(reading_time_sec), 0), COUNT(*) FROM article_interactions WHERE reading_time_sec > 0",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    Ok(UserPreferenceProfile {
+        top_feeds,
+        preferred_topics,
+        deprioritized_topics,
+        avg_reading_time_sec: avg_reading,
+        total_interactions: total,
+    })
+}
+
+pub fn get_article_interaction(
+    conn: &Connection,
+    article_id: &str,
+) -> Result<Option<ArticleInteraction>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT article_id, reading_time_sec, chat_messages, feedback, priority_override, updated_at
+         FROM article_interactions WHERE article_id = ?1"
+    )?;
+    let mut rows = stmt.query_map(params![article_id], |row| {
+        Ok(ArticleInteraction {
+            article_id: row.get(0)?,
+            reading_time_sec: row.get(1)?,
+            chat_messages: row.get(2)?,
+            feedback: row.get(3)?,
+            priority_override: row.get(4)?,
+            updated_at: row.get(5)?,
+        })
+    })?;
+    match rows.next() {
+        Some(Ok(i)) => Ok(Some(i)),
+        Some(Err(e)) => Err(e),
+        None => Ok(None),
+    }
+}
+
 // Settings queries
 pub fn get_setting(conn: &Connection, key: &str) -> Result<Option<String>, rusqlite::Error> {
     let mut stmt = conn.prepare("SELECT value FROM settings WHERE key = ?1")?;

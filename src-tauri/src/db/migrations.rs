@@ -65,6 +65,19 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         );
 
         CREATE INDEX IF NOT EXISTS idx_triage_priority ON article_triage(priority DESC);
+
+        -- Learning system: track user engagement signals
+        CREATE TABLE IF NOT EXISTS article_interactions (
+            article_id       TEXT PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+            reading_time_sec INTEGER NOT NULL DEFAULT 0,
+            chat_messages    INTEGER NOT NULL DEFAULT 0,
+            feedback         TEXT,   -- 'more' | 'less' | NULL
+            priority_override INTEGER,  -- user-corrected priority (1-5) or NULL
+            updated_at       INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_interactions_feedback ON article_interactions(feedback);
+        CREATE INDEX IF NOT EXISTS idx_interactions_reading ON article_interactions(reading_time_sec);
         ",
     )?;
     Ok(())

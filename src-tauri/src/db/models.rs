@@ -151,6 +151,26 @@ pub struct TriageStats {
     pub by_priority: std::collections::HashMap<i32, i64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArticleInteraction {
+    pub article_id: String,
+    pub reading_time_sec: i64,
+    pub chat_messages: i64,
+    pub feedback: Option<String>,       // "more" | "less"
+    pub priority_override: Option<i32>, // user-corrected priority
+    pub updated_at: i64,
+}
+
+/// A learned preference signal derived from user interactions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserPreferenceProfile {
+    pub top_feeds: Vec<String>,           // feeds the user engages with most
+    pub preferred_topics: Vec<String>,    // topics from highly-engaged articles
+    pub deprioritized_topics: Vec<String>, // topics user gave "less" feedback on
+    pub avg_reading_time_sec: f64,
+    pub total_interactions: i64,
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {

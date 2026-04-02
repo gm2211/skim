@@ -163,6 +163,23 @@ export interface TriageStats {
   by_priority: Record<number, number>;
 }
 
+export interface ArticleInteraction {
+  article_id: string;
+  reading_time_sec: number;
+  chat_messages: number;
+  feedback: "more" | "less" | null;
+  priority_override: number | null;
+  updated_at: number;
+}
+
+export interface UserPreferenceProfile {
+  top_feeds: string[];
+  preferred_topics: string[];
+  deprioritized_topics: string[];
+  avg_reading_time_sec: number;
+  total_interactions: number;
+}
+
 export type SidebarView =
   | { type: "all" }
   | { type: "starred" }

@@ -5,6 +5,7 @@ import { useSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
 import { fetchFullArticle, cancelSummarize } from "../../services/commands";
 import { ChatDrawer } from "../chat/ChatPanel";
+import { useReadingTimeTracker, useSetArticleFeedback, useArticleInteraction } from "../../hooks/useLearning";
 
 type ViewMode = "rss" | "reader" | "web";
 
@@ -108,6 +109,9 @@ export function ArticleDetail() {
   const toggleRead = useToggleRead();
   const summarize = useSummarizeArticle();
   const { data: settings } = useSettings();
+  const setFeedback = useSetArticleFeedback();
+  const { data: interaction } = useArticleInteraction(selectedArticleId);
+  useReadingTimeTracker(selectedArticleId);
   const [showSummarizeMenu, setShowSummarizeMenu] = useState(false);
   const [perArticleLength, setPerArticleLength] = useState<string | undefined>();
   const [perArticleTone, setPerArticleTone] = useState<string | undefined>();
@@ -439,6 +443,38 @@ export function ArticleDetail() {
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill={!article.is_read ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="5" />
+            </svg>
+          </button>
+
+          <div className="w-px h-5 bg-white/10" />
+
+          {/* Learning feedback buttons */}
+          <button
+            onClick={() => setFeedback.mutate({
+              articleId: article.id,
+              feedback: interaction?.feedback === "more" ? null : "more",
+            })}
+            className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${
+              interaction?.feedback === "more" ? "text-green-400" : "text-text-muted hover:text-text-primary"
+            }`}
+            title="More like this"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM4 22H2V11h2" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setFeedback.mutate({
+              articleId: article.id,
+              feedback: interaction?.feedback === "less" ? null : "less",
+            })}
+            className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${
+              interaction?.feedback === "less" ? "text-red-400" : "text-text-muted hover:text-text-primary"
+            }`}
+            title="Less like this"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10zM20 2h2v11h-2" />
             </svg>
           </button>
 

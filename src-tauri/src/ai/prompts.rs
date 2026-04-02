@@ -132,15 +132,36 @@ Respond with a JSON object with keys "summary" and "notes". Example:
     )
 }
 
-pub fn triage_system_prompt() -> &'static str {
-    "You triage RSS articles for a busy reader. For each article, assign a priority (1-5) and write a one-line reason (under 80 chars) explaining why it matters or doesn't.\n\n\
+pub fn triage_system_prompt(preferences: Option<&crate::db::models::UserPreferenceProfile>) -> String {
+    let base = "You triage RSS articles for a busy reader. For each article, assign a priority (1-5) and write a one-line reason (under 80 chars) explaining why it matters or doesn't.\n\n\
      Priority scale:\n\
      5 = Breaking/urgent, directly relevant, actionable\n\
      4 = Important development, significant news\n\
      3 = Interesting, worth reading when time allows\n\
      2 = Routine update, low novelty\n\
      1 = Noise, promotional, or not useful\n\n\
-     Be opinionated. Most articles should be 2-3. Reserve 5 for genuinely important items. Reserve 1 for clear noise."
+     Be opinionated. Most articles should be 2-3. Reserve 5 for genuinely important items. Reserve 1 for clear noise.";
+
+    match preferences {
+        Some(prefs) if prefs.total_interactions >= 5 => {
+            let mut context = String::from(base);
+            context.push_str("\n\n--- Reader's learned preferences (use these to personalize priorities) ---\n");
+
+            if !prefs.top_feeds.is_empty() {
+                context.push_str(&format!("Preferred sources (boost priority slightly): {}\n", prefs.top_feeds.join(", ")));
+            }
+            if !prefs.preferred_topics.is_empty() {
+                let sample: Vec<&str> = prefs.preferred_topics.iter().take(15).map(|s| s.as_str()).collect();
+                context.push_str(&format!("Topics the reader engages with most (boost priority):\n{}\n", sample.join("\n")));
+            }
+            if !prefs.deprioritized_topics.is_empty() {
+                let sample: Vec<&str> = prefs.deprioritized_topics.iter().take(10).map(|s| s.as_str()).collect();
+                context.push_str(&format!("Topics the reader deprioritized (lower priority):\n{}\n", sample.join("\n")));
+            }
+            context
+        }
+        _ => base.to_string(),
+    }
 }
 
 pub fn triage_user_prompt(articles_json: &str) -> String {

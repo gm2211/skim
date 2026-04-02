@@ -98,6 +98,13 @@ pub async fn chat_with_article(
 
     let response = provider.chat(req).await?;
 
+    // Track chat interaction for learning system
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let now = chrono::Utc::now().timestamp();
+        let _ = queries::increment_chat_count(&conn, &article_id, now);
+    }
+
     Ok(ChatResponse {
         content: response.content,
         provider: provider.name().to_string(),

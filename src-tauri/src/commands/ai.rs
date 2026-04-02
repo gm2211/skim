@@ -542,7 +542,7 @@ pub async fn triage_articles(
     model_state: State<'_, SharedModelState>,
     force: Option<bool>,
 ) -> Result<crate::db::models::TriageResult, String> {
-    let (articles, settings_json) = {
+    let (articles, settings_json, preferences) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let articles = if force.unwrap_or(false) {
             queries::clear_triage(&conn).map_err(|e| e.to_string())?;
@@ -556,7 +556,8 @@ pub async fn triage_articles(
             queries::get_untriaged_article_ids(&conn, 200).map_err(|e| e.to_string())?
         };
         let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
-        (articles, settings_json)
+        let prefs = queries::build_preference_profile(&conn).ok();
+        (articles, settings_json, prefs)
     };
 
     if articles.is_empty() {
@@ -604,7 +605,7 @@ pub async fn triage_articles(
         let request = ChatRequest {
             model: model.clone(),
             messages: vec![
-                ChatMessage { role: "system".to_string(), content: prompts::triage_system_prompt().to_string() },
+                ChatMessage { role: "system".to_string(), content: prompts::triage_system_prompt(preferences.as_ref()) },
                 ChatMessage { role: "user".to_string(), content: prompts::triage_user_prompt(&articles_json) },
             ],
             temperature: Some(0.3),
@@ -666,4 +667,58 @@ pub async fn get_inbox_articles(
 pub async fn get_triage_stats(db: State<'_, Database>) -> Result<crate::db::models::TriageStats, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     queries::get_triage_stats(&conn).map_err(|e| e.to_string())
+}
+
+// ── Learning / interaction tracking ───────────────────────────────────
+
+#[tauri::command]
+pub async fn record_reading_time(
+    db: State<'_, Database>,
+    article_id: String,
+    seconds: i64,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = Utc::now().timestamp();
+    queries::record_reading_time(&conn, &article_id, seconds, now).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_article_feedback(
+    db: State<'_, Database>,
+    article_id: String,
+    feedback: Option<String>,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = Utc::now().timestamp();
+    queries::set_article_feedback(&conn, &article_id, feedback.as_deref(), now)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn set_priority_override(
+    db: State<'_, Database>,
+    article_id: String,
+    priority: i32,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = Utc::now().timestamp();
+    queries::set_priority_override(&conn, &article_id, priority.clamp(1, 5), now)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_preference_profile(
+    db: State<'_, Database>,
+) -> Result<crate::db::models::UserPreferenceProfile, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::build_preference_profile(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_article_interaction(
+    db: State<'_, Database>,
+    article_id: String,
+) -> Result<Option<crate::db::models::ArticleInteraction>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::get_article_interaction(&conn, &article_id).map_err(|e| e.to_string())
 }

@@ -16,6 +16,8 @@ import type {
   ArticleWithTriage,
   TriageResult,
   TriageStats,
+  ArticleInteraction,
+  UserPreferenceProfile,
 } from "./types";
 
 // Feeds
@@ -77,6 +79,18 @@ export const getInboxArticles = (opts?: {
     offset: opts?.offset ?? null,
   });
 export const getTriageStats = () => invoke<TriageStats>("get_triage_stats");
+
+// Learning / interactions
+export const recordReadingTime = (articleId: string, seconds: number) =>
+  invoke<void>("record_reading_time", { articleId, seconds });
+export const setArticleFeedback = (articleId: string, feedback: string | null) =>
+  invoke<void>("set_article_feedback", { articleId, feedback });
+export const setPriorityOverride = (articleId: string, priority: number) =>
+  invoke<void>("set_priority_override", { articleId, priority });
+export const getPreferenceProfile = () =>
+  invoke<UserPreferenceProfile>("get_preference_profile");
+export const getArticleInteraction = (articleId: string) =>
+  invoke<ArticleInteraction | null>("get_article_interaction", { articleId });
 
 // Chat
 export const chatWithArticle = (articleId: string, messages: ChatMessageInput[]) =>

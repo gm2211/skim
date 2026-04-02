@@ -105,8 +105,10 @@ export function ArticleList() {
   }, [sidebarView, listFilter]);
 
   const { data: regularArticles, isLoading: regularLoading } = useArticles(filter);
+  const inboxIsRead = isInbox && listFilter === "unread" ? false : null;
   const { data: inboxArticles, isLoading: inboxLoading } = useInboxArticles(
-    isInbox ? undefined : -1 // -1 disables the query when not in inbox view
+    isInbox ? undefined : -1, // -1 disables the query when not in inbox view
+    inboxIsRead
   );
 
   const articles = isInbox ? inboxArticles : regularArticles;
@@ -135,15 +137,23 @@ export function ArticleList() {
   }, [sidebarView, articles]);
 
   const filteredArticles = useMemo(() => {
-    if (!articles || !searchQuery.trim()) return articles;
-    const q = searchQuery.toLowerCase();
-    return articles.filter(
-      (a) =>
-        a.title.toLowerCase().includes(q) ||
-        a.feed_title?.toLowerCase().includes(q) ||
-        a.content_text?.toLowerCase().includes(q)
-    );
-  }, [articles, searchQuery]);
+    if (!articles) return articles;
+    let result = articles;
+    // For inbox view, apply starred filter client-side (backend doesn't support it)
+    if (isInbox && listFilter === "starred") {
+      result = result.filter((a) => a.is_starred);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(
+        (a) =>
+          a.title.toLowerCase().includes(q) ||
+          a.feed_title?.toLowerCase().includes(q) ||
+          a.content_text?.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [articles, searchQuery, isInbox, listFilter]);
 
   const unreadCount = useMemo(() => {
     return articles?.filter((a) => !a.is_read).length ?? 0;

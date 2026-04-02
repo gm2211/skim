@@ -247,6 +247,11 @@ impl AiProvider for AnthropicProvider {
     }
 }
 
+/// Escape a string for safe inclusion in a shell command.
+fn shell_escape(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
 /// Provider that uses the Claude Code CLI to make API calls.
 /// This lets users with Claude Pro/Max subscriptions use their subscription
 /// for summarization without needing an API key.
@@ -327,9 +332,7 @@ impl AiProvider for ClaudeCliProvider {
             ]);
 
             if let Some(ref key) = api_key {
-                // Setup token or API key passed via env
                 cmd.env("ANTHROPIC_API_KEY", key);
-                // --bare: skip hooks/keychain, use ANTHROPIC_API_KEY only
                 cmd.arg("--bare");
             }
 
@@ -337,11 +340,34 @@ impl AiProvider for ClaudeCliProvider {
                 cmd.args(["--system-prompt", sys]);
             }
 
+            // Clear inherited env and set only what's needed to prevent
+            // macOS TCC prompts (Photos, Desktop, Dropbox, etc.) from
+            // the subprocess being attributed to Skim.app.
+            let path = std::env::var("PATH").unwrap_or_else(|_| "/usr/local/bin:/usr/bin:/bin".to_string());
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+            cmd.env_clear();
+            cmd.env("PATH", path);
+            cmd.env("HOME", &home);
+            cmd.env("USER", std::env::var("USER").unwrap_or_default());
+            cmd.env("SHELL", "/bin/zsh");
+            cmd.env("TMPDIR", std::env::var("TMPDIR").unwrap_or_else(|_| "/tmp".to_string()));
+            // Ensure claude can find its config
+            cmd.env("XDG_CONFIG_HOME", format!("{}/.config", home));
+            // Set working directory to /tmp to avoid scanning user directories
+            cmd.current_dir("/tmp");
+
             log::info!("ClaudeCliProvider: running claude CLI with model={}", &model);
 
-            let output = cmd
-                .output()
+            // Prevent stdin from blocking (claude might wait for interactive input)
+            cmd.stdin(std::process::Stdio::null());
+
+            let child = cmd
+                .spawn()
                 .map_err(|e| format!("Failed to run claude CLI: {}", e))?;
+
+            let output = child
+                .wait_with_output()
+                .map_err(|e| format!("Failed to read claude CLI output: {}", e))?;
 
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();

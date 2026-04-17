@@ -77,8 +77,7 @@ pub fn run() {
             commands::feeds::disconnect_feedly,
             commands::feeds::get_feedly_status,
             commands::feeds::feedly_oauth_login,
-            commands::feeds::feedly_oauth_redirect_uri,
-            commands::feeds::get_feedly_oauth_config,
+            commands::feeds::feedly_oauth_available,
             commands::feeds::feedly_preview_stored,
             commands::feeds::import_feedly_stored,
             // Articles

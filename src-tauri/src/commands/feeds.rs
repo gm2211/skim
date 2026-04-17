@@ -15,10 +15,9 @@ pub struct FeedWithCount {
 }
 
 /// Returns a valid Feedly access token, refreshing if expiry is within 60s.
-/// Persists the refreshed token and expiry.
+/// Refresh requires baked-in OAuth credentials.
 async fn ensure_feedly_token(db: &Database) -> Result<Option<String>, String> {
-    let baked = feedly_oauth::baked_credentials();
-    let (token, refresh_token, expires_at, stored_client_id, stored_client_secret) = {
+    let (token, refresh_token, expires_at) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         (
             queries::get_setting(&conn, "feedly_token").ok().flatten(),
@@ -27,26 +26,18 @@ async fn ensure_feedly_token(db: &Database) -> Result<Option<String>, String> {
                 .ok()
                 .flatten()
                 .and_then(|s| s.parse::<i64>().ok()),
-            queries::get_setting(&conn, "feedly_client_id").ok().flatten(),
-            queries::get_setting(&conn, "feedly_client_secret").ok().flatten(),
         )
-    };
-    let (client_id, client_secret) = match baked {
-        Some((id, secret)) => (Some(id), Some(secret)),
-        None => (stored_client_id, stored_client_secret),
     };
 
     let Some(token) = token else { return Ok(None) };
 
     let now = chrono::Utc::now().timestamp();
     let needs_refresh = expires_at.map(|e| e - now < 60).unwrap_or(false);
-
     if !needs_refresh {
         return Ok(Some(token));
     }
 
-    let (Some(rt), Some(cid), Some(csec)) = (refresh_token, client_id, client_secret) else {
-        // No refresh credentials; return current token and let API call fail if expired
+    let (Some(rt), Some((cid, csec))) = (refresh_token, feedly_oauth::baked_credentials()) else {
         return Ok(Some(token));
     };
 
@@ -348,29 +339,16 @@ pub async fn disconnect_feedly(
 }
 
 #[tauri::command]
-pub fn feedly_oauth_redirect_uri() -> String {
-    feedly_oauth::redirect_uri()
-}
-
-#[tauri::command]
 pub async fn feedly_oauth_login(
     db: State<'_, Database>,
-    client_id: Option<String>,
-    client_secret: Option<String>,
 ) -> Result<feedly::FeedlyProfile, String> {
-    let (client_id, client_secret) = resolve_oauth_creds(&db, client_id, client_secret)?;
+    let (client_id, client_secret) = feedly_oauth::baked_credentials()
+        .ok_or_else(|| "Feedly sign-in is not available in this build".to_string())?;
     let token = feedly_oauth::run_oauth_flow(&client_id, &client_secret).await?;
     let profile = feedly::verify_token(&token.access_token).await?;
 
     {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        // Only persist user-provided creds (not baked ones); baked come from env each build
-        if feedly_oauth::baked_credentials().is_none() {
-            queries::set_setting(&conn, "feedly_client_id", &client_id)
-                .map_err(|e| e.to_string())?;
-            queries::set_setting(&conn, "feedly_client_secret", &client_secret)
-                .map_err(|e| e.to_string())?;
-        }
         queries::set_setting(&conn, "feedly_token", &token.access_token)
             .map_err(|e| e.to_string())?;
         if let Some(ref rt) = token.refresh_token {
@@ -393,64 +371,9 @@ pub async fn feedly_oauth_login(
     Ok(profile)
 }
 
-#[derive(Debug, Serialize)]
-pub struct FeedlyOAuthConfig {
-    pub client_id: Option<String>,
-    pub client_secret: Option<String>,
-    pub redirect_uri: String,
-    /// True if the app has baked-in OAuth credentials (user doesn't need to provide).
-    pub has_baked_credentials: bool,
-}
-
 #[tauri::command]
-pub async fn get_feedly_oauth_config(
-    db: State<'_, Database>,
-) -> Result<FeedlyOAuthConfig, String> {
-    let baked = feedly_oauth::baked_credentials();
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    Ok(FeedlyOAuthConfig {
-        client_id: baked
-            .as_ref()
-            .map(|(id, _)| id.clone())
-            .or_else(|| queries::get_setting(&conn, "feedly_client_id").ok().flatten()),
-        client_secret: if baked.is_some() {
-            // Don't leak baked secret to the frontend
-            Some("(built-in)".to_string())
-        } else {
-            queries::get_setting(&conn, "feedly_client_secret").ok().flatten()
-        },
-        redirect_uri: feedly_oauth::redirect_uri(),
-        has_baked_credentials: baked.is_some(),
-    })
-}
-
-/// Prefer baked-in credentials over user-supplied/persisted ones.
-fn resolve_oauth_creds(
-    db: &Database,
-    client_id: Option<String>,
-    client_secret: Option<String>,
-) -> Result<(String, String), String> {
-    if let Some(baked) = feedly_oauth::baked_credentials() {
-        return Ok(baked);
-    }
-    let (cid, csec) = match (client_id, client_secret) {
-        (Some(cid), Some(csec)) if !cid.trim().is_empty() && !csec.trim().is_empty() => {
-            (cid, csec)
-        }
-        _ => {
-            let conn = db.conn.lock().map_err(|e| e.to_string())?;
-            let cid = queries::get_setting(&conn, "feedly_client_id")
-                .ok()
-                .flatten()
-                .ok_or_else(|| "Feedly client ID not configured".to_string())?;
-            let csec = queries::get_setting(&conn, "feedly_client_secret")
-                .ok()
-                .flatten()
-                .ok_or_else(|| "Feedly client secret not configured".to_string())?;
-            (cid, csec)
-        }
-    };
-    Ok((cid, csec))
+pub fn feedly_oauth_available() -> bool {
+    feedly_oauth::baked_credentials().is_some()
 }
 
 #[tauri::command]

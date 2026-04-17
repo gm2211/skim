@@ -5,8 +5,8 @@ import type { AppSettings, FeedlyConnectionStatus } from "../../services/types";
 import {
   connectFeedly,
   disconnectFeedly,
+  feedlyOauthAvailable,
   feedlyOauthLogin,
-  getFeedlyOauthConfig,
   getFeedlyStatus,
 } from "../../services/commands";
 import { ModelBrowser } from "./ModelBrowser";
@@ -371,20 +371,18 @@ function SyncTab({
   const [feedlyToken, setFeedlyToken] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [feedlyError, setFeedlyError] = useState<string | null>(null);
-  const [hasBakedCreds, setHasBakedCreds] = useState(false);
+  const [oauthAvailable, setOauthAvailable] = useState(false);
 
   useEffect(() => {
     getFeedlyStatus().then(setFeedlyStatus).catch(() => setFeedlyStatus(null));
-    getFeedlyOauthConfig()
-      .then((cfg) => setHasBakedCreds(cfg.has_baked_credentials))
-      .catch(() => {});
+    feedlyOauthAvailable().then(setOauthAvailable).catch(() => {});
   }, []);
 
   const handleLogin = async () => {
     setConnecting(true);
     setFeedlyError(null);
     try {
-      const profile = await feedlyOauthLogin(null, null);
+      const profile = await feedlyOauthLogin();
       setFeedlyStatus({
         connected: true,
         email: profile.email,
@@ -460,7 +458,7 @@ function SyncTab({
             Connect your Feedly account to sync articles, read state, and stars.
           </p>
 
-          {hasBakedCreds ? (
+          {oauthAvailable ? (
             <>
               <button
                 onClick={handleLogin}

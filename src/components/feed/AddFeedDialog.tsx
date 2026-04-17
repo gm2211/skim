@@ -8,7 +8,7 @@ import {
   importFeedlyStored,
   getFeedlyStatus,
   feedlyOauthLogin,
-  getFeedlyOauthConfig,
+  feedlyOauthAvailable,
 } from "../../services/commands";
 import type { FeedlySubscription, FeedlyImportResult, FeedlyConnectionStatus } from "../../services/types";
 import { useQueryClient } from "@tanstack/react-query";
@@ -141,23 +141,21 @@ function FeedlyTab() {
   const [result, setResult] = useState<FeedlyImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<FeedlyConnectionStatus | null | undefined>(undefined);
-  const [hasBakedCreds, setHasBakedCreds] = useState(false);
+  const [oauthAvailable, setOauthAvailable] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
   const qc = useQueryClient();
 
   useEffect(() => {
     getFeedlyStatus().then(setStatus).catch(() => setStatus(null));
-    getFeedlyOauthConfig()
-      .then((cfg) => setHasBakedCreds(cfg.has_baked_credentials))
-      .catch(() => {});
+    feedlyOauthAvailable().then(setOauthAvailable).catch(() => {});
   }, []);
 
   const handleSignIn = async () => {
     setSigningIn(true);
     setError(null);
     try {
-      const profile = await feedlyOauthLogin(null, null);
+      const profile = await feedlyOauthLogin();
       setStatus({ connected: true, email: profile.email, full_name: profile.full_name });
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
@@ -243,7 +241,7 @@ function FeedlyTab() {
             {status?.full_name || status?.email || "Feedly account"}
           </p>
         </div>
-      ) : hasBakedCreds ? (
+      ) : oauthAvailable ? (
         <>
           <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
             Sign in to your Feedly account to import your subscriptions. Your browser will open for login.
@@ -362,7 +360,7 @@ function FeedlyTab() {
             {importing ? "Importing..." : `Import ${subs.length} Feeds`}
           </button>
         )}
-        {!signedIn && !hasBakedCreds && !result && !subs && (
+        {!signedIn && !oauthAvailable && !result && !subs && (
           <button
             onClick={handlePreviewToken}
             disabled={previewing || !token.trim()}
@@ -372,7 +370,7 @@ function FeedlyTab() {
             {previewing ? "Loading..." : "Preview"}
           </button>
         )}
-        {!signedIn && !hasBakedCreds && subs && !result && (
+        {!signedIn && !oauthAvailable && subs && !result && (
           <button
             onClick={handleImportToken}
             disabled={importing}

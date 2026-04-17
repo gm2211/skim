@@ -20,6 +20,8 @@ import type {
   UserPreferenceProfile,
   FeedlySubscription,
   FeedlyImportResult,
+  FeedlyProfile,
+  FeedlyConnectionStatus,
 } from "./types";
 
 // Feeds
@@ -35,6 +37,24 @@ export const importFeedly = (token: string) =>
   invoke<FeedlyImportResult>("import_feedly", { token });
 export const feedlyPreview = (token: string) =>
   invoke<FeedlySubscription[]>("feedly_preview", { token });
+export const feedlyPreviewStored = () =>
+  invoke<FeedlySubscription[]>("feedly_preview_stored");
+export const importFeedlyStored = () =>
+  invoke<FeedlyImportResult>("import_feedly_stored");
+export const connectFeedly = (token: string) =>
+  invoke<FeedlyProfile>("connect_feedly", { token });
+export const disconnectFeedly = () =>
+  invoke<void>("disconnect_feedly");
+export const getFeedlyStatus = () =>
+  invoke<FeedlyConnectionStatus | null>("get_feedly_status");
+export const feedlyOauthLogin = (clientId: string, clientSecret: string) =>
+  invoke<FeedlyProfile>("feedly_oauth_login", { clientId, clientSecret });
+export const feedlyOauthRedirectUri = () =>
+  invoke<string>("feedly_oauth_redirect_uri");
+export const getFeedlyOauthConfig = () =>
+  invoke<{ client_id: string | null; client_secret: string | null; redirect_uri: string }>(
+    "get_feedly_oauth_config",
+  );
 
 // Articles
 export const getArticles = (filter: ArticleFilter) =>

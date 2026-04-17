@@ -27,6 +27,7 @@ pub struct Article {
     pub fetched_at: i64,
     pub is_read: bool,
     pub is_starred: bool,
+    pub feedly_entry_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

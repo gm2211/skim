@@ -80,5 +80,20 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         CREATE INDEX IF NOT EXISTS idx_interactions_reading ON article_interactions(reading_time_sec);
         ",
     )?;
+
+    // Add feedly_entry_id column to articles (idempotent)
+    let has_feedly_entry_id: bool = conn
+        .prepare("PRAGMA table_info(articles)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .filter_map(|r| r.ok())
+        .any(|name| name == "feedly_entry_id");
+
+    if !has_feedly_entry_id {
+        conn.execute_batch(
+            "ALTER TABLE articles ADD COLUMN feedly_entry_id TEXT;
+             CREATE INDEX IF NOT EXISTS idx_articles_feedly_entry_id ON articles(feedly_entry_id);",
+        )?;
+    }
+
     Ok(())
 }

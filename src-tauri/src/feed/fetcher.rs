@@ -98,6 +98,7 @@ pub async fn fetch_and_parse_feed(
                 fetched_at: now,
                 is_read: false,
                 is_starred: false,
+                feedly_entry_id: None,
             }
         })
         .collect();

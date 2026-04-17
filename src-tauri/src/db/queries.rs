@@ -46,6 +46,48 @@ pub fn list_feeds(conn: &Connection) -> Result<Vec<Feed>, rusqlite::Error> {
     Ok(feeds)
 }
 
+pub fn get_feed_by_id(conn: &Connection, feed_id: &str) -> Result<Option<Feed>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, url, site_url, description, icon_url, feedly_id, created_at, updated_at, last_fetched_at
+         FROM feeds WHERE id = ?1",
+    )?;
+    let mut rows = stmt.query_map(params![feed_id], |row| {
+        Ok(Feed {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            url: row.get(2)?,
+            site_url: row.get(3)?,
+            description: row.get(4)?,
+            icon_url: row.get(5)?,
+            feedly_id: row.get(6)?,
+            created_at: row.get(7)?,
+            updated_at: row.get(8)?,
+            last_fetched_at: row.get(9)?,
+        })
+    })?;
+    match rows.next() {
+        Some(Ok(feed)) => Ok(Some(feed)),
+        Some(Err(e)) => Err(e),
+        None => Ok(None),
+    }
+}
+
+pub fn get_feedly_entry_ids(conn: &Connection, article_ids: &[String]) -> Result<Vec<(String, String)>, rusqlite::Error> {
+    let mut results = Vec::new();
+    for id in article_ids {
+        let mut stmt = conn.prepare(
+            "SELECT id, feedly_entry_id FROM articles WHERE id = ?1 AND feedly_entry_id IS NOT NULL"
+        )?;
+        let rows = stmt.query_map(params![id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        for row in rows {
+            results.push(row?);
+        }
+    }
+    Ok(results)
+}
+
 pub fn delete_feed(conn: &Connection, feed_id: &str) -> Result<(), rusqlite::Error> {
     conn.execute("DELETE FROM feeds WHERE id = ?1", params![feed_id])?;
     Ok(())
@@ -53,8 +95,8 @@ pub fn delete_feed(conn: &Connection, feed_id: &str) -> Result<(), rusqlite::Err
 
 pub fn insert_article(conn: &Connection, article: &Article) -> Result<bool, rusqlite::Error> {
     let result = conn.execute(
-        "INSERT OR IGNORE INTO articles (id, feed_id, title, url, author, content_html, content_text, published_at, fetched_at, is_read, is_starred)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT OR IGNORE INTO articles (id, feed_id, title, url, author, content_html, content_text, published_at, fetched_at, is_read, is_starred, feedly_entry_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             article.id,
             article.feed_id,
@@ -67,6 +109,7 @@ pub fn insert_article(conn: &Connection, article: &Article) -> Result<bool, rusq
             article.fetched_at,
             article.is_read as i32,
             article.is_starred as i32,
+            article.feedly_entry_id,
         ],
     )?;
     Ok(result > 0)
@@ -78,7 +121,7 @@ pub fn get_articles(
 ) -> Result<Vec<ArticleWithFeed>, rusqlite::Error> {
     let mut sql = String::from(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
-                a.published_at, a.fetched_at, a.is_read, a.is_starred,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id,
                 f.title as feed_title, f.icon_url as feed_icon_url
          FROM articles a
          JOIN feeds f ON a.feed_id = f.id",
@@ -143,9 +186,10 @@ pub fn get_articles(
                     fetched_at: row.get(8)?,
                     is_read: row.get::<_, i32>(9)? != 0,
                     is_starred: row.get::<_, i32>(10)? != 0,
+                    feedly_entry_id: row.get(11)?,
                 },
-                feed_title: row.get(11)?,
-                feed_icon_url: row.get(12)?,
+                feed_title: row.get(12)?,
+                feed_icon_url: row.get(13)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -158,7 +202,7 @@ pub fn get_article_by_id(
 ) -> Result<Option<ArticleWithFeed>, rusqlite::Error> {
     let mut stmt = conn.prepare(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
-                a.published_at, a.fetched_at, a.is_read, a.is_starred,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id,
                 f.title as feed_title, f.icon_url as feed_icon_url
          FROM articles a
          JOIN feeds f ON a.feed_id = f.id
@@ -178,9 +222,10 @@ pub fn get_article_by_id(
                 fetched_at: row.get(8)?,
                 is_read: row.get::<_, i32>(9)? != 0,
                 is_starred: row.get::<_, i32>(10)? != 0,
+                feedly_entry_id: row.get(11)?,
             },
-            feed_title: row.get(11)?,
-            feed_icon_url: row.get(12)?,
+            feed_title: row.get(12)?,
+            feed_icon_url: row.get(13)?,
         })
     })?;
     match rows.next() {
@@ -359,7 +404,7 @@ pub fn get_inbox_articles(
 ) -> Result<Vec<ArticleWithTriage>, rusqlite::Error> {
     let mut sql = String::from(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
-                a.published_at, a.fetched_at, a.is_read, a.is_starred,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id,
                 f.title as feed_title, f.icon_url as feed_icon_url,
                 t.priority, t.reason
          FROM articles a
@@ -398,11 +443,12 @@ pub fn get_inbox_articles(
                     fetched_at: row.get(8)?,
                     is_read: row.get::<_, i32>(9)? != 0,
                     is_starred: row.get::<_, i32>(10)? != 0,
+                    feedly_entry_id: row.get(11)?,
                 },
-                feed_title: row.get(11)?,
-                feed_icon_url: row.get(12)?,
-                priority: row.get(13)?,
-                reason: row.get(14)?,
+                feed_title: row.get(12)?,
+                feed_icon_url: row.get(13)?,
+                priority: row.get(14)?,
+                reason: row.get(15)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -412,7 +458,7 @@ pub fn get_inbox_articles(
 pub fn get_untriaged_article_ids(conn: &Connection, limit: i64) -> Result<Vec<ArticleWithFeed>, rusqlite::Error> {
     let mut stmt = conn.prepare(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
-                a.published_at, a.fetched_at, a.is_read, a.is_starred,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id,
                 f.title as feed_title, f.icon_url as feed_icon_url
          FROM articles a
          JOIN feeds f ON a.feed_id = f.id
@@ -436,9 +482,10 @@ pub fn get_untriaged_article_ids(conn: &Connection, limit: i64) -> Result<Vec<Ar
                     fetched_at: row.get(8)?,
                     is_read: row.get::<_, i32>(9)? != 0,
                     is_starred: row.get::<_, i32>(10)? != 0,
+                    feedly_entry_id: row.get(11)?,
                 },
-                feed_title: row.get(11)?,
-                feed_icon_url: row.get(12)?,
+                feed_title: row.get(12)?,
+                feed_icon_url: row.get(13)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;

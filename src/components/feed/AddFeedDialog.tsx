@@ -1,8 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAddFeed } from "../../hooks/useFeeds";
 import { useUiStore } from "../../stores/uiStore";
-import { importFeedly, feedlyPreview } from "../../services/commands";
-import type { FeedlySubscription, FeedlyImportResult } from "../../services/types";
+import {
+  importFeedly,
+  feedlyPreview,
+  feedlyPreviewStored,
+  importFeedlyStored,
+  getFeedlyStatus,
+  feedlyOauthLogin,
+  getFeedlyOauthConfig,
+} from "../../services/commands";
+import type { FeedlySubscription, FeedlyImportResult, FeedlyConnectionStatus } from "../../services/types";
 import { useQueryClient } from "@tanstack/react-query";
 
 type Tab = "url" | "feedly";
@@ -132,10 +140,64 @@ function FeedlyTab() {
   const [subs, setSubs] = useState<FeedlySubscription[] | null>(null);
   const [result, setResult] = useState<FeedlyImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<FeedlyConnectionStatus | null | undefined>(undefined);
+  const [signingIn, setSigningIn] = useState(false);
+  const [showTokenFallback, setShowTokenFallback] = useState(false);
   const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
+  const setShowSettings = useUiStore((s) => s.setShowSettings);
   const qc = useQueryClient();
 
-  const handlePreview = async () => {
+  useEffect(() => {
+    getFeedlyStatus().then(setStatus).catch(() => setStatus(null));
+  }, []);
+
+  const handleSignIn = async () => {
+    setSigningIn(true);
+    setError(null);
+    try {
+      const cfg = await getFeedlyOauthConfig();
+      if (!cfg.client_id || !cfg.client_secret) {
+        setError("Set Feedly client ID and secret in Settings → Sync first.");
+        return;
+      }
+      const profile = await feedlyOauthLogin(cfg.client_id, cfg.client_secret);
+      setStatus({ connected: true, email: profile.email, full_name: profile.full_name });
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const handlePreviewStored = async () => {
+    setPreviewing(true);
+    setError(null);
+    try {
+      const data = await feedlyPreviewStored();
+      setSubs(data);
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const handleImportStored = async () => {
+    setImporting(true);
+    setError(null);
+    try {
+      const res = await importFeedlyStored();
+      setResult(res);
+      qc.invalidateQueries({ queryKey: ["feeds"] });
+      qc.invalidateQueries({ queryKey: ["articles"] });
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handlePreviewToken = async () => {
     if (!token.trim()) return;
     setPreviewing(true);
     setError(null);
@@ -149,7 +211,7 @@ function FeedlyTab() {
     }
   };
 
-  const handleImport = async () => {
+  const handleImportToken = async () => {
     if (!token.trim()) return;
     setImporting(true);
     setError(null);
@@ -165,27 +227,82 @@ function FeedlyTab() {
     }
   };
 
+  const signedIn = status?.connected === true && !showTokenFallback;
+
   return (
     <div style={{ padding: "16px 24px 24px" }}>
-      <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-        Get your Feedly developer token from{" "}
-        <span className="text-accent">feedly.com/v3/auth/dev</span>.
-        Paste it below to import your subscriptions.
-      </p>
+      {signedIn ? (
+        <div
+          className="rounded-xl border border-green-500/20"
+          style={{ padding: "12px 14px", marginBottom: 12, background: "rgba(34, 197, 94, 0.06)" }}
+        >
+          <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
+            <div className="w-2 h-2 rounded-full bg-green-500" />
+            <span className="text-text-primary" style={{ fontSize: 13, fontWeight: 500 }}>
+              Signed in
+            </span>
+          </div>
+          <p className="text-text-muted" style={{ fontSize: 12 }}>
+            {status?.full_name || status?.email || "Feedly account"}
+          </p>
+        </div>
+      ) : showTokenFallback ? (
+        <>
+          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
+            Paste a token from{" "}
+            <span className="text-accent">feedly.com/v3/auth/dev</span>.
+          </p>
+          <input
+            type="password"
+            value={token}
+            onChange={(e) => { setToken(e.target.value); setSubs(null); setResult(null); }}
+            placeholder="Feedly developer token"
+            className="w-full border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors"
+            style={{
+              background: "rgba(255, 255, 255, 0.05)",
+              padding: "12px 16px",
+              fontSize: 14,
+              marginBottom: 12,
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+            Sign in to your Feedly account to import your subscriptions. Your browser will open for login.
+          </p>
+          <button
+            onClick={handleSignIn}
+            disabled={signingIn}
+            className="w-full bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors inline-flex items-center justify-center gap-2"
+            style={{ padding: "12px 20px", fontSize: 14, marginBottom: 12 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            </svg>
+            {signingIn ? "Waiting for browser..." : "Sign in with Feedly"}
+          </button>
+          <button
+            type="button"
+            onClick={() => { setShowAddFeed(false); setShowSettings(true); }}
+            className="text-text-muted hover:text-text-primary transition-colors block"
+            style={{ fontSize: 12, marginBottom: 10 }}
+          >
+            Need Feedly app credentials? Open Settings → Sync
+          </button>
+        </>
+      )}
 
-      <input
-        type="password"
-        value={token}
-        onChange={(e) => { setToken(e.target.value); setSubs(null); setResult(null); }}
-        placeholder="Feedly access token"
-        className="w-full border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors"
-        style={{
-          background: "rgba(255, 255, 255, 0.05)",
-          padding: "12px 16px",
-          fontSize: 14,
-          marginBottom: 12,
-        }}
-      />
+      {!signedIn && (
+        <button
+          type="button"
+          onClick={() => { setShowTokenFallback((v) => !v); setError(null); setSubs(null); setResult(null); }}
+          className="text-text-muted hover:text-text-primary transition-colors block"
+          style={{ fontSize: 12, marginBottom: 8 }}
+        >
+          {showTokenFallback ? "← Back to sign-in" : "▸ Use developer token instead"}
+        </button>
+      )}
 
       {error && (
         <div
@@ -239,9 +356,29 @@ function FeedlyTab() {
         >
           {result ? "Done" : "Cancel"}
         </button>
-        {!result && !subs && (
+        {signedIn && !result && !subs && (
           <button
-            onClick={handlePreview}
+            onClick={handlePreviewStored}
+            disabled={previewing}
+            className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
+            style={{ padding: "10px 24px", fontSize: 14 }}
+          >
+            {previewing ? "Loading..." : "Preview feeds"}
+          </button>
+        )}
+        {signedIn && subs && !result && (
+          <button
+            onClick={handleImportStored}
+            disabled={importing}
+            className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
+            style={{ padding: "10px 24px", fontSize: 14 }}
+          >
+            {importing ? "Importing..." : `Import ${subs.length} Feeds`}
+          </button>
+        )}
+        {showTokenFallback && !result && !subs && (
+          <button
+            onClick={handlePreviewToken}
             disabled={previewing || !token.trim()}
             className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
             style={{ padding: "10px 24px", fontSize: 14 }}
@@ -249,9 +386,9 @@ function FeedlyTab() {
             {previewing ? "Loading..." : "Preview"}
           </button>
         )}
-        {subs && !result && (
+        {showTokenFallback && subs && !result && (
           <button
-            onClick={handleImport}
+            onClick={handleImportToken}
             disabled={importing}
             className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
             style={{ padding: "10px 24px", fontSize: 14 }}

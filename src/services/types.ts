@@ -24,6 +24,7 @@ export interface Article {
   fetched_at: number;
   is_read: boolean;
   is_starred: boolean;
+  feedly_entry_id: string | null;
   feed_title: string;
   feed_icon_url: string | null;
 }
@@ -192,6 +193,18 @@ export interface FeedlyImportResult {
   imported: number;
   skipped: number;
   errors: string[];
+}
+
+export interface FeedlyProfile {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+}
+
+export interface FeedlyConnectionStatus {
+  connected: boolean;
+  email: string | null;
+  full_name: string | null;
 }
 
 export type SidebarView =

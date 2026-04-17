@@ -1,7 +1,14 @@
 import { useState, useEffect } from "react";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
-import type { AppSettings } from "../../services/types";
+import type { AppSettings, FeedlyConnectionStatus } from "../../services/types";
+import {
+  connectFeedly,
+  disconnectFeedly,
+  feedlyOauthLogin,
+  getFeedlyOauthConfig,
+  getFeedlyStatus,
+} from "../../services/commands";
 import { ModelBrowser } from "./ModelBrowser";
 
 const AI_PROVIDERS = [
@@ -310,57 +317,7 @@ export function SettingsDialog() {
             )}
 
             {activeTab === "sync" && (
-              <>
-                <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
-                  Sync
-                </h3>
-
-                <InputField
-                  label="Auto-refresh interval"
-                  description="How often to check feeds for new articles (in minutes)"
-                >
-                  <input
-                    type="number"
-                    min={5}
-                    max={1440}
-                    value={local.sync.refresh_interval_minutes}
-                    onChange={(e) =>
-                      setLocal({
-                        ...local,
-                        sync: {
-                          ...local.sync,
-                          refresh_interval_minutes: parseInt(e.target.value) || 30,
-                        },
-                      })
-                    }
-                    className={inputClass}
-                    style={{ ...inputStyle, width: 120 }}
-                  />
-                </InputField>
-
-                <InputField
-                  label="Max articles per feed"
-                  description="Number of articles to keep per feed"
-                >
-                  <input
-                    type="number"
-                    min={10}
-                    max={1000}
-                    value={local.sync.max_articles_per_feed}
-                    onChange={(e) =>
-                      setLocal({
-                        ...local,
-                        sync: {
-                          ...local.sync,
-                          max_articles_per_feed: parseInt(e.target.value) || 200,
-                        },
-                      })
-                    }
-                    className={inputClass}
-                    style={{ ...inputStyle, width: 120 }}
-                  />
-                </InputField>
-              </>
+              <SyncTab local={local} setLocal={setLocal} inputClass={inputClass} inputStyle={inputStyle} />
             )}
 
             {activeTab === "appearance" && (
@@ -396,5 +353,293 @@ export function SettingsDialog() {
         </div>
       </div>
     </div>
+  );
+}
+
+function SyncTab({
+  local,
+  setLocal,
+  inputClass,
+  inputStyle,
+}: {
+  local: AppSettings;
+  setLocal: (s: AppSettings) => void;
+  inputClass: string;
+  inputStyle: React.CSSProperties;
+}) {
+  const [feedlyStatus, setFeedlyStatus] = useState<FeedlyConnectionStatus | null | undefined>(undefined);
+  const [feedlyToken, setFeedlyToken] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [feedlyError, setFeedlyError] = useState<string | null>(null);
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [redirectUri, setRedirectUri] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showCreds, setShowCreds] = useState(false);
+
+  useEffect(() => {
+    getFeedlyStatus().then(setFeedlyStatus).catch(() => setFeedlyStatus(null));
+    getFeedlyOauthConfig().then((cfg) => {
+      setClientId(cfg.client_id ?? "");
+      setClientSecret(cfg.client_secret ?? "");
+      setRedirectUri(cfg.redirect_uri);
+    }).catch(() => {});
+  }, []);
+
+  const handleLogin = async () => {
+    if (!clientId.trim() || !clientSecret.trim()) {
+      setFeedlyError("Enter your Feedly app's Client ID and Client Secret first.");
+      setShowCreds(true);
+      return;
+    }
+    setConnecting(true);
+    setFeedlyError(null);
+    try {
+      const profile = await feedlyOauthLogin(clientId.trim(), clientSecret.trim());
+      setFeedlyStatus({
+        connected: true,
+        email: profile.email,
+        full_name: profile.full_name,
+      });
+    } catch (e) {
+      setFeedlyError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleConnectWithToken = async () => {
+    if (!feedlyToken.trim()) return;
+    setConnecting(true);
+    setFeedlyError(null);
+    try {
+      const profile = await connectFeedly(feedlyToken.trim());
+      setFeedlyStatus({
+        connected: true,
+        email: profile.email,
+        full_name: profile.full_name,
+      });
+      setFeedlyToken("");
+    } catch (e) {
+      setFeedlyError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    await disconnectFeedly();
+    setFeedlyStatus(null);
+  };
+
+  return (
+    <>
+      <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
+        Feedly
+      </h3>
+
+      {feedlyStatus === undefined ? (
+        <p className="text-text-muted" style={{ fontSize: 13 }}>Checking connection...</p>
+      ) : feedlyStatus?.connected ? (
+        <div style={{ marginBottom: 24 }}>
+          <div
+            className="rounded-xl border border-green-500/20"
+            style={{ padding: "14px 16px", marginBottom: 12, background: "rgba(34, 197, 94, 0.06)" }}
+          >
+            <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <span className="text-text-primary" style={{ fontSize: 14, fontWeight: 500 }}>Connected</span>
+            </div>
+            <p className="text-text-muted" style={{ fontSize: 13 }}>
+              {feedlyStatus.full_name || feedlyStatus.email || "Feedly account"}
+            </p>
+            <p className="text-text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+              Feeds imported from Feedly sync articles, read state, and stars through Feedly's API.
+            </p>
+          </div>
+          <button
+            onClick={handleDisconnect}
+            className="text-danger hover:text-red-400 rounded-xl hover:bg-red-500/10 transition-colors"
+            style={{ padding: "8px 16px", fontSize: 13 }}
+          >
+            Disconnect Feedly
+          </button>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 24 }}>
+          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+            Sign in to your Feedly account to sync articles, read state, and stars.
+          </p>
+
+          <button
+            onClick={handleLogin}
+            disabled={connecting}
+            className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors inline-flex items-center gap-2"
+            style={{ padding: "10px 20px", fontSize: 13, marginBottom: 12 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            </svg>
+            {connecting ? "Waiting for browser..." : "Sign in with Feedly"}
+          </button>
+
+          {feedlyError && (
+            <div
+              className="rounded-xl border border-danger/30 text-danger"
+              style={{ padding: "10px 14px", fontSize: 13, background: "rgba(248, 81, 73, 0.1)", marginBottom: 12 }}
+            >
+              {feedlyError}
+            </div>
+          )}
+
+          {/* Feedly OAuth app credentials */}
+          <button
+            type="button"
+            onClick={() => setShowCreds((v) => !v)}
+            className="text-text-muted hover:text-text-primary transition-colors"
+            style={{ fontSize: 12, marginTop: 4 }}
+          >
+            {showCreds ? "▾" : "▸"} Feedly app credentials (required once)
+          </button>
+          {showCreds && (
+            <div
+              className="rounded-xl border border-white/10"
+              style={{ padding: "12px 14px", marginTop: 8, background: "rgba(255,255,255,0.03)" }}
+            >
+              <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                Feedly requires a registered OAuth app (free). Email{" "}
+                <span className="text-accent">[email protected]</span> to request credentials.
+                Set the redirect URI to:
+              </p>
+              <code
+                className="block text-text-primary"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  marginBottom: 10,
+                  wordBreak: "break-all",
+                }}
+              >
+                {redirectUri}
+              </code>
+              <input
+                type="text"
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                placeholder="Client ID"
+                className={inputClass}
+                style={{ ...inputStyle, marginBottom: 8, fontSize: 13 }}
+              />
+              <input
+                type="password"
+                value={clientSecret}
+                onChange={(e) => setClientSecret(e.target.value)}
+                placeholder="Client Secret"
+                className={inputClass}
+                style={{ ...inputStyle, fontSize: 13 }}
+              />
+            </div>
+          )}
+
+          {/* Legacy: dev token paste */}
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="text-text-muted hover:text-text-primary transition-colors block"
+            style={{ fontSize: 12, marginTop: 10 }}
+          >
+            {showAdvanced ? "▾" : "▸"} Use developer token instead
+          </button>
+          {showAdvanced && (
+            <div style={{ marginTop: 8 }}>
+              <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                Paste a 30-day token from{" "}
+                <a
+                  href="https://feedly.com/v3/auth/dev"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent"
+                >
+                  feedly.com/v3/auth/dev
+                </a>
+                .
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={feedlyToken}
+                  onChange={(e) => { setFeedlyToken(e.target.value); setFeedlyError(null); }}
+                  placeholder="Feedly developer token"
+                  className={inputClass}
+                  style={{ ...inputStyle, flex: 1, fontSize: 13 }}
+                />
+                <button
+                  onClick={handleConnectWithToken}
+                  disabled={connecting || !feedlyToken.trim()}
+                  className="bg-white/10 text-text-primary rounded-xl hover:bg-white/20 disabled:opacity-40 transition-colors flex-shrink-0"
+                  style={{ padding: "10px 20px", fontSize: 13 }}
+                >
+                  {connecting ? "..." : "Connect"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="border-t border-white/5" style={{ margin: "24px 0" }} />
+
+      <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
+        Refresh
+      </h3>
+
+      <InputField
+        label="Auto-refresh interval"
+        description="How often to check feeds for new articles (in minutes)"
+      >
+        <input
+          type="number"
+          min={5}
+          max={1440}
+          value={local.sync.refresh_interval_minutes}
+          onChange={(e) =>
+            setLocal({
+              ...local,
+              sync: {
+                ...local.sync,
+                refresh_interval_minutes: parseInt(e.target.value) || 30,
+              },
+            })
+          }
+          className={inputClass}
+          style={{ ...inputStyle, width: 120 }}
+        />
+      </InputField>
+
+      <InputField
+        label="Max articles per feed"
+        description="Number of articles to keep per feed"
+      >
+        <input
+          type="number"
+          min={10}
+          max={1000}
+          value={local.sync.max_articles_per_feed}
+          onChange={(e) =>
+            setLocal({
+              ...local,
+              sync: {
+                ...local.sync,
+                max_articles_per_feed: parseInt(e.target.value) || 200,
+              },
+            })
+          }
+          className={inputClass}
+          style={{ ...inputStyle, width: 120 }}
+        />
+      </InputField>
+    </>
   );
 }

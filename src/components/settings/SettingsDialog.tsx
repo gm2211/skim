@@ -371,38 +371,20 @@ function SyncTab({
   const [feedlyToken, setFeedlyToken] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [feedlyError, setFeedlyError] = useState<string | null>(null);
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [redirectUri, setRedirectUri] = useState("");
   const [hasBakedCreds, setHasBakedCreds] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showCreds, setShowCreds] = useState(false);
 
   useEffect(() => {
     getFeedlyStatus().then(setFeedlyStatus).catch(() => setFeedlyStatus(null));
-    getFeedlyOauthConfig().then((cfg) => {
-      setHasBakedCreds(cfg.has_baked_credentials);
-      if (!cfg.has_baked_credentials) {
-        setClientId(cfg.client_id ?? "");
-        setClientSecret(cfg.client_secret ?? "");
-      }
-      setRedirectUri(cfg.redirect_uri);
-    }).catch(() => {});
+    getFeedlyOauthConfig()
+      .then((cfg) => setHasBakedCreds(cfg.has_baked_credentials))
+      .catch(() => {});
   }, []);
 
   const handleLogin = async () => {
-    if (!hasBakedCreds && (!clientId.trim() || !clientSecret.trim())) {
-      setFeedlyError("Enter your Feedly app's Client ID and Client Secret first.");
-      setShowCreds(true);
-      return;
-    }
     setConnecting(true);
     setFeedlyError(null);
     try {
-      const profile = await feedlyOauthLogin(
-        hasBakedCreds ? null : clientId.trim(),
-        hasBakedCreds ? null : clientSecret.trim(),
-      );
+      const profile = await feedlyOauthLogin(null, null);
       setFeedlyStatus({
         connected: true,
         email: profile.email,
@@ -475,96 +457,27 @@ function SyncTab({
       ) : (
         <div style={{ marginBottom: 24 }}>
           <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-            Sign in to your Feedly account to sync articles, read state, and stars.
+            Connect your Feedly account to sync articles, read state, and stars.
           </p>
 
-          <button
-            onClick={handleLogin}
-            disabled={connecting}
-            className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors inline-flex items-center gap-2"
-            style={{ padding: "10px 20px", fontSize: 13, marginBottom: 12 }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-            </svg>
-            {connecting ? "Waiting for browser..." : "Sign in with Feedly"}
-          </button>
-
-          {feedlyError && (
-            <div
-              className="rounded-xl border border-danger/30 text-danger"
-              style={{ padding: "10px 14px", fontSize: 13, background: "rgba(248, 81, 73, 0.1)", marginBottom: 12 }}
-            >
-              {feedlyError}
-            </div>
-          )}
-
-          {/* Feedly OAuth app credentials */}
-          {!hasBakedCreds && (
-            <button
-              type="button"
-              onClick={() => setShowCreds((v) => !v)}
-              className="text-text-muted hover:text-text-primary transition-colors"
-              style={{ fontSize: 12, marginTop: 4 }}
-            >
-              {showCreds ? "▾" : "▸"} Feedly app credentials (required once)
-            </button>
-          )}
-          {!hasBakedCreds && showCreds && (
-            <div
-              className="rounded-xl border border-white/10"
-              style={{ padding: "12px 14px", marginTop: 8, background: "rgba(255,255,255,0.03)" }}
-            >
-              <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 10 }}>
-                Feedly requires a registered OAuth app (free). Email{" "}
-                <span className="text-accent">[email protected]</span> to request credentials.
-                Set the redirect URI to:
-              </p>
-              <code
-                className="block text-text-primary"
-                style={{
-                  background: "rgba(255,255,255,0.05)",
-                  padding: "6px 10px",
-                  borderRadius: 6,
-                  fontSize: 12,
-                  marginBottom: 10,
-                  wordBreak: "break-all",
-                }}
+          {hasBakedCreds ? (
+            <>
+              <button
+                onClick={handleLogin}
+                disabled={connecting}
+                className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors flex items-center gap-2 w-fit"
+                style={{ padding: "10px 20px", fontSize: 13, marginBottom: 12 }}
               >
-                {redirectUri}
-              </code>
-              <input
-                type="text"
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                placeholder="Client ID"
-                className={inputClass}
-                style={{ ...inputStyle, marginBottom: 8, fontSize: 13 }}
-              />
-              <input
-                type="password"
-                value={clientSecret}
-                onChange={(e) => setClientSecret(e.target.value)}
-                placeholder="Client Secret"
-                className={inputClass}
-                style={{ ...inputStyle, fontSize: 13 }}
-              />
-            </div>
-          )}
-
-          {/* Legacy: dev token paste */}
-          <button
-            type="button"
-            onClick={() => setShowAdvanced((v) => !v)}
-            className="text-text-muted hover:text-text-primary transition-colors block"
-            style={{ fontSize: 12, marginTop: 10 }}
-          >
-            {showAdvanced ? "▾" : "▸"} Use developer token instead
-          </button>
-          {showAdvanced && (
-            <div style={{ marginTop: 8 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                </svg>
+                {connecting ? "Waiting for browser..." : "Sign in with Feedly"}
+              </button>
+            </>
+          ) : (
+            <div style={{ marginBottom: 12 }}>
               <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
-                Paste a 30-day token from{" "}
+                Paste a developer token from{" "}
                 <a
                   href="https://feedly.com/v3/auth/dev"
                   target="_blank"
@@ -573,7 +486,7 @@ function SyncTab({
                 >
                   feedly.com/v3/auth/dev
                 </a>
-                .
+                . One-click sign-in coming soon.
               </p>
               <div className="flex gap-2">
                 <input
@@ -587,12 +500,21 @@ function SyncTab({
                 <button
                   onClick={handleConnectWithToken}
                   disabled={connecting || !feedlyToken.trim()}
-                  className="bg-white/10 text-text-primary rounded-xl hover:bg-white/20 disabled:opacity-40 transition-colors flex-shrink-0"
+                  className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors flex-shrink-0"
                   style={{ padding: "10px 20px", fontSize: 13 }}
                 >
                   {connecting ? "..." : "Connect"}
                 </button>
               </div>
+            </div>
+          )}
+
+          {feedlyError && (
+            <div
+              className="rounded-xl border border-danger/30 text-danger"
+              style={{ padding: "10px 14px", fontSize: 13, background: "rgba(248, 81, 73, 0.1)", marginBottom: 12 }}
+            >
+              {feedlyError}
             </div>
           )}
         </div>

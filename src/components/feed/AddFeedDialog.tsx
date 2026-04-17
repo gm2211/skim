@@ -141,29 +141,23 @@ function FeedlyTab() {
   const [result, setResult] = useState<FeedlyImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<FeedlyConnectionStatus | null | undefined>(undefined);
+  const [hasBakedCreds, setHasBakedCreds] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
-  const [showTokenFallback, setShowTokenFallback] = useState(false);
   const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
-  const setShowSettings = useUiStore((s) => s.setShowSettings);
   const qc = useQueryClient();
 
   useEffect(() => {
     getFeedlyStatus().then(setStatus).catch(() => setStatus(null));
+    getFeedlyOauthConfig()
+      .then((cfg) => setHasBakedCreds(cfg.has_baked_credentials))
+      .catch(() => {});
   }, []);
 
   const handleSignIn = async () => {
     setSigningIn(true);
     setError(null);
     try {
-      const cfg = await getFeedlyOauthConfig();
-      if (!cfg.has_baked_credentials && (!cfg.client_id || !cfg.client_secret)) {
-        setError("Set Feedly client ID and secret in Settings → Sync first.");
-        return;
-      }
-      const profile = await feedlyOauthLogin(
-        cfg.has_baked_credentials ? null : cfg.client_id,
-        cfg.has_baked_credentials ? null : cfg.client_secret,
-      );
+      const profile = await feedlyOauthLogin(null, null);
       setStatus({ connected: true, email: profile.email, full_name: profile.full_name });
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
@@ -230,7 +224,7 @@ function FeedlyTab() {
     }
   };
 
-  const signedIn = status?.connected === true && !showTokenFallback;
+  const signedIn = status?.connected === true;
 
   return (
     <div style={{ padding: "16px 24px 24px" }}>
@@ -249,11 +243,36 @@ function FeedlyTab() {
             {status?.full_name || status?.email || "Feedly account"}
           </p>
         </div>
-      ) : showTokenFallback ? (
+      ) : hasBakedCreds ? (
+        <>
+          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+            Sign in to your Feedly account to import your subscriptions. Your browser will open for login.
+          </p>
+          <button
+            onClick={handleSignIn}
+            disabled={signingIn}
+            className="w-full bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors inline-flex items-center justify-center gap-2"
+            style={{ padding: "12px 20px", fontSize: 14, marginBottom: 12 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6" />
+            </svg>
+            {signingIn ? "Waiting for browser..." : "Sign in with Feedly"}
+          </button>
+        </>
+      ) : (
         <>
           <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
-            Paste a token from{" "}
-            <span className="text-accent">feedly.com/v3/auth/dev</span>.
+            Paste a developer token from{" "}
+            <a
+              href="https://feedly.com/v3/auth/dev"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent"
+            >
+              feedly.com/v3/auth/dev
+            </a>
+            . One-click sign-in coming soon.
           </p>
           <input
             type="password"
@@ -269,42 +288,6 @@ function FeedlyTab() {
             }}
           />
         </>
-      ) : (
-        <>
-          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-            Sign in to your Feedly account to import your subscriptions. Your browser will open for login.
-          </p>
-          <button
-            onClick={handleSignIn}
-            disabled={signingIn}
-            className="w-full bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors inline-flex items-center justify-center gap-2"
-            style={{ padding: "12px 20px", fontSize: 14, marginBottom: 12 }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-            </svg>
-            {signingIn ? "Waiting for browser..." : "Sign in with Feedly"}
-          </button>
-          <button
-            type="button"
-            onClick={() => { setShowAddFeed(false); setShowSettings(true); }}
-            className="text-text-muted hover:text-text-primary transition-colors block"
-            style={{ fontSize: 12, marginBottom: 10 }}
-          >
-            Need Feedly app credentials? Open Settings → Sync
-          </button>
-        </>
-      )}
-
-      {!signedIn && (
-        <button
-          type="button"
-          onClick={() => { setShowTokenFallback((v) => !v); setError(null); setSubs(null); setResult(null); }}
-          className="text-text-muted hover:text-text-primary transition-colors block"
-          style={{ fontSize: 12, marginBottom: 8 }}
-        >
-          {showTokenFallback ? "← Back to sign-in" : "▸ Use developer token instead"}
-        </button>
       )}
 
       {error && (
@@ -379,7 +362,7 @@ function FeedlyTab() {
             {importing ? "Importing..." : `Import ${subs.length} Feeds`}
           </button>
         )}
-        {showTokenFallback && !result && !subs && (
+        {!signedIn && !hasBakedCreds && !result && !subs && (
           <button
             onClick={handlePreviewToken}
             disabled={previewing || !token.trim()}
@@ -389,7 +372,7 @@ function FeedlyTab() {
             {previewing ? "Loading..." : "Preview"}
           </button>
         )}
-        {showTokenFallback && subs && !result && (
+        {!signedIn && !hasBakedCreds && subs && !result && (
           <button
             onClick={handleImportToken}
             disabled={importing}

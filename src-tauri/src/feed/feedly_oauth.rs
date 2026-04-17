@@ -15,6 +15,17 @@ pub fn redirect_uri() -> String {
     format!("http://{}:{}{}", REDIRECT_HOST, REDIRECT_PORT, REDIRECT_PATH)
 }
 
+/// Returns baked-in client credentials from build-time env vars, if present.
+/// Set FEEDLY_CLIENT_ID / FEEDLY_CLIENT_SECRET at compile time to embed.
+pub fn baked_credentials() -> Option<(String, String)> {
+    match (option_env!("FEEDLY_CLIENT_ID"), option_env!("FEEDLY_CLIENT_SECRET")) {
+        (Some(id), Some(secret)) if !id.is_empty() && !secret.is_empty() => {
+            Some((id.to_string(), secret.to_string()))
+        }
+        _ => None,
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TokenResponse {
     pub access_token: String,

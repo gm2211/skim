@@ -156,11 +156,14 @@ function FeedlyTab() {
     setError(null);
     try {
       const cfg = await getFeedlyOauthConfig();
-      if (!cfg.client_id || !cfg.client_secret) {
+      if (!cfg.has_baked_credentials && (!cfg.client_id || !cfg.client_secret)) {
         setError("Set Feedly client ID and secret in Settings → Sync first.");
         return;
       }
-      const profile = await feedlyOauthLogin(cfg.client_id, cfg.client_secret);
+      const profile = await feedlyOauthLogin(
+        cfg.has_baked_credentials ? null : cfg.client_id,
+        cfg.has_baked_credentials ? null : cfg.client_secret,
+      );
       setStatus({ connected: true, email: profile.email, full_name: profile.full_name });
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));

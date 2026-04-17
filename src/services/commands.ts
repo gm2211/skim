@@ -47,14 +47,17 @@ export const disconnectFeedly = () =>
   invoke<void>("disconnect_feedly");
 export const getFeedlyStatus = () =>
   invoke<FeedlyConnectionStatus | null>("get_feedly_status");
-export const feedlyOauthLogin = (clientId: string, clientSecret: string) =>
+export const feedlyOauthLogin = (clientId: string | null, clientSecret: string | null) =>
   invoke<FeedlyProfile>("feedly_oauth_login", { clientId, clientSecret });
 export const feedlyOauthRedirectUri = () =>
   invoke<string>("feedly_oauth_redirect_uri");
 export const getFeedlyOauthConfig = () =>
-  invoke<{ client_id: string | null; client_secret: string | null; redirect_uri: string }>(
-    "get_feedly_oauth_config",
-  );
+  invoke<{
+    client_id: string | null;
+    client_secret: string | null;
+    redirect_uri: string;
+    has_baked_credentials: boolean;
+  }>("get_feedly_oauth_config");
 
 // Articles
 export const getArticles = (filter: ArticleFilter) =>

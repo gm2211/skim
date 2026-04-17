@@ -374,20 +374,24 @@ function SyncTab({
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [redirectUri, setRedirectUri] = useState("");
+  const [hasBakedCreds, setHasBakedCreds] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showCreds, setShowCreds] = useState(false);
 
   useEffect(() => {
     getFeedlyStatus().then(setFeedlyStatus).catch(() => setFeedlyStatus(null));
     getFeedlyOauthConfig().then((cfg) => {
-      setClientId(cfg.client_id ?? "");
-      setClientSecret(cfg.client_secret ?? "");
+      setHasBakedCreds(cfg.has_baked_credentials);
+      if (!cfg.has_baked_credentials) {
+        setClientId(cfg.client_id ?? "");
+        setClientSecret(cfg.client_secret ?? "");
+      }
       setRedirectUri(cfg.redirect_uri);
     }).catch(() => {});
   }, []);
 
   const handleLogin = async () => {
-    if (!clientId.trim() || !clientSecret.trim()) {
+    if (!hasBakedCreds && (!clientId.trim() || !clientSecret.trim())) {
       setFeedlyError("Enter your Feedly app's Client ID and Client Secret first.");
       setShowCreds(true);
       return;
@@ -395,7 +399,10 @@ function SyncTab({
     setConnecting(true);
     setFeedlyError(null);
     try {
-      const profile = await feedlyOauthLogin(clientId.trim(), clientSecret.trim());
+      const profile = await feedlyOauthLogin(
+        hasBakedCreds ? null : clientId.trim(),
+        hasBakedCreds ? null : clientSecret.trim(),
+      );
       setFeedlyStatus({
         connected: true,
         email: profile.email,
@@ -493,15 +500,17 @@ function SyncTab({
           )}
 
           {/* Feedly OAuth app credentials */}
-          <button
-            type="button"
-            onClick={() => setShowCreds((v) => !v)}
-            className="text-text-muted hover:text-text-primary transition-colors"
-            style={{ fontSize: 12, marginTop: 4 }}
-          >
-            {showCreds ? "▾" : "▸"} Feedly app credentials (required once)
-          </button>
-          {showCreds && (
+          {!hasBakedCreds && (
+            <button
+              type="button"
+              onClick={() => setShowCreds((v) => !v)}
+              className="text-text-muted hover:text-text-primary transition-colors"
+              style={{ fontSize: 12, marginTop: 4 }}
+            >
+              {showCreds ? "▾" : "▸"} Feedly app credentials (required once)
+            </button>
+          )}
+          {!hasBakedCreds && showCreds && (
             <div
               className="rounded-xl border border-white/10"
               style={{ padding: "12px 14px", marginTop: 8, background: "rgba(255,255,255,0.03)" }}

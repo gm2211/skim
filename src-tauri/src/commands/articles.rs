@@ -160,16 +160,39 @@ pub struct FullArticleContent {
     pub raw_html: String,
 }
 
+/// Rewrite URLs to static/readable versions when possible. Reddit's modern
+/// site is a JS SPA that doesn't render inside a cross-origin iframe, but
+/// old.reddit.com returns a server-rendered HTML page that works fine.
+fn rewrite_for_static(url: &str) -> String {
+    if let Ok(parsed) = url::Url::parse(url) {
+        if let Some(host) = parsed.host_str() {
+            let host_lower = host.to_lowercase();
+            if host_lower == "www.reddit.com"
+                || host_lower == "reddit.com"
+                || host_lower == "new.reddit.com"
+            {
+                let mut new_url = parsed.clone();
+                let _ = new_url.set_host(Some("old.reddit.com"));
+                return new_url.to_string();
+            }
+        }
+    }
+    url.to_string()
+}
+
 #[tauri::command]
 pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, String> {
+    let effective_url = rewrite_for_static(&url);
+
     let client = reqwest::Client::builder()
-        .user_agent("Skim/0.1 RSS Reader")
+        // Use a real browser UA — some sites serve blank shells to unknown UAs
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let response = client
-        .get(&url)
+        .get(&effective_url)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch article: {}", e))?;
@@ -179,7 +202,19 @@ pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, Strin
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
-    let raw_html = html.clone();
+    // Inject <base href="..."> so relative URLs (images, stylesheets) resolve
+    // against the original site, not about:srcdoc.
+    let base_tag = format!("<base href=\"{}\">", effective_url.replace('"', "&quot;"));
+    let raw_html = if let Some(head_end) = html.to_lowercase().find("<head") {
+        if let Some(tag_close) = html[head_end..].find('>') {
+            let insert_at = head_end + tag_close + 1;
+            format!("{}{}{}", &html[..insert_at], base_tag, &html[insert_at..])
+        } else {
+            html.clone()
+        }
+    } else {
+        html.clone()
+    };
 
     // Extract body content -- strip everything outside <body> if present
     let body_html = if let Some(start) = html.find("<body") {

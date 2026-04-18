@@ -10,6 +10,25 @@ const FEEDLY_OPML_URL = "https://feedly.com/i/opml";
 
 type OpmlEntry = { title: string; url: string; category: string | null; already_exists: boolean };
 
+function Step({ number, title, children }: { number: number; title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3" style={{ marginBottom: 14 }}>
+      <div
+        className="flex-shrink-0 rounded-full bg-accent/15 text-accent flex items-center justify-center"
+        style={{ width: 22, height: 22, fontSize: 12, fontWeight: 600, marginTop: 1 }}
+      >
+        {number}
+      </div>
+      <div className="flex-1">
+        <p className="text-text-primary" style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
+          {title}
+        </p>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 type Tab = "url" | "feedly";
 
 export function AddFeedDialog() {
@@ -189,38 +208,50 @@ function FeedlyTab() {
     <div style={{ padding: "16px 24px 24px" }}>
       {!entries && !result && (
         <>
-          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-            Feedly's API is gated behind a paid plan, so we use their OPML export instead.
-            Two steps:
+          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 16 }}>
+            Feedly's API is paid. Use their OPML export instead:
           </p>
-          <ol className="text-text-secondary" style={{ fontSize: 13, marginBottom: 16, paddingLeft: 20 }}>
-            <li style={{ marginBottom: 10 }}>
-              Open Feedly and download your subscriptions file (signs in if needed).
-              <button
-                onClick={handleOpenFeedly}
-                className="bg-white/10 text-text-primary rounded-lg hover:bg-white/15 transition-colors inline-flex items-center gap-1.5"
-                style={{ padding: "6px 12px", fontSize: 12, marginTop: 6, display: "inline-flex" }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-                </svg>
-                Open feedly.com/i/opml
-              </button>
-            </li>
-            <li>
-              Select the downloaded <code>.opml</code> file:
-              <div style={{ marginTop: 6 }}>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".opml,.xml,application/xml,text/xml"
-                  onChange={handleFileChange}
-                  className="text-text-muted"
-                  style={{ fontSize: 12 }}
-                />
-              </div>
-            </li>
-          </ol>
+
+          <Step number={1} title="Download your subscriptions from Feedly">
+            <button
+              onClick={handleOpenFeedly}
+              className="bg-white/10 text-text-primary rounded-lg hover:bg-white/15 transition-colors inline-flex items-center gap-1.5"
+              style={{ padding: "8px 14px", fontSize: 13 }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+              </svg>
+              Open feedly.com/i/opml
+            </button>
+            <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6 }}>
+              Signs you in to Feedly and auto-downloads an <code>.opml</code> file.
+            </p>
+          </Step>
+
+          <Step number={2} title="Select the downloaded .opml file">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".opml,.xml,application/xml,text/xml"
+              onChange={handleFileChange}
+              style={{ display: "none" }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-white/10 text-text-primary rounded-lg hover:bg-white/15 transition-colors inline-flex items-center gap-1.5"
+              style={{ padding: "8px 14px", fontSize: 13 }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z M14 2v6h6 M12 18v-6 M9 15l3-3 3 3" />
+              </svg>
+              Choose .opml file
+            </button>
+            {filename && (
+              <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6 }}>
+                {filename}
+              </p>
+            )}
+          </Step>
         </>
       )}
 

@@ -179,9 +179,7 @@ pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, Strin
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
-    // Strip <script> tags from raw_html so the iframe can't run frame-buster /
-    // parent-hijack JS (even with sandbox, belt and suspenders).
-    let raw_html = strip_script_tags(&html);
+    let raw_html = html.clone();
 
     // Extract body content -- strip everything outside <body> if present
     let body_html = if let Some(start) = html.find("<body") {
@@ -246,35 +244,6 @@ pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, Strin
     }
 
     Ok(FullArticleContent { html: clean, raw_html })
-}
-
-/// Removes <script>...</script> blocks (and self-closing/malformed <script>) from HTML.
-/// Case-insensitive; handles attributes on the opening tag.
-fn strip_script_tags(html: &str) -> String {
-    let mut out = String::with_capacity(html.len());
-    let lower = html.to_lowercase();
-    let bytes = html.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if let Some(rel) = lower[i..].find("<script") {
-            let tag_start = i + rel;
-            out.push_str(&html[i..tag_start]);
-            // Find end of closing </script> (case-insensitive)
-            if let Some(close_rel) = lower[tag_start..].find("</script") {
-                let close = tag_start + close_rel;
-                if let Some(close_end_rel) = lower[close..].find('>') {
-                    i = close + close_end_rel + 1;
-                    continue;
-                }
-            }
-            // No closing tag — drop rest
-            break;
-        } else {
-            out.push_str(&html[i..]);
-            break;
-        }
-    }
-    out
 }
 
 #[tauri::command]

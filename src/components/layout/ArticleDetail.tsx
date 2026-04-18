@@ -633,7 +633,7 @@ export function ArticleDetail() {
                   /(<head[^>]*>)/i,
                   '$1<meta name="color-scheme" content="dark"><style>:root{color-scheme:dark}*::-webkit-scrollbar{width:6px!important}*::-webkit-scrollbar-track{background:#1a1a1a!important}*::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15)!important;border-radius:3px!important}*::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3)!important}html,body{scrollbar-color:rgba(255,255,255,0.15) #1a1a1a!important;scrollbar-width:thin!important}</style>'
                 )}
-                sandbox="allow-same-origin allow-popups allow-forms"
+                sandbox="allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock allow-presentation"
                 style={{ width: "100%", height: "100%", border: "none", background: "#1a1a1a" }}
                 title="Article web view"
                 onLoad={() => {

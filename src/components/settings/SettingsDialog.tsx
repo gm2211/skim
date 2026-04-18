@@ -398,47 +398,43 @@ function SyncTab({
     setFeedlyStatus(null);
   };
 
+  const showFeedlySection = oauthAvailable || feedlyStatus?.connected;
+
   return (
     <>
-      <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
-        Feedly
-      </h3>
+      {showFeedlySection && (
+        <>
+          <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
+            Feedly
+          </h3>
 
-      {feedlyStatus === undefined ? (
-        <p className="text-text-muted" style={{ fontSize: 13 }}>Checking connection...</p>
-      ) : feedlyStatus?.connected ? (
-        <div style={{ marginBottom: 24 }}>
-          <div
-            className="rounded-xl border border-green-500/20"
-            style={{ padding: "14px 16px", marginBottom: 12, background: "rgba(34, 197, 94, 0.06)" }}
-          >
-            <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
-              <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-text-primary" style={{ fontSize: 14, fontWeight: 500 }}>Connected</span>
+          {feedlyStatus?.connected ? (
+            <div style={{ marginBottom: 24 }}>
+              <div
+                className="rounded-xl border border-green-500/20"
+                style={{ padding: "14px 16px", marginBottom: 12, background: "rgba(34, 197, 94, 0.06)" }}
+              >
+                <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+                  <div className="w-2 h-2 rounded-full bg-green-500" />
+                  <span className="text-text-primary" style={{ fontSize: 14, fontWeight: 500 }}>Connected</span>
+                </div>
+                <p className="text-text-muted" style={{ fontSize: 13 }}>
+                  {feedlyStatus.full_name || feedlyStatus.email || "Feedly account"}
+                </p>
+              </div>
+              <button
+                onClick={handleDisconnect}
+                className="text-danger hover:text-red-400 rounded-xl hover:bg-red-500/10 transition-colors"
+                style={{ padding: "8px 16px", fontSize: 13 }}
+              >
+                Disconnect Feedly
+              </button>
             </div>
-            <p className="text-text-muted" style={{ fontSize: 13 }}>
-              {feedlyStatus.full_name || feedlyStatus.email || "Feedly account"}
-            </p>
-            <p className="text-text-muted" style={{ fontSize: 12, marginTop: 4 }}>
-              Feeds imported from Feedly sync articles, read state, and stars through Feedly's API.
-            </p>
-          </div>
-          <button
-            onClick={handleDisconnect}
-            className="text-danger hover:text-red-400 rounded-xl hover:bg-red-500/10 transition-colors"
-            style={{ padding: "8px 16px", fontSize: 13 }}
-          >
-            Disconnect Feedly
-          </button>
-        </div>
-      ) : (
-        <div style={{ marginBottom: 24 }}>
-          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-            Connect your Feedly account to sync articles, read state, and stars.
-          </p>
-
-          {oauthAvailable ? (
-            <>
+          ) : (
+            <div style={{ marginBottom: 24 }}>
+              <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
+                Connect your Feedly account to sync read state and stars.
+              </p>
               <button
                 onClick={handleLogin}
                 disabled={connecting}
@@ -450,30 +446,20 @@ function SyncTab({
                 </svg>
                 {connecting ? "Waiting for browser..." : "Sign in with Feedly"}
               </button>
-            </>
-          ) : (
-            <div style={{ marginBottom: 12 }}>
-              <p className="text-text-muted" style={{ fontSize: 12 }}>
-                Feedly account sync (read state, stars) needs OAuth credentials we
-                haven't been granted yet. For now, import your Feedly subscriptions
-                as local feeds via <strong>Add Feed → Import from Feedly</strong>{" "}
-                (uses OPML export — works on any Feedly plan).
-              </p>
+              {feedlyError && (
+                <div
+                  className="rounded-xl border border-danger/30 text-danger"
+                  style={{ padding: "10px 14px", fontSize: 13, background: "rgba(248, 81, 73, 0.1)" }}
+                >
+                  {feedlyError}
+                </div>
+              )}
             </div>
           )}
 
-          {feedlyError && (
-            <div
-              className="rounded-xl border border-danger/30 text-danger"
-              style={{ padding: "10px 14px", fontSize: 13, background: "rgba(248, 81, 73, 0.1)", marginBottom: 12 }}
-            >
-              {feedlyError}
-            </div>
-          )}
-        </div>
+          <div className="border-t border-white/5" style={{ margin: "24px 0" }} />
+        </>
       )}
-
-      <div className="border-t border-white/5" style={{ margin: "24px 0" }} />
 
       <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
         Refresh

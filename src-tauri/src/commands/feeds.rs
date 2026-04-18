@@ -404,7 +404,7 @@ pub async fn import_opml(
                     url: url.clone(),
                     site_url: None,
                     description: None,
-                    icon_url: None,
+                    icon_url: crate::feed::fetcher::favicon_url(&url),
                     feedly_id: None,
                     created_at: now,
                     updated_at: now,

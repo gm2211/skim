@@ -3,6 +3,14 @@ use chrono::Utc;
 use feed_rs::parser;
 use uuid::Uuid;
 
+/// Derive a favicon URL from a site URL using Google's favicon service.
+/// Returns None if the URL can't be parsed.
+pub fn favicon_url(site_or_feed_url: &str) -> Option<String> {
+    let parsed = url::Url::parse(site_or_feed_url).ok()?;
+    let host = parsed.host_str()?;
+    Some(format!("https://www.google.com/s2/favicons?domain={}&sz=64", host))
+}
+
 pub async fn fetch_and_parse_feed(
     feed_url: &str,
     existing_feed_id: Option<&str>,
@@ -44,13 +52,18 @@ pub async fn fetch_and_parse_feed(
 
     let description = parsed.description.map(|d| d.content);
 
+    let icon_url = parsed
+        .icon
+        .map(|i| i.uri)
+        .or_else(|| favicon_url(site_url.as_deref().unwrap_or(feed_url)));
+
     let feed = Feed {
         id: feed_id.clone(),
         title,
         url: feed_url.to_string(),
         site_url,
         description,
-        icon_url: parsed.icon.map(|i| i.uri),
+        icon_url,
         feedly_id: None,
         created_at: now,
         updated_at: now,

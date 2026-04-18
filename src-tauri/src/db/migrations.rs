@@ -95,5 +95,30 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         )?;
     }
 
+    // Backfill missing feed icons using Google's favicon service
+    backfill_feed_icons(conn)?;
+
+    Ok(())
+}
+
+fn backfill_feed_icons(conn: &Connection) -> Result<(), rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, site_url, url FROM feeds WHERE icon_url IS NULL OR icon_url = ''",
+    )?;
+    let rows: Vec<(String, Option<String>, String)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    for (id, site_url, feed_url) in rows {
+        let source = site_url.as_deref().unwrap_or(&feed_url);
+        if let Some(icon) = crate::feed::fetcher::favicon_url(source) {
+            conn.execute(
+                "UPDATE feeds SET icon_url = ?1 WHERE id = ?2",
+                rusqlite::params![icon, id],
+            )?;
+        }
+    }
+
     Ok(())
 }

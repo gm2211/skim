@@ -107,6 +107,29 @@ pub async fn remove_feed(db: State<'_, Database>, feed_id: String) -> Result<(),
 }
 
 #[tauri::command]
+pub async fn rename_feed(
+    db: State<'_, Database>,
+    feed_id: String,
+    title: String,
+) -> Result<(), String> {
+    let trimmed = title.trim();
+    if trimmed.is_empty() {
+        return Err("Title cannot be empty".to_string());
+    }
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::rename_feed(&conn, &feed_id, trimmed).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn count_starred_in_feed(
+    db: State<'_, Database>,
+    feed_id: String,
+) -> Result<i64, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::count_starred_in_feed(&conn, &feed_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn refresh_feed(
     db: State<'_, Database>,
     feed_id: String,

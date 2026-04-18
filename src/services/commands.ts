@@ -29,6 +29,10 @@ export const addFeed = (url: string) => invoke<Feed>("add_feed", { url });
 export const listFeeds = () => invoke<Feed[]>("list_feeds");
 export const removeFeed = (feedId: string) =>
   invoke<void>("remove_feed", { feedId });
+export const renameFeed = (feedId: string, title: string) =>
+  invoke<void>("rename_feed", { feedId, title });
+export const countStarredInFeed = (feedId: string) =>
+  invoke<number>("count_starred_in_feed", { feedId });
 export const refreshFeed = (feedId: string) =>
   invoke<number>("refresh_feed", { feedId });
 export const refreshAllFeeds = () => invoke<number>("refresh_all_feeds");

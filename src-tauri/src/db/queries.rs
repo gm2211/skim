@@ -93,6 +93,22 @@ pub fn delete_feed(conn: &Connection, feed_id: &str) -> Result<(), rusqlite::Err
     Ok(())
 }
 
+pub fn rename_feed(conn: &Connection, feed_id: &str, new_title: &str) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE feeds SET title = ?1, updated_at = ?2 WHERE id = ?3",
+        params![new_title, chrono::Utc::now().timestamp(), feed_id],
+    )?;
+    Ok(())
+}
+
+pub fn count_starred_in_feed(conn: &Connection, feed_id: &str) -> Result<i64, rusqlite::Error> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM articles WHERE feed_id = ?1 AND is_starred = 1",
+        params![feed_id],
+        |row| row.get(0),
+    )
+}
+
 pub fn insert_article(conn: &Connection, article: &Article) -> Result<bool, rusqlite::Error> {
     let result = conn.execute(
         "INSERT OR IGNORE INTO articles (id, feed_id, title, url, author, content_html, content_text, published_at, fetched_at, is_read, is_starred, feedly_entry_id)

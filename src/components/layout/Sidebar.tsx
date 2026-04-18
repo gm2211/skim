@@ -1,8 +1,10 @@
-import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
+import { useEffect, useRef, useState } from "react";
+import { useFeeds, useRefreshAllFeeds, useRemoveFeed, useRenameFeed } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats } from "../../hooks/useInbox";
 import { useThemes, useGenerateThemes } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
-import type { SidebarView } from "../../services/types";
+import { countStarredInFeed } from "../../services/commands";
+import type { SidebarView, Feed } from "../../services/types";
 
 export function Sidebar() {
   const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed } =
@@ -13,8 +15,76 @@ export function Sidebar() {
   const triage = useTriageArticles();
   const { data: themes } = useThemes();
   const generateThemes = useGenerateThemes();
+  const removeFeedMut = useRemoveFeed();
+  const renameFeedMut = useRenameFeed();
+
+  const [contextMenu, setContextMenu] = useState<{ feedId: string; x: number; y: number } | null>(null);
+  const [renamingFeedId, setRenamingFeedId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [removeConfirm, setRemoveConfirm] = useState<{ feed: Feed; starredCount: number } | null>(null);
 
   const totalUnread = feeds?.reduce((sum, f) => sum + f.unread_count, 0) ?? 0;
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("scroll", close, true);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("scroll", close, true);
+    };
+  }, [contextMenu]);
+
+  const openContextMenu = (e: React.MouseEvent, feedId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ feedId, x: e.clientX, y: e.clientY });
+  };
+
+  const startRename = (feed: Feed) => {
+    setContextMenu(null);
+    setRenamingFeedId(feed.id);
+    setRenameValue(feed.title);
+  };
+
+  const commitRename = async () => {
+    if (!renamingFeedId) return;
+    const trimmed = renameValue.trim();
+    const original = feeds?.find((f) => f.id === renamingFeedId);
+    if (!trimmed || !original || trimmed === original.title) {
+      setRenamingFeedId(null);
+      return;
+    }
+    try {
+      await renameFeedMut.mutateAsync({ feedId: renamingFeedId, title: trimmed });
+    } finally {
+      setRenamingFeedId(null);
+    }
+  };
+
+  const startRemove = async (feed: Feed) => {
+    setContextMenu(null);
+    let starredCount = 0;
+    try {
+      starredCount = await countStarredInFeed(feed.id);
+    } catch {
+      // ignore
+    }
+    setRemoveConfirm({ feed, starredCount });
+  };
+
+  const confirmRemove = async () => {
+    if (!removeConfirm) return;
+    try {
+      await removeFeedMut.mutateAsync(removeConfirm.feed.id);
+      if (sidebarView.type === "feed" && sidebarView.feedId === removeConfirm.feed.id) {
+        setSidebarView({ type: "all" });
+      }
+    } finally {
+      setRemoveConfirm(null);
+    }
+  };
 
   const isActive = (view: SidebarView) => {
     if (view.type === sidebarView.type) {
@@ -275,36 +345,20 @@ export function Sidebar() {
             </span>
           </div>
           <div className="space-y-1">
-            {feeds?.map((feed) => {
-              const initial = (feed.title || "?")[0].toUpperCase();
-              return (
-                <div
-                  key={feed.id}
-                  onClick={() => setSidebarView({ type: "feed", feedId: feed.id })}
-                  className={`flex items-center justify-between rounded-lg cursor-pointer transition-colors relative z-20 ${
-                    isActive({ type: "feed", feedId: feed.id })
-                      ? "bg-white/10 text-text-primary"
-                      : "text-text-secondary hover:bg-white/5 hover:text-text-primary"
-                  }`}
-                  style={{ padding: "8px" }}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="rounded-md bg-accent/20 text-accent flex items-center justify-center font-bold flex-shrink-0"
-                      style={{ width: 28, height: 28, fontSize: 12 }}
-                    >
-                      {initial}
-                    </div>
-                    <span className="truncate" style={{ fontSize: 15 }}>{feed.title}</span>
-                  </div>
-                  {feed.unread_count > 0 && (
-                    <span className="text-text-muted tabular-nums ml-2" style={{ fontSize: 14 }}>
-                      {feed.unread_count.toLocaleString()}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+            {feeds?.map((feed) => (
+              <FeedRow
+                key={feed.id}
+                feed={feed}
+                active={isActive({ type: "feed", feedId: feed.id })}
+                renaming={renamingFeedId === feed.id}
+                renameValue={renameValue}
+                setRenameValue={setRenameValue}
+                onCommitRename={commitRename}
+                onCancelRename={() => setRenamingFeedId(null)}
+                onClick={() => setSidebarView({ type: "feed", feedId: feed.id })}
+                onContextMenu={(e) => openContextMenu(e, feed.id)}
+              />
+            ))}
             {(!feeds || feeds.length === 0) && (
               <div style={{ padding: "20px 8px" }} className="text-center">
                 <p className="text-text-muted" style={{ fontSize: 14, marginBottom: 8 }}>No feeds yet</p>
@@ -321,6 +375,100 @@ export function Sidebar() {
         </div>
       </div>
 
+      {/* Context menu */}
+      {contextMenu && (() => {
+        const feed = feeds?.find((f) => f.id === contextMenu.feedId);
+        if (!feed) return null;
+        return (
+          <div
+            className="fixed z-50 rounded-lg border border-white/10 shadow-xl"
+            style={{
+              top: contextMenu.y,
+              left: contextMenu.x,
+              background: "rgba(22, 27, 34, 0.98)",
+              minWidth: 160,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => startRename(feed)}
+              className="flex items-center gap-2 w-full text-left text-text-primary hover:bg-white/10 transition-colors"
+              style={{ padding: "8px 12px", fontSize: 13 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+              Rename
+            </button>
+            <button
+              onClick={() => startRemove(feed)}
+              className="flex items-center gap-2 w-full text-left text-danger hover:bg-red-500/10 transition-colors"
+              style={{ padding: "8px 12px", fontSize: 13 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+              Remove feed...
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* Remove confirm dialog */}
+      {removeConfirm && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+          onClick={() => setRemoveConfirm(null)}
+        >
+          <div
+            className="border border-white/10 rounded-2xl shadow-2xl"
+            style={{ background: "rgba(22, 27, 34, 0.98)", maxWidth: 420, width: "100%", margin: "0 20px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: "20px 24px 16px" }}>
+              <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
+                Remove "{removeConfirm.feed.title}"?
+              </h3>
+              {removeConfirm.starredCount > 0 ? (
+                <p className="text-text-secondary" style={{ fontSize: 13 }}>
+                  This feed has{" "}
+                  <strong className="text-amber-400">
+                    {removeConfirm.starredCount} starred article
+                    {removeConfirm.starredCount !== 1 ? "s" : ""}
+                  </strong>
+                  . Removing the feed deletes all its articles including the starred ones. This cannot be undone.
+                </p>
+              ) : (
+                <p className="text-text-muted" style={{ fontSize: 13 }}>
+                  All articles from this feed will be deleted. This cannot be undone.
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-white/5" style={{ padding: "12px 20px" }}>
+              <button
+                onClick={() => setRemoveConfirm(null)}
+                className="text-text-secondary hover:text-text-primary rounded-lg hover:bg-white/5 transition-colors"
+                style={{ padding: "8px 16px", fontSize: 13 }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmRemove}
+                disabled={removeFeedMut.isPending}
+                className="bg-danger text-white rounded-lg hover:bg-red-600 disabled:opacity-40 transition-colors font-medium"
+                style={{ padding: "8px 16px", fontSize: 13 }}
+              >
+                {removeFeedMut.isPending ? "Removing..." : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Settings at bottom */}
       <div className="border-t border-white/5" style={{ padding: "8px 16px 16px" }}>
         <button
@@ -335,6 +483,98 @@ export function Sidebar() {
           <span style={{ fontSize: 14 }}>Settings</span>
         </button>
       </div>
+    </div>
+  );
+}
+
+function FeedRow({
+  feed,
+  active,
+  renaming,
+  renameValue,
+  setRenameValue,
+  onCommitRename,
+  onCancelRename,
+  onClick,
+  onContextMenu,
+}: {
+  feed: Feed;
+  active: boolean;
+  renaming: boolean;
+  renameValue: string;
+  setRenameValue: (v: string) => void;
+  onCommitRename: () => void;
+  onCancelRename: () => void;
+  onClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
+}) {
+  const [iconFailed, setIconFailed] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const initial = (feed.title || "?")[0].toUpperCase();
+
+  useEffect(() => {
+    if (renaming) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [renaming]);
+
+  return (
+    <div
+      onClick={renaming ? undefined : onClick}
+      onContextMenu={onContextMenu}
+      className={`flex items-center justify-between rounded-lg transition-colors relative z-20 ${
+        renaming ? "" : "cursor-pointer"
+      } ${
+        active
+          ? "bg-white/10 text-text-primary"
+          : "text-text-secondary hover:bg-white/5 hover:text-text-primary"
+      }`}
+      style={{ padding: "8px" }}
+    >
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        {feed.icon_url && !iconFailed ? (
+          <img
+            src={feed.icon_url}
+            alt=""
+            width={20}
+            height={20}
+            className="rounded-sm flex-shrink-0 bg-white/5"
+            style={{ objectFit: "contain" }}
+            onError={() => setIconFailed(true)}
+          />
+        ) : (
+          <div
+            className="rounded-md bg-accent/20 text-accent flex items-center justify-center font-bold flex-shrink-0"
+            style={{ width: 20, height: 20, fontSize: 11 }}
+          >
+            {initial}
+          </div>
+        )}
+        {renaming ? (
+          <input
+            ref={inputRef}
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onBlur={onCommitRename}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onCommitRename();
+              if (e.key === "Escape") onCancelRename();
+            }}
+            className="flex-1 min-w-0 bg-white/10 rounded px-2 py-0.5 text-text-primary outline-none border border-accent/40"
+            style={{ fontSize: 15 }}
+          />
+        ) : (
+          <span className="truncate" style={{ fontSize: 15 }}>
+            {feed.title}
+          </span>
+        )}
+      </div>
+      {!renaming && feed.unread_count > 0 && (
+        <span className="text-text-muted tabular-nums ml-2" style={{ fontSize: 14 }}>
+          {feed.unread_count.toLocaleString()}
+        </span>
+      )}
     </div>
   );
 }

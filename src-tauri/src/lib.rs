@@ -68,6 +68,8 @@ pub fn run() {
             commands::feeds::add_feed,
             commands::feeds::list_feeds,
             commands::feeds::remove_feed,
+            commands::feeds::rename_feed,
+            commands::feeds::count_starred_in_feed,
             commands::feeds::refresh_feed,
             commands::feeds::refresh_all_feeds,
             commands::feeds::get_total_unread,

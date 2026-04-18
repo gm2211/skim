@@ -31,6 +31,18 @@ export function useRemoveFeed() {
   });
 }
 
+export function useRenameFeed() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ feedId, title }: { feedId: string; title: string }) =>
+      commands.renameFeed(feedId, title),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["feeds"] });
+      qc.invalidateQueries({ queryKey: ["articles"] });
+    },
+  });
+}
+
 export function useRefreshFeed() {
   const qc = useQueryClient();
   return useMutation({

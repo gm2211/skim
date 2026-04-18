@@ -4,8 +4,8 @@ use super::models::*;
 
 pub fn insert_feed(conn: &Connection, feed: &Feed) -> Result<(), rusqlite::Error> {
     conn.execute(
-        "INSERT OR REPLACE INTO feeds (id, title, url, site_url, description, icon_url, feedly_id, created_at, updated_at, last_fetched_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "INSERT OR REPLACE INTO feeds (id, title, url, site_url, description, icon_url, feedly_id, created_at, updated_at, last_fetched_at, folder_id, opml_category)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             feed.id,
             feed.title,
@@ -17,6 +17,8 @@ pub fn insert_feed(conn: &Connection, feed: &Feed) -> Result<(), rusqlite::Error
             feed.created_at,
             feed.updated_at,
             feed.last_fetched_at,
+            feed.folder_id,
+            feed.opml_category,
         ],
     )?;
     Ok(())
@@ -24,7 +26,7 @@ pub fn insert_feed(conn: &Connection, feed: &Feed) -> Result<(), rusqlite::Error
 
 pub fn list_feeds(conn: &Connection) -> Result<Vec<Feed>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, url, site_url, description, icon_url, feedly_id, created_at, updated_at, last_fetched_at
+        "SELECT id, title, url, site_url, description, icon_url, feedly_id, created_at, updated_at, last_fetched_at, folder_id, opml_category
          FROM feeds ORDER BY title COLLATE NOCASE",
     )?;
     let feeds = stmt
@@ -40,6 +42,8 @@ pub fn list_feeds(conn: &Connection) -> Result<Vec<Feed>, rusqlite::Error> {
                 created_at: row.get(7)?,
                 updated_at: row.get(8)?,
                 last_fetched_at: row.get(9)?,
+                folder_id: row.get(10)?,
+                opml_category: row.get(11)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -48,7 +52,7 @@ pub fn list_feeds(conn: &Connection) -> Result<Vec<Feed>, rusqlite::Error> {
 
 pub fn get_feed_by_id(conn: &Connection, feed_id: &str) -> Result<Option<Feed>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, url, site_url, description, icon_url, feedly_id, created_at, updated_at, last_fetched_at
+        "SELECT id, title, url, site_url, description, icon_url, feedly_id, created_at, updated_at, last_fetched_at, folder_id, opml_category
          FROM feeds WHERE id = ?1",
     )?;
     let mut rows = stmt.query_map(params![feed_id], |row| {
@@ -63,6 +67,8 @@ pub fn get_feed_by_id(conn: &Connection, feed_id: &str) -> Result<Option<Feed>, 
             created_at: row.get(7)?,
             updated_at: row.get(8)?,
             last_fetched_at: row.get(9)?,
+            folder_id: row.get(10)?,
+            opml_category: row.get(11)?,
         })
     })?;
     match rows.next() {
@@ -99,6 +105,105 @@ pub fn rename_feed(conn: &Connection, feed_id: &str, new_title: &str) -> Result<
         params![new_title, chrono::Utc::now().timestamp(), feed_id],
     )?;
     Ok(())
+}
+
+pub fn assign_feed_to_folder(
+    conn: &Connection,
+    feed_id: &str,
+    folder_id: Option<&str>,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE feeds SET folder_id = ?1, updated_at = ?2 WHERE id = ?3",
+        params![folder_id, chrono::Utc::now().timestamp(), feed_id],
+    )?;
+    Ok(())
+}
+
+// ── Folders ────────────────────────────────────────────────────────
+
+pub fn insert_folder(conn: &Connection, folder: &Folder) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO folders (id, name, sort_order, is_smart, rules_json, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            folder.id,
+            folder.name,
+            folder.sort_order,
+            folder.is_smart as i32,
+            folder.rules_json,
+            folder.created_at,
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn list_folders(conn: &Connection) -> Result<Vec<Folder>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, sort_order, is_smart, rules_json, created_at
+         FROM folders ORDER BY sort_order, name COLLATE NOCASE",
+    )?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(Folder {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                sort_order: row.get(2)?,
+                is_smart: row.get::<_, i32>(3)? != 0,
+                rules_json: row.get(4)?,
+                created_at: row.get(5)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+pub fn rename_folder(conn: &Connection, folder_id: &str, new_name: &str) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE folders SET name = ?1 WHERE id = ?2",
+        params![new_name, folder_id],
+    )?;
+    Ok(())
+}
+
+pub fn update_folder_rules(
+    conn: &Connection,
+    folder_id: &str,
+    rules_json: &str,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE folders SET rules_json = ?1 WHERE id = ?2",
+        params![rules_json, folder_id],
+    )?;
+    Ok(())
+}
+
+pub fn delete_folder(conn: &Connection, folder_id: &str) -> Result<(), rusqlite::Error> {
+    // ON DELETE SET NULL on feeds.folder_id handles orphan feeds
+    conn.execute("DELETE FROM folders WHERE id = ?1", params![folder_id])?;
+    Ok(())
+}
+
+pub fn reorder_folders(
+    conn: &Connection,
+    folder_ids: &[String],
+) -> Result<(), rusqlite::Error> {
+    let tx = conn.unchecked_transaction()?;
+    for (idx, id) in folder_ids.iter().enumerate() {
+        tx.execute(
+            "UPDATE folders SET sort_order = ?1 WHERE id = ?2",
+            params![idx as i32, id],
+        )?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+pub fn next_folder_sort_order(conn: &Connection) -> Result<i32, rusqlite::Error> {
+    let max: Option<i32> = conn
+        .query_row("SELECT MAX(sort_order) FROM folders", [], |row| row.get(0))
+        .ok()
+        .flatten();
+    Ok(max.map(|m| m + 1).unwrap_or(0))
 }
 
 pub fn count_starred_in_feed(conn: &Connection, feed_id: &str) -> Result<i64, rusqlite::Error> {

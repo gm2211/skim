@@ -22,6 +22,8 @@ import type {
   FeedlyImportResult,
   FeedlyProfile,
   FeedlyConnectionStatus,
+  Folder,
+  SmartRules,
 } from "./types";
 
 // Feeds
@@ -33,6 +35,27 @@ export const renameFeed = (feedId: string, title: string) =>
   invoke<void>("rename_feed", { feedId, title });
 export const countStarredInFeed = (feedId: string) =>
   invoke<number>("count_starred_in_feed", { feedId });
+
+// Folders
+export const listFolders = () => invoke<Folder[]>("list_folders");
+export const createFolder = (name: string) =>
+  invoke<Folder>("create_folder", { name });
+export const createSmartFolder = (name: string, rules: SmartRules) =>
+  invoke<Folder>("create_smart_folder", { name, rules });
+export const renameFolder = (folderId: string, name: string) =>
+  invoke<void>("rename_folder", { folderId, name });
+export const updateSmartFolderRules = (folderId: string, rules: SmartRules) =>
+  invoke<void>("update_smart_folder_rules", { folderId, rules });
+export const deleteFolder = (folderId: string) =>
+  invoke<void>("delete_folder", { folderId });
+export const reorderFolders = (folderIds: string[]) =>
+  invoke<void>("reorder_folders", { folderIds });
+export const assignFeedToFolder = (feedId: string, folderId: string | null) =>
+  invoke<void>("assign_feed_to_folder", { feedId, folderId });
+export const previewSmartFolder = (rules: SmartRules) =>
+  invoke<string[]>("preview_smart_folder", { rules });
+export const feedsInFolder = (folderId: string) =>
+  invoke<string[]>("feeds_in_folder", { folderId });
 export const refreshFeed = (feedId: string) =>
   invoke<number>("refresh_feed", { feedId });
 export const refreshAllFeeds = () => invoke<number>("refresh_all_feeds");

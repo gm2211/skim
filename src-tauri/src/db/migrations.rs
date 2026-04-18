@@ -95,6 +95,37 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         )?;
     }
 
+    // Folders (manual + smart)
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS folders (
+            id          TEXT PRIMARY KEY,
+            name        TEXT NOT NULL,
+            sort_order  INTEGER NOT NULL DEFAULT 0,
+            is_smart    INTEGER NOT NULL DEFAULT 0,
+            rules_json  TEXT,
+            created_at  INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_folders_sort_order ON folders(sort_order);",
+    )?;
+
+    // Add folder_id + opml_category columns to feeds (idempotent)
+    let feed_cols: Vec<String> = conn
+        .prepare("PRAGMA table_info(feeds)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    if !feed_cols.iter().any(|c| c == "folder_id") {
+        conn.execute(
+            "ALTER TABLE feeds ADD COLUMN folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL",
+            [],
+        )?;
+        conn.execute_batch("CREATE INDEX IF NOT EXISTS idx_feeds_folder_id ON feeds(folder_id);")?;
+    }
+    if !feed_cols.iter().any(|c| c == "opml_category") {
+        conn.execute("ALTER TABLE feeds ADD COLUMN opml_category TEXT", [])?;
+    }
+
     // Backfill missing feed icons using Google's favicon service
     backfill_feed_icons(conn)?;
 

@@ -164,6 +164,8 @@ pub fn subscriptions_to_feeds(
                 created_at: now,
                 updated_at: now,
                 last_fetched_at: None,
+                folder_id: None,
+                opml_category: sub.categories.first().map(|c| c.label.clone()),
             };
             Some((feed, feed_url))
         })

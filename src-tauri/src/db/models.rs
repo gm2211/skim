@@ -12,6 +12,47 @@ pub struct Feed {
     pub created_at: i64,
     pub updated_at: i64,
     pub last_fetched_at: Option<i64>,
+    #[serde(default)]
+    pub folder_id: Option<String>,
+    #[serde(default)]
+    pub opml_category: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Folder {
+    pub id: String,
+    pub name: String,
+    pub sort_order: i32,
+    pub is_smart: bool,
+    pub rules_json: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SmartRule {
+    RegexTitle { pattern: String },
+    RegexUrl { pattern: String },
+    OpmlCategory { value: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct SmartRules {
+    #[serde(default = "default_match_mode")]
+    pub mode: MatchMode, // any | all
+    pub rules: Vec<SmartRule>,
+}
+
+fn default_match_mode() -> MatchMode {
+    MatchMode::Any
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchMode {
+    #[default]
+    Any,
+    All,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -4041,6 +4041,7 @@ dependencies = [
  "llama-cpp-2",
  "log",
  "opml",
+ "regex",
  "reqwest 0.12.28",
  "rusqlite",
  "serde",

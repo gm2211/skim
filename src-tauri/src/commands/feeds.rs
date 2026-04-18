@@ -1,4 +1,4 @@
-use crate::db::models::Feed;
+use crate::db::models::{Feed, Folder, SmartRule, SmartRules, MatchMode};
 use crate::db::queries;
 use crate::db::Database;
 use crate::feed::fetch_and_parse_feed;
@@ -396,7 +396,7 @@ pub async fn import_opml(
     let mut errors = Vec::new();
     let now = chrono::Utc::now().timestamp();
 
-    for (title, url, _category) in entries {
+    for (title, url, category) in entries {
         if existing_urls.iter().any(|u| u == &url) {
             skipped += 1;
             continue;
@@ -408,6 +408,7 @@ pub async fn import_opml(
                 if feed.title.is_empty() || feed.title == "Untitled Feed" {
                     feed.title = title;
                 }
+                feed.opml_category = category.clone();
                 let conn = db.conn.lock().map_err(|e| e.to_string())?;
                 if let Err(e) = queries::insert_feed(&conn, &feed) {
                     errors.push(format!("{}: {}", feed.title, e));
@@ -432,6 +433,8 @@ pub async fn import_opml(
                     created_at: now,
                     updated_at: now,
                     last_fetched_at: None,
+                    folder_id: None,
+                    opml_category: category.clone(),
                 };
                 let conn = db.conn.lock().map_err(|e| e.to_string())?;
                 match queries::insert_feed(&conn, &feed) {
@@ -545,4 +548,252 @@ pub async fn get_feedly_status(
         email: queries::get_setting(&conn, "feedly_email").ok().flatten(),
         full_name: queries::get_setting(&conn, "feedly_full_name").ok().flatten(),
     }))
+}
+
+// ── Folders (manual + smart) ────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct FolderWithCount {
+    #[serde(flatten)]
+    pub folder: Folder,
+    pub feed_count: i64,
+}
+
+#[tauri::command]
+pub async fn list_folders(db: State<'_, Database>) -> Result<Vec<FolderWithCount>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let folders = queries::list_folders(&conn).map_err(|e| e.to_string())?;
+    let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+
+    let out = folders
+        .into_iter()
+        .map(|folder| {
+            let feed_count = if folder.is_smart {
+                eval_smart_folder(&folder, &feeds).len() as i64
+            } else {
+                feeds.iter().filter(|f| f.folder_id.as_deref() == Some(&folder.id)).count() as i64
+            };
+            FolderWithCount { folder, feed_count }
+        })
+        .collect();
+    Ok(out)
+}
+
+#[tauri::command]
+pub async fn create_folder(
+    db: State<'_, Database>,
+    name: String,
+) -> Result<Folder, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Folder name cannot be empty".to_string());
+    }
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let folder = Folder {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: trimmed.to_string(),
+        sort_order: queries::next_folder_sort_order(&conn).map_err(|e| e.to_string())?,
+        is_smart: false,
+        rules_json: None,
+        created_at: chrono::Utc::now().timestamp(),
+    };
+    queries::insert_folder(&conn, &folder).map_err(|e| e.to_string())?;
+    Ok(folder)
+}
+
+#[tauri::command]
+pub async fn create_smart_folder(
+    db: State<'_, Database>,
+    name: String,
+    rules: SmartRules,
+) -> Result<Folder, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Folder name cannot be empty".to_string());
+    }
+    validate_smart_rules(&rules)?;
+    let rules_json = serde_json::to_string(&rules).map_err(|e| e.to_string())?;
+
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let folder = Folder {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: trimmed.to_string(),
+        sort_order: queries::next_folder_sort_order(&conn).map_err(|e| e.to_string())?,
+        is_smart: true,
+        rules_json: Some(rules_json),
+        created_at: chrono::Utc::now().timestamp(),
+    };
+    queries::insert_folder(&conn, &folder).map_err(|e| e.to_string())?;
+    Ok(folder)
+}
+
+#[tauri::command]
+pub async fn rename_folder(
+    db: State<'_, Database>,
+    folder_id: String,
+    name: String,
+) -> Result<(), String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("Folder name cannot be empty".to_string());
+    }
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::rename_folder(&conn, &folder_id, trimmed).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_smart_folder_rules(
+    db: State<'_, Database>,
+    folder_id: String,
+    rules: SmartRules,
+) -> Result<(), String> {
+    validate_smart_rules(&rules)?;
+    let rules_json = serde_json::to_string(&rules).map_err(|e| e.to_string())?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::update_folder_rules(&conn, &folder_id, &rules_json).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_folder(
+    db: State<'_, Database>,
+    folder_id: String,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::delete_folder(&conn, &folder_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn reorder_folders(
+    db: State<'_, Database>,
+    folder_ids: Vec<String>,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::reorder_folders(&conn, &folder_ids).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn assign_feed_to_folder(
+    db: State<'_, Database>,
+    feed_id: String,
+    folder_id: Option<String>,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::assign_feed_to_folder(&conn, &feed_id, folder_id.as_deref())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn preview_smart_folder(
+    db: State<'_, Database>,
+    rules: SmartRules,
+) -> Result<Vec<String>, String> {
+    validate_smart_rules(&rules)?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+    let folder = Folder {
+        id: String::new(),
+        name: String::new(),
+        sort_order: 0,
+        is_smart: true,
+        rules_json: serde_json::to_string(&rules).ok(),
+        created_at: 0,
+    };
+    Ok(eval_smart_folder(&folder, &feeds).into_iter().map(|f| f.id.clone()).collect())
+}
+
+#[tauri::command]
+pub async fn feeds_in_folder(
+    db: State<'_, Database>,
+    folder_id: String,
+) -> Result<Vec<String>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let folders = queries::list_folders(&conn).map_err(|e| e.to_string())?;
+    let folder = folders
+        .into_iter()
+        .find(|f| f.id == folder_id)
+        .ok_or_else(|| "Folder not found".to_string())?;
+    let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+
+    let matching_ids: Vec<String> = if folder.is_smart {
+        eval_smart_folder(&folder, &feeds).into_iter().map(|f| f.id.clone()).collect()
+    } else {
+        feeds
+            .into_iter()
+            .filter(|f| f.folder_id.as_deref() == Some(&folder.id))
+            .map(|f| f.id)
+            .collect()
+    };
+    Ok(matching_ids)
+}
+
+fn validate_smart_rules(rules: &SmartRules) -> Result<(), String> {
+    if rules.rules.is_empty() {
+        return Err("Smart folder needs at least one rule".to_string());
+    }
+    for r in &rules.rules {
+        match r {
+            SmartRule::RegexTitle { pattern } | SmartRule::RegexUrl { pattern } => {
+                regex::Regex::new(pattern)
+                    .map_err(|e| format!("Invalid regex '{}': {}", pattern, e))?;
+            }
+            SmartRule::OpmlCategory { value } => {
+                if value.trim().is_empty() {
+                    return Err("OPML category rule cannot have empty value".to_string());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn eval_smart_folder<'a>(folder: &Folder, feeds: &'a [Feed]) -> Vec<&'a Feed> {
+    let Some(ref json) = folder.rules_json else { return Vec::new() };
+    let Ok(rules) = serde_json::from_str::<SmartRules>(json) else {
+        return Vec::new();
+    };
+    if rules.rules.is_empty() {
+        return Vec::new();
+    }
+
+    let compiled: Vec<CompiledRule> = rules
+        .rules
+        .iter()
+        .filter_map(|r| match r {
+            SmartRule::RegexTitle { pattern } => regex::Regex::new(pattern)
+                .ok()
+                .map(|re| CompiledRule::Title(re)),
+            SmartRule::RegexUrl { pattern } => regex::Regex::new(pattern)
+                .ok()
+                .map(|re| CompiledRule::Url(re)),
+            SmartRule::OpmlCategory { value } => Some(CompiledRule::Category(value.to_lowercase())),
+        })
+        .collect();
+
+    feeds
+        .iter()
+        .filter(|feed| match rules.mode {
+            MatchMode::Any => compiled.iter().any(|r| r.matches(feed)),
+            MatchMode::All => compiled.iter().all(|r| r.matches(feed)),
+        })
+        .collect()
+}
+
+enum CompiledRule {
+    Title(regex::Regex),
+    Url(regex::Regex),
+    Category(String),
+}
+
+impl CompiledRule {
+    fn matches(&self, feed: &Feed) -> bool {
+        match self {
+            CompiledRule::Title(re) => re.is_match(&feed.title),
+            CompiledRule::Url(re) => re.is_match(&feed.url),
+            CompiledRule::Category(value) => feed
+                .opml_category
+                .as_ref()
+                .map(|c| c.to_lowercase() == *value)
+                .unwrap_or(false),
+        }
+    }
 }

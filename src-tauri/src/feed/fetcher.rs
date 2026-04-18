@@ -68,6 +68,8 @@ pub async fn fetch_and_parse_feed(
         created_at: now,
         updated_at: now,
         last_fetched_at: Some(now),
+        folder_id: None,
+        opml_category: None,
     };
 
     let articles: Vec<Article> = parsed

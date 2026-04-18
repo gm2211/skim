@@ -9,7 +9,29 @@ export interface Feed {
   created_at: number;
   updated_at: number;
   last_fetched_at: number | null;
+  folder_id: string | null;
+  opml_category: string | null;
   unread_count: number;
+}
+
+export type SmartRule =
+  | { type: "regex_title"; pattern: string }
+  | { type: "regex_url"; pattern: string }
+  | { type: "opml_category"; value: string };
+
+export interface SmartRules {
+  mode: "any" | "all";
+  rules: SmartRule[];
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  sort_order: number;
+  is_smart: boolean;
+  rules_json: string | null;
+  created_at: number;
+  feed_count: number;
 }
 
 export interface Article {

@@ -505,7 +505,7 @@ export function ModelBrowser({
         </label>
         <div className="flex flex-col gap-2">
           {[
-            { repo: "bartowski/google_gemma-4-E4B-it-GGUF", file: "google_gemma-4-E4B-it-Q4_K_M.gguf", name: "Gemma 4 E4B", size: "5.4 GB", desc: "Best for summarization — newer, higher quality JSON output" },
+            { repo: "bartowski/gemma-3-4b-it-GGUF", file: "gemma-3-4b-it-Q4_K_M.gguf", name: "Gemma 3 4B", size: "2.8 GB", desc: "Best for summarization — fast, accurate JSON output" },
             { repo: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", file: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", name: "Llama 3.1 8B Instruct", size: "4.9 GB", desc: "Higher quality — good for chat and longer summaries" },
           ].map((preset) => {
             const installed = localModels.data?.some((m) => m.filename === preset.file);

@@ -294,6 +294,134 @@ pub async fn feedly_preview_stored(
     feedly::fetch_subscriptions(&token).await
 }
 
+#[derive(Debug, Serialize)]
+pub struct OpmlPreviewEntry {
+    pub title: String,
+    pub url: String,
+    pub category: Option<String>,
+    pub already_exists: bool,
+}
+
+fn parse_opml_entries(xml: &str) -> Result<Vec<(String, String, Option<String>)>, String> {
+    let document = opml::OPML::from_str(xml).map_err(|e| format!("Invalid OPML: {}", e))?;
+    let mut out = Vec::new();
+    fn walk(outlines: &[opml::Outline], parent: Option<String>, out: &mut Vec<(String, String, Option<String>)>) {
+        for o in outlines {
+            if let Some(ref url) = o.xml_url {
+                let title = if o.text.is_empty() {
+                    o.title.clone().unwrap_or_else(|| url.clone())
+                } else {
+                    o.text.clone()
+                };
+                out.push((title, url.clone(), parent.clone()));
+            }
+            if !o.outlines.is_empty() {
+                let cat = if o.xml_url.is_none() {
+                    if o.text.is_empty() { o.title.clone() } else { Some(o.text.clone()) }
+                } else {
+                    parent.clone()
+                };
+                walk(&o.outlines, cat, out);
+            }
+        }
+    }
+    walk(&document.body.outlines, None, &mut out);
+    Ok(out)
+}
+
+#[tauri::command]
+pub async fn preview_opml(
+    db: State<'_, Database>,
+    xml: String,
+) -> Result<Vec<OpmlPreviewEntry>, String> {
+    let entries = parse_opml_entries(&xml)?;
+    let existing_urls: Vec<String> = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        queries::list_feeds(&conn)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|f| f.url)
+            .collect()
+    };
+    Ok(entries
+        .into_iter()
+        .map(|(title, url, category)| {
+            let already_exists = existing_urls.iter().any(|u| u == &url);
+            OpmlPreviewEntry { title, url, category, already_exists }
+        })
+        .collect())
+}
+
+#[tauri::command]
+pub async fn import_opml(
+    db: State<'_, Database>,
+    xml: String,
+) -> Result<feedly::FeedlyImportResult, String> {
+    let entries = parse_opml_entries(&xml)?;
+
+    let existing_urls: Vec<String> = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        queries::list_feeds(&conn)
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|f| f.url)
+            .collect()
+    };
+
+    let mut imported = 0i32;
+    let mut skipped = 0i32;
+    let mut errors = Vec::new();
+    let now = chrono::Utc::now().timestamp();
+
+    for (title, url, _category) in entries {
+        if existing_urls.iter().any(|u| u == &url) {
+            skipped += 1;
+            continue;
+        }
+
+        let feed_id = uuid::Uuid::new_v4().to_string();
+        match fetch_and_parse_feed(&url, Some(&feed_id)).await {
+            Ok((mut feed, articles)) => {
+                if feed.title.is_empty() || feed.title == "Untitled Feed" {
+                    feed.title = title;
+                }
+                let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                if let Err(e) = queries::insert_feed(&conn, &feed) {
+                    errors.push(format!("{}: {}", feed.title, e));
+                    continue;
+                }
+                for a in &articles {
+                    let _ = queries::insert_article(&conn, a);
+                }
+                let _ = queries::update_feed_fetched(&conn, &feed.id, now);
+                imported += 1;
+            }
+            Err(e) => {
+                log::warn!("Failed to fetch {} ({}): {}", title, url, e);
+                let feed = crate::db::models::Feed {
+                    id: feed_id,
+                    title: title.clone(),
+                    url: url.clone(),
+                    site_url: None,
+                    description: None,
+                    icon_url: None,
+                    feedly_id: None,
+                    created_at: now,
+                    updated_at: now,
+                    last_fetched_at: None,
+                };
+                let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                match queries::insert_feed(&conn, &feed) {
+                    Ok(()) => imported += 1,
+                    Err(db_err) => errors.push(format!("{}: {}", title, db_err)),
+                }
+            }
+        }
+    }
+
+    Ok(feedly::FeedlyImportResult { imported, skipped, errors })
+}
+
 #[tauri::command]
 pub async fn import_feedly_stored(
     db: State<'_, Database>,

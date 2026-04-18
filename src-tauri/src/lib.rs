@@ -80,6 +80,8 @@ pub fn run() {
             commands::feeds::feedly_oauth_available,
             commands::feeds::feedly_preview_stored,
             commands::feeds::import_feedly_stored,
+            commands::feeds::preview_opml,
+            commands::feeds::import_opml,
             // Articles
             commands::articles::get_articles,
             commands::articles::get_article,

@@ -3,7 +3,6 @@ import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
 import type { AppSettings, FeedlyConnectionStatus } from "../../services/types";
 import {
-  connectFeedly,
   disconnectFeedly,
   feedlyOauthAvailable,
   feedlyOauthLogin,
@@ -368,7 +367,6 @@ function SyncTab({
   inputStyle: React.CSSProperties;
 }) {
   const [feedlyStatus, setFeedlyStatus] = useState<FeedlyConnectionStatus | null | undefined>(undefined);
-  const [feedlyToken, setFeedlyToken] = useState("");
   const [connecting, setConnecting] = useState(false);
   const [feedlyError, setFeedlyError] = useState<string | null>(null);
   const [oauthAvailable, setOauthAvailable] = useState(false);
@@ -388,25 +386,6 @@ function SyncTab({
         email: profile.email,
         full_name: profile.full_name,
       });
-    } catch (e) {
-      setFeedlyError(String(e instanceof Error ? e.message : e));
-    } finally {
-      setConnecting(false);
-    }
-  };
-
-  const handleConnectWithToken = async () => {
-    if (!feedlyToken.trim()) return;
-    setConnecting(true);
-    setFeedlyError(null);
-    try {
-      const profile = await connectFeedly(feedlyToken.trim());
-      setFeedlyStatus({
-        connected: true,
-        email: profile.email,
-        full_name: profile.full_name,
-      });
-      setFeedlyToken("");
     } catch (e) {
       setFeedlyError(String(e instanceof Error ? e.message : e));
     } finally {
@@ -474,36 +453,12 @@ function SyncTab({
             </>
           ) : (
             <div style={{ marginBottom: 12 }}>
-              <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
-                Paste a developer token from{" "}
-                <a
-                  href="https://feedly.com/v3/auth/dev"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent"
-                >
-                  feedly.com/v3/auth/dev
-                </a>
-                . One-click sign-in coming soon.
+              <p className="text-text-muted" style={{ fontSize: 12 }}>
+                Feedly account sync (read state, stars) needs OAuth credentials we
+                haven't been granted yet. For now, import your Feedly subscriptions
+                as local feeds via <strong>Add Feed → Import from Feedly</strong>{" "}
+                (uses OPML export — works on any Feedly plan).
               </p>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  value={feedlyToken}
-                  onChange={(e) => { setFeedlyToken(e.target.value); setFeedlyError(null); }}
-                  placeholder="Feedly developer token"
-                  className={inputClass}
-                  style={{ ...inputStyle, flex: 1, fontSize: 13 }}
-                />
-                <button
-                  onClick={handleConnectWithToken}
-                  disabled={connecting || !feedlyToken.trim()}
-                  className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors flex-shrink-0"
-                  style={{ padding: "10px 20px", fontSize: 13 }}
-                >
-                  {connecting ? "..." : "Connect"}
-                </button>
-              </div>
             </div>
           )}
 

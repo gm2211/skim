@@ -41,6 +41,13 @@ export const feedlyPreviewStored = () =>
   invoke<FeedlySubscription[]>("feedly_preview_stored");
 export const importFeedlyStored = () =>
   invoke<FeedlyImportResult>("import_feedly_stored");
+export const previewOpml = (xml: string) =>
+  invoke<Array<{ title: string; url: string; category: string | null; already_exists: boolean }>>(
+    "preview_opml",
+    { xml },
+  );
+export const importOpml = (xml: string) =>
+  invoke<FeedlyImportResult>("import_opml", { xml });
 export const connectFeedly = (token: string) =>
   invoke<FeedlyProfile>("connect_feedly", { token });
 export const disconnectFeedly = () =>

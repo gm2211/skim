@@ -1,17 +1,14 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import { useAddFeed } from "../../hooks/useFeeds";
 import { useUiStore } from "../../stores/uiStore";
-import {
-  importFeedly,
-  feedlyPreview,
-  feedlyPreviewStored,
-  importFeedlyStored,
-  getFeedlyStatus,
-  feedlyOauthLogin,
-  feedlyOauthAvailable,
-} from "../../services/commands";
-import type { FeedlySubscription, FeedlyImportResult, FeedlyConnectionStatus } from "../../services/types";
+import { previewOpml, importOpml } from "../../services/commands";
+import type { FeedlyImportResult } from "../../services/types";
 import { useQueryClient } from "@tanstack/react-query";
+import { openUrl } from "@tauri-apps/plugin-opener";
+
+const FEEDLY_OPML_URL = "https://feedly.com/i/opml";
+
+type OpmlEntry = { title: string; url: string; category: string | null; already_exists: boolean };
 
 type Tab = "url" | "feedly";
 
@@ -134,157 +131,96 @@ function UrlTab() {
 }
 
 function FeedlyTab() {
-  const [token, setToken] = useState("");
-  const [previewing, setPreviewing] = useState(false);
+  const [entries, setEntries] = useState<OpmlEntry[] | null>(null);
+  const [filename, setFilename] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
-  const [subs, setSubs] = useState<FeedlySubscription[] | null>(null);
   const [result, setResult] = useState<FeedlyImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<FeedlyConnectionStatus | null | undefined>(undefined);
-  const [oauthAvailable, setOauthAvailable] = useState(false);
-  const [signingIn, setSigningIn] = useState(false);
+  const [xml, setXml] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
   const qc = useQueryClient();
 
-  useEffect(() => {
-    getFeedlyStatus().then(setStatus).catch(() => setStatus(null));
-    feedlyOauthAvailable().then(setOauthAvailable).catch(() => {});
-  }, []);
-
-  const handleSignIn = async () => {
-    setSigningIn(true);
-    setError(null);
+  const handleOpenFeedly = async () => {
     try {
-      const profile = await feedlyOauthLogin();
-      setStatus({ connected: true, email: profile.email, full_name: profile.full_name });
+      await openUrl(FEEDLY_OPML_URL);
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
-    } finally {
-      setSigningIn(false);
     }
   };
 
-  const handlePreviewStored = async () => {
-    setPreviewing(true);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
     setError(null);
+    setResult(null);
+    setFilename(file.name);
     try {
-      const data = await feedlyPreviewStored();
-      setSubs(data);
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    } finally {
-      setPreviewing(false);
+      const text = await file.text();
+      setXml(text);
+      const list = await previewOpml(text);
+      setEntries(list);
+    } catch (err) {
+      setError(String(err instanceof Error ? err.message : err));
+      setEntries(null);
+      setXml(null);
     }
   };
 
-  const handleImportStored = async () => {
+  const handleImport = async () => {
+    if (!xml) return;
     setImporting(true);
     setError(null);
     try {
-      const res = await importFeedlyStored();
+      const res = await importOpml(xml);
       setResult(res);
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["articles"] });
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
+    } catch (err) {
+      setError(String(err instanceof Error ? err.message : err));
     } finally {
       setImporting(false);
     }
   };
 
-  const handlePreviewToken = async () => {
-    if (!token.trim()) return;
-    setPreviewing(true);
-    setError(null);
-    try {
-      const data = await feedlyPreview(token.trim());
-      setSubs(data);
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    } finally {
-      setPreviewing(false);
-    }
-  };
-
-  const handleImportToken = async () => {
-    if (!token.trim()) return;
-    setImporting(true);
-    setError(null);
-    try {
-      const res = await importFeedly(token.trim());
-      setResult(res);
-      qc.invalidateQueries({ queryKey: ["feeds"] });
-      qc.invalidateQueries({ queryKey: ["articles"] });
-    } catch (e) {
-      setError(String(e instanceof Error ? e.message : e));
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  const signedIn = status?.connected === true;
+  const newCount = entries ? entries.filter((e) => !e.already_exists).length : 0;
 
   return (
     <div style={{ padding: "16px 24px 24px" }}>
-      {signedIn ? (
-        <div
-          className="rounded-xl border border-green-500/20"
-          style={{ padding: "12px 14px", marginBottom: 12, background: "rgba(34, 197, 94, 0.06)" }}
-        >
-          <div className="flex items-center gap-2" style={{ marginBottom: 2 }}>
-            <div className="w-2 h-2 rounded-full bg-green-500" />
-            <span className="text-text-primary" style={{ fontSize: 13, fontWeight: 500 }}>
-              Signed in
-            </span>
-          </div>
-          <p className="text-text-muted" style={{ fontSize: 12 }}>
-            {status?.full_name || status?.email || "Feedly account"}
-          </p>
-        </div>
-      ) : oauthAvailable ? (
+      {!entries && !result && (
         <>
           <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-            Sign in to your Feedly account to import your subscriptions. Your browser will open for login.
+            Feedly's API is gated behind a paid plan, so we use their OPML export instead.
+            Two steps:
           </p>
-          <button
-            onClick={handleSignIn}
-            disabled={signingIn}
-            className="w-full bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors inline-flex items-center justify-center gap-2"
-            style={{ padding: "12px 20px", fontSize: 14, marginBottom: 12 }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6" />
-            </svg>
-            {signingIn ? "Waiting for browser..." : "Sign in with Feedly"}
-          </button>
-        </>
-      ) : (
-        <>
-          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
-            Paste a developer token from{" "}
-            <a
-              href="https://feedly.com/v3/auth/dev"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-accent"
-            >
-              feedly.com/v3/auth/dev
-            </a>
-            . One-click sign-in coming soon.
-          </p>
-          <input
-            type="password"
-            value={token}
-            onChange={(e) => { setToken(e.target.value); setSubs(null); setResult(null); }}
-            placeholder="Feedly developer token"
-            className="w-full border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors"
-            style={{
-              background: "rgba(255, 255, 255, 0.05)",
-              padding: "12px 16px",
-              fontSize: 14,
-              marginBottom: 12,
-            }}
-          />
+          <ol className="text-text-secondary" style={{ fontSize: 13, marginBottom: 16, paddingLeft: 20 }}>
+            <li style={{ marginBottom: 10 }}>
+              Open Feedly and download your subscriptions file (signs in if needed).
+              <button
+                onClick={handleOpenFeedly}
+                className="bg-white/10 text-text-primary rounded-lg hover:bg-white/15 transition-colors inline-flex items-center gap-1.5"
+                style={{ padding: "6px 12px", fontSize: 12, marginTop: 6, display: "inline-flex" }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                </svg>
+                Open feedly.com/i/opml
+              </button>
+            </li>
+            <li>
+              Select the downloaded <code>.opml</code> file:
+              <div style={{ marginTop: 6 }}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".opml,.xml,application/xml,text/xml"
+                  onChange={handleFileChange}
+                  className="text-text-muted"
+                  style={{ fontSize: 12 }}
+                />
+              </div>
+            </li>
+          </ol>
         </>
       )}
 
@@ -308,21 +244,34 @@ function FeedlyTab() {
         </div>
       )}
 
-      {subs && !result && (
+      {entries && !result && (
         <div style={{ marginBottom: 12 }}>
           <p className="text-text-secondary" style={{ fontSize: 13, marginBottom: 8 }}>
-            Found {subs.length} subscription{subs.length !== 1 ? "s" : ""}:
+            {filename ? `${filename}: ` : ""}
+            {entries.length} subscription{entries.length !== 1 ? "s" : ""}
+            {newCount !== entries.length && ` (${newCount} new, ${entries.length - newCount} already added)`}
           </p>
           <div
             className="border border-white/10 rounded-xl overflow-y-auto"
-            style={{ maxHeight: 200, background: "rgba(255,255,255,0.03)" }}
+            style={{ maxHeight: 220, background: "rgba(255,255,255,0.03)" }}
           >
-            {subs.map((sub) => (
-              <div key={sub.id} className="flex items-center gap-2 border-b border-white/5 last:border-b-0" style={{ padding: "8px 12px" }}>
-                <span className="text-text-primary truncate" style={{ fontSize: 13 }}>{sub.title}</span>
-                {sub.categories.length > 0 && (
+            {entries.map((e) => (
+              <div
+                key={e.url}
+                className="flex items-center gap-2 border-b border-white/5 last:border-b-0"
+                style={{ padding: "8px 12px", opacity: e.already_exists ? 0.5 : 1 }}
+              >
+                <span className="text-text-primary truncate flex-1" style={{ fontSize: 13 }}>
+                  {e.title}
+                </span>
+                {e.category && (
                   <span className="text-text-muted flex-shrink-0" style={{ fontSize: 11 }}>
-                    {sub.categories[0].label}
+                    {e.category}
+                  </span>
+                )}
+                {e.already_exists && (
+                  <span className="text-text-muted flex-shrink-0" style={{ fontSize: 11 }}>
+                    exists
                   </span>
                 )}
               </div>
@@ -340,44 +289,14 @@ function FeedlyTab() {
         >
           {result ? "Done" : "Cancel"}
         </button>
-        {signedIn && !result && !subs && (
+        {entries && !result && (
           <button
-            onClick={handlePreviewStored}
-            disabled={previewing}
+            onClick={handleImport}
+            disabled={importing || newCount === 0}
             className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
             style={{ padding: "10px 24px", fontSize: 14 }}
           >
-            {previewing ? "Loading..." : "Preview feeds"}
-          </button>
-        )}
-        {signedIn && subs && !result && (
-          <button
-            onClick={handleImportStored}
-            disabled={importing}
-            className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
-            style={{ padding: "10px 24px", fontSize: 14 }}
-          >
-            {importing ? "Importing..." : `Import ${subs.length} Feeds`}
-          </button>
-        )}
-        {!signedIn && !oauthAvailable && !result && !subs && (
-          <button
-            onClick={handlePreviewToken}
-            disabled={previewing || !token.trim()}
-            className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
-            style={{ padding: "10px 24px", fontSize: 14 }}
-          >
-            {previewing ? "Loading..." : "Preview"}
-          </button>
-        )}
-        {!signedIn && !oauthAvailable && subs && !result && (
-          <button
-            onClick={handleImportToken}
-            disabled={importing}
-            className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
-            style={{ padding: "10px 24px", fontSize: 14 }}
-          >
-            {importing ? "Importing..." : `Import ${subs.length} Feeds`}
+            {importing ? "Importing..." : newCount === 0 ? "Nothing new" : `Import ${newCount} Feeds`}
           </button>
         )}
       </div>

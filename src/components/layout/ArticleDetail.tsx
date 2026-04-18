@@ -5,7 +5,7 @@ import { useSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
 import { fetchFullArticle, cancelSummarize } from "../../services/commands";
 import { ChatDrawer } from "../chat/ChatPanel";
-import { useReadingTimeTracker, useSetArticleFeedback, useArticleInteraction } from "../../hooks/useLearning";
+import { useReadingTimeTracker } from "../../hooks/useLearning";
 
 type ViewMode = "rss" | "reader" | "web";
 
@@ -109,8 +109,6 @@ export function ArticleDetail() {
   const toggleRead = useToggleRead();
   const summarize = useSummarizeArticle();
   const { data: settings } = useSettings();
-  const setFeedback = useSetArticleFeedback();
-  const { data: interaction } = useArticleInteraction(selectedArticleId);
   useReadingTimeTracker(selectedArticleId);
   const [showSummarizeMenu, setShowSummarizeMenu] = useState(false);
   const [perArticleLength, setPerArticleLength] = useState<string | undefined>();
@@ -446,37 +444,6 @@ export function ArticleDetail() {
             </svg>
           </button>
 
-          <div className="w-px h-5 bg-white/10" />
-
-          {/* Learning feedback buttons */}
-          <button
-            onClick={() => setFeedback.mutate({
-              articleId: article.id,
-              feedback: interaction?.feedback === "more" ? null : "more",
-            })}
-            className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${
-              interaction?.feedback === "more" ? "text-green-400" : "text-text-muted hover:text-text-primary"
-            }`}
-            title="More like this"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14zM4 22H2V11h2" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setFeedback.mutate({
-              articleId: article.id,
-              feedback: interaction?.feedback === "less" ? null : "less",
-            })}
-            className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${
-              interaction?.feedback === "less" ? "text-red-400" : "text-text-muted hover:text-text-primary"
-            }`}
-            title="Less like this"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10zM20 2h2v11h-2" />
-            </svg>
-          </button>
 
           {article.url && (
             <a href={article.url} target="_blank" rel="noopener noreferrer"
@@ -625,7 +592,30 @@ export function ArticleDetail() {
           </div>
 
           {/* Panel 2: Web view */}
-          <div className="slide-panel slide-panel-web">
+          <div className="slide-panel slide-panel-web" style={{ position: "relative" }}>
+            {article.url && (
+              <button
+                onClick={() => { if (article.url) window.open(article.url, "_blank"); }}
+                className="absolute bg-white/10 hover:bg-white/20 text-text-primary backdrop-blur-md rounded-lg transition-colors flex items-center gap-1.5 z-10"
+                style={{ top: 12, right: 12, padding: "6px 10px", fontSize: 12 }}
+                title="Open original in external browser"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                </svg>
+                Open in browser
+              </button>
+            )}
+            {!rawHtml && !loadingFull && fullError && (
+              <div className="flex flex-col items-center justify-center h-full text-center" style={{ padding: "0 24px" }}>
+                <p className="text-text-muted" style={{ fontSize: 14, marginBottom: 8 }}>
+                  Couldn't load page in the embedded view.
+                </p>
+                <p className="text-text-muted" style={{ fontSize: 12 }}>
+                  Use the "Open in browser" button above.
+                </p>
+              </div>
+            )}
             {rawHtml && (
               <iframe
                 ref={iframeRef}

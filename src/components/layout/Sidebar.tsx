@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats } from "../../hooks/useInbox";
-import { useThemes, useGenerateThemes } from "../../hooks/useThemes";
+import { useThemes, useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 import { FeedsSection } from "./FeedsSection";
@@ -17,6 +17,7 @@ export function Sidebar() {
   const triage = useTriageArticles();
   const { data: themes } = useThemes();
   const generateThemes = useGenerateThemes();
+  const themeProgress = useThemeProgress();
 
   const totalUnread = feeds?.reduce((sum, f) => sum + f.unread_count, 0) ?? 0;
 
@@ -230,7 +231,16 @@ export function Sidebar() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin flex-shrink-0">
                   <path d="M21 12a9 9 0 11-6.219-8.56" />
                 </svg>
-                <span>Grouping articles...</span>
+                <span className="flex-1 flex items-center justify-between gap-2">
+                  <span className="truncate">
+                    {themeProgress?.message ?? "Grouping articles..."}
+                  </span>
+                  {themeProgress && themeProgress.total > 0 && (
+                    <span className="text-text-muted tabular-nums" style={{ fontSize: 11 }}>
+                      {themeProgress.completed}/{themeProgress.total}
+                    </span>
+                  )}
+                </span>
               </>
             ) : (
               <>
@@ -244,6 +254,20 @@ export function Sidebar() {
               </>
             )}
           </button>
+          {generateThemes.isPending && themeProgress && themeProgress.total > 0 && (
+            <div
+              className="rounded-full bg-white/5 overflow-hidden"
+              style={{ height: 3, margin: "0 8px" }}
+            >
+              <div
+                className="bg-accent transition-all"
+                style={{
+                  height: "100%",
+                  width: `${Math.min(100, (themeProgress.completed / themeProgress.total) * 100)}%`,
+                }}
+              />
+            </div>
+          )}
           {generateThemes.isError && (
             <p className="text-red-400" style={{ fontSize: 12, padding: "4px 8px" }}>
               {generateThemes.error instanceof Error ? generateThemes.error.message : "Theme generation failed"}

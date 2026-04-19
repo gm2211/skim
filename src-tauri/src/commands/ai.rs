@@ -5,11 +5,11 @@ use crate::db::models::{ArticleFilter, ArticleSummary, Theme};
 use crate::db::queries;
 use crate::db::Database;
 use chrono::Utc;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -388,11 +388,33 @@ struct ThemeArticleRef {
 
 fn default_relevance() -> f64 { 1.0 }
 
+#[derive(Serialize, Clone)]
+struct ThemeProgress {
+    stage: String,
+    completed: u32,
+    total: u32,
+    message: String,
+}
+
+fn emit_progress(app: &AppHandle, stage: &str, completed: u32, total: u32, message: &str) {
+    let _ = app.emit(
+        "theme_progress",
+        ThemeProgress {
+            stage: stage.to_string(),
+            completed,
+            total,
+            message: message.to_string(),
+        },
+    );
+}
+
 #[tauri::command]
 pub async fn generate_themes(
+    app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
 ) -> Result<Vec<Theme>, String> {
+    emit_progress(&app, "fetching", 0, 1, "Fetching articles...");
     // Pull inbox articles (triaged, priority >= 3, unread). Fall back to unread
     // articles if nothing has been triaged yet.
     let (articles, settings_json) = {
@@ -424,6 +446,7 @@ pub async fn generate_themes(
     };
 
     if articles.is_empty() {
+        emit_progress(&app, "done", 1, 1, "No articles to group");
         return Ok(vec![]);
     }
 
@@ -443,40 +466,122 @@ pub async fn generate_themes(
 
     let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
 
-    // Build a compact listing using numeric handles — titles + source only.
-    // Excerpts bloat the prompt 10x for little quality gain in topic clustering.
-    let mut listing = String::new();
-    for (i, a) in articles.iter().enumerate() {
-        listing.push_str(&format!("{}\t{}\t[{}]\n", i, a.article.title.trim(), a.feed_title));
+    // Batch articles so we can emit real progress per batch. Local models
+    // are slow so use smaller batches; remote providers can handle more.
+    let batch_size = match settings.ai.provider.as_str() {
+        "local" => 25,
+        "ollama" => 40,
+        _ => 60,
+    };
+    let total_batches = articles.len().div_ceil(batch_size) as u32;
+
+    // Accumulate grouped themes across all batches. Collapse by lowercased
+    // label so the same topic from different batches merges into one theme.
+    let mut combined: HashMap<String, CombinedTheme> = HashMap::new();
+
+    for (batch_idx, chunk) in articles.chunks(batch_size).enumerate() {
+        let batch_num = batch_idx as u32 + 1;
+        emit_progress(
+            &app,
+            "batch",
+            batch_num - 1,
+            total_batches,
+            &format!("Grouping batch {}/{}...", batch_num, total_batches),
+        );
+
+        // Build TSV listing using handles LOCAL to this batch.
+        let mut listing = String::new();
+        for (i, a) in chunk.iter().enumerate() {
+            listing.push_str(&format!("{}\t{}\t[{}]\n", i, a.article.title.trim(), a.feed_title));
+        }
+        let max_tokens = (chunk.len() as i64 * 6 + 400).min(3072);
+
+        let request = ChatRequest {
+            model: model.clone(),
+            messages: vec![
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: prompts::theme_grouping_system_prompt().to_string(),
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: prompts::theme_grouping_user_prompt(&listing),
+                },
+            ],
+            temperature: Some(0.3),
+            max_tokens: Some(max_tokens),
+            json_mode: true,
+        };
+
+        match provider.chat(request).await {
+            Ok(resp) => {
+                let content = resp.content.trim();
+                let json_str = extract_json_object(content).unwrap_or(content);
+                match serde_json::from_str::<ThemeGroupingResponse>(json_str) {
+                    Ok(grouping) => {
+                        for group in grouping.themes {
+                            let label = group.label.trim();
+                            if label.is_empty() {
+                                continue;
+                            }
+                            // Resolve batch-local handles to global article UUIDs.
+                            let resolved: Vec<(String, f64)> = group
+                                .articles
+                                .iter()
+                                .filter_map(|r| {
+                                    let uuid = match &r.id {
+                                        serde_json::Value::Number(n) => n
+                                            .as_u64()
+                                            .and_then(|i| chunk.get(i as usize).map(|a| a.article.id.clone())),
+                                        serde_json::Value::String(s) => {
+                                            if let Ok(i) = s.trim().parse::<usize>() {
+                                                chunk.get(i).map(|a| a.article.id.clone())
+                                            } else if articles.iter().any(|a| a.article.id == *s) {
+                                                Some(s.clone())
+                                            } else {
+                                                None
+                                            }
+                                        }
+                                        _ => None,
+                                    };
+                                    uuid.map(|id| (id, r.relevance))
+                                })
+                                .collect();
+                            if resolved.is_empty() {
+                                continue;
+                            }
+                            let key = label.to_lowercase();
+                            let entry = combined.entry(key).or_insert_with(|| CombinedTheme {
+                                label: label.to_string(),
+                                summaries: Vec::new(),
+                                articles: Vec::new(),
+                            });
+                            entry.summaries.push(group.summary);
+                            for (id, rel) in resolved {
+                                entry.articles.push((id, rel));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!("Theme batch {} parse failed: {}. Raw: {}", batch_num, e, &content[..content.len().min(200)]);
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!("Theme batch {} chat failed: {}", batch_num, e);
+            }
+        }
+
+        emit_progress(
+            &app,
+            "batch",
+            batch_num,
+            total_batches,
+            &format!("Grouped batch {}/{}", batch_num, total_batches),
+        );
     }
 
-    let max_tokens = (articles.len() as i64 * 5 + 500).min(4096);
-
-    let request = ChatRequest {
-        model,
-        messages: vec![
-            ChatMessage {
-                role: "system".to_string(),
-                content: prompts::theme_grouping_system_prompt().to_string(),
-            },
-            ChatMessage {
-                role: "user".to_string(),
-                content: prompts::theme_grouping_user_prompt(&listing),
-            },
-        ],
-        temperature: Some(0.3),
-        max_tokens: Some(max_tokens),
-        json_mode: true,
-    };
-
-    let response = provider.chat(request).await?;
-
-    let content = response.content.trim();
-    let json_str = extract_json_object(content).unwrap_or(content);
-
-    let grouping: ThemeGroupingResponse = serde_json::from_str(json_str)
-        .map_err(|e| format!("Failed to parse AI theme response: {}. Response was: {}", e, &content[..content.len().min(200)]))?;
-
+    emit_progress(&app, "saving", total_batches, total_batches, "Saving themes...");
     let now = Utc::now().timestamp();
     let expires_at = now + 6 * 3600; // 6 hours
 
@@ -486,41 +591,38 @@ pub async fn generate_themes(
 
     let mut result_themes = Vec::new();
 
-    for group in grouping.themes {
-        // Resolve LLM output (numeric handles or UUID strings) to article UUIDs.
-        let resolved: Vec<(String, f64)> = group
-            .articles
-            .iter()
-            .filter_map(|r| {
-                let uuid = match &r.id {
-                    serde_json::Value::Number(n) => n
-                        .as_u64()
-                        .and_then(|i| articles.get(i as usize).map(|a| a.article.id.clone())),
-                    serde_json::Value::String(s) => {
-                        if let Ok(i) = s.trim().parse::<usize>() {
-                            articles.get(i).map(|a| a.article.id.clone())
-                        } else if articles.iter().any(|a| a.article.id == *s) {
-                            Some(s.clone())
-                        } else {
-                            None
-                        }
+    for (_key, combined_theme) in combined {
+        // Dedupe article refs; if the same article appears in multiple batches
+        // under the same theme label, keep the max relevance.
+        let mut by_id: HashMap<String, f64> = HashMap::new();
+        for (id, rel) in combined_theme.articles {
+            by_id
+                .entry(id)
+                .and_modify(|existing| {
+                    if rel > *existing {
+                        *existing = rel;
                     }
-                    _ => None,
-                };
-                uuid.map(|id| (id, r.relevance))
-            })
-            .collect();
+                })
+                .or_insert(rel);
+        }
 
-        if resolved.is_empty() {
+        if by_id.is_empty() {
             continue;
         }
 
+        // Pick first non-empty summary; if all batches contributed, take the longest.
+        let summary = combined_theme
+            .summaries
+            .into_iter()
+            .max_by_key(|s| s.len())
+            .unwrap_or_default();
+
         let theme_id = Uuid::new_v4().to_string();
-        let article_count = resolved.len() as i64;
+        let article_count = by_id.len() as i64;
         let theme = Theme {
             id: theme_id.clone(),
-            label: group.label,
-            summary: Some(group.summary),
+            label: combined_theme.label,
+            summary: Some(summary),
             created_at: now,
             expires_at,
             article_count: Some(article_count),
@@ -528,7 +630,7 @@ pub async fn generate_themes(
 
         queries::insert_theme(&conn, &theme).map_err(|e| e.to_string())?;
 
-        for (article_id, relevance) in &resolved {
+        for (article_id, relevance) in &by_id {
             queries::insert_theme_article(&conn, &theme_id, article_id, *relevance)
                 .map_err(|e| e.to_string())?;
         }
@@ -536,7 +638,20 @@ pub async fn generate_themes(
         result_themes.push(theme);
     }
 
+    emit_progress(
+        &app,
+        "done",
+        total_batches,
+        total_batches,
+        &format!("{} themes", result_themes.len()),
+    );
     Ok(result_themes)
+}
+
+struct CombinedTheme {
+    label: String,
+    summaries: Vec<String>,
+    articles: Vec<(String, f64)>,
 }
 
 #[tauri::command]

@@ -14,7 +14,7 @@ const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
   { value: "local", label: "Local (Embedded)", description: "Run AI locally with llama.cpp — no server needed" },
   { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
-  { value: "claude-cli", label: "Claude (Subscription)", description: "Uses Claude Code CLI — works with Pro/Max subscriptions" },
+  { value: "claude-cli", label: "Claude Pro/Max Subscription", description: "Routes through the claude CLI (claude -p). Sign into Claude Code once and your Pro/Max subscription handles billing — no API key required." },
   { value: "anthropic", label: "Claude (API Key)", description: "api.anthropic.com — requires API key with usage-based billing" },
   { value: "openai", label: "OpenAI", description: "api.openai.com" },
   { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
@@ -22,7 +22,7 @@ const AI_PROVIDERS = [
 ];
 
 const needsApiKey = (provider: string) =>
-  ["openai", "openrouter", "anthropic", "custom"].includes(provider);
+  ["openai", "openrouter", "anthropic", "custom", "claude-cli"].includes(provider);
 
 const needsEndpoint = (provider: string) =>
   ["ollama", "custom"].includes(provider);
@@ -190,18 +190,40 @@ export function SettingsDialog() {
 
                 {needsApiKey(local.ai.provider) && (
                   <InputField
-                    label={local.ai.provider === "claude-cli" ? "Setup Token" : "API Key"}
-                    description={local.ai.provider === "claude-cli" ? "Run 'claude setup-token' in your terminal to get a token." : undefined}
+                    label={local.ai.provider === "claude-cli" ? "Setup Token (optional)" : "API Key"}
+                    description={
+                      local.ai.provider === "claude-cli"
+                        ? "Leave blank to use your existing Claude Pro/Max subscription via 'claude -p'. Only paste a token here if you want to authenticate with an ANTHROPIC_API_KEY instead (run 'claude setup-token' to get one)."
+                        : undefined
+                    }
                   >
                     <input
                       type="password"
                       value={local.ai.api_key ?? ""}
                       onChange={(e) => updateAi({ api_key: e.target.value.trim() || null })}
-                      placeholder={local.ai.provider === "claude-cli" ? "Paste token from 'claude setup-token' (optional)" : "sk-..."}
+                      placeholder={local.ai.provider === "claude-cli" ? "Leave blank for subscription auth" : "sk-..."}
                       className={inputClass}
                       style={inputStyle}
                     />
                   </InputField>
+                )}
+
+                {local.ai.provider === "claude-cli" && (
+                  <div
+                    className="rounded-lg border border-accent/30 bg-accent/5"
+                    style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}
+                  >
+                    <p className="text-text-primary" style={{ fontWeight: 500, marginBottom: 4 }}>
+                      How it works
+                    </p>
+                    <p className="text-text-muted">
+                      Skim runs <code className="text-accent">claude -p "..."</code> under the hood. If the{" "}
+                      <code className="text-accent">claude</code> CLI is already signed into your Pro/Max
+                      account, nothing else is needed. Install with{" "}
+                      <code className="text-accent">npm i -g @anthropic-ai/claude-code</code> then run{" "}
+                      <code className="text-accent">claude</code> once to sign in.
+                    </p>
+                  </div>
                 )}
 
                 {needsEndpoint(local.ai.provider) && (

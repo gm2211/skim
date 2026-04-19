@@ -201,30 +201,13 @@ export function Sidebar() {
               {triage.data.errors.length > 0 && ` (${triage.data.errors.length} errors)`}
             </p>
           )}
-        </div>
 
-        {/* Themes section */}
-        <div style={{ marginBottom: 32, padding: "0 8px" }}>
-          <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
-            <div className="flex items-center gap-3">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
-                className="flex-shrink-0 opacity-50"
-              >
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-              </svg>
-              <span style={{ fontSize: 17, fontWeight: 600 }} className="text-text-primary">
-                Themes
-              </span>
-            </div>
-          </div>
+          {/* Group by theme — operates on AI Inbox articles */}
           <button
             onClick={() => generateThemes.mutate()}
             disabled={generateThemes.isPending}
             className="flex items-center gap-2 w-full rounded-lg text-text-muted hover:text-accent hover:bg-white/5 transition-colors relative z-20"
-            style={{ padding: "8px", fontSize: 13, marginBottom: 4 }}
+            style={{ padding: "8px", fontSize: 13, marginTop: 4 }}
           >
             {generateThemes.isPending ? (
               <>
@@ -274,7 +257,7 @@ export function Sidebar() {
             </p>
           )}
           {themes && themes.length > 0 && (
-            <div className="space-y-1 mt-1">
+            <div className="space-y-1" style={{ marginTop: 6, paddingLeft: 20 }}>
               {themes.map((theme) => (
                 <div
                   key={theme.id}
@@ -284,18 +267,18 @@ export function Sidebar() {
                       ? "bg-white/10 text-text-primary"
                       : "text-text-secondary hover:bg-white/5 hover:text-text-primary"
                   }`}
-                  style={{ padding: "8px" }}
+                  style={{ padding: "6px 8px" }}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="truncate" style={{ fontSize: 14 }}>{theme.label}</span>
+                    <span className="truncate" style={{ fontSize: 13 }}>{theme.label}</span>
                     {theme.article_count != null && (
-                      <span className="text-text-muted tabular-nums ml-2 flex-shrink-0" style={{ fontSize: 13 }}>
+                      <span className="text-text-muted tabular-nums ml-2 flex-shrink-0" style={{ fontSize: 12 }}>
                         {theme.article_count}
                       </span>
                     )}
                   </div>
                   {theme.summary && (
-                    <p className="text-text-muted truncate" style={{ fontSize: 12, marginTop: 2 }}>
+                    <p className="text-text-muted truncate" style={{ fontSize: 11, marginTop: 1 }}>
                       {theme.summary}
                     </p>
                   )}

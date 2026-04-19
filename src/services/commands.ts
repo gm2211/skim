@@ -69,6 +69,23 @@ export const aiMatchFeedsForTopic = (description: string) =>
 export const applyFolderOrganization = (proposals: FolderProposal[]) =>
   invoke<Folder[]>("apply_folder_organization", { proposals });
 
+// Duplicate feed management
+export interface DuplicateFeedInfo {
+  id: string;
+  title: string;
+  url: string;
+  article_count: number;
+  last_fetched_at: number | null;
+}
+export interface DuplicateGroup {
+  normalized_url: string;
+  feeds: DuplicateFeedInfo[];
+}
+export const listDuplicateFeeds = () =>
+  invoke<DuplicateGroup[]>("list_duplicate_feeds");
+export const mergeDuplicateFeeds = () =>
+  invoke<number>("merge_duplicate_feeds");
+
 export const refreshFeed = (feedId: string) =>
   invoke<number>("refresh_feed", { feedId });
 export const refreshAllFeeds = () => invoke<number>("refresh_all_feeds");

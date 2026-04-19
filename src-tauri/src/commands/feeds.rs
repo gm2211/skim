@@ -17,6 +17,41 @@ pub struct FeedWithCount {
     pub unread_count: i64,
 }
 
+/// Normalize a feed URL for duplicate detection.
+/// Strips scheme, www prefix, trailing slash, fragments, and a small set of
+/// tracking query params. Case-insensitive on host, case-preserving on path
+/// (many feeds have case-sensitive paths).
+pub fn normalize_feed_url(url: &str) -> String {
+    let trimmed = url.trim();
+    let parsed = match url::Url::parse(trimmed) {
+        Ok(u) => u,
+        Err(_) => return trimmed.trim_end_matches('/').to_lowercase(),
+    };
+    let host = parsed
+        .host_str()
+        .map(|h| h.trim_start_matches("www.").to_lowercase())
+        .unwrap_or_default();
+    let path = parsed.path().trim_end_matches('/');
+    let filtered_query: Option<String> = parsed.query().and_then(|q| {
+        let kept: Vec<(String, String)> = url::form_urlencoded::parse(q.as_bytes())
+            .filter(|(k, _)| {
+                let lk = k.to_lowercase();
+                !lk.starts_with("utm_") && lk != "fbclid" && lk != "gclid"
+            })
+            .map(|(k, v)| (k.into_owned(), v.into_owned()))
+            .collect();
+        if kept.is_empty() {
+            None
+        } else {
+            Some(url::form_urlencoded::Serializer::new(String::new()).extend_pairs(kept).finish())
+        }
+    });
+    match filtered_query {
+        Some(q) => format!("{}{}?{}", host, path, q),
+        None => format!("{}{}", host, path),
+    }
+}
+
 /// Returns a valid Feedly access token, refreshing if expiry is within 60s.
 /// Refresh requires baked-in OAuth credentials.
 async fn ensure_feedly_token(db: &Database) -> Result<Option<String>, String> {
@@ -69,10 +104,34 @@ async fn ensure_feedly_token(db: &Database) -> Result<Option<String>, String> {
 
 #[tauri::command]
 pub async fn add_feed(db: State<'_, Database>, url: String) -> Result<Feed, String> {
+    // Dedup on the user-supplied URL first to avoid a wasted network fetch.
+    let input_norm = normalize_feed_url(&url);
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let existing = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+        if let Some(match_feed) = existing
+            .iter()
+            .find(|f| normalize_feed_url(&f.url) == input_norm)
+        {
+            return Err(format!("Already subscribed: {}", match_feed.title));
+        }
+    }
+
     let (feed, articles) =
         fetch_and_parse_feed(&url, None).await?;
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // Re-check after fetch in case the resolved URL differs (feed auto-discovery).
+    let existing = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+    let fetched_norm = normalize_feed_url(&feed.url);
+    if let Some(match_feed) = existing
+        .iter()
+        .find(|f| normalize_feed_url(&f.url) == fetched_norm)
+    {
+        return Err(format!("Already subscribed: {}", match_feed.title));
+    }
+
     queries::insert_feed(&conn, &feed).map_err(|e| format!("Failed to save feed: {}", e))?;
 
     for article in &articles {
@@ -230,10 +289,10 @@ pub async fn import_feedly(
     let subs = feedly::fetch_subscriptions(&token).await?;
     let feeds_and_urls = feedly::subscriptions_to_feeds(&subs);
 
-    let existing_urls: Vec<String> = {
+    let existing_norm: std::collections::HashSet<String> = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
-        feeds.into_iter().map(|f| f.url).collect()
+        feeds.into_iter().map(|f| normalize_feed_url(&f.url)).collect()
     };
 
     let mut imported = 0i32;
@@ -241,7 +300,7 @@ pub async fn import_feedly(
     let mut errors = Vec::new();
 
     for (feed, feed_url) in &feeds_and_urls {
-        if existing_urls.iter().any(|u| u == feed_url) {
+        if existing_norm.contains(&normalize_feed_url(feed_url)) {
             skipped += 1;
             continue;
         }
@@ -361,18 +420,18 @@ pub async fn preview_opml(
     xml: String,
 ) -> Result<Vec<OpmlPreviewEntry>, String> {
     let entries = parse_opml_entries(&xml)?;
-    let existing_urls: Vec<String> = {
+    let existing_norm: std::collections::HashSet<String> = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         queries::list_feeds(&conn)
             .map_err(|e| e.to_string())?
             .into_iter()
-            .map(|f| f.url)
+            .map(|f| normalize_feed_url(&f.url))
             .collect()
     };
     Ok(entries
         .into_iter()
         .map(|(title, url, category)| {
-            let already_exists = existing_urls.iter().any(|u| u == &url);
+            let already_exists = existing_norm.contains(&normalize_feed_url(&url));
             OpmlPreviewEntry { title, url, category, already_exists }
         })
         .collect())
@@ -385,12 +444,12 @@ pub async fn import_opml(
 ) -> Result<feedly::FeedlyImportResult, String> {
     let entries = parse_opml_entries(&xml)?;
 
-    let existing_urls: Vec<String> = {
+    let mut existing_norm: std::collections::HashSet<String> = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         queries::list_feeds(&conn)
             .map_err(|e| e.to_string())?
             .into_iter()
-            .map(|f| f.url)
+            .map(|f| normalize_feed_url(&f.url))
             .collect()
     };
 
@@ -400,7 +459,8 @@ pub async fn import_opml(
     let now = chrono::Utc::now().timestamp();
 
     for (title, url, category) in entries {
-        if existing_urls.iter().any(|u| u == &url) {
+        let n = normalize_feed_url(&url);
+        if !existing_norm.insert(n) {
             skipped += 1;
             continue;
         }
@@ -799,6 +859,101 @@ impl CompiledRule {
                 .unwrap_or(false),
         }
     }
+}
+
+// ── Duplicate detection / merging ──────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct DuplicateGroup {
+    pub normalized_url: String,
+    pub feeds: Vec<DuplicateFeedInfo>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DuplicateFeedInfo {
+    pub id: String,
+    pub title: String,
+    pub url: String,
+    pub article_count: i64,
+    pub last_fetched_at: Option<i64>,
+}
+
+#[tauri::command]
+pub async fn list_duplicate_feeds(db: State<'_, Database>) -> Result<Vec<DuplicateGroup>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+
+    let mut by_norm: std::collections::HashMap<String, Vec<Feed>> = std::collections::HashMap::new();
+    for f in feeds {
+        by_norm.entry(normalize_feed_url(&f.url)).or_default().push(f);
+    }
+
+    let mut groups: Vec<DuplicateGroup> = by_norm
+        .into_iter()
+        .filter(|(_, v)| v.len() > 1)
+        .map(|(n, fs)| DuplicateGroup {
+            normalized_url: n,
+            feeds: fs
+                .into_iter()
+                .map(|f| DuplicateFeedInfo {
+                    article_count: queries::count_articles_in_feed(&conn, &f.id).unwrap_or(0),
+                    last_fetched_at: f.last_fetched_at,
+                    id: f.id,
+                    title: f.title,
+                    url: f.url,
+                })
+                .collect(),
+        })
+        .collect();
+    groups.sort_by(|a, b| a.normalized_url.cmp(&b.normalized_url));
+    Ok(groups)
+}
+
+/// Auto-merge every duplicate group. For each group the feed with the most
+/// articles wins; ties broken by most recent `last_fetched_at`.
+#[tauri::command]
+pub async fn merge_duplicate_feeds(db: State<'_, Database>) -> Result<i32, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+
+    let mut by_norm: std::collections::HashMap<String, Vec<Feed>> = std::collections::HashMap::new();
+    for f in feeds {
+        by_norm.entry(normalize_feed_url(&f.url)).or_default().push(f);
+    }
+
+    let mut merged = 0i32;
+    for (_, mut group) in by_norm {
+        if group.len() < 2 {
+            continue;
+        }
+        // Score each candidate: (article_count, last_fetched_at.unwrap_or(0)).
+        let scored: Vec<(Feed, i64, i64)> = group
+            .drain(..)
+            .map(|f| {
+                let count = queries::count_articles_in_feed(&conn, &f.id).unwrap_or(0);
+                let last = f.last_fetched_at.unwrap_or(0);
+                (f, count, last)
+            })
+            .collect();
+        let keeper_idx = scored
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.1.cmp(&b.1).then(a.2.cmp(&b.2)))
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        let keeper_id = scored[keeper_idx].0.id.clone();
+        for (i, (feed, _, _)) in scored.into_iter().enumerate() {
+            if i == keeper_idx {
+                continue;
+            }
+            if let Err(e) = queries::merge_feed(&conn, &feed.id, &keeper_id) {
+                log::warn!("Failed to merge {} into {}: {}", feed.id, keeper_id, e);
+                continue;
+            }
+            merged += 1;
+        }
+    }
+    Ok(merged)
 }
 
 // ── AI-powered folder organization ─────────────────────────────────

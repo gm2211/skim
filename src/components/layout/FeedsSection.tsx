@@ -13,6 +13,8 @@ import {
   aiMatchFeedsForTopic,
   applyFolderOrganization,
   countStarredInFeed,
+  listDuplicateFeeds,
+  mergeDuplicateFeeds,
   type FolderProposal,
 } from "../../services/commands";
 import type { Feed, Folder, SidebarView } from "../../services/types";
@@ -39,6 +41,38 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
   const assignMut = useAssignFeedToFolder();
   const createFolderMut = useCreateFolder();
   const qc = useQueryClient();
+
+  const [dupeCount, setDupeCount] = useState(0);
+  const [merging, setMerging] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const groups = await listDuplicateFeeds();
+        if (cancelled) return;
+        const dupes = groups.reduce((acc, g) => acc + Math.max(0, g.feeds.length - 1), 0);
+        setDupeCount(dupes);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [feeds?.length]);
+
+  const handleMergeDupes = async () => {
+    setMerging(true);
+    try {
+      await mergeDuplicateFeeds();
+      setDupeCount(0);
+      qc.invalidateQueries({ queryKey: ["feeds"] });
+      qc.invalidateQueries({ queryKey: ["folders"] });
+    } finally {
+      setMerging(false);
+    }
+  };
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [feedMenu, setFeedMenu] = useState<FeedContextMenu>(null);
@@ -169,6 +203,26 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
 
   return (
     <div>
+      {/* Duplicate banner */}
+      {dupeCount > 0 && (
+        <div
+          className="flex items-center justify-between rounded-lg border border-amber-400/30 bg-amber-400/10"
+          style={{ margin: "0 8px 10px", padding: "6px 10px" }}
+        >
+          <span className="text-amber-200" style={{ fontSize: 12 }}>
+            {dupeCount} duplicate feed{dupeCount > 1 ? "s" : ""} found
+          </span>
+          <button
+            onClick={handleMergeDupes}
+            disabled={merging}
+            className="text-amber-200 hover:text-amber-100 disabled:opacity-40 transition-colors"
+            style={{ fontSize: 12, fontWeight: 500 }}
+          >
+            {merging ? "Merging…" : "Merge"}
+          </button>
+        </div>
+      )}
+
       {/* Header with + menu */}
       <div className="flex items-center justify-between" style={{ padding: "0 8px", marginBottom: 12 }}>
         <span style={{ fontSize: 17, fontWeight: 600 }} className="text-text-primary">

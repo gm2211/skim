@@ -206,6 +206,40 @@ pub fn next_folder_sort_order(conn: &Connection) -> Result<i32, rusqlite::Error>
     Ok(max.map(|m| m + 1).unwrap_or(0))
 }
 
+/// Reassign articles from one feed to another, then delete the source feed.
+/// Articles with conflicting IDs (same id in both feeds) are silently dropped
+/// from the source — the kept feed already has them.
+pub fn merge_feed(
+    conn: &Connection,
+    from_feed_id: &str,
+    into_feed_id: &str,
+) -> Result<(), rusqlite::Error> {
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
+        "UPDATE OR IGNORE articles SET feed_id = ?1 WHERE feed_id = ?2",
+        params![into_feed_id, from_feed_id],
+    )?;
+    // Delete any leftover articles that couldn't be reassigned (ID conflict).
+    tx.execute(
+        "DELETE FROM articles WHERE feed_id = ?1",
+        params![from_feed_id],
+    )?;
+    tx.execute(
+        "DELETE FROM feeds WHERE id = ?1",
+        params![from_feed_id],
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+pub fn count_articles_in_feed(conn: &Connection, feed_id: &str) -> Result<i64, rusqlite::Error> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM articles WHERE feed_id = ?1",
+        params![feed_id],
+        |row| row.get(0),
+    )
+}
+
 pub fn count_starred_in_feed(conn: &Connection, feed_id: &str) -> Result<i64, rusqlite::Error> {
     conn.query_row(
         "SELECT COUNT(*) FROM articles WHERE feed_id = ?1 AND is_starred = 1",

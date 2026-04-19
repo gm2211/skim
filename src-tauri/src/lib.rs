@@ -97,6 +97,8 @@ pub fn run() {
             commands::feeds::ai_auto_organize_feeds,
             commands::feeds::ai_match_feeds_for_topic,
             commands::feeds::apply_folder_organization,
+            commands::feeds::list_duplicate_feeds,
+            commands::feeds::merge_duplicate_feeds,
             // Articles
             commands::articles::get_articles,
             commands::articles::get_article,

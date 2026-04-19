@@ -181,6 +181,19 @@ export const getArticleInteraction = (articleId: string) =>
 // Chat
 export const chatWithArticle = (articleId: string, messages: ChatMessageInput[]) =>
   invoke<ChatResponse>("chat_with_article", { articleId, messages });
+
+export interface ArticleChatResponse {
+  content: string;
+  provider: string;
+  model: string;
+  article_ids: string[];
+}
+export const chatWithArticles = (
+  scope: "inbox" | "unread" | "all",
+  query: string,
+  messages: ChatMessageInput[],
+) =>
+  invoke<ArticleChatResponse>("chat_with_articles", { scope, query, messages });
 export const webSearch = (query: string) =>
   invoke<SearchResult[]>("web_search", { query });
 

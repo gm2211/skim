@@ -112,6 +112,209 @@ pub async fn chat_with_article(
     })
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct ArticleChatResponse {
+    pub content: String,
+    pub provider: String,
+    pub model: String,
+    pub article_ids: Vec<String>,
+}
+
+/// Extract lowercase word stems (3+ chars) from a query for keyword matching.
+fn query_keywords(query: &str) -> Vec<String> {
+    query
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.len() >= 3)
+        .map(|w| w.to_lowercase())
+        .collect()
+}
+
+fn article_excerpt(a: &crate::db::models::ArticleWithFeed, max_chars: usize) -> String {
+    let content_text = a.article.content_text.as_deref().unwrap_or("");
+    let html_text = a
+        .article
+        .content_html
+        .as_deref()
+        .map(|h| html2text::from_read(h.as_bytes(), 10000))
+        .unwrap_or_default();
+    let src = if html_text.len() > content_text.len() {
+        html_text
+    } else {
+        content_text.to_string()
+    };
+    src.chars().take(max_chars).collect()
+}
+
+/// Chat across multiple articles. Scope determines which articles form the
+/// candidate pool; the user's query is then used to keyword-rank them so the
+/// prompt stays within a reasonable context budget.
+#[tauri::command]
+pub async fn chat_with_articles(
+    db: State<'_, Database>,
+    model_state: State<'_, SharedModelState>,
+    scope: String,
+    query: String,
+    messages: Vec<ChatMessageInput>,
+) -> Result<ArticleChatResponse, String> {
+    let trimmed_query = query.trim().to_string();
+    if trimmed_query.is_empty() {
+        return Err("Query cannot be empty".to_string());
+    }
+
+    let (pool, settings_json) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
+        let pool: Vec<crate::db::models::ArticleWithFeed> = match scope.as_str() {
+            "inbox" => {
+                let inbox = queries::get_inbox_articles(&conn, Some(3), None, 500, 0)
+                    .map_err(|e| e.to_string())?;
+                inbox
+                    .into_iter()
+                    .map(|a| crate::db::models::ArticleWithFeed {
+                        article: a.article,
+                        feed_title: a.feed_title,
+                        feed_icon_url: a.feed_icon_url,
+                    })
+                    .collect()
+            }
+            "unread" => queries::get_articles(
+                &conn,
+                &crate::db::models::ArticleFilter {
+                    feed_id: None,
+                    theme_id: None,
+                    is_read: Some(false),
+                    is_starred: None,
+                    limit: Some(500),
+                    offset: None,
+                },
+            )
+            .map_err(|e| e.to_string())?,
+            _ => queries::get_articles(
+                &conn,
+                &crate::db::models::ArticleFilter {
+                    feed_id: None,
+                    theme_id: None,
+                    is_read: None,
+                    is_starred: None,
+                    limit: Some(1000),
+                    offset: None,
+                },
+            )
+            .map_err(|e| e.to_string())?,
+        };
+        (pool, settings_json)
+    };
+
+    let settings: crate::db::models::AppSettings = settings_json
+        .as_deref()
+        .map(|s| serde_json::from_str(s).unwrap_or_default())
+        .unwrap_or_default();
+
+    let ai_settings = resolve_chat_settings(&settings.ai);
+    if ai_settings.provider == "none" {
+        return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
+    }
+
+    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let model = ai_settings
+        .model
+        .clone()
+        .unwrap_or_else(|| crate::commands::ai::default_model(&ai_settings.provider));
+
+    // Rank articles by keyword overlap with the query + conversation history.
+    let mut haystack_query = trimmed_query.to_lowercase();
+    for m in &messages {
+        haystack_query.push(' ');
+        haystack_query.push_str(&m.content.to_lowercase());
+    }
+    let kws = query_keywords(&haystack_query);
+
+    let mut scored: Vec<(i64, &crate::db::models::ArticleWithFeed)> = pool
+        .iter()
+        .map(|a| {
+            let hay = format!(
+                "{} {} {}",
+                a.article.title.to_lowercase(),
+                a.feed_title.to_lowercase(),
+                a.article.content_text.as_deref().unwrap_or("").to_lowercase(),
+            );
+            let score: i64 = kws.iter().filter(|k| hay.contains(k.as_str())).count() as i64;
+            (score, a)
+        })
+        .collect();
+    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    // If no keywords match anything, fall back to the newest articles.
+    let any_match = scored.first().map(|(s, _)| *s > 0).unwrap_or(false);
+    let top_k = if any_match { 20 } else { 10 };
+    let selected: Vec<&crate::db::models::ArticleWithFeed> =
+        scored.into_iter().take(top_k).map(|(_, a)| a).collect();
+
+    // Build context
+    let mut context = String::new();
+    context.push_str("Relevant articles from the user's RSS feed:\n\n");
+    for (i, a) in selected.iter().enumerate() {
+        let date = a
+            .article
+            .published_at
+            .map(|ts| {
+                chrono::DateTime::from_timestamp(ts, 0)
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+        let excerpt = article_excerpt(a, 600);
+        context.push_str(&format!(
+            "[{i}] Title: {title}\nSource: {source}\nAuthor: {author}\nDate: {date}\nURL: {url}\nExcerpt: {excerpt}\n\n",
+            i = i + 1,
+            title = a.article.title,
+            source = a.feed_title,
+            author = a.article.author.as_deref().unwrap_or(""),
+            url = a.article.url.as_deref().unwrap_or(""),
+            excerpt = excerpt,
+        ));
+    }
+
+    let system_prompt = format!(
+        "You answer the user's questions about articles from their RSS feed. Use ONLY the articles below as evidence. \
+         When you reference an article, cite it with its bracket number like [2]. \
+         If the articles don't contain the answer, say so and suggest broadening the search. \
+         Be concise. No emoji.\n\n{}",
+        context,
+    );
+
+    let mut chat_messages = vec![ChatMessage {
+        role: "system".to_string(),
+        content: system_prompt,
+    }];
+    for msg in &messages {
+        chat_messages.push(ChatMessage {
+            role: msg.role.clone(),
+            content: msg.content.clone(),
+        });
+    }
+    chat_messages.push(ChatMessage {
+        role: "user".to_string(),
+        content: trimmed_query,
+    });
+
+    let req = ChatRequest {
+        model: model.clone(),
+        messages: chat_messages,
+        temperature: Some(0.4),
+        max_tokens: Some(2048),
+        json_mode: false,
+    };
+
+    let response = provider.chat(req).await?;
+
+    Ok(ArticleChatResponse {
+        content: response.content,
+        provider: provider.name().to_string(),
+        model,
+        article_ids: selected.iter().map(|a| a.article.id.clone()).collect(),
+    })
+}
+
 #[tauri::command]
 pub async fn web_search(query: String) -> Result<Vec<SearchResult>, String> {
     let client = reqwest::Client::builder()

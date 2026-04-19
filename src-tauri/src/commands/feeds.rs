@@ -878,19 +878,44 @@ pub struct DuplicateFeedInfo {
     pub last_fetched_at: Option<i64>,
 }
 
+/// Build dedup groups by trying URL first, falling back to (normalized title).
+/// A feed with a unique normalized URL and an empty title has no group.
+fn dedup_groups(feeds: Vec<Feed>) -> Vec<(String, Vec<Feed>)> {
+    let mut by_url: std::collections::HashMap<String, Vec<Feed>> = std::collections::HashMap::new();
+    for f in feeds {
+        by_url.entry(normalize_feed_url(&f.url)).or_default().push(f);
+    }
+
+    // Pull out URL groups that already have >= 2, leave the singletons for a title pass.
+    let (mut dupes, singletons): (Vec<(String, Vec<Feed>)>, Vec<(String, Vec<Feed>)>) = by_url
+        .into_iter()
+        .partition(|(_, v)| v.len() > 1);
+
+    let mut by_title: std::collections::HashMap<String, Vec<Feed>> =
+        std::collections::HashMap::new();
+    for (_, mut group) in singletons {
+        if let Some(f) = group.pop() {
+            let key = f.title.trim().to_lowercase();
+            if !key.is_empty() {
+                by_title.entry(key).or_default().push(f);
+            }
+        }
+    }
+    for (k, v) in by_title {
+        if v.len() > 1 {
+            dupes.push((format!("title:{}", k), v));
+        }
+    }
+    dupes
+}
+
 #[tauri::command]
 pub async fn list_duplicate_feeds(db: State<'_, Database>) -> Result<Vec<DuplicateGroup>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
 
-    let mut by_norm: std::collections::HashMap<String, Vec<Feed>> = std::collections::HashMap::new();
-    for f in feeds {
-        by_norm.entry(normalize_feed_url(&f.url)).or_default().push(f);
-    }
-
-    let mut groups: Vec<DuplicateGroup> = by_norm
+    let mut groups: Vec<DuplicateGroup> = dedup_groups(feeds)
         .into_iter()
-        .filter(|(_, v)| v.len() > 1)
         .map(|(n, fs)| DuplicateGroup {
             normalized_url: n,
             feeds: fs
@@ -915,34 +940,31 @@ pub async fn list_duplicate_feeds(db: State<'_, Database>) -> Result<Vec<Duplica
 pub async fn merge_duplicate_feeds(db: State<'_, Database>) -> Result<i32, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
-
-    let mut by_norm: std::collections::HashMap<String, Vec<Feed>> = std::collections::HashMap::new();
-    for f in feeds {
-        by_norm.entry(normalize_feed_url(&f.url)).or_default().push(f);
-    }
+    let groups = dedup_groups(feeds);
 
     let mut merged = 0i32;
-    for (_, mut group) in by_norm {
+    for (_, group) in groups {
         if group.len() < 2 {
             continue;
         }
-        // Score each candidate: (article_count, last_fetched_at.unwrap_or(0)).
-        let scored: Vec<(Feed, i64, i64)> = group
-            .drain(..)
+        // Score: prefer feed with feedly_id set (can sync), then most articles, then recent fetch.
+        let scored: Vec<(Feed, i32, i64, i64)> = group
+            .into_iter()
             .map(|f| {
+                let has_feedly = if f.feedly_id.is_some() { 1 } else { 0 };
                 let count = queries::count_articles_in_feed(&conn, &f.id).unwrap_or(0);
                 let last = f.last_fetched_at.unwrap_or(0);
-                (f, count, last)
+                (f, has_feedly, count, last)
             })
             .collect();
         let keeper_idx = scored
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.1.cmp(&b.1).then(a.2.cmp(&b.2)))
+            .max_by(|(_, a), (_, b)| a.1.cmp(&b.1).then(a.2.cmp(&b.2)).then(a.3.cmp(&b.3)))
             .map(|(i, _)| i)
             .unwrap_or(0);
         let keeper_id = scored[keeper_idx].0.id.clone();
-        for (i, (feed, _, _)) in scored.into_iter().enumerate() {
+        for (i, (feed, _, _, _)) in scored.into_iter().enumerate() {
             if i == keeper_idx {
                 continue;
             }

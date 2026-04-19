@@ -123,6 +123,7 @@ pub fn run() {
             commands::ai::get_article_interaction,
             // Chat
             commands::chat::chat_with_article,
+            commands::chat::chat_with_articles,
             commands::chat::web_search,
             // Settings
             commands::settings::get_settings,

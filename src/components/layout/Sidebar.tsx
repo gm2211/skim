@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats } from "../../hooks/useInbox";
 import { useThemes, useGenerateThemes } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 import { FeedsSection } from "./FeedsSection";
+import { AskSkimDialog } from "../chat/AskSkimDialog";
 
 export function Sidebar() {
+  const [askOpen, setAskOpen] = useState(false);
   const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed } =
     useUiStore();
   const { data: feeds } = useFeeds();
@@ -61,6 +64,15 @@ export function Sidebar() {
           </svg>
         </button>
         <button
+          onClick={() => setAskOpen(true)}
+          className="text-text-muted hover:text-accent transition-colors"
+          title="Ask Skim — search your feed with AI"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
+        <button
           onClick={() => setShowAddFeed(true)}
           className="text-text-muted hover:text-text-primary transition-colors"
           title="Add feed"
@@ -70,6 +82,7 @@ export function Sidebar() {
           </svg>
         </button>
       </div>
+      {askOpen && <AskSkimDialog onClose={() => setAskOpen(false)} />}
 
       {/* App title */}
       <div style={{ padding: "12px 24px 28px 24px" }}>

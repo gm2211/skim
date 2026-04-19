@@ -380,26 +380,45 @@ struct ThemeGroupItem {
 
 #[derive(Deserialize)]
 struct ThemeArticleRef {
-    id: String,
+    #[serde(alias = "id", alias = "handle")]
+    id: serde_json::Value,
+    #[serde(default = "default_relevance")]
     relevance: f64,
 }
+
+fn default_relevance() -> f64 { 1.0 }
 
 #[tauri::command]
 pub async fn generate_themes(
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
 ) -> Result<Vec<Theme>, String> {
+    // Pull inbox articles (triaged, priority >= 3, unread). Fall back to unread
+    // articles if nothing has been triaged yet.
     let (articles, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        let filter = ArticleFilter {
-            feed_id: None,
-            theme_id: None,
-            is_read: Some(false),
-            is_starred: None,
-            limit: Some(200),
-            offset: None,
+        let inbox = queries::get_inbox_articles(&conn, Some(3), Some(false), 200, 0)
+            .map_err(|e| e.to_string())?;
+        let articles: Vec<crate::db::models::ArticleWithFeed> = if !inbox.is_empty() {
+            inbox
+                .into_iter()
+                .map(|a| crate::db::models::ArticleWithFeed {
+                    article: a.article,
+                    feed_title: a.feed_title,
+                    feed_icon_url: a.feed_icon_url,
+                })
+                .collect()
+        } else {
+            let filter = ArticleFilter {
+                feed_id: None,
+                theme_id: None,
+                is_read: Some(false),
+                is_starred: None,
+                limit: Some(200),
+                offset: None,
+            };
+            queries::get_articles(&conn, &filter).map_err(|e| e.to_string())?
         };
-        let articles = queries::get_articles(&conn, &filter).map_err(|e| e.to_string())?;
         let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
         (articles, settings_json)
     };
@@ -424,29 +443,14 @@ pub async fn generate_themes(
 
     let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
 
-    // Build article snippets for the AI
-    let snippets: Vec<serde_json::Value> = articles
-        .iter()
-        .map(|a| {
-            let excerpt = a
-                .article
-                .content_text
-                .as_deref()
-                .unwrap_or("")
-                .chars()
-                .take(300)
-                .collect::<String>();
-            serde_json::json!({
-                "id": a.article.id,
-                "title": a.article.title,
-                "source": a.feed_title,
-                "excerpt": excerpt,
-            })
-        })
-        .collect();
+    // Build a compact listing using numeric handles — titles + source only.
+    // Excerpts bloat the prompt 10x for little quality gain in topic clustering.
+    let mut listing = String::new();
+    for (i, a) in articles.iter().enumerate() {
+        listing.push_str(&format!("{}\t{}\t[{}]\n", i, a.article.title.trim(), a.feed_title));
+    }
 
-    let articles_json = serde_json::to_string_pretty(&snippets)
-        .map_err(|e| e.to_string())?;
+    let max_tokens = (articles.len() as i64 * 5 + 500).min(4096);
 
     let request = ChatRequest {
         model,
@@ -457,27 +461,18 @@ pub async fn generate_themes(
             },
             ChatMessage {
                 role: "user".to_string(),
-                content: prompts::theme_grouping_user_prompt(&articles_json),
+                content: prompts::theme_grouping_user_prompt(&listing),
             },
         ],
         temperature: Some(0.3),
-        max_tokens: Some(4096),
+        max_tokens: Some(max_tokens),
         json_mode: true,
     };
 
     let response = provider.chat(request).await?;
 
-    // Parse the JSON response - try to extract JSON from potential markdown code blocks
     let content = response.content.trim();
-    let json_str = if content.starts_with("```") {
-        content
-            .trim_start_matches("```json")
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim()
-    } else {
-        content
-    };
+    let json_str = extract_json_object(content).unwrap_or(content);
 
     let grouping: ThemeGroupingResponse = serde_json::from_str(json_str)
         .map_err(|e| format!("Failed to parse AI theme response: {}. Response was: {}", e, &content[..content.len().min(200)]))?;
@@ -492,8 +487,36 @@ pub async fn generate_themes(
     let mut result_themes = Vec::new();
 
     for group in grouping.themes {
+        // Resolve LLM output (numeric handles or UUID strings) to article UUIDs.
+        let resolved: Vec<(String, f64)> = group
+            .articles
+            .iter()
+            .filter_map(|r| {
+                let uuid = match &r.id {
+                    serde_json::Value::Number(n) => n
+                        .as_u64()
+                        .and_then(|i| articles.get(i as usize).map(|a| a.article.id.clone())),
+                    serde_json::Value::String(s) => {
+                        if let Ok(i) = s.trim().parse::<usize>() {
+                            articles.get(i).map(|a| a.article.id.clone())
+                        } else if articles.iter().any(|a| a.article.id == *s) {
+                            Some(s.clone())
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+                uuid.map(|id| (id, r.relevance))
+            })
+            .collect();
+
+        if resolved.is_empty() {
+            continue;
+        }
+
         let theme_id = Uuid::new_v4().to_string();
-        let article_count = group.articles.len() as i64;
+        let article_count = resolved.len() as i64;
         let theme = Theme {
             id: theme_id.clone(),
             label: group.label,
@@ -505,8 +528,8 @@ pub async fn generate_themes(
 
         queries::insert_theme(&conn, &theme).map_err(|e| e.to_string())?;
 
-        for article_ref in &group.articles {
-            queries::insert_theme_article(&conn, &theme_id, &article_ref.id, article_ref.relevance)
+        for (article_id, relevance) in &resolved {
+            queries::insert_theme_article(&conn, &theme_id, article_id, *relevance)
                 .map_err(|e| e.to_string())?;
         }
 

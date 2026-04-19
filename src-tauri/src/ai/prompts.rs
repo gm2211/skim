@@ -1,36 +1,19 @@
 use crate::db::models::AiSettings;
 
 pub fn theme_grouping_system_prompt() -> &'static str {
-    "You organize news articles into coherent thematic groups. \
-     You write clearly and precisely. No filler, no hedging, no emoji. \
-     Executive summaries should be dense with information - every sentence should convey something specific."
+    "You group news articles into themes. Output JSON only. No filler, no hedging. \
+     Labels: 2-5 words. Summaries: 1-2 dense sentences. \
+     Refer to articles by their numeric handle."
 }
 
-pub fn theme_grouping_user_prompt(articles_json: &str) -> String {
+pub fn theme_grouping_user_prompt(articles_listing: &str) -> String {
     format!(
-        r#"Group these articles by theme. For each theme provide:
-- A concise label (2-5 words)
-- An executive summary (2-3 sentences covering key developments, be specific)
-- Article IDs that belong to this theme
-- Relevance score (0-1) for each article
+        r#"Articles (handle TAB title TAB [source]):
+{articles_listing}
+Target 4-10 themes. Each article in 1-2 themes max.
 
-Target 5-15 themes. Articles can appear in multiple themes if relevant.
-
-Articles:
-{articles_json}
-
-Respond in this exact JSON format:
-{{
-  "themes": [
-    {{
-      "label": "string",
-      "summary": "string",
-      "articles": [
-        {{"id": "string", "relevance": 0.9}}
-      ]
-    }}
-  ]
-}}"#
+Output JSON:
+{{"themes":[{{"label":"Name","summary":"Dense summary.","articles":[{{"id":0,"relevance":0.9}}]}}]}}"#
     )
 }
 

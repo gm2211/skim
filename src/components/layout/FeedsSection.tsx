@@ -372,7 +372,7 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
               closeAllMenus();
               setAutoOrganizeOpen(true);
             }}
-            label="✨ Auto-organize with AI"
+            label="Auto-organize with AI"
           />
         </div>
       )}
@@ -1149,7 +1149,10 @@ function AutoOrganizeDialog({
       >
         <div className="overflow-y-auto" style={{ padding: "20px 24px 16px", maxHeight: "calc(85vh - 64px)" }}>
           <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
-            <span style={{ fontSize: 18 }}>✨</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-accent">
+              <path d="M3 7h7M3 12h7M3 17h7" />
+              <path d="M14 4h7v7h-7zM14 13h7v7h-7z" />
+            </svg>
             <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600 }}>
               Auto-organize with AI
             </h3>

@@ -315,38 +315,51 @@ impl AiProvider for ClaudeCliProvider {
 
         // Run claude CLI in a blocking task since it spawns a process
         let result = tokio::task::spawn_blocking(move || {
+            use std::io::Write;
+
             let mut cmd = std::process::Command::new("claude");
+            // Pass the prompt via stdin to avoid hitting argv length limits
+            // with large article contexts.
             cmd.args([
-                "-p", &user_prompt,
+                "-p",
                 "--output-format", "json",
                 "--model", &model,
-                "--no-session-persistence",
-                "--max-budget-usd", "1",
-                // No tools — we just want a text response
-                "--tools", "",
+                "--max-turns", "1",
             ]);
 
             if let Some(ref key) = api_key {
                 cmd.env("ANTHROPIC_API_KEY", key);
-                cmd.arg("--bare");
             }
 
             if let Some(ref sys) = system_msg {
-                cmd.args(["--system-prompt", sys]);
+                cmd.args(["--append-system-prompt", sys]);
             }
 
             // Set working directory to /tmp to avoid scanning user directories
             // which triggers macOS TCC prompts (Photos, Desktop, Dropbox).
             cmd.current_dir("/tmp");
 
-            log::info!("ClaudeCliProvider: running claude CLI with model={}", &model);
+            log::info!(
+                "ClaudeCliProvider: running claude CLI with model={}, prompt {} bytes",
+                &model,
+                user_prompt.len()
+            );
 
-            // Prevent stdin from blocking (claude might wait for interactive input)
-            cmd.stdin(std::process::Stdio::null());
+            cmd.stdin(std::process::Stdio::piped());
+            cmd.stdout(std::process::Stdio::piped());
+            cmd.stderr(std::process::Stdio::piped());
 
-            let child = cmd
+            let mut child = cmd
                 .spawn()
                 .map_err(|e| format!("Failed to run claude CLI: {}", e))?;
+
+            if let Some(mut stdin) = child.stdin.take() {
+                stdin
+                    .write_all(user_prompt.as_bytes())
+                    .map_err(|e| format!("Failed to write prompt to claude stdin: {}", e))?;
+                // Explicitly drop to close stdin so claude knows input is done.
+                drop(stdin);
+            }
 
             let output = child
                 .wait_with_output()

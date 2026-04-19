@@ -245,11 +245,12 @@ pub async fn chat_with_articles(
     scored.sort_by(|a, b| b.0.cmp(&a.0));
     // If no keywords match anything, fall back to the newest articles.
     let any_match = scored.first().map(|(s, _)| *s > 0).unwrap_or(false);
-    let top_k = if any_match { 20 } else { 10 };
+    let top_k = if any_match { 15 } else { 8 };
     let selected: Vec<&crate::db::models::ArticleWithFeed> =
         scored.into_iter().take(top_k).map(|(_, a)| a).collect();
 
-    // Build context
+    // Build context. Keep excerpts short to stay well under any argv or
+    // context window limits — the caller mostly needs titles and source.
     let mut context = String::new();
     context.push_str("Relevant articles from the user's RSS feed:\n\n");
     for (i, a) in selected.iter().enumerate() {
@@ -262,7 +263,7 @@ pub async fn chat_with_articles(
                     .unwrap_or_default()
             })
             .unwrap_or_default();
-        let excerpt = article_excerpt(a, 600);
+        let excerpt = article_excerpt(a, 400);
         context.push_str(&format!(
             "[{i}] Title: {title}\nSource: {source}\nAuthor: {author}\nDate: {date}\nURL: {url}\nExcerpt: {excerpt}\n\n",
             i = i + 1,

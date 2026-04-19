@@ -51,7 +51,7 @@ pub fn run() {
                         .ai
                         .local_preload
                         .clone()
-                        .unwrap_or_else(|| "delayed".to_string()),
+                        .unwrap_or_else(|| "off".to_string()),
                     settings.ai.local_idle_evict_minutes.unwrap_or(10),
                     settings.ai.local_model_path.clone(),
                     effective_layers,
@@ -59,15 +59,11 @@ pub fn run() {
             };
 
             // Optional preload.
-            if preload_mode != "off" {
+            if preload_mode == "on" {
                 if let Some(path_str) = model_path {
                     let path = std::path::PathBuf::from(path_str);
                     let state = model_state.clone();
-                    let delay_secs = if preload_mode == "immediate" { 0 } else { 20 };
                     tauri::async_runtime::spawn(async move {
-                        if delay_secs > 0 {
-                            tokio::time::sleep(std::time::Duration::from_secs(delay_secs)).await;
-                        }
                         tokio::task::spawn_blocking(move || {
                             log::info!("Preloading local model: {}", path.display());
                             match local_provider::load_model(&path, gpu_layers) {

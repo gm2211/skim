@@ -869,23 +869,18 @@ export function ModelBrowser({
           Model preload
         </label>
         <select
-          value={ai.local_preload ?? "delayed"}
+          value={ai.local_preload ?? "off"}
           onChange={(e) => updateAi({ local_preload: e.target.value })}
           className={inputClass}
           style={{ ...inputStyle, width: 220 }}
         >
-          <option value="delayed">Delayed (20s after startup)</option>
-          <option value="immediate">Immediate (at startup)</option>
-          <option value="off">Off (load on first use)</option>
+          <option value="off">Off — load on first use (default)</option>
+          <option value="on">On — load at startup</option>
         </select>
         <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
-          <strong>Delayed</strong> (recommended): app opens instantly, model loads 20s later in the
-          background. First summary feels fast.
+          <strong>Off</strong>: coolest at rest. First summary pays a 1-5s load cost.
           <br />
-          <strong>Immediate</strong>: fastest first summary but the GPU/VRAM is hot from launch.
-          <br />
-          <strong>Off</strong>: model only loads when you trigger AI work. Lowest idle power. First
-          summary pays a 1-5s load cost.
+          <strong>On</strong>: fastest first summary, GPU/VRAM hot from launch.
         </p>
       </div>
 

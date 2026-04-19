@@ -94,6 +94,9 @@ pub fn run() {
             commands::feeds::assign_feed_to_folder,
             commands::feeds::preview_smart_folder,
             commands::feeds::feeds_in_folder,
+            commands::feeds::ai_auto_organize_feeds,
+            commands::feeds::ai_match_feeds_for_topic,
+            commands::feeds::apply_folder_organization,
             // Articles
             commands::articles::get_articles,
             commands::articles::get_article,

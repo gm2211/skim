@@ -56,6 +56,19 @@ export const previewSmartFolder = (rules: SmartRules) =>
   invoke<string[]>("preview_smart_folder", { rules });
 export const feedsInFolder = (folderId: string) =>
   invoke<string[]>("feeds_in_folder", { folderId });
+
+// AI-powered folder organization
+export interface FolderProposal {
+  name: string;
+  feed_ids: string[];
+}
+export const aiAutoOrganizeFeeds = () =>
+  invoke<FolderProposal[]>("ai_auto_organize_feeds");
+export const aiMatchFeedsForTopic = (description: string) =>
+  invoke<string[]>("ai_match_feeds_for_topic", { description });
+export const applyFolderOrganization = (proposals: FolderProposal[]) =>
+  invoke<Folder[]>("apply_folder_organization", { proposals });
+
 export const refreshFeed = (feedId: string) =>
   invoke<number>("refresh_feed", { feedId });
 export const refreshAllFeeds = () => invoke<number>("refresh_all_feeds");

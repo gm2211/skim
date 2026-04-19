@@ -1,10 +1,13 @@
-use crate::db::models::{Feed, Folder, SmartRule, SmartRules, MatchMode};
+use crate::ai::local_provider::SharedModelState;
+use crate::ai::provider::{create_provider, ChatMessage, ChatRequest};
+use crate::commands::ai::{default_model, extract_json_object};
+use crate::db::models::{AppSettings, Feed, Folder, SmartRule, SmartRules, MatchMode};
 use crate::db::queries;
 use crate::db::Database;
 use crate::feed::fetch_and_parse_feed;
 use crate::feed::feedly;
 use crate::feed::feedly_oauth;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 #[derive(Debug, Serialize)]
@@ -796,4 +799,241 @@ impl CompiledRule {
                 .unwrap_or(false),
         }
     }
+}
+
+// ── AI-powered folder organization ─────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FolderProposal {
+    pub name: String,
+    pub feed_ids: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct LlmOrganizeResponse {
+    folders: Vec<LlmFolderItem>,
+}
+
+#[derive(Deserialize)]
+struct LlmFolderItem {
+    name: String,
+    feed_ids: Vec<String>,
+}
+
+fn feeds_snippet_for_llm(feeds: &[Feed]) -> serde_json::Value {
+    let items: Vec<serde_json::Value> = feeds
+        .iter()
+        .map(|f| {
+            let host = url::Url::parse(&f.url)
+                .ok()
+                .and_then(|u| u.host_str().map(|s| s.to_string()))
+                .unwrap_or_default();
+            serde_json::json!({
+                "id": f.id,
+                "title": f.title,
+                "host": host,
+                "category": f.opml_category.clone().unwrap_or_default(),
+            })
+        })
+        .collect();
+    serde_json::Value::Array(items)
+}
+
+/// Cluster all feeds into topic-based folders using the configured LLM.
+/// Returns proposed folders with assigned feed IDs — does NOT modify the DB.
+#[tauri::command]
+pub async fn ai_auto_organize_feeds(
+    db: State<'_, Database>,
+    model_state: State<'_, SharedModelState>,
+) -> Result<Vec<FolderProposal>, String> {
+    let (feeds, settings_json) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+        let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
+        (feeds, settings_json)
+    };
+
+    if feeds.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let settings: AppSettings = settings_json
+        .as_deref()
+        .map(|s| serde_json::from_str(s).unwrap_or_default())
+        .unwrap_or_default();
+
+    if settings.ai.provider == "none" {
+        return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
+    }
+
+    let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
+    let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
+
+    let feeds_json = serde_json::to_string_pretty(&feeds_snippet_for_llm(&feeds))
+        .map_err(|e| e.to_string())?;
+
+    let system = "You organize RSS feeds into topical folders. Output JSON only. Target 4-8 folders. \
+                  Every feed must appear in exactly one folder. Use short, human folder names (2-4 words).";
+    let user = format!(
+        r#"Group these RSS feeds into topical folders. Each feed appears in exactly one folder.
+
+Feeds (JSON):
+{feeds_json}
+
+Respond with ONLY this JSON shape, no prose:
+{{
+  "folders": [
+    {{"name": "Folder name", "feed_ids": ["id1", "id2"]}}
+  ]
+}}"#
+    );
+
+    let req = ChatRequest {
+        model,
+        messages: vec![
+            ChatMessage { role: "system".to_string(), content: system.to_string() },
+            ChatMessage { role: "user".to_string(), content: user },
+        ],
+        temperature: Some(0.2),
+        max_tokens: Some(4096),
+        json_mode: true,
+    };
+
+    let response = provider.chat(req).await?;
+    let content = response.content.trim();
+    let json_str = extract_json_object(content).unwrap_or(content);
+    let parsed: LlmOrganizeResponse = serde_json::from_str(json_str)
+        .map_err(|e| format!("Failed to parse AI response: {}. Raw: {}", e, &content[..content.len().min(300)]))?;
+
+    let valid_ids: std::collections::HashSet<String> = feeds.iter().map(|f| f.id.clone()).collect();
+    let mut seen = std::collections::HashSet::new();
+    let proposals: Vec<FolderProposal> = parsed
+        .folders
+        .into_iter()
+        .filter_map(|f| {
+            let name = f.name.trim().to_string();
+            if name.is_empty() { return None; }
+            let feed_ids: Vec<String> = f
+                .feed_ids
+                .into_iter()
+                .filter(|id| valid_ids.contains(id) && seen.insert(id.clone()))
+                .collect();
+            if feed_ids.is_empty() { return None; }
+            Some(FolderProposal { name, feed_ids })
+        })
+        .collect();
+
+    Ok(proposals)
+}
+
+/// Given a natural-language description, return feed IDs that match.
+#[tauri::command]
+pub async fn ai_match_feeds_for_topic(
+    db: State<'_, Database>,
+    model_state: State<'_, SharedModelState>,
+    description: String,
+) -> Result<Vec<String>, String> {
+    let trimmed = description.trim();
+    if trimmed.is_empty() {
+        return Err("Description cannot be empty".to_string());
+    }
+
+    let (feeds, settings_json) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+        let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
+        (feeds, settings_json)
+    };
+
+    if feeds.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let settings: AppSettings = settings_json
+        .as_deref()
+        .map(|s| serde_json::from_str(s).unwrap_or_default())
+        .unwrap_or_default();
+
+    if settings.ai.provider == "none" {
+        return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
+    }
+
+    let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
+    let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
+
+    let feeds_json = serde_json::to_string_pretty(&feeds_snippet_for_llm(&feeds))
+        .map_err(|e| e.to_string())?;
+
+    let system = "You identify RSS feeds that match a topic description. Output JSON only. \
+                  Be selective — only include feeds that clearly fit the topic.";
+    let user = format!(
+        r#"Topic description: "{trimmed}"
+
+Feeds (JSON):
+{feeds_json}
+
+Return ONLY the feed IDs that fit this topic as JSON:
+{{"feed_ids": ["id1", "id2"]}}"#
+    );
+
+    let req = ChatRequest {
+        model,
+        messages: vec![
+            ChatMessage { role: "system".to_string(), content: system.to_string() },
+            ChatMessage { role: "user".to_string(), content: user },
+        ],
+        temperature: Some(0.1),
+        max_tokens: Some(1024),
+        json_mode: true,
+    };
+
+    let response = provider.chat(req).await?;
+    let content = response.content.trim();
+    let json_str = extract_json_object(content).unwrap_or(content);
+
+    #[derive(Deserialize)]
+    struct MatchResponse {
+        feed_ids: Vec<String>,
+    }
+    let parsed: MatchResponse = serde_json::from_str(json_str)
+        .map_err(|e| format!("Failed to parse AI response: {}. Raw: {}", e, &content[..content.len().min(300)]))?;
+
+    let valid_ids: std::collections::HashSet<String> = feeds.iter().map(|f| f.id.clone()).collect();
+    Ok(parsed.feed_ids.into_iter().filter(|id| valid_ids.contains(id)).collect())
+}
+
+/// Apply a set of folder proposals: creates regular folders and assigns feeds.
+/// Feeds already in other folders get moved.
+#[tauri::command]
+pub async fn apply_folder_organization(
+    db: State<'_, Database>,
+    proposals: Vec<FolderProposal>,
+) -> Result<Vec<Folder>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now().timestamp();
+    let mut created = Vec::new();
+    let mut sort_order = queries::next_folder_sort_order(&conn).map_err(|e| e.to_string())?;
+
+    for proposal in proposals {
+        let name = proposal.name.trim();
+        if name.is_empty() || proposal.feed_ids.is_empty() {
+            continue;
+        }
+        let folder = Folder {
+            id: uuid::Uuid::new_v4().to_string(),
+            name: name.to_string(),
+            sort_order,
+            is_smart: false,
+            rules_json: None,
+            created_at: now,
+        };
+        queries::insert_folder(&conn, &folder).map_err(|e| e.to_string())?;
+        for feed_id in &proposal.feed_ids {
+            let _ = queries::assign_feed_to_folder(&conn, feed_id, Some(&folder.id));
+        }
+        created.push(folder);
+        sort_order += 1;
+    }
+
+    Ok(created)
 }

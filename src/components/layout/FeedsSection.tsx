@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useFeeds, useRemoveFeed, useRenameFeed } from "../../hooks/useFeeds";
 import {
   useAssignFeedToFolder,
   useCreateFolder,
-  useCreateSmartFolder,
   useDeleteFolder,
   useFolders,
   useRenameFolder,
-  useUpdateSmartFolderRules,
 } from "../../hooks/useFolders";
-import { countStarredInFeed } from "../../services/commands";
-import type { Feed, Folder, SidebarView, SmartRule, SmartRules } from "../../services/types";
+import {
+  aiAutoOrganizeFeeds,
+  aiMatchFeedsForTopic,
+  applyFolderOrganization,
+  countStarredInFeed,
+  type FolderProposal,
+} from "../../services/commands";
+import type { Feed, Folder, SidebarView } from "../../services/types";
 import { feedsForFolder } from "../../lib/smartFolder";
 
 type FeedContextMenu = { feedId: string; x: number; y: number } | null;
@@ -33,8 +38,7 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
   const deleteFolderMut = useDeleteFolder();
   const assignMut = useAssignFeedToFolder();
   const createFolderMut = useCreateFolder();
-  const createSmartFolderMut = useCreateSmartFolder();
-  const updateRulesMut = useUpdateSmartFolderRules();
+  const qc = useQueryClient();
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [feedMenu, setFeedMenu] = useState<FeedContextMenu>(null);
@@ -46,7 +50,7 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
   const [removeConfirm, setRemoveConfirm] = useState<{ feed: Feed; starredCount: number } | null>(null);
   const [newFolderMode, setNewFolderMode] = useState<"regular" | "smart" | null>(null);
   const [showAddMenu, setShowAddMenu] = useState<{ x: number; y: number } | null>(null);
-  const [smartEditing, setSmartEditing] = useState<Folder | null>(null);
+  const [autoOrganizeOpen, setAutoOrganizeOpen] = useState(false);
 
   const feedsByFolder = useMemo(() => {
     const map = new Map<string, Feed[]>();
@@ -290,7 +294,7 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
             top: showAddMenu.y,
             left: showAddMenu.x,
             background: "rgba(22, 27, 34, 0.98)",
-            minWidth: 180,
+            minWidth: 220,
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -306,7 +310,15 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
               closeAllMenus();
               setNewFolderMode("smart");
             }}
-            label="New smart folder"
+            label="New smart folder..."
+          />
+          <div className="border-t border-white/5 my-1" />
+          <MenuButton
+            onClick={() => {
+              closeAllMenus();
+              setAutoOrganizeOpen(true);
+            }}
+            label="✨ Auto-organize with AI"
           />
         </div>
       )}
@@ -395,15 +407,6 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
             onClick={(e) => e.stopPropagation()}
           >
             <MenuButton onClick={() => startRenameFolder(folder)} label="Rename" />
-            {folder.is_smart && (
-              <MenuButton
-                onClick={() => {
-                  closeAllMenus();
-                  setSmartEditing(folder);
-                }}
-                label="Edit rules"
-              />
-            )}
             <div className="border-t border-white/5 my-1" />
             <MenuButton onClick={() => handleDeleteFolder(folder)} label="Delete folder" danger />
           </div>
@@ -472,33 +475,26 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
         />
       )}
       {newFolderMode === "smart" && (
-        <SmartFolderDialog
-          title="New smart folder"
-          initialName=""
-          initialRules={{ mode: "any", rules: [{ type: "regex_title", pattern: "" }] }}
+        <AiSmartFolderDialog
+          feeds={feeds ?? []}
           onCancel={() => setNewFolderMode(null)}
-          onSave={async (name, rules) => {
-            await createSmartFolderMut.mutateAsync({ name, rules });
+          onApply={async (name, feedIds) => {
+            await applyFolderOrganization([{ name, feed_ids: feedIds }]);
+            qc.invalidateQueries({ queryKey: ["folders"] });
+            qc.invalidateQueries({ queryKey: ["feeds"] });
             setNewFolderMode(null);
           }}
         />
       )}
-      {smartEditing && (
-        <SmartFolderDialog
-          title={`Edit "${smartEditing.name}"`}
-          initialName={smartEditing.name}
-          initialRules={
-            smartEditing.rules_json
-              ? (JSON.parse(smartEditing.rules_json) as SmartRules)
-              : { mode: "any", rules: [] }
-          }
-          onCancel={() => setSmartEditing(null)}
-          onSave={async (name, rules) => {
-            await updateRulesMut.mutateAsync({ folderId: smartEditing.id, rules });
-            if (name.trim() !== smartEditing.name) {
-              await renameFolderMut.mutateAsync({ folderId: smartEditing.id, name: name.trim() });
-            }
-            setSmartEditing(null);
+      {autoOrganizeOpen && (
+        <AutoOrganizeDialog
+          feeds={feeds ?? []}
+          onCancel={() => setAutoOrganizeOpen(false)}
+          onApply={async (proposals) => {
+            await applyFolderOrganization(proposals);
+            qc.invalidateQueries({ queryKey: ["folders"] });
+            qc.invalidateQueries({ queryKey: ["feeds"] });
+            setAutoOrganizeOpen(false);
           }}
         />
       )}
@@ -791,55 +787,69 @@ function NewFolderDialog({
   );
 }
 
-function SmartFolderDialog({
-  title,
-  initialName,
-  initialRules,
+function AiSmartFolderDialog({
+  feeds,
   onCancel,
-  onSave,
+  onApply,
 }: {
-  title: string;
-  initialName: string;
-  initialRules: SmartRules;
+  feeds: Feed[];
   onCancel: () => void;
-  onSave: (name: string, rules: SmartRules) => Promise<void>;
+  onApply: (name: string, feedIds: string[]) => Promise<void>;
 }) {
-  const [name, setName] = useState(initialName);
-  const [mode, setMode] = useState<"any" | "all">(initialRules.mode);
-  const [rules, setRules] = useState<SmartRule[]>(
-    initialRules.rules.length > 0 ? initialRules.rules : [{ type: "regex_title", pattern: "" }],
-  );
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [matchedIds, setMatchedIds] = useState<string[] | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [matching, setMatching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const updateRule = (idx: number, rule: SmartRule) => {
-    setRules((rs) => rs.map((r, i) => (i === idx ? rule : r)));
+  const matched = useMemo(
+    () => (matchedIds ? feeds.filter((f) => matchedIds.includes(f.id)) : []),
+    [matchedIds, feeds],
+  );
+
+  const runMatch = async () => {
+    if (!description.trim()) {
+      setError("Describe what feeds belong in this folder");
+      return;
+    }
+    setMatching(true);
+    setError(null);
+    try {
+      const ids = await aiMatchFeedsForTopic(description.trim());
+      setMatchedIds(ids);
+      setSelected(new Set(ids));
+      if (ids.length === 0) setError("No matching feeds found. Try rephrasing.");
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setMatching(false);
+    }
   };
 
-  const removeRule = (idx: number) => {
-    setRules((rs) => rs.filter((_, i) => i !== idx));
-  };
-
-  const addRule = () => {
-    setRules((rs) => [...rs, { type: "regex_title", pattern: "" }]);
+  const toggle = (id: string) => {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const handleSave = async () => {
     if (!name.trim()) {
-      setError("Name is required");
+      setError("Folder name is required");
       return;
     }
-    const cleaned = rules.filter((r) =>
-      r.type === "opml_category" ? r.value.trim() !== "" : r.pattern.trim() !== "",
-    );
-    if (cleaned.length === 0) {
-      setError("Add at least one rule");
+    if (selected.size === 0) {
+      setError("Select at least one feed");
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      await onSave(name.trim(), { mode, rules: cleaned });
+      await onApply(name.trim(), Array.from(selected));
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
     } finally {
@@ -854,88 +864,79 @@ function SmartFolderDialog({
     >
       <div
         className="border border-white/10 rounded-2xl shadow-2xl"
-        style={{ background: "rgba(22, 27, 34, 0.98)", maxWidth: 480, width: "100%", margin: "0 20px", maxHeight: "80vh" }}
+        style={{ background: "rgba(22, 27, 34, 0.98)", maxWidth: 520, width: "100%", margin: "0 20px", maxHeight: "85vh" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="overflow-y-auto" style={{ padding: "20px 24px 16px", maxHeight: "calc(80vh - 60px)" }}>
-          <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
-            {title}
-          </h3>
+        <div className="overflow-y-auto" style={{ padding: "20px 24px 16px", maxHeight: "calc(85vh - 60px)" }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+            <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600 }}>
+              New smart folder
+            </h3>
+          </div>
+          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 16 }}>
+            Describe the folder. AI picks matching feeds. You can edit the list before saving.
+          </p>
           <input
             autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Folder name"
+            placeholder="Folder name (e.g. AI & ML)"
             className="w-full border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors"
-            style={{ background: "rgba(255, 255, 255, 0.05)", padding: "10px 14px", fontSize: 14, marginBottom: 16 }}
+            style={{ background: "rgba(255, 255, 255, 0.05)", padding: "10px 14px", fontSize: 14, marginBottom: 10 }}
           />
-          <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
-            <span className="text-text-muted" style={{ fontSize: 13 }}>
-              Match
-            </span>
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value as "any" | "all")}
-              className="border border-white/10 rounded-lg text-text-primary bg-transparent"
-              style={{ background: "rgba(255, 255, 255, 0.05)", padding: "6px 10px", fontSize: 13 }}
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What belongs in this folder? e.g. “sources about machine learning research, LLMs, and AI policy”"
+            rows={3}
+            className="w-full border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors resize-none"
+            style={{ background: "rgba(255, 255, 255, 0.05)", padding: "10px 14px", fontSize: 14 }}
+          />
+          <div className="flex justify-end" style={{ marginTop: 8, marginBottom: 12 }}>
+            <button
+              onClick={runMatch}
+              disabled={matching || !description.trim()}
+              className="text-accent hover:text-accent-hover disabled:opacity-40 transition-colors flex items-center gap-1"
+              style={{ fontSize: 13 }}
             >
-              <option value="any">any</option>
-              <option value="all">all</option>
-            </select>
-            <span className="text-text-muted" style={{ fontSize: 13 }}>
-              of the following:
-            </span>
+              {matching ? "Matching…" : matchedIds ? "Re-match feeds" : "Find matching feeds →"}
+            </button>
           </div>
 
-          <div className="space-y-2" style={{ marginBottom: 12 }}>
-            {rules.map((rule, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <select
-                  value={rule.type}
-                  onChange={(e) => {
-                    const t = e.target.value;
-                    if (t === "opml_category") updateRule(idx, { type: "opml_category", value: "" });
-                    else if (t === "regex_url") updateRule(idx, { type: "regex_url", pattern: "" });
-                    else updateRule(idx, { type: "regex_title", pattern: "" });
-                  }}
-                  className="border border-white/10 rounded-lg text-text-primary flex-shrink-0"
-                  style={{ background: "rgba(255, 255, 255, 0.05)", padding: "8px 10px", fontSize: 13 }}
-                >
-                  <option value="regex_title">Title regex</option>
-                  <option value="regex_url">URL regex</option>
-                  <option value="opml_category">OPML category</option>
-                </select>
-                <input
-                  value={rule.type === "opml_category" ? rule.value : rule.pattern}
-                  onChange={(e) =>
-                    rule.type === "opml_category"
-                      ? updateRule(idx, { type: "opml_category", value: e.target.value })
-                      : updateRule(idx, { type: rule.type, pattern: e.target.value })
-                  }
-                  placeholder={rule.type === "opml_category" ? "e.g. tech" : "regex pattern"}
-                  className="flex-1 border border-white/10 rounded-lg text-text-primary outline-none focus:border-accent/40"
-                  style={{ background: "rgba(255, 255, 255, 0.05)", padding: "8px 12px", fontSize: 13 }}
-                />
-                <button
-                  onClick={() => removeRule(idx)}
-                  className="text-text-muted hover:text-danger transition-colors flex-shrink-0"
-                  title="Remove rule"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
-                </button>
+          {matchedIds && (
+            <div>
+              <div className="text-text-muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                {selected.size} of {matched.length} selected
               </div>
-            ))}
-          </div>
-
-          <button
-            onClick={addRule}
-            className="text-accent hover:text-accent-hover transition-colors"
-            style={{ fontSize: 13 }}
-          >
-            + Add rule
-          </button>
+              <div className="border border-white/5 rounded-xl overflow-hidden" style={{ maxHeight: 280, overflowY: "auto" }}>
+                {matched.map((f) => (
+                  <label
+                    key={f.id}
+                    className="flex items-center gap-3 hover:bg-white/5 cursor-pointer transition-colors"
+                    style={{ padding: "8px 12px" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(f.id)}
+                      onChange={() => toggle(f.id)}
+                      className="accent-accent flex-shrink-0"
+                    />
+                    <span className="truncate text-text-primary" style={{ fontSize: 13 }}>
+                      {f.title}
+                    </span>
+                  </label>
+                ))}
+                {matched.length === 0 && (
+                  <p className="text-text-muted text-center" style={{ padding: 16, fontSize: 13 }}>
+                    No matches.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {error && (
             <p className="text-danger" style={{ fontSize: 12, marginTop: 10 }}>
@@ -953,12 +954,238 @@ function SmartFolderDialog({
           </button>
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || !matchedIds || selected.size === 0 || !name.trim()}
             className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
             style={{ padding: "8px 16px", fontSize: 13 }}
           >
-            {saving ? "Saving..." : "Save"}
+            {saving ? "Creating..." : "Create folder"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AutoOrganizeDialog({
+  feeds,
+  onCancel,
+  onApply,
+}: {
+  feeds: Feed[];
+  onCancel: () => void;
+  onApply: (proposals: FolderProposal[]) => Promise<void>;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [proposals, setProposals] = useState<FolderProposal[]>([]);
+  const [selected, setSelected] = useState<Record<number, Set<string>>>({});
+  const [names, setNames] = useState<Record<number, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const feedById = useMemo(() => {
+    const m = new Map<string, Feed>();
+    for (const f of feeds) m.set(f.id, f);
+    return m;
+  }, [feeds]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await aiAutoOrganizeFeeds();
+        if (cancelled) return;
+        setProposals(result);
+        const initSel: Record<number, Set<string>> = {};
+        const initNames: Record<number, string> = {};
+        result.forEach((p, i) => {
+          initSel[i] = new Set(p.feed_ids);
+          initNames[i] = p.name;
+        });
+        setSelected(initSel);
+        setNames(initNames);
+      } catch (e) {
+        if (!cancelled) setError(String(e instanceof Error ? e.message : e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggle = (folderIdx: number, feedId: string) => {
+    setSelected((s) => {
+      const curr = new Set(s[folderIdx] ?? []);
+      if (curr.has(feedId)) curr.delete(feedId);
+      else curr.add(feedId);
+      return { ...s, [folderIdx]: curr };
+    });
+  };
+
+  const updateName = (idx: number, v: string) => {
+    setNames((n) => ({ ...n, [idx]: v }));
+  };
+
+  const dropFolder = (idx: number) => {
+    setProposals((ps) => ps.filter((_, i) => i !== idx));
+    setSelected((s) => {
+      const next = { ...s };
+      delete next[idx];
+      return next;
+    });
+    setNames((n) => {
+      const next = { ...n };
+      delete next[idx];
+      return next;
+    });
+  };
+
+  const handleApply = async () => {
+    const filtered: FolderProposal[] = proposals
+      .map((_p, idx) => ({
+        name: (names[idx] ?? "").trim(),
+        feed_ids: Array.from(selected[idx] ?? new Set<string>()),
+      }))
+      .filter((p) => p.name && p.feed_ids.length > 0);
+    if (filtered.length === 0) {
+      setError("Nothing to apply");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onApply(filtered);
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const totalSelected = Object.values(selected).reduce((acc, s) => acc + s.size, 0);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+      onClick={onCancel}
+    >
+      <div
+        className="border border-white/10 rounded-2xl shadow-2xl"
+        style={{ background: "rgba(22, 27, 34, 0.98)", maxWidth: 560, width: "100%", margin: "0 20px", maxHeight: "85vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="overflow-y-auto" style={{ padding: "20px 24px 16px", maxHeight: "calc(85vh - 64px)" }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+            <span style={{ fontSize: 18 }}>✨</span>
+            <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600 }}>
+              Auto-organize with AI
+            </h3>
+          </div>
+          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 16 }}>
+            AI proposes folders based on your feeds. Rename, uncheck, or drop folders before applying.
+            Feeds you already have in folders will be moved.
+          </p>
+
+          {loading && (
+            <div className="text-center" style={{ padding: "40px 0" }}>
+              <div className="text-text-muted" style={{ fontSize: 13 }}>
+                Analyzing {feeds.length} feeds…
+              </div>
+            </div>
+          )}
+
+          {!loading && proposals.length === 0 && !error && (
+            <div className="text-center" style={{ padding: "20px 0" }}>
+              <p className="text-text-muted" style={{ fontSize: 13 }}>
+                AI didn't produce any folders. Try again or add more feeds first.
+              </p>
+            </div>
+          )}
+
+          {!loading &&
+            proposals.map((p, idx) => (
+              <div
+                key={idx}
+                className="border border-white/5 rounded-xl"
+                style={{ marginBottom: 12, background: "rgba(255,255,255,0.02)" }}
+              >
+                <div className="flex items-center gap-2" style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                  <input
+                    value={names[idx] ?? ""}
+                    onChange={(e) => updateName(idx, e.target.value)}
+                    className="flex-1 bg-transparent text-text-primary outline-none border-b border-white/0 focus:border-accent/40"
+                    style={{ fontSize: 14, fontWeight: 600, padding: "2px 0" }}
+                  />
+                  <span className="text-text-muted tabular-nums" style={{ fontSize: 12 }}>
+                    {selected[idx]?.size ?? 0} / {p.feed_ids.length}
+                  </span>
+                  <button
+                    onClick={() => dropFolder(idx)}
+                    className="text-text-muted hover:text-danger transition-colors"
+                    title="Skip this folder"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div style={{ padding: "4px 8px" }}>
+                  {p.feed_ids.map((fid) => {
+                    const feed = feedById.get(fid);
+                    if (!feed) return null;
+                    const checked = selected[idx]?.has(fid) ?? false;
+                    return (
+                      <label
+                        key={fid}
+                        className="flex items-center gap-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors"
+                        style={{ padding: "4px 8px" }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggle(idx, fid)}
+                          className="accent-accent flex-shrink-0"
+                        />
+                        <span className="truncate text-text-secondary" style={{ fontSize: 12 }}>
+                          {feed.title}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+          {error && (
+            <p className="text-danger" style={{ fontSize: 12, marginTop: 10 }}>
+              {error}
+            </p>
+          )}
+        </div>
+        <div className="flex justify-between items-center gap-2 border-t border-white/5" style={{ padding: "12px 20px" }}>
+          <span className="text-text-muted" style={{ fontSize: 12 }}>
+            {proposals.length} folders · {totalSelected} feeds
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={onCancel}
+              className="text-text-secondary hover:text-text-primary rounded-lg hover:bg-white/5 transition-colors"
+              style={{ padding: "8px 16px", fontSize: 13 }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleApply}
+              disabled={saving || loading || proposals.length === 0}
+              className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
+              style={{ padding: "8px 16px", fontSize: 13 }}
+            >
+              {saving ? "Applying..." : "Apply"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

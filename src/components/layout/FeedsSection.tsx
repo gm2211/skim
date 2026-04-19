@@ -544,8 +544,8 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
         <AutoOrganizeDialog
           feeds={feeds ?? []}
           onCancel={() => setAutoOrganizeOpen(false)}
-          onApply={async (proposals) => {
-            await applyFolderOrganization(proposals);
+          onApply={async (proposals, replaceExisting) => {
+            await applyFolderOrganization(proposals, replaceExisting);
             qc.invalidateQueries({ queryKey: ["folders"] });
             qc.invalidateQueries({ queryKey: ["feeds"] });
             setAutoOrganizeOpen(false);
@@ -1028,6 +1028,55 @@ function AiSmartFolderDialog({
   );
 }
 
+type CaseStyle =
+  | "title"
+  | "sentence"
+  | "lower"
+  | "upper"
+  | "pascal"
+  | "camel"
+  | "kebab"
+  | "snake";
+
+function splitWords(s: string): string[] {
+  return s
+    .replace(/[_\-]/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function applyCase(name: string, style: CaseStyle): string {
+  const words = splitWords(name);
+  switch (style) {
+    case "title":
+      return words.map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+    case "sentence":
+      if (words.length === 0) return "";
+      return (
+        words[0][0].toUpperCase() +
+        words[0].slice(1).toLowerCase() +
+        (words.length > 1 ? " " + words.slice(1).map((w) => w.toLowerCase()).join(" ") : "")
+      );
+    case "lower":
+      return words.map((w) => w.toLowerCase()).join(" ");
+    case "upper":
+      return words.map((w) => w.toUpperCase()).join(" ");
+    case "pascal":
+      return words.map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join("");
+    case "camel":
+      return words
+        .map((w, i) =>
+          i === 0 ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase(),
+        )
+        .join("");
+    case "kebab":
+      return words.map((w) => w.toLowerCase()).join("-");
+    case "snake":
+      return words.map((w) => w.toLowerCase()).join("_");
+  }
+}
+
 function AutoOrganizeDialog({
   feeds,
   onCancel,
@@ -1035,7 +1084,7 @@ function AutoOrganizeDialog({
 }: {
   feeds: Feed[];
   onCancel: () => void;
-  onApply: (proposals: FolderProposal[]) => Promise<void>;
+  onApply: (proposals: FolderProposal[], replaceExisting: boolean) => Promise<void>;
 }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1044,6 +1093,9 @@ function AutoOrganizeDialog({
   const [names, setNames] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [scope, setScope] = useState<"all" | "unassigned">("unassigned");
+  const [caseStyle, setCaseStyle] = useState<CaseStyle>("title");
+  const [runSeq, setRunSeq] = useState(0);
 
   useEffect(() => {
     if (!loading) return;
@@ -1064,7 +1116,7 @@ function AutoOrganizeDialog({
       setLoading(true);
       setError(null);
       try {
-        const result = await aiAutoOrganizeFeeds();
+        const result = await aiAutoOrganizeFeeds(scope);
         if (cancelled) return;
         setProposals(result);
         const initSel: Record<number, Set<string>> = {};
@@ -1084,7 +1136,18 @@ function AutoOrganizeDialog({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [scope, runSeq]);
+
+  // Re-apply case styling to current names whenever style changes.
+  useEffect(() => {
+    setNames((prev) => {
+      const next: Record<number, string> = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        next[Number(k)] = applyCase(v, caseStyle);
+      });
+      return next;
+    });
+  }, [caseStyle]);
 
   const toggle = (folderIdx: number, feedId: string) => {
     setSelected((s) => {
@@ -1116,7 +1179,7 @@ function AutoOrganizeDialog({
   const handleApply = async () => {
     const filtered: FolderProposal[] = proposals
       .map((_p, idx) => ({
-        name: (names[idx] ?? "").trim(),
+        name: applyCase((names[idx] ?? "").trim(), caseStyle),
         feed_ids: Array.from(selected[idx] ?? new Set<string>()),
       }))
       .filter((p) => p.name && p.feed_ids.length > 0);
@@ -1127,7 +1190,7 @@ function AutoOrganizeDialog({
     setSaving(true);
     setError(null);
     try {
-      await onApply(filtered);
+      await onApply(filtered, scope === "all");
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
     } finally {
@@ -1157,10 +1220,66 @@ function AutoOrganizeDialog({
               Auto-organize with AI
             </h3>
           </div>
-          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 16 }}>
+          <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
             AI proposes folders based on your feeds. Rename, uncheck, or drop folders before applying.
-            Feeds you already have in folders will be moved.
           </p>
+
+          {/* Scope + Case controls */}
+          <div
+            className="border border-white/5 rounded-xl"
+            style={{ padding: "10px 12px", marginBottom: 12, background: "rgba(255,255,255,0.02)" }}
+          >
+            <div className="flex flex-col gap-2" style={{ fontSize: 12 }}>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={scope === "unassigned"}
+                  onChange={() => setScope("unassigned")}
+                  className="accent-accent"
+                />
+                <span className="text-text-primary">Only unassigned feeds</span>
+                <span className="text-text-muted">— keep existing folders</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={scope === "all"}
+                  onChange={() => setScope("all")}
+                  className="accent-accent"
+                />
+                <span className="text-text-primary">Reorganize everything</span>
+                <span className="text-text-muted">— deletes existing folders on apply</span>
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2" style={{ marginTop: 10 }}>
+              <span className="text-text-muted" style={{ fontSize: 12 }}>Folder name case:</span>
+              <select
+                value={caseStyle}
+                onChange={(e) => setCaseStyle(e.target.value as CaseStyle)}
+                className="border border-white/10 rounded-lg text-text-primary"
+                style={{ background: "rgba(255,255,255,0.05)", padding: "4px 8px", fontSize: 12 }}
+              >
+                <option value="title">Title Case</option>
+                <option value="sentence">Sentence case</option>
+                <option value="lower">lowercase</option>
+                <option value="upper">UPPERCASE</option>
+                <option value="pascal">PascalCase</option>
+                <option value="camel">camelCase</option>
+                <option value="kebab">kebab-case</option>
+                <option value="snake">snake_case</option>
+              </select>
+              <button
+                onClick={() => setRunSeq((n) => n + 1)}
+                disabled={loading}
+                className="ml-auto text-accent hover:text-accent-hover disabled:opacity-40 transition-colors"
+                style={{ fontSize: 12 }}
+                title="Re-run AI with current scope"
+              >
+                ⟳ Re-run
+              </button>
+            </div>
+          </div>
 
           {loading && (
             <div className="text-center" style={{ padding: "40px 0" }}>

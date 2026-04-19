@@ -1029,16 +1029,26 @@ fn parse_handles(v: &serde_json::Value) -> Vec<usize> {
     }
 }
 
-/// Cluster all feeds into topic-based folders using the configured LLM.
-/// Returns proposed folders with assigned feed IDs — does NOT modify the DB.
+/// Cluster feeds into topic-based folders using the configured LLM.
+/// Scope: "all" (default) clusters every feed. "unassigned" only looks at
+/// feeds that aren't currently in a folder. Returns proposed folders —
+/// does NOT modify the DB.
 #[tauri::command]
 pub async fn ai_auto_organize_feeds(
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
+    scope: Option<String>,
 ) -> Result<Vec<FolderProposal>, String> {
     let (feeds, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+        let all_feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+        let feeds = match scope.as_deref() {
+            Some("unassigned") => all_feeds
+                .into_iter()
+                .filter(|f| f.folder_id.is_none())
+                .collect(),
+            _ => all_feeds,
+        };
         let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
         (feeds, settings_json)
     };
@@ -1186,15 +1196,26 @@ Output JSON:
 }
 
 /// Apply a set of folder proposals: creates regular folders and assigns feeds.
-/// Feeds already in other folders get moved.
+/// Feeds already in other folders get moved. If `replace_existing` is true,
+/// all pre-existing folders are deleted first (feeds get reassigned).
 #[tauri::command]
 pub async fn apply_folder_organization(
     db: State<'_, Database>,
     proposals: Vec<FolderProposal>,
+    replace_existing: Option<bool>,
 ) -> Result<Vec<Folder>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().timestamp();
     let mut created = Vec::new();
+
+    if replace_existing.unwrap_or(false) {
+        // ON DELETE SET NULL on feeds.folder_id lets us wipe folders safely.
+        let old = queries::list_folders(&conn).map_err(|e| e.to_string())?;
+        for f in old {
+            let _ = queries::delete_folder(&conn, &f.id);
+        }
+    }
+
     let mut sort_order = queries::next_folder_sort_order(&conn).map_err(|e| e.to_string())?;
 
     for proposal in proposals {

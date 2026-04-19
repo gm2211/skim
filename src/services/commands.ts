@@ -62,12 +62,16 @@ export interface FolderProposal {
   name: string;
   feed_ids: string[];
 }
-export const aiAutoOrganizeFeeds = () =>
-  invoke<FolderProposal[]>("ai_auto_organize_feeds");
+export type AutoOrganizeScope = "all" | "unassigned";
+export const aiAutoOrganizeFeeds = (scope: AutoOrganizeScope = "all") =>
+  invoke<FolderProposal[]>("ai_auto_organize_feeds", { scope });
 export const aiMatchFeedsForTopic = (description: string) =>
   invoke<string[]>("ai_match_feeds_for_topic", { description });
-export const applyFolderOrganization = (proposals: FolderProposal[]) =>
-  invoke<Folder[]>("apply_folder_organization", { proposals });
+export const applyFolderOrganization = (
+  proposals: FolderProposal[],
+  replaceExisting = false,
+) =>
+  invoke<Folder[]>("apply_folder_organization", { proposals, replaceExisting });
 
 // Duplicate feed management
 export interface DuplicateFeedInfo {

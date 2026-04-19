@@ -7,8 +7,17 @@ use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
+
+/// Unix timestamp of the last local-model inference. Used by the idle-eviction
+/// watcher to drop the model from VRAM when unused.
+pub static LAST_USED_AT: AtomicI64 = AtomicI64::new(0);
+
+pub fn mark_used() {
+    LAST_USED_AT.store(chrono::Utc::now().timestamp(), Ordering::Relaxed);
+}
 
 use super::provider::{AiProvider, ChatMessage, ChatRequest, ChatResponse, TokenUsage};
 
@@ -260,6 +269,7 @@ impl AiProvider for LocalLlmProvider {
             }
         }
 
+        mark_used();
         let result = tokio::task::spawn_blocking(move || {
             let mut guard = state.blocking_lock();
 
@@ -277,7 +287,9 @@ impl AiProvider for LocalLlmProvider {
 
             let loaded = guard.as_ref().unwrap();
             let prompt = format_chat_messages(&loaded.model, &messages)?;
-            run_inference(loaded, &prompt, max_tokens, temperature)
+            let out = run_inference(loaded, &prompt, max_tokens, temperature);
+            mark_used();
+            out
             // For local models, JSON extraction is handled by extract_json_object()
             // in the caller. Grammar-constrained sampling is not used due to
             // BPE tokenizer incompatibilities in llama.cpp's grammar engine.

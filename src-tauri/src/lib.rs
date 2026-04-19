@@ -3,12 +3,11 @@ mod db;
 mod feed;
 mod ai;
 
-use ai::local_provider::{self, SharedModelState};
+use ai::local_provider::{SharedModelState, LAST_USED_AT};
 use commands::ai::{SharedSummaryCache, SummaryCache, SummaryGeneration};
 use commands::models::DownloadCancelFlag;
-use db::models::AppSettings;
-use db::{queries, Database};
-use std::sync::atomic::AtomicBool;
+use db::Database;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Manager, RunEvent};
 use tokio::sync::Mutex;
@@ -28,32 +27,30 @@ pub fn run() {
                 Database::new(app_dir).expect("Failed to initialize database");
             let model_state = Arc::new(Mutex::new(None::<ai::local_provider::LoadedModel>)) as SharedModelState;
 
-            // Preload local model in background if configured
+            // Idle-eviction watcher: drop the local model from VRAM after
+            // 10 minutes with no inference. Load on demand instead of preload.
             {
-                let conn = database.conn.lock().expect("db lock");
-                let settings: AppSettings = queries::get_setting(&conn, "app_settings")
-                    .ok()
-                    .flatten()
-                    .and_then(|s| serde_json::from_str(&s).ok())
-                    .unwrap_or_default();
-
-                if settings.ai.provider == "local" {
-                    if let Some(ref model_path) = settings.ai.local_model_path {
-                        let path = std::path::PathBuf::from(model_path);
-                        let gpu_layers = settings.ai.local_gpu_layers.unwrap_or(-1);
-                        let state = model_state.clone();
-                        std::thread::spawn(move || {
-                            log::info!("Preloading local model: {}", path.display());
-                            match local_provider::load_model(&path, gpu_layers) {
-                                Ok(loaded) => {
-                                    state.blocking_lock().replace(loaded);
-                                    log::info!("Model preloaded successfully");
-                                }
-                                Err(e) => log::warn!("Failed to preload model: {}", e),
+                let state = model_state.clone();
+                tauri::async_runtime::spawn(async move {
+                    const IDLE_EVICT_SECS: i64 = 600;
+                    let mut ticker = tokio::time::interval(std::time::Duration::from_secs(120));
+                    ticker.tick().await; // skip first immediate tick
+                    loop {
+                        ticker.tick().await;
+                        let now = chrono::Utc::now().timestamp();
+                        let last = LAST_USED_AT.load(Ordering::Relaxed);
+                        if last == 0 {
+                            continue;
+                        }
+                        if now - last >= IDLE_EVICT_SECS {
+                            let mut guard = state.lock().await;
+                            if guard.is_some() {
+                                log::info!("Evicting idle local model from VRAM");
+                                guard.take();
                             }
-                        });
+                        }
                     }
-                }
+                });
             }
 
             app.manage(database);

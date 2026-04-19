@@ -126,6 +126,14 @@ pub struct AiSettings {
     pub local_model_path: Option<String>,
     #[serde(default)]
     pub local_gpu_layers: Option<i32>,
+    /// "off" | "delayed" | "immediate". Defaults to "delayed" (preload 20s
+    /// after startup, keep in VRAM until idle-evict timer fires).
+    #[serde(default)]
+    pub local_preload: Option<String>,
+    /// Minutes of idleness before the loaded model is dropped from VRAM.
+    /// 0 means never evict. Defaults to 10.
+    #[serde(default)]
+    pub local_idle_evict_minutes: Option<i32>,
     #[serde(default)]
     pub models_directory: Option<String>,
     #[serde(default)]
@@ -223,6 +231,8 @@ impl Default for AppSettings {
                 endpoint: None,
                 local_model_path: None,
                 local_gpu_layers: None,
+                local_preload: None,
+                local_idle_evict_minutes: None,
                 models_directory: None,
                 summary_length: None,
                 summary_tone: None,

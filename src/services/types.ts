@@ -91,6 +91,8 @@ export interface AiSettings {
   endpoint: string | null;
   local_model_path: string | null;
   local_gpu_layers: number | null;
+  local_preload: string | null;
+  local_idle_evict_minutes: number | null;
   models_directory: string | null;
   summary_length: string | null;
   summary_tone: string | null;

@@ -3,10 +3,11 @@ mod db;
 mod feed;
 mod ai;
 
-use ai::local_provider::{SharedModelState, LAST_USED_AT};
+use ai::local_provider::{self, SharedModelState, LAST_USED_AT};
 use commands::ai::{SharedSummaryCache, SummaryCache, SummaryGeneration};
 use commands::models::DownloadCancelFlag;
-use db::Database;
+use db::models::AppSettings;
+use db::{queries, Database};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Manager, RunEvent};
@@ -27,14 +28,60 @@ pub fn run() {
                 Database::new(app_dir).expect("Failed to initialize database");
             let model_state = Arc::new(Mutex::new(None::<ai::local_provider::LoadedModel>)) as SharedModelState;
 
-            // Idle-eviction watcher: drop the local model from VRAM after
-            // 10 minutes with no inference. Load on demand instead of preload.
-            {
+            // Read user's preload / idle-evict preferences.
+            let (preload_mode, idle_evict_minutes, model_path, gpu_layers) = {
+                let conn = database.conn.lock().expect("db lock");
+                let settings: AppSettings = queries::get_setting(&conn, "app_settings")
+                    .ok()
+                    .flatten()
+                    .and_then(|s| serde_json::from_str(&s).ok())
+                    .unwrap_or_default();
+                (
+                    settings
+                        .ai
+                        .local_preload
+                        .clone()
+                        .unwrap_or_else(|| "delayed".to_string()),
+                    settings.ai.local_idle_evict_minutes.unwrap_or(10),
+                    settings.ai.local_model_path.clone(),
+                    settings.ai.local_gpu_layers.unwrap_or(-1),
+                )
+            };
+
+            // Optional preload.
+            if preload_mode != "off" {
+                if let Some(path_str) = model_path {
+                    let path = std::path::PathBuf::from(path_str);
+                    let state = model_state.clone();
+                    let delay_secs = if preload_mode == "immediate" { 0 } else { 20 };
+                    tauri::async_runtime::spawn(async move {
+                        if delay_secs > 0 {
+                            tokio::time::sleep(std::time::Duration::from_secs(delay_secs)).await;
+                        }
+                        tokio::task::spawn_blocking(move || {
+                            log::info!("Preloading local model: {}", path.display());
+                            match local_provider::load_model(&path, gpu_layers) {
+                                Ok(loaded) => {
+                                    state.blocking_lock().replace(loaded);
+                                    local_provider::mark_used();
+                                    log::info!("Model preloaded");
+                                }
+                                Err(e) => log::warn!("Preload failed: {}", e),
+                            }
+                        })
+                        .await
+                        .ok();
+                    });
+                }
+            }
+
+            // Idle-eviction watcher. 0 minutes = never evict.
+            if idle_evict_minutes > 0 {
                 let state = model_state.clone();
+                let idle_secs = (idle_evict_minutes as i64) * 60;
                 tauri::async_runtime::spawn(async move {
-                    const IDLE_EVICT_SECS: i64 = 600;
                     let mut ticker = tokio::time::interval(std::time::Duration::from_secs(120));
-                    ticker.tick().await; // skip first immediate tick
+                    ticker.tick().await;
                     loop {
                         ticker.tick().await;
                         let now = chrono::Utc::now().timestamp();
@@ -42,7 +89,7 @@ pub fn run() {
                         if last == 0 {
                             continue;
                         }
-                        if now - last >= IDLE_EVICT_SECS {
+                        if now - last >= idle_secs {
                             let mut guard = state.lock().await;
                             if guard.is_some() {
                                 log::info!("Evicting idle local model from VRAM");

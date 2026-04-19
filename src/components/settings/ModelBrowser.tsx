@@ -829,6 +829,67 @@ export function ModelBrowser({
         </>}
       </div>
 
+      {/* Preload behavior */}
+      <div>
+        <label
+          className="block text-text-muted"
+          style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}
+        >
+          Model preload
+        </label>
+        <select
+          value={ai.local_preload ?? "delayed"}
+          onChange={(e) => updateAi({ local_preload: e.target.value })}
+          className={inputClass}
+          style={{ ...inputStyle, width: 220 }}
+        >
+          <option value="delayed">Delayed (20s after startup)</option>
+          <option value="immediate">Immediate (at startup)</option>
+          <option value="off">Off (load on first use)</option>
+        </select>
+        <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
+          <strong>Delayed</strong> (recommended): app opens instantly, model loads 20s later in the
+          background. First summary feels fast.
+          <br />
+          <strong>Immediate</strong>: fastest first summary but the GPU/VRAM is hot from launch.
+          <br />
+          <strong>Off</strong>: model only loads when you trigger AI work. Lowest idle power. First
+          summary pays a 1-5s load cost.
+        </p>
+      </div>
+
+      {/* Idle eviction */}
+      <div>
+        <label
+          className="block text-text-muted"
+          style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}
+        >
+          Idle eviction
+        </label>
+        <div className="flex items-center gap-3">
+          <input
+            type="number"
+            min={0}
+            max={1440}
+            value={ai.local_idle_evict_minutes ?? 10}
+            onChange={(e) =>
+              updateAi({
+                local_idle_evict_minutes: parseInt(e.target.value) || 0,
+              })
+            }
+            className={inputClass}
+            style={{ ...inputStyle, width: 100 }}
+          />
+          <span className="text-text-muted" style={{ fontSize: 11 }}>
+            minutes — 0 = never evict
+          </span>
+        </div>
+        <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
+          Drops the loaded model from VRAM after this many minutes of no inference. Keeps your
+          laptop cool and battery-friendly at the cost of a reload when you next use AI.
+        </p>
+      </div>
+
       {/* GPU Layers — advanced */}
       <div>
         <label
@@ -852,7 +913,7 @@ export function ModelBrowser({
             style={{ ...inputStyle, width: 100 }}
           />
           <span className="text-text-muted" style={{ fontSize: 11 }}>
-            -1 = all on GPU (recommended for Apple Silicon)
+            -1 = all on GPU. Lower values push more layers to CPU (slower inference, cooler GPU).
           </span>
         </div>
       </div>

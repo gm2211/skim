@@ -134,6 +134,13 @@ pub struct AiSettings {
     /// 0 means never evict. Defaults to 10.
     #[serde(default)]
     pub local_idle_evict_minutes: Option<i32>,
+    /// "cool" | "balanced" | "performance". Controls GPU layers and CPU
+    /// thread count to trade speed for thermal headroom.
+    /// - cool: 0 GPU layers (CPU only), 2 threads
+    /// - balanced: half layers on GPU, half on CPU; half of detected threads
+    /// - performance: all layers on GPU, all threads
+    #[serde(default)]
+    pub local_power_mode: Option<String>,
     #[serde(default)]
     pub models_directory: Option<String>,
     #[serde(default)]
@@ -233,6 +240,7 @@ impl Default for AppSettings {
                 local_gpu_layers: None,
                 local_preload: None,
                 local_idle_evict_minutes: None,
+                local_power_mode: None,
                 models_directory: None,
                 summary_length: None,
                 summary_tone: None,

@@ -419,11 +419,17 @@ pub fn create_provider(
                 .local_model_path
                 .as_deref()
                 .ok_or("No local model selected. Go to Settings to download one.")?;
-            let gpu_layers = settings.local_gpu_layers.unwrap_or(-1);
+            let power_mode = settings.local_power_mode.as_deref().unwrap_or("balanced");
+            let user_layers = settings.local_gpu_layers;
+            let (effective_layers, n_threads) =
+                super::local_provider::resolve_power_profile(power_mode, user_layers);
             let state = model_state
                 .ok_or("Local model state not available")?;
             Ok(Box::new(super::local_provider::LocalLlmProvider::new(
-                model_path, gpu_layers, state,
+                model_path,
+                effective_layers,
+                n_threads,
+                state,
             )))
         }
         "openai" => Ok(Box::new(OpenAiCompatibleProvider::new(

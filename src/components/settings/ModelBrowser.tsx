@@ -505,8 +505,10 @@ export function ModelBrowser({
         </label>
         <div className="flex flex-col gap-2">
           {[
-            { repo: "bartowski/gemma-3-4b-it-GGUF", file: "gemma-3-4b-it-Q4_K_M.gguf", name: "Gemma 3 4B", size: "2.8 GB", desc: "Best for summarization — fast, accurate JSON output" },
-            { repo: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", file: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", name: "Llama 3.1 8B Instruct", size: "4.9 GB", desc: "Higher quality — good for chat and longer summaries" },
+            { repo: "bartowski/Llama-3.2-1B-Instruct-GGUF", file: "Llama-3.2-1B-Instruct-Q4_K_M.gguf", name: "Llama 3.2 1B", size: "0.8 GB", desc: "Cool & tiny — runs on any laptop, good summaries, minimal heat" },
+            { repo: "bartowski/gemma-2-2b-it-GGUF", file: "gemma-2-2b-it-Q4_K_M.gguf", name: "Gemma 2 2B", size: "1.6 GB", desc: "Light & capable — balanced quality, low thermal load" },
+            { repo: "bartowski/gemma-3-4b-it-GGUF", file: "gemma-3-4b-it-Q4_K_M.gguf", name: "Gemma 3 4B", size: "2.8 GB", desc: "Best quality at this tier — fast & accurate, moderate heat" },
+            { repo: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", file: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", name: "Llama 3.1 8B", size: "4.9 GB", desc: "Highest quality — warm laptop, slowest on battery" },
           ].map((preset) => {
             const installed = localModels.data?.some((m) => m.filename === preset.file);
             const isDownloading = downloadModel.isPending;
@@ -827,6 +829,35 @@ export function ModelBrowser({
           </p>
         )}
         </>}
+      </div>
+
+      {/* Power mode */}
+      <div>
+        <label
+          className="block text-text-muted"
+          style={{ fontSize: 12, fontWeight: 500, marginBottom: 6 }}
+        >
+          Power mode
+        </label>
+        <select
+          value={ai.local_power_mode ?? "balanced"}
+          onChange={(e) => updateAi({ local_power_mode: e.target.value })}
+          className={inputClass}
+          style={{ ...inputStyle, width: 220 }}
+        >
+          <option value="cool">Cool — CPU only, 2 threads</option>
+          <option value="balanced">Balanced — mixed GPU/CPU (default)</option>
+          <option value="performance">Performance — all GPU, all threads</option>
+        </select>
+        <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
+          <strong>Cool</strong>: laptop stays quiet and cool. Inference is slow (~10-30s per summary).
+          <br />
+          <strong>Balanced</strong>: about half the model on GPU, half on CPU. Moderate heat, good speed.
+          <br />
+          <strong>Performance</strong>: fastest but fans will spin up.
+          <br />
+          Overrides the advanced GPU Layers setting below.
+        </p>
       </div>
 
       {/* Preload behavior */}

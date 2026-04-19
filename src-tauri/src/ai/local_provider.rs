@@ -52,17 +52,45 @@ pub type SharedModelState = Arc<Mutex<Option<LoadedModel>>>;
 pub struct LocalLlmProvider {
     model_path: PathBuf,
     gpu_layers: i32,
+    n_threads: i32,
     state: SharedModelState,
 }
 
 impl LocalLlmProvider {
-    pub fn new(model_path: &str, gpu_layers: i32, state: SharedModelState) -> Self {
+    pub fn new(model_path: &str, gpu_layers: i32, n_threads: i32, state: SharedModelState) -> Self {
         Self {
             model_path: PathBuf::from(model_path),
             gpu_layers,
+            n_threads,
             state,
         }
     }
+}
+
+/// Resolve ("cool"|"balanced"|"performance", user_override) to concrete
+/// (n_gpu_layers, n_threads). The user-supplied gpu layers override always
+/// wins when set to something other than -1 (the "unset" sentinel we use
+/// for "let the mode decide").
+pub fn resolve_power_profile(mode: &str, user_layers: Option<i32>) -> (i32, i32) {
+    let detected = std::thread::available_parallelism()
+        .map(|n| n.get() as i32)
+        .unwrap_or(8);
+
+    let (layers, threads) = match mode {
+        "cool" => (0, 2.max(detected / 4)),
+        "performance" => (-1, detected),
+        _ => (24, (detected / 2).max(2)), // balanced
+    };
+
+    // User explicit override wins if set to a non-default value.
+    let final_layers = match user_layers {
+        Some(n) if n != 0 && n != -1 => n,
+        Some(n) if mode == "balanced" && n == -1 => layers, // keep balanced default
+        Some(n) => n,
+        None => layers,
+    };
+
+    (final_layers, threads)
 }
 
 fn format_chat_messages(model: &LlamaModel, messages: &[ChatMessage]) -> Result<String, String> {
@@ -126,9 +154,12 @@ fn run_inference(
     prompt: &str,
     max_tokens: u32,
     temperature: f64,
+    n_threads: i32,
 ) -> Result<(String, u32, u32), String> {
-    let ctx_params =
-        LlamaContextParams::default().with_n_ctx(NonZeroU32::new(4096));
+    let ctx_params = LlamaContextParams::default()
+        .with_n_ctx(NonZeroU32::new(4096))
+        .with_n_threads(n_threads)
+        .with_n_threads_batch(n_threads);
 
     let backend = get_backend()?;
     let mut ctx = loaded
@@ -244,6 +275,7 @@ impl AiProvider for LocalLlmProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, String> {
         let model_path = self.model_path.clone();
         let gpu_layers = self.gpu_layers;
+        let n_threads = self.n_threads;
         let state = self.state.clone();
 
         if !model_path.exists() {
@@ -287,7 +319,7 @@ impl AiProvider for LocalLlmProvider {
 
             let loaded = guard.as_ref().unwrap();
             let prompt = format_chat_messages(&loaded.model, &messages)?;
-            let out = run_inference(loaded, &prompt, max_tokens, temperature);
+            let out = run_inference(loaded, &prompt, max_tokens, temperature, n_threads);
             mark_used();
             out
             // For local models, JSON extraction is handled by extract_json_object()
@@ -393,7 +425,7 @@ mod tests {
         let prompt = format_chat_messages(&loaded.model, &messages)
             .expect("Failed to format messages");
 
-        let result = run_inference(&loaded, &prompt, 200, 0.5);
+        let result = run_inference(&loaded, &prompt, 200, 0.5, 4);
         match result {
             Ok((output, prompt_tokens, gen_tokens)) => {
                 println!("=== OUTPUT ({} prompt, {} gen tokens) ===", prompt_tokens, gen_tokens);

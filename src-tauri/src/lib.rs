@@ -28,7 +28,7 @@ pub fn run() {
                 Database::new(app_dir).expect("Failed to initialize database");
             let model_state = Arc::new(Mutex::new(None::<ai::local_provider::LoadedModel>)) as SharedModelState;
 
-            // Read user's preload / idle-evict preferences.
+            // Read user's preload / idle-evict / power preferences.
             let (preload_mode, idle_evict_minutes, model_path, gpu_layers) = {
                 let conn = database.conn.lock().expect("db lock");
                 let settings: AppSettings = queries::get_setting(&conn, "app_settings")
@@ -36,6 +36,16 @@ pub fn run() {
                     .flatten()
                     .and_then(|s| serde_json::from_str(&s).ok())
                     .unwrap_or_default();
+                let power_mode = settings
+                    .ai
+                    .local_power_mode
+                    .as_deref()
+                    .unwrap_or("balanced")
+                    .to_string();
+                let (effective_layers, _) = local_provider::resolve_power_profile(
+                    &power_mode,
+                    settings.ai.local_gpu_layers,
+                );
                 (
                     settings
                         .ai
@@ -44,7 +54,7 @@ pub fn run() {
                         .unwrap_or_else(|| "delayed".to_string()),
                     settings.ai.local_idle_evict_minutes.unwrap_or(10),
                     settings.ai.local_model_path.clone(),
-                    settings.ai.local_gpu_layers.unwrap_or(-1),
+                    effective_layers,
                 )
             };
 

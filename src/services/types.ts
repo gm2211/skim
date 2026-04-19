@@ -93,6 +93,7 @@ export interface AiSettings {
   local_gpu_layers: number | null;
   local_preload: string | null;
   local_idle_evict_minutes: number | null;
+  local_power_mode: string | null;
   models_directory: string | null;
   summary_length: string | null;
   summary_tone: string | null;

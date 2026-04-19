@@ -150,6 +150,13 @@ export const summarizeArticle = (
 export const cancelSummarize = () => invoke<void>("cancel_summarize");
 export const generateThemes = () => invoke<Theme[]>("generate_themes");
 export const getThemes = () => invoke<Theme[]>("get_themes");
+export interface ArticleThemeTag {
+  article_id: string;
+  theme_id: string;
+  theme_label: string;
+}
+export const getArticleThemeTags = () =>
+  invoke<ArticleThemeTag[]>("get_article_theme_tags");
 export const triageArticles = (force?: boolean) =>
   invoke<TriageResult>("triage_articles", { force: force ?? null });
 export const getInboxArticles = (opts?: {

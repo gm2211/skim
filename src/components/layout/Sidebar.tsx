@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats, useTriageProgress } from "../../hooks/useInbox";
-import { useThemes, useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
+import { useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 import { FeedsSection } from "./FeedsSection";
@@ -16,7 +16,6 @@ export function Sidebar() {
   const refreshAll = useRefreshAllFeeds();
   const triage = useTriageArticles();
   const triageProgress = useTriageProgress();
-  const { data: themes } = useThemes();
   const generateThemes = useGenerateThemes();
   const themeProgress = useThemeProgress();
 
@@ -163,7 +162,7 @@ export function Sidebar() {
             </div>
             {triageStats && triageStats.total > 0 && (
               <span className="text-text-muted tabular-nums" style={{ fontSize: 14 }}>
-                {triageStats.total}
+                {triageStats.total.toLocaleString()}
               </span>
             )}
           </div>
@@ -191,8 +190,13 @@ export function Sidebar() {
               </>
             ) : (
               <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
+                  <line x1="21" y1="6" x2="10" y2="6" />
+                  <line x1="16" y1="12" x2="10" y2="12" />
+                  <line x1="12" y1="18" x2="10" y2="18" />
+                  <circle cx="5" cy="6" r="1.5" fill="currentColor" stroke="none" />
+                  <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" />
+                  <circle cx="5" cy="18" r="1.5" fill="currentColor" stroke="none" />
                 </svg>
                 <span>Triage unread articles</span>
               </>
@@ -279,36 +283,6 @@ export function Sidebar() {
             <p className="text-red-400" style={{ fontSize: 12, padding: "4px 8px" }}>
               {generateThemes.error instanceof Error ? generateThemes.error.message : "Theme generation failed"}
             </p>
-          )}
-          {themes && themes.length > 0 && (
-            <div className="space-y-1" style={{ marginTop: 6, paddingLeft: 20 }}>
-              {themes.map((theme) => (
-                <div
-                  key={theme.id}
-                  onClick={() => setSidebarView({ type: "theme", themeId: theme.id })}
-                  className={`rounded-lg cursor-pointer transition-colors relative z-20 ${
-                    isActive({ type: "theme", themeId: theme.id })
-                      ? "bg-white/10 text-text-primary"
-                      : "text-text-secondary hover:bg-white/5 hover:text-text-primary"
-                  }`}
-                  style={{ padding: "6px 8px" }}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="truncate" style={{ fontSize: 13 }}>{theme.label}</span>
-                    {theme.article_count != null && (
-                      <span className="text-text-muted tabular-nums ml-2 flex-shrink-0" style={{ fontSize: 12 }}>
-                        {theme.article_count}
-                      </span>
-                    )}
-                  </div>
-                  {theme.summary && (
-                    <p className="text-text-muted truncate" style={{ fontSize: 11, marginTop: 1 }}>
-                      {theme.summary}
-                    </p>
-                  )}
-                </div>
-              ))}
-            </div>
           )}
         </div>
 

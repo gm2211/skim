@@ -10,6 +10,13 @@ export function useThemes() {
   });
 }
 
+export function useArticleThemeTags() {
+  return useQuery({
+    queryKey: ["articleThemeTags"],
+    queryFn: commands.getArticleThemeTags,
+  });
+}
+
 export interface ThemeProgress {
   stage: "fetching" | "batch" | "saving" | "done";
   completed: number;

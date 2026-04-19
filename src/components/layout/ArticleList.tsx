@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback } from "react";
 import { useArticles, useMarkAllRead, useMarkRead, useMarkUnread, useToggleRead, useToggleStar } from "../../hooks/useArticles";
 import { useInboxArticles } from "../../hooks/useInbox";
-import { useThemes } from "../../hooks/useThemes";
+import { useThemes, useArticleThemeTags } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
@@ -87,6 +87,19 @@ export function ArticleList() {
 
   const isInbox = sidebarView.type === "inbox";
   const { data: themes } = useThemes();
+  const { data: themeTags } = useArticleThemeTags();
+  const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
+
+  // Map of articleId → [{themeId, label}]
+  const themeTagsByArticle = useMemo(() => {
+    const map = new Map<string, { themeId: string; label: string }[]>();
+    for (const tag of themeTags ?? []) {
+      const existing = map.get(tag.article_id) ?? [];
+      existing.push({ themeId: tag.theme_id, label: tag.theme_label });
+      map.set(tag.article_id, existing);
+    }
+    return map;
+  }, [themeTags]);
 
   const filter: ArticleFilter = useMemo(() => {
     const base: ArticleFilter = { limit: 200 };
@@ -151,6 +164,12 @@ export function ArticleList() {
     if (isInbox && listFilter === "starred") {
       result = result.filter((a) => a.is_starred);
     }
+    // Theme tab filter (inbox only)
+    if (isInbox && activeThemeId) {
+      result = result.filter((a) =>
+        (themeTagsByArticle.get(a.id) ?? []).some((t) => t.themeId === activeThemeId),
+      );
+    }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
@@ -161,7 +180,7 @@ export function ArticleList() {
       );
     }
     return result;
-  }, [articles, searchQuery, isInbox, listFilter]);
+  }, [articles, searchQuery, isInbox, listFilter, activeThemeId, themeTagsByArticle]);
 
   const unreadCount = useMemo(() => {
     return articles?.filter((a) => !a.is_read).length ?? 0;
@@ -280,6 +299,46 @@ export function ArticleList() {
         </div>
       </div>
 
+      {/* Theme tabs — only in AI Inbox */}
+      {isInbox && themes && themes.length > 0 && (
+        <div
+          className="flex items-center gap-2 border-b border-white/5 overflow-x-auto"
+          style={{ padding: "8px 24px" }}
+        >
+          <button
+            onClick={() => setActiveThemeId(null)}
+            className={`rounded-full transition-colors whitespace-nowrap ${
+              activeThemeId === null
+                ? "bg-accent/20 text-accent"
+                : "bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary"
+            }`}
+            style={{ padding: "4px 12px", fontSize: 12, fontWeight: 500 }}
+          >
+            All
+          </button>
+          {themes.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveThemeId(t.id === activeThemeId ? null : t.id)}
+              title={t.summary ?? undefined}
+              className={`rounded-full transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                activeThemeId === t.id
+                  ? "bg-accent/20 text-accent"
+                  : "bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary"
+              }`}
+              style={{ padding: "4px 12px", fontSize: 12 }}
+            >
+              <span>{t.label}</span>
+              {t.article_count != null && (
+                <span className="text-text-muted tabular-nums" style={{ fontSize: 11 }}>
+                  {t.article_count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Article list */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
@@ -306,6 +365,7 @@ export function ArticleList() {
                     key={article.id}
                     article={article}
                     triage={triageData}
+                    themeTags={isInbox ? themeTagsByArticle.get(article.id) : undefined}
                     isSelected={selectedArticleId === article.id}
                     onSelect={() => setSelectedArticleId(article.id)}
                     onContextMenu={(e) => handleArticleContextMenu(e, i)}

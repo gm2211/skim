@@ -163,6 +163,7 @@ pub fn run() {
             commands::ai::cancel_summarize,
             commands::ai::generate_themes,
             commands::ai::get_themes,
+            commands::ai::get_article_theme_tags,
             commands::ai::triage_articles,
             commands::ai::get_inbox_articles,
             commands::ai::get_triage_stats,

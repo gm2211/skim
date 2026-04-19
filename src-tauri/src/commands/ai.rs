@@ -672,6 +672,29 @@ pub async fn get_themes(db: State<'_, Database>) -> Result<Vec<Theme>, String> {
     queries::get_themes(&conn).map_err(|e| e.to_string())
 }
 
+#[derive(Serialize)]
+pub struct ArticleThemeTag {
+    pub article_id: String,
+    pub theme_id: String,
+    pub theme_label: String,
+}
+
+#[tauri::command]
+pub async fn get_article_theme_tags(
+    db: State<'_, Database>,
+) -> Result<Vec<ArticleThemeTag>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let pairs = queries::list_article_theme_pairs(&conn).map_err(|e| e.to_string())?;
+    Ok(pairs
+        .into_iter()
+        .map(|(article_id, theme_id, theme_label)| ArticleThemeTag {
+            article_id,
+            theme_id,
+            theme_label,
+        })
+        .collect())
+}
+
 // ── Triage (AI Inbox) ──────────────────────────────────────────────
 
 #[derive(Deserialize)]

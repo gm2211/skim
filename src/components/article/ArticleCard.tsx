@@ -20,6 +20,7 @@ const PRIORITY_LABELS: Record<number, string> = {
 interface Props {
   article: Article;
   triage?: { priority: number; reason: string } | null;
+  themeTags?: { themeId: string; label: string }[];
   isSelected: boolean;
   onSelect: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
@@ -50,7 +51,7 @@ function extractImageUrl(html: string | null): string | null {
   return src;
 }
 
-export function ArticleCard({ article, triage, isSelected, onSelect, onContextMenu }: Props) {
+export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, onContextMenu }: Props) {
   const imageUrl = useMemo(() => extractImageUrl(article.content_html), [article.content_html]);
 
   return (
@@ -91,7 +92,7 @@ export function ArticleCard({ article, triage, isSelected, onSelect, onContextMe
               {article.content_text.slice(0, 160)}
             </p>
           ) : null}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {triage && (
               <span
                 className="rounded-full flex-shrink-0"
@@ -105,6 +106,15 @@ export function ArticleCard({ article, triage, isSelected, onSelect, onContextMe
             <span className="text-text-muted" style={{ fontSize: 12 }}>
               {timeAgo(article.published_at ?? article.fetched_at)}
             </span>
+            {themeTags?.map((tag) => (
+              <span
+                key={tag.themeId}
+                className="rounded-full bg-accent/10 text-accent"
+                style={{ padding: "1px 8px", fontSize: 11 }}
+              >
+                {tag.label}
+              </span>
+            ))}
           </div>
         </div>
         <div className="flex flex-col items-center gap-1.5 flex-shrink-0">

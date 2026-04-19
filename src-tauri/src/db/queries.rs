@@ -531,6 +531,30 @@ pub fn clear_themes(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// Returns a flat list of (article_id, theme_id, theme_label) so the caller
+/// can build an article → themes map without N+1 queries.
+pub fn list_article_theme_pairs(
+    conn: &Connection,
+) -> Result<Vec<(String, String, String)>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT ta.article_id, t.id, t.label
+         FROM theme_articles ta
+         JOIN themes t ON ta.theme_id = t.id
+         WHERE t.expires_at > ?1",
+    )?;
+    let now = chrono::Utc::now().timestamp();
+    let rows = stmt
+        .query_map(params![now], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 // Triage queries
 pub fn upsert_triage_batch(conn: &Connection, items: &[ArticleTriage]) -> Result<(), rusqlite::Error> {
     let tx = conn.unchecked_transaction()?;

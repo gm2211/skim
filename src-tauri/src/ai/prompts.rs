@@ -147,19 +147,14 @@ pub fn triage_system_prompt(preferences: Option<&crate::db::models::UserPreferen
     }
 }
 
-pub fn triage_user_prompt(articles_json: &str) -> String {
+pub fn triage_user_prompt(articles_listing: &str) -> String {
     format!(
-        r#"Triage these articles. For each, return its id, a priority (1-5), and a reason (one sentence, under 80 chars).
+        r#"Articles (handle TAB title TAB [source] TAB excerpt):
+{articles_listing}
+For EVERY article above, return an entry. Refer to articles by their numeric handle.
 
-Articles:
-{articles_json}
-
-Respond in this exact JSON format:
-{{
-  "triage": [
-    {{"id": "article-id-here", "priority": 3, "reason": "Routine product update, nothing novel"}}
-  ]
-}}"#
+Output JSON:
+{{"triage":[{{"id":0,"priority":3,"reason":"short reason"}}]}}"#
     )
 }
 

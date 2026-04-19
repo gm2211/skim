@@ -676,8 +676,10 @@ pub async fn get_themes(db: State<'_, Database>) -> Result<Vec<Theme>, String> {
 
 #[derive(Deserialize)]
 struct TriageResponseItem {
-    id: String,
+    #[serde(alias = "id", alias = "handle")]
+    id: serde_json::Value,
     priority: i32,
+    #[serde(default)]
     reason: String,
 }
 
@@ -739,9 +741,9 @@ pub async fn triage_articles(
     let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
 
     let batch_size = match settings.ai.provider.as_str() {
-        "local" => 10,
-        "ollama" => 15,
-        _ => 25,
+        "local" => 15,
+        "ollama" => 20,
+        _ => 30,
     };
 
     let mut triaged_count = 0i32;
@@ -760,26 +762,35 @@ pub async fn triage_articles(
             &format!("Triaging {}/{} ({} articles)", batch_count, total_batches, articles.len()),
         );
 
-        let snippets: Vec<serde_json::Value> = chunk.iter().map(|a| {
-            let excerpt: String = a.article.content_text.as_deref().unwrap_or("").chars().take(300).collect();
-            serde_json::json!({
-                "id": a.article.id,
-                "title": a.article.title,
-                "source": a.feed_title,
-                "excerpt": excerpt,
-            })
-        }).collect();
-
-        let articles_json = serde_json::to_string_pretty(&snippets).map_err(|e| e.to_string())?;
+        // Compact TSV listing using numeric handles. UUIDs (36 chars each)
+        // would eat most of the token budget otherwise.
+        let mut listing = String::new();
+        for (i, a) in chunk.iter().enumerate() {
+            let excerpt: String = a
+                .article
+                .content_text
+                .as_deref()
+                .unwrap_or("")
+                .chars()
+                .take(200)
+                .collect();
+            let excerpt_clean = excerpt.replace(['\n', '\t'], " ");
+            listing.push_str(&format!(
+                "{}\t{}\t[{}]\t{}\n",
+                i, a.article.title.trim(), a.feed_title, excerpt_clean
+            ));
+        }
+        // ~30 output tokens per item is plenty for handle + priority + short reason.
+        let max_tokens = (chunk.len() as i64 * 35 + 200).max(512);
 
         let request = ChatRequest {
             model: model.clone(),
             messages: vec![
                 ChatMessage { role: "system".to_string(), content: prompts::triage_system_prompt(preferences.as_ref()) },
-                ChatMessage { role: "user".to_string(), content: prompts::triage_user_prompt(&articles_json) },
+                ChatMessage { role: "user".to_string(), content: prompts::triage_user_prompt(&listing) },
             ],
             temperature: Some(0.3),
-            max_tokens: Some((chunk.len() as i64) * 60),
+            max_tokens: Some(max_tokens),
             json_mode: true,
         };
 
@@ -789,16 +800,35 @@ pub async fn triage_articles(
                 let json_str = extract_json_object(content).unwrap_or(content);
                 match serde_json::from_str::<TriageResponse>(json_str) {
                     Ok(parsed) => {
-                        let triage_items: Vec<crate::db::models::ArticleTriage> = parsed.triage.into_iter().map(|t| {
-                            crate::db::models::ArticleTriage {
-                                article_id: t.id,
-                                priority: t.priority.clamp(1, 5),
-                                reason: t.reason,
-                                provider: Some(provider.name().to_string()),
-                                model: Some(model.clone()),
-                                created_at: now,
-                            }
-                        }).collect();
+                        let triage_items: Vec<crate::db::models::ArticleTriage> = parsed
+                            .triage
+                            .into_iter()
+                            .filter_map(|t| {
+                                let article_id = match &t.id {
+                                    serde_json::Value::Number(n) => n
+                                        .as_u64()
+                                        .and_then(|i| chunk.get(i as usize).map(|a| a.article.id.clone())),
+                                    serde_json::Value::String(s) => {
+                                        if let Ok(i) = s.trim().parse::<usize>() {
+                                            chunk.get(i).map(|a| a.article.id.clone())
+                                        } else if chunk.iter().any(|a| a.article.id == *s) {
+                                            Some(s.clone())
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                    _ => None,
+                                }?;
+                                Some(crate::db::models::ArticleTriage {
+                                    article_id,
+                                    priority: t.priority.clamp(1, 5),
+                                    reason: t.reason,
+                                    provider: Some(provider.name().to_string()),
+                                    model: Some(model.clone()),
+                                    created_at: now,
+                                })
+                            })
+                            .collect();
 
                         triaged_count += triage_items.len() as i32;
                         let conn = db.conn.lock().map_err(|e| e.to_string())?;

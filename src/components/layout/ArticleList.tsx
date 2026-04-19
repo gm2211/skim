@@ -17,13 +17,17 @@ const PRIORITY_GROUP_LABELS: Record<number, string> = {
 
 function groupByPriority(articles: ArticleWithTriage[]) {
   const groups: { label: string; indices: number[] }[] = [];
-  let currentPriority = -1;
+  let currentKey: string | number = "";
 
   articles.forEach((article, i) => {
-    const p = article.priority ?? 3;
-    if (p !== currentPriority) {
-      groups.push({ label: PRIORITY_GROUP_LABELS[p] ?? `PRIORITY ${p}`, indices: [] });
-      currentPriority = p;
+    const key: string | number = article.priority ?? "unscored";
+    if (key !== currentKey) {
+      const label =
+        key === "unscored"
+          ? "NOT YET SCORED"
+          : PRIORITY_GROUP_LABELS[key as number] ?? `PRIORITY ${key}`;
+      groups.push({ label, indices: [] });
+      currentKey = key;
     }
     groups[groups.length - 1].indices.push(i);
   });

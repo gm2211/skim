@@ -564,7 +564,7 @@ pub fn get_inbox_articles(
                 t.priority, t.reason
          FROM articles a
          JOIN feeds f ON a.feed_id = f.id
-         JOIN article_triage t ON a.id = t.article_id
+         LEFT JOIN article_triage t ON a.id = t.article_id
          WHERE 1=1"
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -578,7 +578,12 @@ pub fn get_inbox_articles(
         sql.push_str(&format!(" AND a.is_read = ?{}", param_values.len()));
     }
 
-    sql.push_str(" ORDER BY t.priority DESC, COALESCE(a.published_at, a.fetched_at) DESC");
+    // Triaged articles first (sorted by priority desc), untriaged below (by date).
+    sql.push_str(
+        " ORDER BY CASE WHEN t.priority IS NULL THEN 1 ELSE 0 END,
+                   t.priority DESC,
+                   COALESCE(a.published_at, a.fetched_at) DESC"
+    );
     sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
 
     let params_ref: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
@@ -648,6 +653,7 @@ pub fn get_untriaged_article_ids(conn: &Connection, limit: i64) -> Result<Vec<Ar
 }
 
 pub fn get_triage_stats(conn: &Connection) -> Result<TriageStats, rusqlite::Error> {
+    // By-priority breakdown covers triaged + unread articles.
     let mut stmt = conn.prepare(
         "SELECT t.priority, COUNT(*)
          FROM article_triage t
@@ -656,15 +662,22 @@ pub fn get_triage_stats(conn: &Connection) -> Result<TriageStats, rusqlite::Erro
          GROUP BY t.priority"
     )?;
     let mut by_priority = std::collections::HashMap::new();
-    let mut total = 0i64;
     let rows = stmt.query_map([], |row| {
         Ok((row.get::<_, i32>(0)?, row.get::<_, i64>(1)?))
     })?;
     for row in rows {
         let (priority, count) = row?;
-        total += count;
         by_priority.insert(priority, count);
     }
+
+    // Total = all unread articles (triaged + untriaged). The AI Inbox view
+    // shows all of them now, so the badge should reflect the full count.
+    let total: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM articles WHERE is_read = 0",
+        [],
+        |row| row.get(0),
+    )?;
+
     Ok(TriageStats { total, by_priority })
 }
 

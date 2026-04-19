@@ -803,6 +803,14 @@ function AiSmartFolderDialog({
   const [matching, setMatching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!matching) return;
+    const start = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [matching]);
 
   const matched = useMemo(
     () => (matchedIds ? feeds.filter((f) => matchedIds.includes(f.id)) : []),
@@ -902,7 +910,7 @@ function AiSmartFolderDialog({
               className="text-accent hover:text-accent-hover disabled:opacity-40 transition-colors flex items-center gap-1"
               style={{ fontSize: 13 }}
             >
-              {matching ? "Matching…" : matchedIds ? "Re-match feeds" : "Find matching feeds →"}
+              {matching ? `Matching… ${elapsed}s` : matchedIds ? "Re-match feeds" : "Find matching feeds →"}
             </button>
           </div>
 
@@ -981,6 +989,14 @@ function AutoOrganizeDialog({
   const [selected, setSelected] = useState<Record<number, Set<string>>>({});
   const [names, setNames] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!loading) return;
+    const start = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [loading]);
 
   const feedById = useMemo(() => {
     const m = new Map<string, Feed>();
@@ -1092,7 +1108,10 @@ function AutoOrganizeDialog({
           {loading && (
             <div className="text-center" style={{ padding: "40px 0" }}>
               <div className="text-text-muted" style={{ fontSize: 13 }}>
-                Analyzing {feeds.length} feeds…
+                Analyzing {feeds.length} feeds… <span className="tabular-nums">{elapsed}s</span>
+              </div>
+              <div className="text-text-muted" style={{ fontSize: 11, marginTop: 6 }}>
+                Local models can take 30-90s. Cancel if it's too slow.
               </div>
             </div>
           )}

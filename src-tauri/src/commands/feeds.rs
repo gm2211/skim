@@ -817,26 +817,39 @@ struct LlmOrganizeResponse {
 #[derive(Deserialize)]
 struct LlmFolderItem {
     name: String,
-    feed_ids: Vec<String>,
+    #[serde(default, alias = "feed_ids", alias = "ids")]
+    feeds: serde_json::Value,
 }
 
-fn feeds_snippet_for_llm(feeds: &[Feed]) -> serde_json::Value {
-    let items: Vec<serde_json::Value> = feeds
-        .iter()
-        .map(|f| {
-            let host = url::Url::parse(&f.url)
-                .ok()
-                .and_then(|u| u.host_str().map(|s| s.to_string()))
-                .unwrap_or_default();
-            serde_json::json!({
-                "id": f.id,
-                "title": f.title,
-                "host": host,
-                "category": f.opml_category.clone().unwrap_or_default(),
+/// Compact feed listing for the LLM prompt. Uses short numeric handles (0, 1, 2, ...)
+/// instead of UUIDs to cut token count dramatically. Caller holds the uuid mapping.
+fn feeds_listing_for_llm(feeds: &[Feed]) -> String {
+    let mut out = String::new();
+    for (i, f) in feeds.iter().enumerate() {
+        let title = f.title.trim();
+        let cat = f.opml_category.as_deref().unwrap_or("").trim();
+        if cat.is_empty() {
+            out.push_str(&format!("{i}\t{title}\n"));
+        } else {
+            out.push_str(&format!("{i}\t{title}\t[{cat}]\n"));
+        }
+    }
+    out
+}
+
+/// Extract numeric feed handles from a JSON array that may contain ints or strings.
+fn parse_handles(v: &serde_json::Value) -> Vec<usize> {
+    match v.as_array() {
+        Some(arr) => arr
+            .iter()
+            .filter_map(|x| match x {
+                serde_json::Value::Number(n) => n.as_u64().map(|n| n as usize),
+                serde_json::Value::String(s) => s.trim().parse::<usize>().ok(),
+                _ => None,
             })
-        })
-        .collect();
-    serde_json::Value::Array(items)
+            .collect(),
+        None => vec![],
+    }
 }
 
 /// Cluster all feeds into topic-based folders using the configured LLM.
@@ -869,23 +882,19 @@ pub async fn ai_auto_organize_feeds(
     let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
     let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
 
-    let feeds_json = serde_json::to_string_pretty(&feeds_snippet_for_llm(&feeds))
-        .map_err(|e| e.to_string())?;
+    let listing = feeds_listing_for_llm(&feeds);
+    // Estimate max_tokens: each folder entry needs ~15 tokens + ~3 tokens per feed handle.
+    // Target 4-8 folders, assume worst case all feeds referenced once.
+    let max_tokens = (feeds.len() as i64 * 4 + 8 * 20).max(512);
 
-    let system = "You organize RSS feeds into topical folders. Output JSON only. Target 4-8 folders. \
-                  Every feed must appear in exactly one folder. Use short, human folder names (2-4 words).";
+    let system = "You group RSS feeds into 4-8 topical folders. Output JSON only. \
+                  Each feed goes in exactly one folder. Short folder names (2-4 words). \
+                  Refer to feeds by their numeric handle.";
     let user = format!(
-        r#"Group these RSS feeds into topical folders. Each feed appears in exactly one folder.
-
-Feeds (JSON):
-{feeds_json}
-
-Respond with ONLY this JSON shape, no prose:
-{{
-  "folders": [
-    {{"name": "Folder name", "feed_ids": ["id1", "id2"]}}
-  ]
-}}"#
+        r#"Feeds (handle TAB title [TAB category]):
+{listing}
+Output JSON:
+{{"folders":[{{"name":"Tech","feeds":[0,3,7]}}]}}"#
     );
 
     let req = ChatRequest {
@@ -895,7 +904,7 @@ Respond with ONLY this JSON shape, no prose:
             ChatMessage { role: "user".to_string(), content: user },
         ],
         temperature: Some(0.2),
-        max_tokens: Some(4096),
+        max_tokens: Some(max_tokens),
         json_mode: true,
     };
 
@@ -905,7 +914,6 @@ Respond with ONLY this JSON shape, no prose:
     let parsed: LlmOrganizeResponse = serde_json::from_str(json_str)
         .map_err(|e| format!("Failed to parse AI response: {}. Raw: {}", e, &content[..content.len().min(300)]))?;
 
-    let valid_ids: std::collections::HashSet<String> = feeds.iter().map(|f| f.id.clone()).collect();
     let mut seen = std::collections::HashSet::new();
     let proposals: Vec<FolderProposal> = parsed
         .folders
@@ -913,10 +921,10 @@ Respond with ONLY this JSON shape, no prose:
         .filter_map(|f| {
             let name = f.name.trim().to_string();
             if name.is_empty() { return None; }
-            let feed_ids: Vec<String> = f
-                .feed_ids
+            let feed_ids: Vec<String> = parse_handles(&f.feeds)
                 .into_iter()
-                .filter(|id| valid_ids.contains(id) && seen.insert(id.clone()))
+                .filter_map(|h| feeds.get(h).map(|feed| feed.id.clone()))
+                .filter(|id| seen.insert(id.clone()))
                 .collect();
             if feed_ids.is_empty() { return None; }
             Some(FolderProposal { name, feed_ids })
@@ -961,19 +969,18 @@ pub async fn ai_match_feeds_for_topic(
     let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
     let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
 
-    let feeds_json = serde_json::to_string_pretty(&feeds_snippet_for_llm(&feeds))
-        .map_err(|e| e.to_string())?;
+    let listing = feeds_listing_for_llm(&feeds);
+    let max_tokens = (feeds.len() as i64 * 3 + 64).max(256);
 
-    let system = "You identify RSS feeds that match a topic description. Output JSON only. \
-                  Be selective — only include feeds that clearly fit the topic.";
+    let system = "You pick RSS feeds that match a topic. Output JSON only. \
+                  Be selective — only clearly-fitting feeds. Refer to feeds by their numeric handle.";
     let user = format!(
-        r#"Topic description: "{trimmed}"
+        r#"Topic: "{trimmed}"
 
-Feeds (JSON):
-{feeds_json}
-
-Return ONLY the feed IDs that fit this topic as JSON:
-{{"feed_ids": ["id1", "id2"]}}"#
+Feeds (handle TAB title [TAB category]):
+{listing}
+Output JSON:
+{{"feeds":[0,3,7]}}"#
     );
 
     let req = ChatRequest {
@@ -983,7 +990,7 @@ Return ONLY the feed IDs that fit this topic as JSON:
             ChatMessage { role: "user".to_string(), content: user },
         ],
         temperature: Some(0.1),
-        max_tokens: Some(1024),
+        max_tokens: Some(max_tokens),
         json_mode: true,
     };
 
@@ -991,15 +998,14 @@ Return ONLY the feed IDs that fit this topic as JSON:
     let content = response.content.trim();
     let json_str = extract_json_object(content).unwrap_or(content);
 
-    #[derive(Deserialize)]
-    struct MatchResponse {
-        feed_ids: Vec<String>,
-    }
-    let parsed: MatchResponse = serde_json::from_str(json_str)
+    let val: serde_json::Value = serde_json::from_str(json_str)
         .map_err(|e| format!("Failed to parse AI response: {}. Raw: {}", e, &content[..content.len().min(300)]))?;
-
-    let valid_ids: std::collections::HashSet<String> = feeds.iter().map(|f| f.id.clone()).collect();
-    Ok(parsed.feed_ids.into_iter().filter(|id| valid_ids.contains(id)).collect())
+    let handles_val = val.get("feeds").or_else(|| val.get("feed_ids")).cloned().unwrap_or(serde_json::Value::Null);
+    let ids: Vec<String> = parse_handles(&handles_val)
+        .into_iter()
+        .filter_map(|h| feeds.get(h).map(|f| f.id.clone()))
+        .collect();
+    Ok(ids)
 }
 
 /// Apply a set of folder proposals: creates regular folders and assigns feeds.

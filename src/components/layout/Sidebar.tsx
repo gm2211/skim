@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
-import { useTriageArticles, useTriageStats } from "../../hooks/useInbox";
+import { useTriageArticles, useTriageStats, useTriageProgress } from "../../hooks/useInbox";
 import { useThemes, useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
@@ -15,6 +15,7 @@ export function Sidebar() {
   const { data: triageStats } = useTriageStats();
   const refreshAll = useRefreshAllFeeds();
   const triage = useTriageArticles();
+  const triageProgress = useTriageProgress();
   const { data: themes } = useThemes();
   const generateThemes = useGenerateThemes();
   const themeProgress = useThemeProgress();
@@ -177,7 +178,16 @@ export function Sidebar() {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin flex-shrink-0">
                   <path d="M21 12a9 9 0 11-6.219-8.56" />
                 </svg>
-                <span>Triaging...</span>
+                <span className="flex-1 flex items-center justify-between gap-2">
+                  <span className="truncate">
+                    {triageProgress?.message ?? "Triaging..."}
+                  </span>
+                  {triageProgress && triageProgress.total > 0 && (
+                    <span className="text-text-muted tabular-nums" style={{ fontSize: 11 }}>
+                      {triageProgress.completed}/{triageProgress.total}
+                    </span>
+                  )}
+                </span>
               </>
             ) : (
               <>
@@ -188,6 +198,20 @@ export function Sidebar() {
               </>
             )}
           </button>
+          {triage.isPending && triageProgress && triageProgress.total > 0 && (
+            <div
+              className="rounded-full bg-white/5 overflow-hidden"
+              style={{ height: 3, margin: "0 8px" }}
+            >
+              <div
+                className="bg-accent transition-all"
+                style={{
+                  height: "100%",
+                  width: `${Math.min(100, (triageProgress.completed / triageProgress.total) * 100)}%`,
+                }}
+              />
+            </div>
+          )}
           {triage.isError && (
             <p className="text-red-400" style={{ fontSize: 12, padding: "4px 8px" }}>
               {triage.error instanceof Error ? triage.error.message : "Triage failed"}

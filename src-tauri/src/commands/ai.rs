@@ -408,6 +408,18 @@ fn emit_progress(app: &AppHandle, stage: &str, completed: u32, total: u32, messa
     );
 }
 
+fn emit_triage_progress(app: &AppHandle, stage: &str, completed: u32, total: u32, message: &str) {
+    let _ = app.emit(
+        "triage_progress",
+        ThemeProgress {
+            stage: stage.to_string(),
+            completed,
+            total,
+            message: message.to_string(),
+        },
+    );
+}
+
 #[tauri::command]
 pub async fn generate_themes(
     app: AppHandle,
@@ -676,22 +688,33 @@ struct TriageResponse {
 
 #[tauri::command]
 pub async fn triage_articles(
+    app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     force: Option<bool>,
 ) -> Result<crate::db::models::TriageResult, String> {
+    emit_triage_progress(&app, "fetching", 0, 1, "Loading unread articles...");
+
+    // Cap per run to avoid runaway cost on remote providers / all-day loops
+    // on local ones. 1000 is already 20-40 minutes on a local model.
+    const MAX_PER_RUN: i64 = 1000;
+
     let (articles, settings_json, preferences) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let articles = if force.unwrap_or(false) {
             queries::clear_triage(&conn).map_err(|e| e.to_string())?;
             let filter = ArticleFilter {
-                feed_id: None, theme_id: None,
-                is_read: Some(false), is_starred: None,
-                limit: Some(200), offset: None,
+                feed_id: None,
+                theme_id: None,
+                is_read: Some(false),
+                is_starred: None,
+                limit: Some(MAX_PER_RUN),
+                offset: None,
             };
             queries::get_articles(&conn, &filter).map_err(|e| e.to_string())?
         } else {
-            queries::get_untriaged_article_ids(&conn, 200).map_err(|e| e.to_string())?
+            queries::get_untriaged_article_ids(&conn, MAX_PER_RUN)
+                .map_err(|e| e.to_string())?
         };
         let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
         let prefs = queries::build_preference_profile(&conn).ok();
@@ -699,6 +722,7 @@ pub async fn triage_articles(
     };
 
     if articles.is_empty() {
+        emit_triage_progress(&app, "done", 1, 1, "Nothing to triage");
         return Ok(crate::db::models::TriageResult { triaged_count: 0, batches: 0, errors: vec![] });
     }
 
@@ -724,9 +748,17 @@ pub async fn triage_articles(
     let mut batch_count = 0i32;
     let mut errors = Vec::new();
     let now = Utc::now().timestamp();
+    let total_batches = articles.len().div_ceil(batch_size) as u32;
 
     for chunk in articles.chunks(batch_size) {
         batch_count += 1;
+        emit_triage_progress(
+            &app,
+            "batch",
+            batch_count as u32 - 1,
+            total_batches,
+            &format!("Triaging {}/{} ({} articles)", batch_count, total_batches, articles.len()),
+        );
 
         let snippets: Vec<serde_json::Value> = chunk.iter().map(|a| {
             let excerpt: String = a.article.content_text.as_deref().unwrap_or("").chars().take(300).collect();
@@ -783,7 +815,23 @@ pub async fn triage_articles(
                 errors.push(format!("Batch {}: {}", batch_count, e));
             }
         }
+
+        emit_triage_progress(
+            &app,
+            "batch",
+            batch_count as u32,
+            total_batches,
+            &format!("Triaged {}/{}", batch_count, total_batches),
+        );
     }
+
+    emit_triage_progress(
+        &app,
+        "done",
+        total_batches,
+        total_batches,
+        &format!("Triaged {} articles", triaged_count),
+    );
 
     Ok(crate::db::models::TriageResult { triaged_count, batches: batch_count, errors })
 }

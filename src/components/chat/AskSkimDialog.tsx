@@ -123,9 +123,9 @@ export function AskSkimDialog({ onClose }: Props) {
                 Ask anything about articles in your feed.
               </p>
               <div className="flex flex-col gap-1" style={{ fontSize: 12, opacity: 0.7 }}>
-                <span>“what's new with shyam sankar”</span>
+                <span>“what are this week's biggest AI stories”</span>
                 <span>“which article covered work ethic”</span>
-                <span>“summarize this week's AI news”</span>
+                <span>“find pieces about distributed systems”</span>
               </div>
             </div>
           )}

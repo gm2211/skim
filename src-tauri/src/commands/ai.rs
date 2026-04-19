@@ -179,6 +179,59 @@ fn extract_field_fuzzy(text: &str, field: &str) -> Option<String> {
     Some(value.to_string())
 }
 
+/// Fetch the article URL and convert its body to plain text. Used as a fallback
+/// when the RSS entry only contains a title + link (Hacker News, Reddit, etc).
+async fn fetch_article_text(url: &str) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let html = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .text()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Strip everything outside <body>, then remove script/style/nav/etc
+    // before handing off to html2text.
+    let body = if let Some(start) = html.find("<body") {
+        let content_start = html[start..].find('>').map(|i| start + i + 1).unwrap_or(start);
+        if let Some(end) = html[content_start..].find("</body>") {
+            html[content_start..content_start + end].to_string()
+        } else {
+            html[content_start..].to_string()
+        }
+    } else {
+        html
+    };
+
+    let mut clean = body;
+    for tag in &["script", "style", "nav", "header", "footer", "noscript", "aside", "form", "svg", "iframe"] {
+        loop {
+            let lower = clean.to_lowercase();
+            let open = format!("<{}", tag);
+            let close = format!("</{}>", tag);
+            if let Some(s) = lower.find(&open) {
+                if let Some(e) = lower[s..].find(&close) {
+                    clean = format!("{}{}", &clean[..s], &clean[s + e + close.len()..]);
+                } else if let Some(gt) = clean[s..].find('>') {
+                    clean = format!("{}{}", &clean[..s], &clean[s + gt + 1..]);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+    }
+
+    Ok(html2text::from_read(clean.as_bytes(), 12000))
+}
+
 /// Find the first JSON object in a string (handles preamble text before the JSON)
 /// Find the first JSON object in a string (handles preamble text before the JSON)
 pub fn extract_json_object(text: &str) -> Option<&str> {
@@ -288,7 +341,27 @@ pub async fn summarize_article(
     let html_as_text = article.article.content_html.as_deref()
         .map(|h| html2text::from_read(h.as_bytes(), 10000))
         .unwrap_or_default();
-    let text = if html_as_text.len() > content_text.len() { &html_as_text } else { content_text };
+    let local_text = if html_as_text.len() > content_text.len() {
+        html_as_text
+    } else {
+        content_text.to_string()
+    };
+
+    // Many aggregator feeds (Hacker News, Reddit, some newsletters) only
+    // ship a title + link in the RSS body. If we don't have enough text to
+    // summarize, fetch the linked page and extract its body text.
+    let text = if local_text.trim().chars().count() < 400 {
+        if let Some(ref url) = article.article.url {
+            match fetch_article_text(url).await {
+                Ok(fetched) if fetched.trim().chars().count() > local_text.trim().chars().count() => fetched,
+                _ => local_text,
+            }
+        } else {
+            local_text
+        }
+    } else {
+        local_text
+    };
 
     if text.trim().is_empty() {
         return Err("No article content to summarize.".to_string());
@@ -297,7 +370,7 @@ pub async fn summarize_article(
     let system_prompt = prompts::article_summary_system_prompt(&settings.ai);
 
     // Get bullet summary (skip if format is paragraph-only)
-    let bullet_prompt = prompts::article_bullet_summary_prompt(title, text, &settings.ai);
+    let bullet_prompt = prompts::article_bullet_summary_prompt(title, &text, &settings.ai);
     let bullet_response = if !bullet_prompt.is_empty() {
         let req = ChatRequest {
             model: model.clone(),
@@ -320,7 +393,7 @@ pub async fn summarize_article(
     }
 
     // Get full summary (skip if format is bullets-only)
-    let full_prompt = prompts::article_full_summary_prompt(title, text, &settings.ai);
+    let full_prompt = prompts::article_full_summary_prompt(title, &text, &settings.ai);
     let full_response = if !full_prompt.is_empty() {
         let req = ChatRequest {
             model: model.clone(),

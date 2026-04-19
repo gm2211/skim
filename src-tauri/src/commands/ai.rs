@@ -845,7 +845,7 @@ pub async fn get_inbox_articles(
     offset: Option<i64>,
 ) -> Result<Vec<crate::db::models::ArticleWithTriage>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    queries::get_inbox_articles(&conn, min_priority, is_read, limit.unwrap_or(200), offset.unwrap_or(0))
+    queries::get_inbox_articles(&conn, min_priority, is_read, limit.unwrap_or(1000), offset.unwrap_or(0))
         .map_err(|e| e.to_string())
 }
 

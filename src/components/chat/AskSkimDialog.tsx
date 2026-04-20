@@ -16,7 +16,7 @@ interface Props {
 }
 
 export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
-  const [scope, setScope] = useState<Scope>("inbox");
+  const [scope, setScope] = useState<Scope>("unread");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);

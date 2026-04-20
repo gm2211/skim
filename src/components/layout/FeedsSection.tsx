@@ -1086,7 +1086,8 @@ function AutoOrganizeDialog({
   onCancel: () => void;
   onApply: (proposals: FolderProposal[], replaceExisting: boolean) => Promise<void>;
 }) {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [hasRun, setHasRun] = useState(false);
   const [saving, setSaving] = useState(false);
   const [proposals, setProposals] = useState<FolderProposal[]>([]);
   const [selected, setSelected] = useState<Record<number, Set<string>>>({});
@@ -1111,6 +1112,7 @@ function AutoOrganizeDialog({
   }, [feeds]);
 
   useEffect(() => {
+    if (runSeq === 0) return; // Don't auto-fire on open — user clicks Run.
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -1127,6 +1129,7 @@ function AutoOrganizeDialog({
         });
         setSelected(initSel);
         setNames(initNames);
+        setHasRun(true);
       } catch (e) {
         if (!cancelled) setError(String(e instanceof Error ? e.message : e));
       } finally {
@@ -1272,11 +1275,11 @@ function AutoOrganizeDialog({
               <button
                 onClick={() => setRunSeq((n) => n + 1)}
                 disabled={loading}
-                className="ml-auto text-accent hover:text-accent-hover disabled:opacity-40 transition-colors"
-                style={{ fontSize: 12 }}
-                title="Re-run AI with current scope"
+                className="ml-auto bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium"
+                style={{ padding: "4px 12px", fontSize: 12 }}
+                title="Run AI with current scope"
               >
-                ⟳ Re-run
+                {hasRun ? "⟳ Re-run" : "▶ Run"}
               </button>
             </div>
           </div>
@@ -1292,7 +1295,14 @@ function AutoOrganizeDialog({
             </div>
           )}
 
-          {!loading && proposals.length === 0 && !error && (
+          {!loading && !hasRun && !error && (
+            <div className="text-center" style={{ padding: "20px 0" }}>
+              <p className="text-text-muted" style={{ fontSize: 13 }}>
+                Pick scope + case style, then click <strong>Run</strong>.
+              </p>
+            </div>
+          )}
+          {!loading && hasRun && proposals.length === 0 && !error && (
             <div className="text-center" style={{ padding: "20px 0" }}>
               <p className="text-text-muted" style={{ fontSize: 13 }}>
                 AI didn't produce any folders. Try again or add more feeds first.

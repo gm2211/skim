@@ -83,7 +83,14 @@ export function Sidebar() {
           </svg>
         </button>
       </div>
-      {askOpen && <AskSkimDialog onClose={() => setAskOpen(false)} />}
+      {askOpen && (
+        <AskSkimDialog
+          onClose={() => setAskOpen(false)}
+          onOpenArticle={(id) => {
+            useUiStore.getState().setSelectedArticleId(id);
+          }}
+        />
+      )}
 
       {/* App title */}
       <div style={{ padding: "12px 24px 28px 24px" }}>

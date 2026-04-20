@@ -118,6 +118,16 @@ pub struct ArticleChatResponse {
     pub provider: String,
     pub model: String,
     pub article_ids: Vec<String>,
+    pub sources: Vec<ChatSource>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ChatSource {
+    pub id: String,
+    pub title: String,
+    pub feed_title: String,
+    pub url: Option<String>,
+    pub published_at: Option<i64>,
 }
 
 /// Extract lowercase word stems (3+ chars) from a query for keyword matching.
@@ -308,11 +318,23 @@ pub async fn chat_with_articles(
 
     let response = provider.chat(req).await?;
 
+    let sources: Vec<ChatSource> = selected
+        .iter()
+        .map(|a| ChatSource {
+            id: a.article.id.clone(),
+            title: a.article.title.clone(),
+            feed_title: a.feed_title.clone(),
+            url: a.article.url.clone(),
+            published_at: a.article.published_at,
+        })
+        .collect();
+
     Ok(ArticleChatResponse {
         content: response.content,
         provider: provider.name().to_string(),
         model,
         article_ids: selected.iter().map(|a| a.article.id.clone()).collect(),
+        sources,
     })
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { chatWithArticles, type ArticleChatResponse } from "../../services/commands";
+import { chatWithArticles, type ArticleChatResponse, type ChatSource } from "../../services/commands";
 import type { ChatMessageInput } from "../../services/types";
 
 type Scope = "inbox" | "unread" | "all";
@@ -7,7 +7,7 @@ type Scope = "inbox" | "unread" | "all";
 interface Message {
   role: "user" | "assistant";
   content: string;
-  citedIds?: string[];
+  sources?: ChatSource[];
 }
 
 interface Props {
@@ -15,7 +15,7 @@ interface Props {
   onOpenArticle?: (articleId: string) => void;
 }
 
-export function AskSkimDialog({ onClose }: Props) {
+export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
   const [scope, setScope] = useState<Scope>("inbox");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -49,7 +49,7 @@ export function AskSkimDialog({ onClose }: Props) {
       const resp: ArticleChatResponse = await chatWithArticles(scope, query, history);
       setMessages((m) => [
         ...m,
-        { role: "assistant", content: resp.content, citedIds: resp.article_ids },
+        { role: "assistant", content: resp.content, sources: resp.sources },
       ]);
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
@@ -131,27 +131,83 @@ export function AskSkimDialog({ onClose }: Props) {
           )}
 
           {messages.map((m, i) => (
-            <div
-              key={i}
-              className={m.role === "user" ? "flex justify-end" : "flex justify-start"}
-              style={{ marginBottom: 12 }}
-            >
+            <div key={i} style={{ marginBottom: 14 }}>
               <div
-                className={
-                  m.role === "user"
-                    ? "bg-accent/20 text-text-primary rounded-2xl"
-                    : "bg-white/5 text-text-primary rounded-2xl"
-                }
-                style={{
-                  padding: "10px 14px",
-                  fontSize: 13,
-                  maxWidth: "88%",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                }}
+                className={m.role === "user" ? "flex justify-end" : "flex justify-start"}
               >
-                {m.content}
+                <div
+                  className={
+                    m.role === "user"
+                      ? "bg-accent/20 text-text-primary rounded-2xl"
+                      : "bg-white/5 text-text-primary rounded-2xl"
+                  }
+                  style={{
+                    padding: "10px 14px",
+                    fontSize: 13,
+                    maxWidth: "88%",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {m.content}
+                </div>
               </div>
+              {m.role === "assistant" && m.sources && m.sources.length > 0 && (
+                <div style={{ marginTop: 8, paddingLeft: 4 }}>
+                  <div
+                    className="text-text-muted uppercase tracking-wider"
+                    style={{ fontSize: 10, fontWeight: 600, marginBottom: 4 }}
+                  >
+                    Sources
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {m.sources.map((s, idx) => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          if (onOpenArticle) {
+                            onOpenArticle(s.id);
+                            onClose();
+                          } else if (s.url) {
+                            window.open(s.url, "_blank");
+                          }
+                        }}
+                        className="text-left rounded-lg border border-white/5 hover:border-accent/30 hover:bg-white/5 transition-colors"
+                        style={{ padding: "6px 10px" }}
+                      >
+                        <div className="flex items-start gap-2">
+                          <span
+                            className="text-text-muted tabular-nums flex-shrink-0"
+                            style={{ fontSize: 11, fontWeight: 600, marginTop: 1 }}
+                          >
+                            [{idx + 1}]
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div
+                              className="text-text-primary truncate"
+                              style={{ fontSize: 12, fontWeight: 500 }}
+                            >
+                              {s.title}
+                            </div>
+                            <div
+                              className="text-text-muted truncate"
+                              style={{ fontSize: 11 }}
+                            >
+                              {s.feed_title}
+                              {s.published_at && (
+                                <>
+                                  {" · "}
+                                  {new Date(s.published_at * 1000).toLocaleDateString()}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
 

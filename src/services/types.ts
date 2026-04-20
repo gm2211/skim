@@ -171,6 +171,7 @@ export interface AppearanceSettings {
 export interface SyncSettings {
   refresh_interval_minutes: number;
   max_articles_per_feed: number;
+  recent_cap: number;
 }
 
 export interface ArticleWithTriage extends Article {
@@ -237,4 +238,12 @@ export type SidebarView =
   | { type: "starred" }
   | { type: "feed"; feedId: string }
   | { type: "inbox" }
+  | { type: "recent" }
   | { type: "theme"; themeId: string };
+
+export interface ArticleWithInteraction extends Article {
+  reading_time_sec: number;
+  chat_messages: number;
+  interaction_at: number;
+  engagement_score: number;
+}

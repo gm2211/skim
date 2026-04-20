@@ -991,7 +991,44 @@ pub async fn record_reading_time(
 ) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = Utc::now().timestamp();
-    queries::record_reading_time(&conn, &article_id, seconds, now).map_err(|e| e.to_string())
+    queries::record_reading_time(&conn, &article_id, seconds, now).map_err(|e| e.to_string())?;
+    let cap = read_recent_cap(&conn);
+    let _ = queries::prune_interactions(&conn, cap);
+    Ok(())
+}
+
+fn read_recent_cap(conn: &rusqlite::Connection) -> i64 {
+    let settings: crate::db::models::AppSettings = queries::get_setting(conn, "app_settings")
+        .ok()
+        .flatten()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    settings.sync.recent_cap as i64
+}
+
+#[tauri::command]
+pub async fn get_recent_articles(
+    db: State<'_, Database>,
+    order: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<crate::db::models::ArticleWithInteraction>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let order = order.unwrap_or_else(|| "engagement".to_string());
+    let limit = limit.unwrap_or(500).min(3000);
+    queries::list_recent_articles(&conn, &order, limit).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn count_read_matches(
+    db: State<'_, Database>,
+    query: String,
+) -> Result<i64, String> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        return Ok(0);
+    }
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::count_read_matches(&conn, trimmed).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

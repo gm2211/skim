@@ -14,6 +14,7 @@ import type {
   ChatResponse,
   SearchResult,
   ArticleWithTriage,
+  ArticleWithInteraction,
   TriageResult,
   TriageStats,
   ArticleInteraction,
@@ -176,6 +177,18 @@ export const getInboxArticles = (opts?: {
     offset: opts?.offset ?? null,
   });
 export const getTriageStats = () => invoke<TriageStats>("get_triage_stats");
+
+export const getRecentArticles = (
+  order: "engagement" | "recency" = "engagement",
+  limit?: number,
+) =>
+  invoke<ArticleWithInteraction[]>("get_recent_articles", {
+    order,
+    limit: limit ?? null,
+  });
+
+export const countReadMatches = (query: string) =>
+  invoke<number>("count_read_matches", { query });
 
 // Learning / interactions
 export const recordReadingTime = (articleId: string, seconds: number) =>

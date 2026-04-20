@@ -168,6 +168,8 @@ pub fn run() {
             commands::ai::get_inbox_articles,
             commands::ai::get_triage_stats,
             commands::ai::record_reading_time,
+            commands::ai::get_recent_articles,
+            commands::ai::count_read_matches,
             commands::ai::set_article_feedback,
             commands::ai::set_priority_override,
             commands::ai::get_preference_profile,

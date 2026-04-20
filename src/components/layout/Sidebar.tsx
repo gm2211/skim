@@ -145,6 +145,24 @@ export function Sidebar() {
               Starred
             </span>
           </div>
+          <div
+            onClick={() => setSidebarView({ type: "recent" })}
+            className="flex items-center gap-3 cursor-pointer transition-colors relative z-20 hover:text-text-primary"
+            style={{ padding: "6px 0" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+              className={`flex-shrink-0 ${isActive({ type: "recent" }) ? "opacity-100" : "opacity-50"}`}
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 3" />
+            </svg>
+            <span
+              className={isActive({ type: "recent" }) ? "text-text-primary" : "text-text-secondary"}
+              style={{ fontSize: 15 }}
+            >
+              Recent
+            </span>
+          </div>
         </div>
 
         {/* AI Inbox */}

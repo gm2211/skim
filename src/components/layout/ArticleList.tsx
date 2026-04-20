@@ -2,10 +2,11 @@ import { useMemo, useState, useCallback } from "react";
 import { useArticles, useMarkAllRead, useMarkRead, useMarkUnread, useToggleRead, useToggleStar } from "../../hooks/useArticles";
 import { useInboxArticles } from "../../hooks/useInbox";
 import { useThemes, useArticleThemeTags } from "../../hooks/useThemes";
+import { useRecentArticles, useReadMatchCount } from "../../hooks/useRecent";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
-import type { ArticleFilter, ArticleWithTriage } from "../../services/types";
+import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction } from "../../services/types";
 
 const PRIORITY_GROUP_LABELS: Record<number, string> = {
   5: "MUST READ",
@@ -86,6 +87,8 @@ export function ArticleList() {
   } | null>(null);
 
   const isInbox = sidebarView.type === "inbox";
+  const isRecent = sidebarView.type === "recent";
+  const [recentOrder, setRecentOrder] = useState<"engagement" | "recency">("engagement");
   const { data: themes } = useThemes();
   const { data: themeTags } = useArticleThemeTags();
   const [activeThemeId, setActiveThemeId] = useState<string | null>(null);
@@ -129,9 +132,17 @@ export function ArticleList() {
     isInbox ? undefined : -1, // -1 disables the query when not in inbox view
     inboxIsRead
   );
+  const { data: recentArticlesRaw, isLoading: recentLoading } = useRecentArticles(recentOrder);
+  const recentArticles = useMemo(
+    () => (isRecent ? (recentArticlesRaw as ArticleWithInteraction[] | undefined) : undefined),
+    [isRecent, recentArticlesRaw],
+  );
 
-  const articles = isInbox ? inboxArticles : regularArticles;
-  const isLoading = isInbox ? inboxLoading : regularLoading;
+  const { data: readMatchCount } = useReadMatchCount(searchQuery);
+  const [includeRead, setIncludeRead] = useState(false);
+
+  const articles = isInbox ? inboxArticles : isRecent ? recentArticles : regularArticles;
+  const isLoading = isInbox ? inboxLoading : isRecent ? recentLoading : regularLoading;
 
   const title = useMemo(() => {
     switch (sidebarView.type) {
@@ -143,12 +154,14 @@ export function ArticleList() {
         return null;
       case "inbox":
         return "AI Inbox";
+      case "recent":
+        return "Recently Read";
       case "theme": {
         const theme = themes?.find((t) => t.id === sidebarView.themeId);
         return theme?.label ?? "Theme";
       }
     }
-  }, [sidebarView]);
+  }, [sidebarView, themes]);
 
   const feedTitle = useMemo(() => {
     if (sidebarView.type === "feed" && articles && articles.length > 0) {
@@ -172,15 +185,22 @@ export function ArticleList() {
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (a) =>
-          a.title.toLowerCase().includes(q) ||
-          a.feed_title?.toLowerCase().includes(q) ||
-          a.content_text?.toLowerCase().includes(q)
-      );
+      result = result.filter((a) => {
+        const hay =
+          a.title.toLowerCase() +
+          " " +
+          (a.feed_title?.toLowerCase() ?? "") +
+          " " +
+          (a.content_text?.toLowerCase() ?? "");
+        if (!hay.includes(q)) return false;
+        // If searching in a filter that normally hides read articles,
+        // require includeRead toggle before surfacing read matches.
+        if (!includeRead && listFilter === "unread" && a.is_read) return false;
+        return true;
+      });
     }
     return result;
-  }, [articles, searchQuery, isInbox, listFilter, activeThemeId, themeTagsByArticle]);
+  }, [articles, searchQuery, isInbox, listFilter, activeThemeId, themeTagsByArticle, includeRead]);
 
   const unreadCount = useMemo(() => {
     return articles?.filter((a) => !a.is_read).length ?? 0;
@@ -189,8 +209,11 @@ export function ArticleList() {
   const articleGroups = useMemo(() => {
     if (!filteredArticles) return [];
     if (isInbox) return groupByPriority(filteredArticles as ArticleWithTriage[]);
+    if (isRecent && recentOrder === "engagement") {
+      return [{ label: "MOST ENGAGED", indices: filteredArticles.map((_, i) => i) }];
+    }
     return groupByDate(filteredArticles);
-  }, [filteredArticles, isInbox]);
+  }, [filteredArticles, isInbox, isRecent, recentOrder]);
 
   const handleMarkAllRead = () => {
     const feedId = sidebarView.type === "feed" ? sidebarView.feedId : null;
@@ -297,7 +320,47 @@ export function ArticleList() {
             }}
           />
         </div>
+        {searchQuery.trim().length >= 2 &&
+          listFilter === "unread" &&
+          (readMatchCount ?? 0) > 0 && (
+            <div className="flex items-center gap-2" style={{ marginTop: 6 }}>
+              <span className="text-text-muted" style={{ fontSize: 12 }}>
+                {readMatchCount} match{readMatchCount === 1 ? "" : "es"} in already-read articles
+              </span>
+              <button
+                onClick={() => setIncludeRead((v) => !v)}
+                className="text-accent hover:text-accent-hover transition-colors"
+                style={{ fontSize: 12, fontWeight: 500 }}
+              >
+                {includeRead ? "Hide read results" : "Show them"}
+              </button>
+            </div>
+          )}
       </div>
+
+      {/* Recent sort toggle */}
+      {isRecent && (
+        <div
+          className="flex items-center gap-2 border-b border-white/5"
+          style={{ padding: "8px 24px" }}
+        >
+          <span className="text-text-muted" style={{ fontSize: 12 }}>Sort:</span>
+          {(["engagement", "recency"] as const).map((o) => (
+            <button
+              key={o}
+              onClick={() => setRecentOrder(o)}
+              className={`rounded-full transition-colors ${
+                recentOrder === o
+                  ? "bg-accent/20 text-accent"
+                  : "bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary"
+              }`}
+              style={{ padding: "4px 12px", fontSize: 12, fontWeight: 500 }}
+            >
+              {o === "engagement" ? "Engagement" : "Recency"}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Theme tabs — only in AI Inbox */}
       {isInbox && themes && themes.length > 0 && (

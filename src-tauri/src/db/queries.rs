@@ -729,6 +729,97 @@ pub fn record_reading_time(
     Ok(())
 }
 
+/// Delete interaction rows beyond the configured cap, oldest first.
+pub fn prune_interactions(conn: &Connection, cap: i64) -> Result<(), rusqlite::Error> {
+    if cap <= 0 {
+        return Ok(());
+    }
+    conn.execute(
+        "DELETE FROM article_interactions
+         WHERE article_id NOT IN (
+             SELECT article_id FROM article_interactions
+             ORDER BY updated_at DESC
+             LIMIT ?1
+         )",
+        params![cap],
+    )?;
+    Ok(())
+}
+
+/// List articles with material interaction (reading_time >= 10s OR chat
+/// messages > 0 OR feedback set). Engagement score = reading + chat*60.
+pub fn list_recent_articles(
+    conn: &Connection,
+    order: &str,
+    limit: i64,
+) -> Result<Vec<ArticleWithInteraction>, rusqlite::Error> {
+    let order_clause = match order {
+        "recency" => "i.updated_at DESC",
+        _ => "(i.reading_time_sec + i.chat_messages * 60) DESC, i.updated_at DESC",
+    };
+    let sql = format!(
+        "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id,
+                f.title, f.icon_url,
+                i.reading_time_sec, i.chat_messages, i.updated_at
+         FROM article_interactions i
+         JOIN articles a ON i.article_id = a.id
+         JOIN feeds f ON a.feed_id = f.id
+         WHERE i.reading_time_sec >= 10
+            OR i.chat_messages > 0
+            OR i.feedback IS NOT NULL
+            OR i.priority_override IS NOT NULL
+         ORDER BY {}
+         LIMIT ?1",
+        order_clause
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt
+        .query_map(params![limit], |row| {
+            let reading_time_sec: i64 = row.get(14)?;
+            let chat_messages: i64 = row.get(15)?;
+            let engagement_score = (reading_time_sec as f64) + (chat_messages as f64) * 60.0;
+            Ok(ArticleWithInteraction {
+                article: Article {
+                    id: row.get(0)?,
+                    feed_id: row.get(1)?,
+                    title: row.get(2)?,
+                    url: row.get(3)?,
+                    author: row.get(4)?,
+                    content_html: row.get(5)?,
+                    content_text: row.get(6)?,
+                    published_at: row.get(7)?,
+                    fetched_at: row.get(8)?,
+                    is_read: row.get::<_, i32>(9)? != 0,
+                    is_starred: row.get::<_, i32>(10)? != 0,
+                    feedly_entry_id: row.get(11)?,
+                },
+                feed_title: row.get(12)?,
+                feed_icon_url: row.get(13)?,
+                reading_time_sec,
+                chat_messages,
+                interaction_at: row.get(16)?,
+                engagement_score,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
+/// Count read articles whose title or content contains the query. Used to
+/// offer a "N more matches in read articles" hint on the search bar.
+pub fn count_read_matches(conn: &Connection, query: &str) -> Result<i64, rusqlite::Error> {
+    let pattern = format!("%{}%", query.to_lowercase());
+    conn.query_row(
+        "SELECT COUNT(*) FROM articles
+         WHERE is_read = 1
+           AND (LOWER(title) LIKE ?1 OR LOWER(COALESCE(content_text, '')) LIKE ?1)",
+        params![pattern],
+        |row| row.get(0),
+    )
+}
+
 pub fn increment_chat_count(
     conn: &Connection,
     article_id: &str,

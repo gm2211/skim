@@ -173,7 +173,13 @@ pub struct AppearanceSettings {
 pub struct SyncSettings {
     pub refresh_interval_minutes: i32,
     pub max_articles_per_feed: i32,
+    /// Max rows kept in article_interactions. Older rows beyond this cap
+    /// are evicted so the "Recent" list stays bounded.
+    #[serde(default = "default_recent_cap")]
+    pub recent_cap: i32,
 }
+
+fn default_recent_cap() -> i32 { 3000 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArticleTriage {
@@ -193,6 +199,18 @@ pub struct ArticleWithTriage {
     pub feed_icon_url: Option<String>,
     pub priority: Option<i32>,
     pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ArticleWithInteraction {
+    #[serde(flatten)]
+    pub article: Article,
+    pub feed_title: String,
+    pub feed_icon_url: Option<String>,
+    pub reading_time_sec: i64,
+    pub chat_messages: i64,
+    pub interaction_at: i64,
+    pub engagement_score: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -259,6 +277,7 @@ impl Default for AppSettings {
             sync: SyncSettings {
                 refresh_interval_minutes: 30,
                 max_articles_per_feed: 200,
+                recent_cap: 3000,
             },
         }
     }

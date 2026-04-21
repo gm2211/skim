@@ -1,9 +1,19 @@
 use crate::db::models::AiSettings;
 
-pub fn theme_grouping_system_prompt() -> &'static str {
-    "You group news articles into themes. Output JSON only. No filler, no hedging. \
+pub fn theme_grouping_system_prompt(user_prompt: Option<&str>) -> String {
+    let base = "You group news articles into themes. Output JSON only. No filler, no hedging. \
      Labels: 2-5 words. Summaries: 1-2 dense sentences. \
-     Refer to articles by their numeric handle."
+     Refer to articles by their numeric handle.";
+    match user_prompt {
+        Some(p) if !p.trim().is_empty() => {
+            format!(
+                "{base}\n\n--- Reader's interests (explicit) ---\n{}\n\
+                 Use this as a gentle nudge when labeling/grouping themes. Labels must still describe the articles themselves.",
+                p.trim()
+            )
+        }
+        _ => base.to_string(),
+    }
 }
 
 pub fn theme_grouping_user_prompt(articles_listing: &str) -> String {
@@ -115,7 +125,10 @@ Respond with a JSON object with keys "summary" and "notes". Example:
     )
 }
 
-pub fn triage_system_prompt(preferences: Option<&crate::db::models::UserPreferenceProfile>) -> String {
+pub fn triage_system_prompt(
+    preferences: Option<&crate::db::models::UserPreferenceProfile>,
+    user_prompt: Option<&str>,
+) -> String {
     let base = "You triage RSS articles for a busy reader. For each article, assign a priority (1-5) and write a one-line reason (under 80 chars) describing what the article is about and why it matters (or why it's noise).\n\n\
      Priority scale:\n\
      5 = Breaking/urgent, directly relevant, actionable\n\
@@ -126,13 +139,26 @@ pub fn triage_system_prompt(preferences: Option<&crate::db::models::UserPreferen
      Be opinionated. Most articles should be 2-3. Reserve 5 for genuinely important items. Reserve 1 for clear noise.\n\
      The reason field must describe the article itself — never mention \"tracked topics\", \"user preferences\", \"reader history\", or the reader's past behavior. The reader doesn't see or manage a topic list and will be confused by such phrasing.";
 
+    let mut context = String::from(base);
+
+    // Explicit user-authored prompt comes first — it's the strongest signal
+    // because the reader wrote it themselves.
+    if let Some(p) = user_prompt {
+        let trimmed = p.trim();
+        if !trimmed.is_empty() {
+            context.push_str("\n\n--- Reader's interests (explicit) ---\n");
+            context.push_str(trimmed);
+            context.push('\n');
+        }
+    }
+
     // Only inject learned preferences after the reader has meaningfully
     // engaged with articles. Below 20 interactions the signal is too noisy
     // and produces hallucinated "tracked topic" reasons.
-    match preferences {
-        Some(prefs) if prefs.total_interactions >= 20 => {
-            let mut context = String::from(base);
-            context.push_str("\n\n--- Soft personalization hints (use as a gentle nudge, not a justification) ---\n");
+    if let Some(prefs) = preferences {
+        if prefs.total_interactions >= 20 {
+            context.push_str("\n--- Reader's learned preferences ---\n");
+            context.push_str("(soft personalization hints — use as a gentle nudge, not a justification)\n");
 
             if !prefs.top_feeds.is_empty() {
                 context.push_str(&format!("Sources the reader tends to open: {}\n", prefs.top_feeds.join(", ")));
@@ -146,10 +172,10 @@ pub fn triage_system_prompt(preferences: Option<&crate::db::models::UserPreferen
                 context.push_str(&format!("Sample titles the reader deprioritized (inspiration only, do not cite):\n{}\n", sample.join("\n")));
             }
             context.push_str("Reasons must still describe only the article itself.\n");
-            context
         }
-        _ => base.to_string(),
     }
+
+    context
 }
 
 pub fn triage_user_prompt(articles_listing: &str) -> String {

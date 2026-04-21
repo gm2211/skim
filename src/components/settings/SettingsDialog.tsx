@@ -382,6 +382,25 @@ export function SettingsDialog() {
                         rows={3}
                       />
                     </InputField>
+
+                    <div className="border-t border-white/5" style={{ margin: "24px 0" }} />
+                    <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
+                      AI Inbox — What you care about
+                    </h3>
+
+                    <InputField
+                      label="Your interests"
+                      description="This prompt runs alongside the preferences learned from your reading habits."
+                    >
+                      <textarea
+                        value={local.ai.triage_user_prompt ?? ""}
+                        onChange={(e) => updateAi({ triage_user_prompt: e.target.value || null })}
+                        placeholder="e.g., Prioritize distributed systems, Rust/Go internals, Claude/Anthropic news. Deprioritize crypto drama and celebrity tech."
+                        className={inputClass}
+                        style={{ ...inputStyle, minHeight: 120, resize: "vertical" }}
+                        rows={5}
+                      />
+                    </InputField>
                   </>
                 )}
               </>

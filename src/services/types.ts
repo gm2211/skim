@@ -104,6 +104,7 @@ export interface AiSettings {
   chat_model: string | null;
   chat_api_key: string | null;
   chat_endpoint: string | null;
+  triage_user_prompt?: string | null;
 }
 
 export interface ChatMessageInput {

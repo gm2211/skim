@@ -161,6 +161,11 @@ pub struct AiSettings {
     pub chat_api_key: Option<String>,
     #[serde(default)]
     pub chat_endpoint: Option<String>,
+    /// Free-form, user-authored prompt describing topics/interests they care
+    /// about. Feeds into triage (and theme) system prompts alongside the
+    /// engagement-based preference profile built from interactions.
+    #[serde(default)]
+    pub triage_user_prompt: Option<String>,
     /// OAuth bearer token for Claude Pro/Max (provider = "claude-subscription").
     /// Populated at command time from the settings KV rows written by
     /// `claude_oauth_*` commands — not persisted in the AppSettings JSON blob.
@@ -277,6 +282,7 @@ impl Default for AppSettings {
                 chat_model: None,
                 chat_api_key: None,
                 chat_endpoint: None,
+                triage_user_prompt: None,
                 oauth_access_token: None,
             },
             appearance: AppearanceSettings {

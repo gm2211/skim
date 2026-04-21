@@ -588,7 +588,7 @@ pub async fn generate_themes(
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: prompts::theme_grouping_system_prompt().to_string(),
+                    content: prompts::theme_grouping_system_prompt(ai_settings.triage_user_prompt.as_deref()),
                 },
                 ChatMessage {
                     role: "user".to_string(),
@@ -896,7 +896,7 @@ pub async fn triage_articles(
         let request = ChatRequest {
             model: model.clone(),
             messages: vec![
-                ChatMessage { role: "system".to_string(), content: prompts::triage_system_prompt(preferences.as_ref()) },
+                ChatMessage { role: "system".to_string(), content: prompts::triage_system_prompt(preferences.as_ref(), ai_settings.triage_user_prompt.as_deref()) },
                 ChatMessage { role: "user".to_string(), content: prompts::triage_user_prompt(&listing) },
             ],
             temperature: Some(0.3),

@@ -8,7 +8,9 @@ interface Props {
 }
 
 export function CatchupDialog({ onClose, onOpenArticle }: Props) {
-  const [scope, setScope] = useState<"inbox" | "unread">("inbox");
+  // Catch-up over all unread — inbox would filter to priority>=3 and miss
+  // whatever the triage hasn't rated yet.
+  const [scope, setScope] = useState<"inbox" | "unread">("unread");
   const [report, setReport] = useState<CatchupReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0);

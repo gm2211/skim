@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats, useTriageProgress } from "../../hooks/useInbox";
 import { useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
@@ -22,6 +22,20 @@ export function Sidebar() {
   const themeProgress = useThemeProgress();
 
   const totalUnread = feeds?.reduce((sum, f) => sum + f.unread_count, 0) ?? 0;
+
+  // Auto-run triage + theme grouping when the user lands on the AI Inbox.
+  // Fires once per entry into the view. Skips if a run is already in flight.
+  const autoRanFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (sidebarView.type !== "inbox") {
+      autoRanFor.current = null;
+      return;
+    }
+    if (autoRanFor.current === "inbox") return;
+    autoRanFor.current = "inbox";
+    if (!triage.isPending) triage.mutate(false);
+    if (!generateThemes.isPending) generateThemes.mutate();
+  }, [sidebarView.type, triage, generateThemes]);
 
   const isActive = (view: SidebarView) => {
     if (view.type === sidebarView.type) {
@@ -73,6 +87,15 @@ export function Sidebar() {
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
+        <button
+          onClick={() => setCatchupOpen(true)}
+          className="text-text-muted hover:text-accent transition-colors"
+          title="Super-quick catch-up"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
           </svg>
         </button>
         <button
@@ -201,135 +224,36 @@ export function Sidebar() {
               </span>
             )}
           </div>
-          <button
-            onClick={(e) => { e.stopPropagation(); triage.mutate(false); }}
-            disabled={triage.isPending}
-            className="flex items-center gap-2 w-full rounded-lg text-text-muted hover:text-accent hover:bg-white/5 transition-colors relative z-20"
-            style={{ padding: "8px", fontSize: 13 }}
-          >
-            {triage.isPending ? (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin flex-shrink-0">
-                  <path d="M21 12a9 9 0 11-6.219-8.56" />
-                </svg>
-                <span className="flex-1 flex items-center justify-between gap-2">
-                  <span className="truncate">
-                    {triageProgress?.message ?? "Triaging..."}
-                  </span>
+          {(triage.isPending || generateThemes.isPending) && (
+            <div className="flex flex-col gap-2" style={{ padding: "4px 8px 0" }}>
+              {triage.isPending && (
+                <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 12 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin flex-shrink-0">
+                    <path d="M21 12a9 9 0 11-6.219-8.56" />
+                  </svg>
+                  <span className="flex-1 truncate">{triageProgress?.message ?? "Triaging..."}</span>
                   {triageProgress && triageProgress.total > 0 && (
-                    <span className="text-text-muted tabular-nums" style={{ fontSize: 11 }}>
+                    <span className="tabular-nums" style={{ fontSize: 11 }}>
                       {triageProgress.completed}/{triageProgress.total}
                     </span>
                   )}
-                </span>
-              </>
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0">
-                  <line x1="21" y1="6" x2="10" y2="6" />
-                  <line x1="16" y1="12" x2="10" y2="12" />
-                  <line x1="12" y1="18" x2="10" y2="18" />
-                  <circle cx="5" cy="6" r="1.5" fill="currentColor" stroke="none" />
-                  <circle cx="5" cy="12" r="1.5" fill="currentColor" stroke="none" />
-                  <circle cx="5" cy="18" r="1.5" fill="currentColor" stroke="none" />
-                </svg>
-                <span>Triage unread articles</span>
-              </>
-            )}
-          </button>
-          {triage.isPending && triageProgress && triageProgress.total > 0 && (
-            <div
-              className="rounded-full bg-white/5 overflow-hidden"
-              style={{ height: 3, margin: "0 8px" }}
-            >
-              <div
-                className="bg-accent transition-all"
-                style={{
-                  height: "100%",
-                  width: `${Math.min(100, (triageProgress.completed / triageProgress.total) * 100)}%`,
-                }}
-              />
-            </div>
-          )}
-          {triage.isError && (
-            <p className="text-red-400" style={{ fontSize: 12, padding: "4px 8px" }}>
-              {triage.error instanceof Error ? triage.error.message : "Triage failed"}
-            </p>
-          )}
-          {triage.isSuccess && triage.data && (
-            <p className="text-text-muted" style={{ fontSize: 12, padding: "4px 8px" }}>
-              {triage.data.triaged_count > 0
-                ? `Triaged ${triage.data.triaged_count} articles`
-                : "No new articles to triage"}
-              {triage.data.errors.length > 0 && ` (${triage.data.errors.length} errors)`}
-            </p>
-          )}
-
-          {/* Group by theme — operates on AI Inbox articles */}
-          <button
-            onClick={() => generateThemes.mutate()}
-            disabled={generateThemes.isPending}
-            className="flex items-center gap-2 w-full rounded-lg text-text-muted hover:text-accent hover:bg-white/5 transition-colors relative z-20"
-            style={{ padding: "8px", fontSize: 13, marginTop: 4 }}
-          >
-            {generateThemes.isPending ? (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin flex-shrink-0">
-                  <path d="M21 12a9 9 0 11-6.219-8.56" />
-                </svg>
-                <span className="flex-1 flex items-center justify-between gap-2">
-                  <span className="truncate">
-                    {themeProgress?.message ?? "Grouping articles..."}
-                  </span>
+                </div>
+              )}
+              {generateThemes.isPending && (
+                <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 12 }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin flex-shrink-0">
+                    <path d="M21 12a9 9 0 11-6.219-8.56" />
+                  </svg>
+                  <span className="flex-1 truncate">{themeProgress?.message ?? "Grouping..."}</span>
                   {themeProgress && themeProgress.total > 0 && (
-                    <span className="text-text-muted tabular-nums" style={{ fontSize: 11 }}>
+                    <span className="tabular-nums" style={{ fontSize: 11 }}>
                       {themeProgress.completed}/{themeProgress.total}
                     </span>
                   )}
-                </span>
-              </>
-            ) : (
-              <>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
-                  <rect x="3" y="3" width="7" height="7" rx="1" />
-                  <rect x="14" y="3" width="7" height="7" rx="1" />
-                  <rect x="3" y="14" width="7" height="7" rx="1" />
-                  <rect x="14" y="14" width="7" height="7" rx="1" />
-                </svg>
-                <span>Group by theme</span>
-              </>
-            )}
-          </button>
-          {generateThemes.isPending && themeProgress && themeProgress.total > 0 && (
-            <div
-              className="rounded-full bg-white/5 overflow-hidden"
-              style={{ height: 3, margin: "0 8px" }}
-            >
-              <div
-                className="bg-accent transition-all"
-                style={{
-                  height: "100%",
-                  width: `${Math.min(100, (themeProgress.completed / themeProgress.total) * 100)}%`,
-                }}
-              />
+                </div>
+              )}
             </div>
           )}
-          {generateThemes.isError && (
-            <p className="text-red-400" style={{ fontSize: 12, padding: "4px 8px" }}>
-              {generateThemes.error instanceof Error ? generateThemes.error.message : "Theme generation failed"}
-            </p>
-          )}
-
-          <button
-            onClick={(e) => { e.stopPropagation(); setCatchupOpen(true); }}
-            className="flex items-center gap-2 w-full rounded-lg text-text-muted hover:text-accent hover:bg-white/5 transition-colors relative z-20"
-            style={{ padding: "8px", fontSize: 13, marginTop: 4 }}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
-            </svg>
-            <span>Super-quick catch-up</span>
-          </button>
         </div>
 
         {/* Feeds section */}

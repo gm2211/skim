@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-ios-keychain-load"
+description = "Enables the ios_keychain_load command without any pre-configured scope."
+commands.allow = ["ios_keychain_load"]
+
+[[permission]]
+identifier = "deny-ios-keychain-load"
+description = "Denies the ios_keychain_load command without any pre-configured scope."
+commands.deny = ["ios_keychain_load"]

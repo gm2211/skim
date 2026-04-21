@@ -3,7 +3,9 @@ mod db;
 mod feed;
 mod ai;
 
-use ai::local_provider::{self, SharedModelState, LAST_USED_AT};
+use ai::local_provider::SharedModelState;
+#[cfg(not(target_os = "ios"))]
+use ai::local_provider::{self, LAST_USED_AT};
 use commands::ai::{SharedSummaryCache, SummaryCache, SummaryGeneration};
 use commands::models::DownloadCancelFlag;
 use db::models::AppSettings;
@@ -19,6 +21,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_skim_ai::init())
         .setup(|app| {
             let app_dir = app
                 .path()
@@ -28,82 +31,87 @@ pub fn run() {
                 Database::new(app_dir).expect("Failed to initialize database");
             let model_state = Arc::new(Mutex::new(None::<ai::local_provider::LoadedModel>)) as SharedModelState;
 
-            // Read user's preload / idle-evict / power preferences.
-            let (preload_mode, idle_evict_minutes, model_path, gpu_layers) = {
-                let conn = database.conn.lock().expect("db lock");
-                let settings: AppSettings = queries::get_setting(&conn, "app_settings")
-                    .ok()
-                    .flatten()
-                    .and_then(|s| serde_json::from_str(&s).ok())
-                    .unwrap_or_default();
-                let power_mode = settings
-                    .ai
-                    .local_power_mode
-                    .as_deref()
-                    .unwrap_or("balanced")
-                    .to_string();
-                let (effective_layers, _) = local_provider::resolve_power_profile(
-                    &power_mode,
-                    settings.ai.local_gpu_layers,
-                );
-                (
-                    settings
+            // llama.cpp preload + idle-eviction are desktop-only — iOS doesn't
+            // ship llama.cpp and uses MLX via the Swift Tauri plugin instead.
+            #[cfg(not(target_os = "ios"))]
+            {
+                // Read user's preload / idle-evict / power preferences.
+                let (preload_mode, idle_evict_minutes, model_path, gpu_layers) = {
+                    let conn = database.conn.lock().expect("db lock");
+                    let settings: AppSettings = queries::get_setting(&conn, "app_settings")
+                        .ok()
+                        .flatten()
+                        .and_then(|s| serde_json::from_str(&s).ok())
+                        .unwrap_or_default();
+                    let power_mode = settings
                         .ai
-                        .local_preload
-                        .clone()
-                        .unwrap_or_else(|| "off".to_string()),
-                    settings.ai.local_idle_evict_minutes.unwrap_or(10),
-                    settings.ai.local_model_path.clone(),
-                    effective_layers,
-                )
-            };
+                        .local_power_mode
+                        .as_deref()
+                        .unwrap_or("balanced")
+                        .to_string();
+                    let (effective_layers, _) = local_provider::resolve_power_profile(
+                        &power_mode,
+                        settings.ai.local_gpu_layers,
+                    );
+                    (
+                        settings
+                            .ai
+                            .local_preload
+                            .clone()
+                            .unwrap_or_else(|| "off".to_string()),
+                        settings.ai.local_idle_evict_minutes.unwrap_or(10),
+                        settings.ai.local_model_path.clone(),
+                        effective_layers,
+                    )
+                };
 
-            // Optional preload.
-            if preload_mode == "on" {
-                if let Some(path_str) = model_path {
-                    let path = std::path::PathBuf::from(path_str);
-                    let state = model_state.clone();
-                    tauri::async_runtime::spawn(async move {
-                        tokio::task::spawn_blocking(move || {
-                            log::info!("Preloading local model: {}", path.display());
-                            match local_provider::load_model(&path, gpu_layers) {
-                                Ok(loaded) => {
-                                    state.blocking_lock().replace(loaded);
-                                    local_provider::mark_used();
-                                    log::info!("Model preloaded");
+                // Optional preload.
+                if preload_mode == "on" {
+                    if let Some(path_str) = model_path {
+                        let path = std::path::PathBuf::from(path_str);
+                        let state = model_state.clone();
+                        tauri::async_runtime::spawn(async move {
+                            tokio::task::spawn_blocking(move || {
+                                log::info!("Preloading local model: {}", path.display());
+                                match local_provider::load_model(&path, gpu_layers) {
+                                    Ok(loaded) => {
+                                        state.blocking_lock().replace(loaded);
+                                        local_provider::mark_used();
+                                        log::info!("Model preloaded");
+                                    }
+                                    Err(e) => log::warn!("Preload failed: {}", e),
                                 }
-                                Err(e) => log::warn!("Preload failed: {}", e),
+                            })
+                            .await
+                            .ok();
+                        });
+                    }
+                }
+
+                // Idle-eviction watcher. 0 minutes = never evict.
+                if idle_evict_minutes > 0 {
+                    let state = model_state.clone();
+                    let idle_secs = (idle_evict_minutes as i64) * 60;
+                    tauri::async_runtime::spawn(async move {
+                        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(120));
+                        ticker.tick().await;
+                        loop {
+                            ticker.tick().await;
+                            let now = chrono::Utc::now().timestamp();
+                            let last = LAST_USED_AT.load(Ordering::Relaxed);
+                            if last == 0 {
+                                continue;
                             }
-                        })
-                        .await
-                        .ok();
+                            if now - last >= idle_secs {
+                                let mut guard = state.lock().await;
+                                if guard.is_some() {
+                                    log::info!("Evicting idle local model from VRAM");
+                                    guard.take();
+                                }
+                            }
+                        }
                     });
                 }
-            }
-
-            // Idle-eviction watcher. 0 minutes = never evict.
-            if idle_evict_minutes > 0 {
-                let state = model_state.clone();
-                let idle_secs = (idle_evict_minutes as i64) * 60;
-                tauri::async_runtime::spawn(async move {
-                    let mut ticker = tokio::time::interval(std::time::Duration::from_secs(120));
-                    ticker.tick().await;
-                    loop {
-                        ticker.tick().await;
-                        let now = chrono::Utc::now().timestamp();
-                        let last = LAST_USED_AT.load(Ordering::Relaxed);
-                        if last == 0 {
-                            continue;
-                        }
-                        if now - last >= idle_secs {
-                            let mut guard = state.lock().await;
-                            if guard.is_some() {
-                                log::info!("Evicting idle local model from VRAM");
-                                guard.take();
-                            }
-                        }
-                    }
-                });
             }
 
             app.manage(database);

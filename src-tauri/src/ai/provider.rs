@@ -531,6 +531,7 @@ pub fn create_provider(
     let endpoint = settings.endpoint.as_deref();
 
     match settings.provider.as_str() {
+        #[cfg(not(target_os = "ios"))]
         "local" => {
             let model_path = settings
                 .local_model_path
@@ -549,6 +550,8 @@ pub fn create_provider(
                 state,
             )))
         }
+        #[cfg(target_os = "ios")]
+        "local" => Err("Local llama.cpp provider is not supported on iOS — use the on-device MLX tier instead".to_string()),
         "openai" => Ok(Box::new(OpenAiCompatibleProvider::new(
             "https://api.openai.com",
             api_key,

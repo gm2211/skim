@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-mlx-is-available"
+description = "Enables the mlx_is_available command without any pre-configured scope."
+commands.allow = ["mlx_is_available"]
+
+[[permission]]
+identifier = "deny-mlx-is-available"
+description = "Denies the mlx_is_available command without any pre-configured scope."
+commands.deny = ["mlx_is_available"]

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-mlx-complete"
+description = "Enables the mlx_complete command without any pre-configured scope."
+commands.allow = ["mlx_complete"]
+
+[[permission]]
+identifier = "deny-mlx-complete"
+description = "Denies the mlx_complete command without any pre-configured scope."
+commands.deny = ["mlx_complete"]

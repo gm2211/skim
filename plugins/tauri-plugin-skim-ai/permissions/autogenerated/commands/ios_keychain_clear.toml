@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-ios-keychain-clear"
+description = "Enables the ios_keychain_clear command without any pre-configured scope."
+commands.allow = ["ios_keychain_clear"]
+
+[[permission]]
+identifier = "deny-ios-keychain-clear"
+description = "Denies the ios_keychain_clear command without any pre-configured scope."
+commands.deny = ["ios_keychain_clear"]

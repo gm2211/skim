@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-mlx-download-model"
+description = "Enables the mlx_download_model command without any pre-configured scope."
+commands.allow = ["mlx_download_model"]
+
+[[permission]]
+identifier = "deny-mlx-download-model"
+description = "Denies the mlx_download_model command without any pre-configured scope."
+commands.deny = ["mlx_download_model"]

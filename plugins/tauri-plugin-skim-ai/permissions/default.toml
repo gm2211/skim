@@ -1,0 +1,14 @@
+[default]
+description = "Default permissions for skim-ai (MLX + Apple Foundation Models + iOS Keychain)"
+permissions = [
+  "allow-mlx-is-available",
+  "allow-mlx-is-model-downloaded",
+  "allow-mlx-download-model",
+  "allow-mlx-delete-model",
+  "allow-mlx-complete",
+  "allow-fm-is-available",
+  "allow-fm-complete",
+  "allow-ios-keychain-store",
+  "allow-ios-keychain-load",
+  "allow-ios-keychain-clear",
+]

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-fm-complete"
+description = "Enables the fm_complete command without any pre-configured scope."
+commands.allow = ["fm_complete"]
+
+[[permission]]
+identifier = "deny-fm-complete"
+description = "Denies the fm_complete command without any pre-configured scope."
+commands.deny = ["fm_complete"]

@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import MLXLMCommon
 
 /// A single selectable on-device model.
 struct MLXModelOption: Identifiable, Hashable {
@@ -115,8 +114,7 @@ final class MLXModelManager: ObservableObject {
     func deleteModel(repoId: String) async {
         await MLXRunner.shared.evict()
 
-        let cfg = ModelConfiguration(id: repoId)
-        let dir = cfg.modelDirectory()
+        let dir = MLXRunner.cacheDirectory(forRepo: repoId)
         do {
             if FileManager.default.fileExists(atPath: dir.path) {
                 try FileManager.default.removeItem(at: dir)

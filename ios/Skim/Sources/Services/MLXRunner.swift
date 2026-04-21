@@ -75,22 +75,26 @@ actor MLXRunner {
 
     // MARK: - Public API
 
-    /// Whether weights for the current repo are cached on disk. Does not load the model.
+    /// Whether default-repo weights are cached on disk. Does not load the model.
     nonisolated var isModelDownloaded: Bool {
-        let repoId = MLXRunner.defaultRepoId // conservative: always check default
-        let cfg = ModelConfiguration(id: repoId)
-        let dir = cfg.modelDirectory()
-        guard FileManager.default.fileExists(atPath: dir.path) else { return false }
-        let contents = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
-        let hasWeights = contents.contains { $0.hasSuffix(".safetensors") }
-        let hasConfig = contents.contains("config.json")
-        return hasWeights && hasConfig
+        MLXRunner.isRepoDownloaded(MLXRunner.defaultRepoId)
+    }
+
+    /// Local on-disk path where HubApi caches a given model repo.
+    /// Mirrors `HubApi`'s default layout: `~/Documents/huggingface/models/<org>/<repo>`.
+    /// We compute this ourselves so we don't need to link the `Hub` product just
+    /// to call `ModelConfiguration.modelDirectory()` (whose default-arg requires `Hub`).
+    nonisolated static func cacheDirectory(forRepo repoId: String) -> URL {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return documents
+            .appendingPathComponent("huggingface", isDirectory: true)
+            .appendingPathComponent("models", isDirectory: true)
+            .appendingPathComponent(repoId, isDirectory: true)
     }
 
     /// Whether weights for a specific repo are cached on disk.
     nonisolated static func isRepoDownloaded(_ repoId: String) -> Bool {
-        let cfg = ModelConfiguration(id: repoId)
-        let dir = cfg.modelDirectory()
+        let dir = cacheDirectory(forRepo: repoId)
         guard FileManager.default.fileExists(atPath: dir.path) else { return false }
         let contents = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
         let hasWeights = contents.contains { $0.hasSuffix(".safetensors") }
@@ -132,10 +136,11 @@ actor MLXRunner {
             do {
                 let cfg = ModelConfiguration(id: repoId)
                 let container = try await LLMModelFactory.shared.loadContainer(
-                    configuration: cfg
-                ) { progress in
-                    sink?(progress.fractionCompleted)
-                }
+                    configuration: cfg,
+                    progressHandler: { progress in
+                        sink?(progress.fractionCompleted)
+                    }
+                )
                 return container
             } catch {
                 throw MLXError.loadFailed("\(error)")
@@ -154,7 +159,7 @@ actor MLXRunner {
         }
     }
 
-    /// Run a single prompt/response. Returns the assistant text (possibly JSON when `jsonMode`).
+    /// Run a single prompt/response. Returns the assistant text (JSON when `jsonMode`).
     func complete(
         systemPrompt: String,
         userPrompt: String,
@@ -163,8 +168,8 @@ actor MLXRunner {
     ) async throws -> String {
         let container = try await ensureLoaded()
 
-        // Gently steer toward JSON when requested — models without a real JSON mode
-        // still respond well to explicit "respond with JSON only" instructions.
+        // Gently steer toward JSON when requested — MLX LLMs don't have a real
+        // JSON mode, but the instruct tunes comply well with explicit guidance.
         let finalSystem: String
         if jsonMode {
             finalSystem = systemPrompt + "\n\nRespond with a single JSON object. No prose, no code fences."
@@ -172,34 +177,29 @@ actor MLXRunner {
             finalSystem = systemPrompt
         }
 
-        let params = GenerateParameters(
-            maxTokens: maxTokens,
-            temperature: 0.3
-        )
+        let messages: [[String: String]] = [
+            ["role": "system", "content": finalSystem],
+            ["role": "user", "content": userPrompt]
+        ]
+
+        // MLXLMCommon 2.21 does not support maxTokens on GenerateParameters.
+        // Instead we enforce the token budget via the didGenerate callback.
+        let params = GenerateParameters(temperature: 0.3)
+        let budget = maxTokens
 
         do {
-            // `perform` gives us the concrete `ModelContext` (model + tokenizer + processor)
-            // inside the actor's isolation, so we can safely drive generation.
-            let output = try await container.perform { (context: ModelContext) -> String in
-                let messages: [Chat.Message] = [
-                    .system(finalSystem),
-                    .user(userPrompt)
-                ]
-                let userInput = UserInput(chat: messages)
+            let output: String = try await container.perform { (context: ModelContext) -> String in
+                let userInput = UserInput(messages: messages)
                 let lmInput = try await context.processor.prepare(input: userInput)
 
-                var collected = ""
-                let stream = try MLXLMCommon.generate(
+                let result = try MLXLMCommon.generate(
                     input: lmInput,
                     parameters: params,
                     context: context
-                )
-                for await item in stream {
-                    if let chunk = item.chunk {
-                        collected += chunk
-                    }
+                ) { tokens in
+                    tokens.count >= budget ? .stop : .more
                 }
-                return collected
+                return result.output
             }
             return output
         } catch let e as MLXError {

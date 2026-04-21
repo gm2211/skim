@@ -136,7 +136,8 @@ export function ArticleList() {
   }, [sidebarView, listFilter, pageLimit]);
 
   const { data: regularArticles, isLoading: regularLoading } = useArticles(filter);
-  const inboxIsRead = isInbox && listFilter === "unread" ? false : null;
+  // AI Inbox is unread-only by design — ignore listFilter entirely.
+  const inboxIsRead = isInbox ? false : null;
   const { data: inboxArticles, isLoading: inboxLoading } = useInboxArticles(
     isInbox ? undefined : -1, // -1 disables the query when not in inbox view
     inboxIsRead
@@ -182,10 +183,6 @@ export function ArticleList() {
   const filteredArticles = useMemo(() => {
     if (!articles) return articles;
     let result = articles;
-    // For inbox view, apply starred filter client-side (backend doesn't support it)
-    if (isInbox && listFilter === "starred") {
-      result = result.filter((a) => a.is_starred);
-    }
     // Theme tab filter (inbox only)
     if (isInbox && activeThemeId) {
       result = result.filter((a) =>
@@ -535,7 +532,8 @@ export function ArticleList() {
         />
       )}
 
-      {/* Bottom filter toolbar */}
+      {/* Bottom filter toolbar — hidden in AI Inbox (unread-only by design) */}
+      {!isInbox && (
       <div
         className="flex items-center justify-center gap-6 border-t border-white/5"
         style={{ padding: "12px 16px" }}
@@ -580,6 +578,7 @@ export function ArticleList() {
           <span style={{ fontSize: 12, fontWeight: 600 }}>ALL</span>
         </button>
       </div>
+      )}
     </div>
   );
 }

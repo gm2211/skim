@@ -3,7 +3,7 @@
 **RSS reader for the age of AI.** Ingest feeds, let a model triage the noise, skim the rest.
 
 <p align="center">
-  <img src="docs/screenshots/01-main-view.png" alt="Skim main view" width="720" />
+  <img src="docs/skim-demo.gif" alt="Skim — feature highlights" width="820" />
 </p>
 
 Desktop (macOS / Windows / Linux) via [Tauri 2](https://tauri.app). iOS / iPadOS in progress.

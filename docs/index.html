@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skim — RSS reader for the age of AI</title>
+  <meta name="description" content="Ingest feeds, let a model triage the noise, skim the rest. Native Tauri app for macOS, Windows, Linux. iOS in progress." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="nav">
+    <div class="wordmark">SKIM</div>
+    <nav>
+      <a href="#highlights">Highlights</a>
+      <a href="https://github.com/gm2211/skim/blob/main/docs/SPEC.md">Spec</a>
+      <a href="https://github.com/gm2211/skim">GitHub</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <h1>RSS reader<br/>for the age of AI.</h1>
+    <p>Ingest feeds. Let a model triage the noise.<br/>Skim the rest.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="https://github.com/gm2211/skim/releases">Download</a>
+      <a class="btn btn-secondary" href="#highlights">Highlights →</a>
+    </div>
+  </section>
+
+  <section class="hero-shot">
+    <img src="screenshots/01-main-view.png" alt="Skim main view" />
+  </section>
+
+  <section id="highlights" class="highlights">
+    <div class="highlights-header">
+      <h2>Get the highlights.</h2>
+      <div class="carousel-controls">
+        <button class="ctrl" id="prev" aria-label="Previous slide">‹</button>
+        <button class="ctrl ctrl-play" id="playpause" aria-label="Pause"></button>
+        <button class="ctrl" id="next" aria-label="Next slide">›</button>
+      </div>
+    </div>
+
+    <div class="carousel" id="carousel">
+      <div class="track" id="track">
+        <figure class="slide">
+          <img src="screenshots/02-ai-inbox-themes.png" alt="AI Inbox" />
+          <figcaption>
+            <h3>AI Inbox</h3>
+            <p>Every unread scored 1–5. Must-read floats. Theme chips slice the queue by topic.</p>
+          </figcaption>
+        </figure>
+        <figure class="slide">
+          <img src="screenshots/03-auto-organize.png" alt="Auto-organize" />
+          <figcaption>
+            <h3>Auto-organize</h3>
+            <p>AI proposes folders from your feeds. Rename, uncheck, apply.</p>
+          </figcaption>
+        </figure>
+        <figure class="slide">
+          <img src="screenshots/04-ask-skim.png" alt="Ask Skim" />
+          <figcaption>
+            <h3>Ask Skim</h3>
+            <p>Chat across your whole feed with citations. Pulls in web results when needed.</p>
+          </figcaption>
+        </figure>
+        <figure class="slide">
+          <img src="screenshots/05-catchup.png" alt="Super-quick catch-up" />
+          <figcaption>
+            <h3>Super-quick catch-up</h3>
+            <p>Ten takeaways plus notable mentions across everything unread.</p>
+          </figcaption>
+        </figure>
+        <figure class="slide">
+          <img src="screenshots/06-summarize.png" alt="Summarize" />
+          <figcaption>
+            <h3>Summarize</h3>
+            <p>Length, tone, format, custom prompt. Reader or web view.</p>
+          </figcaption>
+        </figure>
+        <figure class="slide">
+          <img src="screenshots/01-main-view.png" alt="Three-pane reader" />
+          <figcaption>
+            <h3>Three-pane reader</h3>
+            <p>Sidebar, list, detail. Favicons, unread counts, keyboard nav.</p>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="dots" id="dots" role="tablist"></div>
+  </section>
+
+  <section class="features">
+    <h2>What's inside.</h2>
+    <div class="feature-grid">
+      <div class="feature"><h4>Learns from you</h4><p>Reading time, stars, chats, feedback, overrides — all feed triage. Plus a freeform "what I care about" prompt.</p></div>
+      <div class="feature"><h4>Smart folders</h4><p>Regex on title / URL / OPML category. Any/all match modes.</p></div>
+      <div class="feature"><h4>Feedly + OPML</h4><p>Two-way Feedly sync. Import / export OPML.</p></div>
+      <div class="feature"><h4>Per-article chat</h4><p>Chat grounded on article body. Web-search tool available.</p></div>
+      <div class="feature"><h4>Local-first</h4><p>All data in SQLite. No Skim cloud. No telemetry.</p></div>
+      <div class="feature"><h4>On-device AI</h4><p>llama.cpp on desktop. MLX + Apple Foundation Models on iOS.</p></div>
+      <div class="feature"><h4>Claude subscription</h4><p>OAuth sign-in — no API key. Uses your Pro/Max.</p></div>
+      <div class="feature"><h4>iPad keyboard nav</h4><p>j/k, r, s, /, ⌘N. Swipe actions. Drag-drop OPML.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <p><a href="https://github.com/gm2211/skim">GitHub</a> · <a href="https://github.com/gm2211/skim/blob/main/docs/SPEC.md">Full spec</a> · MIT</p>
+  </footer>
+
+  <script src="carousel.js"></script>
+</body>
+</html>

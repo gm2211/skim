@@ -22,6 +22,7 @@ struct SidebarView: View {
                                 Text("\(totalUnread)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .accessibilityLabel("\(totalUnread) unread")
                             }
                         }
                     } icon: {
@@ -62,6 +63,7 @@ struct SidebarView: View {
                                 Text("\(feed.unreadCount)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .accessibilityLabel("\(feed.unreadCount) unread")
                             }
                         }
                     }
@@ -78,6 +80,7 @@ struct SidebarView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityLabel("Add Feed")
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -92,6 +95,7 @@ struct SidebarView: View {
                     }
                 }
                 .disabled(appState.isRefreshing)
+                .accessibilityLabel("Refresh All Feeds")
             }
         }
     }

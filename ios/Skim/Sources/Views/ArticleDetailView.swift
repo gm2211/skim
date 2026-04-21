@@ -89,6 +89,7 @@ struct ArticleDetailView: View {
                     Image(systemName: article.isStarred ? "star.fill" : "star")
                         .foregroundStyle(article.isStarred ? .yellow : .secondary)
                 }
+                .accessibilityLabel(article.isStarred ? "Unstar article" : "Star article")
 
                 Button {
                     article.isRead.toggle()
@@ -96,6 +97,7 @@ struct ArticleDetailView: View {
                     Image(systemName: article.isRead ? "circle" : "circle.fill")
                         .foregroundStyle(article.isRead ? .secondary : .accent)
                 }
+                .accessibilityLabel(article.isRead ? "Mark as unread" : "Mark as read")
 
                 // Feedback buttons
                 Menu {
@@ -115,9 +117,11 @@ struct ArticleDetailView: View {
                     Image(systemName: feedbackIcon)
                         .foregroundStyle(feedbackColor)
                 }
+                .accessibilityLabel("Feedback")
 
                 if let url = article.url.flatMap({ URL(string: $0) }) {
                     ShareLink(item: url)
+                        .accessibilityLabel("Share article")
                 }
             }
         }

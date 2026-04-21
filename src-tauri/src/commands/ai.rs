@@ -544,12 +544,14 @@ pub async fn generate_themes(
         return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
     }
 
+    let mut ai_settings = settings.ai.clone();
+    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
     let provider = create_provider(
-        &settings.ai,
+        &ai_settings,
         Some(model_state.inner().clone()),
     )?;
 
-    let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
+    let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
 
     // Batch articles so we can emit real progress per batch. Local models
     // are slow so use smaller batches; remote providers can handle more.
@@ -843,10 +845,12 @@ pub async fn triage_articles(
         return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
     }
 
-    let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
-    let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
+    let mut ai_settings = settings.ai.clone();
+    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
 
-    let batch_size = match settings.ai.provider.as_str() {
+    let batch_size = match ai_settings.provider.as_str() {
         "local" => 15,
         "ollama" => 20,
         _ => 30,
@@ -1237,12 +1241,13 @@ pub async fn generate_catchup_report(
         return Err("No AI provider configured.".to_string());
     }
 
-    let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
-    let model = settings
-        .ai
+    let mut ai_settings = settings.ai.clone();
+    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let model = ai_settings
         .model
         .clone()
-        .unwrap_or_else(|| default_model(&settings.ai.provider));
+        .unwrap_or_else(|| default_model(&ai_settings.provider));
 
     let mut listing = String::new();
     for (i, a) in pool.iter().enumerate() {

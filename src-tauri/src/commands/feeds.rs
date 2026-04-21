@@ -1076,8 +1076,10 @@ pub async fn ai_auto_organize_feeds(
         return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
     }
 
-    let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
-    let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
+    let mut ai_settings = settings.ai.clone();
+    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
 
     let listing = feeds_listing_for_llm(&feeds);
     // Estimate max_tokens: each folder entry needs ~15 tokens + ~3 tokens per feed handle.
@@ -1163,8 +1165,10 @@ pub async fn ai_match_feeds_for_topic(
         return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
     }
 
-    let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
-    let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
+    let mut ai_settings = settings.ai.clone();
+    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
 
     let listing = feeds_listing_for_llm(&feeds);
     let max_tokens = (feeds.len() as i64 * 3 + 64).max(256);

@@ -32,14 +32,19 @@ log = "0.4"
 env_logger = "0.11"
 thiserror = "1"
 async-trait = "0.1"
-llama-cpp-2 = { version = "0.1.143", features = ["metal", "sampler"] }
-
 futures-util = "0.3"
 urlencoding = "2"
 opml = "1"
 regex = "1"
 encoding_rs = "0.8"
 sysinfo = "0.38"
+base64 = "0.22"
+sha2 = "0.10"
+rand = "0.8"
+
+# llama.cpp — desktop only. Not cross-compilable to iOS.
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+llama-cpp-2 = { version = "0.1.143", features = ["metal", "sampler"] }
 
 
 [profile.dev]

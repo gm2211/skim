@@ -41,12 +41,13 @@ pub async fn chat_with_article(
         .unwrap_or_default();
 
     // Use chat-specific provider/model if configured, otherwise fall back to main AI settings
-    let ai_settings = resolve_chat_settings(&settings.ai);
+    let mut ai_settings = resolve_chat_settings(&settings.ai);
 
     if ai_settings.provider == "none" {
         return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
     }
 
+    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
     let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
     let model = ai_settings.model.clone().unwrap_or_else(|| crate::commands::ai::default_model(&ai_settings.provider));
 
@@ -220,11 +221,12 @@ pub async fn chat_with_articles(
         .map(|s| serde_json::from_str(s).unwrap_or_default())
         .unwrap_or_default();
 
-    let ai_settings = resolve_chat_settings(&settings.ai);
+    let mut ai_settings = resolve_chat_settings(&settings.ai);
     if ai_settings.provider == "none" {
         return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
     }
 
+    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
     let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
     let model = ai_settings
         .model

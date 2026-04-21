@@ -247,6 +247,86 @@ impl AiProvider for AnthropicProvider {
     }
 }
 
+/// Provider that uses a Claude Pro/Max OAuth Bearer token directly (no CLI
+/// subprocess). Token is resolved at the call site and injected here.
+///
+/// Refresh logic lives in `commands::claude_oauth` — a background task or
+/// dedicated command refreshes and persists before expiry; this provider just
+/// reads whatever is current and surfaces 401 on stale tokens so the UI can
+/// prompt re-auth.
+pub struct ClaudeSubscriptionProvider {
+    client: reqwest::Client,
+    access_token: String,
+}
+
+impl ClaudeSubscriptionProvider {
+    pub fn new(access_token: String) -> Self {
+        Self { client: reqwest::Client::new(), access_token }
+    }
+}
+
+#[async_trait]
+impl AiProvider for ClaudeSubscriptionProvider {
+    async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, String> {
+        use super::claude_oauth::{BETA_HEADER, SYSTEM_PREFIX};
+        let token = self.access_token.clone();
+
+        let user_system = request.messages.iter()
+            .find(|m| m.role == "system")
+            .map(|m| m.content.clone());
+        let messages: Vec<serde_json::Value> = request.messages.iter()
+            .filter(|m| m.role != "system")
+            .map(|m| serde_json::json!({"role": m.role, "content": m.content}))
+            .collect();
+
+        let mut system_blocks = vec![serde_json::json!({"type": "text", "text": SYSTEM_PREFIX})];
+        if let Some(sys) = user_system {
+            system_blocks.push(serde_json::json!({"type": "text", "text": sys}));
+        }
+
+        let mut body = serde_json::json!({
+            "model": request.model,
+            "messages": messages,
+            "max_tokens": request.max_tokens.unwrap_or(2048),
+            "system": system_blocks,
+        });
+        if let Some(temp) = request.temperature {
+            body["temperature"] = serde_json::json!(temp);
+        }
+
+        let resp = self.client
+            .post("https://api.anthropic.com/v1/messages")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("anthropic-version", "2023-06-01")
+            .header("anthropic-beta", BETA_HEADER)
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Claude subscription request failed: {}", e))?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().await.unwrap_or_default();
+            return Err(format!("Claude subscription API {}: {}", status, body));
+        }
+
+        let api_response: AnthropicResponse = resp.json().await
+            .map_err(|e| format!("Parse Claude subscription response: {}", e))?;
+        let content = api_response.content.first().and_then(|c| c.text.clone()).unwrap_or_default();
+        Ok(ChatResponse {
+            content,
+            model: api_response.model.unwrap_or(request.model),
+            usage: api_response.usage.map(|u| TokenUsage {
+                prompt_tokens: u.input_tokens,
+                completion_tokens: u.output_tokens,
+            }),
+        })
+    }
+
+    fn name(&self) -> &str { "claude-subscription" }
+}
+
 /// Provider that uses the Claude Code CLI to make API calls.
 /// This lets users with Claude Pro/Max subscriptions use their subscription
 /// for summarization without needing an API key.
@@ -490,6 +570,14 @@ pub fn create_provider(
         }
         "claude-cli" => {
             Ok(Box::new(ClaudeCliProvider::new(api_key)?))
+        }
+        "claude-subscription" => {
+            let token = settings.oauth_access_token.clone()
+                .ok_or("Not signed in to Claude. Sign in from Settings.")?;
+            if token.is_empty() {
+                return Err("Not signed in to Claude. Sign in from Settings.".to_string());
+            }
+            Ok(Box::new(ClaudeSubscriptionProvider::new(token)))
         }
         "custom" => {
             let ep = endpoint.ok_or("Custom provider requires an endpoint URL")?;

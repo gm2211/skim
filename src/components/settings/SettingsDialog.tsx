@@ -3,6 +3,11 @@ import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
 import type { AppSettings, FeedlyConnectionStatus } from "../../services/types";
 import {
+  claudeOauthBeginPaste,
+  claudeOauthExchangePaste,
+  claudeOauthSignInLoopback,
+  claudeOauthSignOut,
+  claudeOauthStatus,
   disconnectFeedly,
   feedlyOauthAvailable,
   feedlyOauthLogin,
@@ -14,7 +19,8 @@ const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
   { value: "local", label: "Local (Embedded)", description: "Run AI locally with llama.cpp — no server needed" },
   { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
-  { value: "claude-cli", label: "Claude Pro/Max Subscription", description: "Routes through the claude CLI (claude -p). Sign into Claude Code once and your Pro/Max subscription handles billing — no API key required." },
+  { value: "claude-subscription", label: "Claude Pro/Max (OAuth)", description: "Sign in with your Claude.ai account — no API key, no CLI. Works on desktop and iOS." },
+  { value: "claude-cli", label: "Claude via CLI (legacy)", description: "Uses the local 'claude' CLI binary. Legacy path — prefer 'Claude Pro/Max (OAuth)'." },
   { value: "anthropic", label: "Claude (API Key)", description: "api.anthropic.com — requires API key with usage-based billing" },
   { value: "openai", label: "OpenAI", description: "api.openai.com" },
   { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
@@ -224,6 +230,10 @@ export function SettingsDialog() {
                       <code className="text-accent">claude</code> once to sign in.
                     </p>
                   </div>
+                )}
+
+                {local.ai.provider === "claude-subscription" && (
+                  <ClaudeOAuthSection />
                 )}
 
                 {needsEndpoint(local.ai.provider) && (
@@ -559,5 +569,156 @@ function SyncTab({
         />
       </InputField>
     </>
+  );
+}
+
+function ClaudeOAuthSection() {
+  const [signedIn, setSignedIn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pasteCode, setPasteCode] = useState("");
+  const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    claudeOauthStatus().then(setSignedIn).catch(() => setSignedIn(false));
+  }, []);
+
+  const signInLoopback = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await claudeOauthSignInLoopback();
+      setSignedIn(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const beginPaste = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await claudeOauthBeginPaste();
+      setAuthorizeUrl(r.authorizeUrl);
+      window.open(r.authorizeUrl, "_blank");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const exchangePaste = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await claudeOauthExchangePaste(pasteCode.trim());
+      setSignedIn(true);
+      setAuthorizeUrl(null);
+      setPasteCode("");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signOut = async () => {
+    await claudeOauthSignOut();
+    setSignedIn(false);
+  };
+
+  if (signedIn) {
+    return (
+      <div
+        className="rounded-lg border border-green-500/30 bg-green-500/5"
+        style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}
+      >
+        <p className="text-text-primary" style={{ fontWeight: 500, marginBottom: 4 }}>
+          Signed in with Claude
+        </p>
+        <p className="text-text-muted" style={{ marginBottom: 8 }}>
+          Using your Claude Pro/Max subscription. No API key, no CLI.
+        </p>
+        <button
+          type="button"
+          onClick={signOut}
+          className="rounded border border-red-500/40 text-red-400 hover:bg-red-500/10"
+          style={{ padding: "4px 10px", fontSize: 12 }}
+        >
+          Sign out
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-lg border border-accent/30 bg-accent/5"
+      style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}
+    >
+      <p className="text-text-primary" style={{ fontWeight: 500, marginBottom: 4 }}>
+        Sign in with Claude
+      </p>
+      <p className="text-text-muted" style={{ marginBottom: 8 }}>
+        Uses your Claude.ai Pro or Max account via OAuth. No API key required.
+      </p>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={signInLoopback}
+          className="rounded border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
+          style={{ padding: "4px 10px", fontSize: 12 }}
+        >
+          {busy ? "Signing in…" : "Sign in (desktop)"}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={beginPaste}
+          className="rounded border border-accent/50 text-accent hover:bg-accent/10 disabled:opacity-40"
+          style={{ padding: "4px 10px", fontSize: 12 }}
+        >
+          Sign in (copy-paste)
+        </button>
+      </div>
+      {authorizeUrl && (
+        <div style={{ marginTop: 8 }}>
+          <p className="text-text-muted" style={{ marginBottom: 6 }}>
+            Complete sign-in in the browser tab that opened, then paste the code shown on the success page here.
+          </p>
+          <input
+            type="text"
+            value={pasteCode}
+            onChange={(e) => setPasteCode(e.target.value)}
+            placeholder="code#state"
+            className="w-full rounded border border-border bg-bg-secondary text-text-primary"
+            style={{
+              padding: "6px 10px",
+              fontSize: 13,
+              fontFamily: "ui-monospace, SFMono-Regular, monospace",
+              marginBottom: 6,
+            }}
+          />
+          <button
+            type="button"
+            disabled={busy || !pasteCode.trim()}
+            onClick={exchangePaste}
+            className="rounded border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
+            style={{ padding: "4px 10px", fontSize: 12 }}
+          >
+            {busy ? "Exchanging…" : "Finish sign-in"}
+          </button>
+        </div>
+      )}
+      {error && (
+        <p className="text-red-400" style={{ marginTop: 8 }}>
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

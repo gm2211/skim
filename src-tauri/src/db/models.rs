@@ -161,6 +161,11 @@ pub struct AiSettings {
     pub chat_api_key: Option<String>,
     #[serde(default)]
     pub chat_endpoint: Option<String>,
+    /// OAuth bearer token for Claude Pro/Max (provider = "claude-subscription").
+    /// Populated at command time from the settings KV rows written by
+    /// `claude_oauth_*` commands — not persisted in the AppSettings JSON blob.
+    #[serde(default, skip_serializing)]
+    pub oauth_access_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -272,6 +277,7 @@ impl Default for AppSettings {
                 chat_model: None,
                 chat_api_key: None,
                 chat_endpoint: None,
+                oauth_access_token: None,
             },
             appearance: AppearanceSettings {
                 theme: "dark".to_string(),

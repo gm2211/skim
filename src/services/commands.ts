@@ -121,6 +121,20 @@ export const feedlyOauthLogin = () =>
 export const feedlyOauthAvailable = () =>
   invoke<boolean>("feedly_oauth_available");
 
+// Claude Pro/Max OAuth (subscription auth — no API key)
+export const claudeOauthSignInLoopback = () =>
+  invoke<void>("claude_oauth_sign_in_loopback");
+export const claudeOauthBeginPaste = () =>
+  invoke<{ authorizeUrl: string }>("claude_oauth_begin_paste");
+export const claudeOauthExchangePaste = (pastedCode: string) =>
+  invoke<void>("claude_oauth_exchange_paste", { pastedCode });
+export const claudeOauthSignOut = () =>
+  invoke<void>("claude_oauth_sign_out");
+export const claudeOauthStatus = () =>
+  invoke<boolean>("claude_oauth_status");
+export const claudeOauthRefresh = () =>
+  invoke<void>("claude_oauth_refresh");
+
 // Articles
 export const getArticles = (filter: ArticleFilter) =>
   invoke<Article[]>("get_articles", { filter });

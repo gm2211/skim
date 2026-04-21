@@ -111,6 +111,7 @@ pub fn run() {
             app.manage(DownloadCancelFlag(Arc::new(AtomicBool::new(false))));
             app.manage(Arc::new(Mutex::new(SummaryCache::new())) as SharedSummaryCache);
             app.manage(SummaryGeneration(std::sync::atomic::AtomicU64::new(0)));
+            app.manage(commands::claude_oauth::PasteFlowState::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -192,6 +193,13 @@ pub fn run() {
             commands::models::list_local_models,
             commands::models::delete_local_model,
             commands::models::get_system_info,
+            // Claude OAuth subscription
+            commands::claude_oauth::claude_oauth_sign_in_loopback,
+            commands::claude_oauth::claude_oauth_begin_paste,
+            commands::claude_oauth::claude_oauth_exchange_paste,
+            commands::claude_oauth::claude_oauth_sign_out,
+            commands::claude_oauth::claude_oauth_status,
+            commands::claude_oauth::claude_oauth_refresh,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

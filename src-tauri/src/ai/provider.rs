@@ -279,6 +279,12 @@ struct ClaudeCliResponse {
     result: Option<String>,
     subtype: Option<String>,
     is_error: Option<bool>,
+    #[serde(rename = "type")]
+    resp_type: Option<String>,
+    error: Option<serde_json::Value>,
+    message: Option<serde_json::Value>,
+    api_error_status: Option<serde_json::Value>,
+    stop_reason: Option<String>,
     usage: Option<ClaudeCliUsage>,
 }
 
@@ -383,16 +389,34 @@ impl AiProvider for ClaudeCliProvider {
                 .map_err(|e| format!("Failed to parse claude CLI output: {}. Output: {}", e, &stdout[..stdout.len().min(500)]))?;
 
             if cli_resp.is_error.unwrap_or(false) {
-                return Err(format!(
-                    "claude CLI error: {}",
-                    cli_resp.result.unwrap_or_else(|| "unknown error".into())
-                ));
+                // Surface whatever detail the CLI gave us. Prior code only
+                // reported `result`, which is empty on auth/transport errors.
+                let detail = cli_resp
+                    .result
+                    .clone()
+                    .filter(|s| !s.trim().is_empty())
+                    .or_else(|| cli_resp.api_error_status.as_ref().map(|v| format!("api_error_status={}", v)))
+                    .or_else(|| cli_resp.error.as_ref().map(|v| v.to_string()))
+                    .or_else(|| cli_resp.message.as_ref().map(|v| v.to_string()))
+                    .unwrap_or_else(|| {
+                        format!(
+                            "no result/error field. subtype={:?} type={:?} stop_reason={:?} raw={}",
+                            cli_resp.subtype,
+                            cli_resp.resp_type,
+                            cli_resp.stop_reason,
+                            &stdout[..stdout.len().min(800)]
+                        )
+                    });
+                return Err(format!("claude CLI error: {}", detail));
             }
 
             if cli_resp.subtype.as_deref() != Some("success") {
                 return Err(format!(
-                    "claude CLI non-success: subtype={:?}, result={:?}",
-                    cli_resp.subtype, cli_resp.result
+                    "claude CLI non-success: subtype={:?}, type={:?}, result={:?}, raw={}",
+                    cli_resp.subtype,
+                    cli_resp.resp_type,
+                    cli_resp.result,
+                    &stdout[..stdout.len().min(500)]
                 ));
             }
 

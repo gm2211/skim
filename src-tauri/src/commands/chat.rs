@@ -1,5 +1,8 @@
 use crate::ai::local_provider::SharedModelState;
-use crate::ai::provider::{ChatMessage, ChatRequest, create_provider};
+use crate::ai::provider::{
+    AiProvider, ChatMessage, ChatRequest, ChatResponse as ProviderChatResponse, ToolDef, ToolUse,
+    create_provider,
+};
 use crate::db::models::AiSettings;
 use crate::db::{queries, Database};
 use serde::{Deserialize, Serialize};
@@ -16,6 +19,10 @@ pub struct ChatResponse {
     pub content: String,
     pub provider: String,
     pub model: String,
+    /// Web-search citations the tool-use loop produced, when the provider
+    /// supports tools. Empty for other providers / turns where no search ran.
+    #[serde(default)]
+    pub web_citations: Vec<WebCitation>,
 }
 
 #[tauri::command]
@@ -48,6 +55,7 @@ pub async fn chat_with_article(
     }
 
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    let provider_kind = ai_settings.provider.clone();
     let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
     let model = ai_settings.model.clone().unwrap_or_else(|| crate::commands::ai::default_model(&ai_settings.provider));
 
@@ -65,6 +73,8 @@ pub async fn chat_with_article(
         "You are a helpful assistant discussing a news article. Answer questions about the article, \
          provide context, and help the user understand the topic better. Be concise and direct. \
          No emoji.\n\n\
+         When the article doesn't contain enough information to answer, you may call the \
+         `web_search` tool to pull in fresh results. Prefer article context when it suffices.\n\n\
          Article Title: {}\n\
          Source: {}\n\
          Author: {}\n\n\
@@ -75,29 +85,21 @@ pub async fn chat_with_article(
         article_text,
     );
 
-    let mut chat_messages = vec![
-        ChatMessage {
-            role: "system".to_string(),
-            content: system_prompt,
-        },
-    ];
+    let mut chat_messages = vec![ChatMessage::text("system", system_prompt)];
 
     for msg in &messages {
-        chat_messages.push(ChatMessage {
-            role: msg.role.clone(),
-            content: msg.content.clone(),
-        });
+        chat_messages.push(ChatMessage::text(msg.role.clone(), msg.content.clone()));
     }
 
-    let req = ChatRequest {
-        model: model.clone(),
-        messages: chat_messages,
-        temperature: Some(0.5),
-        max_tokens: Some(2048),
-        json_mode: false,
-    };
-
-    let response = provider.chat(req).await?;
+    let (content, web_citations) = invoke_chat_with_tools(
+        provider.as_ref(),
+        &provider_kind,
+        chat_messages,
+        model.clone(),
+        Some(0.5),
+        Some(2048),
+    )
+    .await?;
 
     // Track chat interaction for learning system
     {
@@ -107,9 +109,10 @@ pub async fn chat_with_article(
     }
 
     Ok(ChatResponse {
-        content: response.content,
+        content,
         provider: provider.name().to_string(),
         model,
+        web_citations,
     })
 }
 
@@ -129,6 +132,22 @@ pub struct ChatSource {
     pub feed_title: String,
     pub url: Option<String>,
     pub published_at: Option<i64>,
+    /// "article" for items pulled from the user's feed, "web" for items
+    /// surfaced by the web_search tool during a tool-use loop. Frontend
+    /// renders a globe icon for web sources.
+    pub source_type: String,
+}
+
+/// A web-search result hoisted into the response so the frontend can render
+/// separate globe citations without mixing them into `article_ids`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebCitation {
+    pub title: String,
+    pub url: String,
+    pub snippet: String,
+    /// The query the model issued to produce this citation. Useful in the UI
+    /// if several searches happen across tool iterations.
+    pub query: String,
 }
 
 /// Extract lowercase word stems (3+ chars) from a query for keyword matching.
@@ -227,6 +246,7 @@ pub async fn chat_with_articles(
     }
 
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    let provider_kind = ai_settings.provider.clone();
     let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
     let model = ai_settings
         .model
@@ -288,39 +308,30 @@ pub async fn chat_with_articles(
     }
 
     let system_prompt = format!(
-        "You answer the user's questions about articles from their RSS feed. Use ONLY the articles below as evidence. \
-         When you reference an article, cite it with its bracket number like [2]. \
-         If the articles don't contain the answer, say so and suggest broadening the search. \
-         Be concise. No emoji.\n\n{}",
+        "You answer the user's questions about articles from their RSS feed. Prefer the articles \
+         below as evidence and cite them with their bracket number like [2]. \
+         If the articles don't contain the answer, call the `web_search` tool to pull in fresh \
+         web results before saying you can't answer. Be concise. No emoji.\n\n{}",
         context,
     );
 
-    let mut chat_messages = vec![ChatMessage {
-        role: "system".to_string(),
-        content: system_prompt,
-    }];
+    let mut chat_messages = vec![ChatMessage::text("system", system_prompt)];
     for msg in &messages {
-        chat_messages.push(ChatMessage {
-            role: msg.role.clone(),
-            content: msg.content.clone(),
-        });
+        chat_messages.push(ChatMessage::text(msg.role.clone(), msg.content.clone()));
     }
-    chat_messages.push(ChatMessage {
-        role: "user".to_string(),
-        content: trimmed_query,
-    });
+    chat_messages.push(ChatMessage::text("user", trimmed_query));
 
-    let req = ChatRequest {
-        model: model.clone(),
-        messages: chat_messages,
-        temperature: Some(0.4),
-        max_tokens: Some(2048),
-        json_mode: false,
-    };
+    let (content, web_citations) = invoke_chat_with_tools(
+        provider.as_ref(),
+        &provider_kind,
+        chat_messages,
+        model.clone(),
+        Some(0.4),
+        Some(2048),
+    )
+    .await?;
 
-    let response = provider.chat(req).await?;
-
-    let sources: Vec<ChatSource> = selected
+    let mut sources: Vec<ChatSource> = selected
         .iter()
         .map(|a| ChatSource {
             id: a.article.id.clone(),
@@ -328,11 +339,25 @@ pub async fn chat_with_articles(
             feed_title: a.feed_title.clone(),
             url: a.article.url.clone(),
             published_at: a.article.published_at,
+            source_type: "article".to_string(),
         })
         .collect();
 
+    // Merge web citations into sources as well, so the existing Ask Skim UI
+    // (which only reads `sources`) can render them without a separate field.
+    for (idx, w) in web_citations.iter().enumerate() {
+        sources.push(ChatSource {
+            id: format!("web-{idx}"),
+            title: w.title.clone(),
+            feed_title: "Web".to_string(),
+            url: Some(w.url.clone()),
+            published_at: None,
+            source_type: "web".to_string(),
+        });
+    }
+
     Ok(ArticleChatResponse {
-        content: response.content,
+        content,
         provider: provider.name().to_string(),
         model,
         article_ids: selected.iter().map(|a| a.article.id.clone()).collect(),
@@ -340,8 +365,218 @@ pub async fn chat_with_articles(
     })
 }
 
+/// Providers that support the tool-use loop. Must match names returned by
+/// `AiProvider::name()` / `AiSettings::provider`.
+fn provider_supports_tools(provider_kind: &str) -> bool {
+    matches!(provider_kind, "anthropic" | "claude-subscription" | "claude-cli")
+}
+
+/// Web-search tool definition shared between per-article and multi-article
+/// chat. Anthropic-compatible JSON schema.
+fn web_search_tool_def() -> ToolDef {
+    ToolDef {
+        name: "web_search".to_string(),
+        description:
+            "Search the public web (DuckDuckGo) for fresh information not present in the \
+             user's article context. Returns up to `max_results` title/url/snippet tuples. \
+             Call this when the provided articles don't cover the user's question."
+                .to_string(),
+        input_schema: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "query": { "type": "string", "description": "Search query." },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Max results to return (1-10). Defaults to 5.",
+                    "minimum": 1,
+                    "maximum": 10
+                }
+            },
+            "required": ["query"]
+        }),
+    }
+}
+
+/// Run the provider chat, optionally looping through tool_use → tool_result
+/// rounds. Caps at 3 tool iterations. Returns the final assistant text plus
+/// any web-search citations the model produced along the way.
+///
+/// For providers that don't support tool-use, this short-circuits to a single
+/// provider call and returns an empty citation list — `web_search` is simply
+/// not advertised.
+async fn invoke_chat_with_tools(
+    provider: &dyn AiProvider,
+    provider_kind: &str,
+    mut messages: Vec<ChatMessage>,
+    model: String,
+    temperature: Option<f64>,
+    max_tokens: Option<i64>,
+) -> Result<(String, Vec<WebCitation>), String> {
+    let supports_tools = provider_supports_tools(provider_kind);
+    if !supports_tools {
+        log::info!(
+            "chat: provider '{}' does not support tool-use; skipping web_search tool registration",
+            provider_kind
+        );
+    }
+
+    let tools = if supports_tools {
+        Some(vec![web_search_tool_def()])
+    } else {
+        None
+    };
+
+    let mut citations: Vec<WebCitation> = Vec::new();
+    let max_iterations = 3;
+
+    for iteration in 0..=max_iterations {
+        let req = ChatRequest {
+            model: model.clone(),
+            messages: messages.clone(),
+            temperature,
+            max_tokens,
+            json_mode: false,
+            tools: tools.clone(),
+        };
+        let response: ProviderChatResponse = provider.chat(req).await?;
+
+        // No tool calls → final response.
+        if response.tool_uses.is_empty() {
+            return Ok((response.content, citations));
+        }
+
+        if iteration == max_iterations {
+            log::warn!(
+                "chat: reached max tool-use iterations ({}); returning partial content",
+                max_iterations
+            );
+            return Ok((response.content, citations));
+        }
+
+        // Replay the assistant's tool_use turn verbatim as content_blocks so
+        // the provider sees the `tool_use_id`s on the next round.
+        let assistant_blocks = build_assistant_tool_use_blocks(&response);
+        messages.push(ChatMessage {
+            role: "assistant".to_string(),
+            content: String::new(),
+            content_blocks: Some(assistant_blocks),
+        });
+
+        // Execute each tool call and append a single user turn with all
+        // `tool_result` blocks.
+        let mut result_blocks: Vec<serde_json::Value> = Vec::new();
+        for tu in &response.tool_uses {
+            let block = execute_tool(tu, &mut citations).await;
+            result_blocks.push(block);
+        }
+        messages.push(ChatMessage {
+            role: "user".to_string(),
+            content: String::new(),
+            content_blocks: Some(result_blocks),
+        });
+    }
+
+    // Unreachable in practice — the loop always returns within max_iterations.
+    unreachable!("tool-use loop exited without returning")
+}
+
+/// Rebuild the assistant's content blocks so they can be replayed to the
+/// provider on the next round. We preserve the leading text (if any) and then
+/// each `tool_use` block with its id/name/input.
+fn build_assistant_tool_use_blocks(response: &ProviderChatResponse) -> Vec<serde_json::Value> {
+    let mut blocks: Vec<serde_json::Value> = Vec::new();
+    if !response.content.is_empty() {
+        blocks.push(serde_json::json!({
+            "type": "text",
+            "text": response.content,
+        }));
+    }
+    for tu in &response.tool_uses {
+        blocks.push(serde_json::json!({
+            "type": "tool_use",
+            "id": tu.id,
+            "name": tu.name,
+            "input": tu.input,
+        }));
+    }
+    blocks
+}
+
+/// Dispatch a single tool invocation. Unknown tools are reported back as
+/// errors so the model can recover on its next turn.
+async fn execute_tool(tu: &ToolUse, citations: &mut Vec<WebCitation>) -> serde_json::Value {
+    match tu.name.as_str() {
+        "web_search" => {
+            let query = tu
+                .input
+                .get("query")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let max_results = tu
+                .input
+                .get("max_results")
+                .and_then(|v| v.as_u64())
+                .map(|n| n.clamp(1, 10) as usize)
+                .unwrap_or(5);
+            if query.is_empty() {
+                return serde_json::json!({
+                    "type": "tool_result",
+                    "tool_use_id": tu.id,
+                    "is_error": true,
+                    "content": "web_search called with empty query",
+                });
+            }
+            match run_web_search(&query, max_results).await {
+                Ok(results) => {
+                    // Capture citations for the UI.
+                    for r in &results {
+                        // Avoid duplicates across iterations.
+                        if !citations.iter().any(|c| c.url == r.url) {
+                            citations.push(WebCitation {
+                                title: r.title.clone(),
+                                url: r.url.clone(),
+                                snippet: r.snippet.clone(),
+                                query: query.clone(),
+                            });
+                        }
+                    }
+                    let payload = serde_json::json!({
+                        "query": query,
+                        "results": results,
+                    });
+                    serde_json::json!({
+                        "type": "tool_result",
+                        "tool_use_id": tu.id,
+                        "content": payload.to_string(),
+                    })
+                }
+                Err(e) => serde_json::json!({
+                    "type": "tool_result",
+                    "tool_use_id": tu.id,
+                    "is_error": true,
+                    "content": format!("web_search failed: {}", e),
+                }),
+            }
+        }
+        other => serde_json::json!({
+            "type": "tool_result",
+            "tool_use_id": tu.id,
+            "is_error": true,
+            "content": format!("Unknown tool: {}", other),
+        }),
+    }
+}
+
 #[tauri::command]
 pub async fn web_search(query: String) -> Result<Vec<SearchResult>, String> {
+    run_web_search(&query, 5).await
+}
+
+/// Actual DuckDuckGo HTML scrape. Factored out of the Tauri command so the
+/// tool-use loop and the direct UI call share one implementation.
+pub async fn run_web_search(query: &str, max_results: usize) -> Result<Vec<SearchResult>, String> {
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
         .build()
@@ -349,7 +584,7 @@ pub async fn web_search(query: String) -> Result<Vec<SearchResult>, String> {
 
     let url = format!(
         "https://html.duckduckgo.com/html/?q={}",
-        urlencoding::encode(&query)
+        urlencoding::encode(query)
     );
 
     let html = client
@@ -361,7 +596,9 @@ pub async fn web_search(query: String) -> Result<Vec<SearchResult>, String> {
         .await
         .map_err(|e| format!("Failed to read search response: {}", e))?;
 
-    Ok(parse_ddg_results(&html))
+    let mut results = parse_ddg_results(&html);
+    results.truncate(max_results);
+    Ok(results)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -377,7 +614,7 @@ fn parse_ddg_results(html: &str) -> Vec<SearchResult> {
     // Parse DuckDuckGo HTML results - they use class="result__a" for links
     // and class="result__snippet" for snippets
     for chunk in html.split("class=\"result__body") {
-        if results.len() >= 5 {
+        if results.len() >= 10 {
             break;
         }
 

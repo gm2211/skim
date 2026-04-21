@@ -375,12 +375,13 @@ pub async fn summarize_article(
         let req = ChatRequest {
             model: model.clone(),
             messages: vec![
-                ChatMessage { role: "system".to_string(), content: system_prompt.clone() },
-                ChatMessage { role: "user".to_string(), content: bullet_prompt },
+                ChatMessage { role: "system".to_string(), content: system_prompt.clone(), content_blocks: None },
+                ChatMessage { role: "user".to_string(), content: bullet_prompt, content_blocks: None },
             ],
             temperature: Some(0.5),
             max_tokens: Some(prompts::bullet_max_tokens(&settings.ai)),
             json_mode: true,
+            tools: None,
         };
         Some(provider.chat(req).await?)
     } else {
@@ -398,12 +399,13 @@ pub async fn summarize_article(
         let req = ChatRequest {
             model: model.clone(),
             messages: vec![
-                ChatMessage { role: "system".to_string(), content: system_prompt },
-                ChatMessage { role: "user".to_string(), content: full_prompt },
+                ChatMessage { role: "system".to_string(), content: system_prompt, content_blocks: None },
+                ChatMessage { role: "user".to_string(), content: full_prompt, content_blocks: None },
             ],
             temperature: Some(0.3),
             max_tokens: Some(prompts::full_max_tokens(&settings.ai)),
             json_mode: true,
+            tools: None,
         };
         Some(provider.chat(req).await?)
     } else {
@@ -589,15 +591,18 @@ pub async fn generate_themes(
                 ChatMessage {
                     role: "system".to_string(),
                     content: prompts::theme_grouping_system_prompt(ai_settings.triage_user_prompt.as_deref()),
+                    content_blocks: None,
                 },
                 ChatMessage {
                     role: "user".to_string(),
                     content: prompts::theme_grouping_user_prompt(&listing),
+                    content_blocks: None,
                 },
             ],
             temperature: Some(0.3),
             max_tokens: Some(max_tokens),
             json_mode: true,
+            tools: None,
         };
 
         match provider.chat(request).await {
@@ -896,12 +901,13 @@ pub async fn triage_articles(
         let request = ChatRequest {
             model: model.clone(),
             messages: vec![
-                ChatMessage { role: "system".to_string(), content: prompts::triage_system_prompt(preferences.as_ref(), ai_settings.triage_user_prompt.as_deref()) },
-                ChatMessage { role: "user".to_string(), content: prompts::triage_user_prompt(&listing) },
+                ChatMessage { role: "system".to_string(), content: prompts::triage_system_prompt(preferences.as_ref(), ai_settings.triage_user_prompt.as_deref()), content_blocks: None },
+                ChatMessage { role: "user".to_string(), content: prompts::triage_user_prompt(&listing), content_blocks: None },
             ],
             temperature: Some(0.3),
             max_tokens: Some(max_tokens),
             json_mode: true,
+            tools: None,
         };
 
         match provider.chat(request).await {
@@ -1277,12 +1283,13 @@ Output JSON:
     let req = ChatRequest {
         model,
         messages: vec![
-            ChatMessage { role: "system".to_string(), content: system.to_string() },
-            ChatMessage { role: "user".to_string(), content: user },
+            ChatMessage { role: "system".to_string(), content: system.to_string(), content_blocks: None },
+            ChatMessage { role: "user".to_string(), content: user, content_blocks: None },
         ],
         temperature: Some(0.3),
         max_tokens: Some(2000),
         json_mode: true,
+        tools: None,
     };
 
     let response = provider.chat(req).await?;
@@ -1331,6 +1338,7 @@ Output JSON:
             feed_title: a.feed_title.clone(),
             url: a.article.url.clone(),
             published_at: a.article.published_at,
+            source_type: "article".to_string(),
         })
         .collect();
 

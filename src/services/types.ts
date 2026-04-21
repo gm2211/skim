@@ -112,10 +112,19 @@ export interface ChatMessageInput {
   content: string;
 }
 
+export interface WebCitation {
+  title: string;
+  url: string;
+  snippet: string;
+  query: string;
+}
+
 export interface ChatResponse {
   content: string;
   provider: string;
   model: string;
+  /** Web-search citations emitted by the tool-use loop, if any. */
+  web_citations?: WebCitation[];
 }
 
 export interface SearchResult {

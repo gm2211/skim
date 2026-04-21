@@ -162,50 +162,70 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
                     Sources
                   </div>
                   <div className="flex flex-col gap-1">
-                    {m.sources.map((s, idx) => (
-                      <button
-                        key={s.id}
-                        onClick={() => {
-                          if (onOpenArticle) {
-                            onOpenArticle(s.id);
-                            onClose();
-                          } else if (s.url) {
-                            openUrl(s.url);
-                          }
-                        }}
-                        className="text-left rounded-lg border border-white/5 hover:border-accent/30 hover:bg-white/5 transition-colors"
-                        style={{ padding: "6px 10px" }}
-                      >
-                        <div className="flex items-start gap-2">
-                          <span
-                            className="text-text-muted tabular-nums flex-shrink-0"
-                            style={{ fontSize: 11, fontWeight: 600, marginTop: 1 }}
-                          >
-                            [{idx + 1}]
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <div
-                              className="text-text-primary truncate"
-                              style={{ fontSize: 12, fontWeight: 500 }}
+                    {m.sources.map((s, idx) => {
+                      const isWeb = s.source_type === "web";
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => {
+                            if (isWeb && s.url) {
+                              openUrl(s.url);
+                            } else if (onOpenArticle) {
+                              onOpenArticle(s.id);
+                              onClose();
+                            } else if (s.url) {
+                              openUrl(s.url);
+                            }
+                          }}
+                          className="text-left rounded-lg border border-white/5 hover:border-accent/30 hover:bg-white/5 transition-colors"
+                          style={{ padding: "6px 10px" }}
+                        >
+                          <div className="flex items-start gap-2">
+                            <span
+                              className="text-text-muted tabular-nums flex-shrink-0 flex items-center gap-1"
+                              style={{ fontSize: 11, fontWeight: 600, marginTop: 1 }}
                             >
-                              {s.title}
-                            </div>
-                            <div
-                              className="text-text-muted truncate"
-                              style={{ fontSize: 11 }}
-                            >
-                              {s.feed_title}
-                              {s.published_at && (
-                                <>
-                                  {" · "}
-                                  {new Date(s.published_at * 1000).toLocaleDateString()}
-                                </>
-                              )}
+                              {isWeb ? (
+                                <svg
+                                  width="11"
+                                  height="11"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  aria-label="Web source"
+                                >
+                                  <circle cx="12" cy="12" r="10" />
+                                  <path d="M2 12h20" />
+                                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                                </svg>
+                              ) : null}
+                              [{idx + 1}]
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div
+                                className="text-text-primary truncate"
+                                style={{ fontSize: 12, fontWeight: 500 }}
+                              >
+                                {s.title}
+                              </div>
+                              <div
+                                className="text-text-muted truncate"
+                                style={{ fontSize: 11 }}
+                              >
+                                {s.feed_title}
+                                {s.published_at && (
+                                  <>
+                                    {" · "}
+                                    {new Date(s.published_at * 1000).toLocaleDateString()}
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}

@@ -341,6 +341,8 @@ export interface ChatSource {
   feed_title: string;
   url: string | null;
   published_at: number | null;
+  /** "article" (default) or "web" — UI renders a globe for web sources. */
+  source_type?: "article" | "web";
 }
 export interface ArticleChatResponse {
   content: string;

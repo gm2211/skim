@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { chatWithArticle, webSearch } from "../../services/commands";
-import type { SearchResult } from "../../services/types";
+import type { SearchResult, WebCitation } from "../../services/types";
 
 interface ChatMessage {
   role: "user" | "assistant" | "search";
   content: string;
   searchResults?: SearchResult[];
+  /** Web citations produced by the tool-use loop on assistant turns. */
+  webCitations?: WebCitation[];
 }
 
 interface Props {
@@ -82,7 +84,11 @@ export function ChatDrawer({ articleId }: Props) {
       const response = await chatWithArticle(articleId, history);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: response.content },
+        {
+          role: "assistant",
+          content: response.content,
+          webCitations: response.web_citations,
+        },
       ]);
     } catch (e) {
       setMessages((prev) => [
@@ -120,7 +126,11 @@ export function ChatDrawer({ articleId }: Props) {
       const response = await chatWithArticle(articleId, history);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: response.content },
+        {
+          role: "assistant",
+          content: response.content,
+          webCitations: response.web_citations,
+        },
       ]);
     } catch (e) {
       setMessages((prev) => [
@@ -264,7 +274,7 @@ export function ChatDrawer({ articleId }: Props) {
               </div>
             )}
             {msg.role === "assistant" && (
-              <div className="flex justify-start">
+              <div className="flex flex-col items-start gap-1">
                 <div
                   className="rounded-xl rounded-bl-sm text-text-primary"
                   style={{
@@ -287,6 +297,58 @@ export function ChatDrawer({ articleId }: Props) {
                     }}
                   />
                 </div>
+                {msg.webCitations && msg.webCitations.length > 0 && (
+                  <div
+                    className="rounded-md border border-white/10"
+                    style={{
+                      padding: "4px 8px",
+                      background: "rgba(255,255,255,0.02)",
+                      maxWidth: "85%",
+                    }}
+                  >
+                    <div
+                      className="text-text-muted uppercase tracking-wider flex items-center gap-1"
+                      style={{ fontSize: 9, fontWeight: 600, marginBottom: 3 }}
+                    >
+                      <svg
+                        width="9"
+                        height="9"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        aria-label="Web source"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M2 12h20" />
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                      </svg>
+                      Web sources
+                    </div>
+                    {msg.webCitations.map((c, j) => (
+                      <div
+                        key={c.url}
+                        style={{
+                          marginBottom:
+                            j < msg.webCitations!.length - 1 ? 4 : 0,
+                        }}
+                      >
+                        <a
+                          href={c.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-accent hover:underline"
+                          style={{ fontSize: 11 }}
+                        >
+                          {c.title}
+                        </a>
+                        <p className="text-text-muted" style={{ fontSize: 10 }}>
+                          {c.snippet}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {msg.role === "search" && (

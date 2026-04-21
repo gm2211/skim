@@ -273,6 +273,13 @@ fn run_inference(
 #[async_trait]
 impl AiProvider for LocalLlmProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, String> {
+        if request.tools.as_ref().map(|t| !t.is_empty()).unwrap_or(false) {
+            log::info!(
+                "LocalLlmProvider: dropping {} tool(s) — local llama.cpp runtime has no tool-use loop",
+                request.tools.as_ref().map(|t| t.len()).unwrap_or(0),
+            );
+        }
+
         let model_path = self.model_path.clone();
         let gpu_layers = self.gpu_layers;
         let n_threads = self.n_threads;
@@ -343,6 +350,8 @@ impl AiProvider for LocalLlmProvider {
                 prompt_tokens: Some(prompt_tokens as i64),
                 completion_tokens: Some(completion_tokens as i64),
             }),
+            tool_uses: Vec::new(),
+            stop_reason: None,
         })
     }
 
@@ -419,8 +428,8 @@ mod tests {
         );
 
         let messages = vec![
-            ChatMessage { role: "system".to_string(), content: system.to_string() },
-            ChatMessage { role: "user".to_string(), content: user },
+            ChatMessage { role: "system".to_string(), content: system.to_string(), content_blocks: None },
+            ChatMessage { role: "user".to_string(), content: user, content_blocks: None },
         ];
         let prompt = format_chat_messages(&loaded.model, &messages)
             .expect("Failed to format messages");

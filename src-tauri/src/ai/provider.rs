@@ -8,6 +8,41 @@ use crate::db::models::AiSettings;
 pub struct ChatMessage {
     pub role: String,
     pub content: String,
+    /// Optional Anthropic-style content blocks. When present, providers that
+    /// support tool-use (Anthropic API, Claude subscription) send these
+    /// verbatim instead of the plain `content` string. This lets the chat
+    /// orchestrator thread `tool_result` blocks back through a multi-turn
+    /// tool-use loop. Other providers ignore this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_blocks: Option<Vec<serde_json::Value>>,
+}
+
+impl ChatMessage {
+    pub fn text(role: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: role.into(),
+            content: content.into(),
+            content_blocks: None,
+        }
+    }
+}
+
+/// Anthropic-style tool definition. Passed through to providers that support
+/// tool-use. Schema matches the Anthropic `tools` API field shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolDef {
+    pub name: String,
+    pub description: String,
+    pub input_schema: serde_json::Value,
+}
+
+/// A single `tool_use` block returned by the model. `input` is the raw JSON
+/// argument object the model produced for this call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolUse {
+    pub id: String,
+    pub name: String,
+    pub input: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,6 +53,11 @@ pub struct ChatRequest {
     pub max_tokens: Option<i64>,
     #[serde(default)]
     pub json_mode: bool,
+    /// Tools the model may invoke. Only sent by providers that implement
+    /// tool-use (Anthropic API, Claude subscription). Other providers log and
+    /// drop this field so callers can reliably fall back to text-only.
+    #[serde(default)]
+    pub tools: Option<Vec<ToolDef>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +65,14 @@ pub struct ChatResponse {
     pub content: String,
     pub model: String,
     pub usage: Option<TokenUsage>,
+    /// Tool invocations emitted by the model in this turn. Always empty for
+    /// providers that don't support tool-use.
+    #[serde(default)]
+    pub tool_uses: Vec<ToolUse>,
+    /// Stop reason from the provider, when available. Used by the
+    /// orchestrator to detect `tool_use` termination on Anthropic.
+    #[serde(default)]
+    pub stop_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,9 +141,25 @@ impl AiProvider for OpenAiCompatibleProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, String> {
         let url = format!("{}/v1/chat/completions", self.base_url);
 
+        if request.tools.as_ref().map(|t| !t.is_empty()).unwrap_or(false) {
+            log::info!(
+                "OpenAiCompatibleProvider ({}): dropping {} tool(s) — tool-use loop is Anthropic-only in this codebase",
+                self.provider_name,
+                request.tools.as_ref().map(|t| t.len()).unwrap_or(0),
+            );
+        }
+
+        // Strip Anthropic-style content_blocks — OpenAI's chat completions
+        // schema doesn't accept them. Fall back to the plain `content` string.
+        let messages: Vec<serde_json::Value> = request
+            .messages
+            .iter()
+            .map(|m| serde_json::json!({"role": m.role, "content": m.content}))
+            .collect();
+
         let mut body = serde_json::json!({
             "model": request.model,
-            "messages": request.messages,
+            "messages": messages,
             "temperature": request.temperature.unwrap_or(0.3),
             "max_tokens": request.max_tokens.unwrap_or(2048),
         });
@@ -138,6 +202,8 @@ impl AiProvider for OpenAiCompatibleProvider {
                 prompt_tokens: u.prompt_tokens,
                 completion_tokens: u.completion_tokens,
             }),
+            tool_uses: Vec::new(),
+            stop_reason: None,
         })
     }
 
@@ -167,17 +233,73 @@ struct AnthropicResponse {
     content: Vec<AnthropicContent>,
     model: Option<String>,
     usage: Option<AnthropicUsage>,
+    #[serde(default)]
+    stop_reason: Option<String>,
 }
 
+/// A single content block in an Anthropic response. We care about `text` and
+/// `tool_use`; other block types (e.g. `thinking`) are deserialized with their
+/// type but their payload is ignored.
 #[derive(Deserialize)]
 struct AnthropicContent {
+    #[serde(rename = "type")]
+    block_type: Option<String>,
     text: Option<String>,
+    // tool_use fields
+    id: Option<String>,
+    name: Option<String>,
+    input: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
 struct AnthropicUsage {
     input_tokens: Option<i64>,
     output_tokens: Option<i64>,
+}
+
+/// Translate internal `ChatMessage`s into the Anthropic messages-API shape.
+/// Non-system messages with `content_blocks` pass their blocks through
+/// verbatim (used for `tool_result` replies). Plain-text messages become a
+/// single text block.
+fn anthropic_messages(messages: &[ChatMessage]) -> Vec<serde_json::Value> {
+    messages
+        .iter()
+        .filter(|m| m.role != "system")
+        .map(|m| {
+            if let Some(blocks) = &m.content_blocks {
+                serde_json::json!({"role": m.role, "content": blocks})
+            } else {
+                serde_json::json!({"role": m.role, "content": m.content})
+            }
+        })
+        .collect()
+}
+
+/// Parse an Anthropic response into our `(text, tool_uses)` pair. Concatenates
+/// all `text` blocks (rare to have >1 but allowed) and collects `tool_use`
+/// blocks in emission order so the orchestrator can execute them sequentially.
+fn parse_anthropic_content(content: &[AnthropicContent]) -> (String, Vec<ToolUse>) {
+    let mut text = String::new();
+    let mut tool_uses = Vec::new();
+    for block in content {
+        match block.block_type.as_deref() {
+            Some("tool_use") => {
+                if let (Some(id), Some(name)) = (block.id.clone(), block.name.clone()) {
+                    tool_uses.push(ToolUse {
+                        id,
+                        name,
+                        input: block.input.clone().unwrap_or(serde_json::Value::Null),
+                    });
+                }
+            }
+            _ => {
+                if let Some(t) = &block.text {
+                    text.push_str(t);
+                }
+            }
+        }
+    }
+    (text, tool_uses)
 }
 
 #[async_trait]
@@ -187,10 +309,7 @@ impl AiProvider for AnthropicProvider {
             .find(|m| m.role == "system")
             .map(|m| m.content.clone());
 
-        let messages: Vec<serde_json::Value> = request.messages.iter()
-            .filter(|m| m.role != "system")
-            .map(|m| serde_json::json!({"role": m.role, "content": m.content}))
-            .collect();
+        let messages = anthropic_messages(&request.messages);
 
         let mut body = serde_json::json!({
             "model": request.model,
@@ -203,6 +322,11 @@ impl AiProvider for AnthropicProvider {
         }
         if let Some(sys) = &system_msg {
             body["system"] = serde_json::json!(sys);
+        }
+        if let Some(tools) = &request.tools {
+            if !tools.is_empty() {
+                body["tools"] = serde_json::json!(tools);
+            }
         }
 
         let response = self.client
@@ -227,10 +351,7 @@ impl AiProvider for AnthropicProvider {
             .await
             .map_err(|e| format!("Failed to parse Anthropic response: {}", e))?;
 
-        let content = api_response.content
-            .first()
-            .and_then(|c| c.text.clone())
-            .unwrap_or_default();
+        let (content, tool_uses) = parse_anthropic_content(&api_response.content);
 
         Ok(ChatResponse {
             content,
@@ -239,6 +360,8 @@ impl AiProvider for AnthropicProvider {
                 prompt_tokens: u.input_tokens,
                 completion_tokens: u.output_tokens,
             }),
+            tool_uses,
+            stop_reason: api_response.stop_reason,
         })
     }
 
@@ -274,10 +397,7 @@ impl AiProvider for ClaudeSubscriptionProvider {
         let user_system = request.messages.iter()
             .find(|m| m.role == "system")
             .map(|m| m.content.clone());
-        let messages: Vec<serde_json::Value> = request.messages.iter()
-            .filter(|m| m.role != "system")
-            .map(|m| serde_json::json!({"role": m.role, "content": m.content}))
-            .collect();
+        let messages = anthropic_messages(&request.messages);
 
         let mut system_blocks = vec![serde_json::json!({"type": "text", "text": SYSTEM_PREFIX})];
         if let Some(sys) = user_system {
@@ -292,6 +412,11 @@ impl AiProvider for ClaudeSubscriptionProvider {
         });
         if let Some(temp) = request.temperature {
             body["temperature"] = serde_json::json!(temp);
+        }
+        if let Some(tools) = &request.tools {
+            if !tools.is_empty() {
+                body["tools"] = serde_json::json!(tools);
+            }
         }
 
         let resp = self.client
@@ -313,7 +438,7 @@ impl AiProvider for ClaudeSubscriptionProvider {
 
         let api_response: AnthropicResponse = resp.json().await
             .map_err(|e| format!("Parse Claude subscription response: {}", e))?;
-        let content = api_response.content.first().and_then(|c| c.text.clone()).unwrap_or_default();
+        let (content, tool_uses) = parse_anthropic_content(&api_response.content);
         Ok(ChatResponse {
             content,
             model: api_response.model.unwrap_or(request.model),
@@ -321,6 +446,8 @@ impl AiProvider for ClaudeSubscriptionProvider {
                 prompt_tokens: u.input_tokens,
                 completion_tokens: u.output_tokens,
             }),
+            tool_uses,
+            stop_reason: api_response.stop_reason,
         })
     }
 
@@ -377,6 +504,13 @@ struct ClaudeCliUsage {
 #[async_trait]
 impl AiProvider for ClaudeCliProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, String> {
+        if request.tools.as_ref().map(|t| !t.is_empty()).unwrap_or(false) {
+            log::info!(
+                "ClaudeCliProvider: dropping {} tool(s) — CLI wrapper doesn't expose tool-use",
+                request.tools.as_ref().map(|t| t.len()).unwrap_or(0),
+            );
+        }
+
         let system_msg = request.messages.iter()
             .find(|m| m.role == "system")
             .map(|m| m.content.clone());
@@ -515,6 +649,8 @@ impl AiProvider for ClaudeCliProvider {
             content: result.0,
             model: request.model,
             usage: result.1,
+            tool_uses: Vec::new(),
+            stop_reason: None,
         })
     }
 

@@ -1099,12 +1099,13 @@ Output JSON:
     let req = ChatRequest {
         model,
         messages: vec![
-            ChatMessage { role: "system".to_string(), content: system.to_string() },
-            ChatMessage { role: "user".to_string(), content: user },
+            ChatMessage { role: "system".to_string(), content: system.to_string(), content_blocks: None },
+            ChatMessage { role: "user".to_string(), content: user, content_blocks: None },
         ],
         temperature: Some(0.2),
         max_tokens: Some(max_tokens),
         json_mode: true,
+        tools: None,
     };
 
     let response = provider.chat(req).await?;
@@ -1187,12 +1188,13 @@ Output JSON:
     let req = ChatRequest {
         model,
         messages: vec![
-            ChatMessage { role: "system".to_string(), content: system.to_string() },
-            ChatMessage { role: "user".to_string(), content: user },
+            ChatMessage { role: "system".to_string(), content: system.to_string(), content_blocks: None },
+            ChatMessage { role: "user".to_string(), content: user, content_blocks: None },
         ],
         temperature: Some(0.1),
         max_tokens: Some(max_tokens),
         json_mode: true,
+        tools: None,
     };
 
     let response = provider.chat(req).await?;

@@ -5,7 +5,7 @@ set -euo pipefail
 install_if_missing() {
   if ! command -v "$1" &>/dev/null; then
     echo "Installing $1..."
-    ${@:2}
+    "${@:2}"
   fi
 }
 

@@ -1122,7 +1122,9 @@ function AutoOrganizeDialog({
         const initNames: Record<number, string> = {};
         result.forEach((p, i) => {
           initSel[i] = new Set(p.feed_ids);
-          initNames[i] = p.name;
+          // Apply current case style to the LLM's raw proposal names so the
+          // preview matches what the user will see post-apply.
+          initNames[i] = applyCase(p.name, caseStyle);
         });
         setSelected(initSel);
         setNames(initNames);

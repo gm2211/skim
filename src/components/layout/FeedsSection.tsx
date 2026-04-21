@@ -261,7 +261,6 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
               onCommitRename={commitRenameFolder}
               onCancelRename={() => setRenamingFolderId(null)}
               unreadCount={unread}
-              feedCount={folderFeeds.length}
               onToggle={() => toggle(folder.id)}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -588,7 +587,6 @@ function FolderRow({
   onCommitRename,
   onCancelRename,
   unreadCount,
-  feedCount,
   onToggle,
   onContextMenu,
 }: {
@@ -600,7 +598,6 @@ function FolderRow({
   onCommitRename: () => void;
   onCancelRename: () => void;
   unreadCount: number;
-  feedCount: number;
   onToggle: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
@@ -662,9 +659,9 @@ function FolderRow({
           </span>
         )}
       </div>
-      {!renaming && (
+      {!renaming && unreadCount > 0 && (
         <span className="text-text-muted tabular-nums ml-2" style={{ fontSize: 12 }}>
-          {unreadCount > 0 ? unreadCount.toLocaleString() : feedCount}
+          {unreadCount.toLocaleString()}
         </span>
       )}
     </div>

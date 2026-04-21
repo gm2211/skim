@@ -204,7 +204,7 @@ pub async fn refresh_feed(
     };
     let feedly_token = ensure_feedly_token(&db).await?;
 
-    let articles = if let (Some(ref feedly_id), Some(ref token)) = (&feed.feedly_id, &feedly_token) {
+    let (articles, feedly_star_updates) = if let (Some(ref feedly_id), Some(ref token)) = (&feed.feedly_id, &feedly_token) {
         // Fetch from Feedly streams API
         let stream = feedly::fetch_stream_contents(
             token,
@@ -212,11 +212,16 @@ pub async fn refresh_feed(
             feed.last_fetched_at,
             200,
         ).await?;
-        feedly::feedly_entries_to_articles(&stream.items, &feed_id)
+        let articles = feedly::feedly_entries_to_articles(&stream.items, &feed_id);
+        let star_updates: Vec<(String, bool)> = articles
+            .iter()
+            .filter_map(|a| a.feedly_entry_id.as_ref().map(|id| (id.clone(), a.is_starred)))
+            .collect();
+        (articles, star_updates)
     } else {
         // Direct RSS fetch
         let (_feed, articles) = fetch_and_parse_feed(&feed.url, Some(&feed_id)).await?;
-        articles
+        (articles, Vec::new())
     };
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -225,6 +230,11 @@ pub async fn refresh_feed(
         if queries::insert_article(&conn, article).map_err(|e| e.to_string())? {
             new_count += 1;
         }
+    }
+    // Keep local star state in sync with Feedly's saved state for already-imported
+    // articles too (insert_article uses INSERT OR IGNORE so it doesn't update).
+    if !feedly_star_updates.is_empty() {
+        let _ = queries::sync_star_state_from_feedly(&conn, &feedly_star_updates);
     }
 
     let now = chrono::Utc::now().timestamp();

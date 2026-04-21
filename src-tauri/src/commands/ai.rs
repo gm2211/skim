@@ -797,6 +797,16 @@ pub async fn triage_articles(
     // on local ones. 1000 is already 20-40 minutes on a local model.
     const MAX_PER_RUN: i64 = 1000;
 
+    // Drop triage rows written before the prompt fix so they get rescored.
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        if let Ok(n) = queries::clear_hallucinated_triage(&conn) {
+            if n > 0 {
+                log::info!("Cleared {} stale triage rows with hallucinated reasons", n);
+            }
+        }
+    }
+
     let (articles, settings_json, preferences) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let articles = if force.unwrap_or(false) {
@@ -951,6 +961,19 @@ pub async fn triage_articles(
         );
     }
 
+    // Post-triage rerank: adjust priorities so articles similar to what the
+    // reader already cares about (starred, long-read, chatted) bubble up,
+    // and dominant topics in the current batch get a boost.
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let signal_titles = queries::collect_signal_titles(&conn, 40).unwrap_or_default();
+        let triaged = queries::list_unread_triaged(&conn).unwrap_or_default();
+        let adjustments = compute_rerank_adjustments(&signal_titles, &triaged);
+        for (article_id, new_priority) in adjustments {
+            let _ = queries::update_triage_priority(&conn, &article_id, new_priority);
+        }
+    }
+
     emit_triage_progress(
         &app,
         "done",
@@ -960,6 +983,86 @@ pub async fn triage_articles(
     );
 
     Ok(crate::db::models::TriageResult { triaged_count, batches: batch_count, errors })
+}
+
+fn extract_keywords(text: &str) -> std::collections::HashSet<String> {
+    const STOPWORDS: &[&str] = &[
+        "the", "and", "for", "that", "this", "with", "from", "your", "about",
+        "into", "over", "have", "has", "been", "were", "was", "are", "not",
+        "how", "why", "when", "what", "who", "which", "will", "just", "its",
+        "they", "them", "their", "there", "these", "those", "then", "than",
+        "because", "also", "some", "more", "most", "like", "between",
+        "against", "upon", "after", "before", "during", "only", "such",
+        "any", "all", "but", "can", "you", "your", "our",
+    ];
+    let stop: std::collections::HashSet<&str> = STOPWORDS.iter().copied().collect();
+    text.to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.len() >= 4 && !stop.contains(w))
+        .map(|w| w.to_string())
+        .collect()
+}
+
+/// Given signal titles (starred/engaged) and the current triaged set, return
+/// the adjusted priorities for any articles that moved.
+fn compute_rerank_adjustments(
+    signal_titles: &[String],
+    triaged: &[(String, String, i32)],
+) -> Vec<(String, i32)> {
+    let signal_keywords: std::collections::HashSet<String> = signal_titles
+        .iter()
+        .flat_map(|t| extract_keywords(t))
+        .collect();
+
+    // Build per-article keyword sets.
+    let per_article: Vec<(String, std::collections::HashSet<String>, i32)> = triaged
+        .iter()
+        .map(|(id, title, pri)| (id.clone(), extract_keywords(title), *pri))
+        .collect();
+
+    // Cluster sizes: for each article, count how many others share >= 2 keywords.
+    let mut cluster_size: Vec<usize> = vec![0; per_article.len()];
+    for i in 0..per_article.len() {
+        for j in 0..per_article.len() {
+            if i == j { continue; }
+            let overlap = per_article[i].1.intersection(&per_article[j].1).count();
+            if overlap >= 2 {
+                cluster_size[i] += 1;
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    for (i, (id, kws, orig_pri)) in per_article.iter().enumerate() {
+        let starred_overlap = kws.intersection(&signal_keywords).count();
+        let cluster = cluster_size[i];
+        let mut new_pri = *orig_pri;
+
+        // Starred/engagement signal
+        if starred_overlap >= 3 {
+            new_pri += 2;
+        } else if starred_overlap >= 1 {
+            new_pri += 1;
+        }
+
+        // Cluster volume signal
+        if cluster >= 5 {
+            new_pri += 2;
+        } else if cluster >= 2 {
+            new_pri += 1;
+        }
+
+        // Isolated + no signal = likely noise
+        if cluster == 0 && starred_overlap == 0 && kws.len() >= 3 {
+            new_pri -= 1;
+        }
+
+        new_pri = new_pri.clamp(1, 5);
+        if new_pri != *orig_pri {
+            out.push((id.clone(), new_pri));
+        }
+    }
+    out
 }
 
 #[tauri::command]
@@ -1016,6 +1119,208 @@ pub async fn get_recent_articles(
     let order = order.unwrap_or_else(|| "engagement".to_string());
     let limit = limit.unwrap_or(500).min(3000);
     queries::list_recent_articles(&conn, &order, limit).map_err(|e| e.to_string())
+}
+
+#[derive(Serialize, Clone)]
+pub struct CatchupItem {
+    pub text: String,
+    pub article_ids: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct CatchupReport {
+    pub takeaways: Vec<CatchupItem>,
+    pub notable_mentions: Vec<CatchupItem>,
+    pub sources: Vec<crate::commands::chat::ChatSource>,
+}
+
+#[derive(Deserialize)]
+struct CatchupRaw {
+    #[serde(default)]
+    takeaways: Vec<CatchupRawItem>,
+    #[serde(default, alias = "notable_mentions", alias = "mentions")]
+    notable_mentions: Vec<CatchupRawItem>,
+}
+
+#[derive(Deserialize)]
+struct CatchupRawItem {
+    text: String,
+    #[serde(default, alias = "article_ids", alias = "articles", alias = "ids")]
+    article_ids: serde_json::Value,
+}
+
+fn resolve_handles(v: &serde_json::Value, articles: &[crate::db::models::ArticleWithFeed]) -> Vec<String> {
+    let arr = match v.as_array() {
+        Some(a) => a,
+        None => return vec![],
+    };
+    arr.iter()
+        .filter_map(|x| match x {
+            serde_json::Value::Number(n) => n
+                .as_u64()
+                .and_then(|i| articles.get(i as usize).map(|a| a.article.id.clone())),
+            serde_json::Value::String(s) => {
+                if let Ok(i) = s.trim().parse::<usize>() {
+                    articles.get(i).map(|a| a.article.id.clone())
+                } else if articles.iter().any(|a| a.article.id == *s) {
+                    Some(s.clone())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub async fn generate_catchup_report(
+    db: State<'_, Database>,
+    model_state: State<'_, SharedModelState>,
+    scope: Option<String>,
+) -> Result<CatchupReport, String> {
+    let (pool, settings_json) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
+        let pool: Vec<crate::db::models::ArticleWithFeed> = match scope.as_deref() {
+            Some("inbox") => {
+                let inbox = queries::get_inbox_articles(&conn, Some(3), Some(false), 100, 0)
+                    .map_err(|e| e.to_string())?;
+                inbox
+                    .into_iter()
+                    .map(|a| crate::db::models::ArticleWithFeed {
+                        article: a.article,
+                        feed_title: a.feed_title,
+                        feed_icon_url: a.feed_icon_url,
+                    })
+                    .collect()
+            }
+            _ => queries::get_articles(
+                &conn,
+                &crate::db::models::ArticleFilter {
+                    feed_id: None,
+                    theme_id: None,
+                    is_read: Some(false),
+                    is_starred: None,
+                    limit: Some(100),
+                    offset: None,
+                },
+            )
+            .map_err(|e| e.to_string())?,
+        };
+        (pool, settings_json)
+    };
+
+    if pool.is_empty() {
+        return Ok(CatchupReport {
+            takeaways: vec![],
+            notable_mentions: vec![],
+            sources: vec![],
+        });
+    }
+
+    let settings: crate::db::models::AppSettings = settings_json
+        .as_deref()
+        .map(|s| serde_json::from_str(s).unwrap_or_default())
+        .unwrap_or_default();
+
+    if settings.ai.provider == "none" {
+        return Err("No AI provider configured.".to_string());
+    }
+
+    let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
+    let model = settings
+        .ai
+        .model
+        .clone()
+        .unwrap_or_else(|| default_model(&settings.ai.provider));
+
+    let mut listing = String::new();
+    for (i, a) in pool.iter().enumerate() {
+        let excerpt: String = a
+            .article
+            .content_text
+            .as_deref()
+            .unwrap_or("")
+            .chars()
+            .take(220)
+            .collect();
+        let clean = excerpt.replace(['\n', '\t'], " ");
+        listing.push_str(&format!("{}\t{}\t[{}]\t{}\n", i, a.article.title.trim(), a.feed_title, clean));
+    }
+
+    let system = "You write a super-quick catch-up brief over a reader's RSS feed. Output JSON only. \
+                  Extract the 10 most important takeaways and 5-8 notable mentions (smaller items \
+                  worth knowing about). Each item is one tight sentence and cites the numeric \
+                  handles of the supporting articles.";
+    let user = format!(
+        r#"Articles (handle TAB title TAB [source] TAB excerpt):
+{listing}
+Output JSON:
+{{"takeaways":[{{"text":"short sentence","article_ids":[0,3]}}],"notable_mentions":[{{"text":"short sentence","article_ids":[5]}}]}}"#
+    );
+
+    let req = ChatRequest {
+        model,
+        messages: vec![
+            ChatMessage { role: "system".to_string(), content: system.to_string() },
+            ChatMessage { role: "user".to_string(), content: user },
+        ],
+        temperature: Some(0.3),
+        max_tokens: Some(2000),
+        json_mode: true,
+    };
+
+    let response = provider.chat(req).await?;
+    let content = response.content.trim();
+    let json_str = extract_json_object(content).unwrap_or(content);
+    let raw: CatchupRaw = serde_json::from_str(json_str)
+        .map_err(|e| format!("Failed to parse catchup response: {}. Raw: {}", e, &content[..content.len().min(300)]))?;
+
+    let takeaways: Vec<CatchupItem> = raw
+        .takeaways
+        .into_iter()
+        .take(10)
+        .map(|r| CatchupItem {
+            text: r.text,
+            article_ids: resolve_handles(&r.article_ids, &pool),
+        })
+        .filter(|i| !i.text.trim().is_empty())
+        .collect();
+
+    let notable_mentions: Vec<CatchupItem> = raw
+        .notable_mentions
+        .into_iter()
+        .take(10)
+        .map(|r| CatchupItem {
+            text: r.text,
+            article_ids: resolve_handles(&r.article_ids, &pool),
+        })
+        .filter(|i| !i.text.trim().is_empty())
+        .collect();
+
+    // Dedup ids and materialize sources
+    use std::collections::HashSet;
+    let mut cited: HashSet<String> = HashSet::new();
+    for i in takeaways.iter().chain(notable_mentions.iter()) {
+        for id in &i.article_ids {
+            cited.insert(id.clone());
+        }
+    }
+
+    let sources: Vec<crate::commands::chat::ChatSource> = pool
+        .iter()
+        .filter(|a| cited.contains(&a.article.id))
+        .map(|a| crate::commands::chat::ChatSource {
+            id: a.article.id.clone(),
+            title: a.article.title.clone(),
+            feed_title: a.feed_title.clone(),
+            url: a.article.url.clone(),
+            published_at: a.article.published_at,
+        })
+        .collect();
+
+    Ok(CatchupReport { takeaways, notable_mentions, sources })
 }
 
 #[tauri::command]

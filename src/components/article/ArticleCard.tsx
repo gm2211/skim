@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useSettings } from "../../hooks/useSettings";
 import type { Article } from "../../services/types";
 
 const PRIORITY_COLORS: Record<number, string> = {
@@ -53,6 +54,8 @@ function extractImageUrl(html: string | null): string | null {
 
 export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, onContextMenu }: Props) {
   const imageUrl = useMemo(() => extractImageUrl(article.content_html), [article.content_html]);
+  const { data: settings } = useSettings();
+  const showExcerpt = settings?.appearance?.show_excerpt_in_list ?? false;
 
   return (
     <div
@@ -77,14 +80,7 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
           >
             {article.title}
           </h3>
-          {triage ? (
-            <p
-              className="line-clamp-2"
-              style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 8, color: PRIORITY_COLORS[triage.priority] ?? "#6b7280" }}
-            >
-              {triage.reason}
-            </p>
-          ) : article.content_text ? (
+          {showExcerpt && article.content_text ? (
             <p
               className="text-text-muted line-clamp-2"
               style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 8 }}
@@ -95,9 +91,13 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
           <div className="flex items-center gap-2 flex-wrap">
             {triage && (
               <span
-                className="rounded-full flex-shrink-0"
+                className="rounded-full flex-shrink-0 cursor-help"
                 style={{ width: 8, height: 8, backgroundColor: PRIORITY_COLORS[triage.priority] ?? "#6b7280" }}
-                title={PRIORITY_LABELS[triage.priority]}
+                title={
+                  triage.reason
+                    ? `${PRIORITY_LABELS[triage.priority]} — ${triage.reason}`
+                    : PRIORITY_LABELS[triage.priority]
+                }
               />
             )}
             <span className="text-accent truncate" style={{ fontSize: 12 }}>

@@ -6,9 +6,11 @@ import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 import { FeedsSection } from "./FeedsSection";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
+import { CatchupDialog } from "../chat/CatchupDialog";
 
 export function Sidebar() {
   const [askOpen, setAskOpen] = useState(false);
+  const [catchupOpen, setCatchupOpen] = useState(false);
   const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed } =
     useUiStore();
   const { data: feeds } = useFeeds();
@@ -86,6 +88,14 @@ export function Sidebar() {
       {askOpen && (
         <AskSkimDialog
           onClose={() => setAskOpen(false)}
+          onOpenArticle={(id) => {
+            useUiStore.getState().setSelectedArticleId(id);
+          }}
+        />
+      )}
+      {catchupOpen && (
+        <CatchupDialog
+          onClose={() => setCatchupOpen(false)}
           onOpenArticle={(id) => {
             useUiStore.getState().setSelectedArticleId(id);
           }}
@@ -309,6 +319,17 @@ export function Sidebar() {
               {generateThemes.error instanceof Error ? generateThemes.error.message : "Theme generation failed"}
             </p>
           )}
+
+          <button
+            onClick={(e) => { e.stopPropagation(); setCatchupOpen(true); }}
+            className="flex items-center gap-2 w-full rounded-lg text-text-muted hover:text-accent hover:bg-white/5 transition-colors relative z-20"
+            style={{ padding: "8px", fontSize: 13, marginTop: 4 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
+            </svg>
+            <span>Super-quick catch-up</span>
+          </button>
         </div>
 
         {/* Feeds section */}

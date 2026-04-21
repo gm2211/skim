@@ -268,10 +268,17 @@ pub fn feedly_entries_to_articles(entries: &[FeedlyEntry], feed_id: &str) -> Vec
             // Feedly timestamps are in milliseconds
             let published_at = entry.published.map(|ms| ms / 1000);
 
+            // The Feedly saved stream is exactly `user/.../tag/global.saved`.
+            // Contains-match matched unrelated tags like `global.saved-for-later`
+            // on some accounts, so require an exact path segment match.
             let is_starred = entry
                 .tags
                 .as_ref()
-                .map(|tags| tags.iter().any(|t| t.id.contains("global.saved")))
+                .map(|tags| {
+                    tags.iter().any(|t| {
+                        t.id.ends_with("/tag/global.saved") || t.id == "global.saved"
+                    })
+                })
                 .unwrap_or(false);
 
             Article {

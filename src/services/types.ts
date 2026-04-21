@@ -166,6 +166,7 @@ export interface DownloadProgress {
 export interface AppearanceSettings {
   theme: string;
   font_size: number;
+  show_excerpt_in_list: boolean;
 }
 
 export interface SyncSettings {

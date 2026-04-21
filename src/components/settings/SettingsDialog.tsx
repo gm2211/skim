@@ -346,9 +346,35 @@ export function SettingsDialog() {
                 <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
                   Appearance
                 </h3>
-                <p className="text-text-muted" style={{ fontSize: 14 }}>
-                  More appearance options coming soon.
-                </p>
+                <label
+                  className="flex items-start gap-3 cursor-pointer"
+                  style={{ marginBottom: 16 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={local.appearance?.show_excerpt_in_list ?? false}
+                    onChange={(e) =>
+                      setLocal({
+                        ...local,
+                        appearance: {
+                          ...local.appearance,
+                          show_excerpt_in_list: e.target.checked,
+                        },
+                      })
+                    }
+                    className="accent-accent flex-shrink-0"
+                    style={{ marginTop: 3 }}
+                  />
+                  <div>
+                    <div className="text-text-primary" style={{ fontSize: 14, fontWeight: 500 }}>
+                      Show excerpt under titles
+                    </div>
+                    <div className="text-text-muted" style={{ fontSize: 12, marginTop: 2 }}>
+                      Renders a 2-line snippet from the article body in list
+                      rows. Off by default — titles stay easier to scan.
+                    </div>
+                  </div>
+                </label>
               </>
             )}
           </div>

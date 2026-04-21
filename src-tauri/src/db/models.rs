@@ -167,6 +167,9 @@ pub struct AiSettings {
 pub struct AppearanceSettings {
     pub theme: String,
     pub font_size: i32,
+    /// Show excerpt text under each article title in lists. Off by default.
+    #[serde(default)]
+    pub show_excerpt_in_list: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -273,6 +276,7 @@ impl Default for AppSettings {
             appearance: AppearanceSettings {
                 theme: "dark".to_string(),
                 font_size: 14,
+                show_excerpt_in_list: false,
             },
             sync: SyncSettings {
                 refresh_interval_minutes: 30,

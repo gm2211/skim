@@ -170,6 +170,7 @@ pub fn run() {
             commands::ai::record_reading_time,
             commands::ai::get_recent_articles,
             commands::ai::count_read_matches,
+            commands::ai::generate_catchup_report,
             commands::ai::set_article_feedback,
             commands::ai::set_priority_override,
             commands::ai::get_preference_profile,

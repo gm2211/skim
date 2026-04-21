@@ -190,6 +190,18 @@ export const getRecentArticles = (
 export const countReadMatches = (query: string) =>
   invoke<number>("count_read_matches", { query });
 
+export interface CatchupItem {
+  text: string;
+  article_ids: string[];
+}
+export interface CatchupReport {
+  takeaways: CatchupItem[];
+  notable_mentions: CatchupItem[];
+  sources: ChatSource[];
+}
+export const generateCatchupReport = (scope: "inbox" | "unread" = "inbox") =>
+  invoke<CatchupReport>("generate_catchup_report", { scope });
+
 // Learning / interactions
 export const recordReadingTime = (articleId: string, seconds: number) =>
   invoke<void>("record_reading_time", { articleId, seconds });

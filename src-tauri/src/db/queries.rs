@@ -445,6 +445,27 @@ pub fn mark_all_read(conn: &Connection, feed_id: Option<&str>) -> Result<(), rus
     Ok(())
 }
 
+/// Update the star state for existing articles by feedly_entry_id.
+/// Used after fetching a Feedly stream so the local DB matches Feedly's
+/// "saved" state (articles unsaved on Feedly get unstarred locally).
+pub fn sync_star_state_from_feedly(
+    conn: &Connection,
+    updates: &[(String, bool)], // (feedly_entry_id, is_starred)
+) -> Result<i64, rusqlite::Error> {
+    let tx = conn.unchecked_transaction()?;
+    let mut changed = 0i64;
+    for (feedly_id, starred) in updates {
+        let n = tx.execute(
+            "UPDATE articles SET is_starred = ?1
+             WHERE feedly_entry_id = ?2 AND is_starred != ?1",
+            params![*starred as i32, feedly_id],
+        )?;
+        changed += n as i64;
+    }
+    tx.commit()?;
+    Ok(changed)
+}
+
 pub fn toggle_star(conn: &Connection, article_id: &str) -> Result<bool, rusqlite::Error> {
     conn.execute(
         "UPDATE articles SET is_starred = CASE WHEN is_starred = 0 THEN 1 ELSE 0 END WHERE id = ?1",
@@ -708,6 +729,94 @@ pub fn get_triage_stats(conn: &Connection) -> Result<TriageStats, rusqlite::Erro
 pub fn clear_triage(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute("DELETE FROM article_triage", [])?;
     Ok(())
+}
+
+/// Drop triage rows whose reason contains pre-fix hallucinations like
+/// "tracked topic", "reader's preference", etc. so they get rescored with
+/// the new prompt on the next triage run.
+pub fn clear_hallucinated_triage(conn: &Connection) -> Result<i64, rusqlite::Error> {
+    let patterns = [
+        "%tracked topic%",
+        "%reader's preference%",
+        "%reader preferences%",
+        "%user preference%",
+        "%reader's history%",
+        "%reader history%",
+        "%reader's tracked%",
+    ];
+    let mut removed = 0i64;
+    for p in patterns {
+        let n = conn.execute(
+            "DELETE FROM article_triage WHERE LOWER(reason) LIKE LOWER(?1)",
+            params![p],
+        )?;
+        removed += n as i64;
+    }
+    Ok(removed)
+}
+
+/// Collect signal titles: starred articles + high-engagement articles.
+/// Used by the triage reranker to boost articles similar to what the
+/// reader has already shown interest in.
+pub fn collect_signal_titles(conn: &Connection, limit: i64) -> Result<Vec<String>, rusqlite::Error> {
+    let mut titles = Vec::new();
+    // Starred
+    {
+        let mut stmt = conn.prepare(
+            "SELECT title FROM articles WHERE is_starred = 1 ORDER BY fetched_at DESC LIMIT ?1",
+        )?;
+        let rows = stmt
+            .query_map(params![limit], |row| row.get::<_, String>(0))?
+            .filter_map(|r| r.ok());
+        titles.extend(rows);
+    }
+    // High-engagement (reading_time or chat)
+    {
+        let mut stmt = conn.prepare(
+            "SELECT a.title FROM article_interactions i
+             JOIN articles a ON i.article_id = a.id
+             WHERE i.reading_time_sec >= 60 OR i.chat_messages > 0 OR i.feedback = 'more'
+             ORDER BY i.updated_at DESC
+             LIMIT ?1",
+        )?;
+        let rows = stmt
+            .query_map(params![limit], |row| row.get::<_, String>(0))?
+            .filter_map(|r| r.ok());
+        titles.extend(rows);
+    }
+    Ok(titles)
+}
+
+/// Update just the priority of a triage row.
+pub fn update_triage_priority(
+    conn: &Connection,
+    article_id: &str,
+    priority: i32,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE article_triage SET priority = ?1 WHERE article_id = ?2",
+        params![priority, article_id],
+    )?;
+    Ok(())
+}
+
+/// List all currently-triaged unread articles (just id + title + priority)
+/// for the reranker.
+pub fn list_unread_triaged(
+    conn: &Connection,
+) -> Result<Vec<(String, String, i32)>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT a.id, a.title, t.priority
+         FROM article_triage t
+         JOIN articles a ON t.article_id = a.id
+         WHERE a.is_read = 0",
+    )?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i32>(2)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
 }
 
 // Interaction / learning queries

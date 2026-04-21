@@ -6,6 +6,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { fetchFullArticle, cancelSummarize } from "../../services/commands";
 import { ChatDrawer } from "../chat/ChatPanel";
 import { useReadingTimeTracker } from "../../hooks/useLearning";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 type ViewMode = "rss" | "reader" | "web";
 
@@ -446,14 +447,15 @@ export function ArticleDetail() {
 
 
           {article.url && (
-            <a href={article.url} target="_blank" rel="noopener noreferrer"
+            <button
+              onClick={() => { if (article.url) openUrl(article.url); }}
               className="text-text-muted hover:text-text-primary p-2 rounded-lg hover:bg-white/10 transition-colors"
               title="Open in browser"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
               </svg>
-            </a>
+            </button>
           )}
         </div>
       </div>
@@ -595,7 +597,7 @@ export function ArticleDetail() {
           <div className="slide-panel slide-panel-web" style={{ position: "relative" }}>
             {article.url && (
               <button
-                onClick={() => { if (article.url) window.open(article.url, "_blank"); }}
+                onClick={() => { if (article.url) openUrl(article.url); }}
                 className="absolute bg-white/10 hover:bg-white/20 text-text-primary backdrop-blur-md rounded-lg transition-colors flex items-center gap-1.5 z-10"
                 style={{ top: 12, right: 12, padding: "6px 10px", fontSize: 12 }}
                 title="Open original in external browser"

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { generateCatchupReport, type CatchupReport, type ChatSource } from "../../services/commands";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 interface Props {
   onClose: () => void;
@@ -81,7 +82,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                               onOpenArticle(id);
                               onClose();
                             } else if (s.url) {
-                              window.open(s.url, "_blank");
+                              openUrl(s.url);
                             }
                           }}
                           className="rounded-full bg-accent/10 text-accent hover:bg-accent/20 transition-colors"

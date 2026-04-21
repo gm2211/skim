@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { chatWithArticles, type ArticleChatResponse, type ChatSource } from "../../services/commands";
 import type { ChatMessageInput } from "../../services/types";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 type Scope = "inbox" | "unread" | "all";
 
@@ -169,7 +170,7 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
                             onOpenArticle(s.id);
                             onClose();
                           } else if (s.url) {
-                            window.open(s.url, "_blank");
+                            openUrl(s.url);
                           }
                         }}
                         className="text-left rounded-lg border border-white/5 hover:border-accent/30 hover:bg-white/5 transition-colors"

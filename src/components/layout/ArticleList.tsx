@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
-import { useArticles, useMarkAllRead, useMarkRead, useMarkUnread, useToggleRead, useToggleStar } from "../../hooks/useArticles";
+import { useArticles, useArticleCount, useMarkAllRead, useMarkRead, useMarkUnread, useToggleRead, useToggleStar } from "../../hooks/useArticles";
 import { useInboxArticles } from "../../hooks/useInbox";
 import { useThemes, useArticleThemeTags } from "../../hooks/useThemes";
 import { useRecentArticles, useReadMatchCount, useRemoveRecent } from "../../hooks/useRecent";
@@ -203,9 +203,19 @@ export function ArticleList() {
     return result;
   }, [articles, searchQuery, isInbox, listFilter, activeThemeId, themeTagsByArticle, includeRead]);
 
+  // True unread total for the active filter — the paged articles array is
+  // capped at 200 so counting locally understates everything above that.
+  const unreadFilter: ArticleFilter = useMemo(() => ({ ...filter, is_read: false, limit: null }), [filter]);
+  const { data: regularUnreadCount } = useArticleCount(
+    unreadFilter,
+    !isInbox && !isRecent,
+  );
   const unreadCount = useMemo(() => {
-    return articles?.filter((a) => !a.is_read).length ?? 0;
-  }, [articles]);
+    if (isInbox || isRecent) {
+      return articles?.filter((a) => !a.is_read).length ?? 0;
+    }
+    return regularUnreadCount ?? 0;
+  }, [articles, isInbox, isRecent, regularUnreadCount]);
 
   const articleGroups = useMemo(() => {
     if (!filteredArticles) return [];

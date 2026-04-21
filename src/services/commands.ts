@@ -124,6 +124,8 @@ export const feedlyOauthAvailable = () =>
 // Articles
 export const getArticles = (filter: ArticleFilter) =>
   invoke<Article[]>("get_articles", { filter });
+export const countArticles = (filter: ArticleFilter) =>
+  invoke<number>("count_articles", { filter });
 export const getArticle = (articleId: string) =>
   invoke<Article>("get_article", { articleId });
 export const markArticlesRead = (articleIds: string[]) =>

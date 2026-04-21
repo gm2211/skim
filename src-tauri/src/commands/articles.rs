@@ -23,6 +23,15 @@ pub async fn get_articles(
 }
 
 #[tauri::command]
+pub async fn count_articles(
+    db: State<'_, Database>,
+    filter: ArticleFilter,
+) -> Result<i64, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::count_articles(&conn, &filter).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn get_article(
     db: State<'_, Database>,
     article_id: String,

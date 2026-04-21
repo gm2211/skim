@@ -151,6 +151,7 @@ pub fn run() {
             commands::feeds::merge_duplicate_feeds,
             // Articles
             commands::articles::get_articles,
+            commands::articles::count_articles,
             commands::articles::get_article,
             commands::articles::mark_articles_read,
             commands::articles::mark_articles_unread,

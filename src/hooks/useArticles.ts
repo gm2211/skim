@@ -9,6 +9,14 @@ export function useArticles(filter: ArticleFilter) {
   });
 }
 
+export function useArticleCount(filter: ArticleFilter, enabled = true) {
+  return useQuery({
+    queryKey: ["articleCount", filter],
+    queryFn: () => commands.countArticles(filter),
+    enabled,
+  });
+}
+
 export function useArticle(articleId: string | null) {
   return useQuery({
     queryKey: ["article", articleId],
@@ -23,6 +31,7 @@ export function useMarkRead() {
     mutationFn: commands.markArticlesRead,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
     },
   });
@@ -34,6 +43,7 @@ export function useMarkUnread() {
     mutationFn: commands.markArticlesUnread,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["article"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
     },
@@ -46,6 +56,7 @@ export function useMarkAllRead() {
     mutationFn: (feedId?: string | null) => commands.markAllRead(feedId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
     },
   });
@@ -57,6 +68,7 @@ export function useToggleRead() {
     mutationFn: commands.toggleRead,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["article"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
     },
@@ -69,6 +81,7 @@ export function useToggleStar() {
     mutationFn: commands.toggleStar,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["article"] });
     },
   });

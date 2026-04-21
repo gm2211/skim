@@ -270,6 +270,45 @@ pub fn insert_article(conn: &Connection, article: &Article) -> Result<bool, rusq
     Ok(result > 0)
 }
 
+pub fn count_articles(
+    conn: &Connection,
+    filter: &ArticleFilter,
+) -> Result<i64, rusqlite::Error> {
+    let mut sql = String::from("SELECT COUNT(*) FROM articles a");
+    let mut conditions = Vec::new();
+    let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(ref feed_id) = filter.feed_id {
+        conditions.push(format!("a.feed_id = ?{}", param_values.len() + 1));
+        param_values.push(Box::new(feed_id.clone()));
+    }
+
+    if let Some(ref theme_id) = filter.theme_id {
+        sql.push_str(" JOIN theme_articles ta ON a.id = ta.article_id");
+        conditions.push(format!("ta.theme_id = ?{}", param_values.len() + 1));
+        param_values.push(Box::new(theme_id.clone()));
+    }
+
+    if let Some(is_read) = filter.is_read {
+        conditions.push(format!("a.is_read = ?{}", param_values.len() + 1));
+        param_values.push(Box::new(is_read as i32));
+    }
+
+    if let Some(is_starred) = filter.is_starred {
+        conditions.push(format!("a.is_starred = ?{}", param_values.len() + 1));
+        param_values.push(Box::new(is_starred as i32));
+    }
+
+    if !conditions.is_empty() {
+        sql.push_str(" WHERE ");
+        sql.push_str(&conditions.join(" AND "));
+    }
+
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|p| p.as_ref()).collect();
+    conn.query_row(&sql, params_ref.as_slice(), |row| row.get(0))
+}
+
 pub fn get_articles(
     conn: &Connection,
     filter: &ArticleFilter,

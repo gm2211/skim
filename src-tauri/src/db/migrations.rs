@@ -129,6 +129,96 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     // Backfill missing feed icons using Google's favicon service
     backfill_feed_icons(conn)?;
 
+    // One-time: collapse duplicate article_interactions rows produced by
+    // duplicate feed imports (same title + feed_title, distinct article IDs).
+    consolidate_duplicate_interactions(conn)?;
+
+    Ok(())
+}
+
+/// Merge interaction rows for sibling articles (same title + feed_title) onto
+/// the oldest-updated row and delete the others. Needed because past writes
+/// minted parallel rows before canonical resolution was added.
+fn consolidate_duplicate_interactions(conn: &Connection) -> Result<(), rusqlite::Error> {
+    // Find (title_lower, feed_title_lower) groups with 2+ interaction rows.
+    let mut stmt = conn.prepare(
+        "SELECT LOWER(TRIM(a.title)), LOWER(TRIM(f.title))
+         FROM article_interactions i
+         JOIN articles a ON a.id = i.article_id
+         JOIN feeds f ON f.id = a.feed_id
+         GROUP BY LOWER(TRIM(a.title)), LOWER(TRIM(f.title))
+         HAVING COUNT(*) > 1",
+    )?;
+    let groups: Vec<(String, String)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+    drop(stmt);
+
+    for (title, feed_title) in groups {
+        // Pull all rows in this dup group with their stats.
+        let mut s = conn.prepare(
+            "SELECT i.article_id, i.reading_time_sec, i.chat_messages,
+                    i.feedback, i.priority_override, i.updated_at
+             FROM article_interactions i
+             JOIN articles a ON a.id = i.article_id
+             JOIN feeds f ON f.id = a.feed_id
+             WHERE LOWER(TRIM(a.title)) = ?1 AND LOWER(TRIM(f.title)) = ?2",
+        )?;
+        let rows: Vec<(String, i64, i64, Option<String>, Option<i32>, i64)> = s
+            .query_map(rusqlite::params![title, feed_title], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                ))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        drop(s);
+
+        if rows.len() < 2 {
+            continue;
+        }
+
+        // Canonical = most recently updated.
+        let canonical = rows
+            .iter()
+            .max_by_key(|r| r.5)
+            .expect("non-empty")
+            .0
+            .clone();
+        let total_reading: i64 = rows.iter().map(|r| r.1).sum();
+        let total_chat: i64 = rows.iter().map(|r| r.2).sum();
+        let feedback: Option<String> = rows.iter().find_map(|r| r.3.clone());
+        let priority: Option<i32> = rows.iter().find_map(|r| r.4);
+        let updated_at: i64 = rows.iter().map(|r| r.5).max().unwrap_or(0);
+
+        conn.execute(
+            "DELETE FROM article_interactions WHERE article_id IN (
+                SELECT i.article_id
+                FROM article_interactions i
+                JOIN articles a ON a.id = i.article_id
+                JOIN feeds f ON f.id = a.feed_id
+                WHERE LOWER(TRIM(a.title)) = ?1 AND LOWER(TRIM(f.title)) = ?2
+                  AND i.article_id != ?3
+            )",
+            rusqlite::params![title, feed_title, canonical],
+        )?;
+        conn.execute(
+            "UPDATE article_interactions
+             SET reading_time_sec = ?1,
+                 chat_messages = ?2,
+                 feedback = ?3,
+                 priority_override = ?4,
+                 updated_at = ?5
+             WHERE article_id = ?6",
+            rusqlite::params![total_reading, total_chat, feedback, priority, updated_at, canonical],
+        )?;
+    }
     Ok(())
 }
 

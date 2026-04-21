@@ -838,13 +838,25 @@ pub fn record_reading_time(
     Ok(())
 }
 
-/// Delete a single interaction row. Used by "Remove from Recent".
+/// Delete interaction rows for a "Remove from Recent" click. Removes the row
+/// for the clicked article *and* any siblings with the same (title, feed_title)
+/// pair — duplicate feed imports produce multiple articles with distinct IDs,
+/// so deleting only one row leaves clones that re-surface on re-fetch.
 pub fn delete_interaction(
     conn: &Connection,
     article_id: &str,
 ) -> Result<(), rusqlite::Error> {
     conn.execute(
-        "DELETE FROM article_interactions WHERE article_id = ?1",
+        "DELETE FROM article_interactions
+         WHERE article_id IN (
+             SELECT a2.id
+             FROM articles a1
+             JOIN articles a2 ON LOWER(TRIM(a1.title)) = LOWER(TRIM(a2.title))
+             JOIN feeds f1 ON a1.feed_id = f1.id
+             JOIN feeds f2 ON a2.feed_id = f2.id
+                          AND LOWER(TRIM(f1.title)) = LOWER(TRIM(f2.title))
+             WHERE a1.id = ?1
+         )",
         params![article_id],
     )?;
     Ok(())
@@ -928,25 +940,38 @@ pub fn list_recent_articles(
         })?
         .collect::<Result<Vec<_>, _>>()?;
 
-    // Dedupe duplicate articles produced by duplicate feeds. Key on normalized
-    // URL first, then on (lowercased title, feed title). List is already sorted
-    // by chosen order, so first-seen wins.
-    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    // Dedupe duplicate articles produced by duplicate feeds / reposts. Primary
+    // key is (lowercased title, lowercased feed title) since duplicates often
+    // differ on URL (different HN item IDs, tracking params, etc). Also track
+    // normalized URL as a secondary key to catch same-URL reposts across feeds.
+    // List is already sorted, so first-seen wins.
+    let mut seen_title: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut seen_url: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut deduped: Vec<ArticleWithInteraction> = Vec::with_capacity(rows.len());
     for r in rows {
-        let key = match r.article.url.as_deref() {
-            Some(u) if !u.is_empty() => normalize_for_dedup(u),
-            _ => format!(
-                "title:{}|{}",
-                r.article.title.trim().to_lowercase(),
-                r.feed_title.trim().to_lowercase()
-            ),
-        };
-        if seen.insert(key) {
-            deduped.push(r);
-            if deduped.len() as i64 >= limit {
-                break;
+        let title_key = format!(
+            "{}|{}",
+            r.article.title.trim().to_lowercase(),
+            r.feed_title.trim().to_lowercase()
+        );
+        let url_key = r
+            .article
+            .url
+            .as_deref()
+            .map(|u| normalize_for_dedup(u))
+            .filter(|s| !s.is_empty());
+
+        if !seen_title.insert(title_key) {
+            continue;
+        }
+        if let Some(uk) = url_key {
+            if !seen_url.insert(uk) {
+                continue;
             }
+        }
+        deduped.push(r);
+        if deduped.len() as i64 >= limit {
+            break;
         }
     }
     Ok(deduped)

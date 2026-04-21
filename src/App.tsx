@@ -4,8 +4,8 @@ import { ArticleDetail } from "./components/layout/ArticleDetail";
 import { AddFeedDialog } from "./components/feed/AddFeedDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { useUiStore } from "./stores/uiStore";
-import { useEffect } from "react";
-import { triageArticles } from "./services/commands";
+import { useEffect, useRef } from "react";
+import { triageArticles, refreshAllFeeds } from "./services/commands";
 import { useQueryClient } from "@tanstack/react-query";
 
 function App() {
@@ -19,6 +19,30 @@ function App() {
       qc.invalidateQueries({ queryKey: ["triageStats"] });
     }).catch(() => {});
   }, []);
+
+  // Auto-refresh on window focus if last refresh was > 1 hour ago.
+  const lastRefreshRef = useRef<number>(Date.now());
+  useEffect(() => {
+    const STALE_MS = 60 * 60 * 1000;
+    const onFocus = () => {
+      if (Date.now() - lastRefreshRef.current < STALE_MS) return;
+      lastRefreshRef.current = Date.now();
+      refreshAllFeeds()
+        .then(() => {
+          qc.invalidateQueries({ queryKey: ["feeds"] });
+          qc.invalidateQueries({ queryKey: ["articles"] });
+          qc.invalidateQueries({ queryKey: ["articleCount"] });
+          return triageArticles(false);
+        })
+        .then(() => {
+          qc.invalidateQueries({ queryKey: ["inbox"] });
+          qc.invalidateQueries({ queryKey: ["triageStats"] });
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [qc]);
 
   // Responsive auto-collapse
   useEffect(() => {

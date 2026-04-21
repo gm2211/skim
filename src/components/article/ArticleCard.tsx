@@ -100,6 +100,16 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
                 }
               />
             )}
+            {article.feed_icon_url && (
+              <img
+                src={article.feed_icon_url}
+                alt=""
+                className="rounded-sm flex-shrink-0"
+                style={{ width: 14, height: 14 }}
+                loading="lazy"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
             <span className="text-accent truncate" style={{ fontSize: 12 }}>
               {article.feed_title}
             </span>

@@ -827,15 +827,43 @@ pub fn record_reading_time(
     seconds: i64,
     now: i64,
 ) -> Result<(), rusqlite::Error> {
+    let canonical = canonical_interaction_id(conn, article_id)?;
     conn.execute(
         "INSERT INTO article_interactions (article_id, reading_time_sec, chat_messages, updated_at)
          VALUES (?1, ?2, 0, ?3)
          ON CONFLICT(article_id) DO UPDATE SET
            reading_time_sec = reading_time_sec + ?2,
            updated_at = ?3",
-        params![article_id, seconds, now],
+        params![canonical, seconds, now],
     )?;
     Ok(())
+}
+
+/// Resolve the canonical article_id to attribute an interaction to. If any
+/// sibling article (same title + feed_title) already has an interaction row,
+/// reuse that one so duplicate feed imports don't mint parallel interactions.
+/// Otherwise return the passed id unchanged.
+fn canonical_interaction_id(
+    conn: &Connection,
+    article_id: &str,
+) -> Result<String, rusqlite::Error> {
+    let existing: Option<String> = conn
+        .query_row(
+            "SELECT a2.id
+             FROM articles a1
+             JOIN articles a2 ON LOWER(TRIM(a1.title)) = LOWER(TRIM(a2.title))
+             JOIN feeds f1 ON a1.feed_id = f1.id
+             JOIN feeds f2 ON a2.feed_id = f2.id
+                          AND LOWER(TRIM(f1.title)) = LOWER(TRIM(f2.title))
+             JOIN article_interactions i ON i.article_id = a2.id
+             WHERE a1.id = ?1
+             ORDER BY i.updated_at DESC
+             LIMIT 1",
+            params![article_id],
+            |row| row.get(0),
+        )
+        .ok();
+    Ok(existing.unwrap_or_else(|| article_id.to_string()))
 }
 
 /// Delete interaction rows for a "Remove from Recent" click. Removes the row
@@ -1008,13 +1036,14 @@ pub fn increment_chat_count(
     article_id: &str,
     now: i64,
 ) -> Result<(), rusqlite::Error> {
+    let canonical = canonical_interaction_id(conn, article_id)?;
     conn.execute(
         "INSERT INTO article_interactions (article_id, reading_time_sec, chat_messages, updated_at)
          VALUES (?1, 0, 1, ?2)
          ON CONFLICT(article_id) DO UPDATE SET
            chat_messages = chat_messages + 1,
            updated_at = ?2",
-        params![article_id, now],
+        params![canonical, now],
     )?;
     Ok(())
 }
@@ -1025,13 +1054,14 @@ pub fn set_article_feedback(
     feedback: Option<&str>,
     now: i64,
 ) -> Result<(), rusqlite::Error> {
+    let canonical = canonical_interaction_id(conn, article_id)?;
     conn.execute(
         "INSERT INTO article_interactions (article_id, reading_time_sec, chat_messages, feedback, updated_at)
          VALUES (?1, 0, 0, ?2, ?3)
          ON CONFLICT(article_id) DO UPDATE SET
            feedback = ?2,
            updated_at = ?3",
-        params![article_id, feedback, now],
+        params![canonical, feedback, now],
     )?;
     Ok(())
 }
@@ -1042,13 +1072,14 @@ pub fn set_priority_override(
     priority: i32,
     now: i64,
 ) -> Result<(), rusqlite::Error> {
+    let canonical = canonical_interaction_id(conn, article_id)?;
     conn.execute(
         "INSERT INTO article_interactions (article_id, reading_time_sec, chat_messages, priority_override, updated_at)
          VALUES (?1, 0, 0, ?2, ?3)
          ON CONFLICT(article_id) DO UPDATE SET
            priority_override = ?2,
            updated_at = ?3",
-        params![article_id, priority, now],
+        params![canonical, priority, now],
     )?;
     Ok(())
 }

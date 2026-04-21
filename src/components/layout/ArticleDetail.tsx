@@ -103,14 +103,16 @@ function stripFullArticleJunk(html: string): string {
 }
 
 export function ArticleDetail() {
-  const { selectedArticleId, setSelectedArticleId, listCollapsed, sidebarCollapsed } = useUiStore();
+  const { selectedArticleId, setSelectedArticleId, listCollapsed, sidebarCollapsed, sidebarView } = useUiStore();
   const { data: article } = useArticle(selectedArticleId);
   const markRead = useMarkRead();
   const toggleStar = useToggleStar();
   const toggleRead = useToggleRead();
   const summarize = useSummarizeArticle();
   const { data: settings } = useSettings();
-  useReadingTimeTracker(selectedArticleId);
+  // Don't count engagement when browsing the Recent tab — that view already
+  // reflects past engagement and would otherwise self-reinforce.
+  useReadingTimeTracker(selectedArticleId, sidebarView.type === "recent");
   const [showSummarizeMenu, setShowSummarizeMenu] = useState(false);
   const [perArticleLength, setPerArticleLength] = useState<string | undefined>();
   const [perArticleTone, setPerArticleTone] = useState<string | undefined>();

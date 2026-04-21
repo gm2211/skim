@@ -135,6 +135,104 @@ export const claudeOauthStatus = () =>
 export const claudeOauthRefresh = () =>
   invoke<void>("claude_oauth_refresh");
 
+// On-device AI (iOS/macOS) — tauri-plugin-skim-ai.
+// These commands are provided by an iOS Tauri plugin that may not be
+// registered yet (desktop builds, plugin not yet wired up). Every wrapper
+// catches the "command not found" / plugin-not-registered error path and
+// returns a safe default, so callers can treat on-device as simply
+// unavailable on platforms where it isn't present.
+const SKIM_AI_UNAVAILABLE = "On-device AI is not available on this platform.";
+
+export const mlxIsAvailable = async (): Promise<boolean> => {
+  try {
+    return await invoke<boolean>("plugin:skim-ai|mlx_is_available");
+  } catch {
+    return false;
+  }
+};
+
+export const mlxIsModelDownloaded = async (repoId: string): Promise<boolean> => {
+  try {
+    return await invoke<boolean>("plugin:skim-ai|mlx_is_model_downloaded", { repoId });
+  } catch {
+    return false;
+  }
+};
+
+export const mlxDownloadModel = async (repoId: string): Promise<void> => {
+  try {
+    await invoke<void>("plugin:skim-ai|mlx_download_model", { repoId });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("unregistered")) {
+      throw new Error(SKIM_AI_UNAVAILABLE);
+    }
+    throw e;
+  }
+};
+
+export const mlxDeleteModel = async (repoId: string): Promise<void> => {
+  try {
+    await invoke<void>("plugin:skim-ai|mlx_delete_model", { repoId });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("unregistered")) {
+      throw new Error(SKIM_AI_UNAVAILABLE);
+    }
+    throw e;
+  }
+};
+
+export type SkimAiCompleteArgs = {
+  system: string;
+  user: string;
+  maxTokens?: number;
+  jsonMode?: boolean;
+  [key: string]: unknown;
+};
+
+export const mlxComplete = async (args: SkimAiCompleteArgs): Promise<string> => {
+  try {
+    return await invoke<string>("plugin:skim-ai|mlx_complete", args);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("unregistered")) {
+      throw new Error(SKIM_AI_UNAVAILABLE);
+    }
+    throw e;
+  }
+};
+
+export const fmIsAvailable = async (): Promise<boolean> => {
+  try {
+    return await invoke<boolean>("plugin:skim-ai|fm_is_available");
+  } catch {
+    return false;
+  }
+};
+
+export const fmComplete = async (args: SkimAiCompleteArgs): Promise<string> => {
+  try {
+    return await invoke<string>("plugin:skim-ai|fm_complete", args);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("unregistered")) {
+      throw new Error(SKIM_AI_UNAVAILABLE);
+    }
+    throw e;
+  }
+};
+
+/** Event name emitted by the MLX downloader. Payload shape is
+ *  `{ repoId: string; downloaded: number; total: number; percent: number }`. */
+export const MLX_DOWNLOAD_PROGRESS_EVENT = "skim-ai://mlx-download-progress";
+export interface MlxDownloadProgress {
+  repoId: string;
+  downloaded: number;
+  total: number;
+  percent: number;
+}
+
 // Articles
 export const getArticles = (filter: ArticleFilter) =>
   invoke<Article[]>("get_articles", { filter });

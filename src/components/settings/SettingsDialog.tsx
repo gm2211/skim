@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
 import type { AppSettings, FeedlyConnectionStatus } from "../../services/types";
@@ -11,13 +12,22 @@ import {
   disconnectFeedly,
   feedlyOauthAvailable,
   feedlyOauthLogin,
+  fmIsAvailable,
   getFeedlyStatus,
+  mlxDeleteModel,
+  mlxDownloadModel,
+  mlxIsAvailable,
+  mlxIsModelDownloaded,
+  MLX_DOWNLOAD_PROGRESS_EVENT,
+  type MlxDownloadProgress,
 } from "../../services/commands";
 import { ModelBrowser } from "./ModelBrowser";
 
 const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
   { value: "local", label: "Local (Embedded)", description: "Run AI locally with llama.cpp — no server needed" },
+  { value: "mlx", label: "On-device (MLX)", description: "Qwen 2.5 3B running on-device via MLX. Offline. ~2GB download. iOS/macOS only." },
+  { value: "foundation-models", label: "Apple Intelligence", description: "Apple's on-device model. No download. Requires iOS 26+ or macOS 15.1+ with Apple Intelligence." },
   { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
   { value: "claude-subscription", label: "Claude Pro/Max (OAuth)", description: "Sign in with your Claude.ai account — no API key, no CLI. Works on desktop and iOS." },
   { value: "claude-cli", label: "Claude via CLI (legacy)", description: "Uses the local 'claude' CLI binary. Legacy path — prefer 'Claude Pro/Max (OAuth)'." },
@@ -25,6 +35,12 @@ const AI_PROVIDERS = [
   { value: "openai", label: "OpenAI", description: "api.openai.com" },
   { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
   { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
+];
+
+const MLX_MODELS: { repoId: string; label: string; sizeGb: number }[] = [
+  { repoId: "mlx-community/Qwen2.5-3B-Instruct-4bit", label: "Qwen 2.5 3B (default)", sizeGb: 2.0 },
+  { repoId: "mlx-community/Llama-3.2-3B-Instruct-4bit", label: "Llama 3.2 3B", sizeGb: 2.0 },
+  { repoId: "mlx-community/Phi-3.5-mini-instruct-4bit", label: "Phi-3.5 Mini", sizeGb: 2.3 },
 ];
 
 const needsApiKey = (provider: string) =>
@@ -188,10 +204,34 @@ export function SettingsDialog() {
                   <p className="text-text-muted" style={{ fontSize: 12, marginTop: 6 }}>
                     {AI_PROVIDERS.find((p) => p.value === local.ai.provider)?.description}
                   </p>
+                  <details
+                    className="text-text-muted"
+                    style={{ fontSize: 12, marginTop: 8 }}
+                  >
+                    <summary
+                      className="cursor-pointer hover:text-text-primary"
+                      style={{ userSelect: "none" }}
+                    >
+                      How are on-device and cloud providers combined?
+                    </summary>
+                    <p style={{ marginTop: 6, lineHeight: 1.5 }}>
+                      On-device tiers handle triage and summaries;
+                      quality-sensitive tasks (chat, themes, auto-organize)
+                      fall back to your cloud provider if both are configured.
+                    </p>
+                  </details>
                 </InputField>
 
                 {local.ai.provider === "local" && (
                   <ModelBrowser ai={local.ai} updateAi={updateAi} />
+                )}
+
+                {local.ai.provider === "mlx" && (
+                  <OnDeviceTierSection ai={local.ai} updateAi={updateAi} />
+                )}
+
+                {local.ai.provider === "foundation-models" && (
+                  <FoundationModelsSection />
                 )}
 
                 {needsApiKey(local.ai.provider) && (
@@ -719,6 +759,283 @@ function ClaudeOAuthSection() {
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+function OnDeviceTierSection({
+  ai,
+  updateAi,
+}: {
+  ai: AppSettings["ai"];
+  updateAi: (patch: Partial<AppSettings["ai"]>) => void;
+}) {
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [downloaded, setDownloaded] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<MlxDownloadProgress | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedRepoId = ai.model ?? MLX_MODELS[0].repoId;
+  const selectedModel =
+    MLX_MODELS.find((m) => m.repoId === selectedRepoId) ?? MLX_MODELS[0];
+
+  useEffect(() => {
+    mlxIsAvailable().then(setAvailable).catch(() => setAvailable(false));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setChecking(true);
+    mlxIsModelDownloaded(selectedRepoId)
+      .then((v) => {
+        if (!cancelled) setDownloaded(v);
+      })
+      .catch(() => {
+        if (!cancelled) setDownloaded(false);
+      })
+      .finally(() => {
+        if (!cancelled) setChecking(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRepoId]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<MlxDownloadProgress>(MLX_DOWNLOAD_PROGRESS_EVENT, (e) => {
+      if (e.payload.repoId === selectedRepoId) {
+        setProgress(e.payload);
+      }
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [selectedRepoId]);
+
+  const handleDownload = async () => {
+    setBusy(true);
+    setError(null);
+    setProgress({ repoId: selectedRepoId, downloaded: 0, total: 0, percent: 0 });
+    try {
+      await mlxDownloadModel(selectedRepoId);
+      setDownloaded(true);
+      setProgress(null);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+      setProgress(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await mlxDeleteModel(selectedRepoId);
+      setDownloaded(false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const availabilityLabel =
+    available === null
+      ? "Checking availability…"
+      : available
+        ? "On-device MLX runtime detected"
+        : "Not available on this device/OS";
+
+  return (
+    <div
+      className="rounded-lg border border-accent/30 bg-accent/5"
+      style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5, marginBottom: 24 }}
+    >
+      <div className="flex items-center gap-2" style={{ marginBottom: 8 }}>
+        <div
+          className="w-2 h-2 rounded-full"
+          style={{
+            background:
+              available === null
+                ? "rgba(255,255,255,0.3)"
+                : available
+                  ? "#22c55e"
+                  : "#f87171",
+          }}
+        />
+        <span className="text-text-primary" style={{ fontWeight: 500 }}>
+          {availabilityLabel}
+        </span>
+      </div>
+
+      <div style={{ marginBottom: 8 }}>
+        <label
+          className="block text-text-primary"
+          style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}
+        >
+          Model
+        </label>
+        <select
+          value={selectedRepoId}
+          onChange={(e) => updateAi({ model: e.target.value })}
+          className="w-full border border-white/10 rounded text-text-primary focus:outline-none focus:border-accent/50"
+          style={{
+            background: "rgba(255, 255, 255, 0.05)",
+            padding: "6px 10px",
+            fontSize: 12,
+          }}
+          disabled={!available || busy}
+        >
+          {MLX_MODELS.map((m) => (
+            <option key={m.repoId} value={m.repoId}>
+              {m.label} — ~{m.sizeGb.toFixed(1)} GB
+            </option>
+          ))}
+        </select>
+        <p className="text-text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+          Storage estimate: ~{selectedModel.sizeGb.toFixed(1)} GB on disk.
+        </p>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+        {!downloaded && (
+          <button
+            type="button"
+            disabled={!available || busy || checking}
+            onClick={handleDownload}
+            className="rounded border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
+            style={{ padding: "4px 10px", fontSize: 12 }}
+          >
+            {busy ? "Downloading…" : "Download"}
+          </button>
+        )}
+        {downloaded && (
+          <>
+            <span
+              className="rounded text-text-primary"
+              style={{
+                padding: "4px 10px",
+                fontSize: 12,
+                background: "rgba(34, 197, 94, 0.15)",
+                border: "1px solid rgba(34, 197, 94, 0.3)",
+              }}
+            >
+              Downloaded
+            </span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleDelete}
+              className="rounded border border-red-500/40 text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+              style={{ padding: "4px 10px", fontSize: 12 }}
+            >
+              {busy ? "Deleting…" : "Delete"}
+            </button>
+          </>
+        )}
+      </div>
+
+      {progress && busy && (
+        <div style={{ marginTop: 8 }}>
+          <div
+            className="w-full rounded"
+            style={{
+              height: 6,
+              background: "rgba(255,255,255,0.08)",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              className="bg-accent"
+              style={{
+                height: "100%",
+                width: `${Math.max(0, Math.min(100, progress.percent))}%`,
+                transition: "width 120ms linear",
+              }}
+            />
+          </div>
+          <p className="text-text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+            {progress.percent.toFixed(1)}%
+            {progress.total > 0 && (
+              <>
+                {" "}
+                — {(progress.downloaded / 1e9).toFixed(2)} /{" "}
+                {(progress.total / 1e9).toFixed(2)} GB
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <p className="text-red-400" style={{ marginTop: 8 }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function FoundationModelsSection() {
+  const [available, setAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fmIsAvailable().then(setAvailable).catch(() => setAvailable(false));
+  }, []);
+
+  if (available === null) {
+    return (
+      <div
+        className="rounded-lg border border-accent/30 bg-accent/5"
+        style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5, marginBottom: 24 }}
+      >
+        <p className="text-text-muted">Checking Apple Intelligence availability…</p>
+      </div>
+    );
+  }
+
+  if (!available) {
+    return (
+      <div
+        className="rounded-lg border border-red-500/30 bg-red-500/5"
+        style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5, marginBottom: 24 }}
+      >
+        <p className="text-text-primary" style={{ fontWeight: 500, marginBottom: 4 }}>
+          Not available on this device/OS
+        </p>
+        <p className="text-text-muted">
+          Apple Intelligence requires iOS 26+ or macOS 15.1+ on supported hardware,
+          with Apple Intelligence enabled in System Settings.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-lg border border-green-500/30 bg-green-500/5"
+      style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5, marginBottom: 24 }}
+    >
+      <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+        <div className="w-2 h-2 rounded-full bg-green-500" />
+        <span className="text-text-primary" style={{ fontWeight: 500 }}>
+          Available — Apple Intelligence enabled
+        </span>
+      </div>
+      <p className="text-text-muted">
+        Skim will use Apple's on-device Foundation Models for triage and
+        summaries. No configuration or download needed — the model is managed
+        by the system.
+      </p>
     </div>
   );
 }

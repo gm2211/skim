@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback } from "react";
 import { useArticles, useMarkAllRead, useMarkRead, useMarkUnread, useToggleRead, useToggleStar } from "../../hooks/useArticles";
 import { useInboxArticles } from "../../hooks/useInbox";
 import { useThemes, useArticleThemeTags } from "../../hooks/useThemes";
-import { useRecentArticles, useReadMatchCount } from "../../hooks/useRecent";
+import { useRecentArticles, useReadMatchCount, useRemoveRecent } from "../../hooks/useRecent";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
@@ -79,6 +79,7 @@ export function ArticleList() {
   const markUnread = useMarkUnread();
   const toggleRead = useToggleRead();
   const toggleStar = useToggleStar();
+  const removeRecent = useRemoveRecent();
   const [searchQuery, setSearchQuery] = useState("");
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -494,6 +495,9 @@ export function ArticleList() {
           onCopyLink={() => {
             if (contextArticle.url) navigator.clipboard.writeText(contextArticle.url);
           }}
+          onRemoveFromRecent={
+            isRecent ? () => removeRecent.mutate(contextArticle.id) : undefined
+          }
         />
       )}
 

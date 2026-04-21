@@ -169,6 +169,7 @@ pub fn run() {
             commands::ai::get_triage_stats,
             commands::ai::record_reading_time,
             commands::ai::get_recent_articles,
+            commands::ai::remove_recent_article,
             commands::ai::count_read_matches,
             commands::ai::generate_catchup_report,
             commands::ai::set_article_feedback,

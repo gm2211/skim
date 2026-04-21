@@ -838,6 +838,18 @@ pub fn record_reading_time(
     Ok(())
 }
 
+/// Delete a single interaction row. Used by "Remove from Recent".
+pub fn delete_interaction(
+    conn: &Connection,
+    article_id: &str,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "DELETE FROM article_interactions WHERE article_id = ?1",
+        params![article_id],
+    )?;
+    Ok(())
+}
+
 /// Delete interaction rows beyond the configured cap, oldest first.
 pub fn prune_interactions(conn: &Connection, cap: i64) -> Result<(), rusqlite::Error> {
     if cap <= 0 {
@@ -884,8 +896,10 @@ pub fn list_recent_articles(
     );
 
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt
-        .query_map(params![limit], |row| {
+    // Pull extra to leave room for dedupe. Cap at 3x to bound work.
+    let pull_limit = (limit * 3).min(10_000);
+    let rows: Vec<ArticleWithInteraction> = stmt
+        .query_map(params![pull_limit], |row| {
             let reading_time_sec: i64 = row.get(14)?;
             let chat_messages: i64 = row.get(15)?;
             let engagement_score = (reading_time_sec as f64) + (chat_messages as f64) * 60.0;
@@ -913,7 +927,42 @@ pub fn list_recent_articles(
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(rows)
+
+    // Dedupe duplicate articles produced by duplicate feeds. Key on normalized
+    // URL first, then on (lowercased title, feed title). List is already sorted
+    // by chosen order, so first-seen wins.
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut deduped: Vec<ArticleWithInteraction> = Vec::with_capacity(rows.len());
+    for r in rows {
+        let key = match r.article.url.as_deref() {
+            Some(u) if !u.is_empty() => normalize_for_dedup(u),
+            _ => format!(
+                "title:{}|{}",
+                r.article.title.trim().to_lowercase(),
+                r.feed_title.trim().to_lowercase()
+            ),
+        };
+        if seen.insert(key) {
+            deduped.push(r);
+            if deduped.len() as i64 >= limit {
+                break;
+            }
+        }
+    }
+    Ok(deduped)
+}
+
+fn normalize_for_dedup(url: &str) -> String {
+    let lower = url.trim().to_lowercase();
+    let without_scheme = lower
+        .strip_prefix("https://")
+        .or_else(|| lower.strip_prefix("http://"))
+        .unwrap_or(&lower);
+    let without_www = without_scheme.strip_prefix("www.").unwrap_or(without_scheme);
+    let no_hash = without_www.split('#').next().unwrap_or("");
+    // Strip query string entirely for dedup purposes — tracking params vary.
+    let no_query = no_hash.split('?').next().unwrap_or("");
+    no_query.trim_end_matches('/').to_string()
 }
 
 /// Count read articles whose title or content contains the query. Used to

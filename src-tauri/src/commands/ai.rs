@@ -1121,6 +1121,15 @@ pub async fn get_recent_articles(
     queries::list_recent_articles(&conn, &order, limit).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub async fn remove_recent_article(
+    db: State<'_, Database>,
+    article_id: String,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    queries::delete_interaction(&conn, &article_id).map_err(|e| e.to_string())
+}
+
 #[derive(Serialize, Clone)]
 pub struct CatchupItem {
     pub text: String,

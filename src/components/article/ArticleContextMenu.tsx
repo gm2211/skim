@@ -13,6 +13,7 @@ interface Props {
   onMarkAboveUnread: () => void;
   onMarkBelowUnread: () => void;
   onCopyLink: () => void;
+  onRemoveFromRecent?: () => void;
 }
 
 export function ArticleContextMenu({
@@ -27,6 +28,7 @@ export function ArticleContextMenu({
   onMarkAboveUnread,
   onMarkBelowUnread,
   onCopyLink,
+  onRemoveFromRecent,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: x, top: y });
@@ -184,6 +186,17 @@ export function ArticleContextMenu({
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
           </svg>
         )}
+
+        {onRemoveFromRecent &&
+          item(
+            "Remove from Recent",
+            onRemoveFromRecent,
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 6h18" />
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            </svg>
+          )}
       </div>
     </div>
   );

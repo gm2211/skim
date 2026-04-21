@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as commands from "../services/commands";
 
 export function useRecentArticles(order: "engagement" | "recency" = "engagement") {
@@ -14,5 +14,13 @@ export function useReadMatchCount(query: string) {
     queryKey: ["readMatchCount", trimmed],
     queryFn: () => commands.countReadMatches(trimmed),
     enabled: trimmed.length >= 2,
+  });
+}
+
+export function useRemoveRecent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (articleId: string) => commands.removeRecentArticle(articleId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recent"] }),
   });
 }

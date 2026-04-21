@@ -190,6 +190,9 @@ export const getRecentArticles = (
 export const countReadMatches = (query: string) =>
   invoke<number>("count_read_matches", { query });
 
+export const removeRecentArticle = (articleId: string) =>
+  invoke<void>("remove_recent_article", { articleId });
+
 export interface CatchupItem {
   text: string;
   article_ids: string[];

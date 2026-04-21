@@ -16,6 +16,12 @@ packages:
   FeedKit:
     url: https://github.com/nmdias/FeedKit.git
     from: "9.0.0"
+  mlx-swift:
+    url: https://github.com/ml-explore/mlx-swift.git
+    from: "0.18.0"
+  mlx-swift-examples:
+    url: https://github.com/ml-explore/mlx-swift-examples.git
+    from: "2.21.0"
 
 targets:
   Skim:
@@ -36,5 +42,11 @@ targets:
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
     dependencies:
       - package: FeedKit
+      - package: mlx-swift
+        product: MLX
+      - package: mlx-swift-examples
+        product: MLXLMCommon
+      - package: mlx-swift-examples
+        product: MLXLLM
     resources:
       - path: Skim/Assets.xcassets

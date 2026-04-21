@@ -97,6 +97,14 @@ struct SidebarView: View {
                 .disabled(appState.isRefreshing)
                 .accessibilityLabel("Refresh All Feeds")
             }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    appState.showSettings = true
+                } label: {
+                    Image(systemName: "gear")
+                }
+                .accessibilityLabel("Settings")
+            }
         }
     }
 

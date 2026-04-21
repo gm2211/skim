@@ -16,9 +16,12 @@ actor AIService {
     }
 
     enum Provider: String {
-        case anthropic
+        case anthropic           // API key
+        case claudeSubscription  // OAuth bearer token (Pro/Max)
         case openai
         case ollama
+        case mlx                 // on-device (MLXRunner)
+        case foundationModels    // on-device (Apple Intelligence, iOS 26+)
     }
 
     func triageArticles(
@@ -139,11 +142,56 @@ actor AIService {
         switch provider {
         case .anthropic:
             return try await anthropicCompletion(apiKey: apiKey, model: model, systemPrompt: systemPrompt, userPrompt: userPrompt, maxTokens: maxTokens)
+        case .claudeSubscription:
+            return try await claudeSubscriptionCompletion(model: model, systemPrompt: systemPrompt, userPrompt: userPrompt, maxTokens: maxTokens)
         case .openai:
             return try await openaiCompletion(apiKey: apiKey, model: model, systemPrompt: systemPrompt, userPrompt: userPrompt, jsonMode: jsonMode, maxTokens: maxTokens)
         case .ollama:
             return try await ollamaCompletion(model: model, systemPrompt: systemPrompt, userPrompt: userPrompt, jsonMode: jsonMode, maxTokens: maxTokens)
+        case .mlx:
+            return try await MLXRunner.shared.complete(systemPrompt: systemPrompt, userPrompt: userPrompt, jsonMode: jsonMode, maxTokens: maxTokens)
+        case .foundationModels:
+            // NOTE: `FoundationModelRunner.triageStructured` offers typed guided-generation
+            // output on iOS 26+. Wire-up is tracked in a follow-up beads task; this path
+            // currently returns raw JSON like the other providers.
+            return try await FoundationModelRunner.shared.complete(systemPrompt: systemPrompt, userPrompt: userPrompt, jsonMode: jsonMode, maxTokens: maxTokens)
         }
+    }
+
+    private func claudeSubscriptionCompletion(model: String, systemPrompt: String, userPrompt: String, maxTokens: Int) async throws -> String {
+        let accessToken = try await ClaudeOAuth.shared.refreshIfNeeded()
+
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue(ClaudeOAuth.betaHeader, forHTTPHeaderField: "anthropic-beta")
+
+        // OAuth path requires the CLI-persona system prefix.
+        let system: [[String: Any]] = [
+            ["type": "text", "text": ClaudeOAuth.systemPrefix],
+            ["type": "text", "text": systemPrompt]
+        ]
+        let body: [String: Any] = [
+            "model": model,
+            "max_tokens": maxTokens,
+            "system": system,
+            "messages": [["role": "user", "content": userPrompt]]
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            let detail = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+            throw AIError.networkError("Claude subscription HTTP \(http.statusCode): \(detail)")
+        }
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let content = json["content"] as? [[String: Any]],
+              let text = content.first?["text"] as? String else {
+            throw AIError.parseError("Invalid Claude subscription response")
+        }
+        return text
     }
 
     private func anthropicCompletion(apiKey: String, model: String, systemPrompt: String, userPrompt: String, maxTokens: Int) async throws -> String {

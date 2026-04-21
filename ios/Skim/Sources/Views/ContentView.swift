@@ -30,6 +30,9 @@ struct ContentView: View {
         .sheet(isPresented: $appState.showAddFeed) {
             AddFeedView()
         }
+        .sheet(isPresented: $appState.showSettings) {
+            SettingsView().environmentObject(appState)
+        }
         .modelContainer(for: [Feed.self, Article.self])
         .onChange(of: appState.selectedArticle) { _, newValue in
             adaptColumns(forSelection: newValue)

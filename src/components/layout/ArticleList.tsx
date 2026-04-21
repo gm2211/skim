@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useArticles, useArticleCount, useMarkAllRead, useMarkRead, useMarkUnread, useToggleRead, useToggleStar } from "../../hooks/useArticles";
 import { useInboxArticles } from "../../hooks/useInbox";
 import { useThemes, useArticleThemeTags } from "../../hooks/useThemes";
@@ -105,8 +105,16 @@ export function ArticleList() {
     return map;
   }, [themeTags]);
 
+  // Infinite scroll: grows in PAGE_SIZE steps when user scrolls near the
+  // bottom. Reset whenever the view or filter changes.
+  const PAGE_SIZE = 200;
+  const [pageLimit, setPageLimit] = useState(PAGE_SIZE);
+  useEffect(() => {
+    setPageLimit(PAGE_SIZE);
+  }, [sidebarView, listFilter]);
+
   const filter: ArticleFilter = useMemo(() => {
-    const base: ArticleFilter = { limit: 200 };
+    const base: ArticleFilter = { limit: pageLimit };
     switch (sidebarView.type) {
       case "all":
         break;
@@ -125,7 +133,7 @@ export function ArticleList() {
     if (listFilter === "unread") base.is_read = false;
     if (listFilter === "starred") base.is_starred = true;
     return base;
-  }, [sidebarView, listFilter]);
+  }, [sidebarView, listFilter, pageLimit]);
 
   const { data: regularArticles, isLoading: regularLoading } = useArticles(filter);
   const inboxIsRead = isInbox && listFilter === "unread" ? false : null;
@@ -244,6 +252,22 @@ export function ArticleList() {
   const contextArticle = contextMenu && filteredArticles
     ? filteredArticles[contextMenu.articleIndex]
     : null;
+
+  // Infinite scroll: grow pageLimit when the user nears the bottom of the
+  // list. Only applies to the paged (regular) query; inbox/recent queries
+  // have their own server-side caps.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const canPaginate = !isInbox && !isRecent;
+  const handleScroll = useCallback(() => {
+    if (!canPaginate) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 400;
+    const pageFull = (regularArticles?.length ?? 0) >= pageLimit;
+    if (nearBottom && pageFull) {
+      setPageLimit((n) => n + PAGE_SIZE);
+    }
+  }, [canPaginate, regularArticles, pageLimit]);
 
   return (
     <div
@@ -414,7 +438,7 @@ export function ArticleList() {
       )}
 
       {/* Article list */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-32">
             <span className="text-text-muted" style={{ fontSize: 14 }}>Loading...</span>

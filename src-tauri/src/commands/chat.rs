@@ -69,20 +69,25 @@ pub async fn chat_with_article(
     // Truncate for context window (char-safe)
     let article_text: String = text.chars().take(12000).collect();
 
+    let tool_hint = if provider_supports_tools(&provider_kind) {
+        "When the article doesn't contain enough information to answer, you may call the \
+         `web_search` tool to pull in fresh results. Prefer article context when it suffices.\n\n"
+    } else {
+        ""
+    };
     let system_prompt = format!(
         "You are a helpful assistant discussing a news article. Answer questions about the article, \
          provide context, and help the user understand the topic better. Be concise and direct. \
-         No emoji.\n\n\
-         When the article doesn't contain enough information to answer, you may call the \
-         `web_search` tool to pull in fresh results. Prefer article context when it suffices.\n\n\
-         Article Title: {}\n\
-         Source: {}\n\
-         Author: {}\n\n\
-         Article Content:\n{}",
-        article.article.title,
-        article.feed_title,
-        article.article.author.as_deref().unwrap_or("Unknown"),
-        article_text,
+         No emoji.\n\n{tool_hint}\
+         Article Title: {title}\n\
+         Source: {source}\n\
+         Author: {author}\n\n\
+         Article Content:\n{body}",
+        tool_hint = tool_hint,
+        title = article.article.title,
+        source = article.feed_title,
+        author = article.article.author.as_deref().unwrap_or("Unknown"),
+        body = article_text,
     );
 
     let mut chat_messages = vec![ChatMessage::text("system", system_prompt)];
@@ -307,12 +312,18 @@ pub async fn chat_with_articles(
         ));
     }
 
+    let tool_clause = if provider_supports_tools(&provider_kind) {
+        "If the articles don't contain the answer, call the `web_search` tool to pull in fresh \
+         web results before saying you can't answer. "
+    } else {
+        ""
+    };
     let system_prompt = format!(
         "You answer the user's questions about articles from their RSS feed. Prefer the articles \
          below as evidence and cite them with their bracket number like [2]. \
-         If the articles don't contain the answer, call the `web_search` tool to pull in fresh \
-         web results before saying you can't answer. Be concise. No emoji.\n\n{}",
-        context,
+         {tool_clause}Be concise. No emoji.\n\n{context}",
+        tool_clause = tool_clause,
+        context = context,
     );
 
     let mut chat_messages = vec![ChatMessage::text("system", system_prompt)];
@@ -368,7 +379,12 @@ pub async fn chat_with_articles(
 /// Providers that support the tool-use loop. Must match names returned by
 /// `AiProvider::name()` / `AiSettings::provider`.
 fn provider_supports_tools(provider_kind: &str) -> bool {
-    matches!(provider_kind, "anthropic" | "claude-subscription" | "claude-cli")
+    // ClaudeCliProvider is intentionally excluded: Claude Code sees the tool
+    // spec and emits `tool_use` blocks that the subprocess wrapper can't
+    // resolve, leading to `stop_reason=tool_use` + `subtype=error_max_turns`
+    // with no result text. Until the CLI gets a tool-loop bridge, it's
+    // text-only.
+    matches!(provider_kind, "anthropic" | "claude-subscription")
 }
 
 /// Web-search tool definition shared between per-article and multi-article

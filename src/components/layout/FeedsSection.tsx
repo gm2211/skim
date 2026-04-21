@@ -1208,11 +1208,12 @@ function AutoOrganizeDialog({
       onClick={onCancel}
     >
       <div
-        className="border border-white/10 rounded-2xl shadow-2xl"
+        className="border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden"
         style={{ background: "rgba(22, 27, 34, 0.98)", maxWidth: 560, width: "100%", margin: "0 20px", maxHeight: "85vh" }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="overflow-y-auto" style={{ padding: "20px 24px 16px", maxHeight: "calc(85vh - 64px)" }}>
+        {/* Fixed header */}
+        <div className="flex-shrink-0" style={{ padding: "20px 24px 12px" }}>
           <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="text-accent">
               <path d="M3 7h7M3 12h7M3 17h7" />
@@ -1229,7 +1230,7 @@ function AutoOrganizeDialog({
           {/* Scope + Case controls */}
           <div
             className="border border-white/5 rounded-xl"
-            style={{ padding: "10px 12px", marginBottom: 12, background: "rgba(255,255,255,0.02)" }}
+            style={{ padding: "10px 12px", background: "rgba(255,255,255,0.02)" }}
           >
             <div className="flex flex-col gap-2" style={{ fontSize: 12 }}>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -1282,7 +1283,10 @@ function AutoOrganizeDialog({
               </button>
             </div>
           </div>
+        </div>
 
+        {/* Scrolling proposals list */}
+        <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: "4px 24px 16px" }}>
           {loading && (
             <div className="text-center" style={{ padding: "40px 0" }}>
               <div className="text-text-muted" style={{ fontSize: 13 }}>
@@ -1369,7 +1373,7 @@ function AutoOrganizeDialog({
             </p>
           )}
         </div>
-        <div className="flex justify-between items-center gap-2 border-t border-white/5" style={{ padding: "12px 20px" }}>
+        <div className="flex flex-shrink-0 justify-between items-center gap-2 border-t border-white/5" style={{ padding: "12px 20px" }}>
           <span className="text-text-muted" style={{ fontSize: 12 }}>
             {proposals.length} folders · {totalSelected} feeds
           </span>

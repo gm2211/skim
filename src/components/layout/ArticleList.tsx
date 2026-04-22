@@ -151,8 +151,52 @@ export function ArticleList() {
   const { data: readMatchCount } = useReadMatchCount(searchQuery);
   const [includeRead, setIncludeRead] = useState(false);
 
-  const articles = isInbox ? inboxArticles : isRecent ? recentArticles : regularArticles;
+  const rawArticles = isInbox ? inboxArticles : isRecent ? recentArticles : regularArticles;
   const isLoading = isInbox ? inboxLoading : isRecent ? recentLoading : regularLoading;
+
+  // Sticky selection: keep articles the user has clicked visible in the list
+  // even after they get marked read and the unread-only query drops them on
+  // refetch. Without this, clicking an unread article makes it vanish
+  // immediately. Reset whenever the view or filter changes.
+  const stickyMapRef = useRef<Map<string, any>>(new Map());
+  const stickyIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    stickyMapRef.current = new Map();
+    stickyIdsRef.current = new Set();
+  }, [sidebarView, listFilter]);
+  useEffect(() => {
+    if (selectedArticleId) stickyIdsRef.current.add(selectedArticleId);
+  }, [selectedArticleId]);
+  if (rawArticles) {
+    for (const a of rawArticles) stickyMapRef.current.set(a.id, a);
+  }
+
+  const articles = useMemo(() => {
+    if (!rawArticles) return rawArticles;
+    const have = new Set(rawArticles.map((a) => a.id));
+    const injected: any[] = [];
+    for (const id of stickyIdsRef.current) {
+      if (!have.has(id)) {
+        const cached = stickyMapRef.current.get(id);
+        if (cached) injected.push(cached);
+      }
+    }
+    if (injected.length === 0) return rawArticles;
+    const combined = [...(rawArticles as any[]), ...injected];
+    if (isInbox) {
+      combined.sort((a, b) => {
+        const pa = a.priority ?? -1;
+        const pb = b.priority ?? -1;
+        if (pa !== pb) return pb - pa;
+        return (b.published_at ?? b.fetched_at) - (a.published_at ?? a.fetched_at);
+      });
+    } else {
+      combined.sort(
+        (a, b) => (b.published_at ?? b.fetched_at) - (a.published_at ?? a.fetched_at),
+      );
+    }
+    return combined as typeof rawArticles;
+  }, [rawArticles, isInbox, selectedArticleId]);
 
   const title = useMemo(() => {
     switch (sidebarView.type) {

@@ -61,13 +61,20 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
     <div
       onClick={onSelect}
       onContextMenu={onContextMenu}
-      className={`cursor-pointer transition-colors border-b border-white/5 select-none ${
+      className={`cursor-pointer transition-colors border-b border-white/5 select-none relative ${
         isSelected
-          ? "bg-white/10"
+          ? "bg-accent/15"
           : "hover:bg-white/5"
       }`}
       style={{ padding: "14px 20px" }}
     >
+      {isSelected && (
+        <div
+          className="absolute left-0 top-0 bottom-0 bg-accent"
+          style={{ width: 3 }}
+          aria-hidden
+        />
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3

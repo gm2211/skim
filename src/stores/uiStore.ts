@@ -36,7 +36,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   sidebarManualCollapse: false,
   listCollapsed: false,
   listManualCollapse: false,
-  listFilter: "all",
+  listFilter: "unread",
 
   setSidebarView: (view) =>
     set({ sidebarView: view, selectedArticleId: null }),

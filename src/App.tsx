@@ -79,6 +79,13 @@ function App() {
         return;
       }
 
+      // Global shortcuts — work even when typing in inputs
+      if (e.key === "," && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        useUiStore.getState().setShowSettings(true);
+        return;
+      }
+
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
@@ -88,10 +95,6 @@ function App() {
       if (e.key === "Escape") {
         useUiStore.getState().setShowAddFeed(false);
         useUiStore.getState().setShowSettings(false);
-      }
-      if (e.key === "," && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        useUiStore.getState().setShowSettings(true);
       }
       if (e.key === "[" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();

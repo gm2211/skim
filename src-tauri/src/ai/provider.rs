@@ -548,6 +548,9 @@ impl AiProvider for ClaudeCliProvider {
                 // WebSearch) can resolve. With --max-turns 1 the model emits a
                 // tool_use block and stops, returning error_max_turns.
                 "--max-turns", "8",
+                // Whitelist read-only research tools. Without this, the CLI
+                // refuses with "WebSearch not permitted".
+                "--allowedTools", "WebSearch,WebFetch",
             ]);
 
             if let Some(ref key) = api_key {

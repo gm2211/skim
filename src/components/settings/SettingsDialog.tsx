@@ -22,6 +22,7 @@ import {
   type MlxDownloadProgress,
 } from "../../services/commands";
 import { ModelBrowser } from "./ModelBrowser";
+import { NumberInput } from "../ui/NumberInput";
 
 const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
@@ -340,13 +341,12 @@ export function SettingsDialog() {
                           <option value="custom">Custom...</option>
                         </select>
                         {local.ai.summary_length === "custom" && (
-                          <input
-                            type="number"
+                          <NumberInput
                             min={20}
                             max={1000}
                             placeholder="Word count"
-                            value={local.ai.summary_custom_word_count ?? ""}
-                            onChange={(e) => updateAi({ summary_custom_word_count: parseInt(e.target.value) || null } as any)}
+                            value={local.ai.summary_custom_word_count ?? null}
+                            onChange={(n) => updateAi({ summary_custom_word_count: n } as any)}
                             className={inputClass}
                             style={{ ...inputStyle, width: 120, marginTop: 6 }}
                           />
@@ -586,17 +586,17 @@ function SyncTab({
         label="Auto-refresh interval"
         description="How often to check feeds for new articles (in minutes)"
       >
-        <input
-          type="number"
+        <NumberInput
           min={5}
           max={1440}
           value={local.sync.refresh_interval_minutes}
-          onChange={(e) =>
+          fallback={30}
+          onChange={(n) =>
             setLocal({
               ...local,
               sync: {
                 ...local.sync,
-                refresh_interval_minutes: parseInt(e.target.value) || 30,
+                refresh_interval_minutes: n,
               },
             })
           }
@@ -609,17 +609,17 @@ function SyncTab({
         label="Max articles per feed"
         description="Number of articles to keep per feed"
       >
-        <input
-          type="number"
+        <NumberInput
           min={10}
           max={1000}
           value={local.sync.max_articles_per_feed}
-          onChange={(e) =>
+          fallback={200}
+          onChange={(n) =>
             setLocal({
               ...local,
               sync: {
                 ...local.sync,
-                max_articles_per_feed: parseInt(e.target.value) || 200,
+                max_articles_per_feed: n,
               },
             })
           }

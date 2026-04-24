@@ -10,6 +10,7 @@ import {
   useSystemInfo,
 } from "../../hooks/useModels";
 import type { AiSettings, HfModelFile } from "../../services/types";
+import { NumberInput } from "../ui/NumberInput";
 
 function formatBytes(bytes: number | null): string {
   if (!bytes) return "";
@@ -893,14 +894,14 @@ export function ModelBrowser({
           Idle eviction
         </label>
         <div className="flex items-center gap-3">
-          <input
-            type="number"
+          <NumberInput
             min={0}
             max={1440}
             value={ai.local_idle_evict_minutes ?? 10}
-            onChange={(e) =>
+            fallback={10}
+            onChange={(n) =>
               updateAi({
-                local_idle_evict_minutes: parseInt(e.target.value) || 0,
+                local_idle_evict_minutes: n,
               })
             }
             className={inputClass}
@@ -925,14 +926,14 @@ export function ModelBrowser({
           Advanced: GPU Layers
         </label>
         <div className="flex items-center gap-3">
-          <input
-            type="number"
+          <NumberInput
             min={-1}
             max={999}
             value={ai.local_gpu_layers ?? -1}
-            onChange={(e) =>
+            fallback={-1}
+            onChange={(n: number) =>
               updateAi({
-                local_gpu_layers: parseInt(e.target.value) || -1,
+                local_gpu_layers: n,
               })
             }
             className={inputClass}

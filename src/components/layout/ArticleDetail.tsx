@@ -7,6 +7,7 @@ import { fetchFullArticle, cancelSummarize } from "../../services/commands";
 import { ChatDrawer } from "../chat/ChatPanel";
 import { useReadingTimeTracker } from "../../hooks/useLearning";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { NumberInput } from "../ui/NumberInput";
 
 type ViewMode = "rss" | "reader" | "web";
 
@@ -362,13 +363,12 @@ export function ArticleDetail() {
                     <option value="custom">Custom...</option>
                   </select>
                   {(perArticleLength ?? settings?.ai.summary_length) === "custom" && (
-                    <input
-                      type="number"
+                    <NumberInput
                       min={20}
                       max={1000}
                       placeholder="Word count"
-                      value={perArticleWordCount ?? settings?.ai.summary_custom_word_count ?? ""}
-                      onChange={(e) => setPerArticleWordCount(parseInt(e.target.value) || undefined)}
+                      value={perArticleWordCount ?? settings?.ai.summary_custom_word_count ?? null}
+                      onChange={(n) => setPerArticleWordCount(n ?? undefined)}
                       className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
                       style={{ padding: "4px 8px", fontSize: 12, marginTop: 4 }}
                     />

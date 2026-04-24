@@ -544,7 +544,10 @@ impl AiProvider for ClaudeCliProvider {
                 "-p",
                 "--output-format", "json",
                 "--model", &model,
-                "--max-turns", "1",
+                // Allow several turns so the CLI's built-in tools (WebFetch,
+                // WebSearch) can resolve. With --max-turns 1 the model emits a
+                // tool_use block and stops, returning error_max_turns.
+                "--max-turns", "8",
             ]);
 
             if let Some(ref key) = api_key {
@@ -603,6 +606,13 @@ impl AiProvider for ClaudeCliProvider {
                 .map_err(|e| format!("Failed to parse claude CLI output: {}. Output: {}", e, &stdout[..stdout.len().min(500)]))?;
 
             if cli_resp.is_error.unwrap_or(false) {
+                if cli_resp.subtype.as_deref() == Some("error_max_turns") {
+                    return Err(
+                        "Claude CLI hit its turn limit while running tools. \
+                         Try rephrasing the question to be more direct."
+                            .to_string(),
+                    );
+                }
                 // Surface whatever detail the CLI gave us. Prior code only
                 // reported `result`, which is empty on auth/transport errors.
                 let detail = cli_resp

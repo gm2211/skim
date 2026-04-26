@@ -325,11 +325,11 @@ export function ArticleList() {
       }}
     >
       {/* Top bar with mark-all-read, search, close */}
-      <div className="flex items-center justify-end gap-2 relative z-20" style={{ height: 40, paddingLeft: isPhone ? 16 : (sidebarCollapsed ? 78 : undefined), paddingRight: 16 }}>
+      <div className="flex items-center gap-2 relative z-20" style={{ height: 40, paddingLeft: isPhone ? 16 : (sidebarCollapsed ? 78 : undefined), paddingRight: 16 }}>
         {isPhone && (
           <button
             onClick={() => setPhonePane("sidebar")}
-            className="text-text-muted hover:text-text-primary transition-colors mr-auto"
+            className="text-text-muted hover:text-text-primary transition-colors"
             title="Open sidebar"
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -342,7 +342,7 @@ export function ArticleList() {
         {sidebarCollapsed && !isPhone && (
           <button
             onClick={() => useUiStore.getState().toggleSidebar()}
-            className="text-text-muted hover:text-text-primary transition-colors mr-auto"
+            className="text-text-muted hover:text-text-primary transition-colors"
             title="Expand sidebar"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -351,6 +351,7 @@ export function ArticleList() {
             </svg>
           </button>
         )}
+        <div className="flex-1" />
         <button
           onClick={handleMarkAllRead}
           className="text-text-muted hover:text-text-primary transition-colors"

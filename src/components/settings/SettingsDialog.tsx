@@ -112,6 +112,7 @@ export function SettingsDialog() {
   const { data: settings } = useSettings();
   const updateSettings = useUpdateSettings();
   const setShowSettings = useUiStore((s) => s.setShowSettings);
+  const isPhone = useUiStore((s) => s.isPhone);
 
   const [local, setLocal] = useState<AppSettings | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("ai");
@@ -142,10 +143,34 @@ export function SettingsDialog() {
     "w-full border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors";
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+    <div
+      className={
+        isPhone
+          ? "fixed inset-0 z-50 flex flex-col bg-bg-primary"
+          : "fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+      }
+      style={
+        isPhone
+          ? {
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+              paddingLeft: "env(safe-area-inset-left)",
+              paddingRight: "env(safe-area-inset-right)",
+            }
+          : undefined
+      }
+    >
       <div
-        className="border border-white/10 rounded-2xl w-full max-w-2xl mx-4 shadow-2xl overflow-hidden flex flex-col backdrop-blur-xl backdrop-saturate-150"
-        style={{ background: "rgba(22, 27, 34, 0.75)", height: local.ai.provider === "local" ? 640 : 520 }}
+        className={
+          isPhone
+            ? "flex flex-col flex-1 min-h-0 overflow-hidden"
+            : "border border-white/10 rounded-2xl w-full max-w-2xl mx-4 shadow-2xl overflow-hidden flex flex-col backdrop-blur-xl backdrop-saturate-150"
+        }
+        style={
+          isPhone
+            ? undefined
+            : { background: "rgba(22, 27, 34, 0.75)", height: local.ai.provider === "local" ? 640 : 520 }
+        }
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/5" style={{ padding: "16px 24px" }}>
@@ -160,15 +185,22 @@ export function SettingsDialog() {
           </button>
         </div>
 
-        {/* Body: sidebar tabs + content */}
-        <div className="flex flex-1 min-h-0">
-          {/* Tab sidebar */}
-          <div className="border-r border-white/5 flex flex-col" style={{ width: 180, padding: "12px 8px" }}>
+        {/* Body: sidebar tabs + content (or stacked on phone) */}
+        <div className={`flex flex-1 min-h-0 ${isPhone ? "flex-col" : ""}`}>
+          {/* Tab bar — vertical on desktop, horizontal scroller on phone */}
+          <div
+            className={
+              isPhone
+                ? "flex border-b border-white/5 overflow-x-auto"
+                : "border-r border-white/5 flex flex-col"
+            }
+            style={isPhone ? { padding: "8px 8px" } : { width: 180, padding: "12px 8px" }}
+          >
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-3 w-full rounded-lg text-left transition-colors ${
+                className={`flex items-center gap-3 ${isPhone ? "flex-shrink-0" : "w-full"} rounded-lg text-left transition-colors ${
                   activeTab === tab.id
                     ? "bg-white/10 text-text-primary"
                     : "text-text-muted hover:text-text-primary hover:bg-white/5"
@@ -182,7 +214,7 @@ export function SettingsDialog() {
           </div>
 
           {/* Content pane */}
-          <div className="flex-1 overflow-y-auto" style={{ padding: "24px 28px" }}>
+          <div className="flex-1 overflow-y-auto" style={{ padding: isPhone ? "16px 16px 24px" : "24px 28px" }}>
             {activeTab === "ai" && (
               <>
                 <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
@@ -196,7 +228,12 @@ export function SettingsDialog() {
                     className={inputClass}
                     style={inputStyle}
                   >
-                    {AI_PROVIDERS.map((p) => (
+                    {AI_PROVIDERS.filter((p) => {
+                      // Phone: hide providers that need a desktop runtime
+                      // (llama.cpp embedded, Ollama localhost, Claude CLI).
+                      if (!isPhone) return true;
+                      return !["local", "ollama", "claude-cli"].includes(p.value);
+                    }).map((p) => (
                       <option key={p.value} value={p.value}>
                         {p.label}
                       </option>

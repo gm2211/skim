@@ -1,6 +1,8 @@
 use crate::ai::local_provider::SharedModelState;
 use crate::ai::prompts;
 use crate::ai::provider::{ChatMessage, ChatRequest, create_provider};
+#[cfg(target_os = "ios")]
+use tauri_plugin_skim_ai::{CompleteArgs, SkimAiExt};
 use crate::db::models::{ArticleFilter, ArticleSummary, Theme};
 use crate::db::queries;
 use crate::db::Database;
@@ -270,6 +272,7 @@ pub async fn cancel_summarize(
 
 #[tauri::command]
 pub async fn summarize_article(
+    app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     summary_cache: State<'_, SharedSummaryCache>,
@@ -328,13 +331,106 @@ pub async fn summarize_article(
         return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
     }
 
+    let title = &article.article.title;
+
+    // iOS-only: route mlx / foundation-models through the Swift plugin since
+    // those providers are not implemented as Rust AiProvider trait
+    // implementations (the inference runs in-process in the WebView host).
+    #[cfg(target_os = "ios")]
+    {
+        let provider_name = settings.ai.provider.as_str();
+        if provider_name == "mlx" || provider_name == "foundation-models" {
+            // Resolve article body the same way the desktop path does below.
+            let content_text = article.article.content_text.as_deref().unwrap_or("");
+            let html_as_text = article.article.content_html.as_deref()
+                .map(|h| html2text::from_read(h.as_bytes(), 10000))
+                .unwrap_or_default();
+            let local_text = if html_as_text.len() > content_text.len() {
+                html_as_text
+            } else {
+                content_text.to_string()
+            };
+            let text = if local_text.trim().chars().count() < 400 {
+                if let Some(ref url) = article.article.url {
+                    match fetch_article_text(url).await {
+                        Ok(fetched) if fetched.trim().chars().count() > local_text.trim().chars().count() => fetched,
+                        _ => local_text,
+                    }
+                } else {
+                    local_text
+                }
+            } else {
+                local_text
+            };
+            if text.trim().is_empty() {
+                return Err("No article content to summarize.".to_string());
+            }
+
+            let plugin = app.skim_ai();
+            let system_prompt = prompts::article_summary_system_prompt(&settings.ai);
+
+            let bullet_prompt = prompts::article_bullet_summary_prompt(title, &text, &settings.ai);
+            let bullet_text = if !bullet_prompt.is_empty() {
+                let args = CompleteArgs {
+                    system: system_prompt.clone(),
+                    user: bullet_prompt,
+                    json_mode: Some(true),
+                    max_tokens: Some(prompts::bullet_max_tokens(&settings.ai) as u32),
+                };
+                let raw = if provider_name == "mlx" {
+                    plugin.mlx_complete(args).map_err(|e| e.to_string())?
+                } else {
+                    plugin.fm_complete(args).map_err(|e| e.to_string())?
+                };
+                Some(extract_bullets_field(&raw))
+            } else {
+                None
+            };
+
+            if generation.0.load(Ordering::SeqCst) != gen_id {
+                return Err("Summary cancelled".to_string());
+            }
+
+            let full_prompt = prompts::article_full_summary_prompt(title, &text, &settings.ai);
+            let full_text = if !full_prompt.is_empty() {
+                let args = CompleteArgs {
+                    system: system_prompt,
+                    user: full_prompt,
+                    json_mode: Some(true),
+                    max_tokens: Some(prompts::full_max_tokens(&settings.ai) as u32),
+                };
+                let raw = if provider_name == "mlx" {
+                    plugin.mlx_complete(args).map_err(|e| e.to_string())?
+                } else {
+                    plugin.fm_complete(args).map_err(|e| e.to_string())?
+                };
+                Some(extract_summary_field(&raw))
+            } else {
+                None
+            };
+
+            let summary = ArticleSummary {
+                article_id: article_id.clone(),
+                bullet_summary: bullet_text,
+                full_summary: full_text,
+                provider: Some(provider_name.to_string()),
+                model: Some(provider_name.to_string()),
+                created_at: Utc::now().timestamp(),
+            };
+            {
+                let mut cache = summary_cache.lock().await;
+                cache.insert(summary.clone());
+            }
+            return Ok(summary);
+        }
+    }
+
     let provider = create_provider(
         &settings.ai,
         Some(model_state.inner().clone()),
     )?;
 
     let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
-    let title = &article.article.title;
 
     // Use the longest available content — prefer content_text, fall back to HTML stripped to text
     let content_text = article.article.content_text.as_deref().unwrap_or("");

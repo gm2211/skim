@@ -271,10 +271,12 @@ export function ArticleDetail() {
           ? "border-accent/30 text-accent bg-accent/10"
           : "border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20"
       }`}
-      style={{ padding: "6px 12px", fontSize: 12 }}
+      style={{ padding: isPhone ? "6px 8px" : "6px 12px", fontSize: 12 }}
+      aria-label={label}
+      title={label}
     >
       {icon}
-      {label}
+      {!isPhone && label}
     </button>
   );
 
@@ -283,7 +285,7 @@ export function ArticleDetail() {
       {/* Toolbar */}
       <div
         className="flex items-center justify-between relative z-20 flex-shrink-0"
-        style={{ height: 52, padding: "0 24px" }}
+        style={{ height: 52, padding: isPhone ? "0 10px" : "0 24px", gap: isPhone ? 4 : undefined }}
       >
         {(isPhone || !(sidebarCollapsed && listCollapsed)) && (
           <button
@@ -305,7 +307,10 @@ export function ArticleDetail() {
           </button>
         )}
 
-        <div className="flex items-center gap-2">
+        <div
+          className="flex items-center gap-2 min-w-0"
+          style={isPhone ? { gap: 6, overflowX: "auto", flex: "1 1 auto" } : undefined}
+        >
           {article.url && (
             <>
               {modeBtn("reader", "Reader",
@@ -324,7 +329,7 @@ export function ArticleDetail() {
             </>
           )}
 
-          <div className="w-px h-5 bg-white/10" />
+          {!isPhone && <div className="w-px h-5 bg-white/10" />}
 
           <div className="relative" ref={sumMenuRef}>
             <div className="flex">
@@ -332,9 +337,18 @@ export function ArticleDetail() {
                 onClick={() => doSummarize(false)}
                 disabled={summarize.isPending}
                 className="rounded-l-lg border border-r-0 border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40"
-                style={{ padding: "6px 12px", fontSize: 12 }}
+                style={{ padding: isPhone ? "6px 8px" : "6px 12px", fontSize: 12 }}
+                title="Summarize"
+                aria-label="Summarize"
               >
-                {summarize.isPending ? "..." : "Summarize"}
+                {summarize.isPending ? "..." : (isPhone ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                    <line x1="16" y1="13" x2="8" y2="13" />
+                    <line x1="16" y1="17" x2="8" y2="17" />
+                  </svg>
+                ) : "Summarize")}
               </button>
               <button
                 onClick={() => setShowSummarizeMenu(!showSummarizeMenu)}
@@ -425,7 +439,7 @@ export function ArticleDetail() {
             )}
           </div>
 
-          <div className="w-px h-5 bg-white/10" />
+          {!isPhone && <div className="w-px h-5 bg-white/10" />}
 
           <button
             onClick={() => toggleStar.mutate(article.id)}
@@ -452,7 +466,7 @@ export function ArticleDetail() {
           </button>
 
 
-          {article.url && (
+          {article.url && !isPhone && (
             <button
               onClick={() => { if (article.url) openUrl(article.url); }}
               className="text-text-muted hover:text-text-primary p-2 rounded-lg hover:bg-white/10 transition-colors"
@@ -557,7 +571,7 @@ export function ArticleDetail() {
           {/* Panel 0: RSS preview */}
           <div className="slide-panel">
 
-            <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 40px 80px" }}>
+            <div style={{ maxWidth: 720, margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px" }}>
               <div style={{ marginBottom: 28 }}>
                 <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>
                   {article.title}
@@ -584,7 +598,7 @@ export function ArticleDetail() {
           <div className="slide-panel">
 
             {fullContent && (
-              <div style={{ maxWidth: 720, margin: "0 auto", padding: "24px 40px 80px" }}>
+              <div style={{ maxWidth: 720, margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px" }}>
                 <div style={{ marginBottom: 28 }}>
                   <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
                   <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>

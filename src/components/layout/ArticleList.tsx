@@ -73,7 +73,7 @@ function groupByDate(articles: { published_at: number | null; fetched_at: number
 }
 
 export function ArticleList() {
-  const { sidebarView, selectedArticleId, setSelectedArticleId, listFilter, setListFilter, sidebarCollapsed, listCollapsed } = useUiStore();
+  const { sidebarView, selectedArticleId, setSelectedArticleId, listFilter, setListFilter, sidebarCollapsed, listCollapsed, isPhone, setPhonePane } = useUiStore();
   const markAllRead = useMarkAllRead();
   const markRead = useMarkRead();
   const markUnread = useMarkUnread();
@@ -318,12 +318,28 @@ export function ArticleList() {
 
   return (
     <div
-      className={`${listCollapsed ? '' : 'border-r border-white/5'} bg-bg-secondary/70 flex flex-col h-full overflow-hidden transition-all duration-300 ease-in-out`}
-      style={{ width: listCollapsed ? 0 : 384, minWidth: listCollapsed ? 0 : 320 }}
+      className={`${listCollapsed && !isPhone ? '' : 'border-r border-white/5'} bg-bg-secondary/70 flex flex-col h-full overflow-hidden transition-all duration-300 ease-in-out`}
+      style={{
+        width: isPhone ? "100%" : (listCollapsed ? 0 : 384),
+        minWidth: isPhone ? "100%" : (listCollapsed ? 0 : 320),
+      }}
     >
       {/* Top bar with mark-all-read, search, close */}
-      <div className="flex items-center justify-end gap-2 relative z-20" style={{ height: 40, paddingLeft: sidebarCollapsed ? 78 : undefined, paddingRight: 16 }}>
-        {sidebarCollapsed && (
+      <div className="flex items-center justify-end gap-2 relative z-20" style={{ height: 40, paddingLeft: isPhone ? 16 : (sidebarCollapsed ? 78 : undefined), paddingRight: 16 }}>
+        {isPhone && (
+          <button
+            onClick={() => setPhonePane("sidebar")}
+            className="text-text-muted hover:text-text-primary transition-colors mr-auto"
+            title="Open sidebar"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        )}
+        {sidebarCollapsed && !isPhone && (
           <button
             onClick={() => useUiStore.getState().toggleSidebar()}
             className="text-text-muted hover:text-text-primary transition-colors mr-auto"

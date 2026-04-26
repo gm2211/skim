@@ -104,7 +104,7 @@ function stripFullArticleJunk(html: string): string {
 }
 
 export function ArticleDetail() {
-  const { selectedArticleId, setSelectedArticleId, listCollapsed, sidebarCollapsed, sidebarView } = useUiStore();
+  const { selectedArticleId, setSelectedArticleId, listCollapsed, sidebarCollapsed, sidebarView, isPhone, phoneBack } = useUiStore();
   const { data: article } = useArticle(selectedArticleId);
   const markRead = useMarkRead();
   const toggleStar = useToggleStar();
@@ -285,17 +285,21 @@ export function ArticleDetail() {
         className="flex items-center justify-between relative z-20 flex-shrink-0"
         style={{ height: 52, padding: "0 24px" }}
       >
-        {!(sidebarCollapsed && listCollapsed) && (
+        {(isPhone || !(sidebarCollapsed && listCollapsed)) && (
           <button
             onClick={() => {
+              if (isPhone) {
+                phoneBack();
+                return;
+              }
               setSelectedArticleId(null);
               const state = useUiStore.getState();
               if (state.listCollapsed) state.toggleList();
             }}
             className="text-text-muted hover:text-text-primary p-2 rounded-lg hover:bg-white/10 transition-colors"
-            title="Close"
+            title={isPhone ? "Back" : "Close"}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width={isPhone ? 22 : 16} height={isPhone ? 22 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
           </button>

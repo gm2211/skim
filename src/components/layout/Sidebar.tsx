@@ -11,7 +11,7 @@ import { CatchupDialog } from "../chat/CatchupDialog";
 export function Sidebar() {
   const [askOpen, setAskOpen] = useState(false);
   const [catchupOpen, setCatchupOpen] = useState(false);
-  const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed } =
+  const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone, phoneBack } =
     useUiStore();
   const { data: feeds } = useFeeds();
   const { data: triageStats } = useTriageStats();
@@ -50,17 +50,32 @@ export function Sidebar() {
 
   return (
     <div
-      className={`${sidebarCollapsed ? '' : 'border-r border-white/5'} bg-white/3 flex flex-col h-full select-none overflow-hidden transition-all duration-300 ease-in-out`}
-      style={{ width: sidebarCollapsed ? 0 : 320, minWidth: sidebarCollapsed ? 0 : 320 }}
+      className={`${sidebarCollapsed && !isPhone ? '' : 'border-r border-white/5'} bg-white/3 flex flex-col h-full select-none overflow-hidden transition-all duration-300 ease-in-out`}
+      style={{
+        width: isPhone ? "100%" : (sidebarCollapsed ? 0 : 320),
+        minWidth: isPhone ? "100%" : (sidebarCollapsed ? 0 : 320),
+      }}
     >
       {/* Top bar: action buttons right */}
       <div
-        className="flex items-center justify-end gap-3 relative z-20"
-        style={{ height: 40, paddingRight: 16 }}
+        className="flex items-center gap-3 relative z-20"
+        style={{ height: 40, paddingLeft: isPhone ? 16 : 0, paddingRight: 16 }}
       >
+        {isPhone && (
+          <button
+            onClick={phoneBack}
+            className="text-text-muted hover:text-text-primary transition-colors"
+            title="Back"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+        )}
+        <div className="flex-1" />
         <button
           onClick={() => useUiStore.getState().toggleSidebar()}
-          className="text-text-muted hover:text-text-primary transition-colors"
+          className={`text-text-muted hover:text-text-primary transition-colors ${isPhone ? "hidden" : ""}`}
           title="Collapse sidebar"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

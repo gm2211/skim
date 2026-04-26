@@ -9,7 +9,7 @@ import { triageArticles, refreshAllFeeds, importOpml } from "./services/commands
 import { useQueryClient } from "@tanstack/react-query";
 
 function App() {
-  const { showAddFeed, showSettings, selectedArticleId, listCollapsed } = useUiStore();
+  const { showAddFeed, showSettings, selectedArticleId, listCollapsed, isPhone, phonePane } = useUiStore();
   const qc = useQueryClient();
 
   // Auto-triage on startup
@@ -86,6 +86,48 @@ function App() {
     };
   }, [qc]);
 
+  // Phone-mode swipe-right-to-back gesture. Edge-initiated swipe
+  // (touchstart near the left edge) feels native and avoids stealing
+  // intra-pane horizontal scrolls.
+  useEffect(() => {
+    if (!isPhone) return;
+    let startX = 0;
+    let startY = 0;
+    let startedAtEdge = false;
+    let cancelled = false;
+    const EDGE_PX = 32;
+    const TRIGGER_PX = 60;
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      if (!t) return;
+      startX = t.clientX;
+      startY = t.clientY;
+      startedAtEdge = startX <= EDGE_PX;
+      cancelled = false;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!startedAtEdge || cancelled) return;
+      const t = e.touches[0];
+      if (!t) return;
+      const dx = t.clientX - startX;
+      const dy = Math.abs(t.clientY - startY);
+      if (dy > 40 && dy > Math.abs(dx)) {
+        cancelled = true;
+        return;
+      }
+      if (dx > TRIGGER_PX) {
+        cancelled = true;
+        useUiStore.getState().phoneBack();
+      }
+    };
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchmove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onStart);
+      window.removeEventListener("touchmove", onMove);
+    };
+  }, [isPhone]);
+
   // Disable default context menu
   useEffect(() => {
     const prevent = (e: MouseEvent) => e.preventDefault();
@@ -134,6 +176,20 @@ function App() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  if (isPhone) {
+    return (
+      <div className="flex flex-col h-full w-full overflow-hidden">
+        <div className="flex flex-1 min-h-0">
+          {phonePane === "sidebar" && <Sidebar />}
+          {phonePane === "list" && <ArticleList />}
+          {phonePane === "detail" && selectedArticleId && <ArticleDetail />}
+        </div>
+        {showAddFeed && <AddFeedDialog />}
+        {showSettings && <SettingsDialog />}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full w-full">

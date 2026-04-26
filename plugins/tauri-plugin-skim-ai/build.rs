@@ -17,12 +17,16 @@ fn main() {
     // APIs, so the swift-package compile fails unless the deployment target
     // is bumped. Force the floor here so the build is correct regardless of
     // how cargo was invoked (xcode preBuildScript, plain cargo build, etc.)
-    if std::env::var_os("IPHONEOS_DEPLOYMENT_TARGET").is_none() {
-        std::env::set_var("IPHONEOS_DEPLOYMENT_TARGET", "17.0");
-    }
-    if std::env::var_os("MACOSX_DEPLOYMENT_TARGET").is_none() {
-        std::env::set_var("MACOSX_DEPLOYMENT_TARGET", "14.0");
-    }
+    // Always set; don't trust whatever caller passed us — older defaults
+    // (iOS 13 / macOS 10.13) silently break the swift-jinja and MLX
+    // transitive compiles.
+    std::env::set_var("IPHONEOS_DEPLOYMENT_TARGET", "17.0");
+    std::env::set_var("MACOSX_DEPLOYMENT_TARGET", "14.0");
+    eprintln!(
+        "tauri-plugin-skim-ai build.rs: IPHONEOS_DEPLOYMENT_TARGET={:?} MACOSX_DEPLOYMENT_TARGET={:?}",
+        std::env::var("IPHONEOS_DEPLOYMENT_TARGET"),
+        std::env::var("MACOSX_DEPLOYMENT_TARGET"),
+    );
     println!("cargo:rerun-if-env-changed=IPHONEOS_DEPLOYMENT_TARGET");
     println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
 

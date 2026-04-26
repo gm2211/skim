@@ -12,6 +12,20 @@ const COMMANDS: &[&str] = &[
 ];
 
 fn main() {
+    // tauri-utils + swift-rs default to iOS 13 / macOS 10.13 when these env
+    // vars are unset. swift-jinja and MLXLMCommon use iOS 16+ / macOS 14+
+    // APIs, so the swift-package compile fails unless the deployment target
+    // is bumped. Force the floor here so the build is correct regardless of
+    // how cargo was invoked (xcode preBuildScript, plain cargo build, etc.)
+    if std::env::var_os("IPHONEOS_DEPLOYMENT_TARGET").is_none() {
+        std::env::set_var("IPHONEOS_DEPLOYMENT_TARGET", "17.0");
+    }
+    if std::env::var_os("MACOSX_DEPLOYMENT_TARGET").is_none() {
+        std::env::set_var("MACOSX_DEPLOYMENT_TARGET", "14.0");
+    }
+    println!("cargo:rerun-if-env-changed=IPHONEOS_DEPLOYMENT_TARGET");
+    println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
+
     tauri_plugin::Builder::new(COMMANDS)
         .ios_path("ios")
         .build();

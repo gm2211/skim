@@ -47,11 +47,10 @@ class SkimAIPlugin: Plugin {
 
     @objc public func mlxDownloadModel(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(RepoIdArgs.self)
-        let webview = self.webviewWindow
-        Task {
-            await MLXRunner.shared.setProgressSink { progress in
-                let payload: [String: Any] = ["repoId": args.repoId, "progress": progress]
-                try? webview?.emitJS(event: "skim-ai://mlx-download-progress", payload: payload)
+        Task { [weak self] in
+            await MLXRunner.shared.setProgressSink { [weak self] progress in
+                let payload: JSObject = ["repoId": args.repoId, "progress": progress]
+                self?.trigger("mlx-download-progress", data: payload)
             }
             await MLXRunner.shared.setModel(repoId: args.repoId)
             do {
@@ -128,11 +127,8 @@ class SkimAIPlugin: Plugin {
 
     @objc public func iosKeychainLoad(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(KeychainKeyArgs.self)
-        if let value = KeychainStore.get(args.key) {
-            invoke.resolve(value)
-        } else {
-            invoke.resolve(NSNull())
-        }
+        let value: String? = KeychainStore.get(args.key)
+        invoke.resolve(value)
     }
 
     @objc public func iosKeychainClear(_ invoke: Invoke) throws {

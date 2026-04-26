@@ -86,36 +86,6 @@ actor FoundationModelRunner {
         #endif
     }
 
-    /// Guided-generation triage path. Returns decoded `AIService.TriageItem`s
-    /// without string-JSON parsing. Available only on iOS 26+.
-    #if canImport(FoundationModels)
-    @available(iOS 26.0, macOS 15.1, *)
-    func triageStructured(
-        systemPrompt: String,
-        userPrompt: String
-    ) async throws -> [AIService.TriageItem] {
-        guard SystemLanguageModel.default.isAvailable else {
-            throw FMError.unavailable("Apple Intelligence is not enabled on this device")
-        }
-
-        ensureBackgroundObserver()
-
-        let session = self.session(for: systemPrompt)
-        let response = try await session.respond(
-            to: userPrompt,
-            generating: TriageResponse.self
-        )
-        let payload = Self.extractGenerable(from: response, as: TriageResponse.self)
-        return payload.triage.map { item in
-            AIService.TriageItem(
-                id: item.id,
-                priority: min(5, max(1, item.priority)),
-                reason: item.reason
-            )
-        }
-    }
-    #endif
-
     // MARK: - Session management
 
     #if canImport(FoundationModels)

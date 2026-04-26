@@ -245,6 +245,7 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
+#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
 fn open_browser(url: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let cmd = std::process::Command::new("open").arg(url).spawn();
@@ -256,4 +257,9 @@ fn open_browser(url: &str) -> Result<(), String> {
         .spawn();
 
     cmd.map(|_| ()).map_err(|e| format!("Failed to open browser: {}", e))
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+fn open_browser(_url: &str) -> Result<(), String> {
+    Err("open_browser unsupported on this platform".into())
 }

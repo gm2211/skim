@@ -2,7 +2,7 @@ name: skim
 options:
   bundleIdPrefix: com.skim.rss
   deploymentTarget:
-    iOS: 14.0
+    iOS: 17.0
 fileGroups: [../../src]
 configs:
   debug: debug
@@ -72,9 +72,12 @@ targets:
     dependencies:
       - framework: libapp.a
         embed: false
+      - sdk: Accelerate.framework
       - sdk: CoreGraphics.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework
+      - sdk: MetalPerformanceShaders.framework
+      - sdk: MetalPerformanceShadersGraph.framework
       - sdk: QuartzCore.framework
       - sdk: Security.framework
       - sdk: UIKit.framework

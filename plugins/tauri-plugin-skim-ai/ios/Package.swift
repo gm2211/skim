@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "tauri-plugin-skim-ai",
     platforms: [
-        .macOS(.v13),
+        .macOS(.v14),
         .iOS(.v17),
     ],
     products: [

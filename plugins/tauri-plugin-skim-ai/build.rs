@@ -15,4 +15,14 @@ fn main() {
     tauri_plugin::Builder::new(COMMANDS)
         .ios_path("ios")
         .build();
+
+    // MLX's CPU backend pulls in LAPACK SVD symbols (sgesdd/dgesdd) provided
+    // by Apple's Accelerate framework. Link it for the iOS plugin target.
+    let target = std::env::var("TARGET").unwrap_or_default();
+    if target.contains("apple-ios") || target.contains("apple-darwin") {
+        println!("cargo:rustc-link-lib=framework=Accelerate");
+        println!("cargo:rustc-link-lib=framework=Metal");
+        println!("cargo:rustc-link-lib=framework=MetalKit");
+        println!("cargo:rustc-link-lib=framework=Foundation");
+    }
 }

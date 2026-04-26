@@ -5,7 +5,7 @@ import { AddFeedDialog } from "./components/feed/AddFeedDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { useUiStore } from "./stores/uiStore";
 import { useEffect, useRef } from "react";
-import { triageArticles, refreshAllFeeds } from "./services/commands";
+import { triageArticles, refreshAllFeeds, importOpml } from "./services/commands";
 import { useQueryClient } from "@tanstack/react-query";
 
 function App() {
@@ -55,6 +55,36 @@ function App() {
     observer.observe(document.documentElement);
     return () => observer.disconnect();
   }, []);
+
+  // OPML drag-drop import (iPad split-view from Files, desktop drop)
+  useEffect(() => {
+    const onDragOver = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
+    };
+    const onDrop = async (e: DragEvent) => {
+      const files = e.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+      e.preventDefault();
+      for (const file of Array.from(files)) {
+        const name = file.name.toLowerCase();
+        if (!name.endsWith(".opml") && !name.endsWith(".xml")) continue;
+        try {
+          const xml = await file.text();
+          await importOpml(xml);
+          qc.invalidateQueries({ queryKey: ["feeds"] });
+          qc.invalidateQueries({ queryKey: ["articles"] });
+        } catch (err) {
+          console.error("OPML drop import failed", err);
+        }
+      }
+    };
+    window.addEventListener("dragover", onDragOver);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onDragOver);
+      window.removeEventListener("drop", onDrop);
+    };
+  }, [qc]);
 
   // Disable default context menu
   useEffect(() => {

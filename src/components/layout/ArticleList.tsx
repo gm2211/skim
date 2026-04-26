@@ -154,19 +154,17 @@ export function ArticleList() {
   const rawArticles = isInbox ? inboxArticles : isRecent ? recentArticles : regularArticles;
   const isLoading = isInbox ? inboxLoading : isRecent ? recentLoading : regularLoading;
 
-  // Sticky selection: keep articles the user has clicked visible in the list
-  // even after they get marked read and the unread-only query drops them on
-  // refetch. Without this, clicking an unread article makes it vanish
-  // immediately. Reset whenever the view or filter changes.
+  // Sticky-read retention: in unread-only views, once an article gets
+  // marked read it would normally drop out of the list on next refetch,
+  // making positions jump around while the user is still in the list.
+  // Instead, keep every article we've seen in this session-view pinned
+  // (styled as read) until the view/filter changes or the app reloads.
+  // stickyMapRef accumulates every article rendered under the current
+  // view/filter; reset on view/filter change.
   const stickyMapRef = useRef<Map<string, any>>(new Map());
-  const stickyIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     stickyMapRef.current = new Map();
-    stickyIdsRef.current = new Set();
   }, [sidebarView, listFilter]);
-  useEffect(() => {
-    if (selectedArticleId) stickyIdsRef.current.add(selectedArticleId);
-  }, [selectedArticleId]);
   if (rawArticles) {
     for (const a of rawArticles) stickyMapRef.current.set(a.id, a);
   }
@@ -175,11 +173,19 @@ export function ArticleList() {
     if (!rawArticles) return rawArticles;
     const have = new Set(rawArticles.map((a) => a.id));
     const injected: any[] = [];
-    for (const id of stickyIdsRef.current) {
-      if (!have.has(id)) {
-        const cached = stickyMapRef.current.get(id);
-        if (cached) injected.push(cached);
+    // Unread-only queries (listFilter==="unread", inbox, or hidden
+    // is_read:false) drop read articles on refetch. For every
+    // previously-seen article missing from rawArticles, inject the
+    // cached copy with is_read:true so it renders in read style but
+    // stays in position.
+    const unreadOnly = isInbox || listFilter === "unread";
+    if (unreadOnly) {
+      for (const [id, cached] of stickyMapRef.current) {
+        if (!have.has(id)) injected.push({ ...cached, is_read: true });
       }
+    } else if (selectedArticleId && !have.has(selectedArticleId)) {
+      const cached = stickyMapRef.current.get(selectedArticleId);
+      if (cached) injected.push(cached);
     }
     if (injected.length === 0) return rawArticles;
     const combined = [...(rawArticles as any[]), ...injected];
@@ -196,7 +202,7 @@ export function ArticleList() {
       );
     }
     return combined as typeof rawArticles;
-  }, [rawArticles, isInbox, selectedArticleId]);
+  }, [rawArticles, isInbox, listFilter, selectedArticleId]);
 
   const title = useMemo(() => {
     switch (sidebarView.type) {

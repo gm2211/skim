@@ -5,6 +5,8 @@
 //! This stub exists so command signatures that reference `SharedModelState`
 //! still compile on iOS without pulling in llama.cpp types.
 
+#![allow(dead_code)]
+
 use std::sync::Arc;
 use std::sync::atomic::AtomicI64;
 use tokio::sync::Mutex;

@@ -353,10 +353,17 @@ export function ArticleDetail() {
               <button
                 onClick={() => setShowSummarizeMenu(!showSummarizeMenu)}
                 disabled={summarize.isPending}
-                className="rounded-r-lg border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40"
-                style={{ padding: "6px 4px", fontSize: 12 }}
+                className="rounded-r-lg border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40 flex items-center justify-center"
+                style={{
+                  padding: isPhone ? "6px 10px" : "6px 4px",
+                  minWidth: isPhone ? 36 : undefined,
+                  minHeight: isPhone ? 32 : undefined,
+                  fontSize: 12,
+                }}
+                aria-label="Summary options"
+                title="Summary options"
               >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width={isPhone ? 14 : 10} height={isPhone ? 14 : 10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M6 9l6 6 6-6" />
                 </svg>
               </button>

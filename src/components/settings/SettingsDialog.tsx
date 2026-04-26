@@ -872,6 +872,18 @@ function OnDeviceTierSection({
   }, [selectedRepoId]);
 
   useEffect(() => {
+    // iOS plugin emits via window.dispatchEvent (CustomEvent) — listen to
+    // it directly. Desktop emits via Tauri's event bus, so subscribe to
+    // both and let whichever path fires drive the bar.
+    const onCustom = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { repoId?: string; percent?: number } | undefined;
+      if (!detail) return;
+      if (detail.repoId !== selectedRepoId) return;
+      const pct = (detail.percent ?? 0) * 100;
+      setProgress({ repoId: detail.repoId, downloaded: 0, total: 0, percent: pct });
+    };
+    window.addEventListener(MLX_DOWNLOAD_PROGRESS_EVENT, onCustom as EventListener);
+
     let unlisten: (() => void) | undefined;
     listen<MlxDownloadProgress>(MLX_DOWNLOAD_PROGRESS_EVENT, (e) => {
       if (e.payload.repoId === selectedRepoId) {
@@ -883,6 +895,7 @@ function OnDeviceTierSection({
       })
       .catch(() => {});
     return () => {
+      window.removeEventListener(MLX_DOWNLOAD_PROGRESS_EVENT, onCustom as EventListener);
       if (unlisten) unlisten();
     };
   }, [selectedRepoId]);

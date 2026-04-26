@@ -29,6 +29,25 @@ class KeychainKeyArgs: Decodable {
 
 class SkimAIPlugin: Plugin {
 
+    // The hosting WKWebView, captured from load(webview:). We dispatch a
+    // CustomEvent on `window` for download progress because the iOS Tauri
+    // plugin Plugin.trigger only routes to JS Channels (not the global
+    // event bus the Tauri JS `listen` uses).
+    private var hostWebView: WKWebView?
+
+    override func load(webview: WKWebView) {
+        self.hostWebView = webview
+    }
+
+    private func emitMlxProgress(repoId: String, progress: Double) {
+        guard let webview = hostWebView else { return }
+        let payload = "{ repoId: '\(repoId)', percent: \(progress) }"
+        let js = "window.dispatchEvent(new CustomEvent('skim-ai://mlx-download-progress', { detail: \(payload) }))"
+        DispatchQueue.main.async {
+            webview.evaluateJavaScript(js, completionHandler: nil)
+        }
+    }
+
     // MARK: - MLX
 
     @objc public func mlxIsAvailable(_ invoke: Invoke) throws {
@@ -49,8 +68,7 @@ class SkimAIPlugin: Plugin {
         let args = try invoke.parseArgs(RepoIdArgs.self)
         Task { [weak self] in
             await MLXRunner.shared.setProgressSink { [weak self] progress in
-                let payload: JSObject = ["repoId": args.repoId, "progress": progress]
-                self?.trigger("mlx-download-progress", data: payload)
+                self?.emitMlxProgress(repoId: args.repoId, progress: progress)
             }
             await MLXRunner.shared.setModel(repoId: args.repoId)
             do {

@@ -39,13 +39,18 @@ actor FoundationModelRunner {
 
     /// True only on iOS 26+ devices whose `SystemLanguageModel.default.isAvailable`
     /// reports true (i.e. Apple Intelligence is provisioned and enabled).
+    /// Always false on the simulator: Apple Intelligence does not run there.
     var isAvailable: Bool {
+        #if targetEnvironment(simulator)
+        return false
+        #else
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 15.1, *) {
             return SystemLanguageModel.default.isAvailable
         }
         #endif
         return false
+        #endif
     }
 
     // MARK: - Completion
@@ -59,6 +64,9 @@ actor FoundationModelRunner {
         jsonMode: Bool,
         maxTokens: Int
     ) async throws -> String {
+        #if targetEnvironment(simulator)
+        throw FMError.unavailable("Apple Intelligence is not available in the iOS Simulator. Use the MLX provider instead, or test on a real iPhone with Apple Intelligence enabled.")
+        #else
         #if canImport(FoundationModels)
         if #available(iOS 26.0, macOS 15.1, *) {
             guard SystemLanguageModel.default.isAvailable else {
@@ -83,6 +91,7 @@ actor FoundationModelRunner {
         }
         #else
         throw FMError.unavailable("FoundationModels framework not available in this build")
+        #endif
         #endif
     }
 

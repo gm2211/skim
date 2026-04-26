@@ -153,7 +153,7 @@ export const mlxIsAvailable = async (): Promise<boolean> => {
 
 export const mlxIsModelDownloaded = async (repoId: string): Promise<boolean> => {
   try {
-    return await invoke<boolean>("plugin:skim-ai|mlx_is_model_downloaded", { repoId });
+    return await invoke<boolean>("plugin:skim-ai|mlx_is_model_downloaded", { payload: { repoId } });
   } catch {
     return false;
   }
@@ -161,7 +161,7 @@ export const mlxIsModelDownloaded = async (repoId: string): Promise<boolean> => 
 
 export const mlxDownloadModel = async (repoId: string): Promise<void> => {
   try {
-    await invoke<void>("plugin:skim-ai|mlx_download_model", { repoId });
+    await invoke<void>("plugin:skim-ai|mlx_download_model", { payload: { repoId } });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("unregistered")) {
@@ -173,7 +173,7 @@ export const mlxDownloadModel = async (repoId: string): Promise<void> => {
 
 export const mlxDeleteModel = async (repoId: string): Promise<void> => {
   try {
-    await invoke<void>("plugin:skim-ai|mlx_delete_model", { repoId });
+    await invoke<void>("plugin:skim-ai|mlx_delete_model", { payload: { repoId } });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("unregistered")) {
@@ -193,7 +193,7 @@ export type SkimAiCompleteArgs = {
 
 export const mlxComplete = async (args: SkimAiCompleteArgs): Promise<string> => {
   try {
-    return await invoke<string>("plugin:skim-ai|mlx_complete", args);
+    return await invoke<string>("plugin:skim-ai|mlx_complete", { payload: args });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("unregistered")) {
@@ -213,7 +213,7 @@ export const fmIsAvailable = async (): Promise<boolean> => {
 
 export const fmComplete = async (args: SkimAiCompleteArgs): Promise<string> => {
   try {
-    return await invoke<string>("plugin:skim-ai|fm_complete", args);
+    return await invoke<string>("plugin:skim-ai|fm_complete", { payload: args });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("unregistered")) {

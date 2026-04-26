@@ -38,8 +38,16 @@ const AI_PROVIDERS = [
   { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
 ];
 
-const MLX_MODELS: { repoId: string; label: string; sizeGb: number }[] = [
-  { repoId: "mlx-community/Qwen2.5-3B-Instruct-4bit", label: "Qwen 2.5 3B (default)", sizeGb: 2.0 },
+type MlxModel = { repoId: string; label: string; sizeGb: number; phoneFriendly?: boolean };
+
+// Sorted ascending by size — smallest models first so phone users see the
+// recommended (small) options at the top of the dropdown.
+const MLX_MODELS: MlxModel[] = [
+  { repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (recommended for iPhone)", sizeGb: 0.7, phoneFriendly: true },
+  { repoId: "mlx-community/Qwen2.5-1.5B-Instruct-4bit", label: "Qwen 2.5 1.5B", sizeGb: 1.0, phoneFriendly: true },
+  { repoId: "mlx-community/Llama-3.2-1B-Instruct-4bit", label: "Llama 3.2 1B", sizeGb: 0.8, phoneFriendly: true },
+  { repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B", sizeGb: 2.4 },
+  { repoId: "mlx-community/Qwen2.5-3B-Instruct-4bit", label: "Qwen 2.5 3B (desktop default)", sizeGb: 2.0 },
   { repoId: "mlx-community/Llama-3.2-3B-Instruct-4bit", label: "Llama 3.2 3B", sizeGb: 2.0 },
   { repoId: "mlx-community/Phi-3.5-mini-instruct-4bit", label: "Phi-3.5 Mini", sizeGb: 2.3 },
 ];
@@ -833,9 +841,13 @@ function OnDeviceTierSection({
   const [progress, setProgress] = useState<MlxDownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const selectedRepoId = ai.model ?? MLX_MODELS[0].repoId;
+  const isPhone = useUiStore((s) => s.isPhone);
+  const defaultModel = isPhone
+    ? MLX_MODELS.find((m) => m.phoneFriendly) ?? MLX_MODELS[0]
+    : MLX_MODELS.find((m) => m.repoId === "mlx-community/Qwen2.5-3B-Instruct-4bit") ?? MLX_MODELS[0];
+  const selectedRepoId = ai.model ?? defaultModel.repoId;
   const selectedModel =
-    MLX_MODELS.find((m) => m.repoId === selectedRepoId) ?? MLX_MODELS[0];
+    MLX_MODELS.find((m) => m.repoId === selectedRepoId) ?? defaultModel;
 
   useEffect(() => {
     mlxIsAvailable().then(setAvailable).catch(() => setAvailable(false));
@@ -951,7 +963,7 @@ function OnDeviceTierSection({
           }}
           disabled={!available || busy}
         >
-          {MLX_MODELS.map((m) => (
+          {MLX_MODELS.filter((m) => !isPhone || m.phoneFriendly).map((m) => (
             <option key={m.repoId} value={m.repoId}>
               {m.label} — ~{m.sizeGb.toFixed(1)} GB
             </option>

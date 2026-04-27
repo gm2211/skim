@@ -259,7 +259,7 @@
 			);
 			sourceTree = "<group>";
 		};
-		"TEMP_C15E1E18-E7BB-4605-B312-559C2842FA3A" /* x86_64 */ = {
+		"TEMP_26A54F99-F820-4462-BDA5-EFC57186E41F" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -436,6 +436,7 @@
 				CODE_SIGN_ENTITLEMENTS = skim_iOS/skim_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_BITCODE = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -530,6 +531,7 @@
 				CODE_SIGN_ENTITLEMENTS = skim_iOS/skim_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_BITCODE = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",

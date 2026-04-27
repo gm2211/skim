@@ -415,7 +415,9 @@ export function ArticleList() {
             style={{
               background: "rgba(255, 255, 255, 0.05)",
               padding: "8px 12px 8px 34px",
-              fontSize: 13,
+              // iOS WKWebView auto-zooms inputs with font-size < 16px on
+              // focus. Use 16 on phone to suppress that zoom.
+              fontSize: isPhone ? 16 : 13,
             }}
           />
         </div>

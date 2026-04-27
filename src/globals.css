@@ -57,6 +57,15 @@ html, body, #root {
   background: var(--color-bg-primary);
 }
 
+/* iOS WKWebView auto-zooms inputs whose computed font-size is < 16px.
+   Force 16px on phone-class viewports for every text input so focusing
+   never triggers the zoom. */
+@media (max-width: 600px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 /* Ensure interactive elements sit above the drag region */
 button, a, input, select, textarea, [role="button"] {
   -webkit-app-region: no-drag;

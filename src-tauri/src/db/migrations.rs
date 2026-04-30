@@ -241,5 +241,17 @@ fn backfill_feed_icons(conn: &Connection) -> Result<(), rusqlite::Error> {
         }
     }
 
+    #[cfg(target_os = "ios")]
+    {
+        // Migrate desktop-only AI providers to claude-subscription on iOS.
+        for stale in ["claude-cli", "local", "ollama"] {
+            let pat = format!("\"provider\":\"{}\"", stale);
+            let _ = conn.execute(
+                "UPDATE settings SET value = replace(value, ?1, '\"provider\":\"claude-subscription\"') WHERE key='app_settings' AND value LIKE '%' || ?1 || '%'",
+                rusqlite::params![pat],
+            );
+        }
+    }
+
     Ok(())
 }

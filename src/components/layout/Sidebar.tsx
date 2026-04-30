@@ -11,7 +11,7 @@ import { CatchupDialog } from "../chat/CatchupDialog";
 export function Sidebar() {
   const [askOpen, setAskOpen] = useState(false);
   const [catchupOpen, setCatchupOpen] = useState(false);
-  const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone, phoneBack } =
+  const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone } =
     useUiStore();
   const { data: feeds } = useFeeds();
   const { data: triageStats } = useTriageStats();
@@ -61,19 +61,6 @@ export function Sidebar() {
         className="flex items-center gap-3 relative z-20"
         style={{ height: 40, paddingLeft: isPhone ? 16 : 0, paddingRight: 16 }}
       >
-        {isPhone && (
-          <button
-            onClick={phoneBack}
-            className="text-text-muted hover:text-text-primary transition-colors"
-            title="Close"
-            aria-label="Close sidebar"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        )}
         <div className="flex-1" />
         <button
           onClick={() => useUiStore.getState().toggleSidebar()}

@@ -23,10 +23,14 @@ pub struct SummaryGeneration(pub AtomicU64);
 pub fn default_model(provider: &str) -> String {
     match provider {
         "claude-cli" => "sonnet".to_string(),
-        "anthropic" => "claude-sonnet-4-5-20241022".to_string(),
+        "anthropic" | "claude-subscription" => "claude-sonnet-4-5".to_string(),
         "ollama" => "llama3".to_string(),
         _ => "gpt-4o-mini".to_string(),
     }
+}
+
+pub fn is_claude_model(model: &str) -> bool {
+    model.starts_with("claude-") || model == "sonnet" || model == "opus" || model == "haiku"
 }
 
 pub struct SummaryCache {
@@ -423,6 +427,16 @@ pub async fn summarize_article(
             }
             return Ok(summary);
         }
+    }
+
+    settings.ai.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+
+    // claude-subscription / anthropic only accept Claude models. Override
+    // any stale OpenAI model carried over from a previous provider.
+    if (settings.ai.provider == "claude-subscription" || settings.ai.provider == "anthropic")
+        && settings.ai.model.as_deref().map(|m| !is_claude_model(m)).unwrap_or(false)
+    {
+        settings.ai.model = None;
     }
 
     let provider = create_provider(

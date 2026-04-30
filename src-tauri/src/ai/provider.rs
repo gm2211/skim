@@ -457,10 +457,12 @@ impl AiProvider for ClaudeSubscriptionProvider {
 /// Provider that uses the Claude Code CLI to make API calls.
 /// This lets users with Claude Pro/Max subscriptions use their subscription
 /// for summarization without needing an API key.
+#[cfg(not(target_os = "ios"))]
 pub struct ClaudeCliProvider {
     api_key: Option<String>,
 }
 
+#[cfg(not(target_os = "ios"))]
 impl ClaudeCliProvider {
     pub fn new(api_key: Option<&str>) -> Result<Self, String> {
         // Verify claude CLI is available
@@ -481,6 +483,7 @@ impl ClaudeCliProvider {
     }
 }
 
+#[cfg(not(target_os = "ios"))]
 #[derive(Deserialize)]
 struct ClaudeCliResponse {
     result: Option<String>,
@@ -495,12 +498,14 @@ struct ClaudeCliResponse {
     usage: Option<ClaudeCliUsage>,
 }
 
+#[cfg(not(target_os = "ios"))]
 #[derive(Deserialize)]
 struct ClaudeCliUsage {
     input_tokens: Option<i64>,
     output_tokens: Option<i64>,
 }
 
+#[cfg(not(target_os = "ios"))]
 #[async_trait]
 impl AiProvider for ClaudeCliProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, String> {
@@ -711,23 +716,29 @@ pub fn create_provider(
             api_key,
             "openrouter",
         ))),
+        #[cfg(not(target_os = "ios"))]
         "ollama" => Ok(Box::new(OpenAiCompatibleProvider::new(
             endpoint.unwrap_or("http://localhost:11434"),
             None,
             "ollama",
         ))),
+        #[cfg(target_os = "ios")]
+        "ollama" => Err("Ollama is not available on iOS. Use Claude (subscription) or Anthropic API key instead.".to_string()),
         "anthropic" => {
-            let key = api_key.ok_or("Anthropic requires an API key")?;
+            let key = api_key.ok_or("[configure-ai] Anthropic API key not set.")?;
             Ok(Box::new(AnthropicProvider::new(key)))
         }
+        #[cfg(not(target_os = "ios"))]
         "claude-cli" => {
             Ok(Box::new(ClaudeCliProvider::new(api_key)?))
         }
+        #[cfg(target_os = "ios")]
+        "claude-cli" => Err("[configure-ai] Claude CLI is not available on iOS. Pick Claude (subscription) or Anthropic API key.".to_string()),
         "claude-subscription" => {
             let token = settings.oauth_access_token.clone()
-                .ok_or("Not signed in to Claude. Sign in from Settings.")?;
+                .ok_or("[configure-ai] Not signed in to Claude.")?;
             if token.is_empty() {
-                return Err("Not signed in to Claude. Sign in from Settings.".to_string());
+                return Err("[configure-ai] Not signed in to Claude.".to_string());
             }
             Ok(Box::new(ClaudeSubscriptionProvider::new(token)))
         }

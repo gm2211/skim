@@ -178,12 +178,28 @@ function App() {
   }, []);
 
   if (isPhone) {
+    const paneIndex = phonePane === "sidebar" ? 0 : phonePane === "list" ? 1 : 2;
     return (
       <div className="flex flex-col h-full w-full overflow-hidden">
-        <div className="flex flex-1 min-h-0">
-          {phonePane === "sidebar" && <Sidebar />}
-          {phonePane === "list" && <ArticleList />}
-          {phonePane === "detail" && selectedArticleId && <ArticleDetail />}
+        <div className="flex-1 min-h-0 relative overflow-hidden">
+          <div
+            className="flex h-full w-[300%]"
+            style={{
+              transform: `translateX(-${paneIndex * (100 / 3)}%)`,
+              transition: "transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)",
+              willChange: "transform",
+            }}
+          >
+            <div className="w-1/3 h-full flex-shrink-0 overflow-hidden flex" style={{ pointerEvents: paneIndex === 0 ? "auto" : "none" }} aria-hidden={paneIndex !== 0}>
+              <Sidebar />
+            </div>
+            <div className="w-1/3 h-full flex-shrink-0 overflow-hidden flex" style={{ pointerEvents: paneIndex === 1 ? "auto" : "none" }} aria-hidden={paneIndex !== 1}>
+              <ArticleList />
+            </div>
+            <div className="w-1/3 h-full flex-shrink-0 overflow-hidden flex" style={{ pointerEvents: paneIndex === 2 ? "auto" : "none" }} aria-hidden={paneIndex !== 2}>
+              {selectedArticleId ? <ArticleDetail /> : <div className="flex-1" />}
+            </div>
+          </div>
         </div>
         {showAddFeed && <AddFeedDialog />}
         {showSettings && <SettingsDialog />}

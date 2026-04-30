@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { chatWithArticle, webSearch } from "../../services/commands";
 import type { SearchResult, WebCitation } from "../../services/types";
+import { useUiStore } from "../../stores/uiStore";
+import { AIDisclaimer } from "../common/AIDisclaimer";
 
 interface ChatMessage {
   role: "user" | "assistant" | "search";
@@ -20,8 +22,12 @@ const DEFAULT_HEIGHT = 280;
 const MIN_HEIGHT = 140;
 
 export function ChatDrawer({ articleId }: Props) {
+  const isPhone = useUiStore((s) => s.isPhone);
   const [open, setOpen] = useState(false);
-  const [height, setHeight] = useState(DEFAULT_HEIGHT);
+  // Phone: cap to half of viewport so article remains visible above. Desktop: keep 280px.
+  const [height, setHeight] = useState(() =>
+    isPhone ? Math.min(DEFAULT_HEIGHT, Math.round(window.innerHeight * 0.5)) : DEFAULT_HEIGHT
+  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -188,7 +194,14 @@ export function ChatDrawer({ articleId }: Props) {
   }
 
   return (
-    <div className="flex-shrink-0 flex flex-col border-t border-white/10" style={{ height }}>
+    <div
+      className="flex-shrink-0 flex flex-col border-t border-white/10 min-w-0 overflow-hidden"
+      style={{
+        height,
+        // Phone: never exceed half of viewport so the article stays visible.
+        maxHeight: isPhone ? "50vh" : undefined,
+      }}
+    >
       {/* Resize handle */}
       <div
         className="flex-shrink-0 cursor-ns-resize flex items-center justify-center hover:bg-white/5 transition-colors"
@@ -235,7 +248,7 @@ export function ChatDrawer({ articleId }: Props) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto min-h-0" style={{ padding: "4px 16px" }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0" style={{ padding: "4px 16px" }}>
         {messages.length === 0 && (
           <div className="flex items-center gap-3 justify-center" style={{ paddingTop: 8 }}>
             {[
@@ -395,16 +408,16 @@ export function ChatDrawer({ articleId }: Props) {
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0" style={{ padding: "6px 16px 10px" }}>
-        <div className="flex items-end gap-2">
+      <div className="flex-shrink-0 min-w-0" style={{ padding: "6px 16px 8px" }}>
+        <div className="flex items-end gap-2 min-w-0">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about this article... (/search to web search)"
-            className="flex-1 border border-white/10 rounded-lg text-text-primary bg-white/5 placeholder-text-muted resize-none focus:outline-none focus:border-accent/40"
-            style={{ padding: "6px 10px", fontSize: 12, maxHeight: 80, lineHeight: 1.4 }}
+            placeholder="Ask about this article..."
+            className="flex-1 min-w-0 border border-white/10 rounded-lg text-text-primary bg-white/5 placeholder-text-muted resize-none focus:outline-none focus:border-accent/40"
+            style={{ padding: "6px 10px", fontSize: 12, maxHeight: 80, lineHeight: 1.4, width: 0 }}
             rows={1}
             disabled={loading}
           />
@@ -418,6 +431,9 @@ export function ChatDrawer({ articleId }: Props) {
               <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
             </svg>
           </button>
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <AIDisclaimer />
         </div>
       </div>
     </div>

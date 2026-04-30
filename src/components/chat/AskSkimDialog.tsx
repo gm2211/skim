@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { chatWithArticles, type ArticleChatResponse, type ChatSource } from "../../services/commands";
 import type { ChatMessageInput } from "../../services/types";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useUiStore } from "../../stores/uiStore";
+import { AIDisclaimer } from "../common/AIDisclaimer";
 
 type Scope = "inbox" | "unread" | "all";
 
@@ -17,6 +20,7 @@ interface Props {
 }
 
 export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
+  const isPhone = useUiStore((s) => s.isPhone);
   const [scope, setScope] = useState<Scope>("unread");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -26,8 +30,9 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    if (isPhone) return;
     inputRef.current?.focus();
-  }, []);
+  }, [isPhone]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -61,63 +66,58 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
     }
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+      className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 ${isPhone ? "" : "flex items-center justify-center"}`}
       onClick={onClose}
     >
       <div
-        className="border border-white/10 rounded-2xl shadow-2xl flex flex-col"
+        className={`${isPhone ? "fixed inset-0 overflow-hidden" : "border border-white/10 rounded-2xl shadow-2xl"} flex flex-col`}
         style={{
           background: "rgba(22, 27, 34, 0.98)",
-          width: "min(720px, 92vw)",
-          height: "min(720px, 85vh)",
-          margin: "0 20px",
+          width: isPhone ? undefined : "min(720px, 92vw)",
+          height: isPhone ? undefined : "min(720px, 85vh)",
+          margin: isPhone ? 0 : "0 20px",
+          paddingTop: isPhone ? 60 : 0,
+          paddingBottom: isPhone ? 24 : 0,
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div
-          className="flex items-center justify-between border-b border-white/5"
-          style={{ padding: "14px 18px" }}
+          className="flex items-center gap-2 border-b border-white/5 flex-nowrap"
+          style={{ padding: "12px 16px" }}
         >
-          <div className="flex items-center gap-2">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent">
-              <circle cx="11" cy="11" r="8" />
-              <path d="M21 21l-4.35-4.35" />
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent flex-shrink-0">
+            <circle cx="11" cy="11" r="8" />
+            <path d="M21 21l-4.35-4.35" />
+          </svg>
+          <h3 className="text-text-primary flex-shrink-0" style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" }}>
+            Ask Skim
+          </h3>
+          <select
+            value={scope}
+            onChange={(e) => setScope(e.target.value as Scope)}
+            className="border border-white/10 rounded-lg text-text-primary flex-1 min-w-0"
+            style={{ background: "rgba(255, 255, 255, 0.05)", padding: "5px 10px", fontSize: 12, width: 0, maxWidth: 200 }}
+          >
+            <option value="inbox">Inbox</option>
+            <option value="unread">Unread</option>
+            <option value="all">All</option>
+          </select>
+          <button
+            onClick={onClose}
+            className="text-text-muted hover:text-text-primary transition-colors flex-shrink-0"
+            title="Close (Esc)"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
             </svg>
-            <h3 className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>
-              Ask Skim
-            </h3>
-            <span className="text-text-muted" style={{ fontSize: 12 }}>
-              — search your feed
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={scope}
-              onChange={(e) => setScope(e.target.value as Scope)}
-              className="border border-white/10 rounded-lg text-text-primary"
-              style={{ background: "rgba(255, 255, 255, 0.05)", padding: "5px 10px", fontSize: 12 }}
-            >
-              <option value="inbox">Inbox (priority ≥ 3)</option>
-              <option value="unread">Unread</option>
-              <option value="all">All articles</option>
-            </select>
-            <button
-              onClick={onClose}
-              className="text-text-muted hover:text-text-primary transition-colors"
-              title="Close (Esc)"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+          </button>
         </div>
 
         {/* Messages */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto" style={{ padding: "18px" }}>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden min-w-0" style={{ padding: "18px" }}>
           {messages.length === 0 && !loading && (
             <div className="text-center text-text-muted" style={{ padding: "40px 20px" }}>
               <p style={{ fontSize: 13, marginBottom: 10 }}>
@@ -257,8 +257,8 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
         </div>
 
         {/* Input */}
-        <div className="border-t border-white/5" style={{ padding: "12px 16px" }}>
-          <div className="flex items-end gap-2">
+        <div className="border-t border-white/5 min-w-0" style={{ padding: "12px 16px 8px" }}>
+          <div className="flex items-center gap-2 min-w-0">
             <textarea
               ref={inputRef}
               value={input}
@@ -270,10 +270,10 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
                 }
                 if (e.key === "Escape") onClose();
               }}
-              placeholder="Ask about your articles… (Enter to send, Shift+Enter for newline)"
+              placeholder="Ask about your articles…"
               rows={2}
-              className="flex-1 border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors resize-none"
-              style={{ background: "rgba(255, 255, 255, 0.05)", padding: "10px 12px", fontSize: 13 }}
+              className="flex-1 min-w-0 border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors resize-none"
+              style={{ background: "rgba(255, 255, 255, 0.05)", padding: "10px 12px", fontSize: 13, width: 0 }}
             />
             <button
               onClick={send}
@@ -284,8 +284,12 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
               Send
             </button>
           </div>
+          <div style={{ marginTop: 8 }}>
+            <AIDisclaimer />
+          </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

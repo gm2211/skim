@@ -1,6 +1,6 @@
 name: skim
 options:
-  bundleIdPrefix: com.skim.rss
+  bundleIdPrefix: com.gm2211.skim
   deploymentTarget:
     iOS: 17.0
 fileGroups: [../../src]
@@ -11,7 +11,9 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: Skim
-      PRODUCT_BUNDLE_IDENTIFIER: com.skim.rss
+      PRODUCT_BUNDLE_IDENTIFIER: com.gm2211.skim
+      DEVELOPMENT_TEAM: 6KQV68SJ5P
+      CODE_SIGN_STYLE: Automatic
 targetTemplates:
   app:
     type: application
@@ -31,6 +33,7 @@ targets:
       - path: Sources
       - path: Assets.xcassets
       - path: Externals
+        buildPhase: none
       - path: skim_iOS
       - path: assets
         buildPhase: resources
@@ -52,7 +55,8 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         CFBundleShortVersionString: 0.1.0
-        CFBundleVersion: "0.1.0"
+        CFBundleVersion: "2"
+        ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: skim_iOS/skim_iOS.entitlements
     scheme:
@@ -63,6 +67,7 @@ targets:
       base:
         ENABLE_BITCODE: false
         ENABLE_USER_SCRIPT_SANDBOXING: false
+        TARGETED_DEVICE_FAMILY: "1"
         ARCHS: [arm64]
         VALID_ARCHS: arm64 
         LIBRARY_SEARCH_PATHS[arch=x86_64]: $(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(TOOLCHAIN_DIR)/usr/lib/swift/$(PLATFORM_NAME) $(TOOLCHAIN_DIR)/usr/lib/swift-5.0/$(PLATFORM_NAME)
@@ -84,7 +89,9 @@ targets:
       - sdk: UIKit.framework
       - sdk: WebKit.framework
     preBuildScripts:
-      - script: cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
+      - script: |
+          export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+          cargo tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths "${FRAMEWORK_SEARCH_PATHS:?}" --header-search-paths "${HEADER_SEARCH_PATHS:?}" --gcc-preprocessor-definitions "${GCC_PREPROCESSOR_DEFINITIONS:-}" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}
         name: Build Rust Code
         basedOnDependencyAnalysis: false
         outputFiles:

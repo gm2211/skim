@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useArticle, useMarkRead, useToggleStar, useToggleRead } from "../../hooks/useArticles";
 import { useSummarizeArticle } from "../../hooks/useAi";
 import { useSettings } from "../../hooks/useSettings";
@@ -8,6 +9,7 @@ import { ChatDrawer } from "../chat/ChatPanel";
 import { useReadingTimeTracker } from "../../hooks/useLearning";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { NumberInput } from "../ui/NumberInput";
+import { AIDisclaimer } from "../common/AIDisclaimer";
 
 type ViewMode = "rss" | "reader" | "web";
 
@@ -120,6 +122,10 @@ export function ArticleDetail() {
   const [perArticlePrompt, setPerArticlePrompt] = useState<string | undefined>();
   const [perArticleWordCount, setPerArticleWordCount] = useState<number | undefined>();
   const sumMenuRef = useRef<HTMLDivElement>(null);
+  const longPressTimer = useRef<number | null>(null);
+  const longPressFired = useRef(false);
+  const longPressStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeStart = useRef<{ x: number; y: number; edge: boolean } | null>(null);
   const [fullContent, setFullContent] = useState<string | null>(null);
   const [rawHtml, setRawHtml] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
@@ -280,6 +286,79 @@ export function ArticleDetail() {
     </button>
   );
 
+  const renderSummarizeMenuBody = () => (
+    <>
+      <div style={{ marginBottom: 8 }}>
+        <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Length</label>
+        <select
+          value={perArticleLength ?? settings?.ai.summary_length ?? "short"}
+          onChange={(e) => setPerArticleLength(e.target.value)}
+          className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
+          style={{ padding: "4px 8px", fontSize: 12 }}
+        >
+          <option value="short">Short (~30 words)</option>
+          <option value="medium">Medium (~150 words)</option>
+          <option value="long">Long (~300 words)</option>
+          <option value="custom">Custom...</option>
+        </select>
+        {(perArticleLength ?? settings?.ai.summary_length) === "custom" && (
+          <NumberInput
+            min={20}
+            max={1000}
+            placeholder="Word count"
+            value={perArticleWordCount ?? settings?.ai.summary_custom_word_count ?? null}
+            onChange={(n) => setPerArticleWordCount(n ?? undefined)}
+            className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
+            style={{ padding: "4px 8px", fontSize: 12, marginTop: 4 }}
+          />
+        )}
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Tone</label>
+        <select
+          value={perArticleTone ?? settings?.ai.summary_tone ?? "concise"}
+          onChange={(e) => setPerArticleTone(e.target.value)}
+          className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
+          style={{ padding: "4px 8px", fontSize: 12 }}
+        >
+          <option value="concise">Concise</option>
+          <option value="detailed">Detailed</option>
+          <option value="casual">Casual</option>
+          <option value="technical">Technical</option>
+        </select>
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Custom prompt</label>
+        <textarea
+          value={perArticlePrompt ?? settings?.ai.summary_custom_prompt ?? ""}
+          onChange={(e) => setPerArticlePrompt(e.target.value || undefined)}
+          placeholder="e.g. Focus on financial implications..."
+          className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5 placeholder-text-muted"
+          style={{ padding: "6px 8px", fontSize: 11, minHeight: 48, resize: "vertical" }}
+          rows={2}
+        />
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => doSummarize(false)}
+          className="flex-1 text-accent border border-accent/20 hover:bg-accent/10 rounded-lg transition-colors"
+          style={{ padding: "5px 0", fontSize: 11 }}
+        >
+          Summarize
+        </button>
+        {summarize.data && (
+          <button
+            onClick={() => doSummarize(true)}
+            className="flex-1 text-text-secondary border border-white/10 hover:bg-white/5 rounded-lg transition-colors"
+            style={{ padding: "5px 0", fontSize: 11 }}
+          >
+            Re-summarize
+          </button>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="flex-1 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
       {/* Toolbar */}
@@ -309,7 +388,7 @@ export function ArticleDetail() {
 
         <div
           className="flex items-center gap-2 min-w-0"
-          style={isPhone ? { gap: 6, overflowX: "auto", flex: "1 1 auto" } : undefined}
+          style={isPhone ? { gap: 6, flex: "1 1 auto", flexWrap: "nowrap" } : undefined}
         >
           {article.url && (
             <>
@@ -334,11 +413,42 @@ export function ArticleDetail() {
           <div className="relative" ref={sumMenuRef}>
             <div className="flex">
               <button
-                onClick={() => doSummarize(false)}
+                onClick={() => {
+                  if (longPressFired.current) { longPressFired.current = false; return; }
+                  doSummarize(false);
+                }}
+                onPointerDown={isPhone ? (e) => {
+                  if (e.pointerType !== "touch") return;
+                  longPressFired.current = false;
+                  longPressStart.current = { x: e.clientX, y: e.clientY };
+                  if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
+                  longPressTimer.current = window.setTimeout(() => {
+                    longPressFired.current = true;
+                    setShowSummarizeMenu(true);
+                    if (navigator.vibrate) navigator.vibrate(8);
+                  }, 450);
+                } : undefined}
+                onPointerUp={isPhone ? () => {
+                  if (longPressTimer.current) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+                  longPressStart.current = null;
+                } : undefined}
+                onPointerMove={isPhone ? (e) => {
+                  if (!longPressStart.current || !longPressTimer.current) return;
+                  const dx = e.clientX - longPressStart.current.x;
+                  const dy = e.clientY - longPressStart.current.y;
+                  if (Math.hypot(dx, dy) > 10) {
+                    window.clearTimeout(longPressTimer.current);
+                    longPressTimer.current = null;
+                  }
+                } : undefined}
+                onPointerLeave={isPhone ? () => {
+                  if (longPressTimer.current) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+                } : undefined}
+                onContextMenu={isPhone ? (e) => e.preventDefault() : undefined}
                 disabled={summarize.isPending}
-                className="rounded-l-lg border border-r-0 border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40"
-                style={{ padding: isPhone ? "6px 8px" : "6px 12px", fontSize: 12 }}
-                title="Summarize"
+                className={`${isPhone ? "rounded-lg" : "rounded-l-lg border-r-0"} border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40`}
+                style={{ padding: isPhone ? "6px 10px" : "6px 12px", fontSize: 12, minHeight: isPhone ? 32 : undefined, touchAction: "manipulation", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
+                title={isPhone ? "Tap: summarize • Long press: options" : "Summarize"}
                 aria-label="Summarize"
               >
                 {summarize.isPending ? "..." : (isPhone ? (
@@ -350,99 +460,42 @@ export function ArticleDetail() {
                   </svg>
                 ) : "Summarize")}
               </button>
-              <button
-                onClick={() => setShowSummarizeMenu(!showSummarizeMenu)}
-                disabled={summarize.isPending}
-                className="rounded-r-lg border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40 flex items-center justify-center"
-                style={{
-                  padding: isPhone ? "6px 10px" : "6px 4px",
-                  minWidth: isPhone ? 36 : undefined,
-                  minHeight: isPhone ? 32 : undefined,
-                  fontSize: 12,
-                }}
-                aria-label="Summary options"
-                title="Summary options"
-              >
-                <svg width={isPhone ? 14 : 10} height={isPhone ? 14 : 10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M6 9l6 6 6-6" />
-                </svg>
-              </button>
+              {!isPhone && (
+                <button
+                  onClick={() => setShowSummarizeMenu(!showSummarizeMenu)}
+                  disabled={summarize.isPending}
+                  className="rounded-r-lg border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40 flex items-center justify-center"
+                  style={{ padding: "6px 4px", fontSize: 12 }}
+                  aria-label="Summary options"
+                  title="Summary options"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M6 9l6 6 6-6" />
+                  </svg>
+                </button>
+              )}
             </div>
 
             {showSummarizeMenu && (
-              <div
-                className="absolute right-0 top-full mt-1 border border-white/10 rounded-xl shadow-xl z-50"
-                style={{ background: "rgba(22, 27, 34, 0.95)", backdropFilter: "blur(12px)", padding: "12px", width: 260 }}
-              >
-                <div style={{ marginBottom: 8 }}>
-                  <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Length</label>
-                  <select
-                    value={perArticleLength ?? settings?.ai.summary_length ?? "short"}
-                    onChange={(e) => setPerArticleLength(e.target.value)}
-                    className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
-                    style={{ padding: "4px 8px", fontSize: 12 }}
+              isPhone ? createPortal(
+                <div className="fixed inset-0 z-50" onClick={() => setShowSummarizeMenu(false)}>
+                  <div
+                    className="absolute left-1/2 -translate-x-1/2 border border-white/10 rounded-xl shadow-xl"
+                    style={{ background: "rgba(22, 27, 34, 0.95)", backdropFilter: "blur(12px)", padding: "12px", width: "min(320px, calc(100vw - 24px))", top: "calc(env(safe-area-inset-top, 0px) + 70px)" }}
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <option value="short">Short (~30 words)</option>
-                    <option value="medium">Medium (~150 words)</option>
-                    <option value="long">Long (~300 words)</option>
-                    <option value="custom">Custom...</option>
-                  </select>
-                  {(perArticleLength ?? settings?.ai.summary_length) === "custom" && (
-                    <NumberInput
-                      min={20}
-                      max={1000}
-                      placeholder="Word count"
-                      value={perArticleWordCount ?? settings?.ai.summary_custom_word_count ?? null}
-                      onChange={(n) => setPerArticleWordCount(n ?? undefined)}
-                      className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
-                      style={{ padding: "4px 8px", fontSize: 12, marginTop: 4 }}
-                    />
-                  )}
+                    {renderSummarizeMenuBody()}
+                  </div>
+                </div>,
+                document.body
+              ) : (
+                <div
+                  className="absolute right-0 top-full mt-1 border border-white/10 rounded-xl shadow-xl z-50"
+                  style={{ background: "rgba(22, 27, 34, 0.95)", backdropFilter: "blur(12px)", padding: "12px", width: 260 }}
+                >
+                  {renderSummarizeMenuBody()}
                 </div>
-                <div style={{ marginBottom: 8 }}>
-                  <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Tone</label>
-                  <select
-                    value={perArticleTone ?? settings?.ai.summary_tone ?? "concise"}
-                    onChange={(e) => setPerArticleTone(e.target.value)}
-                    className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
-                    style={{ padding: "4px 8px", fontSize: 12 }}
-                  >
-                    <option value="concise">Concise</option>
-                    <option value="detailed">Detailed</option>
-                    <option value="casual">Casual</option>
-                    <option value="technical">Technical</option>
-                  </select>
-                </div>
-                <div style={{ marginBottom: 10 }}>
-                  <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Custom prompt</label>
-                  <textarea
-                    value={perArticlePrompt ?? settings?.ai.summary_custom_prompt ?? ""}
-                    onChange={(e) => setPerArticlePrompt(e.target.value || undefined)}
-                    placeholder="e.g. Focus on financial implications..."
-                    className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5 placeholder-text-muted"
-                    style={{ padding: "6px 8px", fontSize: 11, minHeight: 48, resize: "vertical" }}
-                    rows={2}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => doSummarize(false)}
-                    className="flex-1 text-accent border border-accent/20 hover:bg-accent/10 rounded-lg transition-colors"
-                    style={{ padding: "5px 0", fontSize: 11 }}
-                  >
-                    Summarize
-                  </button>
-                  {summarize.data && (
-                    <button
-                      onClick={() => doSummarize(true)}
-                      className="flex-1 text-text-secondary border border-white/10 hover:bg-white/5 rounded-lg transition-colors"
-                      style={{ padding: "5px 0", fontSize: 11 }}
-                    >
-                      Re-summarize
-                    </button>
-                  )}
-                </div>
-              </div>
+              )
             )}
           </div>
 
@@ -510,42 +563,65 @@ export function ArticleDetail() {
 
       {summarize.data && (
         <div className="flex-shrink-0" style={{ maxWidth: 720, margin: "0 auto", padding: "0 40px 8px", width: "100%", maxHeight: "40vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          <div className="rounded-xl border border-white/10" style={{ padding: "16px 20px", background: "rgba(255,255,255,0.03)", position: "relative", overflowY: "auto" }}>
-            <button
-              onClick={() => summarize.reset()}
-              className="text-text-muted hover:text-text-primary transition-colors"
-              style={{ position: "absolute", top: 12, right: 12, padding: 4, lineHeight: 0 }}
-              title="Dismiss summary"
+          <div className="rounded-xl border border-white/10" style={{ background: "rgba(255,255,255,0.03)", overflowY: "auto", display: "flex", flexDirection: "column", minHeight: 0 }}>
+            <div
+              className="flex items-center justify-between"
+              style={{
+                position: "sticky",
+                top: 0,
+                background: "rgba(28, 33, 40, 0.96)",
+                backdropFilter: "blur(8px)",
+                padding: "10px 16px",
+                borderBottom: "1px solid rgba(255,255,255,0.06)",
+                zIndex: 1,
+              }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-            <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11, marginBottom: 8 }}>AI Summary</div>
-            {summarize.data.bullet_summary && (
-              <div className="text-text-primary whitespace-pre-wrap" style={{ fontSize: 14, marginBottom: 10, lineHeight: 1.6 }}>{summarize.data.bullet_summary}</div>
-            )}
-            {summarize.data.full_summary && (
-              <div
-                className="text-text-primary leading-relaxed prose prose-invert prose-sm max-w-none"
-                style={{ fontSize: 14, opacity: 0.85 }}
-                dangerouslySetInnerHTML={{
-                  __html: summarize.data.full_summary
-                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                    .replace(/\n\n/g, '</p><p style="margin-top:12px">')
-                    .replace(/^/, '<p>').replace(/$/, '</p>')
-                }}
-              />
-            )}
+              <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11 }}>AI Summary</div>
+              <button
+                onClick={() => summarize.reset()}
+                className="text-text-muted hover:text-text-primary transition-colors"
+                style={{ padding: 4, lineHeight: 0 }}
+                title="Dismiss summary"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div style={{ padding: "12px 16px 16px" }}>
+              {summarize.data.bullet_summary && (
+                <div className="text-text-primary whitespace-pre-wrap" style={{ fontSize: 14, marginBottom: 10, lineHeight: 1.6 }}>{summarize.data.bullet_summary}</div>
+              )}
+              {summarize.data.full_summary && (
+                <div
+                  className="text-text-primary leading-relaxed prose prose-invert prose-sm max-w-none"
+                  style={{ fontSize: 14, opacity: 0.85 }}
+                  dangerouslySetInnerHTML={{
+                    __html: summarize.data.full_summary
+                      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                      .replace(/\n\n/g, '</p><p style="margin-top:12px">')
+                      .replace(/^/, '<p>').replace(/$/, '</p>')
+                  }}
+                />
+              )}
+              <div style={{ marginTop: 12 }}>
+                <AIDisclaimer />
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {summarize.isError && (() => {
         const msg = String(summarize.error instanceof Error ? summarize.error.message : summarize.error);
-        const isConfigError = msg.toLowerCase().includes("no ai provider configured") || msg.toLowerCase().includes("no local model selected") || msg.toLowerCase().includes("go to settings");
-        const isModelLoadError = msg.toLowerCase().includes("failed to load model") || msg.toLowerCase().includes("null result from llama");
+        const lower = msg.toLowerCase();
+        const isConfigError = msg.includes("[configure-ai]") || lower.includes("no ai provider configured") || lower.includes("no local model selected") || lower.includes("go to settings");
+        const isModelLoadError = lower.includes("failed to load model") || lower.includes("null result from llama");
+        const isNotSignedIn = lower.includes("not signed in to claude");
+        const isUnknownModel = lower.includes("not_found_error") && lower.includes("model:");
+        const modelMatch = isUnknownModel ? msg.match(/"model:\s*([^"}\s]+)"?/i) : null;
+        const badModel = modelMatch ? modelMatch[1] : null;
         return (
           <div className="flex-shrink-0" style={{ maxWidth: 720, margin: "0 auto", padding: "0 40px 8px", width: "100%" }}>
             {isConfigError ? (
@@ -560,6 +636,27 @@ export function ArticleDetail() {
                 <span className="text-text-secondary">It may be corrupted or too large for your system. </span>
                 <button onClick={() => useUiStore.getState().setShowSettings(true)} className="text-accent hover:underline">Try a different model</button>
               </div>
+            ) : isNotSignedIn ? (
+              <div className="rounded-xl border border-warning/30" style={{ padding: "12px 16px", fontSize: 14, background: "rgba(255, 170, 50, 0.08)" }}>
+                <span className="text-warning font-medium">Not signed in to Claude. </span>
+                <button onClick={() => useUiStore.getState().setShowSettings(true)} className="text-accent hover:underline">Sign in</button>
+              </div>
+            ) : isUnknownModel ? (
+              <div className="rounded-xl border border-warning/30" style={{ padding: "12px 16px", fontSize: 14, background: "rgba(255, 170, 50, 0.08)", lineHeight: 1.5 }}>
+                <div className="text-warning font-medium" style={{ marginBottom: 4 }}>
+                  Model not found{badModel ? `: ${badModel}` : ""}
+                </div>
+                <div className="text-text-secondary">
+                  Anthropic's model IDs change over time. Find the current ID at{" "}
+                  <a href="https://docs.anthropic.com/en/docs/about-claude/models" target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                    docs.anthropic.com/models
+                  </a>{" "}
+                  (or use a family alias like <code className="text-accent">claude-sonnet-4-5</code>), then{" "}
+                  <button onClick={() => useUiStore.getState().setShowSettings(true)} className="text-accent hover:underline">
+                    paste it into Settings → AI Provider → Model
+                  </button>.
+                </div>
+              </div>
             ) : (
               <div className="rounded-xl border border-danger/30 text-danger" style={{ padding: "12px 16px", fontSize: 14, background: "rgba(248, 81, 73, 0.1)" }}>
                 {msg}
@@ -570,7 +667,32 @@ export function ArticleDetail() {
       })()}
 
       {/* Sliding panels */}
-      <div className="slide-container">
+      <div
+        className="slide-container"
+        onTouchStart={isPhone ? (e) => {
+          const t = e.touches[0];
+          if (!t) return;
+          swipeStart.current = { x: t.clientX, y: t.clientY, edge: t.clientX <= 32 };
+        } : undefined}
+        onTouchEnd={isPhone ? (e) => {
+          const s = swipeStart.current;
+          if (!s) return;
+          swipeStart.current = null;
+          if (s.edge) return;
+          const t = e.changedTouches[0];
+          if (!t) return;
+          const dx = t.clientX - s.x;
+          const dy = Math.abs(t.clientY - s.y);
+          if (Math.abs(dx) < 50 || dy > Math.abs(dx)) return;
+          if (dx < 0) {
+            const i = modes.indexOf(viewMode);
+            if (i < 2) { fetchFull(); setViewMode(modes[i + 1]); }
+          } else {
+            const i = modes.indexOf(viewMode);
+            if (i > 0) setViewMode(modes[i - 1]);
+          }
+        } : undefined}
+      >
         <div
           className="slide-track"
           style={{ transform: `translateX(-${slideIndex * 100}%)` }}
@@ -625,14 +747,14 @@ export function ArticleDetail() {
             {article.url && (
               <button
                 onClick={() => { if (article.url) openUrl(article.url); }}
-                className="absolute bg-white/10 hover:bg-white/20 text-text-primary backdrop-blur-md rounded-lg transition-colors flex items-center gap-1.5 z-10"
-                style={{ top: 12, right: 12, padding: "6px 10px", fontSize: 12 }}
+                className="absolute bg-bg-secondary/90 hover:bg-bg-secondary border border-white/15 text-text-primary backdrop-blur-md rounded-full shadow-lg transition-colors flex items-center justify-center z-10"
+                style={{ bottom: 16, right: 16, width: 40, height: 40 }}
                 title="Open original in external browser"
+                aria-label="Open in browser"
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
                 </svg>
-                Open in browser
               </button>
             )}
             {!rawHtml && !loadingFull && fullError && (

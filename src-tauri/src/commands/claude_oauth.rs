@@ -24,6 +24,7 @@ pub async fn claude_oauth_sign_in_loopback(db: State<'_, Database>) -> Result<()
 }
 
 #[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PasteFlowStart {
     pub authorize_url: String,
 }

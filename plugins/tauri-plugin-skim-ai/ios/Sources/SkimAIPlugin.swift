@@ -51,9 +51,14 @@ class SkimAIPlugin: Plugin {
     // MARK: - MLX
 
     @objc public func mlxIsAvailable(_ invoke: Invoke) throws {
-        // MLX runs wherever Metal is available — all modern iOS/macOS.
-        // Concrete readiness depends on model download, checked separately.
+        // MLX needs Metal GPU. iOS Simulator's Metal stack lacks the MPS
+        // operations MLX requires — running the model crashes the process.
+        // Gate it off so the UI surfaces the limitation instead.
+        #if targetEnvironment(simulator)
+        invoke.resolve(false)
+        #else
         invoke.resolve(true)
+        #endif
     }
 
     @objc public func mlxIsModelDownloaded(_ invoke: Invoke) throws {
@@ -65,6 +70,10 @@ class SkimAIPlugin: Plugin {
     }
 
     @objc public func mlxDownloadModel(_ invoke: Invoke) throws {
+        #if targetEnvironment(simulator)
+        invoke.reject("MLX is not available in the iOS Simulator (Metal backend unsupported). Run on a real iPhone with iOS 17+.")
+        return
+        #else
         let args = try invoke.parseArgs(RepoIdArgs.self)
         Task { [weak self] in
             await MLXRunner.shared.setProgressSink { [weak self] progress in
@@ -78,6 +87,7 @@ class SkimAIPlugin: Plugin {
                 invoke.reject("MLX download failed: \(error.localizedDescription)")
             }
         }
+        #endif
     }
 
     @objc public func mlxDeleteModel(_ invoke: Invoke) throws {
@@ -93,6 +103,10 @@ class SkimAIPlugin: Plugin {
     }
 
     @objc public func mlxComplete(_ invoke: Invoke) throws {
+        #if targetEnvironment(simulator)
+        invoke.reject("MLX is not available in the iOS Simulator. Run on a real iPhone with iOS 17+.")
+        return
+        #else
         let args = try invoke.parseArgs(CompleteArgs.self)
         Task {
             do {
@@ -107,6 +121,7 @@ class SkimAIPlugin: Plugin {
                 invoke.reject("MLX complete failed: \(error.localizedDescription)")
             }
         }
+        #endif
     }
 
     // MARK: - Foundation Models

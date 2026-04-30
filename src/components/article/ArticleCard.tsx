@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useSettings } from "../../hooks/useSettings";
 import type { Article } from "../../services/types";
 
@@ -56,17 +56,59 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
   const imageUrl = useMemo(() => extractImageUrl(article.content_html), [article.content_html]);
   const { data: settings } = useSettings();
   const showExcerpt = settings?.appearance?.show_excerpt_in_list ?? false;
+  const longPressTimer = useRef<number | null>(null);
+  const longPressFired = useRef(false);
+  const longPressStart = useRef<{ x: number; y: number } | null>(null);
 
   return (
     <div
-      onClick={onSelect}
+      onClick={(e) => {
+        if (longPressFired.current) {
+          longPressFired.current = false;
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        onSelect();
+      }}
       onContextMenu={onContextMenu}
+      onPointerDown={onContextMenu ? (e) => {
+        if (e.pointerType !== "touch") return;
+        longPressFired.current = false;
+        longPressStart.current = { x: e.clientX, y: e.clientY };
+        if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
+        longPressTimer.current = window.setTimeout(() => {
+          longPressFired.current = true;
+          if (navigator.vibrate) navigator.vibrate(8);
+          onContextMenu({
+            preventDefault: () => {},
+            stopPropagation: () => {},
+            clientX: longPressStart.current?.x ?? 0,
+            clientY: longPressStart.current?.y ?? 0,
+          } as unknown as React.MouseEvent);
+        }, 450);
+      } : undefined}
+      onPointerMove={onContextMenu ? (e) => {
+        if (!longPressTimer.current || !longPressStart.current) return;
+        const dx = Math.abs(e.clientX - longPressStart.current.x);
+        const dy = Math.abs(e.clientY - longPressStart.current.y);
+        if (dx > 10 || dy > 10) {
+          window.clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+        }
+      } : undefined}
+      onPointerUp={onContextMenu ? () => {
+        if (longPressTimer.current) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+      } : undefined}
+      onPointerCancel={onContextMenu ? () => {
+        if (longPressTimer.current) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+      } : undefined}
       className={`cursor-pointer transition-colors border-b border-white/5 select-none relative ${
         isSelected
           ? "bg-accent/15"
           : "hover:bg-white/5"
       }`}
-      style={{ padding: "14px 20px" }}
+      style={{ padding: "14px 20px", touchAction: "manipulation", WebkitTouchCallout: "none", WebkitUserSelect: "none" }}
     >
       {isSelected && (
         <div

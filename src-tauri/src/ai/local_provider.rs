@@ -369,7 +369,7 @@ mod tests {
     fn find_qwen_model() -> Option<PathBuf> {
         let home = std::env::var("HOME").ok()?;
         let models_dir = PathBuf::from(&home)
-            .join("Library/Application Support/com.skim.rss/models");
+            .join("Library/Application Support/com.gm2211.skim/models");
         if models_dir.exists() {
             if let Some(p) = find_gguf_matching(&models_dir, "qwen") {
                 return Some(p);

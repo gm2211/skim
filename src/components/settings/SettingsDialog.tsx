@@ -23,6 +23,7 @@ import {
 } from "../../services/commands";
 import { ModelBrowser } from "./ModelBrowser";
 import { NumberInput } from "../ui/NumberInput";
+import { AIDisclaimer } from "../common/AIDisclaimer";
 
 const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
@@ -225,9 +226,13 @@ export function SettingsDialog() {
           <div className="flex-1 overflow-y-auto" style={{ padding: isPhone ? "16px 16px 24px" : "24px 28px" }}>
             {activeTab === "ai" && (
               <>
-                <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
+                <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
                   AI Provider
                 </h3>
+
+                <div style={{ marginBottom: 18 }}>
+                  <AIDisclaimer variant="block" />
+                </div>
 
                 <InputField label="Provider">
                   <select
@@ -319,7 +324,9 @@ export function SettingsDialog() {
                 )}
 
                 {local.ai.provider === "claude-subscription" && (
-                  <ClaudeOAuthSection />
+                  <div style={{ marginBottom: 20 }}>
+                    <ClaudeOAuthSection />
+                  </div>
                 )}
 
                 {needsEndpoint(local.ai.provider) && (
@@ -682,6 +689,7 @@ function ClaudeOAuthSection() {
   const [error, setError] = useState<string | null>(null);
   const [pasteCode, setPasteCode] = useState("");
   const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
+  const isPhone = useUiStore((s) => s.isPhone);
 
   useEffect(() => {
     claudeOauthStatus().then(setSignedIn).catch(() => setSignedIn(false));
@@ -706,7 +714,12 @@ function ClaudeOAuthSection() {
     try {
       const r = await claudeOauthBeginPaste();
       setAuthorizeUrl(r.authorizeUrl);
-      window.open(r.authorizeUrl, "_blank");
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      try {
+        await openUrl(r.authorizeUrl);
+      } catch {
+        window.open(r.authorizeUrl, "_blank");
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -769,16 +782,18 @@ function ClaudeOAuthSection() {
       <p className="text-text-muted" style={{ marginBottom: 8 }}>
         Uses your Claude.ai Pro or Max account via OAuth. No API key required.
       </p>
-      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={signInLoopback}
-          className="rounded border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
-          style={{ padding: "4px 10px", fontSize: 12 }}
-        >
-          {busy ? "Signing in…" : "Sign in (desktop)"}
-        </button>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+        {!isPhone && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={signInLoopback}
+            className="rounded border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
+            style={{ padding: "4px 10px", fontSize: 12 }}
+          >
+            {busy ? "Signing in…" : "Sign in (desktop)"}
+          </button>
+        )}
         <button
           type="button"
           disabled={busy}
@@ -786,7 +801,7 @@ function ClaudeOAuthSection() {
           className="rounded border border-accent/50 text-accent hover:bg-accent/10 disabled:opacity-40"
           style={{ padding: "4px 10px", fontSize: 12 }}
         >
-          Sign in (copy-paste)
+          {isPhone ? (busy ? "Signing in…" : "Sign in") : "Sign in (copy-paste)"}
         </button>
       </div>
       {authorizeUrl && (
@@ -934,7 +949,7 @@ function OnDeviceTierSection({
       ? "Checking availability…"
       : available
         ? "On-device MLX runtime detected"
-        : "Not available on this device/OS";
+        : "Not available — MLX needs a real iPhone (Metal GPU). For the iOS Simulator, pick a cloud provider above (OpenAI / Claude / OpenRouter).";
 
   return (
     <div

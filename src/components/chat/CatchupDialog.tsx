@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { generateCatchupReport, type CatchupReport, type ChatSource } from "../../services/commands";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useUiStore } from "../../stores/uiStore";
 import { AIDisclaimer } from "../common/AIDisclaimer";
+import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
+import { useVisualViewportSync } from "../../hooks/useVisualViewport";
 
 interface Props {
   onClose: () => void;
@@ -18,6 +20,9 @@ const catchupCache = new Map<string, CacheEntry>();
 
 export function CatchupDialog({ onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
+  useLockBodyScroll(isPhone);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useVisualViewportSync(dialogRef, isPhone);
   // Catch-up over all unread — inbox would filter to priority>=3 and miss
   // whatever the triage hasn't rated yet.
   const [scope, setScope] = useState<"inbox" | "unread">("unread");
@@ -149,19 +154,22 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
 
   return createPortal(
     <div
-      className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 ${isPhone ? "" : "flex items-center justify-center"}`}
+      className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 dialog-fade-in ${isPhone ? "" : "flex items-center justify-center"}`}
       onClick={onClose}
     >
       <div
-        className={`${isPhone ? "fixed inset-0 overflow-hidden" : "border border-white/10 rounded-2xl shadow-2xl"} flex flex-col`}
+        ref={dialogRef}
+        className={`${isPhone ? "fixed left-0 right-0 overflow-hidden" : "border border-white/10 rounded-2xl shadow-2xl"} flex flex-col`}
         style={{
           background: "rgba(22, 27, 34, 0.98)",
           width: isPhone ? undefined : "min(760px, 92vw)",
-          height: isPhone ? undefined : undefined,
+          height: isPhone ? "100dvh" : undefined,
+          top: isPhone ? 0 : undefined,
+          willChange: isPhone ? "transform, height" : undefined,
           maxHeight: isPhone ? undefined : "90vh",
           margin: isPhone ? 0 : "0 20px",
-          paddingTop: isPhone ? "max(env(safe-area-inset-top), 50px)" : 0,
-          paddingBottom: isPhone ? "max(env(safe-area-inset-bottom), 12px)" : 0,
+          paddingTop: isPhone ? "max(var(--sat, 0px), 60px)" : 0,
+          paddingBottom: isPhone ? "max(var(--sab, 0px), 12px)" : 0,
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -245,11 +253,12 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 </h4>
                 {renderItems(report.notable_mentions, "No notable mentions generated.")}
               </div>
-              <div style={{ marginTop: 20 }}>
-                <AIDisclaimer />
-              </div>
             </>
           )}
+        </div>
+
+        <div className="border-t border-white/5 flex-shrink-0" style={{ padding: "8px 20px" }}>
+          <AIDisclaimer />
         </div>
       </div>
     </div>,

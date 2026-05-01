@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import type { Article } from "../../services/types";
 
 interface Props {
@@ -88,7 +89,7 @@ export function ArticleContextMenu({
     </button>
   );
 
-  return (
+  return createPortal(
     <div
       ref={ref}
       className="fixed z-50 rounded-xl border border-white/10 shadow-2xl backdrop-blur-xl"
@@ -198,6 +199,7 @@ export function ArticleContextMenu({
             </svg>
           )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -154,18 +154,21 @@ export function ArticleList() {
   const rawArticles = isInbox ? inboxArticles : isRecent ? recentArticles : regularArticles;
   const isLoading = isInbox ? inboxLoading : isRecent ? recentLoading : regularLoading;
 
-  // Sticky-read retention: in unread-only views, once an article gets
-  // marked read it would normally drop out of the list on next refetch,
-  // making positions jump around while the user is still in the list.
-  // Instead, keep every article we've seen in this session-view pinned
-  // (styled as read) until the view/filter changes or the app reloads.
-  // stickyMapRef accumulates every article rendered under the current
-  // view/filter; reset on view/filter change.
+  // Sticky-read retention: in unread-only views, an article that just
+  // got marked read would otherwise drop out on the next refetch and
+  // shift everything below it. Keep it pinned (styled as read) until
+  // the user actually navigates away from the list. Reset on:
+  // - view/filter change (so all↔unread toggles never bleed read items)
+  // - phone leaves the list pane (returning re-fetches fresh)
   const stickyMapRef = useRef<Map<string, any>>(new Map());
   useEffect(() => {
     stickyMapRef.current = new Map();
   }, [sidebarView, listFilter]);
-  if (rawArticles) {
+  // Only accumulate sticky entries while we are actually in an
+  // unread-style view; otherwise the map would carry read items from
+  // "all" into a subsequent "unread" toggle.
+  const stickyEnabled = isInbox || listFilter === "unread";
+  if (rawArticles && stickyEnabled) {
     for (const a of rawArticles) stickyMapRef.current.set(a.id, a);
   }
 
@@ -533,6 +536,8 @@ export function ArticleList() {
                     isSelected={selectedArticleId === article.id}
                     onSelect={() => setSelectedArticleId(article.id)}
                     onContextMenu={(e) => handleArticleContextMenu(e, i)}
+                    onSwipeRead={isPhone ? () => markRead.mutate([article.id]) : undefined}
+                    onSwipeUnread={isPhone ? () => markUnread.mutate([article.id]) : undefined}
                   />
                 );
               })}
@@ -619,11 +624,19 @@ export function ArticleList() {
           </svg>
         </button>
         <button
-          onClick={() => setListFilter("unread")}
+          onClick={() => {
+            // Tapping the active filter again is treated as a refresh —
+            // wipe the sticky-read map so previously-read articles drop
+            // from the unread list.
+            if (listFilter === "unread") {
+              stickyMapRef.current = new Map();
+            }
+            setListFilter("unread");
+          }}
           className={`p-2 rounded-md transition-colors ${
             listFilter === "unread" ? "text-accent" : "text-text-muted hover:text-text-primary"
           }`}
-          title="Unread only"
+          title="Unread only — tap again to refresh"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
             <circle cx="12" cy="12" r={listFilter === "unread" ? 6 : 5} />

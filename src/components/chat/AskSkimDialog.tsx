@@ -5,6 +5,8 @@ import type { ChatMessageInput } from "../../services/types";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useUiStore } from "../../stores/uiStore";
 import { AIDisclaimer } from "../common/AIDisclaimer";
+import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
+import { useVisualViewportSync } from "../../hooks/useVisualViewport";
 
 type Scope = "inbox" | "unread" | "all";
 
@@ -21,6 +23,9 @@ interface Props {
 
 export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
+  useLockBodyScroll(isPhone);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useVisualViewportSync(dialogRef, isPhone);
   const [scope, setScope] = useState<Scope>("unread");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -68,18 +73,21 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
 
   return createPortal(
     <div
-      className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 ${isPhone ? "" : "flex items-center justify-center"}`}
+      className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 dialog-fade-in ${isPhone ? "" : "flex items-center justify-center"}`}
       onClick={onClose}
     >
       <div
-        className={`${isPhone ? "fixed inset-0 overflow-hidden" : "border border-white/10 rounded-2xl shadow-2xl"} flex flex-col`}
+        ref={dialogRef}
+        className={`${isPhone ? "fixed left-0 right-0 overflow-hidden" : "border border-white/10 rounded-2xl shadow-2xl"} flex flex-col`}
         style={{
           background: "rgba(22, 27, 34, 0.98)",
           width: isPhone ? undefined : "min(720px, 92vw)",
-          height: isPhone ? undefined : "min(720px, 85vh)",
+          height: isPhone ? "100dvh" : "min(720px, 85vh)",
+          top: isPhone ? 0 : undefined,
+          willChange: isPhone ? "transform, height" : undefined,
           margin: isPhone ? 0 : "0 20px",
-          paddingTop: isPhone ? 60 : 0,
-          paddingBottom: isPhone ? 24 : 0,
+          paddingTop: isPhone ? "max(var(--sat, 0px), 60px)" : 0,
+          paddingBottom: isPhone ? "max(var(--sab, 0px), 12px)" : 0,
         }}
         onClick={(e) => e.stopPropagation()}
       >

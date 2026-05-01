@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useSettings } from "../../hooks/useSettings";
 import type { Article } from "../../services/types";
 
@@ -25,6 +25,8 @@ interface Props {
   isSelected: boolean;
   onSelect: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  onSwipeRead?: () => void;
+  onSwipeUnread?: () => void;
 }
 
 function timeAgo(timestamp: number | null): string {
@@ -52,19 +54,32 @@ function extractImageUrl(html: string | null): string | null {
   return src;
 }
 
-export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, onContextMenu }: Props) {
+export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, onContextMenu, onSwipeRead, onSwipeUnread }: Props) {
   const imageUrl = useMemo(() => extractImageUrl(article.content_html), [article.content_html]);
   const { data: settings } = useSettings();
   const showExcerpt = settings?.appearance?.show_excerpt_in_list ?? false;
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeFired = useRef(false);
+  const [swipeDx, setSwipeDx] = useState(0);
+
+  const SWIPE_THRESHOLD = 80;
+  const SWIPE_LOCK_AXIS = 12;
+  const swipeable = Boolean(onSwipeRead || onSwipeUnread);
+
+  const resetSwipe = () => {
+    swipeStart.current = null;
+    setSwipeDx(0);
+  };
 
   return (
     <div
       onClick={(e) => {
-        if (longPressFired.current) {
+        if (longPressFired.current || swipeFired.current) {
           longPressFired.current = false;
+          swipeFired.current = false;
           e.preventDefault();
           e.stopPropagation();
           return;
@@ -72,44 +87,99 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
         onSelect();
       }}
       onContextMenu={onContextMenu}
-      onPointerDown={onContextMenu ? (e) => {
+      onPointerDown={(onContextMenu || swipeable) ? (e) => {
         if (e.pointerType !== "touch") return;
         longPressFired.current = false;
+        swipeFired.current = false;
         longPressStart.current = { x: e.clientX, y: e.clientY };
+        swipeStart.current = { x: e.clientX, y: e.clientY };
         if (longPressTimer.current) window.clearTimeout(longPressTimer.current);
-        longPressTimer.current = window.setTimeout(() => {
-          longPressFired.current = true;
-          if (navigator.vibrate) navigator.vibrate(8);
-          onContextMenu({
-            preventDefault: () => {},
-            stopPropagation: () => {},
-            clientX: longPressStart.current?.x ?? 0,
-            clientY: longPressStart.current?.y ?? 0,
-          } as unknown as React.MouseEvent);
-        }, 450);
-      } : undefined}
-      onPointerMove={onContextMenu ? (e) => {
-        if (!longPressTimer.current || !longPressStart.current) return;
-        const dx = Math.abs(e.clientX - longPressStart.current.x);
-        const dy = Math.abs(e.clientY - longPressStart.current.y);
-        if (dx > 10 || dy > 10) {
-          window.clearTimeout(longPressTimer.current);
-          longPressTimer.current = null;
+        if (onContextMenu) {
+          longPressTimer.current = window.setTimeout(() => {
+            longPressFired.current = true;
+            if (navigator.vibrate) navigator.vibrate(8);
+            onContextMenu({
+              preventDefault: () => {},
+              stopPropagation: () => {},
+              clientX: longPressStart.current?.x ?? 0,
+              clientY: longPressStart.current?.y ?? 0,
+            } as unknown as React.MouseEvent);
+          }, 450);
         }
       } : undefined}
-      onPointerUp={onContextMenu ? () => {
-        if (longPressTimer.current) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+      onPointerMove={(onContextMenu || swipeable) ? (e) => {
+        if (longPressStart.current && longPressTimer.current) {
+          const dx = Math.abs(e.clientX - longPressStart.current.x);
+          const dy = Math.abs(e.clientY - longPressStart.current.y);
+          if (dx > 10 || dy > 10) {
+            window.clearTimeout(longPressTimer.current);
+            longPressTimer.current = null;
+          }
+        }
+        if (swipeable && swipeStart.current) {
+          const dx = e.clientX - swipeStart.current.x;
+          const dy = Math.abs(e.clientY - swipeStart.current.y);
+          if (Math.abs(dx) > SWIPE_LOCK_AXIS && Math.abs(dx) > dy) {
+            // Cap visual offset so drag feels bounded, but still let user
+            // see the gesture is recognised.
+            const capped = Math.max(-160, Math.min(160, dx));
+            setSwipeDx(capped);
+          } else if (dy > 30 && dy > Math.abs(dx)) {
+            // Vertical scroll won — bail out of swipe.
+            resetSwipe();
+          }
+        }
       } : undefined}
-      onPointerCancel={onContextMenu ? () => {
+      onPointerUp={(onContextMenu || swipeable) ? () => {
         if (longPressTimer.current) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+        if (swipeable && swipeStart.current) {
+          if (swipeDx >= SWIPE_THRESHOLD && onSwipeRead && !article.is_read) {
+            swipeFired.current = true;
+            if (navigator.vibrate) navigator.vibrate(6);
+            onSwipeRead();
+          } else if (swipeDx <= -SWIPE_THRESHOLD && onSwipeUnread && article.is_read) {
+            swipeFired.current = true;
+            if (navigator.vibrate) navigator.vibrate(6);
+            onSwipeUnread();
+          }
+        }
+        resetSwipe();
       } : undefined}
-      className={`cursor-pointer transition-colors border-b border-white/5 select-none relative ${
+      onPointerCancel={(onContextMenu || swipeable) ? () => {
+        if (longPressTimer.current) { window.clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+        resetSwipe();
+      } : undefined}
+      className={`cursor-pointer transition-colors border-b border-white/5 select-none relative overflow-hidden ${
         isSelected
           ? "bg-accent/15"
           : "hover:bg-white/5"
       }`}
-      style={{ padding: "14px 20px", touchAction: "manipulation", WebkitTouchCallout: "none", WebkitUserSelect: "none" }}
+      style={{ padding: "14px 20px", touchAction: "pan-y", WebkitTouchCallout: "none", WebkitUserSelect: "none" }}
     >
+      {swipeable && swipeDx !== 0 && (
+        <div
+          className={`absolute inset-0 flex items-center pointer-events-none ${
+            swipeDx > 0 ? "justify-start" : "justify-end"
+          }`}
+          style={{
+            background: swipeDx > 0
+              ? "linear-gradient(to right, rgba(34,197,94,0.25), transparent 50%)"
+              : "linear-gradient(to left, rgba(96,165,250,0.25), transparent 50%)",
+            paddingLeft: swipeDx > 0 ? 20 : 0,
+            paddingRight: swipeDx < 0 ? 20 : 0,
+          }}
+          aria-hidden
+        >
+          <span
+            className={`uppercase tracking-wider font-semibold ${
+              swipeDx > 0 ? "text-success" : "text-accent"
+            }`}
+            style={{ fontSize: 11, opacity: Math.min(1, Math.abs(swipeDx) / SWIPE_THRESHOLD) }}
+          >
+            {swipeDx > 0 ? "Mark read" : "Mark unread"}
+          </span>
+        </div>
+      )}
       {isSelected && (
         <div
           className="absolute left-0 top-0 bottom-0 bg-accent"
@@ -117,7 +187,13 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
           aria-hidden
         />
       )}
-      <div className="flex items-start justify-between gap-3">
+      <div
+        className="flex items-start justify-between gap-3 relative"
+        style={{
+          transform: swipeDx !== 0 ? `translate3d(${swipeDx}px, 0, 0)` : undefined,
+          transition: swipeStart.current ? "none" : "transform 180ms ease-out",
+        }}
+      >
         <div className="min-w-0 flex-1">
           <h3
             className={`leading-snug line-clamp-2 ${
@@ -138,6 +214,13 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
             </p>
           ) : null}
           <div className="flex items-center gap-2 flex-wrap">
+            {!article.is_read && (
+              <span
+                className="rounded-full bg-accent flex-shrink-0"
+                style={{ width: 8, height: 8 }}
+                title="Unread"
+              />
+            )}
             {triage && (
               <span
                 className="rounded-full flex-shrink-0 cursor-help"
@@ -188,13 +271,6 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
             />
           ) : null}
           <div className="flex items-center gap-1.5">
-            {!article.is_read && (
-              <div
-                className="rounded-full bg-accent"
-                style={{ width: 8, height: 8 }}
-                title="Unread"
-              />
-            )}
             {article.is_starred && (
               <svg
                 width="12"

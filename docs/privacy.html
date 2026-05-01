@@ -48,7 +48,7 @@
     <ul>
       <li><strong>Fetching feeds:</strong> the App downloads content directly from the RSS/Atom URLs you subscribe to. These requests go to the publishers of those feeds; we do not proxy or log them.</li>
       <li><strong>Fetching favicons and article images</strong> from the publishers' servers.</li>
-      <li><strong>AI features (optional):</strong> if you configure an AI provider in Settings (e.g., Anthropic, OpenAI, OpenRouter, Ollama, Apple Foundation Models), summarization and chat features send the relevant article text and your prompt directly to that provider's API. Skim does not see, log, or relay these requests.</li>
+      <li><strong>AI features (optional):</strong> if you configure an AI provider in Settings (e.g., Anthropic, OpenAI, OpenRouter, Ollama, Apple Foundation Models), summarization and chat features send the relevant article text and your prompt from your device directly to that provider's API. Skim does not run any backend, does not log prompts or responses, and does not relay them through any Skim servers. The request is constructed and dispatched on-device.</li>
       <li><strong>Feedly sync (optional):</strong> if you connect a Feedly account, the App communicates directly with Feedly's servers using OAuth.</li>
       <li><strong>App update checks</strong> via the App Store; standard Apple platform behavior.</li>
     </ul>

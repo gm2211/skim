@@ -214,10 +214,109 @@ async fn fetch_param_count(client: &reqwest::Client, base_model: &str) -> Option
     Some(total as f64 / 1_000_000_000.0)
 }
 
+// Authors we ship instruct/chat GGUFs from. Limits the search to known
+// publishers — keeps roleplay / NSFW / abliterated / random forks out of
+// the model browser. Add new ones here as users ask.
+const TRUSTED_AUTHORS: &[&str] = &[
+    // Quantization maintainers (ship most popular GGUFs)
+    "bartowski",
+    "TheBloke",
+    "lmstudio-community",
+    "unsloth",
+    "mlx-community",
+    "MaziyarPanahi",
+    // Model creators
+    "meta-llama",
+    "mistralai",
+    "Qwen",
+    "google",
+    "microsoft",
+    "HuggingFaceH4",
+    "HuggingFaceTB",
+    "nomic-ai",
+    "deepseek-ai",
+    "01-ai",
+    "ibm-granite",
+    "ibm-research",
+    "internlm",
+    "stabilityai",
+    "tiiuae",
+    "allenai",
+    "databricks",
+    "NousResearch",
+    "bigcode",
+    "openchat",
+    "cohereforai",
+    "CohereForAI",
+];
+
+// Tags / id substrings that mark community variants we don't surface in
+// the default model browser. Lowercased compare.
+const BLOCKED_KEYWORDS: &[&str] = &[
+    "uncensored",
+    "abliterated",
+    "ablit",
+    "nsfw",
+    "erotic",
+    "erp",
+    "roleplay",
+    "lewd",
+    "smut",
+    "horny",
+    "waifu",
+    "rp-",
+    "-rp",
+    "wizard-vicuna",
+    "dolphin-uncensored",
+    "llama-uncensored",
+];
+
+fn is_trusted(model: &HfModelInfoRaw) -> bool {
+    let id_lower = model.id.to_lowercase();
+    if BLOCKED_KEYWORDS.iter().any(|k| id_lower.contains(k)) {
+        return false;
+    }
+    if let Some(tags) = &model.tags {
+        let any_blocked = tags
+            .iter()
+            .any(|t| {
+                let l = t.to_lowercase();
+                BLOCKED_KEYWORDS.iter().any(|k| l.contains(k))
+            });
+        if any_blocked {
+            return false;
+        }
+    }
+    let author_match = model
+        .author
+        .as_deref()
+        .map(|a| {
+            TRUSTED_AUTHORS
+                .iter()
+                .any(|t| t.eq_ignore_ascii_case(a))
+        })
+        .unwrap_or(false);
+    if author_match {
+        return true;
+    }
+    // Fallback: check id prefix (some HF responses leave author null but
+    // id is "<author>/<repo>").
+    if let Some((author_from_id, _)) = model.id.split_once('/') {
+        if TRUSTED_AUTHORS
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case(author_from_id))
+        {
+            return true;
+        }
+    }
+    false
+}
+
 pub async fn search_hf_models(query: &str) -> Result<Vec<HfModelInfo>, String> {
     let client = reqwest::Client::new();
+    // Pull more raw results because we filter aggressively below.
     let url = format!(
-        "https://huggingface.co/api/models?filter=gguf&search={}&sort=downloads&direction=-1&limit=20",
+        "https://huggingface.co/api/models?filter=gguf&search={}&sort=downloads&direction=-1&limit=80",
         urlencoding::encode(query)
     );
     let raw_models: Vec<HfModelInfoRaw> = client
@@ -228,6 +327,12 @@ pub async fn search_hf_models(query: &str) -> Result<Vec<HfModelInfo>, String> {
         .json()
         .await
         .map_err(|e| format!("Failed to parse HuggingFace response: {}", e))?;
+
+    let raw_models: Vec<HfModelInfoRaw> = raw_models
+        .into_iter()
+        .filter(is_trusted)
+        .take(20)
+        .collect();
 
     // Collect unique base models to fetch param counts
     let base_models: std::collections::HashMap<String, String> = raw_models

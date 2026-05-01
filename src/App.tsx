@@ -4,13 +4,15 @@ import { ArticleDetail } from "./components/layout/ArticleDetail";
 import { AddFeedDialog } from "./components/feed/AddFeedDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { useUiStore } from "./stores/uiStore";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { triageArticles, refreshAllFeeds, importOpml } from "./services/commands";
 import { useQueryClient } from "@tanstack/react-query";
+import { AIBootDisclaimer } from "./components/common/AIBootDisclaimer";
 
 function App() {
   const { showAddFeed, showSettings, selectedArticleId, listCollapsed, isPhone, phonePane } = useUiStore();
   const qc = useQueryClient();
+  const [showBootDisclaimer, setShowBootDisclaimer] = useState(true);
 
   // Auto-triage on startup
   useEffect(() => {
@@ -203,6 +205,7 @@ function App() {
         </div>
         {showAddFeed && <AddFeedDialog />}
         {showSettings && <SettingsDialog />}
+        {showBootDisclaimer && <AIBootDisclaimer onDismiss={() => setShowBootDisclaimer(false)} />}
       </div>
     );
   }
@@ -244,6 +247,7 @@ function App() {
       </div>
       {showAddFeed && <AddFeedDialog />}
       {showSettings && <SettingsDialog />}
+      {showBootDisclaimer && <AIBootDisclaimer onDismiss={() => setShowBootDisclaimer(false)} />}
     </div>
   );
 }

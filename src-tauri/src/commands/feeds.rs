@@ -245,33 +245,46 @@ pub async fn refresh_feed(
 
 #[tauri::command]
 pub async fn refresh_all_feeds(db: State<'_, Database>) -> Result<i32, String> {
+    use futures_util::stream::{self, StreamExt};
+
     let feeds = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         queries::list_feeds(&conn).map_err(|e| e.to_string())?
     };
     let feedly_token = ensure_feedly_token(&db).await?;
 
-    let mut total_new = 0;
-    for feed in feeds {
-        let result = if let (Some(ref feedly_id), Some(ref token)) = (&feed.feedly_id, &feedly_token) {
-            feedly::fetch_stream_contents(token, feedly_id, feed.last_fetched_at, 200)
-                .await
-                .map(|stream| feedly::feedly_entries_to_articles(&stream.items, &feed.id))
-        } else {
-            fetch_and_parse_feed(&feed.url, Some(&feed.id))
-                .await
-                .map(|(_f, articles)| articles)
-        };
+    // Fan out fetches concurrently. CONCURRENCY caps to keep us off
+    // host rate-limits and within the iOS file-descriptor budget.
+    const CONCURRENCY: usize = 16;
+    let token_ref = &feedly_token;
+    let results: Vec<(crate::db::models::Feed, Result<Vec<crate::db::models::Article>, String>)> =
+        stream::iter(feeds.into_iter().map(|feed| async move {
+            let res = if let (Some(ref feedly_id), Some(ref token)) = (&feed.feedly_id, token_ref) {
+                feedly::fetch_stream_contents(token, feedly_id, feed.last_fetched_at, 200)
+                    .await
+                    .map(|stream| feedly::feedly_entries_to_articles(&stream.items, &feed.id))
+            } else {
+                fetch_and_parse_feed(&feed.url, Some(&feed.id))
+                    .await
+                    .map(|(_f, articles)| articles)
+            };
+            (feed, res)
+        }))
+        .buffer_unordered(CONCURRENCY)
+        .collect()
+        .await;
 
+    let mut total_new = 0;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now().timestamp();
+    for (feed, result) in results {
         match result {
             Ok(articles) => {
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
                 for article in &articles {
                     if queries::insert_article(&conn, article).map_err(|e| e.to_string())? {
                         total_new += 1;
                     }
                 }
-                let now = chrono::Utc::now().timestamp();
                 queries::update_feed_fetched(&conn, &feed.id, now).map_err(|e| e.to_string())?;
             }
             Err(e) => {
@@ -452,8 +465,6 @@ pub async fn import_opml(
     db: State<'_, Database>,
     xml: String,
 ) -> Result<feedly::FeedlyImportResult, String> {
-    use futures_util::stream::{self, StreamExt};
-
     let entries = parse_opml_entries(&xml)?;
 
     let mut existing_norm: std::collections::HashSet<String> = {
@@ -465,80 +476,38 @@ pub async fn import_opml(
             .collect()
     };
 
-    // Dedup against existing + within-OPML duplicates before fetching.
-    let mut to_fetch: Vec<(String, String, Option<String>, String)> = Vec::new(); // (title, url, category, feed_id)
+    // Importing OPML is just registering feed records — title/url/category
+    // come straight from the file. Articles will be populated by the next
+    // refresh-all pass (auto-runs on startup + on focus when stale). No
+    // reason to block the import on dozens of HTTP roundtrips.
+    let mut imported = 0i32;
     let mut skipped = 0i32;
+    let mut errors: Vec<String> = Vec::new();
+    let now = chrono::Utc::now().timestamp();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
     for (title, url, category) in entries {
         let n = normalize_feed_url(&url);
         if !existing_norm.insert(n) {
             skipped += 1;
             continue;
         }
-        let feed_id = uuid::Uuid::new_v4().to_string();
-        to_fetch.push((title, url, category, feed_id));
-    }
-
-    // Fetch all feeds concurrently — serial fetch was the OPML import
-    // bottleneck (one HTTP roundtrip per feed × dozens of feeds).
-    // CONCURRENCY caps to avoid hammering hosts / hitting fd limits on iOS.
-    const CONCURRENCY: usize = 16;
-    type FetchResult = (String, String, Option<String>, String, Result<(crate::db::models::Feed, Vec<crate::db::models::Article>), String>);
-    let results: Vec<FetchResult> = stream::iter(to_fetch.into_iter().map(|(title, url, category, feed_id)| {
-        let feed_id_clone = feed_id.clone();
-        let url_clone = url.clone();
-        async move {
-            let res = fetch_and_parse_feed(&url_clone, Some(&feed_id_clone)).await;
-            (title, url, category, feed_id, res)
-        }
-    }))
-    .buffer_unordered(CONCURRENCY)
-    .collect()
-    .await;
-
-    // DB writes are serialized via the lock — keep them in a single pass
-    // so we don't churn lock acquisition per feed.
-    let mut imported = 0i32;
-    let mut errors: Vec<String> = Vec::new();
-    let now = chrono::Utc::now().timestamp();
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    for (title, url, category, feed_id, res) in results {
-        match res {
-            Ok((mut feed, articles)) => {
-                if feed.title.is_empty() || feed.title == "Untitled Feed" {
-                    feed.title = title;
-                }
-                feed.opml_category = category;
-                if let Err(e) = queries::insert_feed(&conn, &feed) {
-                    errors.push(format!("{}: {}", feed.title, e));
-                    continue;
-                }
-                for a in &articles {
-                    let _ = queries::insert_article(&conn, a);
-                }
-                let _ = queries::update_feed_fetched(&conn, &feed.id, now);
-                imported += 1;
-            }
-            Err(e) => {
-                log::warn!("Failed to fetch {} ({}): {}", title, url, e);
-                let feed = crate::db::models::Feed {
-                    id: feed_id,
-                    title: title.clone(),
-                    url: url.clone(),
-                    site_url: None,
-                    description: None,
-                    icon_url: crate::feed::fetcher::favicon_url(&url),
-                    feedly_id: None,
-                    created_at: now,
-                    updated_at: now,
-                    last_fetched_at: None,
-                    folder_id: None,
-                    opml_category: category,
-                };
-                match queries::insert_feed(&conn, &feed) {
-                    Ok(()) => imported += 1,
-                    Err(db_err) => errors.push(format!("{}: {}", title, db_err)),
-                }
-            }
+        let feed = crate::db::models::Feed {
+            id: uuid::Uuid::new_v4().to_string(),
+            title: if title.trim().is_empty() { url.clone() } else { title.clone() },
+            url: url.clone(),
+            site_url: None,
+            description: None,
+            icon_url: crate::feed::fetcher::favicon_url(&url),
+            feedly_id: None,
+            created_at: now,
+            updated_at: now,
+            last_fetched_at: None,
+            folder_id: None,
+            opml_category: category,
+        };
+        match queries::insert_feed(&conn, &feed) {
+            Ok(()) => imported += 1,
+            Err(db_err) => errors.push(format!("{}: {}", title, db_err)),
         }
     }
 

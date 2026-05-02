@@ -11,7 +11,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { NumberInput } from "../ui/NumberInput";
 import { AIDisclaimer } from "../common/AIDisclaimer";
 
-type ViewMode = "rss" | "reader" | "web";
+type ViewMode = "reader" | "web";
 
 function formatDate(timestamp: number | null): string {
   if (!timestamp) return "";
@@ -131,9 +131,9 @@ export function ArticleDetail() {
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("rss");
+  const [viewMode, setViewMode] = useState<ViewMode>("reader");
 
-  const modes: ViewMode[] = ["rss", "reader", "web"];
+  const modes: ViewMode[] = ["reader", "web"];
   const slideIndex = modes.indexOf(viewMode);
 
   // Reset state when article changes — cancel any in-flight summary
@@ -185,14 +185,6 @@ export function ArticleDetail() {
     })();
     return () => { cancelled = true; };
   }, [selectedArticleId, article?.url]);
-
-  // Fall back to RSS preview if Reader has nothing to show.
-  useEffect(() => {
-    if (article && !article.url && viewMode === "reader") setViewMode("rss");
-  }, [article?.url, viewMode]);
-  useEffect(() => {
-    if (fullError && viewMode === "reader") setViewMode("rss");
-  }, [fullError, viewMode]);
 
   // Close summarize menu on click outside
   useEffect(() => {
@@ -254,13 +246,13 @@ export function ArticleDetail() {
   }, [article?.url, fullContent]);
 
   const handleReader = useCallback(async () => {
-    if (viewMode === "reader") { setViewMode("rss"); return; }
+    if (viewMode === "reader") return;
     await fetchFull();
     setViewMode("reader");
   }, [viewMode, fetchFull]);
 
   const handleWebView = useCallback(async () => {
-    if (viewMode === "web") { setViewMode("rss"); return; }
+    if (viewMode === "web") { setViewMode("reader"); return; }
     await fetchFull();
     setViewMode("web");
   }, [viewMode, fetchFull]);
@@ -275,7 +267,7 @@ export function ArticleDetail() {
         fetchFull();
         setViewMode((prev) => {
           const i = modes.indexOf(prev);
-          return i < 2 ? modes[i + 1] : prev;
+          return i < modes.length - 1 ? modes[i + 1] : prev;
         });
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
@@ -313,7 +305,7 @@ export function ArticleDetail() {
 
   const modeBtn = (mode: ViewMode, label: string, icon: React.ReactNode) => (
     <button
-      onClick={mode === "reader" ? handleReader : mode === "web" ? handleWebView : () => setViewMode("rss")}
+      onClick={mode === "reader" ? handleReader : handleWebView}
       disabled={loadingFull}
       className={`flex items-center gap-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
         viewMode === mode
@@ -729,7 +721,7 @@ export function ArticleDetail() {
           if (Math.abs(dx) < 50 || dy > Math.abs(dx)) return;
           if (dx < 0) {
             const i = modes.indexOf(viewMode);
-            if (i < 2) { fetchFull(); setViewMode(modes[i + 1]); }
+            if (i < modes.length - 1) { fetchFull(); setViewMode(modes[i + 1]); }
           } else {
             const i = modes.indexOf(viewMode);
             if (i > 0) setViewMode(modes[i - 1]);
@@ -740,14 +732,11 @@ export function ArticleDetail() {
           className="slide-track"
           style={{ transform: `translateX(-${slideIndex * 100}%)` }}
         >
-          {/* Panel 0: RSS preview */}
+          {/* Panel 0: Reader (with RSS-content fallback when extraction fails) */}
           <div className="slide-panel">
-
             <div style={{ maxWidth: 720, margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px" }}>
               <div style={{ marginBottom: 28 }}>
-                <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>
-                  {article.title}
-                </h1>
+                <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
                 <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
                   <span className="text-accent font-medium">{article.feed_title}</span>
                   {article.author && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{article.author}</span></>)}
@@ -755,8 +744,16 @@ export function ArticleDetail() {
                   <span className="text-text-muted">{formatDate(article.published_at)}</span>
                 </div>
               </div>
-
-              {rssHtml ? (
+              {fullContent ? (
+                <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
+              ) : loadingFull ? (
+                <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 14 }}>
+                  <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  Loading article…
+                </div>
+              ) : rssHtml ? (
                 <div className="article-content text-text-primary" dangerouslySetInnerHTML={{ __html: rssHtml }} />
               ) : article.content_text ? (
                 <div className="article-content text-text-primary whitespace-pre-wrap">{article.content_text}</div>
@@ -764,43 +761,6 @@ export function ArticleDetail() {
                 <p className="text-text-muted" style={{ fontSize: 14 }}>No preview available.</p>
               )}
             </div>
-          </div>
-
-          {/* Panel 1: Reader mode */}
-          <div className="slide-panel">
-
-            {fullContent ? (
-              <div style={{ maxWidth: 720, margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px" }}>
-                <div style={{ marginBottom: 28 }}>
-                  <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
-                  <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
-                    <span className="text-accent font-medium">{article.feed_title}</span>
-                    {article.author && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{article.author}</span></>)}
-                    <span className="text-text-muted">·</span>
-                    <span className="text-text-muted">{formatDate(article.published_at)}</span>
-                  </div>
-                </div>
-                <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
-              </div>
-            ) : loadingFull ? (
-              <div style={{ maxWidth: 720, margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px" }}>
-                <div style={{ marginBottom: 28 }}>
-                  <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
-                  <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
-                    <span className="text-accent font-medium">{article.feed_title}</span>
-                    {article.author && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{article.author}</span></>)}
-                    <span className="text-text-muted">·</span>
-                    <span className="text-text-muted">{formatDate(article.published_at)}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 14 }}>
-                  <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                  </svg>
-                  Loading article…
-                </div>
-              </div>
-            ) : null}
           </div>
 
           {/* Panel 2: Web view */}

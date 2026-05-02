@@ -169,9 +169,8 @@ pub struct FullArticleContent {
     pub raw_html: String,
 }
 
-/// Rewrite URLs to static/readable versions when possible. Reddit's modern
-/// site is a JS SPA that doesn't render inside a cross-origin iframe, but
-/// old.reddit.com returns a server-rendered HTML page that works fine.
+/// Rewrite URLs to static/readable versions when possible. Some popular sites
+/// ship hydrated shells that replay poorly inside an embedded srcDoc iframe.
 fn rewrite_for_static(url: &str) -> String {
     if let Ok(parsed) = url::Url::parse(url) {
         if let Some(host) = parsed.host_str() {
@@ -183,6 +182,16 @@ fn rewrite_for_static(url: &str) -> String {
                 let mut new_url = parsed.clone();
                 let _ = new_url.set_host(Some("old.reddit.com"));
                 return new_url.to_string();
+            }
+
+            if (host_lower == "github.com" || host_lower == "www.github.com")
+                && parsed.path().to_lowercase().ends_with(".ipynb")
+                && parsed.path().contains("/blob/")
+            {
+                return format!(
+                    "https://nbviewer.org/github/{}",
+                    parsed.path().trim_start_matches('/')
+                );
             }
         }
     }
@@ -320,6 +329,37 @@ fn plain_to_html(text: &str) -> String {
         out.push_str("</p>\n");
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rewrite_for_static;
+
+    #[test]
+    fn rewrites_reddit_to_old_reddit() {
+        assert_eq!(
+            rewrite_for_static("https://www.reddit.com/r/rust/comments/abc/example/"),
+            "https://old.reddit.com/r/rust/comments/abc/example/"
+        );
+    }
+
+    #[test]
+    fn rewrites_github_notebooks_to_nbviewer() {
+        assert_eq!(
+            rewrite_for_static(
+                "https://github.com/norvig/pytudes/blob/main/ipynb/xkcd-Name-Dominoes.ipynb"
+            ),
+            "https://nbviewer.org/github/norvig/pytudes/blob/main/ipynb/xkcd-Name-Dominoes.ipynb"
+        );
+    }
+
+    #[test]
+    fn leaves_non_notebook_github_urls_unchanged() {
+        assert_eq!(
+            rewrite_for_static("https://github.com/norvig/pytudes/blob/main/README.md"),
+            "https://github.com/norvig/pytudes/blob/main/README.md"
+        );
+    }
 }
 
 #[tauri::command]

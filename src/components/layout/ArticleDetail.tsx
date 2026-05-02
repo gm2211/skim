@@ -130,13 +130,16 @@ export function ArticleDetail() {
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const fullFetchSeqRef = useRef(0);
   const [viewMode, setViewMode] = useState<ViewMode>("reader");
 
   // Reset state when article changes — cancel any in-flight summary
   useEffect(() => {
+    fullFetchSeqRef.current += 1;
     cancelSummarize().catch(() => {});
     setFullContent(null);
     setRawHtml(null);
+    setLoadingFull(false);
     setFullError(null);
     setViewMode("reader");
     summarize.reset();
@@ -151,15 +154,17 @@ export function ArticleDetail() {
   // Inlined (instead of calling fetchFull) so the fetch isn't gated on the
   // previous article's fullContent value during the reset → fetch transition.
   useEffect(() => {
+    const articleId = article?.id;
     const url = article?.url;
-    if (!url) return;
+    if (!articleId || !url) return;
     let cancelled = false;
+    const seq = ++fullFetchSeqRef.current;
     setLoadingFull(true);
     setFullError(null);
     (async () => {
       try {
         const result = await fetchFullArticle(url);
-        if (cancelled) return;
+        if (cancelled || seq !== fullFetchSeqRef.current) return;
         const stripped = stripFullArticleJunk(result.html);
         // Detect anti-bot / paywall stubs: extracted content is too short
         // or matches known JS-required / verification placeholders. Treat
@@ -174,13 +179,13 @@ export function ArticleDetail() {
           setFullContent(stripped);
         }
       } catch (e) {
-        if (!cancelled) setFullError(String(e));
+        if (!cancelled && seq === fullFetchSeqRef.current) setFullError(String(e));
       } finally {
-        if (!cancelled) setLoadingFull(false);
+        if (!cancelled && seq === fullFetchSeqRef.current) setLoadingFull(false);
       }
     })();
     return () => { cancelled = true; };
-  }, [selectedArticleId, article?.url]);
+  }, [selectedArticleId, article?.id, article?.url]);
 
   // Close summarize menu on click outside
   useEffect(() => {
@@ -227,19 +232,23 @@ export function ArticleDetail() {
   }, [article?.id]);
 
   const fetchFull = useCallback(async () => {
-    if (!article?.url || fullContent) return;
+    const articleId = article?.id;
+    const url = article?.url;
+    if (!articleId || !url || rawHtml) return;
+    const seq = ++fullFetchSeqRef.current;
     setLoadingFull(true);
     setFullError(null);
     try {
-      const result = await fetchFullArticle(article.url);
+      const result = await fetchFullArticle(url);
+      if (seq !== fullFetchSeqRef.current || useUiStore.getState().selectedArticleId !== articleId) return;
       setFullContent(stripFullArticleJunk(result.html));
       setRawHtml(result.raw_html);
     } catch (e) {
-      setFullError(String(e));
+      if (seq === fullFetchSeqRef.current) setFullError(String(e));
     } finally {
-      setLoadingFull(false);
+      if (seq === fullFetchSeqRef.current) setLoadingFull(false);
     }
-  }, [article?.url, fullContent]);
+  }, [article?.id, article?.url, rawHtml]);
 
   const handleReader = useCallback(async () => {
     if (viewMode === "reader") return;
@@ -738,10 +747,20 @@ export function ArticleDetail() {
                 </svg>
               </button>
             )}
-            {!rawHtml && !loadingFull && fullError && (
+            {loadingFull && !rawHtml && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center" style={{ padding: "0 24px" }}>
+                <svg className="animate-spin text-text-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: 12 }}>
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+                <p className="text-text-muted" style={{ fontSize: 14 }}>
+                  Loading web view...
+                </p>
+              </div>
+            )}
+            {!rawHtml && !loadingFull && (
               <div className="flex flex-col items-center justify-center h-full text-center" style={{ padding: "0 24px" }}>
                 <p className="text-text-muted" style={{ fontSize: 14, marginBottom: 8 }}>
-                  Couldn't load page in the embedded view.
+                  {fullError ? "Couldn't load page in the embedded view." : "No embedded page preview is available."}
                 </p>
                 <p className="text-text-muted" style={{ fontSize: 12 }}>
                   Use the "Open in browser" button.
@@ -750,6 +769,7 @@ export function ArticleDetail() {
             )}
             {rawHtml && (
               <iframe
+                key={`${article.id}:${article.url}`}
                 ref={iframeRef}
                 srcDoc={rawHtml.replace(
                   /(<head[^>]*>)/i,

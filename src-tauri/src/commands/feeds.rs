@@ -452,6 +452,8 @@ pub async fn import_opml(
     db: State<'_, Database>,
     xml: String,
 ) -> Result<feedly::FeedlyImportResult, String> {
+    use futures_util::stream::{self, StreamExt};
+
     let entries = parse_opml_entries(&xml)?;
 
     let mut existing_norm: std::collections::HashSet<String> = {
@@ -463,26 +465,49 @@ pub async fn import_opml(
             .collect()
     };
 
-    let mut imported = 0i32;
+    // Dedup against existing + within-OPML duplicates before fetching.
+    let mut to_fetch: Vec<(String, String, Option<String>, String)> = Vec::new(); // (title, url, category, feed_id)
     let mut skipped = 0i32;
-    let mut errors = Vec::new();
-    let now = chrono::Utc::now().timestamp();
-
     for (title, url, category) in entries {
         let n = normalize_feed_url(&url);
         if !existing_norm.insert(n) {
             skipped += 1;
             continue;
         }
-
         let feed_id = uuid::Uuid::new_v4().to_string();
-        match fetch_and_parse_feed(&url, Some(&feed_id)).await {
+        to_fetch.push((title, url, category, feed_id));
+    }
+
+    // Fetch all feeds concurrently — serial fetch was the OPML import
+    // bottleneck (one HTTP roundtrip per feed × dozens of feeds).
+    // CONCURRENCY caps to avoid hammering hosts / hitting fd limits on iOS.
+    const CONCURRENCY: usize = 16;
+    type FetchResult = (String, String, Option<String>, String, Result<(crate::db::models::Feed, Vec<crate::db::models::Article>), String>);
+    let results: Vec<FetchResult> = stream::iter(to_fetch.into_iter().map(|(title, url, category, feed_id)| {
+        let feed_id_clone = feed_id.clone();
+        let url_clone = url.clone();
+        async move {
+            let res = fetch_and_parse_feed(&url_clone, Some(&feed_id_clone)).await;
+            (title, url, category, feed_id, res)
+        }
+    }))
+    .buffer_unordered(CONCURRENCY)
+    .collect()
+    .await;
+
+    // DB writes are serialized via the lock — keep them in a single pass
+    // so we don't churn lock acquisition per feed.
+    let mut imported = 0i32;
+    let mut errors: Vec<String> = Vec::new();
+    let now = chrono::Utc::now().timestamp();
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    for (title, url, category, feed_id, res) in results {
+        match res {
             Ok((mut feed, articles)) => {
                 if feed.title.is_empty() || feed.title == "Untitled Feed" {
                     feed.title = title;
                 }
-                feed.opml_category = category.clone();
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                feed.opml_category = category;
                 if let Err(e) = queries::insert_feed(&conn, &feed) {
                     errors.push(format!("{}: {}", feed.title, e));
                     continue;
@@ -507,9 +532,8 @@ pub async fn import_opml(
                     updated_at: now,
                     last_fetched_at: None,
                     folder_id: None,
-                    opml_category: category.clone(),
+                    opml_category: category,
                 };
-                let conn = db.conn.lock().map_err(|e| e.to_string())?;
                 match queries::insert_feed(&conn, &feed) {
                     Ok(()) => imported += 1,
                     Err(db_err) => errors.push(format!("{}: {}", title, db_err)),

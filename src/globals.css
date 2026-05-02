@@ -93,6 +93,15 @@ button, a, input, select, textarea, [role="button"] {
 .article-content {
   line-height: 1.7;
   font-size: 15px;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+}
+
+.article-content *,
+.full-article-content * {
+  max-width: 100% !important;
+  box-sizing: border-box;
 }
 
 .article-content h1,
@@ -155,13 +164,17 @@ button, a, input, select, textarea, [role="button"] {
   background: var(--color-bg-tertiary);
   padding: 1em;
   border-radius: 6px;
-  overflow-x: auto;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   margin: 1em 0;
 }
 
 .article-content pre code {
   background: none;
   padding: 0;
+  white-space: inherit;
+  overflow-wrap: inherit;
 }
 
 .article-content ul, .article-content ol {
@@ -171,6 +184,21 @@ button, a, input, select, textarea, [role="button"] {
 
 .article-content li {
   margin-bottom: 0.5em;
+}
+
+.article-content table,
+.full-article-content table {
+  display: block;
+  width: 100% !important;
+  overflow-x: hidden;
+  table-layout: fixed;
+}
+
+.article-content th,
+.article-content td,
+.full-article-content th,
+.full-article-content td {
+  overflow-wrap: anywhere;
 }
 
 /* Horizontal slide container — 3 panels side by side */
@@ -191,6 +219,7 @@ button, a, input, select, textarea, [role="button"] {
   flex: 0 0 100%;
   height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .slide-panel-web {
@@ -202,6 +231,9 @@ button, a, input, select, textarea, [role="button"] {
   font-size: 16px;
   line-height: 1.8;
   color: var(--color-text-primary);
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
 }
 
 /* Neutralize absolute/fixed/sticky positioning from website styles */
@@ -237,6 +269,17 @@ button, a, input, select, textarea, [role="button"] {
   margin: 1em 0;
   border: none;
   display: block;
+}
+
+.full-article-content pre {
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.full-article-content code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .full-article-content a {

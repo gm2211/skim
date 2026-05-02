@@ -18,6 +18,21 @@ type FetchedArticleContent = {
   raw_html: string;
 };
 
+const EMBEDDED_WEB_VIEW_CSS = `
+:root{color-scheme:dark}
+html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important;overscroll-behavior-x:none!important;touch-action:pan-y;background:#1a1a1a!important}
+*,*::before,*::after{box-sizing:border-box!important;max-width:100%!important}
+img,video,iframe,embed,object,canvas,svg{max-width:100%!important;height:auto!important}
+pre,code{white-space:pre-wrap!important;overflow-wrap:anywhere!important;overflow-x:hidden!important}
+table{display:block!important;width:100%!important;table-layout:fixed!important;overflow-x:hidden!important}
+th,td,a,p,li,span,div{overflow-wrap:anywhere!important}
+*::-webkit-scrollbar{width:6px!important}
+*::-webkit-scrollbar-track{background:#1a1a1a!important}
+*::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15)!important;border-radius:3px!important}
+*::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3)!important}
+html,body{scrollbar-color:rgba(255,255,255,0.15) #1a1a1a!important;scrollbar-width:thin!important}
+`;
+
 function formatDate(timestamp: number | null): string {
   if (!timestamp) return "";
   const date = new Date(timestamp * 1000);
@@ -747,8 +762,8 @@ export function ArticleDetail() {
       {/* Single panel — toggles between reader and web view */}
       <div className="flex-1 min-h-0 relative overflow-hidden">
         {viewMode === "reader" ? (
-          <div className="h-full overflow-y-auto">
-            <div style={{ maxWidth: 720, margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px" }}>
+          <div className="h-full overflow-y-auto overflow-x-hidden" style={{ overscrollBehaviorX: "none", touchAction: "pan-y" }}>
+            <div style={{ maxWidth: 720, width: "100%", margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px", overflowX: "hidden" }}>
               <div style={{ marginBottom: 28 }}>
                 <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
                 <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
@@ -817,17 +832,17 @@ export function ArticleDetail() {
                 ref={iframeRef}
                 srcDoc={rawHtml.replace(
                   /(<head[^>]*>)/i,
-                  '$1<meta name="color-scheme" content="dark"><style>:root{color-scheme:dark}*::-webkit-scrollbar{width:6px!important}*::-webkit-scrollbar-track{background:#1a1a1a!important}*::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15)!important;border-radius:3px!important}*::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3)!important}html,body{scrollbar-color:rgba(255,255,255,0.15) #1a1a1a!important;scrollbar-width:thin!important}</style>'
+                  `$1<meta name="color-scheme" content="dark"><style>${EMBEDDED_WEB_VIEW_CSS}</style>`
                 )}
                 sandbox="allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock allow-presentation"
-                style={{ width: "100%", height: "100%", border: "none", background: "#1a1a1a" }}
+                style={{ width: "100%", height: "100%", border: "none", background: "#1a1a1a", overflow: "hidden" }}
                 title="Article web view"
                 onLoad={() => {
                   try {
                     const win = iframeRef.current?.contentWindow;
                     if (!win) return;
                     const s = win.document.createElement("style");
-                    s.textContent = "*::-webkit-scrollbar{width:6px!important}*::-webkit-scrollbar-track{background:#1a1a1a!important}*::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15)!important;border-radius:3px!important}*::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3)!important}html,body{scrollbar-color:rgba(255,255,255,0.15) #1a1a1a!important;scrollbar-width:thin!important}";
+                    s.textContent = EMBEDDED_WEB_VIEW_CSS;
                     win.document.head.appendChild(s);
                     win.document.addEventListener("contextmenu", (e: Event) => e.preventDefault());
                     win.addEventListener("keydown", ((e: KeyboardEvent) => {

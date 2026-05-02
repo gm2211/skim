@@ -91,42 +91,61 @@ function App() {
     };
   }, [qc]);
 
-  // Phone-mode swipe-right-to-back gesture. Edge-initiated swipe
-  // (touchstart near the left edge) feels native and avoids stealing
-  // intra-pane horizontal scrolls.
+  // Phone-mode horizontal gestures are pane navigation, not page scrolling.
+  // Detail accepts swipe-right anywhere to return to the article list; other
+  // panes keep edge/adjacent-pane gestures so list item swipe actions still work.
   useEffect(() => {
     if (!isPhone) return;
     let startX = 0;
     let startY = 0;
-    let startedAtEdge = false;
+    let startPane = useUiStore.getState().phonePane;
+    let allowsHorizontalPaneGesture = false;
     let cancelled = false;
     const EDGE_PX = 32;
     const TRIGGER_PX = 60;
+    const INTENT_PX = 10;
     const onStart = (e: TouchEvent) => {
       const t = e.touches[0];
       if (!t) return;
+      const state = useUiStore.getState();
       startX = t.clientX;
       startY = t.clientY;
-      startedAtEdge = startX <= EDGE_PX;
+      startPane = state.phonePane;
+      allowsHorizontalPaneGesture =
+        startPane === "detail" ||
+        startPane === "sidebar" ||
+        (startPane === "list" && startX <= EDGE_PX);
       cancelled = false;
     };
     const onMove = (e: TouchEvent) => {
-      if (!startedAtEdge || cancelled) return;
+      if (!allowsHorizontalPaneGesture || cancelled) return;
       const t = e.touches[0];
       if (!t) return;
       const dx = t.clientX - startX;
+      const absDx = Math.abs(dx);
       const dy = Math.abs(t.clientY - startY);
-      if (dy > 40 && dy > Math.abs(dx)) {
+      if (dy > 40 && dy > absDx) {
         cancelled = true;
         return;
       }
-      if (dx > TRIGGER_PX) {
+
+      if (absDx > INTENT_PX && absDx > dy) {
+        e.preventDefault();
+      }
+
+      if (startPane === "detail" && dx > TRIGGER_PX) {
         cancelled = true;
         useUiStore.getState().phoneBack();
+      } else if (startPane === "sidebar" && dx < -TRIGGER_PX) {
+        cancelled = true;
+        useUiStore.getState().setPhonePane("list");
+      } else if (startPane === "list" && dx > TRIGGER_PX) {
+        cancelled = true;
+        useUiStore.getState().setPhonePane("sidebar");
       }
     };
     window.addEventListener("touchstart", onStart, { passive: true });
-    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchmove", onMove, { passive: false });
     return () => {
       window.removeEventListener("touchstart", onStart);
       window.removeEventListener("touchmove", onMove);

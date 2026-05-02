@@ -125,16 +125,12 @@ export function ArticleDetail() {
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
-  const swipeStart = useRef<{ x: number; y: number; edge: boolean } | null>(null);
   const [fullContent, setFullContent] = useState<string | null>(null);
   const [rawHtml, setRawHtml] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("reader");
-
-  const modes: ViewMode[] = ["reader", "web"];
-  const slideIndex = modes.indexOf(viewMode);
 
   // Reset state when article changes — cancel any in-flight summary
   useEffect(() => {
@@ -257,7 +253,7 @@ export function ArticleDetail() {
     setViewMode("web");
   }, [viewMode, fetchFull]);
 
-  // Arrow key navigation — right/left slide between panels
+  // Arrow key navigation — toggle between reader and web views
   useEffect(() => {
     if (!article?.url) return;
     const handler = (e: KeyboardEvent) => {
@@ -265,16 +261,10 @@ export function ArticleDetail() {
       if (e.key === "ArrowRight") {
         e.preventDefault();
         fetchFull();
-        setViewMode((prev) => {
-          const i = modes.indexOf(prev);
-          return i < modes.length - 1 ? modes[i + 1] : prev;
-        });
+        setViewMode("web");
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        setViewMode((prev) => {
-          const i = modes.indexOf(prev);
-          return i > 0 ? modes[i - 1] : prev;
-        });
+        setViewMode("reader");
       }
     };
     window.addEventListener("keydown", handler);
@@ -701,39 +691,10 @@ export function ArticleDetail() {
         );
       })()}
 
-      {/* Sliding panels */}
-      <div
-        className="slide-container"
-        onTouchStart={isPhone ? (e) => {
-          const t = e.touches[0];
-          if (!t) return;
-          swipeStart.current = { x: t.clientX, y: t.clientY, edge: t.clientX <= 32 };
-        } : undefined}
-        onTouchEnd={isPhone ? (e) => {
-          const s = swipeStart.current;
-          if (!s) return;
-          swipeStart.current = null;
-          if (s.edge) return;
-          const t = e.changedTouches[0];
-          if (!t) return;
-          const dx = t.clientX - s.x;
-          const dy = Math.abs(t.clientY - s.y);
-          if (Math.abs(dx) < 50 || dy > Math.abs(dx)) return;
-          if (dx < 0) {
-            const i = modes.indexOf(viewMode);
-            if (i < modes.length - 1) { fetchFull(); setViewMode(modes[i + 1]); }
-          } else {
-            const i = modes.indexOf(viewMode);
-            if (i > 0) setViewMode(modes[i - 1]);
-          }
-        } : undefined}
-      >
-        <div
-          className="slide-track"
-          style={{ transform: `translateX(-${slideIndex * 100}%)` }}
-        >
-          {/* Panel 0: Reader (with RSS-content fallback when extraction fails) */}
-          <div className="slide-panel">
+      {/* Single panel — toggles between reader and web view */}
+      <div className="flex-1 min-h-0 relative overflow-hidden">
+        {viewMode === "reader" ? (
+          <div className="h-full overflow-y-auto">
             <div style={{ maxWidth: 720, margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px" }}>
               <div style={{ marginBottom: 28 }}>
                 <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
@@ -762,9 +723,8 @@ export function ArticleDetail() {
               )}
             </div>
           </div>
-
-          {/* Panel 2: Web view */}
-          <div className="slide-panel slide-panel-web" style={{ position: "relative" }}>
+        ) : (
+          <div className="h-full relative">
             {article.url && (
               <button
                 onClick={() => { if (article.url) openUrl(article.url); }}
@@ -817,8 +777,7 @@ export function ArticleDetail() {
               />
             )}
           </div>
-
-        </div>
+        )}
       </div>
 
       {/* Chat drawer — collapsible bottom pane */}

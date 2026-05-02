@@ -13,6 +13,11 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 
 type ViewMode = "reader" | "web";
 
+type FetchedArticleContent = {
+  html: string;
+  raw_html: string;
+};
+
 function formatDate(timestamp: number | null): string {
   if (!timestamp) return "";
   const date = new Date(timestamp * 1000);
@@ -105,6 +110,52 @@ function stripFullArticleJunk(html: string): string {
   return div.innerHTML;
 }
 
+function htmlToPlainText(html: string): string {
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  div.querySelectorAll("script, style, noscript, svg").forEach((el) => el.remove());
+  return (div.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
+function looksLikeBlockedHtml(html: string): boolean {
+  const plain = htmlToPlainText(html);
+  return (
+    /recaptcha (service|challenge)|captcha.{0,80}(challenge|required|verification)|verification required|access denied|are you a human|cloudflare|just a moment|please enable (javascript|js)|enable javascript/i.test(plain)
+  );
+}
+
+function prepareFetchedArticle(result: FetchedArticleContent): {
+  fullContent: string | null;
+  rawHtml: string | null;
+  error: string | null;
+} {
+  const stripped = stripFullArticleJunk(result.html);
+  const plain = htmlToPlainText(stripped);
+  const blocked = looksLikeBlockedHtml(stripped) || looksLikeBlockedHtml(result.raw_html);
+
+  if (blocked) {
+    return {
+      fullContent: null,
+      rawHtml: null,
+      error: "Reader couldn't extract this page (likely paywall, JS-required, or anti-bot challenge). Showing RSS preview.",
+    };
+  }
+
+  if (plain.length < 240) {
+    return {
+      fullContent: null,
+      rawHtml: result.raw_html,
+      error: "Reader couldn't extract this page (likely paywall, JS-required, or anti-bot challenge). Showing RSS preview.",
+    };
+  }
+
+  return {
+    fullContent: stripped,
+    rawHtml: result.raw_html,
+    error: null,
+  };
+}
+
 export function ArticleDetail() {
   const { selectedArticleId, setSelectedArticleId, listCollapsed, sidebarCollapsed, sidebarView, isPhone, phoneBack } = useUiStore();
   const { data: article } = useArticle(selectedArticleId);
@@ -165,19 +216,10 @@ export function ArticleDetail() {
       try {
         const result = await fetchFullArticle(url);
         if (cancelled || seq !== fullFetchSeqRef.current) return;
-        const stripped = stripFullArticleJunk(result.html);
-        // Detect anti-bot / paywall stubs: extracted content is too short
-        // or matches known JS-required / verification placeholders. Treat
-        // as a fetch failure so the UI falls back to the RSS preview.
-        const plain = stripped.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-        const looksLikeAntiBot =
-          /please enable (javascript|js)|enable javascript|verification required|captcha|access denied|are you a human|cloudflare|just a moment/i.test(plain);
-        setRawHtml(result.raw_html);
-        if (plain.length < 240 || looksLikeAntiBot) {
-          setFullError("Reader couldn't extract this page (likely paywall, JS-required, or anti-bot challenge). Showing RSS preview.");
-        } else {
-          setFullContent(stripped);
-        }
+        const prepared = prepareFetchedArticle(result);
+        setRawHtml(prepared.rawHtml);
+        setFullContent(prepared.fullContent);
+        setFullError(prepared.error);
       } catch (e) {
         if (!cancelled && seq === fullFetchSeqRef.current) setFullError(String(e));
       } finally {
@@ -241,8 +283,10 @@ export function ArticleDetail() {
     try {
       const result = await fetchFullArticle(url);
       if (seq !== fullFetchSeqRef.current || useUiStore.getState().selectedArticleId !== articleId) return;
-      setFullContent(stripFullArticleJunk(result.html));
-      setRawHtml(result.raw_html);
+      const prepared = prepareFetchedArticle(result);
+      setFullContent(prepared.fullContent);
+      setRawHtml(prepared.rawHtml);
+      setFullError(prepared.error);
     } catch (e) {
       if (seq === fullFetchSeqRef.current) setFullError(String(e));
     } finally {

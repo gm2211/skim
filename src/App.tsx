@@ -58,12 +58,15 @@ function App() {
     return () => observer.disconnect();
   }, []);
 
-  // OPML drag-drop import (iPad split-view from Files, desktop drop)
+  // OPML drag-drop import (iPad split-view from Files, desktop drop).
+  // When the AddFeedDialog is open, defer to its own drop zone so the user
+  // gets the preview-then-import flow instead of a silent background import.
   useEffect(() => {
     const onDragOver = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
     };
     const onDrop = async (e: DragEvent) => {
+      if (useUiStore.getState().showAddFeed) return;
       const files = e.dataTransfer?.files;
       if (!files || files.length === 0) return;
       e.preventDefault();
@@ -187,18 +190,40 @@ function App() {
           <div
             className="flex h-full w-[300%]"
             style={{
-              transform: `translateX(-${paneIndex * (100 / 3)}%)`,
-              transition: "transform 0.28s cubic-bezier(0.32, 0.72, 0, 1)",
+              transform: `translate3d(${-paneIndex * (100 / 3)}%, 0, 0)`,
+              transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
               willChange: "transform",
+              backfaceVisibility: "hidden",
             }}
           >
-            <div className="w-1/3 h-full flex-shrink-0 overflow-hidden flex" style={{ pointerEvents: paneIndex === 0 ? "auto" : "none" }} aria-hidden={paneIndex !== 0}>
+            <div
+              className="w-1/3 h-full flex-shrink-0 overflow-hidden flex"
+              style={{
+                pointerEvents: paneIndex === 0 ? "auto" : "none",
+                contain: "layout paint",
+              }}
+              aria-hidden={paneIndex !== 0}
+            >
               <Sidebar />
             </div>
-            <div className="w-1/3 h-full flex-shrink-0 overflow-hidden flex" style={{ pointerEvents: paneIndex === 1 ? "auto" : "none" }} aria-hidden={paneIndex !== 1}>
+            <div
+              className="w-1/3 h-full flex-shrink-0 overflow-hidden flex"
+              style={{
+                pointerEvents: paneIndex === 1 ? "auto" : "none",
+                contain: "layout paint",
+              }}
+              aria-hidden={paneIndex !== 1}
+            >
               <ArticleList />
             </div>
-            <div className="w-1/3 h-full flex-shrink-0 overflow-hidden flex" style={{ pointerEvents: paneIndex === 2 ? "auto" : "none" }} aria-hidden={paneIndex !== 2}>
+            <div
+              className="w-1/3 h-full flex-shrink-0 overflow-hidden flex"
+              style={{
+                pointerEvents: paneIndex === 2 ? "auto" : "none",
+                contain: "layout paint",
+              }}
+              aria-hidden={paneIndex !== 2}
+            >
               {selectedArticleId ? <ArticleDetail /> : <div className="flex-1" />}
             </div>
           </div>

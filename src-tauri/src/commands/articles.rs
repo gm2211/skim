@@ -212,7 +212,7 @@ pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, Strin
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
     // Inject <base href="..."> so relative URLs (images, stylesheets) resolve
-    // against the original site, not about:srcdoc.
+    // against the original site if anything ends up consuming raw_html.
     let base_tag = format!("<base href=\"{}\">", effective_url.replace('"', "&quot;"));
     let raw_html = if let Some(head_end) = html.to_lowercase().find("<head") {
         if let Some(tag_close) = html[head_end..].find('>') {
@@ -225,69 +225,101 @@ pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, Strin
         html.clone()
     };
 
-    // Extract body content -- strip everything outside <body> if present
-    let body_html = if let Some(start) = html.find("<body") {
-        let content_start = html[start..].find('>').map(|i| start + i + 1).unwrap_or(start);
-        if let Some(end) = html[content_start..].find("</body>") {
-            html[content_start..content_start + end].to_string()
-        } else {
-            html[content_start..].to_string()
-        }
+    // Many SPAs (Next.js, etc.) ship a <script id="__NEXT_DATA__"> JSON blob
+    // with the article body — readability can't see it because the page DOM
+    // hasn't been hydrated. Try to pull a usable body string out of common
+    // shapes first; fall back to dom_smoothie for traditional pages.
+    let nextjs_extract = extract_from_next_data(&html);
+
+    let cleaned = if let Some(body) = nextjs_extract {
+        plain_to_html(&body)
     } else {
-        html
+        match dom_smoothie::Readability::new(
+            html.as_str(),
+            Some(&effective_url),
+            Some(dom_smoothie::Config::default()),
+        ) {
+            Ok(mut r) => match r.parse() {
+                Ok(article) => article.content.to_string(),
+                Err(_) => String::new(),
+            },
+            Err(_) => String::new(),
+        }
     };
 
-    // Strip unwanted tags
-    let mut clean = body_html;
-    for tag in &[
-        "script", "style", "nav", "header", "footer", "noscript",
-        "aside", "form", "button", "svg", "iframe",
-    ] {
-        loop {
-            let open = format!("<{}", tag);
-            let close = format!("</{}>", tag);
-            let lower = clean.to_lowercase();
-            if let Some(start) = lower.find(&open) {
-                if let Some(end) = lower[start..].find(&close) {
-                    clean = format!("{}{}", &clean[..start], &clean[start + end + close.len()..]);
-                } else {
-                    // Self-closing or unclosed -- remove to next >
-                    if let Some(end_bracket) = clean[start..].find('>') {
-                        clean = format!("{}{}", &clean[..start], &clean[start + end_bracket + 1..]);
-                    } else {
-                        break;
-                    }
-                }
-            } else {
-                break;
-            }
-        }
-    }
+    Ok(FullArticleContent { html: cleaned, raw_html })
+}
 
-    // Strip elements with common UI/paywall class patterns
-    let ui_patterns = [
-        "skip-to", "skip_to", "skipnav", "paywall", "subscriber",
-        "ad-slot", "ad_slot", "advert", "newsletter", "popup",
-        "toolbar", "topbar", "top-bar", "site-header", "site-nav",
-        "story-settings", "minimize-to-nav", "learn-more",
+// Walk common Next.js / framework JSON shapes to find a long article-body
+// string. Returns Some(body) only if the candidate is at least 500 chars,
+// which keeps us from picking up excerpts or metadata blurbs.
+fn extract_from_next_data(html: &str) -> Option<String> {
+    let needle = r#"id="__NEXT_DATA__""#;
+    let i = html.find(needle)?;
+    let start = html[i..].find('>')? + i + 1;
+    let end = html[start..].find("</script>")? + start;
+    let blob = &html[start..end];
+    let json: serde_json::Value = serde_json::from_str(blob).ok()?;
+
+    // Common keys that hold the actual article content as a string.
+    const BODY_KEYS: &[&str] = &[
+        "articleBody", "body", "content", "html", "markup", "rawBody", "post_body", "story_body",
     ];
-    for pattern in &ui_patterns {
-        loop {
-            let lower = clean.to_lowercase();
-            if let Some(pos) = lower.find(pattern) {
-                let tag_start = clean[..pos].rfind('<').unwrap_or(pos);
-                if let Some(tag_end) = clean[pos..].find('>') {
-                    clean = format!("{}{}", &clean[..tag_start], &clean[pos + tag_end + 1..]);
-                } else {
-                    break;
+
+    fn walk(v: &serde_json::Value, out: &mut Option<String>) {
+        if out.is_some() { return; }
+        match v {
+            serde_json::Value::Object(map) => {
+                for (k, vv) in map {
+                    if BODY_KEYS.contains(&k.as_str()) {
+                        if let Some(s) = vv.as_str() {
+                            if s.len() >= 500 {
+                                *out = Some(s.to_string());
+                                return;
+                            }
+                        }
+                    }
+                    walk(vv, out);
+                    if out.is_some() { return; }
                 }
-            } else {
-                break;
             }
+            serde_json::Value::Array(arr) => {
+                for vv in arr {
+                    walk(vv, out);
+                    if out.is_some() { return; }
+                }
+            }
+            _ => {}
         }
     }
 
-    Ok(FullArticleContent { html: clean, raw_html })
+    let mut found = None;
+    walk(&json, &mut found);
+    found
+}
+
+// Convert a plain-text (or lightly-marked) article body to renderable HTML:
+// split on blank lines for paragraphs, auto-link bare URLs, escape HTML.
+fn plain_to_html(text: &str) -> String {
+    // If the body already looks like HTML, hand it back unchanged.
+    if text.contains("<p") || text.contains("<div") || text.contains("<h2") {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len() + 128);
+    let url_re = regex::Regex::new(r"https?://[^\s<>\)\]]+").unwrap();
+    for para in text.split("\n\n") {
+        let p = para.trim();
+        if p.is_empty() { continue; }
+        let escaped = p.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
+        let linked = url_re.replace_all(&escaped, |caps: &regex::Captures| {
+            let u = &caps[0];
+            format!(r#"<a href="{}" target="_blank" rel="noreferrer">{}</a>"#, u, u)
+        });
+        out.push_str("<p>");
+        out.push_str(&linked.replace('\n', "<br/>"));
+        out.push_str("</p>\n");
+    }
+    out
 }
 
 #[tauri::command]

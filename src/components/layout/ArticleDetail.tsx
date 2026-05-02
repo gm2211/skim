@@ -142,7 +142,7 @@ export function ArticleDetail() {
     setFullContent(null);
     setRawHtml(null);
     setFullError(null);
-    setViewMode("rss");
+    setViewMode("reader");
     summarize.reset();
     setShowSummarizeMenu(false);
     setPerArticleLength(undefined);
@@ -150,6 +150,49 @@ export function ArticleDetail() {
     setPerArticlePrompt(undefined);
     setPerArticleWordCount(undefined);
   }, [selectedArticleId]);
+
+  // Auto-fetch full article on open so Reader has content immediately.
+  // Inlined (instead of calling fetchFull) so the fetch isn't gated on the
+  // previous article's fullContent value during the reset → fetch transition.
+  useEffect(() => {
+    const url = article?.url;
+    if (!url) return;
+    let cancelled = false;
+    setLoadingFull(true);
+    setFullError(null);
+    (async () => {
+      try {
+        const result = await fetchFullArticle(url);
+        if (cancelled) return;
+        const stripped = stripFullArticleJunk(result.html);
+        // Detect anti-bot / paywall stubs: extracted content is too short
+        // or matches known JS-required / verification placeholders. Treat
+        // as a fetch failure so the UI falls back to the RSS preview.
+        const plain = stripped.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+        const looksLikeAntiBot =
+          /please enable (javascript|js)|enable javascript|verification required|captcha|access denied|are you a human|cloudflare|just a moment/i.test(plain);
+        setRawHtml(result.raw_html);
+        if (plain.length < 240 || looksLikeAntiBot) {
+          setFullError("Reader couldn't extract this page (likely paywall, JS-required, or anti-bot challenge). Showing RSS preview.");
+        } else {
+          setFullContent(stripped);
+        }
+      } catch (e) {
+        if (!cancelled) setFullError(String(e));
+      } finally {
+        if (!cancelled) setLoadingFull(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedArticleId, article?.url]);
+
+  // Fall back to RSS preview if Reader has nothing to show.
+  useEffect(() => {
+    if (article && !article.url && viewMode === "reader") setViewMode("rss");
+  }, [article?.url, viewMode]);
+  useEffect(() => {
+    if (fullError && viewMode === "reader") setViewMode("rss");
+  }, [fullError, viewMode]);
 
   // Close summarize menu on click outside
   useEffect(() => {
@@ -726,7 +769,7 @@ export function ArticleDetail() {
           {/* Panel 1: Reader mode */}
           <div className="slide-panel">
 
-            {fullContent && (
+            {fullContent ? (
               <div style={{ maxWidth: 720, margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px" }}>
                 <div style={{ marginBottom: 28 }}>
                   <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
@@ -739,7 +782,25 @@ export function ArticleDetail() {
                 </div>
                 <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
               </div>
-            )}
+            ) : loadingFull ? (
+              <div style={{ maxWidth: 720, margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px" }}>
+                <div style={{ marginBottom: 28 }}>
+                  <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
+                  <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
+                    <span className="text-accent font-medium">{article.feed_title}</span>
+                    {article.author && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{article.author}</span></>)}
+                    <span className="text-text-muted">·</span>
+                    <span className="text-text-muted">{formatDate(article.published_at)}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 14 }}>
+                  <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                  </svg>
+                  Loading article…
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* Panel 2: Web view */}
@@ -763,7 +824,7 @@ export function ArticleDetail() {
                   Couldn't load page in the embedded view.
                 </p>
                 <p className="text-text-muted" style={{ fontSize: 12 }}>
-                  Use the "Open in browser" button above.
+                  Use the "Open in browser" button.
                 </p>
               </div>
             )}
@@ -780,25 +841,17 @@ export function ArticleDetail() {
                 onLoad={() => {
                   try {
                     const win = iframeRef.current?.contentWindow;
-                    if (win) {
-                      // Re-inject scrollbar styles after page loads (overrides site CSS)
-                      const s = win.document.createElement("style");
-                      s.textContent = "*::-webkit-scrollbar{width:6px!important}*::-webkit-scrollbar-track{background:#1a1a1a!important}*::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15)!important;border-radius:3px!important}*::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3)!important}html,body{scrollbar-color:rgba(255,255,255,0.15) #1a1a1a!important;scrollbar-width:thin!important}";
-                      win.document.head.appendChild(s);
-
-                      // Prevent context menu (Inspect Element) inside iframe
-                      win.document.addEventListener("contextmenu", (e: Event) => {
+                    if (!win) return;
+                    const s = win.document.createElement("style");
+                    s.textContent = "*::-webkit-scrollbar{width:6px!important}*::-webkit-scrollbar-track{background:#1a1a1a!important}*::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15)!important;border-radius:3px!important}*::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3)!important}html,body{scrollbar-color:rgba(255,255,255,0.15) #1a1a1a!important;scrollbar-width:thin!important}";
+                    win.document.head.appendChild(s);
+                    win.document.addEventListener("contextmenu", (e: Event) => e.preventDefault());
+                    win.addEventListener("keydown", ((e: KeyboardEvent) => {
+                      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
                         e.preventDefault();
-                      });
-
-                      // Arrow key navigation for prism
-                      win.addEventListener("keydown", ((e: KeyboardEvent) => {
-                        if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-                          e.preventDefault();
-                          window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
-                        }
-                      }) as EventListener);
-                    }
+                        window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
+                      }
+                    }) as EventListener);
                   } catch { /* cross-origin */ }
                 }}
               />

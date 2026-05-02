@@ -161,6 +161,9 @@ export function ArticleList() {
   // - view/filter change (so all↔unread toggles never bleed read items)
   // - phone leaves the list pane (returning re-fetches fresh)
   const stickyMapRef = useRef<Map<string, any>>(new Map());
+  // Bumped whenever we deliberately want to drop the sticky map and
+  // re-derive `articles` from rawArticles only.
+  const [stickyEpoch, setStickyEpoch] = useState(0);
   useEffect(() => {
     stickyMapRef.current = new Map();
   }, [sidebarView, listFilter]);
@@ -205,7 +208,7 @@ export function ArticleList() {
       );
     }
     return combined as typeof rawArticles;
-  }, [rawArticles, isInbox, listFilter, selectedArticleId]);
+  }, [rawArticles, isInbox, listFilter, selectedArticleId, stickyEpoch]);
 
   const title = useMemo(() => {
     switch (sidebarView.type) {
@@ -625,11 +628,12 @@ export function ArticleList() {
         </button>
         <button
           onClick={() => {
-            // Tapping the active filter again is treated as a refresh —
-            // wipe the sticky-read map so previously-read articles drop
-            // from the unread list.
+            // Tapping the active filter again is a refresh — wipe the
+            // sticky-read map and bump the epoch so the articles memo
+            // re-runs without injecting previously-read entries.
             if (listFilter === "unread") {
               stickyMapRef.current = new Map();
+              setStickyEpoch((n) => n + 1);
             }
             setListFilter("unread");
           }}

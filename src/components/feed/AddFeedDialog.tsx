@@ -156,6 +156,7 @@ function FeedlyTab() {
   const [result, setResult] = useState<FeedlyImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [xml, setXml] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
   const qc = useQueryClient();
@@ -168,9 +169,7 @@ function FeedlyTab() {
     }
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const ingestFile = async (file: File) => {
     setError(null);
     setResult(null);
     setFilename(file.name);
@@ -184,6 +183,26 @@ function FeedlyTab() {
       setEntries(null);
       setXml(null);
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await ingestFile(file);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    const name = file.name.toLowerCase();
+    if (!name.endsWith(".opml") && !name.endsWith(".xml")) {
+      setError("Please drop an .opml or .xml file.");
+      return;
+    }
+    await ingestFile(file);
   };
 
   const handleImport = async () => {
@@ -205,7 +224,36 @@ function FeedlyTab() {
   const newCount = entries ? entries.filter((e) => !e.already_exists).length : 0;
 
   return (
-    <div style={{ padding: "16px 24px 24px" }}>
+    <div
+      style={{ padding: "16px 24px 24px", position: "relative" }}
+      onDragOver={(e) => {
+        if (entries || result) return;
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(true);
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setDragActive(false);
+      }}
+      onDrop={handleDrop}
+    >
+      {dragActive && !entries && !result && (
+        <div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-2xl"
+          style={{
+            background: "rgba(88, 166, 255, 0.08)",
+            border: "2px dashed rgba(88, 166, 255, 0.5)",
+            zIndex: 5,
+            margin: 8,
+          }}
+        >
+          <span className="text-accent" style={{ fontSize: 14, fontWeight: 500 }}>
+            Drop .opml file to import
+          </span>
+        </div>
+      )}
       {!entries && !result && (
         <>
           <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 16 }}>
@@ -223,12 +271,15 @@ function FeedlyTab() {
               </svg>
               Open feedly.com/i/opml
             </button>
-            <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6 }}>
-              Signs you in to Feedly and auto-downloads an <code>.opml</code> file.
+            <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
+              Auto-downloads an <code>.opml</code> file if you're already signed in.
+              <br />
+              <strong>Not signed in?</strong> Feedly will redirect you to log in first — once
+              that's done, click the button again to grab the file.
             </p>
           </Step>
 
-          <Step number={2} title="Select the downloaded .opml file">
+          <Step number={2} title="Drop the .opml file here, or pick it from disk">
             <input
               ref={fileInputRef}
               type="file"
@@ -246,6 +297,9 @@ function FeedlyTab() {
               </svg>
               Choose .opml file
             </button>
+            <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6 }}>
+              Or drag and drop the file anywhere on this dialog.
+            </p>
             {filename && (
               <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6 }}>
                 {filename}

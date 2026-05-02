@@ -42,6 +42,7 @@ sysinfo = "0.38"
 base64 = "0.22"
 sha2 = "0.10"
 rand = "0.8"
+dom_smoothie = "0.17"
 
 # llama.cpp — desktop only. Not cross-compilable to iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]

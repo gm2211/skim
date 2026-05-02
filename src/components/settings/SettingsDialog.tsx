@@ -24,6 +24,7 @@ import {
 import { ModelBrowser } from "./ModelBrowser";
 import { NumberInput } from "../ui/NumberInput";
 import { AIDisclaimer } from "../common/AIDisclaimer";
+import { isIOS } from "../../utils/platform";
 
 const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
@@ -242,6 +243,9 @@ export function SettingsDialog() {
                     style={inputStyle}
                   >
                     {AI_PROVIDERS.filter((p) => {
+                      // mlx + Apple Intelligence are only wired on the iOS
+                      // bundle (Skim Swift plugin); hide on macOS/desktop.
+                      if (!isIOS && ["mlx", "foundation-models"].includes(p.value)) return false;
                       // Phone: hide providers that need a desktop runtime
                       // (llama.cpp embedded, Ollama localhost, Claude CLI).
                       if (!isPhone) return true;

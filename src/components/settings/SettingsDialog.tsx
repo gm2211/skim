@@ -31,7 +31,7 @@ import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
   { value: "local", label: "Local (Embedded)", description: "Run AI locally with llama.cpp — no server needed" },
-  { value: "mlx", label: "On-device (MLX)", description: "Qwen 2.5 3B running on-device via MLX. Offline. ~2GB download. iOS/macOS only." },
+  { value: "mlx", label: "On-device (MLX)", description: "Run a downloaded MLX model on-device. Offline. iOS/macOS only." },
   { value: "foundation-models", label: "Apple Intelligence", description: "Apple's on-device model. No download. Requires iOS 26+ on Apple Intelligence hardware." },
   { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
   { value: "claude-subscription", label: "Claude Pro/Max (OAuth)", description: "Sign in with your Claude.ai account — no API key, no CLI. Works on desktop and iOS." },
@@ -880,16 +880,19 @@ function OnDeviceTierSection({
   const [error, setError] = useState<string | null>(null);
 
   const isPhone = useUiStore((s) => s.isPhone);
+  const availableModels = MLX_MODELS.filter((m) => !isPhone || m.phoneFriendly);
   const defaultModel = isPhone
     ? MLX_MODELS.find((m) => m.phoneFriendly) ?? MLX_MODELS[0]
     : MLX_MODELS.find((m) => m.repoId === "mlx-community/Qwen2.5-3B-Instruct-4bit") ?? MLX_MODELS[0];
-  const selectedRepoId = ai.model ?? defaultModel.repoId;
+  const savedRepoId = ai.model ?? ai.local_model_path ?? defaultModel.repoId;
   const selectedModel =
-    MLX_MODELS.find((m) => m.repoId === selectedRepoId) ?? defaultModel;
+    availableModels.find((m) => m.repoId === savedRepoId) ?? defaultModel;
+  const selectedRepoId = selectedModel.repoId;
   const commitSelectedModel = async (repoId: string) => {
-    updateAi({ model: repoId });
+    const patch = { provider: "mlx", model: repoId, local_model_path: repoId };
+    updateAi(patch);
     try {
-      await persistAi({ provider: "mlx", model: repoId });
+      await persistAi(patch);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -900,10 +903,10 @@ function OnDeviceTierSection({
   }, []);
 
   useEffect(() => {
-    if (!ai.model) {
-      void commitSelectedModel(defaultModel.repoId);
+    if (ai.provider === "mlx" && (ai.model !== selectedRepoId || ai.local_model_path !== selectedRepoId)) {
+      void commitSelectedModel(selectedRepoId);
     }
-  }, [ai.model, defaultModel.repoId]);
+  }, [ai.provider, ai.model, ai.local_model_path, defaultModel.repoId, selectedRepoId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -958,7 +961,7 @@ function OnDeviceTierSection({
     setProgress({ repoId: selectedRepoId, downloaded: 0, total: 0, percent: 0 });
     try {
       await mlxDownloadModel(selectedRepoId);
-      await persistAi({ provider: "mlx", model: selectedRepoId });
+      await persistAi({ provider: "mlx", model: selectedRepoId, local_model_path: selectedRepoId });
       setDownloaded(true);
       setProgress(null);
     } catch (e: unknown) {
@@ -1030,7 +1033,7 @@ function OnDeviceTierSection({
           }}
           disabled={!available || busy}
         >
-          {MLX_MODELS.filter((m) => !isPhone || m.phoneFriendly).map((m) => (
+          {availableModels.map((m) => (
             <option key={m.repoId} value={m.repoId}>
               {m.label} — ~{m.sizeGb.toFixed(1)} GB
             </option>

@@ -136,8 +136,56 @@ actor MLXRunner {
         return hasWeights && hasConfig
     }
 
+    nonisolated static func downloadedRepoIds() -> [String] {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let modelsDir = documents
+            .appendingPathComponent("huggingface", isDirectory: true)
+            .appendingPathComponent("models", isDirectory: true)
+        guard let orgs = try? FileManager.default.contentsOfDirectory(
+            at: modelsDir,
+            includingPropertiesForKeys: [.isDirectoryKey]
+        ) else {
+            return []
+        }
+
+        var repoIds: [String] = []
+        for org in orgs {
+            guard (try? org.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+                continue
+            }
+            let repos = (try? FileManager.default.contentsOfDirectory(
+                at: org,
+                includingPropertiesForKeys: [.isDirectoryKey]
+            )) ?? []
+            for repo in repos {
+                guard (try? repo.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+                    continue
+                }
+                let repoId = "\(org.lastPathComponent)/\(repo.lastPathComponent)"
+                if isRepoDownloaded(repoId) {
+                    repoIds.append(repoId)
+                }
+            }
+        }
+        return repoIds.sorted()
+    }
+
     /// The currently selected repo id.
     func activeRepoId() -> String { currentRepoId }
+
+    func selectDownloadedModel(preferredRepoId: String) {
+        if MLXRunner.isRepoDownloaded(preferredRepoId) {
+            setModel(repoId: preferredRepoId)
+            return
+        }
+
+        let fallbacks = [MLXRunner.defaultRepoId] + MLXRunner.downloadedRepoIds()
+        if let fallback = fallbacks.first(where: { MLXRunner.isRepoDownloaded($0) }) {
+            setModel(repoId: fallback)
+        } else {
+            setModel(repoId: preferredRepoId)
+        }
+    }
 
     /// Switch which model is used. Evicts any loaded model if the repo changed.
     func setModel(repoId: String) {

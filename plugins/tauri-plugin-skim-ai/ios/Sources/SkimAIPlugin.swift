@@ -111,7 +111,7 @@ class SkimAIPlugin: Plugin {
         let args = try invoke.parseArgs(CompleteArgs.self)
         Task {
             do {
-                await MLXRunner.shared.setModel(repoId: args.repoId ?? MLXRunner.defaultRepoId)
+                await MLXRunner.shared.selectDownloadedModel(preferredRepoId: args.repoId ?? MLXRunner.defaultRepoId)
                 let text = try await MLXRunner.shared.complete(
                     systemPrompt: args.system,
                     userPrompt: args.user,

@@ -446,7 +446,7 @@ export function ArticleDetail() {
 
   // Close summarize menu on click outside
   useEffect(() => {
-    if (!showSummarizeMenu) return;
+    if (!showSummarizeMenu || isPhone) return;
     const handler = (e: MouseEvent) => {
       if (sumMenuRef.current && !sumMenuRef.current.contains(e.target as Node)) {
         setShowSummarizeMenu(false);
@@ -454,7 +454,7 @@ export function ArticleDetail() {
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [showSummarizeMenu]);
+  }, [isPhone, showSummarizeMenu]);
 
   const doSummarize = useCallback(
     (force = false) => {
@@ -1154,10 +1154,18 @@ export function ArticleDetail() {
 
             {showSummarizeMenu && (
               isPhone ? createPortal(
-                <div className="fixed inset-0 z-50" onClick={() => setShowSummarizeMenu(false)}>
+                <div
+                  className="fixed inset-0 z-50"
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) setShowSummarizeMenu(false);
+                  }}
+                >
                   <div
                     className="absolute left-1/2 -translate-x-1/2 border border-white/10 rounded-xl shadow-xl"
                     style={{ background: "rgba(22, 27, 34, 0.95)", backdropFilter: "blur(12px)", padding: "12px", width: "min(320px, calc(100vw - 24px))", top: "calc(env(safe-area-inset-top, 0px) + 82px)" }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
                   >
                     {renderSummarizeMenuBody()}

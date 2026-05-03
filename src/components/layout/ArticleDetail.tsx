@@ -41,7 +41,7 @@ const SWIPE_FAST_PX_PER_MS = 0.44;
 const SWIPE_FAST_MIN_PX = 24;
 const SLIDE_MS = 390;
 const BOUNCE_MS = 280;
-const SWIPE_STALE_MS = 1800;
+const SWIPE_STALE_MS = 650;
 const PHONE_SLIDE_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
 const PHONE_SETTLE_EASING = "cubic-bezier(0.2, 0.9, 0.2, 1)";
 
@@ -344,6 +344,7 @@ export function ArticleDetail() {
   const articleFrameRef = useRef<HTMLDivElement>(null);
   const readerScrollRef = useRef<HTMLDivElement>(null);
   const articleSwipeRef = useRef<ArticleSwipe | null>(null);
+  const endArticleSwipeRef = useRef<(() => void) | null>(null);
   const articleSwipeSeqRef = useRef(0);
   const articleSwipeWatchdogRef = useRef<number | null>(null);
   const modeTransitionTimerRef = useRef<number | null>(null);
@@ -356,6 +357,7 @@ export function ArticleDetail() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const fullFetchSeqRef = useRef(0);
   const [viewMode, setViewMode] = useState<ViewMode>("reader");
+  const viewModeRef = useRef<ViewMode>("reader");
   const [articleFrameWidth, setArticleFrameWidth] = useState(0);
   const [modeDragOffset, setModeDragOffset] = useState(0);
   const [dismissOffset, setDismissOffset] = useState(0);
@@ -385,6 +387,10 @@ export function ArticleDetail() {
   }, []);
 
   useEffect(() => {
+    viewModeRef.current = viewMode;
+  }, [viewMode]);
+
+  useEffect(() => {
     if (articleSwipeRef.current) return;
     if (modeTransition === "none" && modeDragOffset !== 0) setModeDragOffset(0);
     if (dismissTransition === "none" && dismissOffset !== 0) setDismissOffset(0);
@@ -403,6 +409,7 @@ export function ArticleDetail() {
     setRawHtml(null);
     setLoadingFull(false);
     setFullError(null);
+    viewModeRef.current = "reader";
     setViewMode("reader");
     setModeDragOffset(0);
     setDismissOffset(0);
@@ -615,7 +622,11 @@ export function ArticleDetail() {
     clearArticleSwipeWatchdog();
     articleSwipeWatchdogRef.current = window.setTimeout(() => {
       if (articleSwipeRef.current?.id !== swipeId) return;
-      cancelActiveArticleSwipe(true);
+      if (endArticleSwipeRef.current) {
+        endArticleSwipeRef.current();
+      } else {
+        cancelActiveArticleSwipe(true);
+      }
     }, SWIPE_STALE_MS);
   }, [cancelActiveArticleSwipe, clearArticleSwipeWatchdog]);
 
@@ -655,10 +666,11 @@ export function ArticleDetail() {
     if (mode === "web") void fetchFull();
     clearModeTransitionTimer();
     setDismissOffset(0);
-    if (viewMode !== mode && isPhone) settleMode("slide");
+    if (viewModeRef.current !== mode && isPhone) settleMode("slide");
     setModeDragOffset(0);
+    viewModeRef.current = mode;
     setViewMode(mode);
-  }, [clearModeTransitionTimer, fetchFull, isPhone, settleMode, viewMode]);
+  }, [clearModeTransitionTimer, fetchFull, isPhone, settleMode]);
 
   const handleReader = useCallback(async () => {
     animateToMode("reader");
@@ -705,10 +717,10 @@ export function ArticleDetail() {
       lastAt: performance.now(),
       velocityX: 0,
       intent: "pending",
-      startedIn: viewMode,
+      startedIn: viewModeRef.current,
       target: null,
     };
-  }, [clearArticleSwipeWatchdog, clearDismissTransitionTimer, clearModeTransitionTimer, isPhone, viewMode]);
+  }, [clearArticleSwipeWatchdog, clearDismissTransitionTimer, clearModeTransitionTimer, isPhone]);
 
   const moveArticleSwipe = useCallback((x: number, y: number, iframeGestureId: number | null = null): boolean => {
     const swipe = articleSwipeRef.current;
@@ -800,14 +812,20 @@ export function ArticleDetail() {
     settleMode,
   ]);
 
-  const handleArticleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    const t = e.touches[0];
-    if (!t) return;
-    beginArticleSwipe(t.clientX, t.clientY);
-  }, [beginArticleSwipe]);
+  useEffect(() => {
+    endArticleSwipeRef.current = () => endArticleSwipe(undefined);
+  }, [endArticleSwipe]);
 
   useEffect(() => {
     if (!isPhone) return;
+    const frame = articleFrameRef.current;
+    if (!frame) return;
+    const start = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      beginArticleSwipe(touch.clientX, touch.clientY);
+    };
     const move = (event: TouchEvent) => {
       const swipe = articleSwipeRef.current;
       if (!swipe || swipe.iframeGestureId !== null) return;
@@ -822,6 +840,7 @@ export function ArticleDetail() {
     const cancelIfHidden = () => {
       if (document.hidden) cancelActiveArticleSwipe(true);
     };
+    frame.addEventListener("touchstart", start, { passive: true, capture: true });
     window.addEventListener("touchmove", move, { passive: false, capture: true });
     window.addEventListener("touchend", finish, { capture: true });
     window.addEventListener("touchcancel", finish, { capture: true });
@@ -829,6 +848,7 @@ export function ArticleDetail() {
     window.addEventListener("pagehide", cancel);
     document.addEventListener("visibilitychange", cancelIfHidden);
     return () => {
+      frame.removeEventListener("touchstart", start, { capture: true });
       window.removeEventListener("touchmove", move, { capture: true });
       window.removeEventListener("touchend", finish, { capture: true });
       window.removeEventListener("touchcancel", finish, { capture: true });
@@ -836,7 +856,7 @@ export function ArticleDetail() {
       window.removeEventListener("pagehide", cancel);
       document.removeEventListener("visibilitychange", cancelIfHidden);
     };
-  }, [cancelActiveArticleSwipe, endArticleSwipe, isPhone, moveArticleSwipe]);
+  }, [beginArticleSwipe, cancelActiveArticleSwipe, endArticleSwipe, isPhone, moveArticleSwipe]);
 
   useEffect(() => {
     if (!isPhone) return;
@@ -1357,7 +1377,6 @@ export function ArticleDetail() {
       <div
         ref={articleFrameRef}
         className="flex-1 min-h-0 relative overflow-hidden"
-        onTouchStartCapture={handleArticleTouchStart}
         style={{ overscrollBehaviorX: "none", touchAction: isPhone ? "pan-y" : undefined }}
       >
         <div

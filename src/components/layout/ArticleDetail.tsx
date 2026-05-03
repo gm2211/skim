@@ -19,18 +19,17 @@ type FetchedArticleContent = {
 };
 
 const EMBEDDED_WEB_VIEW_CSS = `
-:root{color-scheme:dark}
-html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important;overscroll-behavior-x:none!important;touch-action:pan-y;background:#1a1a1a!important}
+html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important;overscroll-behavior-x:none!important;touch-action:pan-y}
 *,*::before,*::after{box-sizing:border-box!important;max-width:100%!important}
 img,video,iframe,embed,object,canvas,svg{max-width:100%!important;height:auto!important}
 pre,code{white-space:pre-wrap!important;overflow-wrap:anywhere!important;overflow-x:hidden!important}
 table{display:block!important;width:100%!important;table-layout:fixed!important;overflow-x:hidden!important}
 th,td,a,p,li,span,div{overflow-wrap:anywhere!important}
 *::-webkit-scrollbar{width:6px!important}
-*::-webkit-scrollbar-track{background:#1a1a1a!important}
-*::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.15)!important;border-radius:3px!important}
-*::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.3)!important}
-html,body{scrollbar-color:rgba(255,255,255,0.15) #1a1a1a!important;scrollbar-width:thin!important}
+*::-webkit-scrollbar-track{background:transparent!important}
+*::-webkit-scrollbar-thumb{background:rgba(127,127,127,0.35)!important;border-radius:3px!important}
+*::-webkit-scrollbar-thumb:hover{background:rgba(127,127,127,0.55)!important}
+html,body{scrollbar-color:rgba(127,127,127,0.35) transparent!important;scrollbar-width:thin!important}
 `;
 
 function formatDate(timestamp: number | null): string {
@@ -879,10 +878,10 @@ export function ArticleDetail() {
                 ref={iframeRef}
                 srcDoc={rawHtml.replace(
                   /(<head[^>]*>)/i,
-                  `$1<meta name="color-scheme" content="dark"><style>${EMBEDDED_WEB_VIEW_CSS}</style>`
+                  `$1<style>${EMBEDDED_WEB_VIEW_CSS}</style>`
                 )}
                 sandbox="allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock allow-presentation"
-                style={{ width: "100%", height: "100%", border: "none", background: "#1a1a1a", overflow: "hidden" }}
+                style={{ width: "100%", height: "100%", border: "none", background: "#fff", overflow: "hidden" }}
                 title="Article web view"
                 onLoad={() => {
                   try {

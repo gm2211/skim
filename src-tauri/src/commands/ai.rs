@@ -276,7 +276,7 @@ pub async fn cancel_summarize(
 
 #[tauri::command]
 pub async fn summarize_article(
-    app: AppHandle,
+    _app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     summary_cache: State<'_, SharedSummaryCache>,

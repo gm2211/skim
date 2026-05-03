@@ -7,6 +7,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { AIDisclaimer } from "../common/AIDisclaimer";
 import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
 import { useVisualViewportSync } from "../../hooks/useVisualViewport";
+import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 
 type Scope = "inbox" | "unread" | "all";
 
@@ -26,6 +27,7 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
   useLockBodyScroll(isPhone);
   const dialogRef = useRef<HTMLDivElement>(null);
   useVisualViewportSync(dialogRef, isPhone);
+  const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(isPhone, onClose);
   const [scope, setScope] = useState<Scope>("unread");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -85,6 +87,7 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
           height: isPhone ? "100dvh" : "min(720px, 85vh)",
           top: isPhone ? 0 : undefined,
           willChange: isPhone ? "transform, height" : undefined,
+          ...swipeToDismissStyle,
           margin: isPhone ? 0 : "0 20px",
           paddingTop: isPhone ? "max(var(--sat, 0px), 60px)" : 0,
           paddingBottom: isPhone ? "max(var(--sab, 0px), 12px)" : 0,
@@ -94,7 +97,8 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
         {/* Header */}
         <div
           className="flex items-center gap-2 border-b border-white/5 flex-nowrap"
-          style={{ padding: "12px 16px" }}
+          style={{ padding: isPhone ? "8px 12px" : "12px 16px", touchAction: isPhone ? "pan-y" : undefined }}
+          {...swipeToDismissHandlers}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent flex-shrink-0">
             <circle cx="11" cy="11" r="8" />
@@ -115,8 +119,9 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
           </select>
           <button
             onClick={onClose}
-            className="text-text-muted hover:text-text-primary transition-colors flex-shrink-0"
+            className="tap-target text-text-muted hover:text-text-primary transition-colors flex-shrink-0 rounded-lg hover:bg-white/10"
             title="Close (Esc)"
+            aria-label="Close"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />

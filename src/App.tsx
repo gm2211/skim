@@ -9,10 +9,16 @@ import { triageArticles, refreshAllFeeds, importOpml } from "./services/commands
 import { useQueryClient } from "@tanstack/react-query";
 import { AIBootDisclaimer } from "./components/common/AIBootDisclaimer";
 
+type OpmlImportStatus = {
+  phase: "importing" | "refreshing" | "done" | "error";
+  message: string;
+};
+
 function App() {
   const { showAddFeed, showSettings, selectedArticleId, listCollapsed, isPhone, phonePane } = useUiStore();
   const qc = useQueryClient();
   const [showBootDisclaimer, setShowBootDisclaimer] = useState(true);
+  const [opmlImportStatus, setOpmlImportStatus] = useState<OpmlImportStatus | null>(null);
 
   // Auto-triage on startup
   useEffect(() => {
@@ -62,6 +68,23 @@ function App() {
   // When the AddFeedDialog is open, defer to its own drop zone so the user
   // gets the preview-then-import flow instead of a silent background import.
   useEffect(() => {
+    let clearStatusTimer: number | null = null;
+    const invalidateFeedViews = async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["feeds"] }),
+        qc.invalidateQueries({ queryKey: ["articles"] }),
+        qc.invalidateQueries({ queryKey: ["articleCount"] }),
+        qc.invalidateQueries({ queryKey: ["inbox"] }),
+        qc.invalidateQueries({ queryKey: ["triageStats"] }),
+      ]);
+    };
+    const clearSoon = () => {
+      if (clearStatusTimer !== null) window.clearTimeout(clearStatusTimer);
+      clearStatusTimer = window.setTimeout(() => {
+        setOpmlImportStatus(null);
+        clearStatusTimer = null;
+      }, 2600);
+    };
     const onDragOver = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
     };
@@ -74,18 +97,41 @@ function App() {
         const name = file.name.toLowerCase();
         if (!name.endsWith(".opml") && !name.endsWith(".xml")) continue;
         try {
+          setOpmlImportStatus({ phase: "importing", message: `Importing ${file.name}...` });
           const xml = await file.text();
-          await importOpml(xml);
-          qc.invalidateQueries({ queryKey: ["feeds"] });
-          qc.invalidateQueries({ queryKey: ["articles"] });
+          const res = await importOpml(xml);
+          await invalidateFeedViews();
+          if (res.imported > 0) {
+            setOpmlImportStatus({ phase: "refreshing", message: `Imported ${res.imported} feed${res.imported === 1 ? "" : "s"}. Loading articles...` });
+            const inserted = await refreshAllFeeds();
+            lastRefreshRef.current = Date.now();
+            await triageArticles(false).catch(() => undefined);
+            await invalidateFeedViews();
+            setOpmlImportStatus({
+              phase: "done",
+              message: `Loaded ${inserted} new article${inserted === 1 ? "" : "s"} from ${res.imported} feed${res.imported === 1 ? "" : "s"}.`,
+            });
+          } else {
+            setOpmlImportStatus({
+              phase: "done",
+              message: res.skipped > 0 ? "Those feeds were already imported." : "No new feeds found in that OPML file.",
+            });
+          }
+          clearSoon();
         } catch (err) {
           console.error("OPML drop import failed", err);
+          setOpmlImportStatus({
+            phase: "error",
+            message: err instanceof Error ? err.message : String(err),
+          });
+          clearSoon();
         }
       }
     };
     window.addEventListener("dragover", onDragOver);
     window.addEventListener("drop", onDrop);
     return () => {
+      if (clearStatusTimer !== null) window.clearTimeout(clearStatusTimer);
       window.removeEventListener("dragover", onDragOver);
       window.removeEventListener("drop", onDrop);
     };
@@ -101,8 +147,8 @@ function App() {
     let startPane = useUiStore.getState().phonePane;
     let allowsHorizontalPaneGesture = false;
     let cancelled = false;
-    const EDGE_PX = 32;
-    const TRIGGER_PX = 60;
+    const EDGE_PX = 56;
+    const TRIGGER_PX = 72;
     const INTENT_PX = 10;
     const onStart = (e: TouchEvent) => {
       const t = e.touches[0];
@@ -199,6 +245,7 @@ function App() {
 
   if (isPhone) {
     const paneIndex = phonePane === "sidebar" ? 0 : phonePane === "list" ? 1 : 2;
+    const opmlToast = opmlImportStatus && <OpmlImportToast status={opmlImportStatus} isPhone />;
     return (
       <div className="flex flex-col h-full w-full overflow-hidden">
         <div className="flex-1 min-h-0 relative overflow-hidden">
@@ -206,7 +253,7 @@ function App() {
             className="flex h-full w-[300%]"
             style={{
               transform: `translate3d(${-paneIndex * (100 / 3)}%, 0, 0)`,
-              transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
+              transition: "transform 0.42s cubic-bezier(0.2, 0.82, 0.18, 1)",
               willChange: "transform",
               backfaceVisibility: "hidden",
             }}
@@ -243,12 +290,15 @@ function App() {
             </div>
           </div>
         </div>
+        {opmlToast}
         {showAddFeed && <AddFeedDialog />}
         {showSettings && <SettingsDialog />}
         {showBootDisclaimer && <AIBootDisclaimer onDismiss={() => setShowBootDisclaimer(false)} />}
       </div>
     );
   }
+
+  const opmlToast = opmlImportStatus && <OpmlImportToast status={opmlImportStatus} />;
 
   return (
     <div className="flex flex-col h-full w-full">
@@ -285,9 +335,44 @@ function App() {
           )}
         </div>
       </div>
+      {opmlToast}
       {showAddFeed && <AddFeedDialog />}
       {showSettings && <SettingsDialog />}
       {showBootDisclaimer && <AIBootDisclaimer onDismiss={() => setShowBootDisclaimer(false)} />}
+    </div>
+  );
+}
+
+function OpmlImportToast({ status, isPhone = false }: { status: OpmlImportStatus; isPhone?: boolean }) {
+  const active = status.phase === "importing" || status.phase === "refreshing";
+  const isError = status.phase === "error";
+  return (
+    <div
+      className={`fixed ${isPhone ? "left-3 right-3" : "right-5"} rounded-xl border shadow-2xl backdrop-blur-xl flex items-center gap-3`}
+      style={{
+        bottom: isPhone ? "calc(env(safe-area-inset-bottom, 0px) + 16px)" : 20,
+        zIndex: 60,
+        maxWidth: isPhone ? undefined : 420,
+        padding: "12px 14px",
+        background: "rgba(22, 27, 34, 0.94)",
+        borderColor: isError ? "rgba(248, 81, 73, 0.36)" : "rgba(88, 166, 255, 0.28)",
+      }}
+      role="status"
+      aria-live="polite"
+    >
+      {active ? (
+        <svg className="animate-spin text-accent flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+        </svg>
+      ) : (
+        <span
+          className={`rounded-full flex-shrink-0 ${isError ? "bg-danger" : "bg-success"}`}
+          style={{ width: 8, height: 8 }}
+        />
+      )}
+      <span className={isError ? "text-danger" : "text-text-primary"} style={{ fontSize: 13, lineHeight: 1.45 }}>
+        {status.message}
+      </span>
     </div>
   );
 }

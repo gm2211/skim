@@ -38,9 +38,9 @@ const SWIPE_COMMIT_MAX_PX = 110;
 const SWIPE_COMMIT_RATIO = 0.28;
 const SWIPE_FAST_PX_PER_MS = 0.55;
 const SWIPE_FAST_MIN_PX = 24;
-const SLIDE_MS = 260;
-const BOUNCE_MS = 340;
-const SWIPE_STALE_MS = 1400;
+const SLIDE_MS = 340;
+const BOUNCE_MS = 420;
+const SWIPE_STALE_MS = 1800;
 
 const EMBEDDED_WEB_VIEW_CSS = `
 html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important;overscroll-behavior-x:none!important;touch-action:pan-y}
@@ -817,7 +817,7 @@ export function ArticleDetail() {
           ? "border-accent/30 text-accent bg-accent/10"
           : "border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20"
       }`}
-      style={{ padding: isPhone ? "6px 8px" : "6px 12px", fontSize: 12 }}
+      style={{ padding: isPhone ? "0" : "6px 12px", fontSize: 12, minWidth: isPhone ? 44 : undefined, minHeight: isPhone ? 44 : undefined, justifyContent: "center" }}
       aria-label={label}
       title={label}
     >
@@ -905,13 +905,13 @@ export function ArticleDetail() {
       ? "none"
       : modeTransition === "bounce"
         ? `transform ${BOUNCE_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1)`
-        : `transform ${SLIDE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+        : `transform ${SLIDE_MS}ms cubic-bezier(0.2, 0.82, 0.18, 1)`;
   const dismissTransitionStyle =
     dismissTransition === "none"
       ? "none"
       : dismissTransition === "bounce"
         ? `transform ${BOUNCE_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1)`
-        : `transform ${SLIDE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+        : `transform ${SLIDE_MS}ms cubic-bezier(0.2, 0.82, 0.18, 1)`;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
@@ -931,7 +931,7 @@ export function ArticleDetail() {
               const state = useUiStore.getState();
               if (state.listCollapsed) state.toggleList();
             }}
-            className="text-text-muted hover:text-text-primary p-2 rounded-lg hover:bg-white/10 transition-colors"
+            className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
             title={isPhone ? "Back" : "Close"}
           >
             <svg width={isPhone ? 22 : 16} height={isPhone ? 22 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1001,7 +1001,7 @@ export function ArticleDetail() {
                 onContextMenu={isPhone ? (e) => e.preventDefault() : undefined}
                 disabled={summarize.isPending}
                 className={`${isPhone ? "rounded-lg" : "rounded-l-lg border-r-0"} border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40`}
-                style={{ padding: isPhone ? "6px 10px" : "6px 12px", fontSize: 12, minHeight: isPhone ? 32 : undefined, touchAction: "manipulation", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
+                style={{ padding: isPhone ? 0 : "6px 12px", fontSize: 12, minWidth: isPhone ? 44 : undefined, minHeight: isPhone ? 44 : undefined, touchAction: "manipulation", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
                 title={isPhone ? "Tap: summarize • Long press: options" : "Summarize"}
                 aria-label="Summarize"
               >
@@ -1057,7 +1057,7 @@ export function ArticleDetail() {
 
           <button
             onClick={() => toggleStar.mutate(article.id)}
-            className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${
+            className={`tap-target rounded-lg hover:bg-white/10 transition-colors ${
               article.is_starred ? "text-warning" : "text-text-muted hover:text-text-primary"
             }`}
             title={article.is_starred ? "Unstar" : "Star"}
@@ -1070,7 +1070,7 @@ export function ArticleDetail() {
           {!isPhone && (
             <button
               onClick={() => toggleRead.mutate(article.id)}
-              className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${
+              className={`tap-target rounded-lg hover:bg-white/10 transition-colors ${
                 !article.is_read ? "text-accent" : "text-text-muted hover:text-text-primary"
               }`}
               title={article.is_read ? "Mark as unread" : "Mark as read"}
@@ -1085,7 +1085,7 @@ export function ArticleDetail() {
           {article.url && !isPhone && (
             <button
               onClick={() => { if (article.url) openUrl(article.url); }}
-              className="text-text-muted hover:text-text-primary p-2 rounded-lg hover:bg-white/10 transition-colors"
+              className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
               title="Open in browser"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1135,9 +1135,10 @@ export function ArticleDetail() {
               <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11 }}>AI Summary</div>
               <button
                 onClick={() => summarize.reset()}
-                className="text-text-muted hover:text-text-primary transition-colors"
-                style={{ padding: 4, lineHeight: 0 }}
+                className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
+                style={{ lineHeight: 0 }}
                 title="Dismiss summary"
+                aria-label="Dismiss summary"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M18 6L6 18M6 6l12 12" />
@@ -1305,7 +1306,7 @@ export function ArticleDetail() {
                   <button
                     onClick={() => { if (article.url) openUrl(article.url); }}
                     className="absolute bg-bg-secondary/90 hover:bg-bg-secondary border border-white/15 text-text-primary backdrop-blur-md rounded-full shadow-lg transition-colors flex items-center justify-center z-10"
-                    style={{ bottom: 16, right: 16, width: 40, height: 40 }}
+                    style={{ bottom: 16, right: 16, width: 48, height: 48 }}
                     title="Open original in external browser"
                     aria-label="Open in browser"
                   >

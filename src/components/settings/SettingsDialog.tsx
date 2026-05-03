@@ -12,25 +12,27 @@ import {
   disconnectFeedly,
   feedlyOauthAvailable,
   feedlyOauthLogin,
-  fmIsAvailable,
+  fmAvailability,
   getFeedlyStatus,
   mlxDeleteModel,
   mlxDownloadModel,
   mlxIsAvailable,
   mlxIsModelDownloaded,
   MLX_DOWNLOAD_PROGRESS_EVENT,
+  type FoundationModelAvailability,
   type MlxDownloadProgress,
 } from "../../services/commands";
 import { ModelBrowser } from "./ModelBrowser";
 import { NumberInput } from "../ui/NumberInput";
 import { AIDisclaimer } from "../common/AIDisclaimer";
 import { isIOS } from "../../utils/platform";
+import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 
 const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
   { value: "local", label: "Local (Embedded)", description: "Run AI locally with llama.cpp — no server needed" },
   { value: "mlx", label: "On-device (MLX)", description: "Qwen 2.5 3B running on-device via MLX. Offline. ~2GB download. iOS/macOS only." },
-  { value: "foundation-models", label: "Apple Intelligence", description: "Apple's on-device model. No download. Requires iOS 26+ or macOS 15.1+ with Apple Intelligence." },
+  { value: "foundation-models", label: "Apple Intelligence", description: "Apple's on-device model. No download. Requires iOS 26+ on Apple Intelligence hardware." },
   { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
   { value: "claude-subscription", label: "Claude Pro/Max (OAuth)", description: "Sign in with your Claude.ai account — no API key, no CLI. Works on desktop and iOS." },
   { value: "claude-cli", label: "Claude via CLI (legacy)", description: "Uses the local 'claude' CLI binary. Legacy path — prefer 'Claude Pro/Max (OAuth)'." },
@@ -126,6 +128,10 @@ export function SettingsDialog() {
 
   const [local, setLocal] = useState<AppSettings | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("ai");
+  const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(
+    isPhone,
+    () => setShowSettings(false),
+  );
 
   useEffect(() => {
     if (settings && !local) {
@@ -178,16 +184,21 @@ export function SettingsDialog() {
         }
         style={
           isPhone
-            ? undefined
+            ? swipeToDismissStyle
             : { background: "rgba(22, 27, 34, 0.75)", height: local.ai.provider === "local" ? 640 : 520 }
         }
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/5" style={{ padding: "16px 24px" }}>
+        <div
+          className="flex items-center justify-between border-b border-white/5"
+          style={{ padding: isPhone ? "8px 12px" : "16px 24px", touchAction: isPhone ? "pan-y" : undefined }}
+          {...swipeToDismissHandlers}
+        >
           <h2 style={{ fontSize: 18, fontWeight: 600 }} className="text-text-primary">Settings</h2>
           <button
             onClick={() => setShowSettings(false)}
-            className="text-text-muted hover:text-text-primary p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+            className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
+            aria-label="Close"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />
@@ -1086,13 +1097,19 @@ function OnDeviceTierSection({
 }
 
 function FoundationModelsSection() {
-  const [available, setAvailable] = useState<boolean | null>(null);
+  const [availability, setAvailability] = useState<FoundationModelAvailability | null>(null);
 
   useEffect(() => {
-    fmIsAvailable().then(setAvailable).catch(() => setAvailable(false));
+    fmAvailability().then(setAvailability).catch(() => {
+      setAvailability({
+        available: false,
+        status: "unavailable",
+        message: "Skim could not check Apple Intelligence availability.",
+      });
+    });
   }, []);
 
-  if (available === null) {
+  if (availability === null) {
     return (
       <div
         className="rounded-lg border border-accent/30 bg-accent/5"
@@ -1103,18 +1120,29 @@ function FoundationModelsSection() {
     );
   }
 
-  if (!available) {
+  if (!availability.available) {
+    const title =
+      availability.status === "simulator"
+        ? "Not available in Simulator"
+        : availability.status === "apple-intelligence-disabled"
+          ? "Apple Intelligence is off"
+          : availability.status === "model-not-ready"
+            ? "Model is still preparing"
+            : availability.status === "device-not-eligible"
+              ? "This iPhone is not eligible"
+              : availability.status === "unsupported-os"
+                ? "iOS 26 is required"
+                : "Apple Intelligence unavailable";
     return (
       <div
         className="rounded-lg border border-red-500/30 bg-red-500/5"
         style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5, marginBottom: 24 }}
       >
         <p className="text-text-primary" style={{ fontWeight: 500, marginBottom: 4 }}>
-          Not available on this device/OS
+          {title}
         </p>
         <p className="text-text-muted">
-          Apple Intelligence requires iOS 26+ or macOS 15.1+ on supported hardware,
-          with Apple Intelligence enabled in System Settings.
+          {availability.message}
         </p>
       </div>
     );

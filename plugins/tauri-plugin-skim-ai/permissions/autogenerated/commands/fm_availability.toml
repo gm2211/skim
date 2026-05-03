@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-fm-availability"
+description = "Enables the fm_availability command without any pre-configured scope."
+commands.allow = ["fm_availability"]
+
+[[permission]]
+identifier = "deny-fm-availability"
+description = "Denies the fm_availability command without any pre-configured scope."
+commands.deny = ["fm_availability"]

@@ -47,6 +47,13 @@ pub(crate) async fn fm_is_available<R: Runtime>(app: AppHandle<R>) -> Result<boo
 }
 
 #[command]
+pub(crate) async fn fm_availability<R: Runtime>(
+    app: AppHandle<R>,
+) -> Result<FoundationModelAvailability> {
+    app.skim_ai().fm_availability()
+}
+
+#[command]
 pub(crate) async fn fm_complete<R: Runtime>(
     app: AppHandle<R>,
     payload: CompleteArgs,

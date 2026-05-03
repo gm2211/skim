@@ -471,8 +471,9 @@ export function ModelBrowser({
               </span>
               <button
                 onClick={() => cancelDownload.mutate()}
-                className="text-text-muted hover:text-danger p-1 rounded transition-colors"
+                className="tap-target text-text-muted hover:text-danger rounded-lg hover:bg-white/5 transition-colors"
                 title="Cancel download"
+                aria-label="Cancel download"
               >
                 <svg
                   width="12"

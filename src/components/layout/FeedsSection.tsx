@@ -1332,8 +1332,9 @@ function AutoOrganizeDialog({
                   </span>
                   <button
                     onClick={() => dropFolder(idx)}
-                    className="text-text-muted hover:text-danger transition-colors"
+                    className="tap-target text-text-muted hover:text-danger transition-colors rounded-lg hover:bg-white/5"
                     title="Skip this folder"
+                    aria-label="Skip this folder"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M18 6L6 18M6 6l12 12" />

@@ -10,10 +10,24 @@ import FoundationModels
 ///
 /// Bridges `AIService` → `SystemLanguageModel` via a cached `LanguageModelSession`.
 /// The whole FM surface is gated behind `#if canImport(FoundationModels)` and
-/// `@available(iOS 26.0, macOS 15.1, *)` so the app still builds and runs on
+/// `@available(iOS 26.0, macOS 26.0, *)` so the app still builds and runs on
 /// iOS 17+ hosts (falls back to the "unavailable" branch).
 actor FoundationModelRunner {
     static let shared = FoundationModelRunner()
+
+    struct AvailabilityPayload: Sendable {
+        let available: Bool
+        let status: String
+        let message: String
+
+        var dictionary: [String: Any?] {
+            [
+                "available": available,
+                "status": status,
+                "message": message,
+            ]
+        }
+    }
 
     enum FMError: LocalizedError {
         case unavailable(String)
@@ -37,19 +51,75 @@ actor FoundationModelRunner {
 
     // MARK: - Availability
 
-    /// True only on iOS 26+ devices whose `SystemLanguageModel.default.isAvailable`
-    /// reports true (i.e. Apple Intelligence is provisioned and enabled).
-    /// Always false on the simulator: Apple Intelligence does not run there.
+    /// Rich availability for Settings. This keeps real devices from being
+    /// flattened into a vague "device/OS" failure when Apple Intelligence is
+    /// disabled or the model assets are still provisioning.
+    var availability: AvailabilityPayload {
+        currentAvailability()
+    }
+
     var isAvailable: Bool {
+        currentAvailability().available
+    }
+
+    private func currentAvailability() -> AvailabilityPayload {
         #if targetEnvironment(simulator)
-        return false
+        return AvailabilityPayload(
+            available: false,
+            status: "simulator",
+            message: "Apple Intelligence does not run in the iOS Simulator. Test Foundation Models on a real iPhone, or use MLX/cloud providers here."
+        )
         #else
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, macOS 15.1, *) {
-            return SystemLanguageModel.default.isAvailable
+        if #available(iOS 26.0, macOS 26.0, *) {
+            switch SystemLanguageModel.default.availability {
+            case .available:
+                return AvailabilityPayload(
+                    available: true,
+                    status: "available",
+                    message: "Apple Intelligence is enabled and the on-device Foundation Model is ready."
+                )
+            case .unavailable(let reason):
+                switch reason {
+                case .deviceNotEligible:
+                    return AvailabilityPayload(
+                        available: false,
+                        status: "device-not-eligible",
+                        message: "This device is not eligible for Apple Intelligence Foundation Models."
+                    )
+                case .appleIntelligenceNotEnabled:
+                    return AvailabilityPayload(
+                        available: false,
+                        status: "apple-intelligence-disabled",
+                        message: "Apple Intelligence is off. Enable it in Settings, then relaunch Skim."
+                    )
+                case .modelNotReady:
+                    return AvailabilityPayload(
+                        available: false,
+                        status: "model-not-ready",
+                        message: "Apple Intelligence is enabled, but the on-device model is still downloading or preparing. Keep the phone on power/Wi-Fi and try again shortly."
+                    )
+                @unknown default:
+                    return AvailabilityPayload(
+                        available: false,
+                        status: "unknown-unavailable",
+                        message: "Foundation Models are unavailable for a system reason this build does not recognize yet."
+                    )
+                }
+            @unknown default:
+                return AvailabilityPayload(
+                    available: false,
+                    status: "unknown",
+                    message: "Foundation Models returned an unknown availability state."
+                )
+            }
         }
         #endif
-        return false
+        return AvailabilityPayload(
+            available: false,
+            status: "unsupported-os",
+            message: "Apple Foundation Models require iOS 26 or later on supported Apple Intelligence hardware."
+        )
         #endif
     }
 
@@ -68,9 +138,10 @@ actor FoundationModelRunner {
         throw FMError.unavailable("Apple Intelligence is not available in the iOS Simulator. Use the MLX provider instead, or test on a real iPhone with Apple Intelligence enabled.")
         #else
         #if canImport(FoundationModels)
-        if #available(iOS 26.0, macOS 15.1, *) {
-            guard SystemLanguageModel.default.isAvailable else {
-                throw FMError.unavailable("Apple Intelligence is not enabled on this device")
+        if #available(iOS 26.0, macOS 26.0, *) {
+            let status = currentAvailability()
+            guard status.available else {
+                throw FMError.unavailable(status.message)
             }
 
             ensureBackgroundObserver()
@@ -98,7 +169,7 @@ actor FoundationModelRunner {
     // MARK: - Session management
 
     #if canImport(FoundationModels)
-    @available(iOS 26.0, macOS 15.1, *)
+    @available(iOS 26.0, macOS 26.0, *)
     private func session(for instructions: String) -> LanguageModelSession {
         if let cached = cachedSessionAny as? LanguageModelSession,
            cachedInstructions == instructions {
@@ -143,7 +214,7 @@ actor FoundationModelRunner {
     // We reflect on what's present so this compiles against whichever headers
     // the user's Xcode 26 ships.
 
-    @available(iOS 26.0, macOS 15.1, *)
+    @available(iOS 26.0, macOS 26.0, *)
     private static func extractText(from response: Any) -> String {
         if let s = response as? String { return s }
         let mirror = Mirror(reflecting: response)
@@ -159,7 +230,7 @@ actor FoundationModelRunner {
         return String(describing: response)
     }
 
-    @available(iOS 26.0, macOS 15.1, *)
+    @available(iOS 26.0, macOS 26.0, *)
     private static func extractGenerable<T>(from response: Any, as _: T.Type) -> T {
         if let typed = response as? T { return typed }
         let mirror = Mirror(reflecting: response)

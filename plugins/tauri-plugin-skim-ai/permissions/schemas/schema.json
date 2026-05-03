@@ -295,6 +295,18 @@
       "type": "string",
       "oneOf": [
         {
+          "description": "Enables the fm_availability command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-fm-availability",
+          "markdownDescription": "Enables the fm_availability command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the fm_availability command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-fm-availability",
+          "markdownDescription": "Denies the fm_availability command without any pre-configured scope."
+        },
+        {
           "description": "Enables the fm_complete command without any pre-configured scope.",
           "type": "string",
           "const": "allow-fm-complete",
@@ -415,10 +427,10 @@
           "markdownDescription": "Denies the mlx_is_model_downloaded command without any pre-configured scope."
         },
         {
-          "description": "Default permissions for skim-ai (MLX + Apple Foundation Models + iOS Keychain)\n#### This default permission set includes:\n\n- `allow-mlx-is-available`\n- `allow-mlx-is-model-downloaded`\n- `allow-mlx-download-model`\n- `allow-mlx-delete-model`\n- `allow-mlx-complete`\n- `allow-fm-is-available`\n- `allow-fm-complete`\n- `allow-ios-keychain-store`\n- `allow-ios-keychain-load`\n- `allow-ios-keychain-clear`",
+          "description": "Default permissions for skim-ai (MLX + Apple Foundation Models + iOS Keychain)\n#### This default permission set includes:\n\n- `allow-mlx-is-available`\n- `allow-mlx-is-model-downloaded`\n- `allow-mlx-download-model`\n- `allow-mlx-delete-model`\n- `allow-mlx-complete`\n- `allow-fm-is-available`\n- `allow-fm-availability`\n- `allow-fm-complete`\n- `allow-ios-keychain-store`\n- `allow-ios-keychain-load`\n- `allow-ios-keychain-clear`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Default permissions for skim-ai (MLX + Apple Foundation Models + iOS Keychain)\n#### This default permission set includes:\n\n- `allow-mlx-is-available`\n- `allow-mlx-is-model-downloaded`\n- `allow-mlx-download-model`\n- `allow-mlx-delete-model`\n- `allow-mlx-complete`\n- `allow-fm-is-available`\n- `allow-fm-complete`\n- `allow-ios-keychain-store`\n- `allow-ios-keychain-load`\n- `allow-ios-keychain-clear`"
+          "markdownDescription": "Default permissions for skim-ai (MLX + Apple Foundation Models + iOS Keychain)\n#### This default permission set includes:\n\n- `allow-mlx-is-available`\n- `allow-mlx-is-model-downloaded`\n- `allow-mlx-download-model`\n- `allow-mlx-delete-model`\n- `allow-mlx-complete`\n- `allow-fm-is-available`\n- `allow-fm-availability`\n- `allow-fm-complete`\n- `allow-ios-keychain-store`\n- `allow-ios-keychain-load`\n- `allow-ios-keychain-clear`"
         }
       ]
     }

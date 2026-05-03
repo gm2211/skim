@@ -7,6 +7,7 @@ permissions = [
   "allow-mlx-delete-model",
   "allow-mlx-complete",
   "allow-fm-is-available",
+  "allow-fm-availability",
   "allow-fm-complete",
   "allow-ios-keychain-store",
   "allow-ios-keychain-load",

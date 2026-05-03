@@ -17,6 +17,14 @@ pub struct CompleteArgs {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FoundationModelAvailability {
+    pub available: bool,
+    pub status: String,
+    pub message: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct KeychainSetArgs {
     pub key: String,
     pub value: String,

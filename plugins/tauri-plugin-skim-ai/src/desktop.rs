@@ -37,6 +37,14 @@ impl<R: Runtime> SkimAi<R> {
 
     pub fn fm_is_available(&self) -> crate::Result<bool> { Ok(false) }
 
+    pub fn fm_availability(&self) -> crate::Result<FoundationModelAvailability> {
+        Ok(FoundationModelAvailability {
+            available: false,
+            status: "unsupported-platform".into(),
+            message: "Apple Foundation Models are only wired into the iOS app bundle.".into(),
+        })
+    }
+
     pub fn fm_complete(&self, _payload: CompleteArgs) -> crate::Result<String> {
         Err(crate::Error::Other(UNAVAILABLE.into()))
     }

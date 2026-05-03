@@ -331,11 +331,11 @@ export function ArticleList() {
       }}
     >
       {/* Top bar with mark-all-read, search, close */}
-      <div className="flex items-center gap-2 relative z-20" style={{ height: 40, paddingLeft: isPhone ? 16 : (sidebarCollapsed ? 78 : undefined), paddingRight: 16 }}>
+      <div className="flex items-center gap-2 relative z-20" style={{ height: isPhone ? 52 : 40, paddingLeft: isPhone ? 8 : (sidebarCollapsed ? 78 : undefined), paddingRight: isPhone ? 8 : 16 }}>
         {isPhone && (
           <button
             onClick={() => setPhonePane("sidebar")}
-            className="text-text-muted hover:text-text-primary transition-colors"
+            className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
             title="Open sidebar"
           >
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -348,7 +348,7 @@ export function ArticleList() {
         {sidebarCollapsed && !isPhone && (
           <button
             onClick={() => useUiStore.getState().toggleSidebar()}
-            className="text-text-muted hover:text-text-primary transition-colors"
+            className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
             title="Expand sidebar"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -360,7 +360,7 @@ export function ArticleList() {
         <div className="flex-1" />
         <button
           onClick={handleMarkAllRead}
-          className="text-text-muted hover:text-text-primary transition-colors"
+          className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
           title="Mark all as read"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -373,7 +373,7 @@ export function ArticleList() {
             const input = document.getElementById("article-search");
             if (input) input.focus();
           }}
-          className="text-text-muted hover:text-text-primary transition-colors"
+          className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
           title="Search"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

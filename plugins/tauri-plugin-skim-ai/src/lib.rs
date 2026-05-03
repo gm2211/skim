@@ -42,6 +42,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
       commands::mlx_delete_model,
       commands::mlx_complete,
       commands::fm_is_available,
+      commands::fm_availability,
       commands::fm_complete,
       commands::ios_keychain_store,
       commands::ios_keychain_load,

@@ -133,6 +133,13 @@ class SkimAIPlugin: Plugin {
         }
     }
 
+    @objc public func fmAvailability(_ invoke: Invoke) throws {
+        Task {
+            let availability = await FoundationModelRunner.shared.availability
+            invoke.resolve(availability.dictionary)
+        }
+    }
+
     @objc public func fmComplete(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(CompleteArgs.self)
         Task {

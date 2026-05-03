@@ -71,6 +71,26 @@ button, a, input, select, textarea, [role="button"] {
   -webkit-app-region: no-drag;
 }
 
+.tap-target {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+@media (max-width: 600px) {
+  .tap-target {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  .phone-smooth-panel {
+    transition-timing-function: cubic-bezier(0.2, 0.82, 0.18, 1);
+  }
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;

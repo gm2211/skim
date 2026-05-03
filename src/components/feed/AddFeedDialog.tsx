@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
 import { useAddFeed } from "../../hooks/useFeeds";
 import { useUiStore } from "../../stores/uiStore";
-import { previewOpml, importOpml } from "../../services/commands";
+import { previewOpml, importOpml, refreshAllFeeds, triageArticles } from "../../services/commands";
 import type { FeedlyImportResult } from "../../services/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 
 const FEEDLY_OPML_URL = "https://feedly.com/i/opml";
 
@@ -34,18 +35,28 @@ type Tab = "url" | "feedly";
 export function AddFeedDialog() {
   const [tab, setTab] = useState<Tab>("url");
   const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
+  const isPhone = useUiStore((s) => s.isPhone);
+  const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(
+    isPhone,
+    () => setShowAddFeed(false),
+  );
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
       <div
         className="border border-white/10 rounded-2xl w-full max-w-md mx-4 shadow-2xl overflow-hidden"
-        style={{ background: "rgba(22, 27, 34, 0.95)" }}
+        style={{ background: "rgba(22, 27, 34, 0.95)", ...swipeToDismissStyle }}
       >
-        <div className="flex items-center justify-between" style={{ padding: "20px 24px 0" }}>
+        <div
+          className="flex items-center justify-between"
+          style={{ padding: "16px 16px 0", touchAction: isPhone ? "pan-y" : undefined }}
+          {...swipeToDismissHandlers}
+        >
           <h2 style={{ fontSize: 18, fontWeight: 600 }} className="text-text-primary">Add Feed</h2>
           <button
             onClick={() => setShowAddFeed(false)}
-            className="text-text-muted hover:text-text-primary p-1 rounded-lg hover:bg-white/10 transition-colors"
+            className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
+            aria-label="Close"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />
@@ -153,6 +164,8 @@ function FeedlyTab() {
   const [entries, setEntries] = useState<OpmlEntry[] | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [refreshingArticles, setRefreshingArticles] = useState(false);
+  const [loadedArticles, setLoadedArticles] = useState<number | null>(null);
   const [result, setResult] = useState<FeedlyImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [xml, setXml] = useState<string | null>(null);
@@ -160,6 +173,16 @@ function FeedlyTab() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
   const qc = useQueryClient();
+
+  const invalidateFeedViews = async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ["feeds"] }),
+      qc.invalidateQueries({ queryKey: ["articles"] }),
+      qc.invalidateQueries({ queryKey: ["articleCount"] }),
+      qc.invalidateQueries({ queryKey: ["inbox"] }),
+      qc.invalidateQueries({ queryKey: ["triageStats"] }),
+    ]);
+  };
 
   const handleOpenFeedly = async () => {
     try {
@@ -172,6 +195,7 @@ function FeedlyTab() {
   const ingestFile = async (file: File) => {
     setError(null);
     setResult(null);
+    setLoadedArticles(null);
     setFilename(file.name);
     try {
       const text = await file.text();
@@ -208,12 +232,31 @@ function FeedlyTab() {
   const handleImport = async () => {
     if (!xml) return;
     setImporting(true);
+    setRefreshingArticles(false);
+    setLoadedArticles(null);
     setError(null);
     try {
       const res = await importOpml(xml);
       setResult(res);
-      qc.invalidateQueries({ queryKey: ["feeds"] });
-      qc.invalidateQueries({ queryKey: ["articles"] });
+      await invalidateFeedViews();
+
+      if (res.imported > 0) {
+        setRefreshingArticles(true);
+        try {
+          const inserted = await refreshAllFeeds();
+          setLoadedArticles(inserted);
+          await triageArticles(false).catch(() => undefined);
+          await invalidateFeedViews();
+        } catch (refreshErr) {
+          setError(
+            `Imported ${res.imported} feed${res.imported === 1 ? "" : "s"}, but article loading failed: ${
+              refreshErr instanceof Error ? refreshErr.message : String(refreshErr)
+            }`,
+          );
+        } finally {
+          setRefreshingArticles(false);
+        }
+      }
     } catch (err) {
       setError(String(err instanceof Error ? err.message : err));
     } finally {
@@ -323,7 +366,18 @@ function FeedlyTab() {
           className="rounded-xl border border-green-500/30 text-green-400"
           style={{ padding: "10px 14px", marginBottom: 12, fontSize: 13, background: "rgba(34, 197, 94, 0.1)" }}
         >
-          Imported {result.imported} feed{result.imported !== 1 ? "s" : ""}.
+          <div className="flex items-center gap-2">
+            {refreshingArticles && (
+              <svg className="animate-spin flex-shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+            )}
+            <span>
+              Imported {result.imported} feed{result.imported !== 1 ? "s" : ""}.
+              {refreshingArticles && " Loading articles..."}
+              {!refreshingArticles && loadedArticles !== null && ` Loaded ${loadedArticles} new article${loadedArticles === 1 ? "" : "s"}.`}
+            </span>
+          </div>
           {result.skipped > 0 && ` ${result.skipped} already existed.`}
           {result.errors.length > 0 && ` ${result.errors.length} error(s).`}
         </div>
@@ -368,16 +422,19 @@ function FeedlyTab() {
       <div className="flex justify-end gap-3">
         <button
           type="button"
-          onClick={() => setShowAddFeed(false)}
+          onClick={() => {
+            if (!refreshingArticles) setShowAddFeed(false);
+          }}
+          disabled={refreshingArticles}
           className="text-text-secondary hover:text-text-primary rounded-xl hover:bg-white/5 transition-colors"
           style={{ padding: "10px 20px", fontSize: 14 }}
         >
-          {result ? "Done" : "Cancel"}
+          {refreshingArticles ? "Loading..." : result ? "Done" : "Cancel"}
         </button>
         {entries && !result && (
           <button
             onClick={handleImport}
-            disabled={importing || newCount === 0}
+            disabled={importing || refreshingArticles || newCount === 0}
             className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
             style={{ padding: "10px 24px", fontSize: 14 }}
           >

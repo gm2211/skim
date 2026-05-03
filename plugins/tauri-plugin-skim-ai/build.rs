@@ -5,6 +5,7 @@ const COMMANDS: &[&str] = &[
     "mlx_delete_model",
     "mlx_complete",
     "fm_is_available",
+    "fm_availability",
     "fm_complete",
     "ios_keychain_store",
     "ios_keychain_load",

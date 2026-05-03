@@ -10,6 +10,7 @@ Default permissions for skim-ai (MLX + Apple Foundation Models + iOS Keychain)
 - `allow-mlx-delete-model`
 - `allow-mlx-complete`
 - `allow-fm-is-available`
+- `allow-fm-availability`
 - `allow-fm-complete`
 - `allow-ios-keychain-store`
 - `allow-ios-keychain-load`
@@ -23,6 +24,32 @@ Default permissions for skim-ai (MLX + Apple Foundation Models + iOS Keychain)
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`skim-ai:allow-fm-availability`
+
+</td>
+<td>
+
+Enables the fm_availability command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`skim-ai:deny-fm-availability`
+
+</td>
+<td>
+
+Denies the fm_availability command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>

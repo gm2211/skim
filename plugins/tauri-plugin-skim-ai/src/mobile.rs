@@ -47,6 +47,10 @@ impl<R: Runtime> SkimAi<R> {
         self.0.run_mobile_plugin::<bool>("fmIsAvailable", ()).map_err(Into::into)
     }
 
+    pub fn fm_availability(&self) -> crate::Result<FoundationModelAvailability> {
+        self.0.run_mobile_plugin::<FoundationModelAvailability>("fmAvailability", ()).map_err(Into::into)
+    }
+
     pub fn fm_complete(&self, payload: CompleteArgs) -> crate::Result<String> {
         self.0.run_mobile_plugin::<String>("fmComplete", payload).map_err(Into::into)
     }

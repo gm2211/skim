@@ -203,12 +203,28 @@ export const mlxComplete = async (args: SkimAiCompleteArgs): Promise<string> => 
   }
 };
 
-export const fmIsAvailable = async (): Promise<boolean> => {
+export interface FoundationModelAvailability {
+  available: boolean;
+  status: string;
+  message: string;
+}
+
+const FALLBACK_FM_AVAILABILITY: FoundationModelAvailability = {
+  available: false,
+  status: "unavailable",
+  message: SKIM_AI_UNAVAILABLE,
+};
+
+export const fmAvailability = async (): Promise<FoundationModelAvailability> => {
   try {
-    return await invoke<boolean>("plugin:skim-ai|fm_is_available");
+    return await invoke<FoundationModelAvailability>("plugin:skim-ai|fm_availability");
   } catch {
-    return false;
+    return FALLBACK_FM_AVAILABILITY;
   }
+};
+
+export const fmIsAvailable = async (): Promise<boolean> => {
+  return (await fmAvailability()).available;
 };
 
 export const fmComplete = async (args: SkimAiCompleteArgs): Promise<string> => {

@@ -6,6 +6,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { AIDisclaimer } from "../common/AIDisclaimer";
 import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
 import { useVisualViewportSync } from "../../hooks/useVisualViewport";
+import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 
 interface Props {
   onClose: () => void;
@@ -23,6 +24,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
   useLockBodyScroll(isPhone);
   const dialogRef = useRef<HTMLDivElement>(null);
   useVisualViewportSync(dialogRef, isPhone);
+  const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(isPhone, onClose);
   // Catch-up over all unread — inbox would filter to priority>=3 and miss
   // whatever the triage hasn't rated yet.
   const [scope, setScope] = useState<"inbox" | "unread">("unread");
@@ -166,6 +168,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
           height: isPhone ? "100dvh" : undefined,
           top: isPhone ? 0 : undefined,
           willChange: isPhone ? "transform, height" : undefined,
+          ...swipeToDismissStyle,
           maxHeight: isPhone ? undefined : "90vh",
           margin: isPhone ? 0 : "0 20px",
           paddingTop: isPhone ? "max(var(--sat, 0px), 60px)" : 0,
@@ -175,7 +178,8 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
       >
         <div
           className="flex items-center gap-2 border-b border-white/5 flex-nowrap"
-          style={{ padding: "12px 16px" }}
+          style={{ padding: isPhone ? "8px 12px" : "12px 16px", touchAction: isPhone ? "pan-y" : undefined }}
+          {...swipeToDismissHandlers}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent flex-shrink-0">
             <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
@@ -203,8 +207,9 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
           </button>
           <button
             onClick={onClose}
-            className="text-text-muted hover:text-text-primary transition-colors flex-shrink-0"
+            className="tap-target text-text-muted hover:text-text-primary transition-colors flex-shrink-0 rounded-lg hover:bg-white/10"
             title="Close"
+            aria-label="Close"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M18 6L6 18M6 6l12 12" />

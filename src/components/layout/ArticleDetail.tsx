@@ -1234,7 +1234,8 @@ export function ArticleDetail() {
                 top: 0,
                 background: "rgba(28, 33, 40, 0.96)",
                 backdropFilter: "blur(8px)",
-                padding: "10px 16px",
+                padding: isPhone ? "6px 10px" : "8px 14px",
+                minHeight: isPhone ? 44 : 40,
                 borderBottom: "1px solid rgba(255,255,255,0.06)",
                 zIndex: 1,
               }}
@@ -1243,11 +1244,11 @@ export function ArticleDetail() {
               <button
                 onClick={() => summarize.reset()}
                 className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
-                style={{ lineHeight: 0 }}
+                style={isPhone ? { lineHeight: 0, minWidth: 40, minHeight: 40 } : { lineHeight: 0 }}
                 title="Dismiss summary"
                 aria-label="Dismiss summary"
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width={isPhone ? 20 : 12} height={isPhone ? 20 : 12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>

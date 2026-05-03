@@ -7,7 +7,7 @@ import MLX
 import MLXLMCommon
 import MLXLLM
 
-/// On-device LLM runtime backed by MLX + Qwen 2.5 3B Instruct (4-bit default).
+/// On-device LLM runtime backed by MLX + a small phone-friendly default model.
 ///
 /// - Lazy-loads the model on first `complete()`.
 /// - Caches the loaded `ModelContainer` inside the actor so subsequent calls skip load.
@@ -20,8 +20,8 @@ actor MLXRunner {
 
     // MARK: - Config
 
-    /// Default Qwen 2.5 3B Instruct 4-bit HF repo id. Can be overridden via `setModel(_:)`.
-    static let defaultRepoId = "mlx-community/Qwen2.5-3B-Instruct-4bit"
+    /// Default HF repo id. Can be overridden via `setModel(_:)`.
+    static let defaultRepoId = "mlx-community/gemma-3-1b-it-4bit"
 
     private var currentRepoId: String = MLXRunner.defaultRepoId
     private var loadedContainer: ModelContainer?

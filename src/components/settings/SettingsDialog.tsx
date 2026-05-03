@@ -149,6 +149,12 @@ export function SettingsDialog() {
   const updateAi = (patch: Partial<AppSettings["ai"]>) =>
     setLocal({ ...local, ai: { ...local.ai, ...patch } });
 
+  const persistAi = async (patch: Partial<AppSettings["ai"]>) => {
+    const next = { ...local, ai: { ...local.ai, ...patch } };
+    setLocal(next);
+    await updateSettings.mutateAsync(next);
+  };
+
   const inputStyle = {
     background: "rgba(255, 255, 255, 0.05)",
     padding: "10px 14px",
@@ -212,24 +218,24 @@ export function SettingsDialog() {
           <div
             className={
               isPhone
-                ? "flex border-b border-white/5 overflow-x-auto"
+                ? "grid grid-cols-3 gap-1 border-b border-white/5 overflow-hidden"
                 : "border-r border-white/5 flex flex-col"
             }
-            style={isPhone ? { padding: "8px 8px" } : { width: 180, padding: "12px 8px" }}
+            style={isPhone ? { padding: "8px 10px" } : { width: 180, padding: "12px 8px" }}
           >
             {TABS.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-3 ${isPhone ? "flex-shrink-0" : "w-full"} rounded-lg text-left transition-colors ${
+                className={`flex items-center ${isPhone ? "justify-center min-w-0" : "gap-3 w-full text-left"} rounded-lg transition-colors ${
                   activeTab === tab.id
                     ? "bg-white/10 text-text-primary"
                     : "text-text-muted hover:text-text-primary hover:bg-white/5"
                 }`}
-                style={{ padding: "10px 12px", fontSize: 14 }}
+                style={{ padding: isPhone ? "10px 6px" : "10px 12px", fontSize: isPhone ? 13 : 14, gap: isPhone ? 6 : 12 }}
               >
-                <span className="opacity-70">{tab.icon}</span>
-                <span>{tab.label}</span>
+                <span className="opacity-70 flex-shrink-0">{tab.icon}</span>
+                <span className={isPhone ? "truncate" : undefined}>{tab.label}</span>
               </button>
             ))}
           </div>
@@ -293,7 +299,7 @@ export function SettingsDialog() {
                 )}
 
                 {local.ai.provider === "mlx" && (
-                  <OnDeviceTierSection ai={local.ai} updateAi={updateAi} />
+                  <OnDeviceTierSection ai={local.ai} updateAi={updateAi} persistAi={persistAi} />
                 )}
 
                 {local.ai.provider === "foundation-models" && (
@@ -860,9 +866,11 @@ function ClaudeOAuthSection() {
 function OnDeviceTierSection({
   ai,
   updateAi,
+  persistAi,
 }: {
   ai: AppSettings["ai"];
   updateAi: (patch: Partial<AppSettings["ai"]>) => void;
+  persistAi: (patch: Partial<AppSettings["ai"]>) => Promise<void>;
 }) {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [downloaded, setDownloaded] = useState(false);
@@ -878,10 +886,24 @@ function OnDeviceTierSection({
   const selectedRepoId = ai.model ?? defaultModel.repoId;
   const selectedModel =
     MLX_MODELS.find((m) => m.repoId === selectedRepoId) ?? defaultModel;
+  const commitSelectedModel = async (repoId: string) => {
+    updateAi({ model: repoId });
+    try {
+      await persistAi({ provider: "mlx", model: repoId });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   useEffect(() => {
     mlxIsAvailable().then(setAvailable).catch(() => setAvailable(false));
   }, []);
+
+  useEffect(() => {
+    if (!ai.model) {
+      void commitSelectedModel(defaultModel.repoId);
+    }
+  }, [ai.model, defaultModel.repoId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -936,6 +958,7 @@ function OnDeviceTierSection({
     setProgress({ repoId: selectedRepoId, downloaded: 0, total: 0, percent: 0 });
     try {
       await mlxDownloadModel(selectedRepoId);
+      await persistAi({ provider: "mlx", model: selectedRepoId });
       setDownloaded(true);
       setProgress(null);
     } catch (e: unknown) {
@@ -997,7 +1020,7 @@ function OnDeviceTierSection({
         </label>
         <select
           value={selectedRepoId}
-          onChange={(e) => updateAi({ model: e.target.value })}
+          onChange={(e) => void commitSelectedModel(e.target.value)}
           className="w-full border border-white/10 rounded text-text-primary focus:outline-none focus:border-accent/50"
           style={{
             background: "rgba(255, 255, 255, 0.05)",

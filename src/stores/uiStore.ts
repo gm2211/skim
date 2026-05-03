@@ -4,12 +4,15 @@ import type { SidebarView } from "../services/types";
 type ListFilter = "all" | "unread" | "starred";
 
 type PhonePane = "sidebar" | "list" | "detail";
+type ArticleReturnTarget = "catchup";
 
 interface UiState {
   sidebarView: SidebarView;
   selectedArticleId: string | null;
+  articleReturnTarget: ArticleReturnTarget | null;
   showAddFeed: boolean;
   showSettings: boolean;
+  showCatchup: boolean;
   sidebarCollapsed: boolean;
   sidebarManualCollapse: boolean;
   listCollapsed: boolean;
@@ -22,8 +25,11 @@ interface UiState {
 
   setSidebarView: (view: SidebarView) => void;
   setSelectedArticleId: (id: string | null) => void;
+  openArticleFromCatchup: (id: string) => void;
+  closeArticleDetail: () => void;
   setShowAddFeed: (show: boolean) => void;
   setShowSettings: (show: boolean) => void;
+  setShowCatchup: (show: boolean) => void;
   toggleSidebar: () => void;
   toggleList: () => void;
   setListFilter: (filter: ListFilter) => void;
@@ -41,8 +47,10 @@ const PHONE_BREAKPOINT = 600;
 export const useUiStore = create<UiState>((set, get) => ({
   sidebarView: { type: "all" },
   selectedArticleId: null,
+  articleReturnTarget: null,
   showAddFeed: false,
   showSettings: false,
+  showCatchup: false,
   sidebarCollapsed: false,
   sidebarManualCollapse: false,
   listCollapsed: false,
@@ -55,6 +63,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     set((state) => ({
       sidebarView: view,
       selectedArticleId: null,
+      articleReturnTarget: null,
       // On phone, picking a feed/view from the sidebar drawer pops back to
       // the list pane so the user immediately sees the chosen feed.
       phonePane: state.isPhone ? "list" : state.phonePane,
@@ -62,10 +71,35 @@ export const useUiStore = create<UiState>((set, get) => ({
   setSelectedArticleId: (id) =>
     set((state) => ({
       selectedArticleId: id,
+      articleReturnTarget: null,
       phonePane: state.isPhone && id ? "detail" : state.phonePane,
     })),
+  openArticleFromCatchup: (id) =>
+    set((state) => ({
+      selectedArticleId: id,
+      articleReturnTarget: "catchup",
+      showCatchup: false,
+      phonePane: state.isPhone ? "detail" : state.phonePane,
+    })),
+  closeArticleDetail: () =>
+    set((state) => {
+      if (state.articleReturnTarget === "catchup") {
+        return {
+          selectedArticleId: null,
+          articleReturnTarget: null,
+          showCatchup: true,
+          phonePane: state.isPhone ? "list" : state.phonePane,
+        };
+      }
+      return {
+        selectedArticleId: null,
+        articleReturnTarget: null,
+        phonePane: state.isPhone ? "list" : state.phonePane,
+      };
+    }),
   setShowAddFeed: (show) => set({ showAddFeed: show }),
   setShowSettings: (show) => set({ showSettings: show }),
+  setShowCatchup: (show) => set({ showCatchup: show }),
 
   toggleSidebar: () =>
     set((state) => {
@@ -85,7 +119,15 @@ export const useUiStore = create<UiState>((set, get) => ({
   phoneBack: () =>
     set((state) => {
       if (state.phonePane === "detail") {
-        return { phonePane: "list", selectedArticleId: null };
+        if (state.articleReturnTarget === "catchup") {
+          return {
+            phonePane: "list",
+            selectedArticleId: null,
+            articleReturnTarget: null,
+            showCatchup: true,
+          };
+        }
+        return { phonePane: "list", selectedArticleId: null, articleReturnTarget: null };
       }
       if (state.phonePane === "sidebar") return { phonePane: "list" };
       return state;

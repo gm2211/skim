@@ -322,7 +322,7 @@ function prepareFetchedArticle(result: FetchedArticleContent): {
 }
 
 export function ArticleDetail() {
-  const { selectedArticleId, setSelectedArticleId, listCollapsed, sidebarCollapsed, sidebarView, isPhone, phoneBack } = useUiStore();
+  const { selectedArticleId, closeArticleDetail, listCollapsed, sidebarCollapsed, sidebarView, isPhone, phoneBack } = useUiStore();
   const { data: article, refetch: refetchArticle } = useArticle(selectedArticleId);
   const markRead = useMarkRead();
   const toggleStar = useToggleStar();
@@ -1042,7 +1042,7 @@ export function ArticleDetail() {
                 phoneBack();
                 return;
               }
-              setSelectedArticleId(null);
+              closeArticleDetail();
               const state = useUiStore.getState();
               if (state.listCollapsed) state.toggleList();
             }}

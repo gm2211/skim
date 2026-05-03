@@ -10,8 +10,7 @@ import { CatchupDialog } from "../chat/CatchupDialog";
 
 export function Sidebar() {
   const [askOpen, setAskOpen] = useState(false);
-  const [catchupOpen, setCatchupOpen] = useState(false);
-  const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone } =
+  const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone, showCatchup, setShowCatchup, openArticleFromCatchup } =
     useUiStore();
   const { data: feeds } = useFeeds();
   const { data: triageStats } = useTriageStats();
@@ -92,7 +91,7 @@ export function Sidebar() {
           </svg>
         </button>
         <button
-          onClick={() => setCatchupOpen(true)}
+          onClick={() => setShowCatchup(true)}
           className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
           title="Super-quick catch-up"
         >
@@ -118,11 +117,11 @@ export function Sidebar() {
           }}
         />
       )}
-      {catchupOpen && (
+      {showCatchup && (
         <CatchupDialog
-          onClose={() => setCatchupOpen(false)}
+          onClose={() => setShowCatchup(false)}
           onOpenArticle={(id) => {
-            useUiStore.getState().setSelectedArticleId(id);
+            openArticleFromCatchup(id);
           }}
         />
       )}

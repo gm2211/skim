@@ -902,7 +902,7 @@ export function ArticleDetail() {
           ? "border-accent/30 text-accent bg-accent/10"
           : "border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20"
       }`}
-      style={{ padding: isPhone ? "0" : "6px 12px", fontSize: 12, minWidth: isPhone ? 44 : undefined, minHeight: isPhone ? 44 : undefined, justifyContent: "center" }}
+      style={{ padding: isPhone ? "0" : "6px 12px", fontSize: 12, minWidth: isPhone ? 52 : undefined, minHeight: isPhone ? 52 : undefined, justifyContent: "center" }}
       aria-label={label}
       title={label}
     >
@@ -1003,7 +1003,7 @@ export function ArticleDetail() {
       {/* Toolbar */}
       <div
         className="flex items-center justify-between relative z-20 flex-shrink-0"
-        style={{ height: 52, padding: isPhone ? "0 10px" : "0 24px", gap: isPhone ? 4 : undefined }}
+        style={{ height: isPhone ? 64 : 52, padding: isPhone ? "0 10px" : "0 24px", gap: isPhone ? 6 : undefined }}
       >
         {(isPhone || !(sidebarCollapsed && listCollapsed)) && (
           <button
@@ -1086,7 +1086,7 @@ export function ArticleDetail() {
                 onContextMenu={isPhone ? (e) => e.preventDefault() : undefined}
                 disabled={summarize.isPending}
                 className={`${isPhone ? "rounded-lg" : "rounded-l-lg border-r-0"} border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40`}
-                style={{ padding: isPhone ? 0 : "6px 12px", fontSize: 12, minWidth: isPhone ? 44 : undefined, minHeight: isPhone ? 44 : undefined, touchAction: "manipulation", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
+                style={{ padding: isPhone ? 0 : "6px 12px", fontSize: 12, minWidth: isPhone ? 52 : undefined, minHeight: isPhone ? 52 : undefined, touchAction: "manipulation", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
                 title={isPhone ? "Tap: summarize • Long press: options" : "Summarize"}
                 aria-label="Summarize"
               >
@@ -1120,7 +1120,7 @@ export function ArticleDetail() {
                 <div className="fixed inset-0 z-50" onClick={() => setShowSummarizeMenu(false)}>
                   <div
                     className="absolute left-1/2 -translate-x-1/2 border border-white/10 rounded-xl shadow-xl"
-                    style={{ background: "rgba(22, 27, 34, 0.95)", backdropFilter: "blur(12px)", padding: "12px", width: "min(320px, calc(100vw - 24px))", top: "calc(env(safe-area-inset-top, 0px) + 70px)" }}
+                    style={{ background: "rgba(22, 27, 34, 0.95)", backdropFilter: "blur(12px)", padding: "12px", width: "min(320px, calc(100vw - 24px))", top: "calc(env(safe-area-inset-top, 0px) + 82px)" }}
                     onClick={(e) => e.stopPropagation()}
                   >
                     {renderSummarizeMenuBody()}

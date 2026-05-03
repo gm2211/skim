@@ -18,6 +18,7 @@ interface Props {
 }
 
 const COLLAPSED_HEIGHT = 36;
+const PHONE_COLLAPSED_HEIGHT = 52;
 const DEFAULT_HEIGHT = 280;
 const MIN_HEIGHT = 140;
 
@@ -177,11 +178,11 @@ export function ChatDrawer({ articleId }: Props) {
     return (
       <div
         className="flex-shrink-0 border-t border-white/10 flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors select-none"
-        style={{ height: COLLAPSED_HEIGHT }}
+        style={{ height: isPhone ? PHONE_COLLAPSED_HEIGHT : COLLAPSED_HEIGHT }}
         onClick={() => setOpen(true)}
       >
-        <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 11 }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: isPhone ? 13 : 11, minHeight: isPhone ? 52 : undefined }}>
+          <svg width={isPhone ? 16 : 12} height={isPhone ? 16 : 12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
           Chat
@@ -219,7 +220,7 @@ export function ChatDrawer({ articleId }: Props) {
       {/* Header */}
       <div
         className="flex-shrink-0 flex items-center justify-between"
-        style={{ padding: "4px 16px 6px" }}
+        style={{ padding: isPhone ? "4px 12px 8px" : "4px 16px 6px", minHeight: isPhone ? 52 : undefined }}
       >
         <div className="flex items-center gap-2">
           <span className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 10 }}>Chat</span>
@@ -229,18 +230,20 @@ export function ChatDrawer({ articleId }: Props) {
           {messages.length > 0 && (
             <button
               onClick={() => setMessages([])}
-              className="text-text-muted hover:text-text-primary transition-colors"
-              style={{ fontSize: 10 }}
+              className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
+              style={{ fontSize: isPhone ? 12 : 10 }}
             >
               Clear
             </button>
           )}
           <button
             onClick={() => setOpen(false)}
-            className="text-text-muted hover:text-text-primary transition-colors"
-            style={{ padding: 2, lineHeight: 0 }}
+            className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
+            style={{ lineHeight: 0 }}
+            aria-label="Collapse chat"
+            title="Collapse chat"
           >
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width={isPhone ? 16 : 10} height={isPhone ? 16 : 10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M6 9l6 6 6-6" />
             </svg>
           </button>
@@ -260,7 +263,7 @@ export function ChatDrawer({ articleId }: Props) {
                 key={q}
                 onClick={() => { setInput(q); inputRef.current?.focus(); }}
                 className="text-text-muted border border-white/10 hover:border-white/20 hover:text-text-secondary rounded-md transition-colors"
-                style={{ padding: "3px 8px", fontSize: 10 }}
+                style={{ padding: isPhone ? "8px 10px" : "3px 8px", fontSize: isPhone ? 12 : 10, minHeight: isPhone ? 40 : undefined }}
               >
                 {q}
               </button>
@@ -417,17 +420,19 @@ export function ChatDrawer({ articleId }: Props) {
             onKeyDown={handleKeyDown}
             placeholder="Ask about this article..."
             className="flex-1 min-w-0 border border-white/10 rounded-lg text-text-primary bg-white/5 placeholder-text-muted resize-none focus:outline-none focus:border-accent/40"
-            style={{ padding: "6px 10px", fontSize: 12, maxHeight: 80, lineHeight: 1.4, width: 0 }}
+            style={{ padding: isPhone ? "10px 12px" : "6px 10px", fontSize: isPhone ? 16 : 12, maxHeight: 80, lineHeight: 1.4, width: 0, minHeight: isPhone ? 44 : undefined }}
             rows={1}
             disabled={loading}
           />
           <button
             onClick={handleSubmit}
             disabled={loading || !input.trim()}
-            className="text-accent hover:bg-accent/10 disabled:opacity-30 rounded-lg transition-colors flex-shrink-0"
-            style={{ padding: "6px 10px" }}
+            className="tap-target text-accent hover:bg-accent/10 disabled:opacity-30 rounded-lg transition-colors flex-shrink-0"
+            style={{ padding: isPhone ? 0 : "6px 10px" }}
+            aria-label="Send message"
+            title="Send"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width={isPhone ? 18 : 14} height={isPhone ? 18 : 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
             </svg>
           </button>

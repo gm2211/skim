@@ -59,7 +59,7 @@ export function Sidebar() {
       {/* Top bar: action buttons right */}
       <div
         className="flex items-center gap-3 relative z-20"
-        style={{ height: 40, paddingLeft: isPhone ? 16 : 0, paddingRight: 16 }}
+        style={{ height: isPhone ? 60 : 40, paddingLeft: isPhone ? 10 : 0, paddingRight: isPhone ? 10 : 16 }}
       >
         <div className="flex-1" />
         <button
@@ -75,7 +75,7 @@ export function Sidebar() {
         <button
           onClick={() => refreshAll.mutate()}
           disabled={refreshAll.isPending}
-          className={`text-text-muted hover:text-text-primary transition-colors ${
+          className={`tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors ${
             refreshAll.isPending ? "animate-spin" : ""
           }`}
           title="Refresh all feeds"
@@ -86,7 +86,7 @@ export function Sidebar() {
         </button>
         <button
           onClick={() => setAskOpen(true)}
-          className="text-text-muted hover:text-accent transition-colors"
+          className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
           title="Ask Skim — search your feed with AI"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -95,7 +95,7 @@ export function Sidebar() {
         </button>
         <button
           onClick={() => setCatchupOpen(true)}
-          className="text-text-muted hover:text-accent transition-colors"
+          className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
           title="Super-quick catch-up"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -104,7 +104,7 @@ export function Sidebar() {
         </button>
         <button
           onClick={() => setShowAddFeed(true)}
-          className="text-text-muted hover:text-text-primary transition-colors"
+          className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
           title="Add feed"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

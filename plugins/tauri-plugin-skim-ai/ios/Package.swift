@@ -19,6 +19,7 @@ let package = Package(
         .package(name: "Tauri", path: "../.tauri/tauri-api"),
         .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.18.0"),
         .package(url: "https://github.com/ml-explore/mlx-swift-examples.git", from: "2.21.0"),
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.0.0"),
     ],
     targets: [
         .target(
@@ -28,6 +29,7 @@ let package = Package(
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-examples"),
                 .product(name: "MLXLLM", package: "mlx-swift-examples"),
+                .product(name: "Hub", package: "swift-transformers"),
             ],
             path: "Sources")
     ]

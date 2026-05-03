@@ -2,6 +2,7 @@ import Foundation
 #if canImport(UIKit)
 import UIKit
 #endif
+import Hub
 import MLX
 import MLXLMCommon
 import MLXLLM
@@ -33,11 +34,13 @@ actor MLXRunner {
     // MARK: - Errors
 
     enum MLXError: LocalizedError {
+        case downloadFailed(String)
         case loadFailed(String)
         case generationFailed(String)
 
         var errorDescription: String? {
             switch self {
+            case .downloadFailed(let m): return "MLX model download failed: \(m)"
             case .loadFailed(let m): return "MLX model load failed: \(m)"
             case .generationFailed(let m): return "MLX generation failed: \(m)"
             }
@@ -47,6 +50,7 @@ actor MLXRunner {
     // MARK: - Init / lifecycle observers
 
     init() {
+        Self.cleanupAllPartialDownloads()
         Task { await self.installObservers() }
     }
 
@@ -92,6 +96,36 @@ actor MLXRunner {
             .appendingPathComponent(repoId, isDirectory: true)
     }
 
+    nonisolated static func cleanupAllPartialDownloads() {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let modelsDir = documents
+            .appendingPathComponent("huggingface", isDirectory: true)
+            .appendingPathComponent("models", isDirectory: true)
+        guard let enumerator = FileManager.default.enumerator(
+            at: modelsDir,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: []
+        ) else {
+            return
+        }
+        for case let url as URL in enumerator where url.lastPathComponent.hasSuffix(".incomplete") {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    nonisolated static func cleanupPartialDownloads(repoId: String) {
+        let repoDir = cacheDirectory(forRepo: repoId)
+        guard let enumerator = FileManager.default.enumerator(
+            at: repoDir,
+            includingPropertiesForKeys: [.isRegularFileKey]
+        ) else {
+            return
+        }
+        for case let url as URL in enumerator where url.lastPathComponent.hasSuffix(".incomplete") {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     /// Whether weights for a specific repo are cached on disk.
     nonisolated static func isRepoDownloaded(_ repoId: String) -> Bool {
         let dir = cacheDirectory(forRepo: repoId)
@@ -129,6 +163,31 @@ actor MLXRunner {
     /// to nonisolated.
     func isModelDownloaded(repoId: String) -> Bool {
         MLXRunner.isRepoDownloaded(repoId)
+    }
+
+    /// Download model weights/config without loading them into GPU memory.
+    /// The Settings "Download" button must not call `ensureLoaded()`: loading
+    /// immediately after a multi-GB download can terminate the app on memory
+    /// constrained phones.
+    func downloadModel(repoId: String) async throws {
+        let sink = progressSink
+        let cfg = ModelConfiguration(id: repoId)
+        do {
+            MLXRunner.cleanupPartialDownloads(repoId: repoId)
+            _ = try await MLXLMCommon.downloadModel(
+                hub: HubApi(),
+                configuration: cfg,
+                progressHandler: { progress in
+                    sink?(progress.fractionCompleted)
+                }
+            )
+            loadedContainer = nil
+            loadingTask = nil
+            sink?(1.0)
+        } catch {
+            MLXRunner.cleanupPartialDownloads(repoId: repoId)
+            throw MLXError.downloadFailed("\(error)")
+        }
     }
 
     /// Remove cached weights for `repoId`. Evicts the loaded container if it

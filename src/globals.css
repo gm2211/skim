@@ -82,8 +82,8 @@ button, a, input, select, textarea, [role="button"] {
 
 @media (max-width: 600px) {
   .tap-target {
-    min-width: 48px;
-    min-height: 48px;
+    min-width: 52px;
+    min-height: 52px;
   }
 
   .phone-smooth-panel {

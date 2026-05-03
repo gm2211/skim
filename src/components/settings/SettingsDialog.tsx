@@ -1001,8 +1001,9 @@ function OnDeviceTierSection({
           className="w-full border border-white/10 rounded text-text-primary focus:outline-none focus:border-accent/50"
           style={{
             background: "rgba(255, 255, 255, 0.05)",
-            padding: "6px 10px",
-            fontSize: 12,
+            padding: isPhone ? "10px 12px" : "6px 10px",
+            fontSize: isPhone ? 16 : 12,
+            minHeight: isPhone ? 48 : undefined,
           }}
           disabled={!available || busy}
         >
@@ -1014,6 +1015,7 @@ function OnDeviceTierSection({
         </select>
         <p className="text-text-muted" style={{ fontSize: 12, marginTop: 4 }}>
           Storage estimate: ~{selectedModel.sizeGb.toFixed(1)} GB on disk.
+          {" "}Interrupted downloads are cleaned up before the next attempt.
         </p>
       </div>
 
@@ -1024,7 +1026,7 @@ function OnDeviceTierSection({
             disabled={!available || busy || checking}
             onClick={handleDownload}
             className="rounded border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
-            style={{ padding: "4px 10px", fontSize: 12 }}
+            style={{ padding: isPhone ? "0 16px" : "4px 10px", fontSize: isPhone ? 14 : 12, minHeight: isPhone ? 48 : undefined, minWidth: isPhone ? 112 : undefined }}
           >
             {busy ? "Downloading…" : "Download"}
           </button>
@@ -1034,8 +1036,8 @@ function OnDeviceTierSection({
             <span
               className="rounded text-text-primary"
               style={{
-                padding: "4px 10px",
-                fontSize: 12,
+                padding: isPhone ? "12px 14px" : "4px 10px",
+                fontSize: isPhone ? 14 : 12,
                 background: "rgba(34, 197, 94, 0.15)",
                 border: "1px solid rgba(34, 197, 94, 0.3)",
               }}
@@ -1047,7 +1049,7 @@ function OnDeviceTierSection({
               disabled={busy}
               onClick={handleDelete}
               className="rounded border border-red-500/40 text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-              style={{ padding: "4px 10px", fontSize: 12 }}
+              style={{ padding: isPhone ? "0 16px" : "4px 10px", fontSize: isPhone ? 14 : 12, minHeight: isPhone ? 48 : undefined, minWidth: isPhone ? 96 : undefined }}
             >
               {busy ? "Deleting…" : "Delete"}
             </button>

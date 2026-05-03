@@ -81,7 +81,7 @@ class SkimAIPlugin: Plugin {
             }
             await MLXRunner.shared.setModel(repoId: args.repoId)
             do {
-                _ = try await MLXRunner.shared.ensureLoaded()
+                try await MLXRunner.shared.downloadModel(repoId: args.repoId)
                 invoke.resolve()
             } catch {
                 invoke.reject("MLX download failed: \(error.localizedDescription)")

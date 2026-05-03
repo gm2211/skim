@@ -41,7 +41,7 @@ const SWIPE_FAST_PX_PER_MS = 0.44;
 const SWIPE_FAST_MIN_PX = 24;
 const SLIDE_MS = 390;
 const BOUNCE_MS = 280;
-const SWIPE_STALE_MS = 900;
+const SWIPE_STALE_MS = 1800;
 const PHONE_SLIDE_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
 const PHONE_SETTLE_EASING = "cubic-bezier(0.2, 0.9, 0.2, 1)";
 
@@ -806,18 +806,15 @@ export function ArticleDetail() {
     beginArticleSwipe(t.clientX, t.clientY);
   }, [beginArticleSwipe]);
 
-  const handleArticleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    const t = e.touches[0];
-    if (!t) return;
-    if (moveArticleSwipe(t.clientX, t.clientY)) e.preventDefault();
-  }, [moveArticleSwipe]);
-
-  const handleArticleTouchEnd = useCallback(() => {
-    endArticleSwipe(undefined);
-  }, [endArticleSwipe]);
-
   useEffect(() => {
     if (!isPhone) return;
+    const move = (event: TouchEvent) => {
+      const swipe = articleSwipeRef.current;
+      if (!swipe || swipe.iframeGestureId !== null) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      if (moveArticleSwipe(touch.clientX, touch.clientY)) event.preventDefault();
+    };
     const finish = (event: TouchEvent) => {
       if (event.touches.length === 0) endArticleSwipe(undefined);
     };
@@ -825,19 +822,21 @@ export function ArticleDetail() {
     const cancelIfHidden = () => {
       if (document.hidden) cancelActiveArticleSwipe(true);
     };
+    window.addEventListener("touchmove", move, { passive: false, capture: true });
     window.addEventListener("touchend", finish, { capture: true });
     window.addEventListener("touchcancel", finish, { capture: true });
     window.addEventListener("blur", cancel);
     window.addEventListener("pagehide", cancel);
     document.addEventListener("visibilitychange", cancelIfHidden);
     return () => {
+      window.removeEventListener("touchmove", move, { capture: true });
       window.removeEventListener("touchend", finish, { capture: true });
       window.removeEventListener("touchcancel", finish, { capture: true });
       window.removeEventListener("blur", cancel);
       window.removeEventListener("pagehide", cancel);
       document.removeEventListener("visibilitychange", cancelIfHidden);
     };
-  }, [cancelActiveArticleSwipe, endArticleSwipe, isPhone]);
+  }, [cancelActiveArticleSwipe, endArticleSwipe, isPhone, moveArticleSwipe]);
 
   useEffect(() => {
     if (!isPhone) return;
@@ -1358,10 +1357,7 @@ export function ArticleDetail() {
       <div
         ref={articleFrameRef}
         className="flex-1 min-h-0 relative overflow-hidden"
-        onTouchStart={handleArticleTouchStart}
-        onTouchMove={handleArticleTouchMove}
-        onTouchEnd={handleArticleTouchEnd}
-        onTouchCancel={handleArticleTouchEnd}
+        onTouchStartCapture={handleArticleTouchStart}
         style={{ overscrollBehaviorX: "none", touchAction: isPhone ? "pan-y" : undefined }}
       >
         <div

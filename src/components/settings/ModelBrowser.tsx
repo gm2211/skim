@@ -507,10 +507,10 @@ export function ModelBrowser({
         </label>
         <div className="flex flex-col gap-2">
           {[
-            { repo: "bartowski/Llama-3.2-1B-Instruct-GGUF", file: "Llama-3.2-1B-Instruct-Q4_K_M.gguf", name: "Llama 3.2 1B", size: "0.8 GB", desc: "Cool & tiny — runs on any laptop, good summaries, minimal heat" },
-            { repo: "bartowski/gemma-2-2b-it-GGUF", file: "gemma-2-2b-it-Q4_K_M.gguf", name: "Gemma 2 2B", size: "1.6 GB", desc: "Light & capable — balanced quality, low thermal load" },
-            { repo: "bartowski/gemma-3-4b-it-GGUF", file: "gemma-3-4b-it-Q4_K_M.gguf", name: "Gemma 3 4B", size: "2.8 GB", desc: "Best quality at this tier — fast & accurate, moderate heat" },
-            { repo: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", file: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", name: "Llama 3.1 8B", size: "4.9 GB", desc: "Highest quality — warm laptop, slowest on battery" },
+            { repo: "bartowski/Llama-3.2-1B-Instruct-GGUF", file: "Llama-3.2-1B-Instruct-Q4_K_M.gguf", name: "Llama 3.2 1B", size: "0.8 GB", desc: "Cool & tiny - runs on any laptop, good summaries, minimal heat" },
+            { repo: "bartowski/google_gemma-4-E2B-it-GGUF", file: "google_gemma-4-E2B-it-Q4_K_M.gguf", name: "Gemma 4 E2B", size: "3.5 GB", desc: "Current small Gemma - strong reasoning, 128K context, moderate heat" },
+            { repo: "bartowski/google_gemma-4-E4B-it-GGUF", file: "google_gemma-4-E4B-it-Q4_K_M.gguf", name: "Gemma 4 E4B", size: "5.4 GB", desc: "Best Gemma quality for most Macs - larger download, warmer laptop" },
+            { repo: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", file: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", name: "Llama 3.1 8B", size: "4.9 GB", desc: "Highest Llama quality - warm laptop, slowest on battery" },
           ].map((preset) => {
             const installed = localModels.data?.some((m) => m.filename === preset.file);
             const isDownloading = downloadModel.isPending;

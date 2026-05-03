@@ -75,12 +75,10 @@ export function Sidebar() {
         <button
           onClick={() => refreshAll.mutate()}
           disabled={refreshAll.isPending}
-          className={`tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors ${
-            refreshAll.isPending ? "animate-spin" : ""
-          }`}
+          className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
           title="Refresh all feeds"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg className={refreshAll.isPending ? "smooth-spin" : undefined} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
           </svg>
         </button>
@@ -232,7 +230,7 @@ export function Sidebar() {
             <div className="flex flex-col gap-2" style={{ padding: "4px 8px 0" }}>
               {triage.isPending && (
                 <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 12 }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin flex-shrink-0">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="smooth-spin flex-shrink-0">
                     <path d="M21 12a9 9 0 11-6.219-8.56" />
                   </svg>
                   <span className="flex-1 truncate">{triageProgress?.message ?? "Triaging..."}</span>
@@ -245,7 +243,7 @@ export function Sidebar() {
               )}
               {generateThemes.isPending && (
                 <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 12 }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin flex-shrink-0">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="smooth-spin flex-shrink-0">
                     <path d="M21 12a9 9 0 11-6.219-8.56" />
                   </svg>
                   <span className="flex-1 truncate">{themeProgress?.message ?? "Grouping..."}</span>

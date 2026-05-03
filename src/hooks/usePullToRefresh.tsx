@@ -189,7 +189,7 @@ export function usePullToRefresh({
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className={phase === "refreshing" ? "animate-spin" : undefined}
+          className={phase === "refreshing" ? "smooth-spin" : undefined}
           style={{
             transform: phase === "refreshing" ? undefined : `rotate(${progress * 240}deg)`,
             transition: phase === "pulling" ? "none" : "transform 180ms ease",

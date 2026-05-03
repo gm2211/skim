@@ -254,7 +254,7 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
-                className="animate-spin"
+                className="smooth-spin"
               >
                 <path d="M21 12a9 9 0 11-6.219-8.56" />
               </svg>

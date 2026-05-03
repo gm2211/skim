@@ -11,6 +11,7 @@ pub struct RepoIdArgs {
 pub struct CompleteArgs {
     pub system: String,
     pub user: String,
+    pub repo_id: Option<String>,
     pub max_tokens: Option<u32>,
     pub json_mode: Option<bool>,
 }

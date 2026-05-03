@@ -255,6 +255,9 @@ pub async fn refresh_all_feeds(db: State<'_, Database>) -> Result<i32, String> {
 
     // Fan out fetches concurrently. CONCURRENCY caps to keep us off
     // host rate-limits and within the iOS file-descriptor budget.
+    #[cfg(target_os = "ios")]
+    const CONCURRENCY: usize = 4;
+    #[cfg(not(target_os = "ios"))]
     const CONCURRENCY: usize = 16;
     let token_ref = &feedly_token;
     let results: Vec<(crate::db::models::Feed, Result<Vec<crate::db::models::Article>, String>)> =
@@ -275,11 +278,14 @@ pub async fn refresh_all_feeds(db: State<'_, Database>) -> Result<i32, String> {
         .await;
 
     let mut total_new = 0;
+    let mut refreshed_count = 0usize;
+    let mut failures: Vec<String> = Vec::new();
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     let now = chrono::Utc::now().timestamp();
     for (feed, result) in results {
         match result {
             Ok(articles) => {
+                refreshed_count += 1;
                 for article in &articles {
                     if queries::insert_article(&conn, article).map_err(|e| e.to_string())? {
                         total_new += 1;
@@ -289,8 +295,23 @@ pub async fn refresh_all_feeds(db: State<'_, Database>) -> Result<i32, String> {
             }
             Err(e) => {
                 log::warn!("Failed to refresh feed {}: {}", feed.title, e);
+                failures.push(format!("{}: {}", feed.title, e));
             }
         }
+    }
+
+    if refreshed_count == 0 && !failures.is_empty() {
+        let preview = failures
+            .iter()
+            .take(3)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("; ");
+        return Err(format!(
+            "All feed refreshes failed{}{}",
+            if preview.is_empty() { "" } else { ": " },
+            preview
+        ));
     }
 
     Ok(total_new)

@@ -266,6 +266,16 @@ pub fn extract_json_object(text: &str) -> Option<&str> {
     None
 }
 
+#[cfg(target_os = "ios")]
+fn ios_local_summary_text(text: &str) -> String {
+    const MAX_CHARS: usize = 12_000;
+    if text.chars().count() <= MAX_CHARS {
+        return text.to_string();
+    }
+
+    text.chars().take(MAX_CHARS).collect()
+}
+
 #[tauri::command]
 pub async fn cancel_summarize(
     generation: State<'_, SummaryGeneration>,
@@ -276,7 +286,8 @@ pub async fn cancel_summarize(
 
 #[tauri::command]
 pub async fn summarize_article(
-    _app: AppHandle,
+    #[cfg_attr(not(target_os = "ios"), allow(unused_variables))]
+    app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     summary_cache: State<'_, SharedSummaryCache>,
@@ -369,15 +380,22 @@ pub async fn summarize_article(
             if text.trim().is_empty() {
                 return Err("No article content to summarize.".to_string());
             }
+            let text = if provider_name == "mlx" {
+                ios_local_summary_text(&text)
+            } else {
+                text
+            };
 
             let plugin = app.skim_ai();
             let system_prompt = prompts::article_summary_system_prompt(&settings.ai);
+            let repo_id = settings.ai.model.clone();
 
             let bullet_prompt = prompts::article_bullet_summary_prompt(title, &text, &settings.ai);
             let bullet_text = if !bullet_prompt.is_empty() {
                 let args = CompleteArgs {
                     system: system_prompt.clone(),
                     user: bullet_prompt,
+                    repo_id: repo_id.clone(),
                     json_mode: Some(true),
                     max_tokens: Some(prompts::bullet_max_tokens(&settings.ai) as u32),
                 };
@@ -400,6 +418,7 @@ pub async fn summarize_article(
                 let args = CompleteArgs {
                     system: system_prompt,
                     user: full_prompt,
+                    repo_id,
                     json_mode: Some(true),
                     max_tokens: Some(prompts::full_max_tokens(&settings.ai) as u32),
                 };

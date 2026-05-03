@@ -19,17 +19,68 @@ function App() {
   const qc = useQueryClient();
   const [showBootDisclaimer, setShowBootDisclaimer] = useState(true);
   const [opmlImportStatus, setOpmlImportStatus] = useState<OpmlImportStatus | null>(null);
+  const lastRefreshRef = useRef<number>(Date.now());
 
-  // Auto-triage on startup
+  // Auto-load feed articles on startup. OPML import intentionally registers
+  // feeds quickly, then this normal refresh path fills articles.
   useEffect(() => {
-    triageArticles(false).then(() => {
-      qc.invalidateQueries({ queryKey: ["inbox"] });
-      qc.invalidateQueries({ queryKey: ["triageStats"] });
-    }).catch(() => {});
-  }, []);
+    let cancelled = false;
+    let statusTimer: number | null = window.setTimeout(() => {
+      if (!cancelled) {
+        setOpmlImportStatus({ phase: "refreshing", message: "Loading feed articles..." });
+      }
+    }, 900);
+
+    const invalidate = async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["feeds"] }),
+        qc.invalidateQueries({ queryKey: ["articles"] }),
+        qc.invalidateQueries({ queryKey: ["articleCount"] }),
+        qc.invalidateQueries({ queryKey: ["inbox"] }),
+        qc.invalidateQueries({ queryKey: ["triageStats"] }),
+      ]);
+    };
+
+    refreshAllFeeds()
+      .then(async (inserted) => {
+        lastRefreshRef.current = Date.now();
+        await invalidate();
+        await triageArticles(false).catch(() => undefined);
+        await invalidate();
+        if (!cancelled && inserted > 0) {
+          setOpmlImportStatus({
+            phase: "done",
+            message: `Loaded ${inserted} new article${inserted === 1 ? "" : "s"}.`,
+          });
+          window.setTimeout(() => {
+            if (!cancelled) setOpmlImportStatus(null);
+          }, 2200);
+        } else if (!cancelled) {
+          setOpmlImportStatus(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setOpmlImportStatus({
+            phase: "error",
+            message: `Couldn't load feed articles: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        }
+      })
+      .finally(() => {
+        if (statusTimer !== null) {
+          window.clearTimeout(statusTimer);
+          statusTimer = null;
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (statusTimer !== null) window.clearTimeout(statusTimer);
+    };
+  }, [qc]);
 
   // Auto-refresh on window focus if last refresh was > 1 hour ago.
-  const lastRefreshRef = useRef<number>(Date.now());
   useEffect(() => {
     const STALE_MS = 60 * 60 * 1000;
     const onFocus = () => {
@@ -361,7 +412,7 @@ function OpmlImportToast({ status, isPhone = false }: { status: OpmlImportStatus
       aria-live="polite"
     >
       {active ? (
-        <svg className="animate-spin text-accent flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className="smooth-spin text-accent flex-shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M21 12a9 9 0 1 1-6.219-8.56" />
         </svg>
       ) : (

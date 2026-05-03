@@ -82,12 +82,50 @@ button, a, input, select, textarea, [role="button"] {
 
 @media (max-width: 600px) {
   .tap-target {
-    min-width: 52px;
-    min-height: 52px;
+    min-width: 56px;
+    min-height: 56px;
+  }
+
+  .tap-target > svg:only-child {
+    width: 26px;
+    height: 26px;
+    display: block;
   }
 
   .phone-smooth-panel {
     transition-timing-function: cubic-bezier(0.2, 0.82, 0.18, 1);
+  }
+
+  .phone-icon-button {
+    width: 62px;
+    height: 62px;
+    min-width: 62px;
+    min-height: 62px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    line-height: 0;
+  }
+
+  .phone-icon-button svg {
+    width: 30px;
+    height: 30px;
+    display: block;
+    flex: 0 0 auto;
+  }
+}
+
+.smooth-spin {
+  animation: skim-smooth-spin 0.9s linear infinite;
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  will-change: transform;
+}
+
+@keyframes skim-smooth-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

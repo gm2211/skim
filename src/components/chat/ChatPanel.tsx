@@ -399,7 +399,7 @@ export function ChatDrawer({ articleId }: Props) {
               className="rounded-xl rounded-bl-sm text-text-muted flex items-center gap-2"
               style={{ padding: "6px 10px", fontSize: 12, background: "rgba(255, 255, 255, 0.05)" }}
             >
-              <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg className="smooth-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 12a9 9 0 1 1-6.219-8.56" />
               </svg>
               {searchLoading ? "Searching..." : "Thinking..."}

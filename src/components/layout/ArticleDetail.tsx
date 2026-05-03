@@ -801,13 +801,23 @@ export function ArticleDetail() {
   useEffect(() => {
     if (!isPhone) return;
     const finish = () => endArticleSwipe();
+    const cancel = () => cancelActiveArticleSwipe(true);
+    const cancelIfHidden = () => {
+      if (document.hidden) cancelActiveArticleSwipe(true);
+    };
     window.addEventListener("touchend", finish, { capture: true });
     window.addEventListener("touchcancel", finish, { capture: true });
+    window.addEventListener("blur", cancel);
+    window.addEventListener("pagehide", cancel);
+    document.addEventListener("visibilitychange", cancelIfHidden);
     return () => {
       window.removeEventListener("touchend", finish, { capture: true });
       window.removeEventListener("touchcancel", finish, { capture: true });
+      window.removeEventListener("blur", cancel);
+      window.removeEventListener("pagehide", cancel);
+      document.removeEventListener("visibilitychange", cancelIfHidden);
     };
-  }, [endArticleSwipe, isPhone]);
+  }, [cancelActiveArticleSwipe, endArticleSwipe, isPhone]);
 
   useEffect(() => {
     if (!isPhone) return;
@@ -897,12 +907,12 @@ export function ArticleDetail() {
     <button
       onClick={mode === "reader" ? handleReader : handleWebView}
       disabled={loadingFull}
-      className={`flex items-center gap-1.5 rounded-lg border transition-colors disabled:opacity-40 ${
+      className={`${isPhone ? "phone-icon-button" : "flex items-center gap-1.5 rounded-lg"} border transition-colors disabled:opacity-40 ${
         viewMode === mode
           ? "border-accent/30 text-accent bg-accent/10"
-          : "border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20"
+          : "border-white/12 text-text-secondary bg-white/[0.02] hover:text-text-primary hover:border-white/24"
       }`}
-      style={{ padding: isPhone ? "0" : "6px 12px", fontSize: 12, minWidth: isPhone ? 52 : undefined, minHeight: isPhone ? 52 : undefined, justifyContent: "center" }}
+      style={{ padding: isPhone ? 0 : "6px 12px", fontSize: 12, justifyContent: "center" }}
       aria-label={label}
       title={label}
     >
@@ -1003,7 +1013,7 @@ export function ArticleDetail() {
       {/* Toolbar */}
       <div
         className="flex items-center justify-between relative z-20 flex-shrink-0"
-        style={{ height: isPhone ? 64 : 52, padding: isPhone ? "0 10px" : "0 24px", gap: isPhone ? 6 : undefined }}
+        style={{ height: isPhone ? 76 : 52, padding: isPhone ? "0 12px" : "0 24px", gap: isPhone ? 8 : undefined }}
       >
         {(isPhone || !(sidebarCollapsed && listCollapsed)) && (
           <button
@@ -1017,9 +1027,10 @@ export function ArticleDetail() {
               if (state.listCollapsed) state.toggleList();
             }}
             className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
+            style={isPhone ? { minWidth: 56, minHeight: 62 } : undefined}
             title={isPhone ? "Back" : "Close"}
           >
-            <svg width={isPhone ? 22 : 16} height={isPhone ? 22 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width={isPhone ? 30 : 16} height={isPhone ? 30 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
           </button>
@@ -1027,18 +1038,18 @@ export function ArticleDetail() {
 
         <div
           className="flex items-center gap-2 min-w-0"
-          style={isPhone ? { gap: 6, flex: "1 1 auto", flexWrap: "nowrap" } : undefined}
+          style={isPhone ? { gap: 8, flex: "1 1 auto", flexWrap: "nowrap" } : undefined}
         >
           {article.url && (
             <>
               {modeBtn("reader", "Reader",
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width={isPhone ? 30 : 13} height={isPhone ? 30 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                   <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                 </svg>
               )}
               {modeBtn("web", "Web",
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width={isPhone ? 30 : 13} height={isPhone ? 30 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="2" y1="12" x2="22" y2="12" />
                   <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
@@ -1085,13 +1096,19 @@ export function ArticleDetail() {
                 } : undefined}
                 onContextMenu={isPhone ? (e) => e.preventDefault() : undefined}
                 disabled={summarize.isPending}
-                className={`${isPhone ? "rounded-lg" : "rounded-l-lg border-r-0"} border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40`}
-                style={{ padding: isPhone ? 0 : "6px 12px", fontSize: 12, minWidth: isPhone ? 52 : undefined, minHeight: isPhone ? 52 : undefined, touchAction: "manipulation", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
+                className={`${isPhone ? "phone-icon-button" : "rounded-l-lg border-r-0"} border border-white/10 bg-white/[0.02] text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40`}
+                style={{ padding: isPhone ? 0 : "6px 12px", fontSize: 12, touchAction: "manipulation", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
                 title={isPhone ? "Tap: summarize • Long press: options" : "Summarize"}
                 aria-label="Summarize"
               >
-                {summarize.isPending ? "..." : (isPhone ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                {summarize.isPending ? (
+                  isPhone ? <span className="smooth-spin" style={{ width: 30, height: 30, display: "inline-flex" }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                    </svg>
+                  </span> : "..."
+                ) : (isPhone ? (
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <polyline points="14 2 14 8 20 8" />
                     <line x1="16" y1="13" x2="8" y2="13" />
@@ -1142,12 +1159,12 @@ export function ArticleDetail() {
 
           <button
             onClick={() => toggleStar.mutate(article.id)}
-            className={`tap-target rounded-lg hover:bg-white/10 transition-colors ${
+            className={`${isPhone ? "phone-icon-button border border-white/10 bg-white/[0.02]" : "tap-target rounded-lg"} hover:bg-white/10 transition-colors ${
               article.is_starred ? "text-warning" : "text-text-muted hover:text-text-primary"
             }`}
             title={article.is_starred ? "Unstar" : "Star"}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill={article.is_starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+            <svg width={isPhone ? 31 : 16} height={isPhone ? 31 : 16} viewBox="0 0 24 24" fill={article.is_starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
           </button>
@@ -1193,7 +1210,7 @@ export function ArticleDetail() {
           <div className="rounded-xl border border-white/10" style={{ padding: "16px 20px", background: "rgba(255,255,255,0.03)" }}>
             <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 11, marginBottom: 8 }}>AI Summary</div>
             <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 14 }}>
-              <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg className="smooth-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 12a9 9 0 1 1-6.219-8.56" />
               </svg>
               Summarizing...
@@ -1380,7 +1397,7 @@ export function ArticleDetail() {
                     <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
                   ) : loadingFull ? (
                     <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 14 }}>
-                      <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <svg className="smooth-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                       </svg>
                       Loading article…
@@ -1419,7 +1436,7 @@ export function ArticleDetail() {
                   )}
                   {loadingFull && !rawHtml && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center" style={{ padding: "0 24px" }}>
-                      <svg className="animate-spin text-text-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: 12 }}>
+                      <svg className="smooth-spin text-text-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: 12 }}>
                         <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                       </svg>
                       <p className="text-text-muted" style={{ fontSize: 14 }}>

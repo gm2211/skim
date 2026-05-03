@@ -210,6 +210,9 @@ actor MLXRunner {
         if let task = loadingTask { return try await task.value }
 
         let repoId = currentRepoId
+        guard MLXRunner.isRepoDownloaded(repoId) else {
+            throw MLXError.loadFailed("Model \(repoId) is not downloaded.")
+        }
         let sink = progressSink
         let task = Task { () throws -> ModelContainer in
             do {

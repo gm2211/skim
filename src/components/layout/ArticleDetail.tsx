@@ -926,12 +926,12 @@ export function ArticleDetail() {
     <button
       onClick={mode === "reader" ? handleReader : handleWebView}
       disabled={loadingFull}
-      className={`${isPhone ? "phone-icon-button" : "flex items-center gap-1.5 rounded-lg"} border transition-colors disabled:opacity-40 ${
+      className={`${isPhone ? "tap-target" : "flex items-center gap-1.5 rounded-lg border"} transition-colors disabled:opacity-40 ${
         viewMode === mode
-          ? "border-accent/30 text-accent bg-accent/10"
-          : "border-white/12 text-text-secondary bg-white/[0.02] hover:text-text-primary hover:border-white/24"
+          ? isPhone ? "text-accent" : "border-accent/30 text-accent bg-accent/10"
+          : isPhone ? "text-text-muted hover:text-text-primary hover:bg-white/10" : "border-white/12 text-text-secondary bg-white/[0.02] hover:text-text-primary hover:border-white/24"
       }`}
-      style={{ padding: isPhone ? 0 : "6px 12px", fontSize: 12, justifyContent: "center" }}
+      style={{ padding: isPhone ? undefined : "6px 12px", fontSize: 12, justifyContent: "center" }}
       aria-label={label}
       title={label}
     >
@@ -1032,7 +1032,7 @@ export function ArticleDetail() {
       {/* Toolbar */}
       <div
         className="flex items-center justify-between relative z-20 flex-shrink-0"
-        style={{ height: isPhone ? 76 : 52, padding: isPhone ? "0 12px" : "0 24px", gap: isPhone ? 8 : undefined }}
+        style={{ height: 52, padding: isPhone ? "0 8px" : "0 24px", gap: isPhone ? 8 : undefined }}
       >
         {(isPhone || !(sidebarCollapsed && listCollapsed)) && (
           <button
@@ -1046,10 +1046,10 @@ export function ArticleDetail() {
               if (state.listCollapsed) state.toggleList();
             }}
             className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
-            style={isPhone ? { minWidth: 52, minHeight: 58 } : undefined}
+            style={isPhone ? { minWidth: 52, minHeight: 52 } : undefined}
             title={isPhone ? "Back" : "Close"}
           >
-            <svg width={isPhone ? 28 : 16} height={isPhone ? 28 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width={isPhone ? 24 : 16} height={isPhone ? 24 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
           </button>
@@ -1062,13 +1062,13 @@ export function ArticleDetail() {
           {article.url && (
             <>
               {modeBtn("reader", "Reader",
-                <svg width={isPhone ? 28 : 13} height={isPhone ? 28 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width={isPhone ? 18 : 13} height={isPhone ? 18 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                   <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                 </svg>
               )}
               {modeBtn("web", "Web",
-                <svg width={isPhone ? 28 : 13} height={isPhone ? 28 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width={isPhone ? 18 : 13} height={isPhone ? 18 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="2" y1="12" x2="22" y2="12" />
                   <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
@@ -1115,19 +1115,19 @@ export function ArticleDetail() {
                 } : undefined}
                 onContextMenu={isPhone ? (e) => e.preventDefault() : undefined}
                 disabled={summarize.isPending}
-                className={`${isPhone ? "phone-icon-button" : "rounded-l-lg border-r-0"} border border-white/10 bg-white/[0.02] text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors disabled:opacity-40`}
-                style={{ padding: isPhone ? 0 : "6px 12px", fontSize: 12, touchAction: "manipulation", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
+                className={`${isPhone ? "tap-target rounded-lg hover:bg-white/10" : "rounded-l-lg border border-r-0 border-white/10 bg-white/[0.02] hover:border-white/20"} text-text-muted hover:text-text-primary transition-colors disabled:opacity-40`}
+                style={{ padding: isPhone ? undefined : "6px 12px", fontSize: 12, touchAction: "manipulation", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }}
                 title={isPhone ? "Tap: summarize • Long press: options" : "Summarize"}
                 aria-label="Summarize"
               >
                 {summarize.isPending ? (
-                  isPhone ? <span className="smooth-spin" style={{ width: 28, height: 28, display: "inline-flex" }}>
+                  isPhone ? <span className="smooth-spin" style={{ width: 18, height: 18, display: "inline-flex" }}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                     </svg>
                   </span> : "..."
                 ) : (isPhone ? (
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <polyline points="14 2 14 8 20 8" />
                     <line x1="16" y1="13" x2="8" y2="13" />
@@ -1186,12 +1186,12 @@ export function ArticleDetail() {
 
           <button
             onClick={() => toggleStar.mutate(article.id)}
-            className={`${isPhone ? "phone-icon-button border border-white/10 bg-white/[0.02]" : "tap-target rounded-lg"} hover:bg-white/10 transition-colors ${
+            className={`${isPhone ? "tap-target" : "tap-target rounded-lg"} hover:bg-white/10 transition-colors ${
               article.is_starred ? "text-warning" : "text-text-muted hover:text-text-primary"
             }`}
             title={article.is_starred ? "Unstar" : "Star"}
           >
-            <svg width={isPhone ? 29 : 16} height={isPhone ? 29 : 16} viewBox="0 0 24 24" fill={article.is_starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+            <svg width={isPhone ? 18 : 16} height={isPhone ? 18 : 16} viewBox="0 0 24 24" fill={article.is_starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
           </button>

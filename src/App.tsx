@@ -92,8 +92,8 @@ function App() {
   }, [qc]);
 
   // Phone-mode horizontal gestures are pane navigation, not page scrolling.
-  // Detail accepts swipe-right anywhere to return to the article list; other
-  // panes keep edge/adjacent-pane gestures so list item swipe actions still work.
+  // Article detail owns its Reader/Web/back gestures; the shell handles only
+  // sidebar/list transitions so list item swipe actions still work.
   useEffect(() => {
     if (!isPhone) return;
     let startX = 0;
@@ -112,7 +112,6 @@ function App() {
       startY = t.clientY;
       startPane = state.phonePane;
       allowsHorizontalPaneGesture =
-        startPane === "detail" ||
         startPane === "sidebar" ||
         (startPane === "list" && startX <= EDGE_PX);
       cancelled = false;
@@ -133,10 +132,7 @@ function App() {
         e.preventDefault();
       }
 
-      if (startPane === "detail" && dx > TRIGGER_PX) {
-        cancelled = true;
-        useUiStore.getState().phoneBack();
-      } else if (startPane === "sidebar" && dx < -TRIGGER_PX) {
+      if (startPane === "sidebar" && dx < -TRIGGER_PX) {
         cancelled = true;
         useUiStore.getState().setPhonePane("list");
       } else if (startPane === "list" && dx > TRIGGER_PX) {

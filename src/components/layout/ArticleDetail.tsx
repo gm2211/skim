@@ -191,6 +191,7 @@ export function ArticleDetail() {
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
+  const articleSwipeRef = useRef<{ x: number; y: number; handled: boolean } | null>(null);
   const [fullContent, setFullContent] = useState<string | null>(null);
   const [rawHtml, setRawHtml] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
@@ -320,6 +321,44 @@ export function ArticleDetail() {
     await fetchFull();
     setViewMode("web");
   }, [viewMode, fetchFull]);
+
+  const handleArticleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isPhone) return;
+    const t = e.touches[0];
+    if (!t) return;
+    articleSwipeRef.current = { x: t.clientX, y: t.clientY, handled: false };
+  }, [isPhone]);
+
+  const handleArticleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isPhone || !articleSwipeRef.current) return;
+    const t = e.touches[0];
+    if (!t) return;
+
+    const dx = t.clientX - articleSwipeRef.current.x;
+    const absDx = Math.abs(dx);
+    const dy = Math.abs(t.clientY - articleSwipeRef.current.y);
+    if (dy > 40 && dy > absDx) {
+      articleSwipeRef.current.handled = true;
+      return;
+    }
+    if (absDx <= 10 || absDx <= dy) return;
+
+    e.preventDefault();
+    if (articleSwipeRef.current.handled || absDx < 60) return;
+    articleSwipeRef.current.handled = true;
+
+    if (dx < 0 && viewMode === "reader" && article?.url) {
+      void handleWebView();
+    } else if (dx > 0 && viewMode === "web") {
+      void handleReader();
+    } else if (dx > 0 && viewMode === "reader") {
+      phoneBack();
+    }
+  }, [article?.url, handleReader, handleWebView, isPhone, phoneBack, viewMode]);
+
+  const handleArticleTouchEnd = useCallback(() => {
+    articleSwipeRef.current = null;
+  }, []);
 
   // Arrow key navigation — toggle between reader and web views
   useEffect(() => {
@@ -760,7 +799,13 @@ export function ArticleDetail() {
       })()}
 
       {/* Single panel — toggles between reader and web view */}
-      <div className="flex-1 min-h-0 relative overflow-hidden">
+      <div
+        className="flex-1 min-h-0 relative overflow-hidden"
+        onTouchStart={handleArticleTouchStart}
+        onTouchMove={handleArticleTouchMove}
+        onTouchEnd={handleArticleTouchEnd}
+        onTouchCancel={handleArticleTouchEnd}
+      >
         {viewMode === "reader" ? (
           <div className="h-full overflow-y-auto overflow-x-hidden" style={{ overscrollBehaviorX: "none", touchAction: "pan-y" }}>
             <div style={{ maxWidth: 720, width: "100%", margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px", overflowX: "hidden" }}>

@@ -3,10 +3,12 @@ import { useArticles, useArticleCount, useMarkAllRead, useMarkRead, useMarkUnrea
 import { useInboxArticles } from "../../hooks/useInbox";
 import { useThemes, useArticleThemeTags } from "../../hooks/useThemes";
 import { useRecentArticles, useReadMatchCount, useRemoveRecent } from "../../hooks/useRecent";
+import { useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
 import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction } from "../../services/types";
+import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 
 const PRIORITY_GROUP_LABELS: Record<number, string> = {
   5: "MUST READ",
@@ -80,6 +82,7 @@ export function ArticleList() {
   const toggleRead = useToggleRead();
   const toggleStar = useToggleStar();
   const removeRecent = useRemoveRecent();
+  const refreshAllFeeds = useRefreshAllFeeds();
   const [searchQuery, setSearchQuery] = useState("");
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -322,6 +325,20 @@ export function ArticleList() {
     }
   }, [canPaginate, regularArticles, pageLimit]);
 
+  const {
+    pullToRefreshHandlers,
+    pullToRefreshContentStyle,
+    pullToRefreshIndicator,
+  } = usePullToRefresh({
+    enabled: isPhone,
+    canStart: () => (scrollRef.current?.scrollTop ?? 0) <= 0 && !refreshAllFeeds.isPending,
+    onRefresh: async () => {
+      stickyMapRef.current = new Map();
+      setStickyEpoch((n) => n + 1);
+      await refreshAllFeeds.mutateAsync();
+    },
+  });
+
   return (
     <div
       className={`${listCollapsed && !isPhone ? '' : 'border-r border-white/5'} bg-bg-secondary/70 flex flex-col h-full overflow-hidden transition-all duration-300 ease-in-out`}
@@ -510,58 +527,66 @@ export function ArticleList() {
       )}
 
       {/* Article list */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-32">
-            <span className="text-text-muted" style={{ fontSize: 14 }}>Loading...</span>
-          </div>
-        ) : filteredArticles && filteredArticles.length > 0 ? (
-          articleGroups.map((group) => (
-            <div key={group.label}>
-              <div
-                className="text-text-muted uppercase tracking-wider font-semibold"
-                style={{ fontSize: 11, padding: "16px 24px 8px" }}
-              >
-                {group.label}
-              </div>
-              {group.indices.map((i) => {
-                const article = filteredArticles[i];
-                const triageData = isInbox ? {
-                  priority: (article as ArticleWithTriage).priority ?? 3,
-                  reason: (article as ArticleWithTriage).reason ?? "",
-                } : null;
-                return (
-                  <ArticleCard
-                    key={article.id}
-                    article={article}
-                    triage={triageData}
-                    themeTags={isInbox ? themeTagsByArticle.get(article.id) : undefined}
-                    isSelected={selectedArticleId === article.id}
-                    onSelect={() => setSelectedArticleId(article.id)}
-                    onContextMenu={(e) => handleArticleContextMenu(e, i)}
-                    onSwipeRead={isPhone ? () => markRead.mutate([article.id]) : undefined}
-                    onSwipeUnread={isPhone ? () => markUnread.mutate([article.id]) : undefined}
-                  />
-                );
-              })}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto relative"
+        {...pullToRefreshHandlers}
+      >
+        {pullToRefreshIndicator}
+        <div style={pullToRefreshContentStyle}>
+          {isLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <span className="text-text-muted" style={{ fontSize: 14 }}>Loading...</span>
             </div>
-          ))
-        ) : (
-          <div className="flex flex-col items-center justify-center h-48 px-6">
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              className="text-text-muted mb-3 opacity-40"
-            >
-              <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V9a2 2 0 0 0-2-2h-1" />
-            </svg>
-            <span className="text-text-muted" style={{ fontSize: 13 }}>No articles</span>
-          </div>
-        )}
+          ) : filteredArticles && filteredArticles.length > 0 ? (
+            articleGroups.map((group) => (
+              <div key={group.label}>
+                <div
+                  className="text-text-muted uppercase tracking-wider font-semibold"
+                  style={{ fontSize: 11, padding: "16px 24px 8px" }}
+                >
+                  {group.label}
+                </div>
+                {group.indices.map((i) => {
+                  const article = filteredArticles[i];
+                  const triageData = isInbox ? {
+                    priority: (article as ArticleWithTriage).priority ?? 3,
+                    reason: (article as ArticleWithTriage).reason ?? "",
+                  } : null;
+                  return (
+                    <ArticleCard
+                      key={article.id}
+                      article={article}
+                      triage={triageData}
+                      themeTags={isInbox ? themeTagsByArticle.get(article.id) : undefined}
+                      isSelected={selectedArticleId === article.id}
+                      onSelect={() => setSelectedArticleId(article.id)}
+                      onContextMenu={(e) => handleArticleContextMenu(e, i)}
+                      onSwipeRead={isPhone ? () => markRead.mutate([article.id]) : undefined}
+                      onSwipeUnread={isPhone ? () => markUnread.mutate([article.id]) : undefined}
+                    />
+                  );
+                })}
+              </div>
+            ))
+          ) : (
+            <div className="flex flex-col items-center justify-center h-48 px-6">
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="text-text-muted mb-3 opacity-40"
+              >
+                <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V9a2 2 0 0 0-2-2h-1" />
+              </svg>
+              <span className="text-text-muted" style={{ fontSize: 13 }}>No articles</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {contextMenu && contextArticle && filteredArticles && (

@@ -10,6 +10,7 @@ import { useReadingTimeTracker } from "../../hooks/useLearning";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { NumberInput } from "../ui/NumberInput";
 import { AIDisclaimer } from "../common/AIDisclaimer";
+import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 
 type ViewMode = "reader" | "web";
 type SwipeTarget = "web" | "reader" | "list";
@@ -65,7 +66,7 @@ const EMBEDDED_WEB_VIEW_SCRIPT = `
   let horizontal = false;
   let vertical = false;
   let active = false;
-  const post = (phase, touch) => {
+  const postSwipe = (phase, touch) => {
     if (!touch) return;
     window.parent.postMessage({
       type: "skim-article-swipe",
@@ -75,6 +76,23 @@ const EMBEDDED_WEB_VIEW_SCRIPT = `
       y: touch.clientY
     }, "*");
   };
+  const postPull = (phase, touch) => {
+    if (!touch) return;
+    window.parent.postMessage({
+      type: "skim-article-pull-refresh",
+      gestureId,
+      phase,
+      x: touch.clientX,
+      y: touch.clientY
+    }, "*");
+  };
+  const scrollTop = () =>
+    window.scrollY ||
+    document.documentElement.scrollTop ||
+    document.body.scrollTop ||
+    0;
+  let pullCandidate = false;
+  let pulling = false;
   window.addEventListener("touchstart", (event) => {
     const touch = event.touches[0];
     if (!touch) return;
@@ -83,8 +101,11 @@ const EMBEDDED_WEB_VIEW_SCRIPT = `
     horizontal = false;
     vertical = false;
     active = true;
+    pullCandidate = scrollTop() <= 0;
+    pulling = false;
     gestureId += 1;
-    post("start", touch);
+    postSwipe("start", touch);
+    if (pullCandidate) postPull("start", touch);
   }, { passive: true, capture: true });
   window.addEventListener("touchmove", (event) => {
     if (!active) return;
@@ -92,22 +113,34 @@ const EMBEDDED_WEB_VIEW_SCRIPT = `
     if (!touch) return;
     const dx = touch.clientX - startX;
     const absDx = Math.abs(dx);
-    const dy = Math.abs(touch.clientY - startY);
+    const signedDy = touch.clientY - startY;
+    const dy = Math.abs(signedDy);
     if (!horizontal && !vertical) {
-      if (dy > ${SWIPE_VERTICAL_CANCEL_PX} && dy > absDx) {
+      if (signedDy < -${SWIPE_VERTICAL_CANCEL_PX} && dy > absDx) {
         vertical = true;
       } else if (absDx > ${SWIPE_INTENT_PX} && absDx > dy) {
         horizontal = true;
       }
     }
+    if (pullCandidate && !horizontal && !vertical && signedDy > ${SWIPE_INTENT_PX} && signedDy > absDx && scrollTop() <= 0) {
+      pulling = true;
+    }
+    if (pulling) {
+      event.preventDefault();
+      postPull("move", touch);
+      return;
+    }
     if (!horizontal) return;
     event.preventDefault();
-    post("move", touch);
+    postSwipe("move", touch);
   }, { passive: false, capture: true });
   const finish = (phase, event) => {
     if (!active) return;
     active = false;
-    post(phase, event.changedTouches[0]);
+    postSwipe(phase, event.changedTouches[0]);
+    if (pullCandidate || pulling) postPull(phase, event.changedTouches[0]);
+    pullCandidate = false;
+    pulling = false;
   };
   window.addEventListener("touchend", (event) => finish("end", event), { passive: true, capture: true });
   window.addEventListener("touchcancel", (event) => finish("cancel", event), { passive: true, capture: true });
@@ -121,6 +154,17 @@ const EMBEDDED_WEB_VIEW_SCRIPT = `
       x: startX,
       y: startY
     }, "*");
+    if (pullCandidate || pulling) {
+      window.parent.postMessage({
+        type: "skim-article-pull-refresh",
+        gestureId,
+        phase: "cancel",
+        x: startX,
+        y: startY
+      }, "*");
+    }
+    pullCandidate = false;
+    pulling = false;
   });
 })();
 </script>
@@ -277,7 +321,7 @@ function prepareFetchedArticle(result: FetchedArticleContent): {
 
 export function ArticleDetail() {
   const { selectedArticleId, setSelectedArticleId, listCollapsed, sidebarCollapsed, sidebarView, isPhone, phoneBack } = useUiStore();
-  const { data: article } = useArticle(selectedArticleId);
+  const { data: article, refetch: refetchArticle } = useArticle(selectedArticleId);
   const markRead = useMarkRead();
   const toggleStar = useToggleStar();
   const toggleRead = useToggleRead();
@@ -296,6 +340,7 @@ export function ArticleDetail() {
   const longPressFired = useRef(false);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
   const articleFrameRef = useRef<HTMLDivElement>(null);
+  const readerScrollRef = useRef<HTMLDivElement>(null);
   const articleSwipeRef = useRef<ArticleSwipe | null>(null);
   const articleSwipeSeqRef = useRef(0);
   const articleSwipeWatchdogRef = useRef<number | null>(null);
@@ -441,10 +486,10 @@ export function ArticleDetail() {
     }
   }, [article?.id]);
 
-  const fetchFull = useCallback(async () => {
+  const fetchFull = useCallback(async (force = false) => {
     const articleId = article?.id;
     const url = article?.url;
-    if (!articleId || !url || rawHtml) return;
+    if (!articleId || !url || (!force && rawHtml)) return;
     const seq = ++fullFetchSeqRef.current;
     setLoadingFull(true);
     setFullError(null);
@@ -461,6 +506,32 @@ export function ArticleDetail() {
       if (seq === fullFetchSeqRef.current) setLoadingFull(false);
     }
   }, [article?.id, article?.url, rawHtml]);
+
+  const refreshCurrentArticle = useCallback(async () => {
+    await refetchArticle();
+    await fetchFull(true);
+  }, [fetchFull, refetchArticle]);
+
+  const readerRefresh = usePullToRefresh({
+    enabled: isPhone,
+    canStart: () =>
+      viewMode === "reader" &&
+      (readerScrollRef.current?.scrollTop ?? 0) <= 0 &&
+      !loadingFull,
+    onRefresh: refreshCurrentArticle,
+  });
+
+  const {
+    beginPull: beginWebPullRefresh,
+    movePull: moveWebPullRefresh,
+    endPull: endWebPullRefresh,
+    pullToRefreshContentStyle: webPullToRefreshContentStyle,
+    pullToRefreshIndicator: webPullToRefreshIndicator,
+  } = usePullToRefresh({
+    enabled: isPhone,
+    canStart: () => viewMode === "web" && !loadingFull,
+    onRefresh: refreshCurrentArticle,
+  });
 
   const clearModeTransitionTimer = useCallback(() => {
     if (modeTransitionTimerRef.current) {
@@ -749,14 +820,20 @@ export function ArticleDetail() {
         x?: number;
         y?: number;
       };
-      if (
-        data?.type !== "skim-article-swipe" ||
-        typeof data.gestureId !== "number" ||
-        typeof data.x !== "number" ||
-        typeof data.y !== "number"
-      ) {
+      if (typeof data.gestureId !== "number" || typeof data.x !== "number" || typeof data.y !== "number") {
         return;
       }
+      if (data.type === "skim-article-pull-refresh") {
+        if (data.phase === "start") {
+          beginWebPullRefresh(data.x, data.y);
+        } else if (data.phase === "move") {
+          moveWebPullRefresh(data.x, data.y);
+        } else if (data.phase === "end" || data.phase === "cancel") {
+          endWebPullRefresh();
+        }
+        return;
+      }
+      if (data.type !== "skim-article-swipe") return;
       if (data.phase === "start") {
         beginArticleSwipe(data.x, data.y, data.gestureId);
       } else if (data.phase === "move") {
@@ -767,7 +844,15 @@ export function ArticleDetail() {
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
-  }, [beginArticleSwipe, endArticleSwipe, isPhone, moveArticleSwipe]);
+  }, [
+    beginArticleSwipe,
+    beginWebPullRefresh,
+    endArticleSwipe,
+    endWebPullRefresh,
+    isPhone,
+    moveArticleSwipe,
+    moveWebPullRefresh,
+  ]);
 
   // Arrow key navigation — toggle between reader and web views
   useEffect(() => {
@@ -1265,8 +1350,23 @@ export function ArticleDetail() {
               aria-hidden={viewMode !== "reader"}
               style={{ width: effectiveArticleFrameWidth, flex: "0 0 auto" }}
             >
-              <div className="h-full overflow-y-auto overflow-x-hidden" style={{ overscrollBehaviorX: "none", touchAction: "pan-y" }}>
-                <div style={{ maxWidth: 720, width: "100%", margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px", overflowX: "hidden" }}>
+              <div
+                ref={readerScrollRef}
+                className="h-full overflow-y-auto overflow-x-hidden relative"
+                style={{ overscrollBehaviorX: "none", touchAction: "pan-y" }}
+                {...readerRefresh.pullToRefreshHandlers}
+              >
+                {readerRefresh.pullToRefreshIndicator}
+                <div
+                  style={{
+                    ...readerRefresh.pullToRefreshContentStyle,
+                    maxWidth: 720,
+                    width: "100%",
+                    margin: "0 auto",
+                    padding: isPhone ? "16px 16px 64px" : "24px 40px 80px",
+                    overflowX: "hidden",
+                  }}
+                >
                   <div style={{ marginBottom: 28 }}>
                     <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
                     <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
@@ -1301,66 +1401,69 @@ export function ArticleDetail() {
               aria-hidden={viewMode !== "web"}
               style={{ width: effectiveArticleFrameWidth, flex: "0 0 auto" }}
             >
-              <div className="h-full relative">
-                {article.url && (
-                  <button
-                    onClick={() => { if (article.url) openUrl(article.url); }}
-                    className="absolute bg-bg-secondary/90 hover:bg-bg-secondary border border-white/15 text-text-primary backdrop-blur-md rounded-full shadow-lg transition-colors flex items-center justify-center z-10"
-                    style={{ bottom: 16, right: 16, width: 48, height: 48 }}
-                    title="Open original in external browser"
-                    aria-label="Open in browser"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-                    </svg>
-                  </button>
-                )}
-                {loadingFull && !rawHtml && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center" style={{ padding: "0 24px" }}>
-                    <svg className="animate-spin text-text-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: 12 }}>
-                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                    </svg>
-                    <p className="text-text-muted" style={{ fontSize: 14 }}>
-                      Loading web view...
-                    </p>
-                  </div>
-                )}
-                {!rawHtml && !loadingFull && (
-                  <div className="flex flex-col items-center justify-center h-full text-center" style={{ padding: "0 24px" }}>
-                    <p className="text-text-muted" style={{ fontSize: 14, marginBottom: 8 }}>
-                      {fullError ? "Couldn't load page in the embedded view." : "No embedded page preview is available."}
-                    </p>
-                    <p className="text-text-muted" style={{ fontSize: 12 }}>
-                      Use the "Open in browser" button.
-                    </p>
-                  </div>
-                )}
-                {rawHtml && (
-                  <iframe
-                    key={`${article.id}:${article.url}`}
-                    ref={iframeRef}
-                    srcDoc={buildEmbeddedWebSrcDoc(rawHtml)}
-                    sandbox="allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock allow-presentation"
-                    style={{ width: "100%", height: "100%", border: "none", background: "#fff", overflow: "hidden" }}
-                    title="Article web view"
-                    onLoad={() => {
-                      try {
-                        const win = iframeRef.current?.contentWindow;
-                        if (!win) return;
-                        const s = win.document.createElement("style");
-                        s.textContent = EMBEDDED_WEB_VIEW_CSS;
-                        win.document.head.appendChild(s);
-                        win.document.addEventListener("contextmenu", (e: Event) => e.preventDefault());
-                        win.addEventListener("keydown", ((e: KeyboardEvent) => {
-                          if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-                            e.preventDefault();
-                            window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
-                          }
-                        }) as EventListener);
-                      } catch { /* cross-origin */ }
-                    }}
-                  />
-                )}
+              <div className="h-full relative overflow-hidden">
+                {webPullToRefreshIndicator}
+                <div className="h-full relative" style={webPullToRefreshContentStyle}>
+                  {article.url && (
+                    <button
+                      onClick={() => { if (article.url) openUrl(article.url); }}
+                      className="absolute bg-bg-secondary/90 hover:bg-bg-secondary border border-white/15 text-text-primary backdrop-blur-md rounded-full shadow-lg transition-colors flex items-center justify-center z-10"
+                      style={{ bottom: 16, right: 16, width: 48, height: 48 }}
+                      title="Open original in external browser"
+                      aria-label="Open in browser"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                      </svg>
+                    </button>
+                  )}
+                  {loadingFull && !rawHtml && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center" style={{ padding: "0 24px" }}>
+                      <svg className="animate-spin text-text-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: 12 }}>
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                      </svg>
+                      <p className="text-text-muted" style={{ fontSize: 14 }}>
+                        Loading web view...
+                      </p>
+                    </div>
+                  )}
+                  {!rawHtml && !loadingFull && (
+                    <div className="flex flex-col items-center justify-center h-full text-center" style={{ padding: "0 24px" }}>
+                      <p className="text-text-muted" style={{ fontSize: 14, marginBottom: 8 }}>
+                        {fullError ? "Couldn't load page in the embedded view." : "No embedded page preview is available."}
+                      </p>
+                      <p className="text-text-muted" style={{ fontSize: 12 }}>
+                        Use the "Open in browser" button.
+                      </p>
+                    </div>
+                  )}
+                  {rawHtml && (
+                    <iframe
+                      key={`${article.id}:${article.url}`}
+                      ref={iframeRef}
+                      srcDoc={buildEmbeddedWebSrcDoc(rawHtml)}
+                      sandbox="allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock allow-presentation"
+                      style={{ width: "100%", height: "100%", border: "none", background: "#fff", overflow: "hidden" }}
+                      title="Article web view"
+                      onLoad={() => {
+                        try {
+                          const win = iframeRef.current?.contentWindow;
+                          if (!win) return;
+                          const s = win.document.createElement("style");
+                          s.textContent = EMBEDDED_WEB_VIEW_CSS;
+                          win.document.head.appendChild(s);
+                          win.document.addEventListener("contextmenu", (e: Event) => e.preventDefault());
+                          win.addEventListener("keydown", ((e: KeyboardEvent) => {
+                            if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                              e.preventDefault();
+                              window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
+                            }
+                          }) as EventListener);
+                        } catch { /* cross-origin */ }
+                      }}
+                    />
+                  )}
+                </div>
               </div>
             </section>
           </div>

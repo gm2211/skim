@@ -82,13 +82,13 @@ button, a, input, select, textarea, [role="button"] {
 
 @media (max-width: 600px) {
   .tap-target {
-    min-width: 56px;
-    min-height: 56px;
+    min-width: 52px;
+    min-height: 52px;
   }
 
   .tap-target > svg:only-child {
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
     display: block;
   }
 
@@ -97,20 +97,20 @@ button, a, input, select, textarea, [role="button"] {
   }
 
   .phone-icon-button {
-    width: 62px;
-    height: 62px;
-    min-width: 62px;
-    min-height: 62px;
+    width: 58px;
+    height: 58px;
+    min-width: 58px;
+    min-height: 58px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: 14px;
+    border-radius: 13px;
     line-height: 0;
   }
 
   .phone-icon-button svg {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     display: block;
     flex: 0 0 auto;
   }

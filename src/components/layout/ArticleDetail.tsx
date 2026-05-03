@@ -1047,10 +1047,10 @@ export function ArticleDetail() {
               if (state.listCollapsed) state.toggleList();
             }}
             className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
-            style={isPhone ? { minWidth: 56, minHeight: 62 } : undefined}
+            style={isPhone ? { minWidth: 52, minHeight: 58 } : undefined}
             title={isPhone ? "Back" : "Close"}
           >
-            <svg width={isPhone ? 30 : 16} height={isPhone ? 30 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width={isPhone ? 28 : 16} height={isPhone ? 28 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
           </button>
@@ -1063,13 +1063,13 @@ export function ArticleDetail() {
           {article.url && (
             <>
               {modeBtn("reader", "Reader",
-                <svg width={isPhone ? 30 : 13} height={isPhone ? 30 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width={isPhone ? 28 : 13} height={isPhone ? 28 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
                   <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
                 </svg>
               )}
               {modeBtn("web", "Web",
-                <svg width={isPhone ? 30 : 13} height={isPhone ? 30 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width={isPhone ? 28 : 13} height={isPhone ? 28 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="2" y1="12" x2="22" y2="12" />
                   <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
@@ -1122,13 +1122,13 @@ export function ArticleDetail() {
                 aria-label="Summarize"
               >
                 {summarize.isPending ? (
-                  isPhone ? <span className="smooth-spin" style={{ width: 30, height: 30, display: "inline-flex" }}>
+                  isPhone ? <span className="smooth-spin" style={{ width: 28, height: 28, display: "inline-flex" }}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M21 12a9 9 0 1 1-6.219-8.56" />
                     </svg>
                   </span> : "..."
                 ) : (isPhone ? (
-                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <polyline points="14 2 14 8 20 8" />
                     <line x1="16" y1="13" x2="8" y2="13" />
@@ -1184,7 +1184,7 @@ export function ArticleDetail() {
             }`}
             title={article.is_starred ? "Unstar" : "Star"}
           >
-            <svg width={isPhone ? 31 : 16} height={isPhone ? 31 : 16} viewBox="0 0 24 24" fill={article.is_starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+            <svg width={isPhone ? 29 : 16} height={isPhone ? 29 : 16} viewBox="0 0 24 24" fill={article.is_starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
           </button>
@@ -1259,7 +1259,7 @@ export function ArticleDetail() {
               <button
                 onClick={() => summarize.reset()}
                 className="inline-flex items-center justify-center text-text-muted hover:text-text-primary transition-colors rounded-md hover:bg-white/10"
-                style={{ lineHeight: 0, width: isPhone ? 30 : 28, height: isPhone ? 30 : 28, flex: "0 0 auto" }}
+                style={{ lineHeight: 0, width: isPhone ? 28 : 28, height: isPhone ? 28 : 28, flex: "0 0 auto" }}
                 title="Dismiss summary"
                 aria-label="Dismiss summary"
               >

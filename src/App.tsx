@@ -25,6 +25,7 @@ const PHONE_PANE_SLIDE_MS = 390;
 const PHONE_PANE_SETTLE_MS = 280;
 const PHONE_SLIDE_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
 const PHONE_SETTLE_EASING = "cubic-bezier(0.2, 0.9, 0.2, 1)";
+const ACTIVE_FEED_TOAST_MAX_MS = 35000;
 
 function App() {
   const { showAddFeed, showSettings, selectedArticleId, listCollapsed, isPhone, phonePane } = useUiStore();
@@ -94,6 +95,30 @@ function App() {
       if (statusTimer !== null) window.clearTimeout(statusTimer);
     };
   }, [qc]);
+
+  // Feed refreshes can keep running after the UI no longer needs a blocking
+  // status toast. Never let an active feed-loading toast pin itself forever.
+  useEffect(() => {
+    if (
+      opmlImportStatus?.phase !== "importing" &&
+      opmlImportStatus?.phase !== "refreshing"
+    ) {
+      return;
+    }
+
+    const phase = opmlImportStatus.phase;
+    const message = opmlImportStatus.message;
+    const timer = window.setTimeout(() => {
+      setOpmlImportStatus((current) => {
+        if (current?.phase === phase && current.message === message) {
+          return null;
+        }
+        return current;
+      });
+    }, ACTIVE_FEED_TOAST_MAX_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [opmlImportStatus?.phase, opmlImportStatus?.message]);
 
   // Auto-refresh on window focus if last refresh was > 1 hour ago.
   useEffect(() => {

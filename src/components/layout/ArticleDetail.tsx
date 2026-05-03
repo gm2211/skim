@@ -645,17 +645,19 @@ export function ArticleDetail() {
             </svg>
           </button>
 
-          <button
-            onClick={() => toggleRead.mutate(article.id)}
-            className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${
-              !article.is_read ? "text-accent" : "text-text-muted hover:text-text-primary"
-            }`}
-            title={article.is_read ? "Mark as unread" : "Mark as read"}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill={!article.is_read ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="5" />
-            </svg>
-          </button>
+          {!isPhone && (
+            <button
+              onClick={() => toggleRead.mutate(article.id)}
+              className={`p-2 rounded-lg hover:bg-white/10 transition-colors ${
+                !article.is_read ? "text-accent" : "text-text-muted hover:text-text-primary"
+              }`}
+              title={article.is_read ? "Mark as unread" : "Mark as read"}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill={!article.is_read ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="5" />
+              </svg>
+            </button>
+          )}
 
 
           {article.url && !isPhone && (

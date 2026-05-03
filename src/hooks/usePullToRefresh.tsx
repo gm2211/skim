@@ -180,24 +180,31 @@ export function usePullToRefresh({
         className="rounded-full border border-white/10 bg-bg-secondary/95 text-accent shadow-lg backdrop-blur-xl flex items-center justify-center"
         style={{ width: 34, height: 34 }}
       >
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+        <span
           className={phase === "refreshing" ? "smooth-spin" : undefined}
           style={{
+            width: 18,
+            height: 18,
+            display: "inline-flex",
             transform: phase === "refreshing" ? undefined : `rotate(${progress * 240}deg)`,
-            transition: phase === "pulling" ? "none" : "transform 180ms ease",
+            transition: phase === "pulling" ? "none" : "transform 180ms linear",
           }}
         >
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-          <path d="M21 3v6h-6" />
-        </svg>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ display: "block" }}
+          >
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <path d="M21 3v6h-6" />
+          </svg>
+        </span>
       </div>
     </div>
   ) : null;

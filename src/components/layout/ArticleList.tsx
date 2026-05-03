@@ -594,8 +594,6 @@ export function ArticleList() {
                       isSelected={selectedArticleId === article.id}
                       onSelect={() => setSelectedArticleId(article.id)}
                       onContextMenu={(e) => handleArticleContextMenu(e, i)}
-                      onSwipeRead={isPhone ? () => markRead.mutate([article.id]) : undefined}
-                      onSwipeUnread={isPhone ? () => markUnread.mutate([article.id]) : undefined}
                     />
                   );
                 })}

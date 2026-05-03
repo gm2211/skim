@@ -230,7 +230,7 @@ function App() {
 
   // Phone-mode horizontal gestures are pane navigation, not page scrolling.
   // Article detail owns its Reader/Web/back gestures; the shell handles only
-  // sidebar/list transitions so list item swipe actions still work.
+  // sidebar/list transitions.
   useEffect(() => {
     if (!isPhone) return;
     let startX = 0;

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { useArticle, useMarkRead, useToggleStar, useToggleRead } from "../../hooks/useArticles";
 import { useSummarizeArticle } from "../../hooks/useAi";
@@ -12,11 +12,32 @@ import { NumberInput } from "../ui/NumberInput";
 import { AIDisclaimer } from "../common/AIDisclaimer";
 
 type ViewMode = "reader" | "web";
+type SwipeTarget = "web" | "reader" | "list";
+type SwipeTransition = "none" | "slide" | "bounce";
+type ArticleSwipe = {
+  startX: number;
+  startY: number;
+  lastX: number;
+  lastAt: number;
+  velocityX: number;
+  intent: "pending" | "horizontal" | "vertical";
+  startedIn: ViewMode;
+  target: SwipeTarget | null;
+};
 
 type FetchedArticleContent = {
   html: string;
   raw_html: string;
 };
+
+const SWIPE_INTENT_PX = 10;
+const SWIPE_VERTICAL_CANCEL_PX = 40;
+const SWIPE_COMMIT_MAX_PX = 110;
+const SWIPE_COMMIT_RATIO = 0.28;
+const SWIPE_FAST_PX_PER_MS = 0.55;
+const SWIPE_FAST_MIN_PX = 24;
+const SLIDE_MS = 260;
+const BOUNCE_MS = 340;
 
 const EMBEDDED_WEB_VIEW_CSS = `
 html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important;overscroll-behavior-x:none!important;touch-action:pan-y}
@@ -31,6 +52,65 @@ th,td,a,p,li,span,div{overflow-wrap:anywhere!important}
 *::-webkit-scrollbar-thumb:hover{background:rgba(127,127,127,0.55)!important}
 html,body{scrollbar-color:rgba(127,127,127,0.35) transparent!important;scrollbar-width:thin!important}
 `;
+
+const EMBEDDED_WEB_VIEW_SCRIPT = `
+<script>
+(() => {
+  let startX = 0;
+  let startY = 0;
+  let horizontal = false;
+  let vertical = false;
+  const post = (phase, touch) => {
+    if (!touch) return;
+    window.parent.postMessage({
+      type: "skim-article-swipe",
+      phase,
+      x: touch.clientX,
+      y: touch.clientY
+    }, "*");
+  };
+  window.addEventListener("touchstart", (event) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    startX = touch.clientX;
+    startY = touch.clientY;
+    horizontal = false;
+    vertical = false;
+    post("start", touch);
+  }, { passive: true });
+  window.addEventListener("touchmove", (event) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - startX;
+    const absDx = Math.abs(dx);
+    const dy = Math.abs(touch.clientY - startY);
+    if (!horizontal && !vertical) {
+      if (dy > ${SWIPE_VERTICAL_CANCEL_PX} && dy > absDx) {
+        vertical = true;
+      } else if (absDx > ${SWIPE_INTENT_PX} && absDx > dy) {
+        horizontal = true;
+      }
+    }
+    if (!horizontal) return;
+    event.preventDefault();
+    post("move", touch);
+  }, { passive: false });
+  window.addEventListener("touchend", (event) => post("end", event.changedTouches[0]), { passive: true });
+  window.addEventListener("touchcancel", (event) => post("cancel", event.changedTouches[0]), { passive: true });
+})();
+</script>
+`;
+
+function buildEmbeddedWebSrcDoc(html: string): string {
+  const injection = `<style>${EMBEDDED_WEB_VIEW_CSS}</style>${EMBEDDED_WEB_VIEW_SCRIPT}`;
+  if (/<head[^>]*>/i.test(html)) {
+    return html.replace(/(<head[^>]*>)/i, `$1${injection}`);
+  }
+  if (/<html[^>]*>/i.test(html)) {
+    return html.replace(/(<html[^>]*>)/i, `$1<head>${injection}</head>`);
+  }
+  return `${injection}${html}`;
+}
 
 function formatDate(timestamp: number | null): string {
   if (!timestamp) return "";
@@ -190,7 +270,11 @@ export function ArticleDetail() {
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
-  const articleSwipeRef = useRef<{ x: number; y: number; handled: boolean } | null>(null);
+  const articleFrameRef = useRef<HTMLDivElement>(null);
+  const articleSwipeRef = useRef<ArticleSwipe | null>(null);
+  const modeTransitionTimerRef = useRef<number | null>(null);
+  const dismissTransitionTimerRef = useRef<number | null>(null);
+  const dismissToListRef = useRef(false);
   const [fullContent, setFullContent] = useState<string | null>(null);
   const [rawHtml, setRawHtml] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
@@ -198,16 +282,50 @@ export function ArticleDetail() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const fullFetchSeqRef = useRef(0);
   const [viewMode, setViewMode] = useState<ViewMode>("reader");
+  const [articleFrameWidth, setArticleFrameWidth] = useState(0);
+  const [modeDragOffset, setModeDragOffset] = useState(0);
+  const [dismissOffset, setDismissOffset] = useState(0);
+  const [modeTransition, setModeTransition] = useState<SwipeTransition>("none");
+  const [dismissTransition, setDismissTransition] = useState<SwipeTransition>("none");
+  const effectiveArticleFrameWidth = Math.max(
+    1,
+    articleFrameWidth || (typeof window !== "undefined" ? window.innerWidth : 1)
+  );
+
+  useLayoutEffect(() => {
+    const frame = articleFrameRef.current;
+    if (!frame) return;
+    const updateWidth = () => setArticleFrameWidth(frame.clientWidth);
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [article?.id, selectedArticleId]);
+
+  useEffect(() => {
+    return () => {
+      if (modeTransitionTimerRef.current) window.clearTimeout(modeTransitionTimerRef.current);
+      if (dismissTransitionTimerRef.current) window.clearTimeout(dismissTransitionTimerRef.current);
+    };
+  }, []);
 
   // Reset state when article changes — cancel any in-flight summary
   useEffect(() => {
     fullFetchSeqRef.current += 1;
     cancelSummarize().catch(() => {});
+    articleSwipeRef.current = null;
+    dismissToListRef.current = false;
+    if (modeTransitionTimerRef.current) window.clearTimeout(modeTransitionTimerRef.current);
+    if (dismissTransitionTimerRef.current) window.clearTimeout(dismissTransitionTimerRef.current);
     setFullContent(null);
     setRawHtml(null);
     setLoadingFull(false);
     setFullError(null);
     setViewMode("reader");
+    setModeDragOffset(0);
+    setDismissOffset(0);
+    setModeTransition("none");
+    setDismissTransition("none");
     summarize.reset();
     setShowSummarizeMenu(false);
     setPerArticleLength(undefined);
@@ -309,55 +427,217 @@ export function ArticleDetail() {
     }
   }, [article?.id, article?.url, rawHtml]);
 
+  const clearModeTransitionTimer = useCallback(() => {
+    if (modeTransitionTimerRef.current) {
+      window.clearTimeout(modeTransitionTimerRef.current);
+      modeTransitionTimerRef.current = null;
+    }
+  }, []);
+
+  const clearDismissTransitionTimer = useCallback(() => {
+    if (dismissTransitionTimerRef.current) {
+      window.clearTimeout(dismissTransitionTimerRef.current);
+      dismissTransitionTimerRef.current = null;
+    }
+  }, []);
+
+  const settleMode = useCallback((transition: Exclude<SwipeTransition, "none">) => {
+    clearModeTransitionTimer();
+    setModeTransition(transition);
+    modeTransitionTimerRef.current = window.setTimeout(() => {
+      modeTransitionTimerRef.current = null;
+      setModeTransition("none");
+      setModeDragOffset(0);
+    }, (transition === "bounce" ? BOUNCE_MS : SLIDE_MS) + 80);
+  }, [clearModeTransitionTimer]);
+
+  const settleDismiss = useCallback((transition: Exclude<SwipeTransition, "none">, toList = false) => {
+    clearDismissTransitionTimer();
+    dismissToListRef.current = toList;
+    setDismissTransition(transition);
+    dismissTransitionTimerRef.current = window.setTimeout(() => {
+      dismissTransitionTimerRef.current = null;
+      const shouldGoBack = dismissToListRef.current;
+      dismissToListRef.current = false;
+      setDismissTransition("none");
+      setDismissOffset(0);
+      if (shouldGoBack) phoneBack();
+    }, (transition === "bounce" ? BOUNCE_MS : SLIDE_MS) + 80);
+  }, [clearDismissTransitionTimer, phoneBack]);
+
+  const animateToMode = useCallback((mode: ViewMode) => {
+    if (mode === "web") void fetchFull();
+    clearModeTransitionTimer();
+    setDismissOffset(0);
+    if (viewMode !== mode && isPhone) settleMode("slide");
+    setModeDragOffset(0);
+    setViewMode(mode);
+  }, [clearModeTransitionTimer, fetchFull, isPhone, settleMode, viewMode]);
+
   const handleReader = useCallback(async () => {
-    if (viewMode === "reader") return;
-    await fetchFull();
-    setViewMode("reader");
-  }, [viewMode, fetchFull]);
+    animateToMode("reader");
+  }, [animateToMode]);
 
   const handleWebView = useCallback(async () => {
-    if (viewMode === "web") { setViewMode("reader"); return; }
-    await fetchFull();
-    setViewMode("web");
-  }, [viewMode, fetchFull]);
+    animateToMode(viewMode === "web" ? "reader" : "web");
+  }, [animateToMode, viewMode]);
 
-  const handleArticleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+  const resolveSwipeTarget = useCallback((dx: number, startedIn: ViewMode): SwipeTarget | null => {
+    if (dx < 0 && startedIn === "reader" && article?.url) return "web";
+    if (dx > 0 && startedIn === "web") return "reader";
+    if (dx > 0 && startedIn === "reader") return "list";
+    return null;
+  }, [article?.url]);
+
+  const constrainedSwipeOffset = useCallback((dx: number, target: SwipeTarget | null): number => {
+    if (!target) {
+      return Math.sign(dx) * Math.min(Math.abs(dx) * 0.22, 46);
+    }
+
+    const direction = target === "web" ? -1 : 1;
+    const distance = Math.max(0, direction * dx);
+    if (distance <= effectiveArticleFrameWidth) return direction * distance;
+    return direction * (effectiveArticleFrameWidth + (distance - effectiveArticleFrameWidth) * 0.16);
+  }, [effectiveArticleFrameWidth]);
+
+  const beginArticleSwipe = useCallback((x: number, y: number) => {
     if (!isPhone) return;
-    const t = e.touches[0];
-    if (!t) return;
-    articleSwipeRef.current = { x: t.clientX, y: t.clientY, handled: false };
-  }, [isPhone]);
+    clearModeTransitionTimer();
+    clearDismissTransitionTimer();
+    dismissToListRef.current = false;
+    setModeTransition("none");
+    setDismissTransition("none");
+    articleSwipeRef.current = {
+      startX: x,
+      startY: y,
+      lastX: x,
+      lastAt: performance.now(),
+      velocityX: 0,
+      intent: "pending",
+      startedIn: viewMode,
+      target: null,
+    };
+  }, [clearDismissTransitionTimer, clearModeTransitionTimer, isPhone, viewMode]);
 
-  const handleArticleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
-    if (!isPhone || !articleSwipeRef.current) return;
-    const t = e.touches[0];
-    if (!t) return;
+  const moveArticleSwipe = useCallback((x: number, y: number): boolean => {
+    const swipe = articleSwipeRef.current;
+    if (!isPhone || !swipe) return false;
 
-    const dx = t.clientX - articleSwipeRef.current.x;
+    const now = performance.now();
+    const dt = Math.max(1, now - swipe.lastAt);
+    swipe.velocityX = (x - swipe.lastX) / dt;
+    swipe.lastX = x;
+    swipe.lastAt = now;
+
+    const dx = x - swipe.startX;
     const absDx = Math.abs(dx);
-    const dy = Math.abs(t.clientY - articleSwipeRef.current.y);
-    if (dy > 40 && dy > absDx) {
-      articleSwipeRef.current.handled = true;
+    const dy = Math.abs(y - swipe.startY);
+
+    if (swipe.intent === "pending") {
+      if (dy > SWIPE_VERTICAL_CANCEL_PX && dy > absDx) {
+        swipe.intent = "vertical";
+        setModeDragOffset(0);
+        setDismissOffset(0);
+        return false;
+      }
+      if (absDx <= SWIPE_INTENT_PX || absDx <= dy) return false;
+      swipe.intent = "horizontal";
+    }
+
+    if (swipe.intent !== "horizontal") return false;
+    if (!swipe.target) swipe.target = resolveSwipeTarget(dx, swipe.startedIn);
+
+    const visualOffset = constrainedSwipeOffset(dx, swipe.target);
+    if (swipe.target === "list") {
+      setModeDragOffset(0);
+      setDismissOffset(Math.max(0, visualOffset));
+    } else {
+      setDismissOffset(0);
+      setModeDragOffset(visualOffset);
+    }
+    return true;
+  }, [constrainedSwipeOffset, isPhone, resolveSwipeTarget]);
+
+  const endArticleSwipe = useCallback(() => {
+    const swipe = articleSwipeRef.current;
+    articleSwipeRef.current = null;
+    if (!swipe || swipe.intent !== "horizontal") return;
+
+    const dx = swipe.lastX - swipe.startX;
+    const target = swipe.target ?? resolveSwipeTarget(dx, swipe.startedIn);
+    const direction = target === "web" ? -1 : 1;
+    const distance = target ? Math.max(0, direction * dx) : 0;
+    const velocity = target ? direction * swipe.velocityX : 0;
+    const threshold = Math.min(SWIPE_COMMIT_MAX_PX, effectiveArticleFrameWidth * SWIPE_COMMIT_RATIO);
+    const shouldCommit = Boolean(
+      target &&
+      (distance >= threshold || (distance >= SWIPE_FAST_MIN_PX && velocity >= SWIPE_FAST_PX_PER_MS))
+    );
+
+    if (shouldCommit && target === "web") {
+      animateToMode("web");
       return;
     }
-    if (absDx <= 10 || absDx <= dy) return;
-
-    e.preventDefault();
-    if (articleSwipeRef.current.handled || absDx < 60) return;
-    articleSwipeRef.current.handled = true;
-
-    if (dx < 0 && viewMode === "reader" && article?.url) {
-      void handleWebView();
-    } else if (dx > 0 && viewMode === "web") {
-      void handleReader();
-    } else if (dx > 0 && viewMode === "reader") {
-      phoneBack();
+    if (shouldCommit && target === "reader") {
+      animateToMode("reader");
+      return;
     }
-  }, [article?.url, handleReader, handleWebView, isPhone, phoneBack, viewMode]);
+    if (shouldCommit && target === "list") {
+      setModeDragOffset(0);
+      setDismissOffset(effectiveArticleFrameWidth);
+      settleDismiss("slide", true);
+      return;
+    }
+
+    if (target === "list") {
+      setDismissOffset(0);
+      settleDismiss("bounce");
+    } else {
+      setModeDragOffset(0);
+      settleMode("bounce");
+    }
+  }, [animateToMode, effectiveArticleFrameWidth, resolveSwipeTarget, settleDismiss, settleMode]);
+
+  const handleArticleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    const t = e.touches[0];
+    if (!t) return;
+    beginArticleSwipe(t.clientX, t.clientY);
+  }, [beginArticleSwipe]);
+
+  const handleArticleTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    const t = e.touches[0];
+    if (!t) return;
+    if (moveArticleSwipe(t.clientX, t.clientY)) e.preventDefault();
+  }, [moveArticleSwipe]);
 
   const handleArticleTouchEnd = useCallback(() => {
-    articleSwipeRef.current = null;
-  }, []);
+    endArticleSwipe();
+  }, [endArticleSwipe]);
+
+  useEffect(() => {
+    if (!isPhone) return;
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      const data = event.data as {
+        type?: string;
+        phase?: string;
+        x?: number;
+        y?: number;
+      };
+      if (data?.type !== "skim-article-swipe" || typeof data.x !== "number" || typeof data.y !== "number") {
+        return;
+      }
+      if (data.phase === "start") {
+        beginArticleSwipe(data.x, data.y);
+      } else if (data.phase === "move") {
+        moveArticleSwipe(data.x, data.y);
+      } else if (data.phase === "end" || data.phase === "cancel") {
+        endArticleSwipe();
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [beginArticleSwipe, endArticleSwipe, isPhone, moveArticleSwipe]);
 
   // Arrow key navigation — toggle between reader and web views
   useEffect(() => {
@@ -366,16 +646,15 @@ export function ArticleDetail() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "ArrowRight") {
         e.preventDefault();
-        fetchFull();
-        setViewMode("web");
+        animateToMode("web");
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        setViewMode("reader");
+        animateToMode("reader");
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [article?.url, fetchFull]);
+  }, [animateToMode, article?.url]);
 
   if (!article) {
     return (
@@ -489,6 +768,20 @@ export function ArticleDetail() {
       </div>
     </>
   );
+
+  const modeTrackX = (viewMode === "web" ? -effectiveArticleFrameWidth : 0) + modeDragOffset;
+  const modeTransitionStyle =
+    modeTransition === "none"
+      ? "none"
+      : modeTransition === "bounce"
+        ? `transform ${BOUNCE_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1)`
+        : `transform ${SLIDE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+  const dismissTransitionStyle =
+    dismissTransition === "none"
+      ? "none"
+      : dismissTransition === "bounce"
+        ? `transform ${BOUNCE_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1)`
+        : `transform ${SLIDE_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
@@ -799,110 +1092,138 @@ export function ArticleDetail() {
         );
       })()}
 
-      {/* Single panel — toggles between reader and web view */}
+      {/* Swipeable article surface: drag either commits to the next pane or settles back to center. */}
       <div
+        ref={articleFrameRef}
         className="flex-1 min-h-0 relative overflow-hidden"
         onTouchStart={handleArticleTouchStart}
         onTouchMove={handleArticleTouchMove}
         onTouchEnd={handleArticleTouchEnd}
         onTouchCancel={handleArticleTouchEnd}
+        style={{ overscrollBehaviorX: "none", touchAction: isPhone ? "pan-y" : undefined }}
       >
-        {viewMode === "reader" ? (
-          <div className="h-full overflow-y-auto overflow-x-hidden" style={{ overscrollBehaviorX: "none", touchAction: "pan-y" }}>
-            <div style={{ maxWidth: 720, width: "100%", margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px", overflowX: "hidden" }}>
-              <div style={{ marginBottom: 28 }}>
-                <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
-                <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
-                  <span className="text-accent font-medium">{article.feed_title}</span>
-                  {article.author && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{article.author}</span></>)}
-                  <span className="text-text-muted">·</span>
-                  <span className="text-text-muted">{formatDate(article.published_at)}</span>
+        <div
+          className="h-full w-full"
+          style={{
+            transform: `translate3d(${dismissOffset}px, 0, 0)`,
+            transition: dismissTransitionStyle,
+            willChange: isPhone ? "transform" : undefined,
+          }}
+        >
+          <div
+            className="h-full flex"
+            style={{
+              width: effectiveArticleFrameWidth * 2,
+              transform: `translate3d(${modeTrackX}px, 0, 0)`,
+              transition: modeTransitionStyle,
+              willChange: isPhone ? "transform" : undefined,
+            }}
+          >
+            <section
+              className="h-full overflow-hidden"
+              aria-hidden={viewMode !== "reader"}
+              style={{ width: effectiveArticleFrameWidth, flex: "0 0 auto" }}
+            >
+              <div className="h-full overflow-y-auto overflow-x-hidden" style={{ overscrollBehaviorX: "none", touchAction: "pan-y" }}>
+                <div style={{ maxWidth: 720, width: "100%", margin: "0 auto", padding: isPhone ? "16px 16px 64px" : "24px 40px 80px", overflowX: "hidden" }}>
+                  <div style={{ marginBottom: 28 }}>
+                    <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
+                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
+                      <span className="text-accent font-medium">{article.feed_title}</span>
+                      {article.author && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{article.author}</span></>)}
+                      <span className="text-text-muted">·</span>
+                      <span className="text-text-muted">{formatDate(article.published_at)}</span>
+                    </div>
+                  </div>
+                  {fullContent ? (
+                    <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
+                  ) : loadingFull ? (
+                    <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 14 }}>
+                      <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                      </svg>
+                      Loading article…
+                    </div>
+                  ) : rssHtml ? (
+                    <div className="article-content text-text-primary" dangerouslySetInnerHTML={{ __html: rssHtml }} />
+                  ) : article.content_text ? (
+                    <div className="article-content text-text-primary whitespace-pre-wrap">{article.content_text}</div>
+                  ) : (
+                    <p className="text-text-muted" style={{ fontSize: 14 }}>No preview available.</p>
+                  )}
                 </div>
               </div>
-              {fullContent ? (
-                <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
-              ) : loadingFull ? (
-                <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 14 }}>
-                  <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                  </svg>
-                  Loading article…
-                </div>
-              ) : rssHtml ? (
-                <div className="article-content text-text-primary" dangerouslySetInnerHTML={{ __html: rssHtml }} />
-              ) : article.content_text ? (
-                <div className="article-content text-text-primary whitespace-pre-wrap">{article.content_text}</div>
-              ) : (
-                <p className="text-text-muted" style={{ fontSize: 14 }}>No preview available.</p>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="h-full relative">
-            {article.url && (
-              <button
-                onClick={() => { if (article.url) openUrl(article.url); }}
-                className="absolute bg-bg-secondary/90 hover:bg-bg-secondary border border-white/15 text-text-primary backdrop-blur-md rounded-full shadow-lg transition-colors flex items-center justify-center z-10"
-                style={{ bottom: 16, right: 16, width: 40, height: 40 }}
-                title="Open original in external browser"
-                aria-label="Open in browser"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-                </svg>
-              </button>
-            )}
-            {loadingFull && !rawHtml && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center" style={{ padding: "0 24px" }}>
-                <svg className="animate-spin text-text-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: 12 }}>
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                </svg>
-                <p className="text-text-muted" style={{ fontSize: 14 }}>
-                  Loading web view...
-                </p>
-              </div>
-            )}
-            {!rawHtml && !loadingFull && (
-              <div className="flex flex-col items-center justify-center h-full text-center" style={{ padding: "0 24px" }}>
-                <p className="text-text-muted" style={{ fontSize: 14, marginBottom: 8 }}>
-                  {fullError ? "Couldn't load page in the embedded view." : "No embedded page preview is available."}
-                </p>
-                <p className="text-text-muted" style={{ fontSize: 12 }}>
-                  Use the "Open in browser" button.
-                </p>
-              </div>
-            )}
-            {rawHtml && (
-              <iframe
-                key={`${article.id}:${article.url}`}
-                ref={iframeRef}
-                srcDoc={rawHtml.replace(
-                  /(<head[^>]*>)/i,
-                  `$1<style>${EMBEDDED_WEB_VIEW_CSS}</style>`
+            </section>
+
+            <section
+              className="h-full overflow-hidden"
+              aria-hidden={viewMode !== "web"}
+              style={{ width: effectiveArticleFrameWidth, flex: "0 0 auto" }}
+            >
+              <div className="h-full relative">
+                {article.url && (
+                  <button
+                    onClick={() => { if (article.url) openUrl(article.url); }}
+                    className="absolute bg-bg-secondary/90 hover:bg-bg-secondary border border-white/15 text-text-primary backdrop-blur-md rounded-full shadow-lg transition-colors flex items-center justify-center z-10"
+                    style={{ bottom: 16, right: 16, width: 40, height: 40 }}
+                    title="Open original in external browser"
+                    aria-label="Open in browser"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                    </svg>
+                  </button>
                 )}
-                sandbox="allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock allow-presentation"
-                style={{ width: "100%", height: "100%", border: "none", background: "#fff", overflow: "hidden" }}
-                title="Article web view"
-                onLoad={() => {
-                  try {
-                    const win = iframeRef.current?.contentWindow;
-                    if (!win) return;
-                    const s = win.document.createElement("style");
-                    s.textContent = EMBEDDED_WEB_VIEW_CSS;
-                    win.document.head.appendChild(s);
-                    win.document.addEventListener("contextmenu", (e: Event) => e.preventDefault());
-                    win.addEventListener("keydown", ((e: KeyboardEvent) => {
-                      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
-                        e.preventDefault();
-                        window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
-                      }
-                    }) as EventListener);
-                  } catch { /* cross-origin */ }
-                }}
-              />
-            )}
+                {loadingFull && !rawHtml && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center" style={{ padding: "0 24px" }}>
+                    <svg className="animate-spin text-text-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: 12 }}>
+                      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                    </svg>
+                    <p className="text-text-muted" style={{ fontSize: 14 }}>
+                      Loading web view...
+                    </p>
+                  </div>
+                )}
+                {!rawHtml && !loadingFull && (
+                  <div className="flex flex-col items-center justify-center h-full text-center" style={{ padding: "0 24px" }}>
+                    <p className="text-text-muted" style={{ fontSize: 14, marginBottom: 8 }}>
+                      {fullError ? "Couldn't load page in the embedded view." : "No embedded page preview is available."}
+                    </p>
+                    <p className="text-text-muted" style={{ fontSize: 12 }}>
+                      Use the "Open in browser" button.
+                    </p>
+                  </div>
+                )}
+                {rawHtml && (
+                  <iframe
+                    key={`${article.id}:${article.url}`}
+                    ref={iframeRef}
+                    srcDoc={buildEmbeddedWebSrcDoc(rawHtml)}
+                    sandbox="allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock allow-presentation"
+                    style={{ width: "100%", height: "100%", border: "none", background: "#fff", overflow: "hidden" }}
+                    title="Article web view"
+                    onLoad={() => {
+                      try {
+                        const win = iframeRef.current?.contentWindow;
+                        if (!win) return;
+                        const s = win.document.createElement("style");
+                        s.textContent = EMBEDDED_WEB_VIEW_CSS;
+                        win.document.head.appendChild(s);
+                        win.document.addEventListener("contextmenu", (e: Event) => e.preventDefault());
+                        win.addEventListener("keydown", ((e: KeyboardEvent) => {
+                          if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                            e.preventDefault();
+                            window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
+                          }
+                        }) as EventListener);
+                      } catch { /* cross-origin */ }
+                    }}
+                  />
+                )}
+              </div>
+            </section>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Chat drawer — collapsible bottom pane */}

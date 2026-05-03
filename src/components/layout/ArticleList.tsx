@@ -7,6 +7,7 @@ import { useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
+import { AskSkimDialog } from "../chat/AskSkimDialog";
 import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction } from "../../services/types";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 
@@ -75,7 +76,18 @@ function groupByDate(articles: { published_at: number | null; fetched_at: number
 }
 
 export function ArticleList() {
-  const { sidebarView, selectedArticleId, setSelectedArticleId, listFilter, setListFilter, sidebarCollapsed, listCollapsed, isPhone, setPhonePane } = useUiStore();
+  const {
+    sidebarView,
+    selectedArticleId,
+    setSelectedArticleId,
+    listFilter,
+    setListFilter,
+    sidebarCollapsed,
+    listCollapsed,
+    isPhone,
+    setPhonePane,
+    setShowCatchup,
+  } = useUiStore();
   const markAllRead = useMarkAllRead();
   const markRead = useMarkRead();
   const markUnread = useMarkUnread();
@@ -84,6 +96,7 @@ export function ArticleList() {
   const removeRecent = useRemoveRecent();
   const refreshAllFeeds = useRefreshAllFeeds();
   const [searchQuery, setSearchQuery] = useState("");
+  const [askOpen, setAskOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -376,6 +389,24 @@ export function ArticleList() {
         )}
         <div className="flex-1" />
         <button
+          onClick={() => setShowCatchup(true)}
+          className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
+          title="Super-quick catch-up"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
+          </svg>
+        </button>
+        <button
+          onClick={() => setAskOpen(true)}
+          className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
+          title="Ask Skim — search your feed with AI"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
+        <button
           onClick={handleMarkAllRead}
           className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
           title="Mark all as read"
@@ -631,6 +662,16 @@ export function ArticleList() {
           onRemoveFromRecent={
             isRecent ? () => removeRecent.mutate(contextArticle.id) : undefined
           }
+        />
+      )}
+
+      {askOpen && (
+        <AskSkimDialog
+          onClose={() => setAskOpen(false)}
+          onOpenArticle={(id) => {
+            setSelectedArticleId(id);
+            setAskOpen(false);
+          }}
         />
       )}
 

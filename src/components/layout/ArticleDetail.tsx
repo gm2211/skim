@@ -41,7 +41,7 @@ const SWIPE_FAST_PX_PER_MS = 0.44;
 const SWIPE_FAST_MIN_PX = 24;
 const SLIDE_MS = 390;
 const BOUNCE_MS = 280;
-const SWIPE_STALE_MS = 1800;
+const SWIPE_STALE_MS = 900;
 const PHONE_SLIDE_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
 const PHONE_SETTLE_EASING = "cubic-bezier(0.2, 0.9, 0.2, 1)";
 
@@ -619,6 +619,19 @@ export function ArticleDetail() {
     }, SWIPE_STALE_MS);
   }, [cancelActiveArticleSwipe, clearArticleSwipeWatchdog]);
 
+  useEffect(() => {
+    if (!isPhone) return;
+    if (modeDragOffset === 0 && dismissOffset === 0) return;
+    const id = window.setTimeout(() => {
+      const swipe = articleSwipeRef.current;
+      if (!swipe) return;
+      if (performance.now() - swipe.lastAt >= SWIPE_STALE_MS) {
+        cancelActiveArticleSwipe(true);
+      }
+    }, SWIPE_STALE_MS + 40);
+    return () => window.clearTimeout(id);
+  }, [cancelActiveArticleSwipe, dismissOffset, isPhone, modeDragOffset]);
+
   const settleMode = useCallback((transition: Exclude<SwipeTransition, "none">) => {
     clearModeTransitionTimer();
     setModeTransition(transition);
@@ -738,9 +751,9 @@ export function ArticleDetail() {
     return true;
   }, [armArticleSwipeWatchdog, constrainedSwipeOffset, isPhone, resolveSwipeTarget]);
 
-  const endArticleSwipe = useCallback((iframeGestureId: number | null = null) => {
+  const endArticleSwipe = useCallback((iframeGestureId?: number | null) => {
     const swipe = articleSwipeRef.current;
-    if (swipe?.iframeGestureId !== iframeGestureId) return;
+    if (iframeGestureId !== undefined && swipe?.iframeGestureId !== iframeGestureId) return;
     articleSwipeRef.current = null;
     clearArticleSwipeWatchdog();
     if (!swipe || swipe.intent !== "horizontal") return;
@@ -800,12 +813,14 @@ export function ArticleDetail() {
   }, [moveArticleSwipe]);
 
   const handleArticleTouchEnd = useCallback(() => {
-    endArticleSwipe();
+    endArticleSwipe(undefined);
   }, [endArticleSwipe]);
 
   useEffect(() => {
     if (!isPhone) return;
-    const finish = () => endArticleSwipe();
+    const finish = (event: TouchEvent) => {
+      if (event.touches.length === 0) endArticleSwipe(undefined);
+    };
     const cancel = () => cancelActiveArticleSwipe(true);
     const cancelIfHidden = () => {
       if (document.hidden) cancelActiveArticleSwipe(true);

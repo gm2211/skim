@@ -14,11 +14,26 @@ type OpmlImportStatus = {
   message: string;
 };
 
+type PhonePaneTransition = "none" | "slide" | "settle";
+
+const PHONE_PANE_INTENT_PX = 8;
+const PHONE_PANE_VERTICAL_CANCEL_PX = 36;
+const PHONE_PANE_COMMIT_MAX_PX = 92;
+const PHONE_PANE_COMMIT_RATIO = 0.24;
+const PHONE_PANE_FAST_PX_PER_MS = 0.42;
+const PHONE_PANE_SLIDE_MS = 390;
+const PHONE_PANE_SETTLE_MS = 280;
+const PHONE_SLIDE_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
+const PHONE_SETTLE_EASING = "cubic-bezier(0.2, 0.9, 0.2, 1)";
+
 function App() {
   const { showAddFeed, showSettings, selectedArticleId, listCollapsed, isPhone, phonePane } = useUiStore();
   const qc = useQueryClient();
   const [showBootDisclaimer, setShowBootDisclaimer] = useState(true);
   const [opmlImportStatus, setOpmlImportStatus] = useState<OpmlImportStatus | null>(null);
+  const [phonePaneDragOffset, setPhonePaneDragOffset] = useState(0);
+  const [phonePaneTransition, setPhonePaneTransition] = useState<PhonePaneTransition>("slide");
+  const [suppressNextPhonePaneTransition, setSuppressNextPhonePaneTransition] = useState(false);
   const lastRefreshRef = useRef<number>(Date.now());
 
   // Auto-load feed articles on startup. OPML import intentionally registers
@@ -195,55 +210,137 @@ function App() {
     if (!isPhone) return;
     let startX = 0;
     let startY = 0;
+    let lastX = 0;
+    let lastAt = 0;
+    let velocityX = 0;
     let startPane = useUiStore.getState().phonePane;
     let allowsHorizontalPaneGesture = false;
-    let cancelled = false;
-    const EDGE_PX = 56;
-    const TRIGGER_PX = 72;
-    const INTENT_PX = 10;
+    let active = false;
+    let intent: "pending" | "horizontal" | "vertical" = "pending";
+    let targetPane: "sidebar" | "list" | null = null;
+    const EDGE_PX = 64;
+    const paneWidth = () => Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+    const resistance = (distance: number, width: number) => {
+      if (distance <= width) return distance;
+      return width + (distance - width) * 0.16;
+    };
+    const resetGesture = (transition: PhonePaneTransition) => {
+      active = false;
+      intent = "pending";
+      targetPane = null;
+      setPhonePaneTransition(transition);
+      setPhonePaneDragOffset(0);
+    };
     const onStart = (e: TouchEvent) => {
       const t = e.touches[0];
       if (!t) return;
       const state = useUiStore.getState();
       startX = t.clientX;
       startY = t.clientY;
+      lastX = startX;
+      lastAt = performance.now();
+      velocityX = 0;
       startPane = state.phonePane;
       allowsHorizontalPaneGesture =
         startPane === "sidebar" ||
         (startPane === "list" && startX <= EDGE_PX);
-      cancelled = false;
+      active = allowsHorizontalPaneGesture;
+      intent = "pending";
+      targetPane = null;
+      if (active) setPhonePaneTransition("none");
     };
     const onMove = (e: TouchEvent) => {
-      if (!allowsHorizontalPaneGesture || cancelled) return;
+      if (!allowsHorizontalPaneGesture || !active) return;
       const t = e.touches[0];
       if (!t) return;
+      const now = performance.now();
+      const dt = Math.max(1, now - lastAt);
+      velocityX = (t.clientX - lastX) / dt;
+      lastX = t.clientX;
+      lastAt = now;
+
       const dx = t.clientX - startX;
       const absDx = Math.abs(dx);
       const dy = Math.abs(t.clientY - startY);
-      if (dy > 40 && dy > absDx) {
-        cancelled = true;
+      if (intent === "pending") {
+        if (dy > PHONE_PANE_VERTICAL_CANCEL_PX && dy > absDx) {
+          resetGesture("settle");
+          return;
+        }
+        if (absDx <= PHONE_PANE_INTENT_PX || absDx <= dy) return;
+        intent = "horizontal";
+      }
+
+      if (intent !== "horizontal") return;
+      e.preventDefault();
+
+      if (!targetPane) {
+        if (startPane === "sidebar" && dx < 0) targetPane = "list";
+        if (startPane === "list" && dx > 0) targetPane = "sidebar";
+      }
+
+      const width = paneWidth();
+      if (targetPane === "list") {
+        setPhonePaneDragOffset(-resistance(Math.max(0, -dx), width));
+      } else if (targetPane === "sidebar") {
+        setPhonePaneDragOffset(resistance(Math.max(0, dx), width));
+      } else {
+        setPhonePaneDragOffset(Math.sign(dx) * Math.min(absDx * 0.18, 36));
+      }
+    };
+    const onEnd = () => {
+      if (!active) return;
+      if (intent !== "horizontal") {
+        resetGesture("settle");
         return;
       }
 
-      if (absDx > INTENT_PX && absDx > dy) {
-        e.preventDefault();
-      }
+      const dx = lastX - startX;
+      const width = paneWidth();
+      const direction = targetPane === "list" ? -1 : 1;
+      const distance = targetPane ? Math.max(0, direction * dx) : 0;
+      const velocity = targetPane ? direction * velocityX : 0;
+      const threshold = Math.min(PHONE_PANE_COMMIT_MAX_PX, width * PHONE_PANE_COMMIT_RATIO);
+      const shouldCommit =
+        targetPane &&
+        (distance >= threshold || (distance >= 22 && velocity >= PHONE_PANE_FAST_PX_PER_MS));
 
-      if (startPane === "sidebar" && dx < -TRIGGER_PX) {
-        cancelled = true;
-        useUiStore.getState().setPhonePane("list");
-      } else if (startPane === "list" && dx > TRIGGER_PX) {
-        cancelled = true;
-        useUiStore.getState().setPhonePane("sidebar");
+      active = false;
+      intent = "pending";
+      if (shouldCommit && targetPane) {
+        setPhonePaneTransition("slide");
+        setPhonePaneDragOffset(0);
+        useUiStore.getState().setPhonePane(targetPane);
+      } else {
+        setPhonePaneTransition("settle");
+        setPhonePaneDragOffset(0);
       }
+      targetPane = null;
     };
     window.addEventListener("touchstart", onStart, { passive: true });
     window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onEnd, { passive: true, capture: true });
+    window.addEventListener("touchcancel", onEnd, { passive: true, capture: true });
     return () => {
       window.removeEventListener("touchstart", onStart);
       window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd, { capture: true });
+      window.removeEventListener("touchcancel", onEnd, { capture: true });
     };
   }, [isPhone]);
+
+  useEffect(() => {
+    if (!isPhone) return;
+    const suppress = () => setSuppressNextPhonePaneTransition(true);
+    window.addEventListener("skim-suppress-next-phone-pane-transition", suppress);
+    return () => window.removeEventListener("skim-suppress-next-phone-pane-transition", suppress);
+  }, [isPhone]);
+
+  useEffect(() => {
+    if (!suppressNextPhonePaneTransition) return;
+    const id = window.requestAnimationFrame(() => setSuppressNextPhonePaneTransition(false));
+    return () => window.cancelAnimationFrame(id);
+  }, [phonePane, suppressNextPhonePaneTransition]);
 
   // Disable default context menu
   useEffect(() => {
@@ -297,14 +394,20 @@ function App() {
   if (isPhone) {
     const paneIndex = phonePane === "sidebar" ? 0 : phonePane === "list" ? 1 : 2;
     const opmlToast = opmlImportStatus && <OpmlImportToast status={opmlImportStatus} isPhone />;
+    const phonePaneTransitionStyle =
+      suppressNextPhonePaneTransition || phonePaneTransition === "none"
+        ? "none"
+        : phonePaneTransition === "settle"
+          ? `transform ${PHONE_PANE_SETTLE_MS}ms ${PHONE_SETTLE_EASING}`
+          : `transform ${PHONE_PANE_SLIDE_MS}ms ${PHONE_SLIDE_EASING}`;
     return (
       <div className="flex flex-col h-full w-full overflow-hidden">
         <div className="flex-1 min-h-0 relative overflow-hidden">
           <div
             className="flex h-full w-[300%]"
             style={{
-              transform: `translate3d(${-paneIndex * (100 / 3)}%, 0, 0)`,
-              transition: "transform 0.42s cubic-bezier(0.2, 0.82, 0.18, 1)",
+              transform: `translate3d(calc(${-paneIndex * (100 / 3)}% + ${phonePaneDragOffset}px), 0, 0)`,
+              transition: phonePaneTransitionStyle,
               willChange: "transform",
               backfaceVisibility: "hidden",
             }}

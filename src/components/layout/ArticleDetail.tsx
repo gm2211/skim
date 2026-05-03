@@ -35,13 +35,15 @@ type FetchedArticleContent = {
 
 const SWIPE_INTENT_PX = 10;
 const SWIPE_VERTICAL_CANCEL_PX = 40;
-const SWIPE_COMMIT_MAX_PX = 110;
-const SWIPE_COMMIT_RATIO = 0.28;
-const SWIPE_FAST_PX_PER_MS = 0.55;
+const SWIPE_COMMIT_MAX_PX = 96;
+const SWIPE_COMMIT_RATIO = 0.24;
+const SWIPE_FAST_PX_PER_MS = 0.44;
 const SWIPE_FAST_MIN_PX = 24;
-const SLIDE_MS = 340;
-const BOUNCE_MS = 420;
+const SLIDE_MS = 390;
+const BOUNCE_MS = 280;
 const SWIPE_STALE_MS = 1800;
+const PHONE_SLIDE_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
+const PHONE_SETTLE_EASING = "cubic-bezier(0.2, 0.9, 0.2, 1)";
 
 const EMBEDDED_WEB_VIEW_CSS = `
 html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important;overscroll-behavior-x:none!important;touch-action:pan-y}
@@ -570,7 +572,10 @@ export function ArticleDetail() {
     articleSwipeRef.current = null;
     setDismissTransition("none");
     setDismissOffset(0);
-    if (shouldGoBack) phoneBack();
+    if (shouldGoBack) {
+      window.dispatchEvent(new CustomEvent("skim-suppress-next-phone-pane-transition"));
+      phoneBack();
+    }
   }, [clearArticleSwipeWatchdog, clearDismissTransitionTimer, phoneBack]);
 
   const cancelActiveArticleSwipe = useCallback((animate = true) => {
@@ -999,14 +1004,14 @@ export function ArticleDetail() {
     modeTransition === "none"
       ? "none"
       : modeTransition === "bounce"
-        ? `transform ${BOUNCE_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1)`
-        : `transform ${SLIDE_MS}ms cubic-bezier(0.2, 0.82, 0.18, 1)`;
+        ? `transform ${BOUNCE_MS}ms ${PHONE_SETTLE_EASING}`
+        : `transform ${SLIDE_MS}ms ${PHONE_SLIDE_EASING}`;
   const dismissTransitionStyle =
     dismissTransition === "none"
       ? "none"
       : dismissTransition === "bounce"
-        ? `transform ${BOUNCE_MS}ms cubic-bezier(0.34, 1.56, 0.64, 1)`
-        : `transform ${SLIDE_MS}ms cubic-bezier(0.2, 0.82, 0.18, 1)`;
+        ? `transform ${BOUNCE_MS}ms ${PHONE_SETTLE_EASING}`
+        : `transform ${SLIDE_MS}ms ${PHONE_SLIDE_EASING}`;
 
   return (
     <div className="flex-1 flex flex-col h-full bg-bg-primary/60 overflow-hidden">

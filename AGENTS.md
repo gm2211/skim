@@ -36,6 +36,10 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
+## Release Archives
+
+Before producing any new archive for Xcode Organizer or App Store Connect, bump the app version/build metadata first. Do not create, export, or upload an Organizer archive from an unchanged version. Verify the final archive/package reports the bumped version and build number before handing it off.
+
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
 

@@ -15,6 +15,8 @@ type ViewMode = "reader" | "web";
 type SwipeTarget = "web" | "reader" | "list";
 type SwipeTransition = "none" | "slide" | "bounce";
 type ArticleSwipe = {
+  id: number;
+  iframeGestureId: number | null;
   startX: number;
   startY: number;
   lastX: number;
@@ -38,6 +40,7 @@ const SWIPE_FAST_PX_PER_MS = 0.55;
 const SWIPE_FAST_MIN_PX = 24;
 const SLIDE_MS = 260;
 const BOUNCE_MS = 340;
+const SWIPE_STALE_MS = 1400;
 
 const EMBEDDED_WEB_VIEW_CSS = `
 html,body{width:100%!important;max-width:100%!important;overflow-x:hidden!important;overscroll-behavior-x:none!important;touch-action:pan-y}
@@ -56,14 +59,17 @@ html,body{scrollbar-color:rgba(127,127,127,0.35) transparent!important;scrollbar
 const EMBEDDED_WEB_VIEW_SCRIPT = `
 <script>
 (() => {
+  let gestureId = 0;
   let startX = 0;
   let startY = 0;
   let horizontal = false;
   let vertical = false;
+  let active = false;
   const post = (phase, touch) => {
     if (!touch) return;
     window.parent.postMessage({
       type: "skim-article-swipe",
+      gestureId,
       phase,
       x: touch.clientX,
       y: touch.clientY
@@ -76,9 +82,12 @@ const EMBEDDED_WEB_VIEW_SCRIPT = `
     startY = touch.clientY;
     horizontal = false;
     vertical = false;
+    active = true;
+    gestureId += 1;
     post("start", touch);
-  }, { passive: true });
+  }, { passive: true, capture: true });
   window.addEventListener("touchmove", (event) => {
+    if (!active) return;
     const touch = event.touches[0];
     if (!touch) return;
     const dx = touch.clientX - startX;
@@ -94,9 +103,25 @@ const EMBEDDED_WEB_VIEW_SCRIPT = `
     if (!horizontal) return;
     event.preventDefault();
     post("move", touch);
-  }, { passive: false });
-  window.addEventListener("touchend", (event) => post("end", event.changedTouches[0]), { passive: true });
-  window.addEventListener("touchcancel", (event) => post("cancel", event.changedTouches[0]), { passive: true });
+  }, { passive: false, capture: true });
+  const finish = (phase, event) => {
+    if (!active) return;
+    active = false;
+    post(phase, event.changedTouches[0]);
+  };
+  window.addEventListener("touchend", (event) => finish("end", event), { passive: true, capture: true });
+  window.addEventListener("touchcancel", (event) => finish("cancel", event), { passive: true, capture: true });
+  window.addEventListener("blur", () => {
+    if (!active) return;
+    active = false;
+    window.parent.postMessage({
+      type: "skim-article-swipe",
+      gestureId,
+      phase: "cancel",
+      x: startX,
+      y: startY
+    }, "*");
+  });
 })();
 </script>
 `;
@@ -272,6 +297,8 @@ export function ArticleDetail() {
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
   const articleFrameRef = useRef<HTMLDivElement>(null);
   const articleSwipeRef = useRef<ArticleSwipe | null>(null);
+  const articleSwipeSeqRef = useRef(0);
+  const articleSwipeWatchdogRef = useRef<number | null>(null);
   const modeTransitionTimerRef = useRef<number | null>(null);
   const dismissTransitionTimerRef = useRef<number | null>(null);
   const dismissToListRef = useRef(false);
@@ -304,10 +331,17 @@ export function ArticleDetail() {
 
   useEffect(() => {
     return () => {
+      if (articleSwipeWatchdogRef.current) window.clearTimeout(articleSwipeWatchdogRef.current);
       if (modeTransitionTimerRef.current) window.clearTimeout(modeTransitionTimerRef.current);
       if (dismissTransitionTimerRef.current) window.clearTimeout(dismissTransitionTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (articleSwipeRef.current) return;
+    if (modeTransition === "none" && modeDragOffset !== 0) setModeDragOffset(0);
+    if (dismissTransition === "none" && dismissOffset !== 0) setDismissOffset(0);
+  }, [dismissOffset, dismissTransition, modeDragOffset, modeTransition]);
 
   // Reset state when article changes — cancel any in-flight summary
   useEffect(() => {
@@ -315,6 +349,7 @@ export function ArticleDetail() {
     cancelSummarize().catch(() => {});
     articleSwipeRef.current = null;
     dismissToListRef.current = false;
+    if (articleSwipeWatchdogRef.current) window.clearTimeout(articleSwipeWatchdogRef.current);
     if (modeTransitionTimerRef.current) window.clearTimeout(modeTransitionTimerRef.current);
     if (dismissTransitionTimerRef.current) window.clearTimeout(dismissTransitionTimerRef.current);
     setFullContent(null);
@@ -441,29 +476,91 @@ export function ArticleDetail() {
     }
   }, []);
 
+  const clearArticleSwipeWatchdog = useCallback(() => {
+    if (articleSwipeWatchdogRef.current) {
+      window.clearTimeout(articleSwipeWatchdogRef.current);
+      articleSwipeWatchdogRef.current = null;
+    }
+  }, []);
+
+  const finishModeTransition = useCallback(() => {
+    clearModeTransitionTimer();
+    clearArticleSwipeWatchdog();
+    articleSwipeRef.current = null;
+    setModeTransition("none");
+    setModeDragOffset(0);
+  }, [clearArticleSwipeWatchdog, clearModeTransitionTimer]);
+
+  const finishDismissTransition = useCallback(() => {
+    clearDismissTransitionTimer();
+    clearArticleSwipeWatchdog();
+    const shouldGoBack = dismissToListRef.current;
+    dismissToListRef.current = false;
+    articleSwipeRef.current = null;
+    setDismissTransition("none");
+    setDismissOffset(0);
+    if (shouldGoBack) phoneBack();
+  }, [clearArticleSwipeWatchdog, clearDismissTransitionTimer, phoneBack]);
+
+  const cancelActiveArticleSwipe = useCallback((animate = true) => {
+    const swipe = articleSwipeRef.current;
+    articleSwipeRef.current = null;
+    clearArticleSwipeWatchdog();
+
+    if (swipe?.target === "list") {
+      setDismissOffset(0);
+      if (animate) {
+        setDismissTransition("bounce");
+        clearDismissTransitionTimer();
+        dismissTransitionTimerRef.current = window.setTimeout(finishDismissTransition, BOUNCE_MS + 80);
+      } else {
+        finishDismissTransition();
+      }
+      return;
+    }
+
+    setModeDragOffset(0);
+    if (animate) {
+      setModeTransition("bounce");
+      clearModeTransitionTimer();
+      modeTransitionTimerRef.current = window.setTimeout(finishModeTransition, BOUNCE_MS + 80);
+    } else {
+      finishModeTransition();
+    }
+  }, [
+    clearArticleSwipeWatchdog,
+    clearDismissTransitionTimer,
+    clearModeTransitionTimer,
+    finishDismissTransition,
+    finishModeTransition,
+  ]);
+
+  const armArticleSwipeWatchdog = useCallback((swipeId: number) => {
+    clearArticleSwipeWatchdog();
+    articleSwipeWatchdogRef.current = window.setTimeout(() => {
+      if (articleSwipeRef.current?.id !== swipeId) return;
+      cancelActiveArticleSwipe(true);
+    }, SWIPE_STALE_MS);
+  }, [cancelActiveArticleSwipe, clearArticleSwipeWatchdog]);
+
   const settleMode = useCallback((transition: Exclude<SwipeTransition, "none">) => {
     clearModeTransitionTimer();
     setModeTransition(transition);
-    modeTransitionTimerRef.current = window.setTimeout(() => {
-      modeTransitionTimerRef.current = null;
-      setModeTransition("none");
-      setModeDragOffset(0);
-    }, (transition === "bounce" ? BOUNCE_MS : SLIDE_MS) + 80);
-  }, [clearModeTransitionTimer]);
+    modeTransitionTimerRef.current = window.setTimeout(
+      finishModeTransition,
+      (transition === "bounce" ? BOUNCE_MS : SLIDE_MS) + 80
+    );
+  }, [clearModeTransitionTimer, finishModeTransition]);
 
   const settleDismiss = useCallback((transition: Exclude<SwipeTransition, "none">, toList = false) => {
     clearDismissTransitionTimer();
     dismissToListRef.current = toList;
     setDismissTransition(transition);
-    dismissTransitionTimerRef.current = window.setTimeout(() => {
-      dismissTransitionTimerRef.current = null;
-      const shouldGoBack = dismissToListRef.current;
-      dismissToListRef.current = false;
-      setDismissTransition("none");
-      setDismissOffset(0);
-      if (shouldGoBack) phoneBack();
-    }, (transition === "bounce" ? BOUNCE_MS : SLIDE_MS) + 80);
-  }, [clearDismissTransitionTimer, phoneBack]);
+    dismissTransitionTimerRef.current = window.setTimeout(
+      finishDismissTransition,
+      (transition === "bounce" ? BOUNCE_MS : SLIDE_MS) + 80
+    );
+  }, [clearDismissTransitionTimer, finishDismissTransition]);
 
   const animateToMode = useCallback((mode: ViewMode) => {
     if (mode === "web") void fetchFull();
@@ -500,14 +597,19 @@ export function ArticleDetail() {
     return direction * (effectiveArticleFrameWidth + (distance - effectiveArticleFrameWidth) * 0.16);
   }, [effectiveArticleFrameWidth]);
 
-  const beginArticleSwipe = useCallback((x: number, y: number) => {
+  const beginArticleSwipe = useCallback((x: number, y: number, iframeGestureId: number | null = null) => {
     if (!isPhone) return;
     clearModeTransitionTimer();
     clearDismissTransitionTimer();
+    clearArticleSwipeWatchdog();
     dismissToListRef.current = false;
     setModeTransition("none");
     setDismissTransition("none");
+    const id = articleSwipeSeqRef.current + 1;
+    articleSwipeSeqRef.current = id;
     articleSwipeRef.current = {
+      id,
+      iframeGestureId,
       startX: x,
       startY: y,
       lastX: x,
@@ -517,11 +619,12 @@ export function ArticleDetail() {
       startedIn: viewMode,
       target: null,
     };
-  }, [clearDismissTransitionTimer, clearModeTransitionTimer, isPhone, viewMode]);
+  }, [clearArticleSwipeWatchdog, clearDismissTransitionTimer, clearModeTransitionTimer, isPhone, viewMode]);
 
-  const moveArticleSwipe = useCallback((x: number, y: number): boolean => {
+  const moveArticleSwipe = useCallback((x: number, y: number, iframeGestureId: number | null = null): boolean => {
     const swipe = articleSwipeRef.current;
     if (!isPhone || !swipe) return false;
+    if (swipe.iframeGestureId !== iframeGestureId) return false;
 
     const now = performance.now();
     const dt = Math.max(1, now - swipe.lastAt);
@@ -555,12 +658,15 @@ export function ArticleDetail() {
       setDismissOffset(0);
       setModeDragOffset(visualOffset);
     }
+    armArticleSwipeWatchdog(swipe.id);
     return true;
-  }, [constrainedSwipeOffset, isPhone, resolveSwipeTarget]);
+  }, [armArticleSwipeWatchdog, constrainedSwipeOffset, isPhone, resolveSwipeTarget]);
 
-  const endArticleSwipe = useCallback(() => {
+  const endArticleSwipe = useCallback((iframeGestureId: number | null = null) => {
     const swipe = articleSwipeRef.current;
+    if (swipe?.iframeGestureId !== iframeGestureId) return;
     articleSwipeRef.current = null;
+    clearArticleSwipeWatchdog();
     if (!swipe || swipe.intent !== "horizontal") return;
 
     const dx = swipe.lastX - swipe.startX;
@@ -596,7 +702,14 @@ export function ArticleDetail() {
       setModeDragOffset(0);
       settleMode("bounce");
     }
-  }, [animateToMode, effectiveArticleFrameWidth, resolveSwipeTarget, settleDismiss, settleMode]);
+  }, [
+    animateToMode,
+    clearArticleSwipeWatchdog,
+    effectiveArticleFrameWidth,
+    resolveSwipeTarget,
+    settleDismiss,
+    settleMode,
+  ]);
 
   const handleArticleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
     const t = e.touches[0];
@@ -616,23 +729,40 @@ export function ArticleDetail() {
 
   useEffect(() => {
     if (!isPhone) return;
+    const finish = () => endArticleSwipe();
+    window.addEventListener("touchend", finish, { capture: true });
+    window.addEventListener("touchcancel", finish, { capture: true });
+    return () => {
+      window.removeEventListener("touchend", finish, { capture: true });
+      window.removeEventListener("touchcancel", finish, { capture: true });
+    };
+  }, [endArticleSwipe, isPhone]);
+
+  useEffect(() => {
+    if (!isPhone) return;
     const handleMessage = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       const data = event.data as {
         type?: string;
         phase?: string;
+        gestureId?: number;
         x?: number;
         y?: number;
       };
-      if (data?.type !== "skim-article-swipe" || typeof data.x !== "number" || typeof data.y !== "number") {
+      if (
+        data?.type !== "skim-article-swipe" ||
+        typeof data.gestureId !== "number" ||
+        typeof data.x !== "number" ||
+        typeof data.y !== "number"
+      ) {
         return;
       }
       if (data.phase === "start") {
-        beginArticleSwipe(data.x, data.y);
+        beginArticleSwipe(data.x, data.y, data.gestureId);
       } else if (data.phase === "move") {
-        moveArticleSwipe(data.x, data.y);
+        moveArticleSwipe(data.x, data.y, data.gestureId);
       } else if (data.phase === "end" || data.phase === "cancel") {
-        endArticleSwipe();
+        endArticleSwipe(data.gestureId);
       }
     };
     window.addEventListener("message", handleMessage);
@@ -1104,6 +1234,11 @@ export function ArticleDetail() {
       >
         <div
           className="h-full w-full"
+          onTransitionEnd={(e) => {
+            if (e.currentTarget === e.target && e.propertyName === "transform" && dismissTransition !== "none") {
+              finishDismissTransition();
+            }
+          }}
           style={{
             transform: `translate3d(${dismissOffset}px, 0, 0)`,
             transition: dismissTransitionStyle,
@@ -1112,6 +1247,11 @@ export function ArticleDetail() {
         >
           <div
             className="h-full flex"
+            onTransitionEnd={(e) => {
+              if (e.currentTarget === e.target && e.propertyName === "transform" && modeTransition !== "none") {
+                finishModeTransition();
+              }
+            }}
             style={{
               width: effectiveArticleFrameWidth * 2,
               transform: `translate3d(${modeTrackX}px, 0, 0)`,

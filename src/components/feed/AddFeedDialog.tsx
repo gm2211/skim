@@ -1,8 +1,17 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAddFeed } from "../../hooks/useFeeds";
 import { useUiStore } from "../../stores/uiStore";
-import { previewOpml, importOpml, refreshAllFeeds, triageArticles } from "../../services/commands";
-import type { FeedlyImportResult } from "../../services/types";
+import {
+  feedlyOauthAvailable,
+  feedlyOauthLogin,
+  getFeedlyStatus,
+  importFeedlyStored,
+  importOpml,
+  previewOpml,
+  refreshAllFeeds,
+  triageArticles,
+} from "../../services/commands";
+import type { FeedlyConnectionStatus, FeedlyImportResult } from "../../services/types";
 import { useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
@@ -164,15 +173,27 @@ function FeedlyTab() {
   const [entries, setEntries] = useState<OpmlEntry[] | null>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [directImporting, setDirectImporting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [refreshingArticles, setRefreshingArticles] = useState(false);
   const [loadedArticles, setLoadedArticles] = useState<number | null>(null);
   const [result, setResult] = useState<FeedlyImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [xml, setXml] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [oauthAvailable, setOauthAvailable] = useState(false);
+  const [feedlyStatus, setFeedlyStatus] = useState<FeedlyConnectionStatus | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
+  const isPhone = useUiStore((s) => s.isPhone);
   const qc = useQueryClient();
+
+  useEffect(() => {
+    if (isPhone) return;
+    feedlyOauthAvailable().then(setOauthAvailable).catch(() => setOauthAvailable(false));
+    getFeedlyStatus().then(setFeedlyStatus).catch(() => setFeedlyStatus(null));
+  }, [isPhone]);
 
   const invalidateFeedViews = async () => {
     await Promise.all([
@@ -189,6 +210,44 @@ function FeedlyTab() {
       await openUrl(FEEDLY_OPML_URL);
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
+    }
+  };
+
+  const handleCopyFeedlyUrl = async () => {
+    setError(null);
+    try {
+      await navigator.clipboard.writeText(FEEDLY_OPML_URL);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    }
+  };
+
+  const handleDirectFeedlyImport = async () => {
+    setDirectImporting(true);
+    setError(null);
+    setResult(null);
+    setLoadedArticles(null);
+    try {
+      if (!feedlyStatus?.connected) {
+        setConnecting(true);
+        const profile = await feedlyOauthLogin();
+        setFeedlyStatus({
+          connected: true,
+          email: profile.email,
+          full_name: profile.full_name,
+        });
+        setConnecting(false);
+      }
+      const res = await importFeedlyStored();
+      setResult(res);
+      await invalidateFeedViews();
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setDirectImporting(false);
+      setConnecting(false);
     }
   };
 
@@ -300,25 +359,73 @@ function FeedlyTab() {
       {!entries && !result && (
         <>
           <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 16 }}>
-            Feedly's API is paid. Use their OPML export instead:
+            Import directly when possible, or use Feedly's OPML export.
           </p>
 
-          <Step number={1} title="Download your subscriptions from Feedly">
-            <button
-              onClick={handleOpenFeedly}
-              className="bg-white/10 text-text-primary rounded-lg hover:bg-white/15 transition-colors inline-flex items-center gap-1.5"
-              style={{ padding: "8px 14px", fontSize: 13 }}
+          {oauthAvailable && !isPhone && (
+            <div
+              className="rounded-xl border border-accent/20"
+              style={{ padding: "12px 14px", marginBottom: 16, background: "rgba(88, 166, 255, 0.06)" }}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-              </svg>
-              Open feedly.com/i/opml
-            </button>
+              <p className="text-text-primary" style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+                Best option: sign in once and import directly
+              </p>
+              <p className="text-text-muted" style={{ fontSize: 11, lineHeight: 1.5, marginBottom: 10 }}>
+                This avoids the browser login redirect and private-window tab problem entirely.
+              </p>
+              <button
+                onClick={() => void handleDirectFeedlyImport()}
+                disabled={directImporting || connecting}
+                className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors inline-flex items-center gap-1.5"
+                style={{ padding: "8px 14px", fontSize: 13, fontWeight: 500 }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                </svg>
+                {directImporting || connecting
+                  ? (connecting ? "Waiting for Feedly..." : "Importing...")
+                  : feedlyStatus?.connected
+                    ? "Import from connected Feedly"
+                    : "Sign in and import"}
+              </button>
+              {feedlyStatus?.connected && (
+                <p className="text-text-muted" style={{ fontSize: 11, marginTop: 8 }}>
+                  Connected as {feedlyStatus.full_name || feedlyStatus.email || "Feedly account"}.
+                </p>
+              )}
+            </div>
+          )}
+
+          <Step number={1} title="Download your subscriptions from Feedly">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleOpenFeedly}
+                className="bg-white/10 text-text-primary rounded-lg hover:bg-white/15 transition-colors inline-flex items-center gap-1.5"
+                style={{ padding: "8px 14px", fontSize: 13 }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                </svg>
+                Open Feedly export
+              </button>
+              <button
+                onClick={handleCopyFeedlyUrl}
+                className="bg-white/5 text-text-secondary rounded-lg hover:bg-white/10 hover:text-text-primary transition-colors inline-flex items-center gap-1.5"
+                style={{ padding: "8px 14px", fontSize: 13 }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                {copied ? "Copied" : "Copy export link"}
+              </button>
+            </div>
             <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
               Auto-downloads an <code>.opml</code> file if you're already signed in.
               <br />
-              <strong>Not signed in?</strong> Feedly will redirect you to log in first — once
-              that's done, click the button again to grab the file.
+              <strong>If Feedly asks you to sign in:</strong> sign in, stay in that same tab,
+              then paste the copied export link into that tab's address bar. In private windows,
+              a new tab may ask you to sign in again.
             </p>
           </Step>
 

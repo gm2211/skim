@@ -252,6 +252,7 @@ struct ArticleListView: View {
 private struct FeedPickerSheet: View {
     @EnvironmentObject private var model: AppModel
     @Binding var isPresented: Bool
+    @GestureState private var dragOffset: CGFloat = 0
     var onAddFeed: () -> Void
     var onImportOPML: () -> Void
     var onRefresh: () -> Void
@@ -306,7 +307,7 @@ private struct FeedPickerSheet: View {
 
                         Spacer(minLength: 38)
 
-                        pickerRow(iconSystemName: "tray", title: "All Inbox", count: model.totalUnreadCount, isSelected: false) {
+                        pickerRow(iconSystemName: "tray", title: "AI Inbox", count: model.totalUnreadCount, isSelected: false) {
                             model.selectedFeedID = nil
                             model.listMode = .unread
                             isPresented = false
@@ -353,6 +354,25 @@ private struct FeedPickerSheet: View {
             }
             .scrollIndicators(.hidden)
         }
+        .offset(x: min(0, dragOffset))
+        .simultaneousGesture(dismissGesture)
+    }
+
+    private var dismissGesture: some Gesture {
+        DragGesture(minimumDistance: 18, coordinateSpace: .local)
+            .updating($dragOffset) { value, state, _ in
+                guard abs(value.translation.width) > abs(value.translation.height),
+                      value.translation.width < 0 else { return }
+                state = value.translation.width
+            }
+            .onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                let shouldDismiss = value.translation.width < -80 || value.predictedEndTranslation.width < -140
+                guard shouldDismiss else { return }
+                withAnimation(.smooth(duration: 0.26)) {
+                    isPresented = false
+                }
+            }
     }
 
     private func pickerRow(

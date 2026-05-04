@@ -252,6 +252,7 @@ struct ArticleListView: View {
 private struct FeedPickerSheet: View {
     @EnvironmentObject private var model: AppModel
     @Binding var isPresented: Bool
+    @State private var scrollTopOffset: CGFloat = 0
     var onAddFeed: () -> Void
     var onImportOPML: () -> Void
     var onRefresh: () -> Void
@@ -261,21 +262,28 @@ private struct FeedPickerSheet: View {
             SkimStyle.chrome.ignoresSafeArea()
 
             ScrollView {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: FeedPaneScrollOffsetKey.self,
+                        value: proxy.frame(in: .named("feedPaneScroll")).minY
+                    )
+                }
+                .frame(height: 0)
+
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack(spacing: 30) {
-                        Spacer()
-                        BorderlessIconButton(systemName: "arrow.clockwise", title: "Refresh", size: 23, tapSize: 44, action: onRefresh)
-                        BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 24, tapSize: 44) {}
-                        BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 44) {}
-                        BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 26, tapSize: 44, action: onAddFeed)
-                    }
-                    .padding(.horizontal, 28)
-                    .padding(.top, 24)
-                    .padding(.bottom, 30)
+                    topControls
 
                     SkimWordmark(size: 48)
                         .padding(.horizontal, 30)
-                        .padding(.bottom, 50)
+                        .padding(.bottom, model.isLoading ? 8 : 50)
+
+                    if model.isLoading {
+                        Text("Syncing...")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.bottom, 42)
+                    }
 
                     VStack(alignment: .leading, spacing: 22) {
                         pickerRow(
@@ -351,13 +359,49 @@ private struct FeedPickerSheet: View {
                     .padding(.bottom, 34)
                 }
             }
+            .coordinateSpace(name: "feedPaneScroll")
             .scrollIndicators(.hidden)
-            .refreshable {
-                await model.refreshAll()
+            .onPreferenceChange(FeedPaneScrollOffsetKey.self) { value in
+                scrollTopOffset = value
             }
+            .simultaneousGesture(pullRefreshGesture)
         }
         .contentShape(Rectangle())
         .simultaneousGesture(dismissGesture)
+    }
+
+    private var topControls: some View {
+        ZStack {
+            Button(action: onRefresh) {
+                ZStack {
+                    Circle()
+                        .fill(model.isLoading ? Color.white.opacity(0.11) : .clear)
+                        .frame(width: 42, height: 42)
+
+                    if model.isLoading {
+                        ProgressView()
+                            .controlSize(.regular)
+                            .tint(SkimStyle.text)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 21, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(model.isLoading ? "Syncing" : "Refresh")
+
+            HStack(spacing: 28) {
+                Spacer()
+                BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 24, tapSize: 44) {}
+                BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 44) {}
+                BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 26, tapSize: 44, action: onAddFeed)
+            }
+        }
+        .padding(.horizontal, 28)
+        .padding(.top, 24)
+        .padding(.bottom, 30)
     }
 
     private var dismissGesture: some Gesture {
@@ -369,6 +413,17 @@ private struct FeedPickerSheet: View {
                 withAnimation(.smooth(duration: 0.26)) {
                     isPresented = false
                 }
+            }
+    }
+
+    private var pullRefreshGesture: some Gesture {
+        DragGesture(minimumDistance: 28, coordinateSpace: .local)
+            .onEnded { value in
+                guard scrollTopOffset >= -1,
+                      value.translation.height > abs(value.translation.width),
+                      value.translation.height > 90 || value.predictedEndTranslation.height > 145
+                else { return }
+                onRefresh()
             }
     }
 
@@ -434,6 +489,14 @@ private struct FeedPickerSheet: View {
             seen.insert(key)
             return true
         }
+    }
+}
+
+private struct FeedPaneScrollOffsetKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

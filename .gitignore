@@ -28,6 +28,7 @@ src-tauri/gen/apple/**/xcuserdata/
 DerivedData/
 xcuserdata/
 *.xcuserstate
+native/**/.build/
 
 # Editor directories and files
 .vscode/*

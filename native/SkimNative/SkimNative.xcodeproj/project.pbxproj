@@ -1,0 +1,520 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
+		568EFC6280529AB7F91222BD /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8734D4E26C300D1AD49D4262 /* SkimCore */; };
+		6048C096F85B46DFAF8590AF /* Style.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038284DEE00F91A360324653 /* Style.swift */; };
+		61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */; };
+		705834903C7D5B0F2442C2D8 /* SkimMacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */; };
+		8ED4B358481AC4273C225054 /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474BA38A4E522DB5D3ECB21 /* WebView.swift */; };
+		D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A483594667B890576E4D368D /* SkimNativeApp.swift */; };
+		E0006C62ED6F6DE502164145 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9AD11F7D9C976F34C0C9347 /* RootView.swift */; };
+		E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */; };
+		F22F6907C7390FE6C195AD8C /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 96F35F36DD1B890E9DE5ACBA /* SkimCore */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		038284DEE00F91A360324653 /* Style.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Style.swift; sourceTree = "<group>"; };
+		1474BA38A4E522DB5D3ECB21 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
+		55C58C12B9B2AB383B4BA89C /* SkimCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimCore; path = ../SkimCore; sourceTree = SOURCE_ROOT; };
+		6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleListView.swift; sourceTree = "<group>"; };
+		911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkimMacOSApp.swift; sourceTree = "<group>"; };
+		A483594667B890576E4D368D /* SkimNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkimNativeApp.swift; sourceTree = "<group>"; };
+		A9AD11F7D9C976F34C0C9347 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		B72B2D107E596891809ECA5E /* Skim macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Skim macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleDetailView.swift; sourceTree = "<group>"; };
+		D60276D39C8ED76452B2EB26 /* Skim iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Skim iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		41A11D44200FFE5EB472F0E2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F22F6907C7390FE6C195AD8C /* SkimCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		76DB0782F0908D763A32FBB8 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				568EFC6280529AB7F91222BD /* SkimCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1A2D47319E7CFF24CC9F78AD = {
+			isa = PBXGroup;
+			children = (
+				5D931F04FC8D63ECE5B39F74 /* Packages */,
+				3E35E50044D8E41517AC148A /* SkimIOS */,
+				2BC0ADE719452D0F6EFFCB9A /* SkimMacOS */,
+				D7ABB738AAC39584D7DAB6DD /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		2BC0ADE719452D0F6EFFCB9A /* SkimMacOS */ = {
+			isa = PBXGroup;
+			children = (
+				6A741000BF236389F8526857 /* App */,
+			);
+			path = SkimMacOS;
+			sourceTree = "<group>";
+		};
+		3417775593F58D71E2EF3871 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */,
+				A483594667B890576E4D368D /* SkimNativeApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		3E35E50044D8E41517AC148A /* SkimIOS */ = {
+			isa = PBXGroup;
+			children = (
+				3417775593F58D71E2EF3871 /* App */,
+				996846EA10E61EE5D576648A /* Support */,
+				F8A894C5E58672BA9365DF76 /* Views */,
+			);
+			path = SkimIOS;
+			sourceTree = "<group>";
+		};
+		5D931F04FC8D63ECE5B39F74 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				55C58C12B9B2AB383B4BA89C /* SkimCore */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		6A741000BF236389F8526857 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		996846EA10E61EE5D576648A /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				038284DEE00F91A360324653 /* Style.swift */,
+				1474BA38A4E522DB5D3ECB21 /* WebView.swift */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+		D7ABB738AAC39584D7DAB6DD /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D60276D39C8ED76452B2EB26 /* Skim iOS.app */,
+				B72B2D107E596891809ECA5E /* Skim macOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F8A894C5E58672BA9365DF76 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */,
+				6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */,
+				A9AD11F7D9C976F34C0C9347 /* RootView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D929318313B1392530E756B1 /* Skim iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 08C47FB093FD6FC316B8207B /* Build configuration list for PBXNativeTarget "Skim iOS" */;
+			buildPhases = (
+				FA8C62AE1B6B922170E1F987 /* Sources */,
+				76DB0782F0908D763A32FBB8 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Skim iOS";
+			packageProductDependencies = (
+				8734D4E26C300D1AD49D4262 /* SkimCore */,
+			);
+			productName = "Skim iOS";
+			productReference = D60276D39C8ED76452B2EB26 /* Skim iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		EC587717C8EAD7BD3D55046E /* Skim macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6E2B6792ADB1E851E87E6F2A /* Build configuration list for PBXNativeTarget "Skim macOS" */;
+			buildPhases = (
+				1637F370E261F1F8236916C4 /* Sources */,
+				41A11D44200FFE5EB472F0E2 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Skim macOS";
+			packageProductDependencies = (
+				96F35F36DD1B890E9DE5ACBA /* SkimCore */,
+			);
+			productName = "Skim macOS";
+			productReference = B72B2D107E596891809ECA5E /* Skim macOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BF2799439C611FAABE478155 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					D929318313B1392530E756B1 = {
+						DevelopmentTeam = 6KQV68SJ5P;
+						ProvisioningStyle = Automatic;
+					};
+					EC587717C8EAD7BD3D55046E = {
+						DevelopmentTeam = 6KQV68SJ5P;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = F00E8D4A7E5DCF1E228A8FFA /* Build configuration list for PBXProject "SkimNative" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 1A2D47319E7CFF24CC9F78AD;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DD3DF580024801F9AE4E4899 /* XCLocalSwiftPackageReference "../SkimCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = D7ABB738AAC39584D7DAB6DD /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D929318313B1392530E756B1 /* Skim iOS */,
+				EC587717C8EAD7BD3D55046E /* Skim macOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		1637F370E261F1F8236916C4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				705834903C7D5B0F2442C2D8 /* SkimMacOSApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		FA8C62AE1B6B922170E1F987 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */,
+				1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */,
+				E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */,
+				E0006C62ED6F6DE502164145 /* RootView.swift in Sources */,
+				D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */,
+				6048C096F85B46DFAF8590AF /* Style.swift in Sources */,
+				8ED4B358481AC4273C225054 /* WebView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		075E812BDEEEFF5A0A4F9E66 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6KQV68SJ5P;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Skim Native";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gm2211.skim.native.macos;
+				PRODUCT_NAME = Skim;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		2EF7042F67E7BE5464EC4FCD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		484B3CB6AC83A73B13D5F556 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6KQV68SJ5P;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Skim Native";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gm2211.skim.native.macos;
+				PRODUCT_NAME = Skim;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		D4F28219C4B8BC5A5122BE93 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6KQV68SJ5P;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Skim Native";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gm2211.skim.native;
+				PRODUCT_NAME = Skim;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		E724FA0F7DC71E746A550215 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6KQV68SJ5P;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Skim Native";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gm2211.skim.native;
+				PRODUCT_NAME = Skim;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F819B1C6290A7288038A9B59 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		08C47FB093FD6FC316B8207B /* Build configuration list for PBXNativeTarget "Skim iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E724FA0F7DC71E746A550215 /* Debug */,
+				D4F28219C4B8BC5A5122BE93 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6E2B6792ADB1E851E87E6F2A /* Build configuration list for PBXNativeTarget "Skim macOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				075E812BDEEEFF5A0A4F9E66 /* Debug */,
+				484B3CB6AC83A73B13D5F556 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F00E8D4A7E5DCF1E228A8FFA /* Build configuration list for PBXProject "SkimNative" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2EF7042F67E7BE5464EC4FCD /* Debug */,
+				F819B1C6290A7288038A9B59 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		DD3DF580024801F9AE4E4899 /* XCLocalSwiftPackageReference "../SkimCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../SkimCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8734D4E26C300D1AD49D4262 /* SkimCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SkimCore;
+		};
+		96F35F36DD1B890E9DE5ACBA /* SkimCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SkimCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = BF2799439C611FAABE478155 /* Project object */;
+}

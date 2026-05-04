@@ -307,9 +307,10 @@ private struct FeedPickerSheet: View {
                             icon: nil,
                             title: "All Articles",
                             count: model.totalUnreadCount,
-                            isSelected: model.selectedFeedID == nil,
+                            isSelected: model.selectedFeedID == nil && model.listMode == .all,
                             action: {
                                 model.selectedFeedID = nil
+                                model.listMode = .all
                                 isPresented = false
                                 Task { await model.reloadArticles() }
                             }
@@ -322,9 +323,9 @@ private struct FeedPickerSheet: View {
                             Task { await model.reloadArticles() }
                         }
 
-                        pickerRow(iconSystemName: "clock", title: "Recent", count: nil, isSelected: false) {
+                        pickerRow(iconSystemName: "clock", title: "Recent", count: nil, isSelected: model.selectedFeedID == nil && model.listMode == .recent) {
                             model.selectedFeedID = nil
-                            model.listMode = .all
+                            model.listMode = .recent
                             isPresented = false
                             Task { await model.reloadArticles() }
                         }

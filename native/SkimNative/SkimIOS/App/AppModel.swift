@@ -5,7 +5,12 @@ import UniformTypeIdentifiers
 enum ArticleListMode: String, CaseIterable, Identifiable {
     case unread
     case all
+    case recent
     case starred
+
+    static var allCases: [ArticleListMode] {
+        [.unread, .all, .starred]
+    }
 
     var id: String { rawValue }
 
@@ -13,6 +18,7 @@ enum ArticleListMode: String, CaseIterable, Identifiable {
         switch self {
         case .unread: "Unread"
         case .all: "All"
+        case .recent: "Recent"
         case .starred: "Starred"
         }
     }
@@ -21,6 +27,7 @@ enum ArticleListMode: String, CaseIterable, Identifiable {
         switch self {
         case .unread: "circle.fill"
         case .all: "list.bullet"
+        case .recent: "clock"
         case .starred: "star"
         }
     }
@@ -57,7 +64,14 @@ final class AppModel: ObservableObject {
         if let selectedFeedID, let feed = feeds.first(where: { $0.id == selectedFeedID }) {
             return feed.title
         }
-        return listMode == .starred ? "Starred" : "All Articles"
+        switch listMode {
+        case .starred:
+            return "Starred"
+        case .recent:
+            return "Recent"
+        case .unread, .all:
+            return "All Articles"
+        }
     }
 
     var filter: ArticleFilter {

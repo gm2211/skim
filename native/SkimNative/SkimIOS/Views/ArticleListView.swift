@@ -118,8 +118,6 @@ struct ArticleListView: View {
             BorderlessIconButton(systemName: "checkmark.circle", title: "Unread", isActive: model.listMode == .unread, size: 24, tapSize: 44) {
                 model.listMode = .unread
             }
-            BorderlessIconButton(systemName: "magnifyingglass", title: "Search", size: 24, tapSize: 44) {
-            }
         }
         .padding(.horizontal, 26)
         .frame(height: 64)

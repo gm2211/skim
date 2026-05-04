@@ -29,17 +29,12 @@ struct ArticleListView: View {
             guard case .success(let urls) = result, let url = urls.first else { return }
             Task { await model.importOPML(url: url) }
         }
-        .confirmationDialog("Feed", isPresented: $showFeedPicker) {
-            Button("All Articles") {
-                model.selectedFeedID = nil
-                Task { await model.reloadArticles() }
-            }
-            ForEach(model.feeds) { feed in
-                Button(feed.title) {
-                    model.selectedFeedID = feed.id
-                    Task { await model.reloadArticles() }
-                }
-            }
+        .sheet(isPresented: $showFeedPicker) {
+            FeedPickerSheet(isPresented: $showFeedPicker)
+                .environmentObject(model)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.ultraThinMaterial)
         }
         .onChange(of: model.listMode) { _, _ in
             Task { await model.reloadArticles() }
@@ -211,6 +206,91 @@ struct ArticleListView: View {
         }
         .map { ($0.key.uppercased(), $0.value.sorted { ($0.publishedAt ?? $0.fetchedAt) > ($1.publishedAt ?? $1.fetchedAt) }) }
         .sorted { ($0.articles.first?.publishedAt ?? .distantPast) > ($1.articles.first?.publishedAt ?? .distantPast) }
+    }
+}
+
+private struct FeedPickerSheet: View {
+    @EnvironmentObject private var model: AppModel
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        NavigationStack {
+            List {
+                pickerRow(title: "All Articles", subtitle: "\(model.feeds.count) feeds", isSelected: model.selectedFeedID == nil) {
+                    model.selectedFeedID = nil
+                    isPresented = false
+                    Task { await model.reloadArticles() }
+                }
+
+                Section("Feeds") {
+                    ForEach(uniqueFeeds) { feed in
+                        pickerRow(
+                            title: feed.title,
+                            subtitle: feed.url.host() ?? feed.url.absoluteString,
+                            isSelected: model.selectedFeedID == feed.id
+                        ) {
+                            model.selectedFeedID = feed.id
+                            isPresented = false
+                            Task { await model.reloadArticles() }
+                        }
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(SkimStyle.background.opacity(0.92))
+            .navigationTitle("Feeds")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        isPresented = false
+                    }
+                    .font(.system(size: 17, weight: .semibold))
+                }
+            }
+        }
+        .tint(SkimStyle.accent)
+    }
+
+    private func pickerRow(title: String, subtitle: String?, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(SkimStyle.text)
+                        .lineLimit(1)
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SkimStyle.accent)
+                }
+            }
+            .padding(.vertical, 7)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(SkimStyle.surface.opacity(0.62))
+    }
+
+    private var uniqueFeeds: [Feed] {
+        var seen: Set<String> = []
+        return model.feeds.filter { feed in
+            let key = feed.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
     }
 }
 

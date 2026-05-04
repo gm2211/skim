@@ -9,6 +9,7 @@ struct RootView: View {
         }
         .tint(SkimStyle.accent)
         .background(SkimStyle.background)
+        .dynamicTypeSize(.medium)
         .task {
             await model.load()
         }

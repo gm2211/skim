@@ -82,92 +82,92 @@ struct ArticleListView: View {
     }
 
     private var topBar: some View {
-        HStack(alignment: .center, spacing: 26) {
-            BorderlessIconButton(systemName: "line.3.horizontal", title: "Feeds", size: 26, tapSize: 48) {
+        HStack(alignment: .center, spacing: 24) {
+            BorderlessIconButton(systemName: "line.3.horizontal", title: "Feeds", size: 22, tapSize: 46) {
                 showFeedPicker = true
             }
             Spacer()
-            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 31, tapSize: 52) {
+            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 48) {
             }
-            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 29, tapSize: 52) {
+            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 25, tapSize: 48) {
             }
-            BorderlessIconButton(systemName: "checkmark.circle", title: "Unread", isActive: model.listMode == .unread, size: 30, tapSize: 52) {
+            BorderlessIconButton(systemName: "checkmark.circle", title: "Unread", isActive: model.listMode == .unread, size: 26, tapSize: 48) {
                 model.listMode = .unread
             }
-            BorderlessIconButton(systemName: "magnifyingglass", title: "Search", size: 31, tapSize: 52) {
+            BorderlessIconButton(systemName: "magnifyingglass", title: "Search", size: 27, tapSize: 48) {
             }
         }
-        .padding(.horizontal, 22)
-        .frame(height: 84)
+        .padding(.horizontal, 28)
+        .frame(height: 72)
         .background(SkimStyle.chrome)
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(model.title)
-                .font(.system(size: 32, weight: .heavy))
+                .font(.system(size: 27, weight: .heavy))
                 .foregroundStyle(SkimStyle.text)
                 .lineLimit(2)
             Text("\(model.totalUnreadCount) Unread Items")
-                .font(.system(size: 18, weight: .regular))
+                .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(SkimStyle.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 24)
-        .padding(.top, 12)
-        .padding(.bottom, 18)
+        .padding(.horizontal, 46)
+        .padding(.top, 18)
+        .padding(.bottom, 20)
     }
 
     private var searchField: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(SkimStyle.secondary)
-                .font(.system(size: 22, weight: .regular))
+                .font(.system(size: 19, weight: .regular))
             TextField("Search articles...", text: $model.searchQuery)
                 .textInputAutocapitalization(.never)
                 .foregroundStyle(SkimStyle.text)
-                .font(.system(size: 24, weight: .regular))
+                .font(.system(size: 20, weight: .regular))
         }
-        .padding(.horizontal, 18)
-        .frame(height: 60)
+        .padding(.horizontal, 16)
+        .frame(height: 50)
         .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(SkimStyle.separator, lineWidth: 1)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, 46)
         .padding(.bottom, 18)
     }
 
     @ViewBuilder
     private var content: some View {
         if model.feeds.isEmpty && model.articles.isEmpty && !model.isLoading {
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 Image(systemName: "dot.radiowaves.left.and.right")
-                    .font(.system(size: 38, weight: .regular))
+                    .font(.system(size: 30, weight: .regular))
                     .foregroundStyle(SkimStyle.secondary)
 
                 VStack(spacing: 8) {
                     Text("Add a feed to begin")
-                        .font(.system(size: 28, weight: .heavy))
+                        .font(.system(size: 24, weight: .heavy))
                         .foregroundStyle(SkimStyle.text)
                         .multilineTextAlignment(.center)
 
                     Text("Paste an RSS or Atom URL. OPML is still here when you want the whole library.")
-                        .font(.system(size: 18, weight: .regular))
+                        .font(.system(size: 16, weight: .regular))
                         .foregroundStyle(SkimStyle.text.opacity(0.82))
                         .multilineTextAlignment(.center)
                         .lineSpacing(3)
                         .frame(maxWidth: 320)
                 }
 
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     Button("Add RSS Feed") { showAddFeed = true }
                         .buttonStyle(.glassProminent)
 
                     Button("Import OPML") { showImporter = true }
                         .buttonStyle(.plain)
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(SkimStyle.accent)
                 }
             }
@@ -192,9 +192,9 @@ struct ArticleListView: View {
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(SkimStyle.secondary)
                             .tracking(1.6)
-                            .padding(.horizontal, 24)
-                            .padding(.top, 20)
-                            .padding(.bottom, 16)
+                            .padding(.horizontal, 46)
+                            .padding(.top, 18)
+                            .padding(.bottom, 12)
                     }
                 }
             }
@@ -223,7 +223,7 @@ struct ArticleListView: View {
                 .foregroundStyle(model.listMode == mode ? SkimStyle.accent : SkimStyle.secondary)
             }
         }
-        .frame(height: 70)
+        .frame(height: 58)
         .frame(maxWidth: .infinity)
         .background(SkimStyle.chrome.opacity(0.96))
         .overlay(alignment: .top) {
@@ -258,24 +258,24 @@ private struct FeedPickerSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(spacing: 30) {
                         Spacer()
-                        BorderlessIconButton(systemName: "arrow.clockwise", title: "Refresh", size: 27, tapSize: 48, action: onRefresh)
-                        BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 28, tapSize: 48) {}
-                        BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 31, tapSize: 48) {}
-                        BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 30, tapSize: 48, action: onAddFeed)
+                        BorderlessIconButton(systemName: "arrow.clockwise", title: "Refresh", size: 23, tapSize: 44, action: onRefresh)
+                        BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 24, tapSize: 44) {}
+                        BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 44) {}
+                        BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 26, tapSize: 44, action: onAddFeed)
                     }
-                    .padding(.horizontal, 26)
-                    .padding(.top, 28)
-                    .padding(.bottom, 34)
+                    .padding(.horizontal, 28)
+                    .padding(.top, 24)
+                    .padding(.bottom, 30)
 
                     Text("SKIM")
-                        .font(.system(size: 50, weight: .black))
+                        .font(.system(size: 46, weight: .black))
                         .tracking(10)
                         .foregroundStyle(SkimStyle.text)
-                        .shadow(color: SkimStyle.accent.opacity(0.28), radius: 14, x: 0, y: 0)
-                        .padding(.horizontal, 26)
-                        .padding(.bottom, 56)
+                        .shadow(color: SkimStyle.accent.opacity(0.22), radius: 12, x: 0, y: 0)
+                        .padding(.horizontal, 30)
+                        .padding(.bottom, 50)
 
-                    VStack(alignment: .leading, spacing: 26) {
+                    VStack(alignment: .leading, spacing: 22) {
                         pickerRow(
                             icon: nil,
                             title: "All Articles",
@@ -302,7 +302,7 @@ private struct FeedPickerSheet: View {
                             Task { await model.reloadArticles() }
                         }
 
-                        Spacer(minLength: 44)
+                        Spacer(minLength: 38)
 
                         pickerRow(iconSystemName: "tray", title: "All Inbox", count: model.totalUnreadCount, isSelected: false) {
                             model.selectedFeedID = nil
@@ -311,26 +311,26 @@ private struct FeedPickerSheet: View {
                             Task { await model.reloadArticles() }
                         }
                     }
-                    .padding(.horizontal, 26)
-                    .padding(.bottom, 42)
+                    .padding(.horizontal, 30)
+                    .padding(.bottom, 36)
 
                     HStack {
                         Text("Feeds")
-                            .font(.system(size: 26, weight: .bold))
+                            .font(.system(size: 23, weight: .bold))
                             .foregroundStyle(SkimStyle.text)
                         Spacer()
                         Button(action: onImportOPML) {
                             Image(systemName: "folder.badge.plus")
-                                .font(.system(size: 20, weight: .regular))
+                                .font(.system(size: 18, weight: .regular))
                                 .foregroundStyle(SkimStyle.secondary)
-                                .frame(width: 44, height: 44)
+                                .frame(width: 40, height: 40)
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 26)
-                    .padding(.bottom, 22)
+                    .padding(.horizontal, 30)
+                    .padding(.bottom, 20)
 
-                    LazyVStack(alignment: .leading, spacing: 23) {
+                    LazyVStack(alignment: .leading, spacing: 19) {
                         ForEach(uniqueFeeds) { feed in
                             pickerRow(
                                 icon: AnyView(FeedIcon(feed: feed)),
@@ -345,7 +345,7 @@ private struct FeedPickerSheet: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 26)
+                    .padding(.horizontal, 30)
                     .padding(.bottom, 34)
                 }
             }
@@ -363,9 +363,9 @@ private struct FeedPickerSheet: View {
         pickerRow(
             icon: AnyView(
                 Image(systemName: iconSystemName)
-                    .font(.system(size: 22, weight: .regular))
+                    .font(.system(size: 19, weight: .regular))
                     .foregroundStyle(SkimStyle.secondary)
-                    .frame(width: 30)
+                    .frame(width: 28)
             ),
             title: title,
             count: count,
@@ -388,7 +388,7 @@ private struct FeedPickerSheet: View {
                 }
 
                 Text(title)
-                    .font(.system(size: 22, weight: isSelected ? .bold : .regular))
+                    .font(.system(size: 19, weight: isSelected ? .bold : .regular))
                     .foregroundStyle(isSelected ? SkimStyle.text : SkimStyle.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -397,11 +397,11 @@ private struct FeedPickerSheet: View {
 
                 if let count, count > 0 {
                     Text(count.formatted())
-                        .font(.system(size: 21, weight: .regular))
+                        .font(.system(size: 18, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
                 }
             }
-            .frame(minHeight: 34)
+            .frame(minHeight: 30)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -503,12 +503,12 @@ private struct FeedIcon: View {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .fill(color)
             Text(initials)
-                .font(.system(size: 12, weight: .black))
+                .font(.system(size: 10, weight: .black))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
         }
-        .frame(width: 28, height: 28)
+        .frame(width: 24, height: 24)
     }
 
     private var initials: String {
@@ -541,12 +541,12 @@ private struct ArticleRow: View {
         HStack(alignment: .top, spacing: 12) {
             Circle()
                 .fill(article.isRead ? SkimStyle.secondary.opacity(0.35) : SkimStyle.accent)
-                .frame(width: 8, height: 8)
-                .padding(.top, 36)
+                .frame(width: 7, height: 7)
+                .padding(.top, 31)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(article.title)
-                    .font(.system(size: 20, weight: article.isRead ? .regular : .semibold))
+                    .font(.system(size: 18, weight: article.isRead ? .regular : .semibold))
                     .foregroundStyle(article.isRead ? SkimStyle.secondary : SkimStyle.text)
                     .lineLimit(3)
 
@@ -562,12 +562,12 @@ private struct ArticleRow: View {
                             .foregroundStyle(.yellow)
                     }
                 }
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 22)
+        .padding(.horizontal, 46)
+        .padding(.vertical, 18)
         .background(SkimStyle.background)
         .overlay(alignment: .bottom) {
             Rectangle()

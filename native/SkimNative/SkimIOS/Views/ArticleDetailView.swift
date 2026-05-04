@@ -47,27 +47,27 @@ struct ArticleDetailView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 30) {
-            BorderlessIconButton(systemName: "chevron.left", title: "Back", size: 30, tapSize: 48) {
+        HStack(spacing: 28) {
+            BorderlessIconButton(systemName: "chevron.left", title: "Back", size: 26, tapSize: 46) {
                 dismiss()
             }
 
             Spacer(minLength: 4)
 
-            BorderlessIconButton(systemName: "book", title: "Reader", isActive: page == .reader, size: 30, tapSize: 52) {
+            BorderlessIconButton(systemName: "book", title: "Reader", isActive: page == .reader, size: 26, tapSize: 48) {
                 page = .reader
             }
-            BorderlessIconButton(systemName: "globe", title: "Web", isActive: page == .web, size: 31, tapSize: 52) {
+            BorderlessIconButton(systemName: "globe", title: "Web", isActive: page == .web, size: 27, tapSize: 48) {
                 page = .web
             }
-            BorderlessIconButton(systemName: "doc.text", title: "Reader source", size: 29, tapSize: 52) {
+            BorderlessIconButton(systemName: "doc.text", title: "Reader source", size: 25, tapSize: 48) {
             }
-            BorderlessIconButton(systemName: article?.isStarred == true ? "star.fill" : "star", title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 31, tapSize: 52) {
+            BorderlessIconButton(systemName: article?.isStarred == true ? "star.fill" : "star", title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 27, tapSize: 48) {
                 Task { await toggleStar() }
             }
         }
-        .padding(.horizontal, 22)
-        .frame(height: 98)
+        .padding(.horizontal, 28)
+        .frame(height: 76)
     }
 
     private func load(markRead: Bool) async {
@@ -118,8 +118,8 @@ private struct ReaderPage: View {
                         .padding(.top, 80)
                 }
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 18)
+            .padding(.horizontal, 38)
+            .padding(.top, 16)
             .padding(.bottom, 56)
         }
         .scrollIndicators(.visible)
@@ -128,7 +128,7 @@ private struct ReaderPage: View {
     private func articleHeader(_ article: Article) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(article.title)
-                .font(.system(size: 34, weight: .heavy))
+                .font(.system(size: 30, weight: .heavy))
                 .foregroundStyle(SkimStyle.text)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -170,8 +170,8 @@ private struct ReaderPage: View {
             .skimGlass(cornerRadius: 20)
         } else {
             Text(body)
-                .font(.system(size: 22, weight: .regular))
-                .lineSpacing(9)
+                .font(.system(size: 20, weight: .regular))
+                .lineSpacing(8)
                 .foregroundStyle(SkimStyle.text)
                 .textSelection(.enabled)
         }

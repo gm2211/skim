@@ -7,6 +7,7 @@ struct ArticleListView: View {
     @State private var showImporter = false
     @State private var showFeedPicker = false
     @State private var showAddFeed = false
+    @State private var showAutoGroup = false
 
     var body: some View {
         ZStack {
@@ -31,6 +32,10 @@ struct ArticleListView: View {
                     },
                     onImportOPML: {
                         presentImporter()
+                    },
+                    onAutoGroup: {
+                        showFeedPicker = false
+                        showAutoGroup = true
                     },
                     onRefresh: {
                         Task { await model.refreshAll() }
@@ -65,6 +70,13 @@ struct ArticleListView: View {
             .presentationDetents([.height(320)])
             .presentationDragIndicator(.visible)
             .presentationBackground(SkimStyle.chrome)
+        }
+        .sheet(isPresented: $showAutoGroup) {
+            AutoGroupSheet(isPresented: $showAutoGroup)
+                .environmentObject(model)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(SkimStyle.chrome)
         }
         .onChange(of: model.listMode) { _, _ in
             Task { await model.reloadArticles() }
@@ -272,6 +284,7 @@ private struct FeedPickerSheet: View {
     @State private var scrollTopOffset: CGFloat = 0
     var onAddFeed: () -> Void
     var onImportOPML: () -> Void
+    var onAutoGroup: () -> Void
     var onRefresh: () -> Void
 
     var body: some View {
@@ -347,7 +360,7 @@ private struct FeedPickerSheet: View {
                             .font(.system(size: 23, weight: .bold))
                             .foregroundStyle(SkimStyle.text)
                         Spacer()
-                        Button(action: onImportOPML) {
+                        Button(action: onAutoGroup) {
                             Image(systemName: "folder.badge.plus")
                                 .font(.system(size: 18, weight: .regular))
                                 .foregroundStyle(SkimStyle.secondary)
@@ -493,6 +506,288 @@ private struct FeedPaneScrollOffsetKey: PreferenceKey {
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+private enum AutoGroupNameStyle: String, CaseIterable, Identifiable {
+    case titleCase
+    case camelCase
+    case kebabCase
+    case snakeCase
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .titleCase: "TitleCase"
+        case .camelCase: "camelCase"
+        case .kebabCase: "kebab-case"
+        case .snakeCase: "snake_case"
+        }
+    }
+
+    func format(_ words: [String]) -> String {
+        let cleaned = words
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            .filter { !$0.isEmpty }
+
+        switch self {
+        case .titleCase:
+            return cleaned.map(Self.titleWord).joined()
+        case .camelCase:
+            guard let first = cleaned.first else { return "" }
+            return ([first] + cleaned.dropFirst().map(Self.titleWord)).joined()
+        case .kebabCase:
+            return cleaned.joined(separator: "-")
+        case .snakeCase:
+            return cleaned.joined(separator: "_")
+        }
+    }
+
+    private static func titleWord(_ word: String) -> String {
+        switch word {
+        case "ai": "AI"
+        case "rss": "RSS"
+        case "ml": "ML"
+        default:
+            word.prefix(1).uppercased() + word.dropFirst()
+        }
+    }
+}
+
+private struct AutoGroupProposal: Identifiable {
+    var id: String { name }
+    var name: String
+    var feeds: [Feed]
+}
+
+private struct AutoGroupSheet: View {
+    @EnvironmentObject private var model: AppModel
+    @Binding var isPresented: Bool
+    @State private var nameStyle: AutoGroupNameStyle = .titleCase
+
+    private var proposals: [AutoGroupProposal] {
+        AutoGroupClassifier.proposals(for: model.feeds, style: nameStyle)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Auto-group feeds")
+                        .font(.system(size: 27, weight: .heavy))
+                        .foregroundStyle(SkimStyle.text)
+                    Text("Classify feeds into folder proposals, then choose the folder naming style.")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer()
+
+                Button {
+                    isPresented = false
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Folder naming")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .textCase(.uppercase)
+                    .tracking(1.1)
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 9) {
+                        ForEach(AutoGroupNameStyle.allCases) { style in
+                            Button {
+                                withAnimation(.smooth(duration: 0.18)) {
+                                    nameStyle = style
+                                }
+                            } label: {
+                                Text(style.label)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(nameStyle == style ? SkimStyle.text : SkimStyle.secondary)
+                                    .padding(.horizontal, 13)
+                                    .frame(height: 36)
+                                    .background(
+                                        nameStyle == style ? SkimStyle.surface.opacity(0.95) : SkimStyle.surface.opacity(0.34),
+                                        in: Capsule()
+                                    )
+                                    .overlay {
+                                        Capsule()
+                                            .stroke(nameStyle == style ? SkimStyle.accent.opacity(0.7) : SkimStyle.separator, lineWidth: 1)
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+            if proposals.isEmpty {
+                ContentUnavailableView(
+                    "No feeds to classify",
+                    systemImage: "folder.badge.plus",
+                    description: Text("Add RSS feeds or import OPML first.")
+                )
+                .foregroundStyle(SkimStyle.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(proposals) { proposal in
+                            AutoGroupProposalRow(proposal: proposal)
+                        }
+                    }
+                    .padding(.bottom, 8)
+                }
+                .scrollIndicators(.hidden)
+            }
+
+            HStack(spacing: 12) {
+                Text("Preview only until native folder persistence lands.")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+                Spacer()
+                Button("Done") {
+                    isPresented = false
+                }
+                .buttonStyle(.glassProminent)
+            }
+            .padding(.top, 2)
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 24)
+        .padding(.bottom, 18)
+    }
+}
+
+private struct AutoGroupProposalRow: View {
+    var proposal: AutoGroupProposal
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 10) {
+                Text(proposal.name)
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(SkimStyle.text)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                Spacer()
+
+                Text("\(proposal.feeds.count)")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SkimStyle.secondary)
+            }
+
+            Text(proposal.feeds.map(\.title).joined(separator: ", "))
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(SkimStyle.secondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(SkimStyle.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .stroke(SkimStyle.separator, lineWidth: 1)
+        }
+    }
+}
+
+private enum AutoGroupClassifier {
+    static func proposals(for feeds: [Feed], style: AutoGroupNameStyle) -> [AutoGroupProposal] {
+        let uniqueFeeds = deduplicate(feeds)
+        let grouped = Dictionary(grouping: uniqueFeeds) { feed in
+            categoryWords(for: feed)
+        }
+
+        return grouped
+            .map { words, feeds in
+                AutoGroupProposal(
+                    name: style.format(words),
+                    feeds: feeds.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+                )
+            }
+            .sorted {
+                if $0.feeds.count == $1.feeds.count {
+                    return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                }
+                return $0.feeds.count > $1.feeds.count
+            }
+    }
+
+    private static func deduplicate(_ feeds: [Feed]) -> [Feed] {
+        var seen: Set<String> = []
+        return feeds.filter { feed in
+            let key = feed.url.absoluteString.lowercased()
+            guard !seen.contains(key) else { return false }
+            seen.insert(key)
+            return true
+        }
+    }
+
+    private static func categoryWords(for feed: Feed) -> [String] {
+        let text = [
+            feed.title,
+            feed.url.host() ?? "",
+            feed.siteURL?.host() ?? ""
+        ]
+        .joined(separator: " ")
+        .lowercased()
+
+        if containsAny(text, ["ai", "llm", "openai", "anthropic", "machine learning", "ml", "neural", "model"]) {
+            return ["artificial", "intelligence"]
+        }
+        if containsAny(text, ["distributed", "systems", "kubernetes", "database", "cache", "network", "sre", "infra"]) {
+            return ["distributed", "systems"]
+        }
+        if containsAny(text, ["security", "privacy", "vulnerability", "crypto", "cryptography", "malware", "exploit"]) {
+            return ["security"]
+        }
+        if containsAny(text, ["finance", "economics", "market", "money", "banking", "investing"]) {
+            return ["finance", "economics"]
+        }
+        if containsAny(text, ["software", "programming", "code", "developer", "engineering", "swift", "rust", "typescript"]) {
+            return ["software", "engineering"]
+        }
+        if containsAny(text, ["startup", "business", "company", "product", "venture"]) {
+            return ["business"]
+        }
+
+        return fallbackWords(for: feed)
+    }
+
+    private static func containsAny(_ text: String, _ needles: [String]) -> Bool {
+        needles.contains { text.contains($0) }
+    }
+
+    private static func fallbackWords(for feed: Feed) -> [String] {
+        let stopWords: Set<String> = ["the", "and", "for", "blog", "rss", "feed", "www", "com", "org", "net", "io"]
+        let titleWords = feed.title
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .map { $0.lowercased() }
+            .filter { $0.count > 2 && !stopWords.contains($0) }
+
+        if let first = titleWords.first {
+            return [first]
+        }
+
+        let hostWords = (feed.url.host() ?? "feeds")
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .map { $0.lowercased() }
+            .filter { !$0.isEmpty && !stopWords.contains($0) }
+
+        return Array(hostWords.prefix(2)).isEmpty ? ["feeds"] : Array(hostWords.prefix(2))
     }
 }
 

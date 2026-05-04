@@ -353,6 +353,9 @@ private struct FeedPickerSheet: View {
                 }
             }
             .scrollIndicators(.hidden)
+            .refreshable {
+                await model.refreshAll()
+            }
         }
         .offset(x: min(0, dragOffset))
         .simultaneousGesture(dismissGesture)

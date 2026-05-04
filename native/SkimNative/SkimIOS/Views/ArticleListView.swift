@@ -86,63 +86,63 @@ struct ArticleListView: View {
     }
 
     private var topBar: some View {
-        HStack(alignment: .center, spacing: 24) {
-            BorderlessIconButton(systemName: "line.3.horizontal", title: "Feeds", size: 22, tapSize: 46) {
+        HStack(alignment: .center, spacing: 22) {
+            BorderlessIconButton(systemName: "line.3.horizontal", title: "Feeds", size: 20, tapSize: 42) {
                 withAnimation(.smooth(duration: 0.26)) {
                     showFeedPicker = true
                 }
             }
             Spacer()
-            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 48) {
+            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 24, tapSize: 44) {
             }
-            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 25, tapSize: 48) {
+            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 23, tapSize: 44) {
             }
-            BorderlessIconButton(systemName: "checkmark.circle", title: "Unread", isActive: model.listMode == .unread, size: 26, tapSize: 48) {
+            BorderlessIconButton(systemName: "checkmark.circle", title: "Unread", isActive: model.listMode == .unread, size: 24, tapSize: 44) {
                 model.listMode = .unread
             }
-            BorderlessIconButton(systemName: "magnifyingglass", title: "Search", size: 27, tapSize: 48) {
+            BorderlessIconButton(systemName: "magnifyingglass", title: "Search", size: 24, tapSize: 44) {
             }
         }
-        .padding(.horizontal, 28)
-        .frame(height: 72)
+        .padding(.horizontal, 26)
+        .frame(height: 64)
         .background(SkimStyle.chrome)
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(model.title)
-                .font(.system(size: 27, weight: .heavy))
+                .font(.system(size: 25, weight: .heavy))
                 .foregroundStyle(SkimStyle.text)
                 .lineLimit(2)
             Text("\(model.totalUnreadCount) Unread Items")
-                .font(.system(size: 16, weight: .regular))
+                .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(SkimStyle.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 46)
-        .padding(.top, 18)
-        .padding(.bottom, 20)
+        .padding(.horizontal, 38)
+        .padding(.top, 16)
+        .padding(.bottom, 18)
     }
 
     private var searchField: some View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(SkimStyle.secondary)
-                .font(.system(size: 19, weight: .regular))
+                .font(.system(size: 17, weight: .regular))
             TextField("Search articles...", text: $model.searchQuery)
                 .textInputAutocapitalization(.never)
                 .foregroundStyle(SkimStyle.text)
-                .font(.system(size: 20, weight: .regular))
+                .font(.system(size: 18, weight: .regular))
         }
-        .padding(.horizontal, 16)
-        .frame(height: 50)
-        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.horizontal, 15)
+        .frame(height: 46)
+        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .stroke(SkimStyle.separator, lineWidth: 1)
         }
-        .padding(.horizontal, 46)
-        .padding(.bottom, 18)
+        .padding(.horizontal, 38)
+        .padding(.bottom, 14)
     }
 
     @ViewBuilder
@@ -195,12 +195,12 @@ struct ArticleListView: View {
                         }
                     } header: {
                         Text(group.label)
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(SkimStyle.secondary)
                             .tracking(1.6)
-                            .padding(.horizontal, 46)
-                            .padding(.top, 18)
-                            .padding(.bottom, 12)
+                            .padding(.horizontal, 38)
+                            .padding(.top, 14)
+                            .padding(.bottom, 10)
                     }
                 }
             }
@@ -229,7 +229,7 @@ struct ArticleListView: View {
                 .foregroundStyle(model.listMode == mode ? SkimStyle.accent : SkimStyle.secondary)
             }
         }
-        .frame(height: 58)
+        .frame(height: 54)
         .frame(maxWidth: .infinity)
         .background(SkimStyle.chrome.opacity(0.96))
         .overlay(alignment: .top) {
@@ -273,7 +273,7 @@ private struct FeedPickerSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     topControls
 
-                    SkimWordmark(size: 48)
+                    SkimWordmark(size: 54)
                         .padding(.horizontal, 30)
                         .padding(.bottom, model.isLoading ? 8 : 50)
 
@@ -623,12 +623,12 @@ private struct ArticleRow: View {
         HStack(alignment: .top, spacing: 12) {
             Circle()
                 .fill(article.isRead ? SkimStyle.secondary.opacity(0.35) : SkimStyle.accent)
-                .frame(width: 7, height: 7)
-                .padding(.top, 31)
+                .frame(width: 6, height: 6)
+                .padding(.top, 27)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 7) {
                 Text(article.title)
-                    .font(.system(size: 18, weight: article.isRead ? .regular : .semibold))
+                    .font(.system(size: 17, weight: article.isRead ? .regular : .semibold))
                     .foregroundStyle(article.isRead ? SkimStyle.secondary : SkimStyle.text)
                     .lineLimit(3)
 
@@ -644,12 +644,12 @@ private struct ArticleRow: View {
                             .foregroundStyle(.yellow)
                     }
                 }
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 13, weight: .medium))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 46)
-        .padding(.vertical, 18)
+        .padding(.horizontal, 38)
+        .padding(.vertical, 15)
         .background(SkimStyle.background)
         .overlay(alignment: .bottom) {
             Rectangle()

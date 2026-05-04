@@ -70,7 +70,7 @@ struct SkimWordmark: View {
                     )
                 )
         }
-        .shadow(color: SkimStyle.accent.opacity(0.25), radius: 14, x: 0, y: 0)
+        .shadow(color: SkimStyle.accent.opacity(0.16), radius: 9, x: 0, y: 0)
         .fixedSize()
         .accessibilityLabel("Skim")
     }

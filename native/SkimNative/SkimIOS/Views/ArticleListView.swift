@@ -252,7 +252,6 @@ struct ArticleListView: View {
 private struct FeedPickerSheet: View {
     @EnvironmentObject private var model: AppModel
     @Binding var isPresented: Bool
-    @GestureState private var dragOffset: CGFloat = 0
     var onAddFeed: () -> Void
     var onImportOPML: () -> Void
     var onRefresh: () -> Void
@@ -357,17 +356,12 @@ private struct FeedPickerSheet: View {
                 await model.refreshAll()
             }
         }
-        .offset(x: min(0, dragOffset))
+        .contentShape(Rectangle())
         .simultaneousGesture(dismissGesture)
     }
 
     private var dismissGesture: some Gesture {
-        DragGesture(minimumDistance: 18, coordinateSpace: .local)
-            .updating($dragOffset) { value, state, _ in
-                guard abs(value.translation.width) > abs(value.translation.height),
-                      value.translation.width < 0 else { return }
-                state = value.translation.width
-            }
+        DragGesture(minimumDistance: 24, coordinateSpace: .local)
             .onEnded { value in
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 let shouldDismiss = value.translation.width < -80 || value.predictedEndTranslation.width < -140

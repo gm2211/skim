@@ -154,6 +154,17 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func setRead(_ articles: [Article], isRead: Bool) async {
+        do {
+            for article in articles {
+                try await store.setArticleRead(id: article.id, isRead: isRead)
+            }
+            await reloadArticles()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func toggleStar(_ article: Article) async {
         do {
             try await store.toggleStar(id: article.id)

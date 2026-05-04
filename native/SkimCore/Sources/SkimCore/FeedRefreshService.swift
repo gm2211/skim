@@ -231,7 +231,13 @@ private final class FeedParserDelegate: NSObject, XMLParserDelegate {
             if name == "enclosure", item.imageURL == nil, let url = attributeDict["url"], (attributeDict["type"] ?? "").hasPrefix("image") {
                 item.imageURL = URL(string: url)
             }
+            if name == "media:content", item.imageURL == nil, let url = attributeDict["url"], (attributeDict["medium"] == "image" || (attributeDict["type"] ?? "").hasPrefix("image")) {
+                item.imageURL = URL(string: url)
+            }
             if name == "media:thumbnail", item.imageURL == nil, let url = attributeDict["url"] {
+                item.imageURL = URL(string: url)
+            }
+            if name == "itunes:image", item.imageURL == nil, let url = attributeDict["href"] {
                 item.imageURL = URL(string: url)
             }
         }
@@ -279,9 +285,11 @@ private final class FeedParserDelegate: NSObject, XMLParserDelegate {
         case "description", "summary":
             if item.contentText == nil { item.contentText = value.strippingTags() }
             if item.contentHTML == nil { item.contentHTML = value }
+            if item.imageURL == nil { item.imageURL = value.firstImageURL(relativeTo: item.url) }
         case "content:encoded", "content":
             item.contentHTML = value
             item.contentText = value.strippingTags()
+            if item.imageURL == nil { item.imageURL = value.firstImageURL(relativeTo: item.url) }
         case "pubdate", "published", "updated":
             item.publishedAt = Date.feedDate(from: value)
         default:
@@ -322,5 +330,18 @@ extension String {
         replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func firstImageURL(relativeTo baseURL: URL?) -> URL? {
+        let pattern = #"<img\b[^>]*\bsrc\s*=\s*(['"])(.*?)\1"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return nil
+        }
+        let range = NSRange(startIndex..<endIndex, in: self)
+        guard let match = regex.firstMatch(in: self, range: range),
+              match.numberOfRanges >= 3,
+              let srcRange = Range(match.range(at: 2), in: self)
+        else { return nil }
+        return URL(string: String(self[srcRange]), relativeTo: baseURL)?.absoluteURL
     }
 }

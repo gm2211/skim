@@ -204,7 +204,7 @@ struct ArticleListView: View {
                     Section {
                         ForEach(group.articles) { article in
                             NavigationLink(value: article.id) {
-                                ArticleRow(article: article)
+                                ArticleRow(article: article, visibleArticles: model.articles)
                             }
                             .buttonStyle(.plain)
                             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
@@ -614,20 +614,24 @@ private struct FeedIcon: View {
 }
 
 private struct ArticleRow: View {
+    @EnvironmentObject private var model: AppModel
+    @Environment(\.openURL) private var openURL
+
     var article: Article
+    var visibleArticles: [Article]
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Circle()
                 .fill(article.isRead ? SkimStyle.secondary.opacity(0.35) : SkimStyle.accent)
                 .frame(width: 6, height: 6)
-                .padding(.top, 27)
+                .padding(.top, 22)
 
             VStack(alignment: .leading, spacing: 7) {
                 Text(article.title)
-                    .font(.system(size: 17, weight: article.isRead ? .regular : .semibold))
+                    .font(.system(size: 16, weight: article.isRead ? .regular : .semibold))
                     .foregroundStyle(article.isRead ? SkimStyle.secondary : SkimStyle.text)
-                    .lineLimit(3)
+                    .lineLimit(2)
 
                 HStack(spacing: 8) {
                     Text(article.feedTitle)
@@ -641,17 +645,91 @@ private struct ArticleRow: View {
                             .foregroundStyle(.yellow)
                     }
                 }
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
+            }
+
+            Spacer(minLength: 8)
+
+            if let imageURL = article.imageURL {
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .failure:
+                        Color.clear
+                    case .empty:
+                        SkimStyle.surface
+                    @unknown default:
+                        Color.clear
+                    }
+                }
+                .frame(width: 54, height: 54)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .opacity(article.isRead ? 0.62 : 1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 38)
-        .padding(.vertical, 15)
+        .padding(.vertical, 10)
         .background(SkimStyle.background)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(SkimStyle.separator.opacity(0.75))
                 .frame(height: 1)
         }
+        .contextMenu {
+            Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? "circle" : "checkmark.circle") {
+                Task { await model.setRead(article, isRead: !article.isRead) }
+            }
+
+            Button(article.isStarred ? "Unfavorite" : "Mark Favorite", systemImage: article.isStarred ? "star.slash" : "star") {
+                Task { await model.toggleStar(article) }
+            }
+
+            Divider()
+
+            Button("Mark All Above Read", systemImage: "arrow.up.to.line") {
+                Task { await model.setRead(articlesAbove, isRead: true) }
+            }
+            .disabled(articlesAbove.isEmpty)
+
+            Button("Mark All Above Unread", systemImage: "arrow.up.to.line") {
+                Task { await model.setRead(articlesAbove, isRead: false) }
+            }
+            .disabled(articlesAbove.isEmpty)
+
+            Button("Mark All Below Read", systemImage: "arrow.down.to.line") {
+                Task { await model.setRead(articlesBelow, isRead: true) }
+            }
+            .disabled(articlesBelow.isEmpty)
+
+            Button("Mark All Below Unread", systemImage: "arrow.down.to.line") {
+                Task { await model.setRead(articlesBelow, isRead: false) }
+            }
+            .disabled(articlesBelow.isEmpty)
+
+            if let url = article.url {
+                Divider()
+                Button("Open Link", systemImage: "safari") {
+                    openURL(url)
+                }
+            }
+        }
+    }
+
+    private var currentIndex: Int? {
+        visibleArticles.firstIndex { $0.id == article.id }
+    }
+
+    private var articlesAbove: [Article] {
+        guard let currentIndex else { return [] }
+        return Array(visibleArticles[..<currentIndex])
+    }
+
+    private var articlesBelow: [Article] {
+        guard let currentIndex, currentIndex + 1 < visibleArticles.count else { return [] }
+        return Array(visibleArticles[(currentIndex + 1)...])
     }
 }

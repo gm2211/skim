@@ -115,6 +115,33 @@ import Testing
     #expect(articles.map(\.title) == ["First item"])
 }
 
+@Test func parsesArticleImagesFromRSS() throws {
+    let rss = """
+    <rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+      <channel>
+        <title>Image Feed</title>
+        <item>
+          <title>With media</title>
+          <link>https://example.com/media</link>
+          <media:content url="https://example.com/media.jpg" medium="image" />
+        </item>
+        <item>
+          <title>With HTML image</title>
+          <link>https://example.com/html</link>
+          <description><![CDATA[<p>Hello</p><img src="https://example.com/html.jpg">]]></description>
+        </item>
+      </channel>
+    </rss>
+    """
+
+    let feed = try FeedParser().parse(data: Data(rss.utf8), fallbackTitle: "fallback")
+
+    #expect(feed.articles.map(\.imageURL?.absoluteString) == [
+        "https://example.com/media.jpg",
+        "https://example.com/html.jpg"
+    ])
+}
+
 private func temporaryStore() throws -> SkimStore {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     let url = dir.appendingPathComponent("skim.sqlite")

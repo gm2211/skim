@@ -33,6 +33,8 @@ struct ArticleDetailView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.smooth(duration: 0.28), value: page)
             }
+            .contentShape(Rectangle())
+            .simultaneousGesture(readerBackGesture)
         }
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
@@ -68,6 +70,19 @@ struct ArticleDetailView: View {
         }
         .padding(.horizontal, 28)
         .frame(height: 76)
+    }
+
+    private var readerBackGesture: some Gesture {
+        DragGesture(minimumDistance: 24, coordinateSpace: .local)
+            .onEnded { value in
+                guard page == .reader,
+                      abs(value.translation.width) > abs(value.translation.height)
+                else { return }
+
+                let shouldDismiss = value.translation.width > 82 || value.predictedEndTranslation.width > 145
+                guard shouldDismiss else { return }
+                dismiss()
+            }
     }
 
     private func load(markRead: Bool) async {

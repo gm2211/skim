@@ -125,6 +125,26 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func addFeed(urlString: String) async {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            let url = try normalizedFeedURL(from: urlString)
+            let feed = Feed(
+                id: stableID(prefix: "feed", value: url.absoluteString),
+                title: url.host(percentEncoded: false) ?? url.absoluteString,
+                url: url
+            )
+            try await refresher.refresh(feed: feed, store: store)
+            selectedFeedID = feed.id
+            listMode = .unread
+            await reloadArticles()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func setRead(_ article: Article, isRead: Bool) async {
         do {
             try await store.setArticleRead(id: article.id, isRead: isRead)
@@ -154,5 +174,20 @@ final class AppModel: ObservableObject {
             next[feed.id] = try await store.countUnread(feedID: feed.id)
         }
         unreadCounts = next
+    }
+
+    private func normalizedFeedURL(from value: String) throws -> URL {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw SkimCoreError.invalidFeedURL }
+
+        let withScheme = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        guard let url = URL(string: withScheme)?.upgradingHTTPToHTTPS(),
+              let scheme = url.scheme?.lowercased(),
+              (scheme == "https" || scheme == "http"),
+              url.host() != nil
+        else {
+            throw SkimCoreError.invalidFeedURL
+        }
+        return url
     }
 }

@@ -6,6 +6,7 @@ struct ArticleListView: View {
     @EnvironmentObject private var model: AppModel
     @State private var showImporter = false
     @State private var showFeedPicker = false
+    @State private var showAddFeed = false
 
     var body: some View {
         ZStack {
@@ -32,15 +33,32 @@ struct ArticleListView: View {
         .fullScreenCover(isPresented: $showFeedPicker) {
             FeedPickerSheet(
                 isPresented: $showFeedPicker,
-                onImport: {
+                onAddFeed: {
                     showFeedPicker = false
-                    showImporter = true
+                    showAddFeed = true
+                },
+                onImportOPML: {
+                    presentImporter()
                 },
                 onRefresh: {
                     Task { await model.refreshAll() }
                 }
             )
                 .environmentObject(model)
+        }
+        .sheet(isPresented: $showAddFeed) {
+            AddFeedSheet(
+                isPresented: $showAddFeed,
+                onAdd: { url in
+                    Task { await model.addFeed(urlString: url) }
+                },
+                onImportOPML: {
+                    presentImporter()
+                }
+            )
+            .presentationDetents([.height(320)])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(SkimStyle.chrome)
         }
         .onChange(of: model.listMode) { _, _ in
             Task { await model.reloadArticles() }
@@ -52,6 +70,14 @@ struct ArticleListView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(model.errorMessage ?? "")
+        }
+    }
+
+    private func presentImporter() {
+        showFeedPicker = false
+        showAddFeed = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            showImporter = true
         }
     }
 
@@ -116,18 +142,18 @@ struct ArticleListView: View {
     @ViewBuilder
     private var content: some View {
         if model.feeds.isEmpty && model.articles.isEmpty && !model.isLoading {
-            VStack(spacing: 18) {
-                Image(systemName: "square.and.arrow.down")
-                    .font(.system(size: 36, weight: .medium))
+            VStack(spacing: 20) {
+                Image(systemName: "dot.radiowaves.left.and.right")
+                    .font(.system(size: 38, weight: .regular))
                     .foregroundStyle(SkimStyle.secondary)
 
                 VStack(spacing: 8) {
-                    Text("Import OPML to begin")
-                        .font(.system(size: 27, weight: .bold, design: .rounded))
+                    Text("Add a feed to begin")
+                        .font(.system(size: 28, weight: .heavy))
                         .foregroundStyle(SkimStyle.text)
                         .multilineTextAlignment(.center)
 
-                    Text("Bring in your feeds and Skim will fetch the first batch of articles.")
+                    Text("Paste an RSS or Atom URL. OPML is still here when you want the whole library.")
                         .font(.system(size: 18, weight: .regular))
                         .foregroundStyle(SkimStyle.text.opacity(0.82))
                         .multilineTextAlignment(.center)
@@ -135,8 +161,15 @@ struct ArticleListView: View {
                         .frame(maxWidth: 320)
                 }
 
-                Button("Import OPML") { showImporter = true }
-                    .buttonStyle(.glassProminent)
+                VStack(spacing: 12) {
+                    Button("Add RSS Feed") { showAddFeed = true }
+                        .buttonStyle(.glassProminent)
+
+                    Button("Import OPML") { showImporter = true }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(SkimStyle.accent)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 32)
@@ -213,7 +246,8 @@ struct ArticleListView: View {
 private struct FeedPickerSheet: View {
     @EnvironmentObject private var model: AppModel
     @Binding var isPresented: Bool
-    var onImport: () -> Void
+    var onAddFeed: () -> Void
+    var onImportOPML: () -> Void
     var onRefresh: () -> Void
 
     var body: some View {
@@ -227,7 +261,7 @@ private struct FeedPickerSheet: View {
                         BorderlessIconButton(systemName: "arrow.clockwise", title: "Refresh", size: 27, tapSize: 48, action: onRefresh)
                         BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 28, tapSize: 48) {}
                         BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 31, tapSize: 48) {}
-                        BorderlessIconButton(systemName: "plus", title: "Import OPML", size: 30, tapSize: 48, action: onImport)
+                        BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 30, tapSize: 48, action: onAddFeed)
                     }
                     .padding(.horizontal, 26)
                     .padding(.top, 28)
@@ -285,7 +319,7 @@ private struct FeedPickerSheet: View {
                             .font(.system(size: 26, weight: .bold))
                             .foregroundStyle(SkimStyle.text)
                         Spacer()
-                        Button(action: onImport) {
+                        Button(action: onImportOPML) {
                             Image(systemName: "folder.badge.plus")
                                 .font(.system(size: 20, weight: .regular))
                                 .foregroundStyle(SkimStyle.secondary)
@@ -380,6 +414,83 @@ private struct FeedPickerSheet: View {
             guard !seen.contains(key) else { return false }
             seen.insert(key)
             return true
+        }
+    }
+}
+
+private struct AddFeedSheet: View {
+    @Binding var isPresented: Bool
+    @State private var feedURL = ""
+    @FocusState private var isFocused: Bool
+
+    var onAdd: (String) -> Void
+    var onImportOPML: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            HStack {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Add RSS Feed")
+                        .font(.system(size: 26, weight: .heavy))
+                        .foregroundStyle(SkimStyle.text)
+                    Text("Paste a feed URL. Skim will fetch the first articles now.")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+
+                Spacer()
+
+                Button {
+                    isPresented = false
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+            }
+
+            TextField("https://example.com/feed.xml", text: $feedURL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+                .textContentType(.URL)
+                .font(.system(size: 19, weight: .regular))
+                .foregroundStyle(SkimStyle.text)
+                .focused($isFocused)
+                .padding(.horizontal, 16)
+                .frame(height: 56)
+                .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(SkimStyle.separator, lineWidth: 1)
+                }
+
+            HStack(spacing: 14) {
+                Button("Import OPML") {
+                    isPresented = false
+                    onImportOPML()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(SkimStyle.accent)
+
+                Spacer()
+
+                Button("Add Feed") {
+                    let value = feedURL
+                    isPresented = false
+                    onAdd(value)
+                }
+                .buttonStyle(.glassProminent)
+                .disabled(feedURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 26)
+        .onAppear {
+            isFocused = true
         }
     }
 }

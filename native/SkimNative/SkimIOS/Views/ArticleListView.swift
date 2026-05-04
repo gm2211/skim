@@ -114,15 +114,31 @@ struct ArticleListView: View {
     @ViewBuilder
     private var content: some View {
         if model.feeds.isEmpty && model.articles.isEmpty && !model.isLoading {
-            ContentUnavailableView {
-                Label("Import OPML to begin", systemImage: "square.and.arrow.down")
-            } description: {
-                Text("Bring in your feeds and Skim will fetch the first batch of articles.")
-            } actions: {
+            VStack(spacing: 18) {
+                Image(systemName: "square.and.arrow.down")
+                    .font(.system(size: 36, weight: .medium))
+                    .foregroundStyle(SkimStyle.secondary)
+
+                VStack(spacing: 8) {
+                    Text("Import OPML to begin")
+                        .font(.system(size: 27, weight: .bold, design: .rounded))
+                        .foregroundStyle(SkimStyle.text)
+                        .multilineTextAlignment(.center)
+
+                    Text("Bring in your feeds and Skim will fetch the first batch of articles.")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundStyle(SkimStyle.text.opacity(0.82))
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(3)
+                        .frame(maxWidth: 320)
+                }
+
                 Button("Import OPML") { showImporter = true }
                     .buttonStyle(.glassProminent)
             }
-            .foregroundStyle(SkimStyle.text)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 32)
+            .padding(.bottom, 18)
         } else {
             List {
                 ForEach(groupedArticles, id: \.label) { group in

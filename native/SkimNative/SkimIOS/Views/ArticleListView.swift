@@ -29,12 +29,18 @@ struct ArticleListView: View {
             guard case .success(let urls) = result, let url = urls.first else { return }
             Task { await model.importOPML(url: url) }
         }
-        .sheet(isPresented: $showFeedPicker) {
-            FeedPickerSheet(isPresented: $showFeedPicker)
+        .fullScreenCover(isPresented: $showFeedPicker) {
+            FeedPickerSheet(
+                isPresented: $showFeedPicker,
+                onImport: {
+                    showFeedPicker = false
+                    showImporter = true
+                },
+                onRefresh: {
+                    Task { await model.refreshAll() }
+                }
+            )
                 .environmentObject(model)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
         }
         .onChange(of: model.listMode) { _, _ in
             Task { await model.reloadArticles() }
@@ -50,34 +56,34 @@ struct ArticleListView: View {
     }
 
     private var topBar: some View {
-        HStack {
-            BorderlessIconButton(systemName: "line.3.horizontal", title: "Feeds") {
+        HStack(alignment: .center, spacing: 26) {
+            BorderlessIconButton(systemName: "line.3.horizontal", title: "Feeds", size: 26, tapSize: 48) {
                 showFeedPicker = true
             }
             Spacer()
-            BorderlessIconButton(systemName: "tray.and.arrow.down", title: "Import OPML") {
-                showImporter = true
+            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 31, tapSize: 52) {
             }
-            BorderlessIconButton(systemName: "arrow.clockwise", title: "Refresh") {
-                Task { await model.refreshAll() }
+            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 29, tapSize: 52) {
             }
-            BorderlessIconButton(systemName: "checkmark.circle", title: "Unread", isActive: model.listMode == .unread) {
+            BorderlessIconButton(systemName: "checkmark.circle", title: "Unread", isActive: model.listMode == .unread, size: 30, tapSize: 52) {
                 model.listMode = .unread
             }
-            BorderlessIconButton(systemName: "magnifyingglass", title: "Search") {}
+            BorderlessIconButton(systemName: "magnifyingglass", title: "Search", size: 31, tapSize: 52) {
+            }
         }
-        .padding(.horizontal, 8)
-        .frame(height: 52)
+        .padding(.horizontal, 22)
+        .frame(height: 84)
+        .background(SkimStyle.chrome)
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(model.title)
-                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .font(.system(size: 32, weight: .heavy))
                 .foregroundStyle(SkimStyle.text)
                 .lineLimit(2)
-            Text("\(model.articles.filter { !$0.isRead }.count) Unread Items")
-                .font(.system(size: 17, weight: .medium))
+            Text("\(model.totalUnreadCount) Unread Items")
+                .font(.system(size: 18, weight: .regular))
                 .foregroundStyle(SkimStyle.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -90,20 +96,21 @@ struct ArticleListView: View {
         HStack(spacing: 12) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(SkimStyle.secondary)
+                .font(.system(size: 22, weight: .regular))
             TextField("Search articles...", text: $model.searchQuery)
                 .textInputAutocapitalization(.never)
                 .foregroundStyle(SkimStyle.text)
-                .font(.system(size: 18))
+                .font(.system(size: 24, weight: .regular))
         }
-        .padding(.horizontal, 16)
-        .frame(height: 56)
-        .background(SkimStyle.surface.opacity(0.85), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.horizontal, 18)
+        .frame(height: 60)
+        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(.white.opacity(0.08), lineWidth: 1)
+                .stroke(SkimStyle.separator, lineWidth: 1)
         }
         .padding(.horizontal, 24)
-        .padding(.bottom, 12)
+        .padding(.bottom, 18)
     }
 
     @ViewBuilder
@@ -141,31 +148,20 @@ struct ArticleListView: View {
                         ForEach(group.articles) { article in
                             NavigationLink(value: article.id) {
                                 ArticleRow(article: article)
-                                    .listRowInsets(EdgeInsets(top: 14, leading: 24, bottom: 14, trailing: 18))
                             }
                             .buttonStyle(.plain)
-                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button {
-                                    Task { await model.setRead(article, isRead: !article.isRead) }
-                                } label: {
-                                    Label(article.isRead ? "Unread" : "Read", systemImage: article.isRead ? "circle" : "checkmark")
-                                }
-                                .tint(SkimStyle.accent)
-                            }
-                            .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                Button {
-                                    Task { await model.toggleStar(article) }
-                                } label: {
-                                    Label("Star", systemImage: "star")
-                                }
-                                .tint(.yellow)
-                            }
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(SkimStyle.background)
                         }
                     } header: {
                         Text(group.label)
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(SkimStyle.secondary)
                             .tracking(1.6)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 20)
+                            .padding(.bottom, 16)
                     }
                 }
             }
@@ -194,9 +190,14 @@ struct ArticleListView: View {
                 .foregroundStyle(model.listMode == mode ? SkimStyle.accent : SkimStyle.secondary)
             }
         }
-        .frame(height: 58)
+        .frame(height: 70)
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
+        .background(SkimStyle.chrome.opacity(0.96))
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(SkimStyle.separator)
+                .frame(height: 1)
+        }
     }
 
     private var groupedArticles: [(label: String, articles: [Article])] {
@@ -212,75 +213,164 @@ struct ArticleListView: View {
 private struct FeedPickerSheet: View {
     @EnvironmentObject private var model: AppModel
     @Binding var isPresented: Bool
+    var onImport: () -> Void
+    var onRefresh: () -> Void
 
     var body: some View {
-        NavigationStack {
-            List {
-                pickerRow(title: "All Articles", subtitle: "\(model.feeds.count) feeds", isSelected: model.selectedFeedID == nil) {
-                    model.selectedFeedID = nil
-                    isPresented = false
-                    Task { await model.reloadArticles() }
-                }
+        ZStack {
+            SkimStyle.chrome.ignoresSafeArea()
 
-                Section("Feeds") {
-                    ForEach(uniqueFeeds) { feed in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 30) {
+                        Spacer()
+                        BorderlessIconButton(systemName: "arrow.clockwise", title: "Refresh", size: 27, tapSize: 48, action: onRefresh)
+                        BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 28, tapSize: 48) {}
+                        BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 31, tapSize: 48) {}
+                        BorderlessIconButton(systemName: "plus", title: "Import OPML", size: 30, tapSize: 48, action: onImport)
+                    }
+                    .padding(.horizontal, 26)
+                    .padding(.top, 28)
+                    .padding(.bottom, 34)
+
+                    Text("SKIM")
+                        .font(.system(size: 50, weight: .black))
+                        .tracking(10)
+                        .foregroundStyle(SkimStyle.text)
+                        .shadow(color: SkimStyle.accent.opacity(0.28), radius: 14, x: 0, y: 0)
+                        .padding(.horizontal, 26)
+                        .padding(.bottom, 56)
+
+                    VStack(alignment: .leading, spacing: 26) {
                         pickerRow(
-                            title: feed.title,
-                            subtitle: feed.url.host() ?? feed.url.absoluteString,
-                            isSelected: model.selectedFeedID == feed.id
-                        ) {
-                            model.selectedFeedID = feed.id
+                            icon: nil,
+                            title: "All Articles",
+                            count: model.totalUnreadCount,
+                            isSelected: model.selectedFeedID == nil,
+                            action: {
+                                model.selectedFeedID = nil
+                                isPresented = false
+                                Task { await model.reloadArticles() }
+                            }
+                        )
+
+                        pickerRow(iconSystemName: "star", title: "Starred", count: nil, isSelected: model.listMode == .starred) {
+                            model.selectedFeedID = nil
+                            model.listMode = .starred
+                            isPresented = false
+                            Task { await model.reloadArticles() }
+                        }
+
+                        pickerRow(iconSystemName: "clock", title: "Recent", count: nil, isSelected: false) {
+                            model.selectedFeedID = nil
+                            model.listMode = .all
+                            isPresented = false
+                            Task { await model.reloadArticles() }
+                        }
+
+                        Spacer(minLength: 44)
+
+                        pickerRow(iconSystemName: "tray", title: "All Inbox", count: model.totalUnreadCount, isSelected: false) {
+                            model.selectedFeedID = nil
+                            model.listMode = .unread
                             isPresented = false
                             Task { await model.reloadArticles() }
                         }
                     }
-                }
-            }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(SkimStyle.background.opacity(0.92))
-            .navigationTitle("Feeds")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        isPresented = false
+                    .padding(.horizontal, 26)
+                    .padding(.bottom, 42)
+
+                    HStack {
+                        Text("Feeds")
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundStyle(SkimStyle.text)
+                        Spacer()
+                        Button(action: onImport) {
+                            Image(systemName: "folder.badge.plus")
+                                .font(.system(size: 20, weight: .regular))
+                                .foregroundStyle(SkimStyle.secondary)
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .font(.system(size: 17, weight: .semibold))
+                    .padding(.horizontal, 26)
+                    .padding(.bottom, 22)
+
+                    LazyVStack(alignment: .leading, spacing: 23) {
+                        ForEach(uniqueFeeds) { feed in
+                            pickerRow(
+                                icon: AnyView(FeedIcon(feed: feed)),
+                                title: feed.title,
+                                count: model.unreadCounts[feed.id],
+                                isSelected: model.selectedFeedID == feed.id
+                            ) {
+                                model.selectedFeedID = feed.id
+                                model.listMode = .unread
+                                isPresented = false
+                                Task { await model.reloadArticles() }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 26)
+                    .padding(.bottom, 34)
                 }
             }
+            .scrollIndicators(.hidden)
         }
-        .tint(SkimStyle.accent)
     }
 
-    private func pickerRow(title: String, subtitle: String?, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private func pickerRow(
+        iconSystemName: String,
+        title: String,
+        count: Int?,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        pickerRow(
+            icon: AnyView(
+                Image(systemName: iconSystemName)
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .frame(width: 30)
+            ),
+            title: title,
+            count: count,
+            isSelected: isSelected,
+            action: action
+        )
+    }
+
+    private func pickerRow(
+        icon: AnyView?,
+        title: String,
+        count: Int?,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(SkimStyle.text)
-                        .lineLimit(1)
-                    if let subtitle, !subtitle.isEmpty {
-                        Text(subtitle)
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(SkimStyle.secondary)
-                            .lineLimit(1)
-                    }
+            HStack(spacing: 16) {
+                if let icon {
+                    icon
                 }
+
+                Text(title)
+                    .font(.system(size: 22, weight: isSelected ? .bold : .regular))
+                    .foregroundStyle(isSelected ? SkimStyle.text : SkimStyle.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
                 Spacer()
 
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(SkimStyle.accent)
+                if let count, count > 0 {
+                    Text(count.formatted())
+                        .font(.system(size: 21, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
                 }
             }
-            .padding(.vertical, 7)
+            .frame(minHeight: 34)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .listRowBackground(SkimStyle.surface.opacity(0.62))
     }
 
     private var uniqueFeeds: [Feed] {
@@ -294,6 +384,45 @@ private struct FeedPickerSheet: View {
     }
 }
 
+private struct FeedIcon: View {
+    var feed: Feed
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(color)
+            Text(initials)
+                .font(.system(size: 12, weight: .black))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+        }
+        .frame(width: 28, height: 28)
+    }
+
+    private var initials: String {
+        let words = feed.title
+            .split(separator: " ")
+            .prefix(2)
+            .compactMap { $0.first }
+        let value = String(words).uppercased()
+        return value.isEmpty ? "S" : value
+    }
+
+    private var color: Color {
+        let palette: [Color] = [
+            Color(red: 0.12, green: 0.32, blue: 0.98),
+            Color(red: 0.68, green: 0.10, blue: 0.17),
+            Color(red: 0.45, green: 0.72, blue: 0.77),
+            Color(red: 0.93, green: 0.23, blue: 0.13),
+            Color(red: 0.91, green: 0.76, blue: 0.19),
+            Color(red: 0.52, green: 0.17, blue: 0.30)
+        ]
+        let index = abs(feed.id.hashValue) % palette.count
+        return palette[index]
+    }
+}
+
 private struct ArticleRow: View {
     var article: Article
 
@@ -301,12 +430,12 @@ private struct ArticleRow: View {
         HStack(alignment: .top, spacing: 12) {
             Circle()
                 .fill(article.isRead ? SkimStyle.secondary.opacity(0.35) : SkimStyle.accent)
-                .frame(width: 9, height: 9)
-                .padding(.top, 8)
+                .frame(width: 8, height: 8)
+                .padding(.top, 36)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(article.title)
-                    .font(.system(size: 19, weight: article.isRead ? .regular : .semibold))
+                    .font(.system(size: 20, weight: article.isRead ? .regular : .semibold))
                     .foregroundStyle(article.isRead ? SkimStyle.secondary : SkimStyle.text)
                     .lineLimit(3)
 
@@ -325,6 +454,14 @@ private struct ArticleRow: View {
                 .font(.system(size: 15, weight: .medium))
             }
         }
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 22)
+        .background(SkimStyle.background)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(SkimStyle.separator.opacity(0.75))
+                .frame(height: 1)
+        }
     }
 }

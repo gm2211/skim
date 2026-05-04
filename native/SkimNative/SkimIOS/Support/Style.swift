@@ -1,10 +1,12 @@
 import SwiftUI
 
 enum SkimStyle {
-    static let background = Color(red: 0.035, green: 0.055, blue: 0.078)
-    static let surface = Color(red: 0.075, green: 0.095, blue: 0.125)
-    static let text = Color(red: 0.90, green: 0.93, blue: 0.97)
-    static let secondary = Color(red: 0.47, green: 0.51, blue: 0.58)
+    static let background = Color(red: 0.034, green: 0.049, blue: 0.066)
+    static let chrome = Color(red: 0.071, green: 0.090, blue: 0.114)
+    static let surface = Color(red: 0.087, green: 0.108, blue: 0.135)
+    static let separator = Color(red: 0.145, green: 0.166, blue: 0.196)
+    static let text = Color(red: 0.90, green: 0.93, blue: 0.96)
+    static let secondary = Color(red: 0.48, green: 0.52, blue: 0.59)
     static let accent = Color(red: 0.39, green: 0.64, blue: 1.0)
 }
 
@@ -19,13 +21,16 @@ struct BorderlessIconButton: View {
     var systemName: String
     var title: String
     var isActive = false
+    var size: CGFloat = 28
+    var tapSize: CGFloat = 54
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 19, weight: .medium))
-                .frame(width: 48, height: 48)
+                .font(.system(size: size, weight: .regular))
+                .symbolRenderingMode(.monochrome)
+                .frame(width: tapSize, height: tapSize)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

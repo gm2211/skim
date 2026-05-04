@@ -47,28 +47,27 @@ struct ArticleDetailView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 4) {
-            BorderlessIconButton(systemName: "chevron.left", title: "Back") {
+        HStack(spacing: 30) {
+            BorderlessIconButton(systemName: "chevron.left", title: "Back", size: 30, tapSize: 48) {
                 dismiss()
             }
 
-            Spacer(minLength: 10)
+            Spacer(minLength: 4)
 
-            BorderlessIconButton(systemName: "book", title: "Reader", isActive: page == .reader) {
+            BorderlessIconButton(systemName: "book", title: "Reader", isActive: page == .reader, size: 30, tapSize: 52) {
                 page = .reader
             }
-            BorderlessIconButton(systemName: "globe", title: "Web", isActive: page == .web) {
+            BorderlessIconButton(systemName: "globe", title: "Web", isActive: page == .web, size: 31, tapSize: 52) {
                 page = .web
             }
-            BorderlessIconButton(systemName: article?.isRead == true ? "circle" : "checkmark.circle", title: article?.isRead == true ? "Mark unread" : "Mark read") {
-                Task { await toggleRead() }
+            BorderlessIconButton(systemName: "doc.text", title: "Reader source", size: 29, tapSize: 52) {
             }
-            BorderlessIconButton(systemName: article?.isStarred == true ? "star.fill" : "star", title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true) {
+            BorderlessIconButton(systemName: article?.isStarred == true ? "star.fill" : "star", title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 31, tapSize: 52) {
                 Task { await toggleStar() }
             }
         }
-        .padding(.horizontal, 8)
-        .frame(height: 52)
+        .padding(.horizontal, 22)
+        .frame(height: 98)
     }
 
     private func load(markRead: Bool) async {
@@ -129,7 +128,7 @@ private struct ReaderPage: View {
     private func articleHeader(_ article: Article) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(article.title)
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .font(.system(size: 34, weight: .heavy))
                 .foregroundStyle(SkimStyle.text)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -142,7 +141,7 @@ private struct ReaderPage: View {
                 }
                 if let publishedAt = article.publishedAt {
                     Text("·")
-                    Text(publishedAt, style: .date)
+                    Text(publishedAt.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().year().hour().minute()))
                 }
             }
             .font(.system(size: 16, weight: .medium))

@@ -35,6 +35,8 @@ final class AppModel: ObservableObject {
     @Published var searchQuery = ""
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var unreadCounts: [String: Int] = [:]
+    @Published var totalUnreadCount = 0
 
     let store: SkimStore
     private let importer = OPMLImportService()
@@ -74,6 +76,7 @@ final class AppModel: ObservableObject {
         do {
             feeds = try await store.listFeeds()
             articles = try await store.listArticles(filter: filter)
+            try await refreshCounts()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -84,6 +87,7 @@ final class AppModel: ObservableObject {
         do {
             feeds = try await store.listFeeds()
             articles = try await store.listArticles(filter: filter)
+            try await refreshCounts()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -141,5 +145,14 @@ final class AppModel: ObservableObject {
 
     func updatedArticle(id: String) async -> Article? {
         try? await store.article(id: id)
+    }
+
+    private func refreshCounts() async throws {
+        totalUnreadCount = try await store.countUnread(feedID: nil)
+        var next: [String: Int] = [:]
+        for feed in feeds {
+            next[feed.id] = try await store.countUnread(feedID: feed.id)
+        }
+        unreadCounts = next
     }
 }

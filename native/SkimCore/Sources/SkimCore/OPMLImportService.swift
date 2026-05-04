@@ -30,9 +30,9 @@ private final class OPMLParserDelegate: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
         guard elementName.lowercased() == "outline" else { return }
         let xml = attributeDict["xmlUrl"] ?? attributeDict["xmlurl"] ?? attributeDict["url"]
-        guard let xml, let xmlURL = URL(string: xml) else { return }
+        guard let xml, let xmlURL = URL(string: xml)?.upgradingHTTPToHTTPS() else { return }
         let title = attributeDict["title"] ?? attributeDict["text"] ?? xmlURL.host ?? xml
         let html = attributeDict["htmlUrl"] ?? attributeDict["htmlurl"]
-        feeds.append(ImportedFeed(title: title, xmlURL: xmlURL, htmlURL: html.flatMap(URL.init(string:))))
+        feeds.append(ImportedFeed(title: title, xmlURL: xmlURL, htmlURL: html.flatMap { URL(string: $0)?.upgradingHTTPToHTTPS() }))
     }
 }

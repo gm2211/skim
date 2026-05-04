@@ -34,12 +34,13 @@ public struct FeedRefreshService: Sendable {
     }
 
     public func refresh(feed: Feed, store: some FeedStore) async throws {
-        let (data, _) = try await session.data(from: feed.url)
+        let fetchURL = feed.url.upgradingHTTPToHTTPS()
+        let (data, _) = try await session.data(from: fetchURL)
         let parsed = try FeedParser().parse(data: data, fallbackTitle: feed.title)
         let updatedFeed = Feed(
             id: feed.id,
             title: parsed.title.isEmpty ? feed.title : parsed.title,
-            url: feed.url,
+            url: fetchURL,
             siteURL: parsed.siteURL ?? feed.siteURL,
             iconURL: feed.iconURL,
             fetchedAt: Date()

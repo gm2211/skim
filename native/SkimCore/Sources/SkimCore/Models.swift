@@ -150,3 +150,13 @@ public func stableID(prefix: String, value: String) -> String {
     }
     return "\(prefix)-\(String(hash, radix: 16))"
 }
+
+extension URL {
+    func upgradingHTTPToHTTPS() -> URL {
+        guard scheme?.lowercased() == "http", var components = URLComponents(url: self, resolvingAgainstBaseURL: false) else {
+            return self
+        }
+        components.scheme = "https"
+        return components.url ?? self
+    }
+}

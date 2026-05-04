@@ -21,6 +21,21 @@ import Testing
     #expect(feeds[0].xmlURL.absoluteString == "https://example.com/feed.xml")
 }
 
+@Test func upgradesHTTPFeedURLsFromOPML() throws {
+    let opml = """
+    <opml version="2.0">
+      <body>
+        <outline text="Old Feed" xmlUrl="http://example.com/feed.xml" htmlUrl="http://example.com"/>
+      </body>
+    </opml>
+    """
+
+    let feed = try #require(OPMLImportService().parseOPML(data: Data(opml.utf8)).first)
+
+    #expect(feed.xmlURL.absoluteString == "https://example.com/feed.xml")
+    #expect(feed.htmlURL?.absoluteString == "https://example.com")
+}
+
 @Test func persistsAndFiltersArticles() async throws {
     let store = try temporaryStore()
     let feed = Feed(id: "feed-1", title: "A Feed", url: URL(string: "https://example.com/rss")!)

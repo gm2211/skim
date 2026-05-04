@@ -38,3 +38,46 @@ struct BorderlessIconButton: View {
         .accessibilityLabel(title)
     }
 }
+
+struct SkimWordmark: View {
+    var size: CGFloat = 48
+
+    private var font: Font {
+        .custom("AquireBold", size: size)
+    }
+
+    var body: some View {
+        ZStack {
+            wordmark
+                .foregroundStyle(Color.black.opacity(0.72))
+                .offset(x: 0, y: 4)
+                .blur(radius: 0.6)
+
+            wordmark
+                .foregroundStyle(Color(red: 0.41, green: 0.47, blue: 0.54))
+                .offset(x: 0, y: 2)
+
+            wordmark
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            Color.white,
+                            Color(red: 0.91, green: 0.95, blue: 0.99),
+                            Color(red: 0.68, green: 0.75, blue: 0.82)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        }
+        .shadow(color: SkimStyle.accent.opacity(0.25), radius: 14, x: 0, y: 0)
+        .fixedSize()
+        .accessibilityLabel("Skim")
+    }
+
+    private var wordmark: some View {
+        Text("SKIM")
+            .font(font)
+            .tracking(size * 0.18)
+    }
+}

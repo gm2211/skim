@@ -273,11 +273,7 @@ private struct FeedPickerSheet: View {
                     .padding(.top, 24)
                     .padding(.bottom, 30)
 
-                    Text("SKIM")
-                        .font(.system(size: 46, weight: .black))
-                        .tracking(10)
-                        .foregroundStyle(SkimStyle.text)
-                        .shadow(color: SkimStyle.accent.opacity(0.22), radius: 12, x: 0, y: 0)
+                    SkimWordmark(size: 48)
                         .padding(.horizontal, 30)
                         .padding(.bottom, 50)
 

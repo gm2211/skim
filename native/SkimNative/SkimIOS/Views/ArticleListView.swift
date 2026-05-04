@@ -19,7 +19,27 @@ struct ArticleListView: View {
                 content
                 bottomFilter
             }
+
+            if showFeedPicker {
+                FeedPickerSheet(
+                    isPresented: $showFeedPicker,
+                    onAddFeed: {
+                        showFeedPicker = false
+                        showAddFeed = true
+                    },
+                    onImportOPML: {
+                        presentImporter()
+                    },
+                    onRefresh: {
+                        Task { await model.refreshAll() }
+                    }
+                )
+                .environmentObject(model)
+                .transition(.move(edge: .leading))
+                .zIndex(1)
+            }
         }
+        .animation(.smooth(duration: 0.26), value: showFeedPicker)
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .fileImporter(
@@ -29,22 +49,6 @@ struct ArticleListView: View {
         ) { result in
             guard case .success(let urls) = result, let url = urls.first else { return }
             Task { await model.importOPML(url: url) }
-        }
-        .fullScreenCover(isPresented: $showFeedPicker) {
-            FeedPickerSheet(
-                isPresented: $showFeedPicker,
-                onAddFeed: {
-                    showFeedPicker = false
-                    showAddFeed = true
-                },
-                onImportOPML: {
-                    presentImporter()
-                },
-                onRefresh: {
-                    Task { await model.refreshAll() }
-                }
-            )
-                .environmentObject(model)
         }
         .sheet(isPresented: $showAddFeed) {
             AddFeedSheet(
@@ -84,7 +88,9 @@ struct ArticleListView: View {
     private var topBar: some View {
         HStack(alignment: .center, spacing: 24) {
             BorderlessIconButton(systemName: "line.3.horizontal", title: "Feeds", size: 22, tapSize: 46) {
-                showFeedPicker = true
+                withAnimation(.smooth(duration: 0.26)) {
+                    showFeedPicker = true
+                }
             }
             Spacer()
             BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 48) {

@@ -74,8 +74,82 @@ import Testing
     #expect(feeds.map(\.title) == ["One", "Two"])
 }
 
+@Test func discoversFeedFromHTMLPage() async throws {
+    let store = try temporaryStore()
+    MockURLProtocol.responses = [
+        "https://example.com/": Data("""
+        <!doctype html>
+        <html>
+          <head>
+            <link rel="alternate" type="application/rss+xml" href="/feed.xml">
+          </head>
+        </html>
+        """.utf8),
+        "https://example.com/feed.xml": Data("""
+        <rss version="2.0">
+          <channel>
+            <title>Example RSS</title>
+            <link>https://example.com</link>
+            <item>
+              <title>First item</title>
+              <link>https://example.com/first</link>
+              <description>Hello</description>
+            </item>
+          </channel>
+        </rss>
+        """.utf8)
+    ]
+
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [MockURLProtocol.self]
+    let session = URLSession(configuration: config)
+    let service = FeedRefreshService(session: session)
+    let feed = Feed(id: "feed-1", title: "example.com", url: URL(string: "https://example.com/")!)
+
+    try await service.refresh(feed: feed, store: store)
+
+    let feeds = try await store.listFeeds()
+    let articles = try await store.listArticles(filter: ArticleFilter())
+    #expect(feeds.first?.title == "Example RSS")
+    #expect(feeds.first?.url.absoluteString == "https://example.com/feed.xml")
+    #expect(articles.map(\.title) == ["First item"])
+}
+
 private func temporaryStore() throws -> SkimStore {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     let url = dir.appendingPathComponent("skim.sqlite")
     return try SkimStore(databaseURL: url)
+}
+
+private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var responses: [String: Data] = [:]
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        guard let url = request.url,
+              let data = Self.responses[url.absoluteString],
+              let response = HTTPURLResponse(
+                url: url,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": url.pathExtension == "xml" ? "application/rss+xml" : "text/html"]
+              )
+        else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badURL))
+            return
+        }
+
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
 }

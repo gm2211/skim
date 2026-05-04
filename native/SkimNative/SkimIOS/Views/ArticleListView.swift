@@ -19,6 +19,8 @@ struct ArticleListView: View {
                 content
                 bottomFilter
             }
+            .contentShape(Rectangle())
+            .simultaneousGesture(openFeedPickerGesture)
 
             if showFeedPicker {
                 FeedPickerSheet(
@@ -83,6 +85,22 @@ struct ArticleListView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             showImporter = true
         }
+    }
+
+    private var openFeedPickerGesture: some Gesture {
+        DragGesture(minimumDistance: 24, coordinateSpace: .local)
+            .onEnded { value in
+                guard !showFeedPicker,
+                      abs(value.translation.width) > abs(value.translation.height)
+                else { return }
+
+                let shouldOpen = value.translation.width > 82 || value.predictedEndTranslation.width > 145
+                guard shouldOpen else { return }
+
+                withAnimation(.smooth(duration: 0.26)) {
+                    showFeedPicker = true
+                }
+            }
     }
 
     private var topBar: some View {
@@ -209,6 +227,7 @@ struct ArticleListView: View {
             .refreshable {
                 await model.refreshAll()
             }
+            .simultaneousGesture(openFeedPickerGesture)
             .navigationDestination(for: String.self) { id in
                 ArticleDetailView(articleID: id)
             }
@@ -371,33 +390,11 @@ private struct FeedPickerSheet: View {
     }
 
     private var topControls: some View {
-        ZStack {
-            Button(action: onRefresh) {
-                ZStack {
-                    Circle()
-                        .fill(model.isLoading ? Color.white.opacity(0.11) : .clear)
-                        .frame(width: 42, height: 42)
-
-                    if model.isLoading {
-                        ProgressView()
-                            .controlSize(.regular)
-                            .tint(SkimStyle.text)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 21, weight: .semibold))
-                            .foregroundStyle(SkimStyle.secondary)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(model.isLoading ? "Syncing" : "Refresh")
-
-            HStack(spacing: 28) {
-                Spacer()
-                BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 24, tapSize: 44) {}
-                BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 44) {}
-                BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 26, tapSize: 44, action: onAddFeed)
-            }
+        HStack(spacing: 28) {
+            Spacer()
+            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 24, tapSize: 44) {}
+            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 44) {}
+            BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 26, tapSize: 44, action: onAddFeed)
         }
         .padding(.horizontal, 28)
         .padding(.top, 24)

@@ -18,14 +18,14 @@ targets:
       - package: SkimCore
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.gm2211.skim.native
+        PRODUCT_BUNDLE_IDENTIFIER: com.gm2211.skim
         PRODUCT_NAME: Skim
         DEVELOPMENT_TEAM: 6KQV68SJ5P
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: 6.0
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Skim Native
+        INFOPLIST_KEY_CFBundleDisplayName: Skim
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.news
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIRequiresFullScreen: YES
@@ -33,6 +33,7 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: YES
         CODE_SIGN_STYLE: Automatic
   Skim macOS:
@@ -52,6 +53,6 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: 6.0
         GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Skim Native
+        INFOPLIST_KEY_CFBundleDisplayName: Skim
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.news
         CODE_SIGN_STYLE: Automatic

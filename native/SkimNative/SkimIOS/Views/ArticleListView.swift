@@ -1,6 +1,9 @@
 import SkimCore
 import SwiftUI
 import UniformTypeIdentifiers
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 struct ArticleListView: View {
     @EnvironmentObject private var model: AppModel
@@ -544,6 +547,10 @@ private enum AutoGroupNameStyle: String, CaseIterable, Identifiable {
         }
     }
 
+    func formatName(_ name: String) -> String {
+        format(Self.words(in: name))
+    }
+
     private static func titleWord(_ word: String) -> String {
         switch word {
         case "ai": "AI"
@@ -553,22 +560,40 @@ private enum AutoGroupNameStyle: String, CaseIterable, Identifiable {
             word.prefix(1).uppercased() + word.dropFirst()
         }
     }
+
+    private static func words(in value: String) -> [String] {
+        let normalized = value
+            .replacingOccurrences(of: "([a-z0-9])([A-Z])", with: "$1 $2", options: .regularExpression)
+            .replacingOccurrences(of: "([A-Z]+)([A-Z][a-z])", with: "$1 $2", options: .regularExpression)
+
+        return normalized
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .flatMap { word -> [String] in
+                let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? [] : [trimmed]
+            }
+    }
 }
 
 private struct AutoGroupProposal: Identifiable {
-    var id: String { name }
-    var name: String
+    var id: String { "\(baseName)-\(feeds.map(\.id).joined(separator: ","))" }
+    var baseName: String
     var feeds: [Feed]
+
+    func displayName(style: AutoGroupNameStyle) -> String {
+        style.formatName(baseName)
+    }
 }
 
 private struct AutoGroupSheet: View {
     @EnvironmentObject private var model: AppModel
     @Binding var isPresented: Bool
     @State private var nameStyle: AutoGroupNameStyle = .titleCase
-
-    private var proposals: [AutoGroupProposal] {
-        AutoGroupClassifier.proposals(for: model.feeds, style: nameStyle)
-    }
+    @State private var proposals: [AutoGroupProposal] = []
+    @State private var isRunningAI = false
+    @State private var aiMessage: String?
+    @State private var didRunAI = false
+    @State private var usedFallback = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -577,7 +602,7 @@ private struct AutoGroupSheet: View {
                     Text("Auto-group feeds")
                         .font(.system(size: 27, weight: .heavy))
                         .foregroundStyle(SkimStyle.text)
-                    Text("Classify feeds into folder proposals, then choose the folder naming style.")
+                    Text("Use AI to classify feeds into folder proposals, then choose the folder naming style.")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -595,6 +620,8 @@ private struct AutoGroupSheet: View {
                 }
                 .buttonStyle(.plain)
             }
+
+            aiStatus
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Folder naming")
@@ -643,7 +670,7 @@ private struct AutoGroupSheet: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
                         ForEach(proposals) { proposal in
-                            AutoGroupProposalRow(proposal: proposal)
+                            AutoGroupProposalRow(proposal: proposal, nameStyle: nameStyle)
                         }
                     }
                     .padding(.bottom, 8)
@@ -652,10 +679,18 @@ private struct AutoGroupSheet: View {
             }
 
             HStack(spacing: 12) {
-                Text("Preview only until native folder persistence lands.")
+                Text(usedFallback ? "Local fallback preview. Not AI." : "AI preview until native folder persistence lands.")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(SkimStyle.secondary)
                 Spacer()
+                if !isRunningAI {
+                    Button("Run AI") {
+                        Task { await runAI() }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SkimStyle.accent)
+                }
                 Button("Done") {
                     isPresented = false
                 }
@@ -666,16 +701,86 @@ private struct AutoGroupSheet: View {
         .padding(.horizontal, 24)
         .padding(.top, 24)
         .padding(.bottom, 18)
+        .task {
+            guard !didRunAI else { return }
+            await runAI()
+        }
+    }
+
+    @ViewBuilder
+    private var aiStatus: some View {
+        if isRunningAI {
+            HStack(spacing: 12) {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(SkimStyle.accent)
+                Text("Asking Apple Foundation Models...")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SkimStyle.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .frame(height: 46)
+            .background(SkimStyle.surface.opacity(0.66), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        } else if let aiMessage {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(aiMessage)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(usedFallback ? SkimStyle.secondary : (proposals.isEmpty ? Color.red.opacity(0.9) : SkimStyle.secondary))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if proposals.isEmpty {
+                    Button("Use local fallback preview") {
+                        proposals = AutoGroupClassifier.fallbackProposals(for: model.feeds)
+                        usedFallback = true
+                        self.aiMessage = "Using local fallback categories. This is not AI."
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SkimStyle.accent)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(SkimStyle.surface.opacity(0.66), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+    }
+
+    private func runAI() async {
+        guard !model.feeds.isEmpty else {
+            didRunAI = true
+            proposals = []
+            aiMessage = nil
+            return
+        }
+
+        didRunAI = true
+        usedFallback = false
+        isRunningAI = true
+        aiMessage = nil
+
+        do {
+            let result = try await AutoGroupClassifier.aiProposals(for: model.feeds)
+            proposals = result
+            aiMessage = "Grouped with Apple Foundation Models."
+        } catch {
+            proposals = []
+            aiMessage = "AI grouping unavailable: \(error.localizedDescription)"
+        }
+
+        isRunningAI = false
     }
 }
 
 private struct AutoGroupProposalRow: View {
     var proposal: AutoGroupProposal
+    var nameStyle: AutoGroupNameStyle
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 10) {
-                Text(proposal.name)
+                Text(proposal.displayName(style: nameStyle))
                     .font(.system(size: 19, weight: .bold))
                     .foregroundStyle(SkimStyle.text)
                     .lineLimit(1)
@@ -705,7 +810,16 @@ private struct AutoGroupProposalRow: View {
 }
 
 private enum AutoGroupClassifier {
-    static func proposals(for feeds: [Feed], style: AutoGroupNameStyle) -> [AutoGroupProposal] {
+    static func aiProposals(for feeds: [Feed]) async throws -> [AutoGroupProposal] {
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            return try await FoundationModelFeedOrganizer.proposals(for: deduplicate(feeds))
+        }
+#endif
+        throw AutoGroupAIError.unavailable("Foundation Models are not available in this build.")
+    }
+
+    static func fallbackProposals(for feeds: [Feed]) -> [AutoGroupProposal] {
         let uniqueFeeds = deduplicate(feeds)
         let grouped = Dictionary(grouping: uniqueFeeds) { feed in
             categoryWords(for: feed)
@@ -714,19 +828,19 @@ private enum AutoGroupClassifier {
         return grouped
             .map { words, feeds in
                 AutoGroupProposal(
-                    name: style.format(words),
+                    baseName: words.joined(separator: " "),
                     feeds: feeds.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
                 )
             }
             .sorted {
                 if $0.feeds.count == $1.feeds.count {
-                    return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                    return $0.baseName.localizedCaseInsensitiveCompare($1.baseName) == .orderedAscending
                 }
                 return $0.feeds.count > $1.feeds.count
             }
     }
 
-    private static func deduplicate(_ feeds: [Feed]) -> [Feed] {
+    fileprivate static func deduplicate(_ feeds: [Feed]) -> [Feed] {
         var seen: Set<String> = []
         return feeds.filter { feed in
             let key = feed.url.absoluteString.lowercased()
@@ -790,6 +904,176 @@ private enum AutoGroupClassifier {
         return Array(hostWords.prefix(2)).isEmpty ? ["feeds"] : Array(hostWords.prefix(2))
     }
 }
+
+private enum AutoGroupAIError: LocalizedError {
+    case unavailable(String)
+    case invalidResponse(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable(let message), .invalidResponse(let message):
+            message
+        }
+    }
+}
+
+private struct AutoGroupAIResponse: Decodable {
+    var folders: [AutoGroupAIFolder]
+}
+
+private struct AutoGroupAIFolder: Decodable {
+    var name: String
+    var feeds: [Int]
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case feeds
+        case feedIDs = "feed_ids"
+        case ids
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+
+        let key: CodingKeys
+        if container.contains(.feeds) {
+            key = .feeds
+        } else if container.contains(.feedIDs) {
+            key = .feedIDs
+        } else {
+            key = .ids
+        }
+
+        if let values = try? container.decode([Int].self, forKey: key) {
+            feeds = values
+        } else if let values = try? container.decode([String].self, forKey: key) {
+            feeds = values.compactMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        } else {
+            feeds = []
+        }
+    }
+}
+
+#if canImport(FoundationModels)
+@available(iOS 26.0, *)
+private enum FoundationModelFeedOrganizer {
+    static func proposals(for feeds: [Feed]) async throws -> [AutoGroupProposal] {
+        guard !feeds.isEmpty else { return [] }
+
+        let model = SystemLanguageModel(useCase: .contentTagging)
+        switch model.availability {
+        case .available:
+            break
+        case .unavailable(let reason):
+            throw AutoGroupAIError.unavailable("Apple Intelligence is not available: \(reasonDescription(reason)).")
+        }
+
+        let session = LanguageModelSession(
+            model: model,
+            instructions: """
+            You group RSS feeds into topical folders. Output JSON only.
+            Each feed must appear in exactly one folder. Use 4-8 folders when possible.
+            Use short folder names of 2-4 words. Refer to feeds only by numeric handle.
+            """
+        )
+
+        let maxTokens = max(512, feeds.count * 4 + 160)
+        let response = try await session.respond(
+            to: prompt(for: feeds),
+            options: GenerationOptions(
+                sampling: .greedy,
+                temperature: 0.1,
+                maximumResponseTokens: maxTokens
+            )
+        )
+
+        return try decodeProposals(from: response.content, feeds: feeds)
+    }
+
+    private static func prompt(for feeds: [Feed]) -> String {
+        """
+        Feeds, one per line as handle TAB title TAB site:
+        \(listing(for: feeds))
+
+        Return exactly this JSON shape:
+        {"folders":[{"name":"Distributed Systems","feeds":[0,3,7]}]}
+        """
+    }
+
+    private static func listing(for feeds: [Feed]) -> String {
+        feeds.enumerated()
+            .map { index, feed in
+                let title = feed.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                let site = feed.siteURL?.host() ?? feed.url.host() ?? ""
+                return "\(index)\t\(title)\t\(site)"
+            }
+            .joined(separator: "\n")
+    }
+
+    private static func decodeProposals(from content: String, feeds: [Feed]) throws -> [AutoGroupProposal] {
+        let json = extractJSONObject(from: content)
+        guard let data = json.data(using: .utf8) else {
+            throw AutoGroupAIError.invalidResponse("AI returned unreadable JSON.")
+        }
+
+        let decoded: AutoGroupAIResponse
+        do {
+            decoded = try JSONDecoder().decode(AutoGroupAIResponse.self, from: data)
+        } catch {
+            throw AutoGroupAIError.invalidResponse("Could not parse AI folder JSON.")
+        }
+
+        var seenFeedIDs: Set<String> = []
+        let proposals = decoded.folders.compactMap { folder -> AutoGroupProposal? in
+            let selectedFeeds = folder.feeds.compactMap { handle -> Feed? in
+                guard feeds.indices.contains(handle) else { return nil }
+                let feed = feeds[handle]
+                guard seenFeedIDs.insert(feed.id).inserted else { return nil }
+                return feed
+            }
+
+            let name = folder.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, !selectedFeeds.isEmpty else { return nil }
+
+            return AutoGroupProposal(
+                baseName: name,
+                feeds: selectedFeeds.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            )
+        }
+
+        if proposals.isEmpty {
+            throw AutoGroupAIError.invalidResponse("AI did not return any usable folders.")
+        }
+
+        return proposals
+    }
+
+    private static func extractJSONObject(from content: String) -> String {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let start = trimmed.firstIndex(of: "{"),
+              let end = trimmed.lastIndex(of: "}"),
+              start <= end
+        else {
+            return trimmed
+        }
+        return String(trimmed[start...end])
+    }
+
+    private static func reasonDescription(_ reason: SystemLanguageModel.Availability.UnavailableReason) -> String {
+        switch reason {
+        case .deviceNotEligible:
+            "this device is not eligible"
+        case .appleIntelligenceNotEnabled:
+            "Apple Intelligence is not enabled"
+        case .modelNotReady:
+            "the language model is not ready"
+        @unknown default:
+            "unknown reason"
+        }
+    }
+}
+#endif
 
 private struct AddFeedSheet: View {
     @Binding var isPresented: Bool

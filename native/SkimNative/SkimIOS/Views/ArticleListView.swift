@@ -21,8 +21,7 @@ struct ArticleListView: View {
 
             VStack(spacing: 0) {
                 topBar
-                header
-                searchField
+                compactHeader
                 content
                 bottomFilter
             }
@@ -241,41 +240,44 @@ struct ArticleListView: View {
         .background(SkimStyle.chrome)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(model.title)
-                .font(.system(size: 25, weight: .heavy))
-                .foregroundStyle(SkimStyle.text)
-                .lineLimit(2)
-            Text("\(model.currentUnreadCount) Unread Items")
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(SkimStyle.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 38)
-        .padding(.top, 16)
-        .padding(.bottom, 18)
-    }
+    private var compactHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                Text(model.title)
+                    .font(.system(size: 24, weight: .heavy))
+                    .foregroundStyle(SkimStyle.text)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
 
-    private var searchField: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(SkimStyle.secondary)
-                .font(.system(size: 17, weight: .regular))
-            TextField("Search articles...", text: $model.searchQuery)
-                .textInputAutocapitalization(.never)
-                .foregroundStyle(SkimStyle.text)
-                .font(.system(size: 18, weight: .regular))
-        }
-        .padding(.horizontal, 15)
-        .frame(height: 46)
-        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
-                .stroke(SkimStyle.separator, lineWidth: 1)
+                Spacer(minLength: 12)
+
+                Text("\(model.currentUnreadCount.formatted()) unread")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+            }
+
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(SkimStyle.secondary)
+                    .font(.system(size: 15, weight: .regular))
+                TextField("Search articles...", text: $model.searchQuery)
+                    .textInputAutocapitalization(.never)
+                    .foregroundStyle(SkimStyle.text)
+                    .font(.system(size: 16, weight: .regular))
+            }
+            .padding(.horizontal, 13)
+            .frame(height: 38)
+            .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .stroke(SkimStyle.separator.opacity(0.9), lineWidth: 1)
+            }
         }
         .padding(.horizontal, 38)
-        .padding(.bottom, 14)
+        .padding(.top, 8)
+        .padding(.bottom, 9)
+        .background(SkimStyle.chrome)
     }
 
     @ViewBuilder
@@ -332,8 +334,8 @@ struct ArticleListView: View {
                             .foregroundStyle(SkimStyle.secondary)
                             .tracking(1.6)
                             .padding(.horizontal, 38)
-                            .padding(.top, 14)
-                            .padding(.bottom, 10)
+                            .padding(.top, 8)
+                            .padding(.bottom, 8)
                     }
                 }
             }
@@ -1614,14 +1616,14 @@ private struct ArticleRow: View {
                         Color.clear
                     }
                 }
-                .frame(width: 54, height: 54)
+                .frame(width: 50, height: 50)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .opacity(article.isRead ? 0.62 : 1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 38)
-        .padding(.vertical, 10)
+        .padding(.vertical, 8)
         .background(SkimStyle.chrome)
         .overlay(alignment: .bottom) {
             Rectangle()

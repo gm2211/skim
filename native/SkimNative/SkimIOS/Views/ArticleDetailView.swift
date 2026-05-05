@@ -134,7 +134,8 @@ struct ArticleDetailView: View {
             title: "AI Summary",
             subtitle: article.title
         ) {
-            try await NativeAI.summarize(article: article, settings: model.settings)
+            let text = try await NativeAI.summarize(article: article, settings: model.settings)
+            return AIResultAnswer(text: text, articles: [article])
         }
     }
 

@@ -167,7 +167,8 @@ struct ArticleListView: View {
             guard !context.isEmpty else {
                 throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before running Quick Catch-up.")
             }
-            return try await NativeAI.quickCatchUp(articles: context, settings: model.settings)
+            let text = try await NativeAI.quickCatchUp(articles: context, settings: model.settings)
+            return AIResultAnswer(text: text, articles: context)
         }
     }
 
@@ -196,7 +197,8 @@ struct ArticleListView: View {
             guard !context.isEmpty else {
                 throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before opening AI Inbox.")
             }
-            return try await NativeAI.aiInbox(articles: context, settings: model.settings)
+            let text = try await NativeAI.aiInbox(articles: context, settings: model.settings)
+            return AIResultAnswer(text: text, articles: context)
         }
     }
 

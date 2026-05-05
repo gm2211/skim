@@ -8,7 +8,12 @@ struct AIResultRequest: Identifiable {
     let id = UUID()
     var title: String
     var subtitle: String
-    var action: () async throws -> String
+    var action: () async throws -> AIResultAnswer
+}
+
+struct AIResultAnswer {
+    var text: String
+    var articles: [Article]
 }
 
 struct AIChatRequest: Identifiable {
@@ -60,7 +65,9 @@ enum NativeAI {
     static func quickCatchUp(articles: [Article], settings: AppSettings) async throws -> String {
         try await complete(
             settings: settings,
-            instructions: "You write crisp catch-up reports for a news/RSS reader. Be useful, specific, and concise.",
+            instructions: """
+            You write crisp catch-up reports for a news/RSS reader. Be useful, specific, and concise. Use Markdown headings and bullets. Whenever you mention a specific article, cite it with its numeric handle like [3] and its title so the app can make it clickable.
+            """,
             prompt: """
             Create a Super Quick Catch-up from these articles. Group related items into themes, name what matters, and keep it scannable.
 
@@ -73,7 +80,9 @@ enum NativeAI {
     static func aiInbox(articles: [Article], settings: AppSettings) async throws -> String {
         try await complete(
             settings: settings,
-            instructions: "You triage RSS articles for a smart inbox. Pick what seems most worth reading and explain why.",
+            instructions: """
+            You triage RSS articles for a smart inbox. Pick what seems most worth reading and explain why. Use Markdown bullets. Cite every selected article with its numeric handle like [3] and title so the app can make it clickable.
+            """,
             prompt: """
             Rank the most interesting articles from this list. Return 8-12 picks with a short reason for each. Favor novelty, depth, engineering relevance, and things a curious technical reader would not want to miss.
 
@@ -397,6 +406,7 @@ struct AIResultSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isLoading = true
     @State private var result = ""
+    @State private var referencedArticles: [Article] = []
     @State private var errorMessage: String?
 
     var body: some View {
@@ -426,11 +436,25 @@ struct AIResultSheet: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     } else {
-                        Text(result)
-                            .font(.system(size: 18, weight: .regular))
-                            .foregroundStyle(SkimStyle.text)
-                            .lineSpacing(5)
-                            .textSelection(.enabled)
+                        PrettyAIText(result)
+
+                        if !referencedArticles.isEmpty {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Articles")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundStyle(SkimStyle.secondary)
+                                    .textCase(.uppercase)
+                                    .tracking(1.2)
+                                    .padding(.top, 6)
+
+                                ForEach(referencedArticles) { article in
+                                    NavigationLink(value: article.id) {
+                                        ChatArticleReferenceRow(article: article)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
                     }
                 }
                 .padding(24)
@@ -438,6 +462,9 @@ struct AIResultSheet: View {
             .background(SkimStyle.chrome.ignoresSafeArea())
             .scrollContentBackground(.hidden)
             .navigationTitle(request.title)
+            .navigationDestination(for: String.self) { articleID in
+                ArticleDetailView(articleID: articleID)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { dismiss() }
@@ -455,12 +482,38 @@ struct AIResultSheet: View {
         isLoading = true
         errorMessage = nil
         result = ""
+        referencedArticles = []
         do {
-            result = try await request.action()
+            let answer = try await request.action()
+            result = answer.text
+            referencedArticles = ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles)
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+}
+
+private struct PrettyAIText: View {
+    var text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(formattedText)
+            .font(.system(size: 18, weight: .regular))
+            .foregroundStyle(SkimStyle.text)
+            .lineSpacing(5)
+            .textSelection(.enabled)
+    }
+
+    private var formattedText: AttributedString {
+        if let parsed = try? AttributedString(markdown: text) {
+            return parsed
+        }
+        return AttributedString(text)
     }
 }
 

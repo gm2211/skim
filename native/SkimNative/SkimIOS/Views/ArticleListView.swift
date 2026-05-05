@@ -980,14 +980,29 @@ private struct AutoGroupSheet: View {
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(SkimStyle.secondary)
                 Spacer()
-                if !isRunningAI {
-                    Button("Run AI") {
-                        Task { await runAI() }
+                Button {
+                    Task { await runAI() }
+                } label: {
+                    HStack(spacing: 8) {
+                        if isRunningAI {
+                            ProgressView()
+                                .controlSize(.mini)
+                                .tint(SkimStyle.text)
+                        }
+                        Text(aiActionTitle)
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(SkimStyle.accent)
                 }
+                .buttonStyle(.plain)
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(SkimStyle.text)
+                .padding(.horizontal, 15)
+                .frame(height: 42)
+                .background(SkimStyle.accent.opacity(isRunningAI ? 0.45 : 0.95), in: Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                }
+                .disabled(isRunningAI)
                 Button("Done") {
                     isPresented = false
                 }
@@ -1042,6 +1057,16 @@ private struct AutoGroupSheet: View {
             .padding(.vertical, 12)
             .background(SkimStyle.surface.opacity(0.66), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+    }
+
+    private var aiActionTitle: String {
+        if isRunningAI {
+            return "Running"
+        }
+        if usedFallback {
+            return "Retry AI"
+        }
+        return didRunAI ? "Regroup" : "Run AI"
     }
 
     private func runAI() async {
@@ -1118,17 +1143,21 @@ private enum AutoGroupClassifier {
         let uniqueFeeds = deduplicate(feeds)
         guard !uniqueFeeds.isEmpty else { return [] }
 
-        let content = try await NativeAI.complete(
-            settings: settings,
-            instructions: """
-            You group RSS feeds into topical folders. Output JSON only.
-            Each feed must appear in exactly one folder. Use 4-8 folders when possible.
-            Use short folder names of 2-4 words. Refer to feeds by their numeric handle.
-            """,
-            prompt: prompt(for: uniqueFeeds),
-            maxTokens: max(512, uniqueFeeds.count * 4 + 180)
-        )
-        return try decodeProposals(from: content, feeds: uniqueFeeds)
+        do {
+            let proposals = try await requestProposals(for: uniqueFeeds, settings: settings, correctiveNote: nil)
+            try validate(proposals: proposals, feedCount: uniqueFeeds.count)
+            return proposals
+        } catch {
+            let proposals = try await requestProposals(
+                for: uniqueFeeds,
+                settings: settings,
+                correctiveNote: """
+                Your previous folder proposal was too broad or did not match the requested JSON. Try again. Split the feeds into distinct topical folders; do not put most feeds into one generic folder such as "Programming" or "Technology".
+                """
+            )
+            try validate(proposals: proposals, feedCount: uniqueFeeds.count)
+            return proposals
+        }
     }
 
     static func providerLabel(for provider: String) -> String {
@@ -1174,13 +1203,37 @@ private enum AutoGroupClassifier {
         }
     }
 
-    private static func prompt(for feeds: [Feed]) -> String {
+    private static func requestProposals(
+        for feeds: [Feed],
+        settings: AppSettings,
+        correctiveNote: String?
+    ) async throws -> [AutoGroupProposal] {
+        let content = try await NativeAI.complete(
+            settings: settings,
+            instructions: systemInstructions,
+            prompt: prompt(for: feeds, correctiveNote: correctiveNote),
+            maxTokens: max(512, feeds.count * 4 + 160)
+        )
+        return try decodeProposals(from: content, feeds: feeds)
+    }
+
+    private static var systemInstructions: String {
         """
-        Feeds, one per line as handle TAB title TAB site:
+        You group RSS feeds into 4-8 topical folders. Output JSON only.
+        Each feed goes in exactly one folder. Short folder names (2-4 words).
+        Refer to feeds by their numeric handle.
+        """
+    }
+
+    private static func prompt(for feeds: [Feed], correctiveNote: String?) -> String {
+        let correction = correctiveNote.map { "\($0)\n\n" } ?? ""
+
+        return """
+        \(correction)Feeds (handle TAB title [TAB site]):
         \(listing(for: feeds))
 
-        Return exactly this JSON shape:
-        {"folders":[{"name":"Distributed Systems","feeds":[0,3,7]}]}
+        Output JSON:
+        {"folders":[{"name":"Tech","feeds":[0,3,7]}]}
         """
     }
 
@@ -1234,6 +1287,29 @@ private enum AutoGroupClassifier {
         }
 
         return proposals
+    }
+
+    private static func validate(proposals: [AutoGroupProposal], feedCount: Int) throws {
+        let expectedMinimum = minimumFolderCount(for: feedCount)
+        guard proposals.count >= expectedMinimum else {
+            throw AutoGroupAIError.invalidResponse("AI returned too few folders.")
+        }
+
+        let largestGroup = proposals.map(\.feeds.count).max() ?? 0
+        if proposals.count < 4, feedCount >= 8, Double(largestGroup) / Double(max(feedCount, 1)) > 0.6 {
+            throw AutoGroupAIError.invalidResponse("AI collapsed too many feeds into one broad folder.")
+        }
+    }
+
+    private static func minimumFolderCount(for feedCount: Int) -> Int {
+        switch feedCount {
+        case 0...3:
+            return 1
+        case 4...7:
+            return 2
+        default:
+            return 4
+        }
     }
 
     private static func extractJSON(from content: String) -> String {

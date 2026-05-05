@@ -17,7 +17,7 @@ struct ArticleListView: View {
 
     var body: some View {
         ZStack {
-            SkimStyle.background.ignoresSafeArea()
+            SkimStyle.chrome.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 topBar
@@ -307,7 +307,7 @@ struct ArticleListView: View {
                             .buttonStyle(.plain)
                             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                             .listRowSeparator(.hidden)
-                            .listRowBackground(SkimStyle.background)
+                            .listRowBackground(SkimStyle.chrome)
                         }
                     } header: {
                         Text(group.label)
@@ -322,6 +322,7 @@ struct ArticleListView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            .background(SkimStyle.chrome)
             .refreshable {
                 await model.refreshAll()
             }

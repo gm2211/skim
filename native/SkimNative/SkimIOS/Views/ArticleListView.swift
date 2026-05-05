@@ -17,6 +17,7 @@ struct ArticleListView: View {
     @State private var showSettings = false
     @State private var activeAIResult: AIResultRequest?
     @State private var activeAIChat: AIChatRequest?
+    @State private var showSearch = false
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -25,7 +26,9 @@ struct ArticleListView: View {
 
             VStack(spacing: 0) {
                 topBar
-                compactHeader
+                if showSearch || !model.searchQuery.isEmpty {
+                    searchBar
+                }
                 content
                 bottomFilter
             }
@@ -263,47 +266,80 @@ struct ArticleListView: View {
     }
 
     private var topBar: some View {
-        HStack(alignment: .center, spacing: 22) {
-            BorderlessIconButton(systemName: "line.3.horizontal", title: "Feeds", size: 20, tapSize: 42) {
-                dismissTextEntry()
-                withAnimation(.smooth(duration: 0.26)) {
-                    showFeedPicker = true
+        ZStack {
+            HStack {
+                Spacer()
+                VStack(spacing: 1) {
+                    Text(compactTitle)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(SkimStyle.text)
+                        .lineLimit(1)
+
+                    if model.isLoading {
+                        Text("Syncing...")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                    } else if model.currentUnreadCount > 0 {
+                        Text("\(model.currentUnreadCount.formatted()) unread")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(SkimStyle.secondary.opacity(0.78))
+                    }
                 }
+                .frame(maxWidth: 190)
+                Spacer()
             }
-            Spacer()
-            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 24, tapSize: 44) {
-                presentQuickCatchUp()
+
+            HStack(alignment: .center, spacing: 18) {
+                BorderlessIconButton(systemName: "line.3.horizontal", title: "Feeds", size: 20, tapSize: 42) {
+                    dismissTextEntry()
+                    withAnimation(.smooth(duration: 0.26)) {
+                        showFeedPicker = true
+                    }
+                }
+                Spacer()
+
+                Menu {
+                    Button("Quick Catch-up", systemImage: "bolt") {
+                        presentQuickCatchUp()
+                    }
+                    Button("Chat with Articles", systemImage: "bubble.left") {
+                        presentArticleChat()
+                    }
+                    Button("AI Inbox", systemImage: "tray") {
+                        presentAIInbox()
+                    }
+                    Divider()
+                    Button("Add RSS Feed", systemImage: "plus") {
+                        dismissTextEntry()
+                        showAddFeed = true
+                    }
+                    Button("Settings", systemImage: "gearshape") {
+                        dismissTextEntry()
+                        showSettings = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 23, weight: .bold))
+                        .frame(width: 42, height: 42)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(SkimStyle.secondary)
+                .accessibilityLabel("Article actions")
             }
-            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 23, tapSize: 44) {
-                presentArticleChat()
-            }
-            BorderlessIconButton(systemName: "checkmark.circle", title: "Unread", isActive: model.listMode == .unread, size: 24, tapSize: 44) {
-                model.listMode = .unread
-            }
+            .padding(.horizontal, 26)
         }
-        .padding(.horizontal, 26)
-        .frame(height: 64)
+        .frame(height: 56)
         .background(SkimStyle.chrome)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(SkimStyle.separator.opacity(0.4))
+                .frame(height: 1)
+        }
     }
 
-    private var compactHeader: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 14) {
-                Text(model.title)
-                    .font(.system(size: 24, weight: .heavy))
-                    .foregroundStyle(SkimStyle.text)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-
-                Spacer(minLength: 12)
-
-                Text("\(model.currentUnreadCount.formatted()) unread")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(SkimStyle.secondary)
-                    .lineLimit(1)
-            }
-
-            HStack(spacing: 10) {
+    private var searchBar: some View {
+        HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(SkimStyle.secondary)
                     .font(.system(size: 15, weight: .regular))
@@ -316,6 +352,19 @@ struct ArticleListView: View {
                     .onSubmit {
                         dismissTextEntry()
                     }
+                if !model.searchQuery.isEmpty {
+                    Button {
+                        model.searchQuery = ""
+                        showSearch = false
+                        dismissTextEntry()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
+                }
             }
             .padding(.horizontal, 13)
             .frame(height: 38)
@@ -324,10 +373,9 @@ struct ArticleListView: View {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .stroke(SkimStyle.separator.opacity(0.9), lineWidth: 1)
             }
-        }
         .padding(.horizontal, 38)
-        .padding(.top, 8)
-        .padding(.bottom, 9)
+        .padding(.top, 9)
+        .padding(.bottom, 10)
         .background(SkimStyle.chrome)
     }
 
@@ -383,7 +431,11 @@ struct ArticleListView: View {
                     Section {
                         ForEach(group.articles) { article in
                             NavigationLink(value: article.id) {
-                                ArticleRow(article: article, visibleArticles: model.articles)
+                                ArticleRow(
+                                    article: article,
+                                    feed: model.feeds.first(where: { $0.id == article.feedID }),
+                                    visibleArticles: model.articles
+                                )
                             }
                             .buttonStyle(.plain)
                             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
@@ -392,12 +444,12 @@ struct ArticleListView: View {
                         }
                     } header: {
                         Text(group.label)
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(SkimStyle.secondary)
-                            .tracking(1.6)
-                            .padding(.horizontal, 38)
-                            .padding(.top, 8)
-                            .padding(.bottom, 8)
+                            .tracking(1.15)
+                            .padding(.horizontal, 72)
+                            .padding(.top, 13)
+                            .padding(.bottom, 7)
                     }
                 }
             }
@@ -416,27 +468,71 @@ struct ArticleListView: View {
     }
 
     private var bottomFilter: some View {
-        HStack(spacing: 28) {
-            ForEach(ArticleListMode.allCases) { mode in
-                Button {
-                    dismissTextEntry()
-                    model.listMode = mode
-                } label: {
-                    Label(mode.title, systemImage: mode.systemImage)
-                        .labelStyle(.iconOnly)
-                        .font(.system(size: 18, weight: .medium))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(model.listMode == mode ? SkimStyle.accent : SkimStyle.secondary)
+        HStack(spacing: 30) {
+            Button {
+                dismissTextEntry()
+                model.listMode = .unread
+            } label: {
+                Label("Unread", systemImage: "checkmark.circle.fill")
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 19, weight: .medium))
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(model.listMode == .unread ? SkimStyle.accent : SkimStyle.secondary)
+
+            ForEach(ArticleListMode.allCases) { mode in
+                if mode != .unread {
+                    Button {
+                        dismissTextEntry()
+                        model.listMode = mode
+                    } label: {
+                        Label(mode.title, systemImage: mode.systemImage)
+                            .labelStyle(.iconOnly)
+                            .font(.system(size: 18, weight: .medium))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(model.listMode == mode ? SkimStyle.accent : SkimStyle.secondary)
+                }
+            }
+
+            Button {
+                withAnimation(.smooth(duration: 0.18)) {
+                    showSearch = true
+                    isSearchFocused = true
+                }
+            } label: {
+                Label("Search", systemImage: "magnifyingglass")
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 19, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(showSearch || !model.searchQuery.isEmpty ? SkimStyle.accent : SkimStyle.secondary)
         }
-        .frame(height: 54)
+        .frame(height: 52)
         .frame(maxWidth: .infinity)
         .background(SkimStyle.chrome.opacity(0.96))
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(SkimStyle.separator)
                 .frame(height: 1)
+        }
+    }
+
+    private var compactTitle: String {
+        if let selectedFeedID = model.selectedFeedID,
+           let feed = model.feeds.first(where: { $0.id == selectedFeedID }) {
+            return feed.title
+        }
+
+        switch model.listMode {
+        case .unread:
+            return "Unread"
+        case .all:
+            return "All"
+        case .recent:
+            return "Recent"
+        case .starred:
+            return "Starred"
         }
     }
 
@@ -571,15 +667,20 @@ private struct FeedPickerSheet: View {
 
     private var topControls: some View {
         HStack(spacing: 22) {
-            BorderlessIconButton(systemName: "gearshape", title: "Settings", size: 24, tapSize: 44, action: onSettings)
+            BorderlessIconButton(systemName: "gearshape", title: "Settings", size: 22, tapSize: 42, action: onSettings)
             Spacer()
-            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 23, tapSize: 44, action: onChat)
-            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 24, tapSize: 44, action: onCatchUp)
-            BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 24, tapSize: 44, action: onAddFeed)
+            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 22, tapSize: 42, action: onChat)
+            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 23, tapSize: 42, action: onCatchUp)
+            BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 23, tapSize: 42, action: onAddFeed)
         }
         .padding(.horizontal, 26)
-        .frame(height: 64)
+        .frame(height: 56)
         .background(SkimStyle.chrome)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(SkimStyle.separator.opacity(0.4))
+                .frame(height: 1)
+        }
     }
 
     private var dismissGesture: some Gesture {
@@ -1605,6 +1706,7 @@ private struct AddFeedSheet: View {
 
 private struct FeedIcon: View {
     var feed: Feed
+    var size: CGFloat = 24
 
     var body: some View {
         ZStack {
@@ -1616,7 +1718,7 @@ private struct FeedIcon: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
         }
-        .frame(width: 24, height: 24)
+        .frame(width: size, height: size)
     }
 
     private var initials: String {
@@ -1647,37 +1749,66 @@ private struct ArticleRow: View {
     @Environment(\.openURL) private var openURL
 
     var article: Article
+    var feed: Feed?
     var visibleArticles: [Article]
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Circle()
-                .fill(article.isRead ? SkimStyle.secondary.opacity(0.35) : SkimStyle.accent)
-                .frame(width: 6, height: 6)
-                .padding(.top, 22)
+            ZStack(alignment: .topLeading) {
+                if let feed {
+                    FeedIcon(feed: feed, size: 30)
+                } else {
+                    ArticleSourceIcon(article: article)
+                }
+
+                if !article.isRead {
+                    Circle()
+                        .fill(SkimStyle.accent)
+                        .frame(width: 6, height: 6)
+                        .offset(x: -8, y: 11)
+                }
+            }
+            .padding(.top, 20)
+            .frame(width: 34, alignment: .center)
 
             VStack(alignment: .leading, spacing: 7) {
-                Text(article.title)
-                    .font(.system(size: 16, weight: article.isRead ? .regular : .semibold))
-                    .foregroundStyle(article.isRead ? SkimStyle.secondary : SkimStyle.text)
-                    .lineLimit(2)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(sourceLabel)
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(0.7)
+                        .foregroundStyle(SkimStyle.secondary.opacity(article.isRead ? 0.58 : 0.78))
+                        .lineLimit(1)
 
-                HStack(spacing: 8) {
-                    Text(article.feedTitle)
-                        .foregroundStyle(SkimStyle.accent)
-                    if let publishedAt = article.publishedAt {
-                        Text(publishedAt, style: .relative)
-                            .foregroundStyle(SkimStyle.secondary)
+                    Spacer(minLength: 8)
+
+                    Text(timestamp)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(SkimStyle.text.opacity(article.isRead ? 0.46 : 0.78))
+                        .lineLimit(1)
+                }
+
+                Text(article.title)
+                    .font(.system(size: 17, weight: article.isRead ? .regular : .semibold))
+                    .foregroundStyle(article.isRead ? SkimStyle.secondary : SkimStyle.text)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 7) {
+                    if let secondaryLine {
+                        Text(secondaryLine)
+                            .foregroundStyle(SkimStyle.secondary.opacity(article.isRead ? 0.54 : 0.76))
+                            .lineLimit(1)
                     }
                     if article.isStarred {
                         Image(systemName: "star.fill")
-                            .foregroundStyle(.yellow)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color(red: 0.91, green: 0.76, blue: 0.19))
                     }
                 }
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 15, weight: .regular))
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 4)
 
             if let imageURL = article.imageURL {
                 AsyncImage(url: imageURL) { phase in
@@ -1694,19 +1825,22 @@ private struct ArticleRow: View {
                         Color.clear
                     }
                 }
-                .frame(width: 50, height: 50)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .frame(width: 76, height: 62)
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
                 .opacity(article.isRead ? 0.62 : 1)
+                .padding(.top, 24)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 38)
-        .padding(.vertical, 8)
+        .padding(.leading, 46)
+        .padding(.trailing, 28)
+        .padding(.vertical, 11)
         .background(SkimStyle.chrome)
         .overlay(alignment: .bottom) {
             Rectangle()
-                .fill(SkimStyle.separator.opacity(0.75))
+                .fill(SkimStyle.separator.opacity(0.5))
                 .frame(height: 1)
+                .padding(.leading, 92)
         }
         .contextMenu {
             Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? "circle" : "checkmark.circle") {
@@ -1760,6 +1894,71 @@ private struct ArticleRow: View {
     private var articlesBelow: [Article] {
         guard let currentIndex, currentIndex + 1 < visibleArticles.count else { return [] }
         return Array(visibleArticles[(currentIndex + 1)...])
+    }
+
+    private var sourceLabel: String {
+        article.feedTitle.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    }
+
+    private var secondaryLine: String? {
+        if article.feedTitle.localizedCaseInsensitiveContains("hacker news") {
+            return "Comments"
+        }
+
+        if let author = article.author?.trimmingCharacters(in: .whitespacesAndNewlines), !author.isEmpty {
+            return author
+        }
+
+        return article.url?.host(percentEncoded: false)?
+            .replacingOccurrences(of: "www.", with: "")
+    }
+
+    private var timestamp: String {
+        let date = article.publishedAt ?? article.fetchedAt
+        if Calendar.current.isDateInToday(date) {
+            return date.formatted(.dateTime.hour().minute())
+        }
+
+        return date.formatted(.dateTime.month(.abbreviated).day())
+    }
+}
+
+private struct ArticleSourceIcon: View {
+    var article: Article
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(color)
+            Text(initials)
+                .font(.system(size: 11, weight: .black))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.55)
+        }
+        .frame(width: 30, height: 30)
+    }
+
+    private var initials: String {
+        let words = article.feedTitle
+            .split(separator: " ")
+            .prefix(2)
+            .compactMap { $0.first }
+        let value = String(words).uppercased()
+        return value.isEmpty ? "S" : value
+    }
+
+    private var color: Color {
+        let palette: [Color] = [
+            Color(red: 0.12, green: 0.32, blue: 0.98),
+            Color(red: 0.68, green: 0.10, blue: 0.17),
+            Color(red: 0.45, green: 0.72, blue: 0.77),
+            Color(red: 0.93, green: 0.23, blue: 0.13),
+            Color(red: 0.91, green: 0.76, blue: 0.19),
+            Color(red: 0.52, green: 0.17, blue: 0.30)
+        ]
+        let index = abs(article.feedID.hashValue) % palette.count
+        return palette[index]
     }
 }
 

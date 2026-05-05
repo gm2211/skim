@@ -128,11 +128,13 @@ struct ArticleListView: View {
             AIResultSheet(request: request)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+                .presentationBackground(SkimStyle.chrome)
         }
         .sheet(item: $activeAIChat) { request in
             AIChatSheet(request: request)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+                .presentationBackground(SkimStyle.chrome)
         }
         .onChange(of: model.listMode) { _, _ in
             Task { await model.reloadArticles() }
@@ -159,9 +161,13 @@ struct ArticleListView: View {
         let articles = model.articles
         activeAIResult = AIResultRequest(
             title: "Quick Catch-up",
-            subtitle: "\(articles.count) visible articles"
+            subtitle: articles.isEmpty ? "Latest articles" : "\(articles.count) visible articles"
         ) {
-            try await NativeAI.quickCatchUp(articles: articles, settings: model.settings)
+            let context = try await model.articlesForAIContext(preferred: articles)
+            guard !context.isEmpty else {
+                throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before running Quick Catch-up.")
+            }
+            return try await NativeAI.quickCatchUp(articles: context, settings: model.settings)
         }
     }
 
@@ -169,9 +175,13 @@ struct ArticleListView: View {
         let articles = model.articles
         activeAIChat = AIChatRequest(
             title: "Chat with Articles",
-            placeholder: "Ask about the currently visible articles."
+            placeholder: articles.isEmpty ? "Ask about the latest articles." : "Ask about the currently visible articles."
         ) { question in
-            try await NativeAI.chat(question: question, articles: articles, settings: model.settings)
+            let context = try await model.articlesForAIContext(preferred: articles)
+            guard !context.isEmpty else {
+                throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before chatting.")
+            }
+            return try await NativeAI.chat(question: question, articles: context, settings: model.settings)
         }
     }
 
@@ -179,9 +189,13 @@ struct ArticleListView: View {
         let articles = model.articles
         activeAIResult = AIResultRequest(
             title: "AI Inbox",
-            subtitle: "Smart triage across \(articles.count) visible articles"
+            subtitle: articles.isEmpty ? "Smart triage across latest articles" : "Smart triage across \(articles.count) visible articles"
         ) {
-            try await NativeAI.aiInbox(articles: articles, settings: model.settings)
+            let context = try await model.articlesForAIContext(preferred: articles)
+            guard !context.isEmpty else {
+                throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before opening AI Inbox.")
+            }
+            return try await NativeAI.aiInbox(articles: context, settings: model.settings)
         }
     }
 

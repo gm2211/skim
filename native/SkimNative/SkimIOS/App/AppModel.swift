@@ -204,6 +204,32 @@ final class AppModel: ObservableObject {
         try? await store.article(id: id)
     }
 
+    func articlesForAIContext(preferred: [Article], limit: Int = 45) async throws -> [Article] {
+        let visible = Array(preferred.prefix(limit))
+        if !visible.isEmpty {
+            return visible
+        }
+
+        let contextualFilter = ArticleFilter(
+            feedID: selectedFeedID,
+            readState: .all,
+            starredOnly: listMode == .starred,
+            searchQuery: searchQuery,
+            limit: limit
+        )
+        let contextual = try await store.listArticles(filter: contextualFilter)
+        if !contextual.isEmpty {
+            return contextual
+        }
+
+        return try await store.listArticles(
+            filter: ArticleFilter(
+                readState: .all,
+                limit: limit
+            )
+        )
+    }
+
     private func refreshCounts() async throws {
         totalUnreadCount = try await store.countUnread(feedID: nil)
         var next: [String: Int] = [:]

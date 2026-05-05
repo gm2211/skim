@@ -428,7 +428,8 @@ struct AIResultSheet: View {
                 }
                 .padding(24)
             }
-            .background(SkimStyle.background.ignoresSafeArea())
+            .background(SkimStyle.chrome.ignoresSafeArea())
+            .scrollContentBackground(.hidden)
             .navigationTitle(request.title)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -517,7 +518,7 @@ struct AIChatSheet: View {
                 .padding(14)
                 .background(SkimStyle.chrome)
             }
-            .background(SkimStyle.background.ignoresSafeArea())
+            .background(SkimStyle.chrome.ignoresSafeArea())
             .navigationTitle(request.title)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

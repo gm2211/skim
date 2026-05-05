@@ -144,7 +144,8 @@ struct ArticleDetailView: View {
             title: "Chat with Article",
             placeholder: article.title
         ) { question in
-            try await NativeAI.chat(question: question, article: article, settings: model.settings)
+            let text = try await NativeAI.chat(question: question, article: article, settings: model.settings)
+            return AIChatAnswer(text: text, articles: [article])
         }
     }
 }

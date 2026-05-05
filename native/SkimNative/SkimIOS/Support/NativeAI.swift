@@ -15,7 +15,12 @@ struct AIChatRequest: Identifiable {
     let id = UUID()
     var title: String
     var placeholder: String
-    var answer: (String) async throws -> String
+    var answer: (String) async throws -> AIChatAnswer
+}
+
+struct AIChatAnswer {
+    var text: String
+    var articles: [Article]
 }
 
 struct NativeAIAvailabilityStatus {
@@ -112,7 +117,9 @@ enum NativeAI {
     static func chat(question: String, articles: [Article], settings: AppSettings) async throws -> String {
         try await complete(
             settings: settings,
-            instructions: "You answer questions across a set of RSS articles. Cite article titles naturally when using them.",
+            instructions: """
+            You answer questions across a set of RSS articles. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable.
+            """,
             prompt: """
             Articles:
             \(articleDigest(articles, limit: 35))
@@ -520,6 +527,9 @@ struct AIChatSheet: View {
             }
             .background(SkimStyle.chrome.ignoresSafeArea())
             .navigationTitle(request.title)
+            .navigationDestination(for: String.self) { articleID in
+                ArticleDetailView(articleID: articleID)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { dismiss() }
@@ -537,7 +547,13 @@ struct AIChatSheet: View {
         isSending = true
         do {
             let answer = try await request.answer(question)
-            messages.append(AIChatMessage(role: .assistant, text: answer))
+            messages.append(
+                AIChatMessage(
+                    role: .assistant,
+                    text: answer.text,
+                    referencedArticles: ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles)
+                )
+            )
         } catch {
             messages.append(AIChatMessage(role: .assistant, text: error.localizedDescription, isError: true))
         }
@@ -554,6 +570,7 @@ private struct AIChatMessage: Identifiable {
     let id = UUID()
     var role: Role
     var text: String
+    var referencedArticles: [Article] = []
     var isError = false
 }
 
@@ -566,21 +583,111 @@ private struct AIChatBubble: View {
                 Spacer(minLength: 42)
             }
 
-            Text(message.text)
-                .font(.system(size: 17, weight: .regular))
-                .foregroundStyle(message.isError ? Color.red.opacity(0.95) : SkimStyle.text)
-                .lineSpacing(4)
-                .padding(.horizontal, 15)
-                .padding(.vertical, 12)
-                .background(
-                    message.role == .user ? SkimStyle.accent.opacity(0.28) : SkimStyle.surface,
-                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-                )
-                .textSelection(.enabled)
+            VStack(alignment: .leading, spacing: 12) {
+                Text(message.text)
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(message.isError ? Color.red.opacity(0.95) : SkimStyle.text)
+                    .lineSpacing(4)
+                    .textSelection(.enabled)
+
+                if !message.referencedArticles.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(message.referencedArticles) { article in
+                            NavigationLink(value: article.id) {
+                                ChatArticleReferenceRow(article: article)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 15)
+            .padding(.vertical, 12)
+            .background(
+                message.role == .user ? SkimStyle.accent.opacity(0.28) : SkimStyle.surface,
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
 
             if message.role == .assistant {
                 Spacer(minLength: 42)
             }
+        }
+    }
+}
+
+private struct ChatArticleReferenceRow: View {
+    var article: Article
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(SkimStyle.accent)
+                .frame(width: 22, height: 22)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(article.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(SkimStyle.text)
+                    .lineLimit(2)
+
+                Text(article.feedTitle)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(SkimStyle.secondary.opacity(0.75))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+        .background(SkimStyle.chrome.opacity(0.64), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(SkimStyle.separator.opacity(0.6), lineWidth: 1)
+        }
+        .accessibilityLabel("Open article \(article.title)")
+    }
+}
+
+private enum ArticleReferenceExtractor {
+    static func references(in text: String, articles: [Article]) -> [Article] {
+        var references: [Article] = []
+        var seenIDs: Set<String> = []
+
+        for index in numericHandles(in: text) {
+            let zeroBased = index - 1
+            guard articles.indices.contains(zeroBased) else { continue }
+            let article = articles[zeroBased]
+            if seenIDs.insert(article.id).inserted {
+                references.append(article)
+            }
+        }
+
+        if references.isEmpty {
+            for article in articles where text.localizedCaseInsensitiveContains(article.title) {
+                if seenIDs.insert(article.id).inserted {
+                    references.append(article)
+                }
+            }
+        }
+
+        return references
+    }
+
+    private static func numericHandles(in text: String) -> [Int] {
+        let pattern = #"\[(\d{1,3})\]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.matches(in: text, range: nsRange).compactMap { match in
+            guard match.numberOfRanges > 1,
+                  let range = Range(match.range(at: 1), in: text)
+            else { return nil }
+            return Int(text[range])
         }
     }
 }

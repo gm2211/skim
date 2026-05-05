@@ -205,44 +205,37 @@ private final class FeedParserDelegate: NSObject, XMLParserDelegate {
 
     func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
         let name = normalized(elementName)
+        let localName = localElementName(name)
+        let attributes = normalizedAttributes(attributeDict)
         currentElement = name
         text = ""
 
-        if name == "channel" || name == "feed" {
+        if localName == "channel" || localName == "feed" {
             sawFeedRoot = true
             context = .channel
-        } else if name == "item" {
+        } else if localName == "item" {
             context = .item
             item = ParsedArticle(guid: nil, title: "", url: nil, author: nil, contentText: nil, contentHTML: nil, imageURL: nil, publishedAt: nil)
-        } else if name == "entry" {
+        } else if localName == "entry" {
             context = .entry
             item = ParsedArticle(guid: nil, title: "", url: nil, author: nil, contentText: nil, contentHTML: nil, imageURL: nil, publishedAt: nil)
         }
 
-        if context == .entry, name == "link", item.url == nil {
-            let href = attributeDict["href"]
-            let rel = attributeDict["rel"] ?? "alternate"
+        if context == .entry, localName == "link", item.url == nil {
+            let href = attributes["href"]
+            let rel = attributes["rel"] ?? "alternate"
             if rel == "alternate", let href {
                 item.url = URL(string: href)
             }
         }
 
-        if context == .channel, name == "link", siteURL == nil, let href = attributeDict["href"] {
+        if context == .channel, localName == "link", siteURL == nil, let href = attributes["href"] {
             siteURL = URL(string: href)
         }
 
         if context == .item || context == .entry {
-            if name == "enclosure", item.imageURL == nil, let url = attributeDict["url"], (attributeDict["type"] ?? "").hasPrefix("image") {
-                item.imageURL = URL(string: url)
-            }
-            if name == "media:content", item.imageURL == nil, let url = attributeDict["url"], (attributeDict["medium"] == "image" || (attributeDict["type"] ?? "").hasPrefix("image")) {
-                item.imageURL = URL(string: url)
-            }
-            if name == "media:thumbnail", item.imageURL == nil, let url = attributeDict["url"] {
-                item.imageURL = URL(string: url)
-            }
-            if name == "itunes:image", item.imageURL == nil, let url = attributeDict["href"] {
-                item.imageURL = URL(string: url)
+            if item.imageURL == nil, let previewURL = previewImageURL(elementName: name, localName: localName, namespaceURI: namespaceURI, attributes: attributes) {
+                item.imageURL = previewURL
             }
         }
     }
@@ -253,18 +246,19 @@ private final class FeedParserDelegate: NSObject, XMLParserDelegate {
 
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
         let name = normalized(elementName)
+        let localName = localElementName(name)
         let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
         switch context {
         case .channel:
-            if name == "title", !value.isEmpty {
+            if localName == "title", !value.isEmpty {
                 feedTitle = value.decodingHTMLEntities()
-            } else if name == "link", siteURL == nil {
+            } else if localName == "link", siteURL == nil {
                 siteURL = URL(string: value)
             }
         case .item, .entry:
             assignItemValue(name: name, value: value)
-            if name == "item" || name == "entry" {
+            if localName == "item" || localName == "entry" {
                 articles.append(item)
                 context = .channel
             }
@@ -277,7 +271,8 @@ private final class FeedParserDelegate: NSObject, XMLParserDelegate {
 
     private func assignItemValue(name: String, value: String) {
         guard !value.isEmpty else { return }
-        switch name {
+        let localName = localElementName(name)
+        switch localName {
         case "guid", "id":
             item.guid = value
         case "title":
@@ -290,10 +285,14 @@ private final class FeedParserDelegate: NSObject, XMLParserDelegate {
             if item.contentText == nil { item.contentText = value.strippingTags() }
             if item.contentHTML == nil { item.contentHTML = value }
             if item.imageURL == nil { item.imageURL = value.firstImageURL(relativeTo: item.url) }
-        case "content:encoded", "content":
+        case "encoded", "content":
             item.contentHTML = value
             item.contentText = value.strippingTags()
             if item.imageURL == nil { item.imageURL = value.firstImageURL(relativeTo: item.url) }
+        case "image", "thumbnail":
+            if item.imageURL == nil {
+                item.imageURL = URL.imageURL(from: value, relativeTo: item.url)
+            }
         case "pubdate", "published", "updated":
             item.publishedAt = Date.feedDate(from: value)
         default:
@@ -303,6 +302,42 @@ private final class FeedParserDelegate: NSObject, XMLParserDelegate {
 
     private func normalized(_ name: String) -> String {
         name.lowercased()
+    }
+
+    private func localElementName(_ name: String) -> String {
+        name.split(separator: ":").last.map(String.init) ?? name
+    }
+
+    private func normalizedAttributes(_ attributes: [String: String]) -> [String: String] {
+        attributes.reduce(into: [:]) { result, pair in
+            result[pair.key.lowercased()] = pair.value
+        }
+    }
+
+    private func previewImageURL(elementName: String, localName: String, namespaceURI: String?, attributes: [String: String]) -> URL? {
+        let type = attributes["type"]?.lowercased() ?? ""
+        let medium = attributes["medium"]?.lowercased() ?? ""
+        let rel = attributes["rel"]?.lowercased() ?? ""
+        let isImage = type.hasPrefix("image") || medium == "image"
+        let isMediaElement = elementName.hasPrefix("media:") || namespaceURI?.lowercased().contains("search.yahoo.com/mrss") == true
+
+        switch localName {
+        case "enclosure":
+            guard isImage else { return nil }
+            return URL.imageURL(from: attributes["url"], relativeTo: item.url)
+        case "content":
+            guard isMediaElement, isImage else { return nil }
+            return URL.imageURL(from: attributes["url"], relativeTo: item.url)
+        case "thumbnail":
+            return URL.imageURL(from: attributes["url"], relativeTo: item.url)
+        case "image":
+            return URL.imageURL(from: attributes["href"] ?? attributes["url"], relativeTo: item.url)
+        case "link":
+            guard isImage || rel.contains("enclosure") || rel.contains("preview") else { return nil }
+            return URL.imageURL(from: attributes["href"] ?? attributes["url"], relativeTo: item.url)
+        default:
+            return nil
+        }
     }
 }
 
@@ -326,6 +361,16 @@ extension Date {
 
         let iso = ISO8601DateFormatter()
         return iso.date(from: value)
+    }
+}
+
+private extension URL {
+    static func imageURL(from value: String?, relativeTo baseURL: URL?) -> URL? {
+        guard let value else { return nil }
+        let decoded = value.decodingHTMLEntities()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !decoded.isEmpty else { return nil }
+        return URL(string: decoded, relativeTo: baseURL)?.absoluteURL.upgradingHTTPToHTTPS()
     }
 }
 
@@ -373,15 +418,55 @@ extension String {
     }
 
     func firstImageURL(relativeTo baseURL: URL?) -> URL? {
-        let pattern = #"<img\b[^>]*\bsrc\s*=\s*(['"])(.*?)\1"#
+        let patterns = [
+            #"<img\b[^>]*\bsrc\s*=\s*(['"])(.*?)\1"#,
+            #"<img\b[^>]*\bdata-src\s*=\s*(['"])(.*?)\1"#,
+            #"<img\b[^>]*\bdata-original\s*=\s*(['"])(.*?)\1"#,
+            #"<video\b[^>]*\bposter\s*=\s*(['"])(.*?)\1"#,
+            #"<meta\b[^>]*(?:property|name)\s*=\s*(['"])(?:og:image|twitter:image)\1[^>]*\bcontent\s*=\s*(['"])(.*?)\2"#
+        ]
+
+        for pattern in patterns {
+            if let url = firstImageURL(matching: pattern, relativeTo: baseURL) {
+                return url
+            }
+        }
+
+        return firstSrcsetImageURL(relativeTo: baseURL)
+    }
+
+    private func firstImageURL(matching pattern: String, relativeTo baseURL: URL?) -> URL? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return nil
+        }
+        let range = NSRange(startIndex..<endIndex, in: self)
+        guard let match = regex.firstMatch(in: self, range: range),
+              match.numberOfRanges >= 3
+        else { return nil }
+
+        let candidateIndex = match.numberOfRanges - 1
+        guard let srcRange = Range(match.range(at: candidateIndex), in: self) else { return nil }
+        return URL.imageURL(from: String(self[srcRange]), relativeTo: baseURL)
+    }
+
+    private func firstSrcsetImageURL(relativeTo baseURL: URL?) -> URL? {
+        let pattern = #"<img\b[^>]*\bsrcset\s*=\s*(['"])(.*?)\1"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
         let range = NSRange(startIndex..<endIndex, in: self)
         guard let match = regex.firstMatch(in: self, range: range),
               match.numberOfRanges >= 3,
-              let srcRange = Range(match.range(at: 2), in: self)
+              let srcsetRange = Range(match.range(at: 2), in: self)
         else { return nil }
-        return URL(string: String(self[srcRange]), relativeTo: baseURL)?.absoluteURL
+
+        let firstCandidate = self[srcsetRange]
+            .split(separator: ",")
+            .first?
+            .split(whereSeparator: { $0.isWhitespace })
+            .first
+            .map(String.init)
+
+        return URL.imageURL(from: firstCandidate, relativeTo: baseURL)
     }
 }

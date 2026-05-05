@@ -130,6 +130,21 @@ import Testing
           <link>https://example.com/html</link>
           <description><![CDATA[<p>Hello</p><img src="https://example.com/html.jpg">]]></description>
         </item>
+        <item>
+          <title>With enclosure image</title>
+          <link>https://example.com/enclosure</link>
+          <enclosure url="https://example.com/enclosure.jpg" type="image/jpeg" />
+        </item>
+        <item>
+          <title>With thumbnail</title>
+          <link>https://example.com/thumb</link>
+          <media:thumbnail url="https://example.com/thumb.jpg" />
+        </item>
+        <item>
+          <title>With lazy image</title>
+          <link>https://example.com/lazy</link>
+          <description><![CDATA[<p>Hello</p><img data-src="/lazy.jpg">]]></description>
+        </item>
       </channel>
     </rss>
     """
@@ -138,7 +153,36 @@ import Testing
 
     #expect(feed.articles.map(\.imageURL?.absoluteString) == [
         "https://example.com/media.jpg",
-        "https://example.com/html.jpg"
+        "https://example.com/html.jpg",
+        "https://example.com/enclosure.jpg",
+        "https://example.com/thumb.jpg",
+        "https://example.com/lazy.jpg"
+    ])
+}
+
+@Test func parsesAtomPreviewImages() throws {
+    let atom = """
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <title>Atom Feed</title>
+      <entry>
+        <title>With enclosure link</title>
+        <link rel="alternate" href="https://example.com/entry" />
+        <link rel="enclosure" type="image/png" href="https://example.com/entry.png" />
+        <summary>Atom summary</summary>
+      </entry>
+      <entry>
+        <title>With content srcset</title>
+        <link rel="alternate" href="https://example.com/srcset" />
+        <content type="html"><![CDATA[<img srcset="/small.jpg 1x, /large.jpg 2x">]]></content>
+      </entry>
+    </feed>
+    """
+
+    let feed = try FeedParser().parse(data: Data(atom.utf8), fallbackTitle: "fallback")
+
+    #expect(feed.articles.map(\.imageURL?.absoluteString) == [
+        "https://example.com/entry.png",
+        "https://example.com/small.jpg"
     ])
 }
 

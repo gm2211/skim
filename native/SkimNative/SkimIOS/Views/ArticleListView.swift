@@ -396,9 +396,10 @@ private struct FeedPickerSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     topControls
 
-                    SkimWordmark(size: 54)
-                        .padding(.horizontal, 30)
-                        .padding(.bottom, model.isLoading ? 8 : 50)
+                    SkimWordmark(size: 50)
+                        .padding(.horizontal, 38)
+                        .padding(.top, 18)
+                        .padding(.bottom, model.isLoading ? 8 : 46)
 
                     if model.isLoading {
                         Text("Syncing...")
@@ -408,7 +409,7 @@ private struct FeedPickerSheet: View {
                             .padding(.bottom, 42)
                     }
 
-                    VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 18) {
                         pickerRow(
                             icon: nil,
                             title: "All Articles",
@@ -442,41 +443,36 @@ private struct FeedPickerSheet: View {
                             onAIInbox()
                         }
                     }
-                    .padding(.horizontal, 30)
+                    .padding(.horizontal, 38)
                     .padding(.bottom, 36)
 
                     HStack {
                         Text("Feeds")
-                            .font(.system(size: 23, weight: .bold))
+                            .font(.system(size: 22, weight: .bold))
                             .foregroundStyle(SkimStyle.text)
                         Spacer()
                         Button(action: onAutoGroup) {
                             Image(systemName: "folder.badge.plus")
-                                .font(.system(size: 18, weight: .regular))
+                                .font(.system(size: 17, weight: .regular))
                                 .foregroundStyle(SkimStyle.secondary)
-                                .frame(width: 40, height: 40)
+                                .frame(width: 36, height: 36)
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 30)
-                    .padding(.bottom, 20)
+                    .padding(.horizontal, 38)
+                    .padding(.bottom, 16)
 
-                    LazyVStack(alignment: .leading, spacing: 19) {
+                    LazyVStack(alignment: .leading, spacing: 14) {
                         ForEach(uniqueFeeds) { feed in
                             pickerRow(
                                 icon: AnyView(FeedIcon(feed: feed)),
                                 title: feed.title,
                                 count: model.unreadCounts[feed.id],
                                 isSelected: model.selectedFeedID == feed.id
-                            ) {
-                                model.selectedFeedID = feed.id
-                                model.listMode = .unread
-                                isPresented = false
-                                Task { await model.reloadArticles() }
-                            }
+                            ) { selectFeed(feed) }
                         }
                     }
-                    .padding(.horizontal, 30)
+                    .padding(.horizontal, 38)
                     .padding(.bottom, 34)
                 }
             }
@@ -492,16 +488,16 @@ private struct FeedPickerSheet: View {
     }
 
     private var topControls: some View {
-        HStack(spacing: 28) {
+        HStack(spacing: 22) {
             BorderlessIconButton(systemName: "gearshape", title: "Settings", size: 24, tapSize: 44, action: onSettings)
             Spacer()
-            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 24, tapSize: 44, action: onChat)
-            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 44, action: onCatchUp)
-            BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 26, tapSize: 44, action: onAddFeed)
+            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 23, tapSize: 44, action: onChat)
+            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 24, tapSize: 44, action: onCatchUp)
+            BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 24, tapSize: 44, action: onAddFeed)
         }
-        .padding(.horizontal, 28)
-        .padding(.top, 24)
-        .padding(.bottom, 30)
+        .padding(.horizontal, 26)
+        .frame(height: 64)
+        .background(SkimStyle.chrome)
     }
 
     private var dismissGesture: some Gesture {
@@ -537,9 +533,9 @@ private struct FeedPickerSheet: View {
         pickerRow(
             icon: AnyView(
                 Image(systemName: iconSystemName)
-                    .font(.system(size: 19, weight: .regular))
+                    .font(.system(size: 18, weight: .regular))
                     .foregroundStyle(SkimStyle.secondary)
-                    .frame(width: 28)
+                    .frame(width: 26)
             ),
             title: title,
             count: count,
@@ -562,7 +558,7 @@ private struct FeedPickerSheet: View {
                 }
 
                 Text(title)
-                    .font(.system(size: 19, weight: isSelected ? .bold : .regular))
+                    .font(.system(size: 17, weight: isSelected ? .bold : .regular))
                     .foregroundStyle(isSelected ? SkimStyle.text : SkimStyle.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -571,14 +567,23 @@ private struct FeedPickerSheet: View {
 
                 if let count, count > 0 {
                     Text(count.formatted())
-                        .font(.system(size: 18, weight: .regular))
+                        .font(.system(size: 17, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
                 }
             }
-            .frame(minHeight: 30)
+            .frame(minHeight: 27)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private func selectFeed(_ feed: Feed) {
+        model.selectedFeedID = feed.id
+        if model.listMode == .recent {
+            model.listMode = .unread
+        }
+        isPresented = false
+        Task { await model.reloadArticles() }
     }
 
     private var uniqueFeeds: [Feed] {
@@ -1339,7 +1344,7 @@ private struct ArticleRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 38)
         .padding(.vertical, 10)
-        .background(SkimStyle.background)
+        .background(SkimStyle.chrome)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(SkimStyle.separator.opacity(0.75))

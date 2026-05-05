@@ -29,7 +29,11 @@ public struct FeedRefreshService: Sendable {
     public func refreshAll(store: some FeedStore) async throws {
         let feeds = try await store.listFeeds()
         for feed in feeds {
-            try await refresh(feed: feed, store: store)
+            do {
+                try await refresh(feed: feed, store: store)
+            } catch {
+                continue
+            }
         }
     }
 

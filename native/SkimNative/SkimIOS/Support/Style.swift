@@ -46,31 +46,39 @@ struct SkimWordmark: View {
         .custom("AquireBold", size: size)
     }
 
+    private var fill: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.white,
+                Color(red: 0.91, green: 0.95, blue: 0.99),
+                Color(red: 0.67, green: 0.74, blue: 0.81)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
     var body: some View {
         ZStack {
             wordmark
-                .foregroundStyle(Color.black.opacity(0.72))
-                .offset(x: 0, y: 4)
-                .blur(radius: 0.6)
+                .foregroundStyle(Color.black.opacity(0.68))
+                .offset(x: 0, y: 3.2)
+                .blur(radius: 0.45)
 
             wordmark
-                .foregroundStyle(Color(red: 0.41, green: 0.47, blue: 0.54))
-                .offset(x: 0, y: 2)
+                .foregroundStyle(Color(red: 0.43, green: 0.49, blue: 0.56))
+                .offset(x: 0, y: 1.6)
 
             wordmark
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [
-                            Color.white,
-                            Color(red: 0.91, green: 0.95, blue: 0.99),
-                            Color(red: 0.68, green: 0.75, blue: 0.82)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+                .foregroundStyle(fill)
+                .offset(x: -0.35, y: 0)
+            wordmark
+                .foregroundStyle(fill)
+                .offset(x: 0.35, y: 0)
+            wordmark
+                .foregroundStyle(fill)
         }
-        .shadow(color: SkimStyle.accent.opacity(0.16), radius: 9, x: 0, y: 0)
+        .shadow(color: SkimStyle.accent.opacity(0.07), radius: 3.5, x: 0, y: 0)
         .fixedSize()
         .accessibilityLabel("Skim")
     }
@@ -78,6 +86,6 @@ struct SkimWordmark: View {
     private var wordmark: some View {
         Text("SKIM")
             .font(font)
-            .tracking(size * 0.18)
+            .tracking(size * 0.12)
     }
 }

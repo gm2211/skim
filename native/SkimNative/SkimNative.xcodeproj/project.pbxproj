@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9167BE3C78659C05031D238 /* SettingsSheet.swift */; };
 		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
 		568EFC6280529AB7F91222BD /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8734D4E26C300D1AD49D4262 /* SkimCore */; };
 		6048C096F85B46DFAF8590AF /* Style.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038284DEE00F91A360324653 /* Style.swift */; };
@@ -35,6 +36,7 @@
 		A9AD11F7D9C976F34C0C9347 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		B72B2D107E596891809ECA5E /* Skim macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Skim macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		B9167BE3C78659C05031D238 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleDetailView.swift; sourceTree = "<group>"; };
 		D60276D39C8ED76452B2EB26 /* Skim iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Skim iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -148,6 +150,7 @@
 				D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */,
 				6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */,
 				A9AD11F7D9C976F34C0C9347 /* RootView.swift */,
+				B9167BE3C78659C05031D238 /* SettingsSheet.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -266,6 +269,7 @@
 				E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */,
 				C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */,
 				E0006C62ED6F6DE502164145 /* RootView.swift in Sources */,
+				014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */,
 				D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */,
 				6048C096F85B46DFAF8590AF /* Style.swift in Sources */,
 				8ED4B358481AC4273C225054 /* WebView.swift in Sources */,

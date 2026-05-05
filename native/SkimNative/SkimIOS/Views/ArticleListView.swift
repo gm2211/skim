@@ -11,6 +11,7 @@ struct ArticleListView: View {
     @State private var showFeedPicker = false
     @State private var showAddFeed = false
     @State private var showAutoGroup = false
+    @State private var showSettings = false
     @State private var activeAIResult: AIResultRequest?
     @State private var activeAIChat: AIChatRequest?
 
@@ -41,6 +42,10 @@ struct ArticleListView: View {
                     onAutoGroup: {
                         showFeedPicker = false
                         showAutoGroup = true
+                    },
+                    onSettings: {
+                        showFeedPicker = false
+                        showSettings = true
                     },
                     onChat: {
                         showFeedPicker = false
@@ -94,6 +99,30 @@ struct ArticleListView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsSheet(
+                isPresented: $showSettings,
+                onAddFeed: {
+                    showSettings = false
+                    showAddFeed = true
+                },
+                onImportOPML: {
+                    showSettings = false
+                    presentImporter()
+                },
+                onAutoGroup: {
+                    showSettings = false
+                    showAutoGroup = true
+                },
+                onRefresh: {
+                    Task { await model.refreshAll() }
+                }
+            )
+            .environmentObject(model)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(SkimStyle.chrome)
         }
         .sheet(item: $activeAIResult) { request in
             AIResultSheet(request: request)
@@ -344,6 +373,7 @@ private struct FeedPickerSheet: View {
     var onAddFeed: () -> Void
     var onImportOPML: () -> Void
     var onAutoGroup: () -> Void
+    var onSettings: () -> Void
     var onChat: () -> Void
     var onCatchUp: () -> Void
     var onAIInbox: () -> Void
@@ -462,6 +492,7 @@ private struct FeedPickerSheet: View {
 
     private var topControls: some View {
         HStack(spacing: 28) {
+            BorderlessIconButton(systemName: "gearshape", title: "Settings", size: 24, tapSize: 44, action: onSettings)
             Spacer()
             BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 24, tapSize: 44, action: onChat)
             BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 44, action: onCatchUp)

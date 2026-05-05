@@ -18,7 +18,40 @@ struct AIChatRequest: Identifiable {
     var answer: (String) async throws -> String
 }
 
+struct NativeAIAvailabilityStatus {
+    var title: String
+    var detail: String
+    var isAvailable: Bool
+}
+
 enum NativeAI {
+    static func availabilityStatus() -> NativeAIAvailabilityStatus {
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            let model = SystemLanguageModel(useCase: .general)
+            switch model.availability {
+            case .available:
+                return NativeAIAvailabilityStatus(
+                    title: "Apple Foundation Models",
+                    detail: "Available on this device.",
+                    isAvailable: true
+                )
+            case .unavailable(let reason):
+                return NativeAIAvailabilityStatus(
+                    title: "Apple Foundation Models",
+                    detail: "Unavailable: \(reasonDescription(reason)).",
+                    isAvailable: false
+                )
+            }
+        }
+#endif
+        return NativeAIAvailabilityStatus(
+            title: "Apple Foundation Models",
+            detail: "Unavailable in this build.",
+            isAvailable: false
+        )
+    }
+
     static func quickCatchUp(articles: [Article]) async throws -> String {
         try await complete(
             instructions: "You write crisp catch-up reports for a news/RSS reader. Be useful, specific, and concise.",

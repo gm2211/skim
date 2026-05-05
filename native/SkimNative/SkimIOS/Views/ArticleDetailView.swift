@@ -74,7 +74,7 @@ struct ArticleDetailView: View {
             BorderlessIconButton(systemName: "globe", title: "Web", isActive: page == .web, size: 26, tapSize: 42) {
                 page = .web
             }
-            BorderlessIconButton(systemName: "sparkles", title: "Summary", size: 22, tapSize: 40) {
+            BorderlessIconButton(systemName: "doc.text", title: "Summary", size: 23, tapSize: 40) {
                 presentSummary()
             }
             BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 22, tapSize: 40) {

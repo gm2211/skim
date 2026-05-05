@@ -528,35 +528,49 @@ struct AIChatSheet: View {
     @State private var input = ""
     @State private var isSending = false
     @FocusState private var focused: Bool
+    private let bottomAnchorID = "chat-bottom-anchor"
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        if messages.isEmpty {
-                            ContentUnavailableView("Ask Skim", systemImage: "bubble.left.and.text.bubble.right", description: Text(request.placeholder))
-                                .foregroundStyle(SkimStyle.secondary)
-                                .padding(.top, 80)
-                        } else {
-                            ForEach(messages) { message in
-                                AIChatBubble(message: message)
-                            }
-                        }
-
-                        if isSending {
-                            HStack(spacing: 10) {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .tint(SkimStyle.accent)
-                                Text("Thinking...")
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 14) {
+                            if messages.isEmpty {
+                                ContentUnavailableView("Ask Skim", systemImage: "bubble.left.and.text.bubble.right", description: Text(request.placeholder))
                                     .foregroundStyle(SkimStyle.secondary)
+                                    .padding(.top, 80)
+                            } else {
+                                ForEach(messages) { message in
+                                    AIChatBubble(message: message)
+                                        .id(message.id)
+                                }
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
+
+                            if isSending {
+                                HStack(spacing: 10) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .tint(SkimStyle.accent)
+                                    Text("Thinking...")
+                                        .foregroundStyle(SkimStyle.secondary)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                            }
+
+                            Color.clear
+                                .frame(height: 1)
+                                .id(bottomAnchorID)
                         }
+                        .padding(18)
                     }
-                    .padding(18)
+                    .onChange(of: messages.count) { _, _ in
+                        scrollToLatest(proxy)
+                    }
+                    .onChange(of: isSending) { _, _ in
+                        scrollToLatest(proxy)
+                    }
                 }
 
                 HStack(spacing: 10) {
@@ -593,6 +607,15 @@ struct AIChatSheet: View {
                 }
             }
             .onAppear { focused = true }
+        }
+    }
+
+    private func scrollToLatest(_ proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            withAnimation(.smooth(duration: 0.22)) {
+                proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+            }
         }
     }
 

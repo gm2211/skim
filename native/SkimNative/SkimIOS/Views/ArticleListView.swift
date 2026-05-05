@@ -413,14 +413,12 @@ private struct FeedPickerSheet: View {
                     SkimWordmark(size: 50)
                         .padding(.horizontal, 38)
                         .padding(.top, 18)
-                        .padding(.bottom, model.isLoading ? 8 : 46)
+                        .padding(.bottom, model.isLoading ? 14 : 46)
 
                     if model.isLoading {
-                        Text("Syncing...")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundStyle(SkimStyle.secondary)
+                        FeedPaneLoadingSpinner()
                             .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.bottom, 42)
+                            .padding(.bottom, 34)
                     }
 
                     VStack(alignment: .leading, spacing: 18) {
@@ -608,6 +606,24 @@ private struct FeedPickerSheet: View {
             seen.insert(key)
             return true
         }
+    }
+}
+
+private struct FeedPaneLoadingSpinner: View {
+    var body: some View {
+        ProgressView()
+            .controlSize(.regular)
+            .tint(SkimStyle.secondary)
+            .frame(width: 36, height: 36)
+            .background {
+                Circle()
+                    .fill(SkimStyle.surface.opacity(0.45))
+            }
+            .overlay {
+                Circle()
+                    .stroke(SkimStyle.separator.opacity(0.6), lineWidth: 1)
+            }
+            .accessibilityLabel("Syncing")
     }
 }
 

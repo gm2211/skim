@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsSheet: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.openURL) private var openURL
     @Binding var isPresented: Bool
     @State private var draft = AppSettings()
 
@@ -108,10 +109,16 @@ struct SettingsSheet: View {
             if providerNeedsAPIKey {
                 SettingsTextField(
                     title: draft.ai.provider == "claude-subscription" ? "Claude OAuth token" : "API key",
-                    placeholder: draft.ai.provider == "anthropic" ? "sk-ant-..." : "sk-...",
+                    placeholder: draft.ai.provider == "anthropic" || draft.ai.provider == "claude-subscription" ? "sk-ant-..." : "sk-...",
                     text: aiAPIKeyBinding,
                     isSecure: true
                 )
+            }
+
+            if draft.ai.provider == "claude-subscription" {
+                ClaudeOAuthPastePanel(ai: aiSettingsBinding) { url in
+                    openURL(url)
+                }
             }
 
             if draft.ai.provider != "foundation-models" && draft.ai.provider != "none" && draft.ai.provider != "mlx" {
@@ -217,7 +224,7 @@ struct SettingsSheet: View {
             ("foundation-models", "Apple Intelligence", "Apple's on-device model. Requires Apple Intelligence to finish preparing its language model."),
             ("openai", "OpenAI", "Uses api.openai.com with your API key."),
             ("anthropic", "Claude API Key", "Uses api.anthropic.com with an Anthropic API key."),
-            ("claude-subscription", "Claude Pro/Max", "Uses a Claude OAuth bearer token. Full sign-in UI is still being ported."),
+            ("claude-subscription", "Claude Pro/Max", "Opens Claude sign-in, then exchanges the pasted code for a bearer token."),
             ("openrouter", "OpenRouter", "Uses OpenRouter's OpenAI-compatible API."),
             ("custom", "Custom", "Any OpenAI-compatible endpoint."),
             ("mlx", "On-device MLX", "Download and run a small MLX model on this iPhone. Offline after download."),
@@ -552,6 +559,134 @@ private struct MLXSettingsPanel: View {
             isDownloaded = NativeMLX.isDownloadedSync(repoId)
         }
         isWorking = false
+    }
+}
+
+private struct ClaudeOAuthPastePanel: View {
+    @Binding var ai: AISettings
+    var openURL: (URL) -> Void
+
+    @State private var flow: ClaudePasteFlow?
+    @State private var pastedCode = ""
+    @State private var isWorking = false
+    @State private var errorMessage: String?
+    @State private var successMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "person.crop.circle.badge.checkmark")
+                    .font(.system(size: 21, weight: .regular))
+                    .foregroundStyle(SkimStyle.accent)
+                    .frame(width: 28)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Sign in with Claude")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(SkimStyle.text)
+                    Text("Opens Claude's OAuth page. After signing in, paste the code shown on the Anthropic success page and Skim will save the bearer token.")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    beginSignIn()
+                } label: {
+                    Label(flow == nil ? "Get Claude token" : "Open Claude again", systemImage: "safari")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+                .buttonStyle(.bordered)
+                .tint(SkimStyle.accent)
+                .disabled(isWorking)
+
+                if ai.apiKey?.nilIfEmpty != nil {
+                    Button(role: .destructive) {
+                        ai.apiKey = nil
+                        successMessage = nil
+                    } label: {
+                        Text("Clear")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(height: 44)
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            if flow != nil {
+                SettingsTextField(
+                    title: "Paste code from Anthropic",
+                    placeholder: "code#state",
+                    text: $pastedCode
+                )
+
+                Button {
+                    Task { await finishSignIn() }
+                } label: {
+                    Text(isWorking ? "Exchanging..." : "Finish sign-in")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 46)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(SkimStyle.accent)
+                .disabled(isWorking || pastedCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            if let successMessage {
+                notice(color: .green, text: successMessage)
+            }
+
+            if let errorMessage {
+                notice(color: .red, text: errorMessage)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SkimStyle.chrome.opacity(0.62), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func beginSignIn() {
+        errorMessage = nil
+        successMessage = nil
+        do {
+            let next = try NativeClaudeOAuth.beginPasteFlow()
+            flow = next
+            pastedCode = ""
+            openURL(next.authorizeURL)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    private func finishSignIn() async {
+        guard let flow else { return }
+        isWorking = true
+        errorMessage = nil
+        successMessage = nil
+        do {
+            let tokenSet = try await NativeClaudeOAuth.exchange(pastedCode: pastedCode, flow: flow)
+            ai.apiKey = tokenSet.accessToken
+            ai.model = ai.model?.nilIfEmpty ?? "claude-sonnet-4-5"
+            self.flow = nil
+            pastedCode = ""
+            successMessage = "Signed in with Claude. Tap Save to keep this token."
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isWorking = false
+    }
+
+    private func notice(color: Color, text: String) -> some View {
+        Text(text)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

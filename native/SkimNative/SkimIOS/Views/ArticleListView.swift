@@ -11,6 +11,8 @@ struct ArticleListView: View {
     @State private var showFeedPicker = false
     @State private var showAddFeed = false
     @State private var showAutoGroup = false
+    @State private var activeAIResult: AIResultRequest?
+    @State private var activeAIChat: AIChatRequest?
 
     var body: some View {
         ZStack {
@@ -39,6 +41,18 @@ struct ArticleListView: View {
                     onAutoGroup: {
                         showFeedPicker = false
                         showAutoGroup = true
+                    },
+                    onChat: {
+                        showFeedPicker = false
+                        presentArticleChat()
+                    },
+                    onCatchUp: {
+                        showFeedPicker = false
+                        presentQuickCatchUp()
+                    },
+                    onAIInbox: {
+                        showFeedPicker = false
+                        presentAIInbox()
                     },
                     onRefresh: {
                         Task { await model.refreshAll() }
@@ -81,6 +95,16 @@ struct ArticleListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
+        .sheet(item: $activeAIResult) { request in
+            AIResultSheet(request: request)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $activeAIChat) { request in
+            AIChatSheet(request: request)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .onChange(of: model.listMode) { _, _ in
             Task { await model.reloadArticles() }
         }
@@ -99,6 +123,36 @@ struct ArticleListView: View {
         showAddFeed = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             showImporter = true
+        }
+    }
+
+    private func presentQuickCatchUp() {
+        let articles = model.articles
+        activeAIResult = AIResultRequest(
+            title: "Quick Catch-up",
+            subtitle: "\(articles.count) visible articles"
+        ) {
+            try await NativeAI.quickCatchUp(articles: articles)
+        }
+    }
+
+    private func presentArticleChat() {
+        let articles = model.articles
+        activeAIChat = AIChatRequest(
+            title: "Chat with Articles",
+            placeholder: "Ask about the currently visible articles."
+        ) { question in
+            try await NativeAI.chat(question: question, articles: articles)
+        }
+    }
+
+    private func presentAIInbox() {
+        let articles = model.articles
+        activeAIResult = AIResultRequest(
+            title: "AI Inbox",
+            subtitle: "Smart triage across \(articles.count) visible articles"
+        ) {
+            try await NativeAI.aiInbox(articles: articles)
         }
     }
 
@@ -127,8 +181,10 @@ struct ArticleListView: View {
             }
             Spacer()
             BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 24, tapSize: 44) {
+                presentQuickCatchUp()
             }
             BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 23, tapSize: 44) {
+                presentArticleChat()
             }
             BorderlessIconButton(systemName: "checkmark.circle", title: "Unread", isActive: model.listMode == .unread, size: 24, tapSize: 44) {
                 model.listMode = .unread
@@ -288,6 +344,9 @@ private struct FeedPickerSheet: View {
     var onAddFeed: () -> Void
     var onImportOPML: () -> Void
     var onAutoGroup: () -> Void
+    var onChat: () -> Void
+    var onCatchUp: () -> Void
+    var onAIInbox: () -> Void
     var onRefresh: () -> Void
 
     var body: some View {
@@ -349,10 +408,7 @@ private struct FeedPickerSheet: View {
                         Spacer(minLength: 38)
 
                         pickerRow(iconSystemName: "tray", title: "AI Inbox", count: model.totalUnreadCount, isSelected: false) {
-                            model.selectedFeedID = nil
-                            model.listMode = .unread
-                            isPresented = false
-                            Task { await model.reloadArticles() }
+                            onAIInbox()
                         }
                     }
                     .padding(.horizontal, 30)
@@ -407,8 +463,8 @@ private struct FeedPickerSheet: View {
     private var topControls: some View {
         HStack(spacing: 28) {
             Spacer()
-            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 24, tapSize: 44) {}
-            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 44) {}
+            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 24, tapSize: 44, action: onChat)
+            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 27, tapSize: 44, action: onCatchUp)
             BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 26, tapSize: 44, action: onAddFeed)
         }
         .padding(.horizontal, 28)

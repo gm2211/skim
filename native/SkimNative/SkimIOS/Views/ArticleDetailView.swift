@@ -15,6 +15,8 @@ struct ArticleDetailView: View {
     @State private var article: Article?
     @State private var page: DetailPage = .reader
     @State private var isLoading = true
+    @State private var activeAIResult: AIResultRequest?
+    @State private var activeAIChat: AIChatRequest?
 
     var body: some View {
         ZStack {
@@ -46,29 +48,43 @@ struct ArticleDetailView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
+        .sheet(item: $activeAIResult) { request in
+            AIResultSheet(request: request)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $activeAIChat) { request in
+            AIChatSheet(request: request)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var topBar: some View {
-        HStack(spacing: 28) {
-            BorderlessIconButton(systemName: "chevron.left", title: "Back", size: 26, tapSize: 46) {
+        HStack(spacing: 12) {
+            BorderlessIconButton(systemName: "chevron.left", title: "Back", size: 25, tapSize: 42) {
                 dismiss()
             }
 
             Spacer(minLength: 4)
 
-            BorderlessIconButton(systemName: "book", title: "Reader", isActive: page == .reader, size: 26, tapSize: 48) {
+            BorderlessIconButton(systemName: "book", title: "Reader", isActive: page == .reader, size: 25, tapSize: 42) {
                 page = .reader
             }
-            BorderlessIconButton(systemName: "globe", title: "Web", isActive: page == .web, size: 27, tapSize: 48) {
+            BorderlessIconButton(systemName: "globe", title: "Web", isActive: page == .web, size: 26, tapSize: 42) {
                 page = .web
             }
-            BorderlessIconButton(systemName: "doc.text", title: "Reader source", size: 25, tapSize: 48) {
+            BorderlessIconButton(systemName: "sparkles", title: "Summary", size: 22, tapSize: 40) {
+                presentSummary()
             }
-            BorderlessIconButton(systemName: article?.isStarred == true ? "star.fill" : "star", title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 27, tapSize: 48) {
+            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 22, tapSize: 40) {
+                presentArticleChat()
+            }
+            BorderlessIconButton(systemName: article?.isStarred == true ? "star.fill" : "star", title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 26, tapSize: 42) {
                 Task { await toggleStar() }
             }
         }
-        .padding(.horizontal, 28)
+        .padding(.horizontal, 20)
         .frame(height: 76)
     }
 
@@ -110,6 +126,26 @@ struct ArticleDetailView: View {
         await model.toggleStar(article)
         article.isStarred.toggle()
         self.article = article
+    }
+
+    private func presentSummary() {
+        guard let article else { return }
+        activeAIResult = AIResultRequest(
+            title: "AI Summary",
+            subtitle: article.title
+        ) {
+            try await NativeAI.summarize(article: article)
+        }
+    }
+
+    private func presentArticleChat() {
+        guard let article else { return }
+        activeAIChat = AIChatRequest(
+            title: "Chat with Article",
+            placeholder: article.title
+        ) { question in
+            try await NativeAI.chat(question: question, article: article)
+        }
     }
 }
 

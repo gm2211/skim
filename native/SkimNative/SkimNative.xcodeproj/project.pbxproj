@@ -8,12 +8,13 @@
 
 /* Begin PBXBuildFile section */
 		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
-		4F0897A81A5C4315A23F8B0C /* AquireBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 72A9CF25B2784E36A5E497A8 /* AquireBold.otf */; };
 		568EFC6280529AB7F91222BD /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8734D4E26C300D1AD49D4262 /* SkimCore */; };
 		6048C096F85B46DFAF8590AF /* Style.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038284DEE00F91A360324653 /* Style.swift */; };
 		61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */; };
 		705834903C7D5B0F2442C2D8 /* SkimMacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */; };
+		8B797999B22B89495C05CA39 /* AquireBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */; };
 		8ED4B358481AC4273C225054 /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474BA38A4E522DB5D3ECB21 /* WebView.swift */; };
+		C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BCD3DD03D305C558D07614 /* NativeAI.swift */; };
 		C1D91C8A78E543F0F69FFE82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0C79E51007F91AE5C8286F40 /* Assets.xcassets */; };
 		D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A483594667B890576E4D368D /* SkimNativeApp.swift */; };
 		E0006C62ED6F6DE502164145 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9AD11F7D9C976F34C0C9347 /* RootView.swift */; };
@@ -26,9 +27,10 @@
 		0C79E51007F91AE5C8286F40 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1474BA38A4E522DB5D3ECB21 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
 		55C58C12B9B2AB383B4BA89C /* SkimCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimCore; path = ../SkimCore; sourceTree = SOURCE_ROOT; };
+		63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = AquireBold.otf; sourceTree = "<group>"; };
 		6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleListView.swift; sourceTree = "<group>"; };
-		72A9CF25B2784E36A5E497A8 /* AquireBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; name = AquireBold.otf; path = ../../src/assets/fonts/AquireBold.otf; sourceTree = SOURCE_ROOT; };
 		911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkimMacOSApp.swift; sourceTree = "<group>"; };
+		A1BCD3DD03D305C558D07614 /* NativeAI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAI.swift; sourceTree = "<group>"; };
 		A483594667B890576E4D368D /* SkimNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkimNativeApp.swift; sourceTree = "<group>"; };
 		A9AD11F7D9C976F34C0C9347 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -60,6 +62,7 @@
 		1A2D47319E7CFF24CC9F78AD = {
 			isa = PBXGroup;
 			children = (
+				F382D506BD65E61FC2E26B85 /* fonts */,
 				5D931F04FC8D63ECE5B39F74 /* Packages */,
 				3E35E50044D8E41517AC148A /* SkimIOS */,
 				2BC0ADE719452D0F6EFFCB9A /* SkimMacOS */,
@@ -89,7 +92,6 @@
 			children = (
 				0C79E51007F91AE5C8286F40 /* Assets.xcassets */,
 				3417775593F58D71E2EF3871 /* App */,
-				72A9CF25B2784E36A5E497A8 /* AquireBold.otf */,
 				996846EA10E61EE5D576648A /* Support */,
 				F8A894C5E58672BA9365DF76 /* Views */,
 			);
@@ -115,6 +117,7 @@
 		996846EA10E61EE5D576648A /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				A1BCD3DD03D305C558D07614 /* NativeAI.swift */,
 				038284DEE00F91A360324653 /* Style.swift */,
 				1474BA38A4E522DB5D3ECB21 /* WebView.swift */,
 			);
@@ -128,6 +131,15 @@
 				B72B2D107E596891809ECA5E /* Skim macOS.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		F382D506BD65E61FC2E26B85 /* fonts */ = {
+			isa = PBXGroup;
+			children = (
+				63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */,
+			);
+			name = fonts;
+			path = ../../src/assets/fonts;
 			sourceTree = "<group>";
 		};
 		F8A894C5E58672BA9365DF76 /* Views */ = {
@@ -229,7 +241,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				4F0897A81A5C4315A23F8B0C /* AquireBold.otf in Resources */,
+				8B797999B22B89495C05CA39 /* AquireBold.otf in Resources */,
 				C1D91C8A78E543F0F69FFE82 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -252,6 +264,7 @@
 				61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */,
 				1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */,
 				E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */,
+				C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */,
 				E0006C62ED6F6DE502164145 /* RootView.swift in Sources */,
 				D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */,
 				6048C096F85B46DFAF8590AF /* Style.swift in Sources */,

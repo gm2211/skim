@@ -339,8 +339,8 @@ private struct ReaderPage: View {
                         .padding(.top, 80)
                 }
             }
-            .padding(.horizontal, 38)
-            .padding(.top, 16)
+            .padding(.horizontal, 32)
+            .padding(.top, 10)
             .padding(.bottom, 56)
         }
         .scrollIndicators(.visible)
@@ -348,34 +348,37 @@ private struct ReaderPage: View {
 
     private func articleHeader(_ article: Article) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(article.title)
-                .font(.system(size: 30, weight: .heavy))
+            Text(article.displayTitle)
+                .font(.system(size: 28, weight: .heavy))
                 .foregroundStyle(SkimStyle.text)
+                .lineSpacing(1)
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 9) {
-                Text(article.feedTitle)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(article.displayFeedTitle)
                     .foregroundStyle(SkimStyle.accent)
-                if let author = article.author, !author.isEmpty {
-                    Text("·")
-                    Text(author)
+
+                HStack(spacing: 7) {
+                    if let author = article.displayAuthor {
+                        Text(author)
+                    }
+                    if article.displayAuthor != nil, article.publishedAt != nil {
+                        Text("·")
+                    }
+                    if let publishedAt = article.publishedAt {
+                        Text(publishedAt.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().year().hour().minute()))
+                    }
                 }
-                if let publishedAt = article.publishedAt {
-                    Text("·")
-                    Text(publishedAt.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().year().hour().minute()))
-                }
+                .foregroundStyle(SkimStyle.secondary)
             }
-            .font(.system(size: 16, weight: .medium))
-            .foregroundStyle(SkimStyle.secondary)
-            .lineLimit(2)
+            .font(.system(size: 15, weight: .medium))
+            .lineLimit(1)
         }
     }
 
     @ViewBuilder
     private func articleBody(_ article: Article) -> some View {
-        let body = article.contentText?.trimmingCharacters(in: .whitespacesAndNewlines)
-            ?? article.contentHTML?.skimPlainText.trimmingCharacters(in: .whitespacesAndNewlines)
-            ?? ""
+        let body = article.displayBody
 
         if body.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
@@ -391,8 +394,8 @@ private struct ReaderPage: View {
             .skimGlass(cornerRadius: 20)
         } else {
             Text(body)
-                .font(.system(size: 20, weight: .regular))
-                .lineSpacing(8)
+                .font(.system(size: 19, weight: .regular))
+                .lineSpacing(7)
                 .foregroundStyle(SkimStyle.text)
                 .textSelection(.enabled)
         }
@@ -417,6 +420,77 @@ private extension String {
     var skimPlainText: String {
         replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .decodingHTMLEntities
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var decodingHTMLEntities: String {
+        var decoded = self
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&#160;", with: " ")
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&apos;", with: "'")
+
+        let pattern = #"&#(x?[0-9A-Fa-f]+);"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return decoded }
+        let matches = regex.matches(in: decoded, range: NSRange(decoded.startIndex..<decoded.endIndex, in: decoded)).reversed()
+
+        for match in matches {
+            guard match.numberOfRanges == 2,
+                  let fullRange = Range(match.range(at: 0), in: decoded),
+                  let valueRange = Range(match.range(at: 1), in: decoded)
+            else { continue }
+
+            let value = decoded[valueRange]
+            let radix = value.lowercased().hasPrefix("x") ? 16 : 10
+            let scalarText = radix == 16 ? value.dropFirst() : Substring(value)
+            guard let codepoint = UInt32(scalarText, radix: radix),
+                  let scalar = UnicodeScalar(codepoint)
+            else { continue }
+
+            decoded.replaceSubrange(fullRange, with: String(scalar))
+        }
+
+        return decoded
+    }
+}
+
+private extension Article {
+    var displayTitle: String {
+        title.decodingHTMLEntities
+    }
+
+    var displayFeedTitle: String {
+        feedTitle.decodingHTMLEntities
+    }
+
+    var displayAuthor: String? {
+        author?.decodingHTMLEntities.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    }
+
+    var displayBody: String {
+        let body = contentText?.decodingHTMLEntities.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? contentHTML?.skimPlainText.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? ""
+        return body.removingReaderBoilerplate
+    }
+}
+
+private extension String {
+    var removingReaderBoilerplate: String {
+        let normalized = replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let redditPattern = #"^submitted by\s+/u/\S+\s+\[link\]\s+(&\s+)?\[comments\]$"#
+        if normalized.range(of: redditPattern, options: [.regularExpression, .caseInsensitive]) != nil {
+            return ""
+        }
+
+        return self
     }
 }

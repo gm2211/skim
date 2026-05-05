@@ -142,6 +142,28 @@ import Testing
     ])
 }
 
+@Test func decodesHTMLEntitiesFromRSS() throws {
+    let rss = """
+    <rss version="2.0">
+      <channel>
+        <title>Research &amp; News</title>
+        <item>
+          <title>Spirit Airlines can&#39;t keep up with oil prices</title>
+          <link>https://example.com/spirit</link>
+          <description>&amp;#32;submitted by &amp;#32;/u/ControlCAD [link] &amp;amp; [comments]</description>
+        </item>
+      </channel>
+    </rss>
+    """
+
+    let feed = try FeedParser().parse(data: Data(rss.utf8), fallbackTitle: "fallback")
+    let article = try #require(feed.articles.first)
+
+    #expect(feed.title == "Research & News")
+    #expect(article.title == "Spirit Airlines can't keep up with oil prices")
+    #expect(article.contentText == "submitted by /u/ControlCAD [link] & [comments]")
+}
+
 private func temporaryStore() throws -> SkimStore {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     let url = dir.appendingPathComponent("skim.sqlite")

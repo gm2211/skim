@@ -125,6 +125,7 @@ public struct AISettings: Codable, Equatable, Sendable {
     public var summaryLength: String?
     public var summaryTone: String?
     public var summaryCustomWordCount: Int?
+    public var summaryCustomPrompt: String?
     public var triageUserPrompt: String?
 
     public init(
@@ -139,6 +140,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         summaryLength: String? = "short",
         summaryTone: String? = "concise",
         summaryCustomWordCount: Int? = nil,
+        summaryCustomPrompt: String? = nil,
         triageUserPrompt: String? = nil
     ) {
         self.provider = provider
@@ -152,6 +154,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         self.summaryLength = summaryLength
         self.summaryTone = summaryTone
         self.summaryCustomWordCount = summaryCustomWordCount
+        self.summaryCustomPrompt = summaryCustomPrompt
         self.triageUserPrompt = triageUserPrompt
     }
 
@@ -167,6 +170,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         case summaryLength
         case summaryTone
         case summaryCustomWordCount
+        case summaryCustomPrompt
         case triageUserPrompt
     }
 
@@ -179,6 +183,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         case summary_length
         case summary_tone
         case summary_custom_word_count
+        case summary_custom_prompt
         case triage_user_prompt
     }
 
@@ -196,6 +201,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         summaryLength = try container.decodeIfPresent(String.self, forKey: .summaryLength) ?? legacy.decodeIfPresent(String.self, forKey: .summary_length) ?? "short"
         summaryTone = try container.decodeIfPresent(String.self, forKey: .summaryTone) ?? legacy.decodeIfPresent(String.self, forKey: .summary_tone) ?? "concise"
         summaryCustomWordCount = try container.decodeIfPresent(Int.self, forKey: .summaryCustomWordCount) ?? legacy.decodeIfPresent(Int.self, forKey: .summary_custom_word_count)
+        summaryCustomPrompt = try container.decodeIfPresent(String.self, forKey: .summaryCustomPrompt) ?? legacy.decodeIfPresent(String.self, forKey: .summary_custom_prompt)
         triageUserPrompt = try container.decodeIfPresent(String.self, forKey: .triageUserPrompt) ?? legacy.decodeIfPresent(String.self, forKey: .triage_user_prompt)
     }
 }

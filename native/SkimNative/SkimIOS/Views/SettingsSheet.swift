@@ -161,6 +161,13 @@ struct SettingsSheet: View {
             }
 
             SettingsTextField(
+                title: "Summary prompt",
+                placeholder: "Focus on risks, implications, and what changed...",
+                text: summaryPromptBinding,
+                axis: .vertical
+            )
+
+            SettingsTextField(
                 title: "AI Inbox interests",
                 placeholder: "Prioritize distributed systems, Swift, local AI...",
                 text: triagePromptBinding,
@@ -316,6 +323,13 @@ struct SettingsSheet: View {
         Binding(
             get: { draft.ai.summaryTone ?? "concise" },
             set: { value in updateAI { $0.summaryTone = value } }
+        )
+    }
+
+    private var summaryPromptBinding: Binding<String> {
+        Binding(
+            get: { draft.ai.summaryCustomPrompt ?? "" },
+            set: { value in updateAI { $0.summaryCustomPrompt = value.nilIfEmpty } }
         )
     }
 

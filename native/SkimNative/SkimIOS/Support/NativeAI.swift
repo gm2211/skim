@@ -306,7 +306,11 @@ enum NativeAI {
 
     private static func summaryInstructions(_ settings: AISettings) -> String {
         let tone = settings.summaryTone?.nilIfEmpty ?? "concise"
-        return "You summarize articles accurately in a \(tone) style. Preserve nuance, avoid hype, and mention uncertainty when the source is thin."
+        var instructions = "You summarize articles accurately in a \(tone) style. Preserve nuance, avoid hype, and mention uncertainty when the source is thin."
+        if let custom = settings.summaryCustomPrompt?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
+            instructions += "\n\nUser summary instructions:\n\(custom)"
+        }
+        return instructions
     }
 
     private static func summaryLengthDescription(_ settings: AISettings) -> String {

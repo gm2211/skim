@@ -17,6 +17,7 @@ struct ArticleDetailView: View {
     @State private var isLoading = true
     @State private var activeAIResult: AIResultRequest?
     @State private var activeAIChat: AIChatRequest?
+    @State private var activeSummaryConfiguration: Article?
 
     var body: some View {
         ZStack {
@@ -52,6 +53,14 @@ struct ArticleDetailView: View {
             AIResultSheet(request: request)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $activeSummaryConfiguration) { article in
+            SummaryConfigurationSheet(article: article, defaults: model.settings.ai) { summarySettings in
+                runSummary(article: article, summarySettings: summarySettings)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(SkimStyle.chrome)
         }
         .sheet(item: $activeAIChat) { request in
             AIChatSheet(request: request)
@@ -130,16 +139,175 @@ struct ArticleDetailView: View {
 
     private func presentSummary() {
         guard let article else { return }
-        activeAIResult = AIResultRequest(
-            title: "AI Summary",
-            subtitle: article.title
-        ) {
-            let text = try await NativeAI.summarize(article: article, settings: model.settings)
-            return AIResultAnswer(text: text, articles: [article])
+        activeSummaryConfiguration = article
+    }
+
+    private func runSummary(article: Article, summarySettings: AISettings) {
+        var settings = model.settings
+        settings.ai = summarySettings
+        activeSummaryConfiguration = nil
+
+        Task {
+            await model.saveSettings(settings)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            activeAIResult = AIResultRequest(
+                title: "AI Summary",
+                subtitle: article.title
+            ) {
+                let text = try await NativeAI.summarize(article: article, settings: settings)
+                return AIResultAnswer(text: text, articles: [article])
+            }
+        }
+    }
+}
+
+private struct SummaryConfigurationSheet: View {
+    var article: Article
+    var defaults: AISettings
+    var onRun: (AISettings) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var style: String
+    @State private var length: String
+    @State private var maxWords: String
+    @State private var customPrompt: String
+
+    init(article: Article, defaults: AISettings, onRun: @escaping (AISettings) -> Void) {
+        self.article = article
+        self.defaults = defaults
+        self.onRun = onRun
+        _style = State(initialValue: defaults.summaryTone ?? "concise")
+        _length = State(initialValue: defaults.summaryLength ?? "short")
+        _maxWords = State(initialValue: defaults.summaryCustomWordCount.map(String.init) ?? "")
+        _customPrompt = State(initialValue: defaults.summaryCustomPrompt ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Configure Summary")
+                            .font(.system(size: 31, weight: .heavy))
+                            .foregroundStyle(SkimStyle.text)
+                        Text(article.title)
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .lineLimit(3)
+                    }
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Style")
+                            .summaryControlLabel()
+                        Picker("Style", selection: $style) {
+                            Text("Concise").tag("concise")
+                            Text("Descriptive").tag("descriptive")
+                            Text("Casual").tag("casual")
+                            Text("Technical").tag("technical")
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Length")
+                            .summaryControlLabel()
+                        Picker("Length", selection: $length) {
+                            Text("Tiny").tag("tiny")
+                            Text("Short").tag("short")
+                            Text("Medium").tag("medium")
+                            Text("Long").tag("long")
+                        }
+                        .pickerStyle(.segmented)
+
+                        TextField("Optional max words", text: $maxWords)
+                            .keyboardType(.numberPad)
+                            .textInputAutocapitalization(.never)
+                            .font(.system(size: 17, weight: .regular))
+                            .foregroundStyle(SkimStyle.text)
+                            .padding(.horizontal, 14)
+                            .frame(height: 46)
+                            .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(SkimStyle.separator, lineWidth: 1)
+                            }
+                    }
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Custom Prompt")
+                            .summaryControlLabel()
+                        TextField("Focus on tradeoffs, risks, key takeaways...", text: $customPrompt, axis: .vertical)
+                            .lineLimit(4...8)
+                            .textInputAutocapitalization(.sentences)
+                            .font(.system(size: 17, weight: .regular))
+                            .foregroundStyle(SkimStyle.text)
+                            .padding(14)
+                            .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(SkimStyle.separator, lineWidth: 1)
+                            }
+                    }
+
+                    Text("These choices are saved as your new summary defaults when you run.")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(24)
+            }
+            .background(SkimStyle.chrome.ignoresSafeArea())
+            .scrollContentBackground(.hidden)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Run") {
+                        onRun(configuredSettings)
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
         }
     }
 
-    private func presentArticleChat() {
+    private var configuredSettings: AISettings {
+        var next = defaults
+        next.summaryTone = style
+        next.summaryLength = length
+        next.summaryCustomWordCount = normalizedWordCount
+        next.summaryCustomPrompt = customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        return next
+    }
+
+    private var normalizedWordCount: Int? {
+        let trimmed = maxWords.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let words = Int(trimmed), words > 0 else { return nil }
+        return min(words, 900)
+    }
+}
+
+private extension Text {
+    func summaryControlLabel() -> some View {
+        font(.system(size: 13, weight: .bold))
+            .foregroundStyle(SkimStyle.secondary)
+            .textCase(.uppercase)
+            .tracking(1.2)
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+private extension ArticleDetailView {
+    func presentArticleChat() {
         guard let article else { return }
         activeAIChat = AIChatRequest(
             title: "Chat with Article",

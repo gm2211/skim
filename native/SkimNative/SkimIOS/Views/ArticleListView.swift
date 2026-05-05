@@ -1,6 +1,9 @@
 import SkimCore
 import SwiftUI
 import UniformTypeIdentifiers
+#if canImport(UIKit)
+import UIKit
+#endif
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -14,6 +17,7 @@ struct ArticleListView: View {
     @State private var showSettings = false
     @State private var activeAIResult: AIResultRequest?
     @State private var activeAIChat: AIChatRequest?
+    @FocusState private var isSearchFocused: Bool
 
     var body: some View {
         ZStack {
@@ -32,6 +36,7 @@ struct ArticleListView: View {
                 FeedPickerSheet(
                     isPresented: $showFeedPicker,
                     onAddFeed: {
+                        dismissTextEntry()
                         showFeedPicker = false
                         showAddFeed = true
                     },
@@ -39,22 +44,27 @@ struct ArticleListView: View {
                         presentImporter()
                     },
                     onAutoGroup: {
+                        dismissTextEntry()
                         showFeedPicker = false
                         showAutoGroup = true
                     },
                     onSettings: {
+                        dismissTextEntry()
                         showFeedPicker = false
                         showSettings = true
                     },
                     onChat: {
+                        dismissTextEntry()
                         showFeedPicker = false
                         presentArticleChat()
                     },
                     onCatchUp: {
+                        dismissTextEntry()
                         showFeedPicker = false
                         presentQuickCatchUp()
                     },
                     onAIInbox: {
+                        dismissTextEntry()
                         showFeedPicker = false
                         presentAIInbox()
                     },
@@ -82,6 +92,7 @@ struct ArticleListView: View {
             AddFeedSheet(
                 isPresented: $showAddFeed,
                 onAdd: { url in
+                    dismissTextEntry()
                     Task { await model.addFeed(urlString: url) }
                 },
                 onImportOPML: {
@@ -103,14 +114,17 @@ struct ArticleListView: View {
             SettingsSheet(
                 isPresented: $showSettings,
                 onAddFeed: {
+                    dismissTextEntry()
                     showSettings = false
                     showAddFeed = true
                 },
                 onImportOPML: {
+                    dismissTextEntry()
                     showSettings = false
                     presentImporter()
                 },
                 onAutoGroup: {
+                    dismissTextEntry()
                     showSettings = false
                     showAutoGroup = true
                 },
@@ -136,10 +150,36 @@ struct ArticleListView: View {
                 .presentationBackground(SkimStyle.chrome)
         }
         .onChange(of: model.listMode) { _, _ in
+            dismissTextEntry()
             Task { await model.reloadArticles() }
         }
         .onChange(of: model.searchQuery) { _, _ in
             Task { await model.reloadArticles() }
+        }
+        .onChange(of: showFeedPicker) { _, isShowing in
+            if isShowing {
+                dismissTextEntry()
+            }
+        }
+        .onChange(of: showAutoGroup) { _, isShowing in
+            if isShowing {
+                dismissTextEntry()
+            }
+        }
+        .onChange(of: showSettings) { _, isShowing in
+            if isShowing {
+                dismissTextEntry()
+            }
+        }
+        .onChange(of: activeAIResult?.id) { _, requestID in
+            if requestID != nil {
+                dismissTextEntry()
+            }
+        }
+        .onChange(of: activeAIChat?.id) { _, requestID in
+            if requestID != nil {
+                dismissTextEntry()
+            }
         }
         .alert("Skim", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) {}
@@ -149,6 +189,7 @@ struct ArticleListView: View {
     }
 
     private func presentImporter() {
+        dismissTextEntry()
         showFeedPicker = false
         showAddFeed = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -157,6 +198,7 @@ struct ArticleListView: View {
     }
 
     private func presentQuickCatchUp() {
+        dismissTextEntry()
         let articles = model.articles
         activeAIResult = AIResultRequest(
             title: "Quick Catch-up",
@@ -172,6 +214,7 @@ struct ArticleListView: View {
     }
 
     private func presentArticleChat() {
+        dismissTextEntry()
         let articles = model.articles
         activeAIChat = AIChatRequest(
             title: "Chat with Articles",
@@ -187,6 +230,7 @@ struct ArticleListView: View {
     }
 
     private func presentAIInbox() {
+        dismissTextEntry()
         let articles = model.articles
         activeAIResult = AIResultRequest(
             title: "AI Inbox",
@@ -211,6 +255,7 @@ struct ArticleListView: View {
                 let shouldOpen = value.translation.width > 82 || value.predictedEndTranslation.width > 145
                 guard shouldOpen else { return }
 
+                dismissTextEntry()
                 withAnimation(.smooth(duration: 0.26)) {
                     showFeedPicker = true
                 }
@@ -220,6 +265,7 @@ struct ArticleListView: View {
     private var topBar: some View {
         HStack(alignment: .center, spacing: 22) {
             BorderlessIconButton(systemName: "line.3.horizontal", title: "Feeds", size: 20, tapSize: 42) {
+                dismissTextEntry()
                 withAnimation(.smooth(duration: 0.26)) {
                     showFeedPicker = true
                 }
@@ -265,6 +311,11 @@ struct ArticleListView: View {
                     .textInputAutocapitalization(.never)
                     .foregroundStyle(SkimStyle.text)
                     .font(.system(size: 16, weight: .regular))
+                    .focused($isSearchFocused)
+                    .submitLabel(.search)
+                    .onSubmit {
+                        dismissTextEntry()
+                    }
             }
             .padding(.horizontal, 13)
             .frame(height: 38)
@@ -278,6 +329,11 @@ struct ArticleListView: View {
         .padding(.top, 8)
         .padding(.bottom, 9)
         .background(SkimStyle.chrome)
+    }
+
+    private func dismissTextEntry() {
+        isSearchFocused = false
+        dismissUIKitKeyboard()
     }
 
     @ViewBuilder
@@ -303,10 +359,16 @@ struct ArticleListView: View {
                 }
 
                 VStack(spacing: 10) {
-                    Button("Add RSS Feed") { showAddFeed = true }
+                    Button("Add RSS Feed") {
+                        dismissTextEntry()
+                        showAddFeed = true
+                    }
                         .buttonStyle(.glassProminent)
 
-                    Button("Import OPML") { showImporter = true }
+                    Button("Import OPML") {
+                        dismissTextEntry()
+                        showImporter = true
+                    }
                         .buttonStyle(.plain)
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(SkimStyle.accent)
@@ -340,6 +402,7 @@ struct ArticleListView: View {
                 }
             }
             .listStyle(.plain)
+            .scrollDismissesKeyboard(.immediately)
             .scrollContentBackground(.hidden)
             .background(SkimStyle.chrome)
             .refreshable {
@@ -356,6 +419,7 @@ struct ArticleListView: View {
         HStack(spacing: 28) {
             ForEach(ArticleListMode.allCases) { mode in
                 Button {
+                    dismissTextEntry()
                     model.listMode = mode
                 } label: {
                     Label(mode.title, systemImage: mode.systemImage)
@@ -495,6 +559,7 @@ private struct FeedPickerSheet: View {
             }
             .coordinateSpace(name: "feedPaneScroll")
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.immediately)
             .onPreferenceChange(FeedPaneScrollOffsetKey.self) { value in
                 scrollTopOffset = value
             }
@@ -523,6 +588,7 @@ private struct FeedPickerSheet: View {
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 let shouldDismiss = value.translation.width < -80 || value.predictedEndTranslation.width < -140
                 guard shouldDismiss else { return }
+                dismissUIKitKeyboard()
                 withAnimation(.smooth(duration: 0.26)) {
                     isPresented = false
                 }
@@ -595,6 +661,7 @@ private struct FeedPickerSheet: View {
     }
 
     private func selectFeed(_ feed: Feed) {
+        dismissUIKitKeyboard()
         model.selectedFeedID = feed.id
         if model.listMode == .recent {
             model.listMode = .unread
@@ -739,6 +806,7 @@ private struct AutoGroupSheet: View {
                 Spacer()
 
                 Button {
+                    dismissUIKitKeyboard()
                     isPresented = false
                 } label: {
                     Image(systemName: "xmark")
@@ -1499,7 +1567,7 @@ private struct AddFeedSheet: View {
 
             HStack(spacing: 14) {
                 Button("Import OPML") {
-                    isPresented = false
+                    close()
                     onImportOPML()
                 }
                 .buttonStyle(.plain)
@@ -1510,7 +1578,7 @@ private struct AddFeedSheet: View {
 
                 Button("Add Feed") {
                     let value = feedURL
-                    isPresented = false
+                    close()
                     onAdd(value)
                 }
                 .buttonStyle(.glassProminent)
@@ -1522,6 +1590,16 @@ private struct AddFeedSheet: View {
         .onAppear {
             isFocused = true
         }
+        .onDisappear {
+            isFocused = false
+            dismissUIKitKeyboard()
+        }
+    }
+
+    private func close() {
+        isFocused = false
+        dismissUIKitKeyboard()
+        isPresented = false
     }
 }
 
@@ -1683,4 +1761,10 @@ private struct ArticleRow: View {
         guard let currentIndex, currentIndex + 1 < visibleArticles.count else { return [] }
         return Array(visibleArticles[(currentIndex + 1)...])
     }
+}
+
+private func dismissUIKitKeyboard() {
+#if canImport(UIKit)
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+#endif
 }

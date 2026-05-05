@@ -75,6 +75,13 @@ final class AppModel: ObservableObject {
         }
     }
 
+    var currentUnreadCount: Int {
+        if let selectedFeedID {
+            return unreadCounts[selectedFeedID] ?? 0
+        }
+        return totalUnreadCount
+    }
+
     var filter: ArticleFilter {
         ArticleFilter(
             feedID: selectedFeedID,

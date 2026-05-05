@@ -247,7 +247,7 @@ struct ArticleListView: View {
                 .font(.system(size: 25, weight: .heavy))
                 .foregroundStyle(SkimStyle.text)
                 .lineLimit(2)
-            Text("\(model.totalUnreadCount) Unread Items")
+            Text("\(model.currentUnreadCount) Unread Items")
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(SkimStyle.secondary)
         }

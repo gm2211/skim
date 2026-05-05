@@ -131,10 +131,7 @@ struct SettingsSheet: View {
             }
 
             if draft.ai.provider == "mlx" {
-                Text("Native MLX model download/inference still needs to be ported from the Tauri build. This option is visible so the app shape matches Skim, but cloud providers or Apple Intelligence are the working paths right now.")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(SkimStyle.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                MLXSettingsPanel(ai: aiSettingsBinding)
             }
 
             Divider()
@@ -223,7 +220,7 @@ struct SettingsSheet: View {
             ("claude-subscription", "Claude Pro/Max", "Uses a Claude OAuth bearer token. Full sign-in UI is still being ported."),
             ("openrouter", "OpenRouter", "Uses OpenRouter's OpenAI-compatible API."),
             ("custom", "Custom", "Any OpenAI-compatible endpoint."),
-            ("mlx", "On-device MLX", "Local model path from the Tauri app; native port pending."),
+            ("mlx", "On-device MLX", "Download and run a small MLX model on this iPhone. Offline after download."),
             ("none", "None", "Disable AI features.")
         ]
     }
@@ -240,7 +237,9 @@ struct SettingsSheet: View {
         switch draft.ai.provider {
         case "foundation-models":
             return aiStatus.isAvailable
-        case "none", "mlx":
+        case "mlx":
+            return NativeMLX.isAvailable && NativeMLX.isDownloadedSync(mlxSelectedRepoId)
+        case "none":
             return false
         default:
             return draft.ai.apiKey?.nilIfEmpty != nil || draft.ai.provider == "custom"
@@ -254,7 +253,10 @@ struct SettingsSheet: View {
         case "none":
             return "AI disabled"
         case "mlx":
-            return "MLX native port pending"
+            if !NativeMLX.isAvailable {
+                return "MLX unavailable here"
+            }
+            return NativeMLX.isDownloadedSync(mlxSelectedRepoId) ? "On-device MLX ready" : "Download a model"
         default:
             return providerIsReady ? "Provider configured" : "API key needed"
         }
@@ -267,7 +269,14 @@ struct SettingsSheet: View {
         case "none":
             return "Choose another provider to use summaries, chat, catch-up, and AI Inbox."
         case "mlx":
-            return "The native app still needs the MLX downloader and inference bridge."
+            let option = NativeMLX.option(for: mlxSelectedRepoId)
+            if !NativeMLX.isAvailable {
+                return "MLX inference and downloads require a real iPhone; the Simulator cannot run this backend."
+            }
+            if NativeMLX.isDownloadedSync(mlxSelectedRepoId) {
+                return "\(option.label) is cached locally and ready for summaries, chat, catch-up, and AI Inbox."
+            }
+            return "Choose a model, download it once, then Skim can run AI locally on-device."
         default:
             return providerIsReady ? "Skim will use this provider for chat, summaries, catch-up, and AI Inbox." : "Paste a token or API key, then save settings."
         }
@@ -284,10 +293,36 @@ struct SettingsSheet: View {
         }
     }
 
+    private var mlxSelectedRepoId: String {
+        draft.ai.localModelPath?.nilIfEmpty
+            ?? draft.ai.model?.nilIfEmpty
+            ?? NativeMLX.defaultRepoId
+    }
+
     private var aiProviderBinding: Binding<String> {
         Binding(
             get: { draft.ai.provider },
-            set: { value in updateAI { $0.provider = value } }
+            set: { value in
+                updateAI {
+                    $0.provider = value
+                    if value == "mlx" {
+                        let repoId = $0.localModelPath?.nilIfEmpty ?? $0.model?.nilIfEmpty ?? NativeMLX.defaultRepoId
+                        $0.localModelPath = repoId
+                        $0.model = repoId
+                    }
+                }
+            }
+        )
+    }
+
+    private var aiSettingsBinding: Binding<AISettings> {
+        Binding(
+            get: { draft.ai },
+            set: { value in
+                var next = draft
+                next.ai = value
+                draft = next
+            }
         )
     }
 
@@ -344,6 +379,179 @@ struct SettingsSheet: View {
         var next = draft
         mutate(&next.ai)
         draft = next
+    }
+}
+
+private struct MLXSettingsPanel: View {
+    @Binding var ai: AISettings
+    @State private var isDownloaded = false
+    @State private var downloadProgress: Double?
+    @State private var isWorking = false
+    @State private var errorMessage: String?
+
+    private var selectedRepoId: String {
+        ai.localModelPath?.nilIfEmpty
+            ?? ai.model?.nilIfEmpty
+            ?? NativeMLX.defaultRepoId
+    }
+
+    private var selectedOption: MLXModelOption {
+        NativeMLX.option(for: selectedRepoId)
+    }
+
+    private var selectedRepoBinding: Binding<String> {
+        Binding(
+            get: { selectedRepoId },
+            set: { repoId in
+                ai.localModelPath = repoId
+                ai.model = repoId
+                errorMessage = nil
+                refreshDownloadState()
+            }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Picker("Model", selection: selectedRepoBinding) {
+                ForEach(NativeMLX.modelOptions) { option in
+                    Text(option.label).tag(option.repoId)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(SkimStyle.accent)
+
+            Text("Storage estimate: ~\(storageText(selectedOption.sizeGB)) on disk. Interrupted downloads are cleaned before the next attempt.")
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(SkimStyle.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !NativeMLX.isAvailable {
+                providerNotice(
+                    color: .orange,
+                    title: "Real iPhone required",
+                    detail: "The Simulator can show settings, but MLX downloads and inference run only on-device."
+                )
+            }
+
+            if let errorMessage {
+                providerNotice(color: .red, title: "MLX error", detail: errorMessage)
+            }
+
+            if let downloadProgress {
+                VStack(alignment: .leading, spacing: 8) {
+                    ProgressView(value: downloadProgress)
+                        .tint(SkimStyle.accent)
+                    Text("Downloading \(Int(downloadProgress * 100))%")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    Task { await downloadSelectedModel() }
+                } label: {
+                    Text(isDownloaded ? "Downloaded" : "Download")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(isDownloaded ? Color.green.opacity(0.45) : SkimStyle.accent)
+                .disabled(isWorking || isDownloaded || !NativeMLX.isAvailable)
+
+                if isDownloaded {
+                    Button(role: .destructive) {
+                        Task { await deleteSelectedModel() }
+                    } label: {
+                        Text("Delete")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 48)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isWorking)
+                }
+            }
+        }
+        .task(id: selectedRepoId) {
+            await refreshDownloadStateAsync()
+        }
+    }
+
+    private func providerNotice(color: Color, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Circle()
+                .fill(color.opacity(0.88))
+                .frame(width: 9, height: 9)
+                .padding(.top, 7)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(SkimStyle.text)
+                Text(detail)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func storageText(_ size: Double) -> String {
+        size > 0 ? String(format: "%.1f GB", size) : "unknown"
+    }
+
+    @MainActor
+    private func refreshDownloadState() {
+        isDownloaded = NativeMLX.isDownloadedSync(selectedRepoId)
+    }
+
+    @MainActor
+    private func refreshDownloadStateAsync() async {
+        isDownloaded = await NativeMLX.isDownloaded(selectedRepoId)
+    }
+
+    @MainActor
+    private func downloadSelectedModel() async {
+        errorMessage = nil
+        downloadProgress = 0
+        isWorking = true
+        let repoId = selectedRepoId
+        do {
+            try await NativeMLX.download(repoId: repoId) { progress in
+                Task { @MainActor in
+                    downloadProgress = progress
+                }
+            }
+            ai.localModelPath = repoId
+            ai.model = repoId
+            isDownloaded = true
+            downloadProgress = nil
+        } catch {
+            errorMessage = error.localizedDescription
+            downloadProgress = nil
+            isDownloaded = NativeMLX.isDownloadedSync(repoId)
+        }
+        isWorking = false
+    }
+
+    @MainActor
+    private func deleteSelectedModel() async {
+        errorMessage = nil
+        isWorking = true
+        let repoId = selectedRepoId
+        do {
+            try await NativeMLX.delete(repoId: repoId)
+            isDownloaded = false
+        } catch {
+            errorMessage = error.localizedDescription
+            isDownloaded = NativeMLX.isDownloadedSync(repoId)
+        }
+        isWorking = false
     }
 }
 

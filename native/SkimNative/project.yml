@@ -7,6 +7,15 @@ options:
 packages:
   SkimCore:
     path: ../SkimCore
+  mlx-swift:
+    url: https://github.com/ml-explore/mlx-swift.git
+    from: 0.18.0
+  mlx-swift-examples:
+    url: https://github.com/ml-explore/mlx-swift-examples.git
+    from: 2.21.0
+  swift-transformers:
+    url: https://github.com/huggingface/swift-transformers
+    from: 1.0.0
 targets:
   Skim iOS:
     type: application
@@ -18,13 +27,21 @@ targets:
         buildPhase: resources
     dependencies:
       - package: SkimCore
+      - package: mlx-swift
+        product: MLX
+      - package: mlx-swift-examples
+        product: MLXLMCommon
+      - package: mlx-swift-examples
+        product: MLXLLM
+      - package: swift-transformers
+        product: Hub
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gm2211.skim
         PRODUCT_NAME: Skim
         DEVELOPMENT_TEAM: 6KQV68SJ5P
         MARKETING_VERSION: 0.1.5
-        CURRENT_PROJECT_VERSION: 3
+        CURRENT_PROJECT_VERSION: 4
         SWIFT_VERSION: 6.0
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Skim
@@ -53,7 +70,7 @@ targets:
         PRODUCT_NAME: Skim
         DEVELOPMENT_TEAM: 6KQV68SJ5P
         MARKETING_VERSION: 0.1.5
-        CURRENT_PROJECT_VERSION: 3
+        CURRENT_PROJECT_VERSION: 4
         SWIFT_VERSION: 6.0
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Skim

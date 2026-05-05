@@ -140,7 +140,13 @@ enum NativeAI {
         )
     }
 
-    static func complete(settings: AppSettings, instructions: String, prompt: String, maxTokens: Int) async throws -> String {
+    static func complete(
+        settings: AppSettings,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        jsonMode: Bool = false
+    ) async throws -> String {
         let ai = settings.ai
         switch ai.provider {
         case "none":
@@ -152,7 +158,13 @@ enum NativeAI {
         case "anthropic", "claude-subscription":
             return try await completeAnthropic(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
         case "mlx":
-            throw NativeAIError.unavailable("MLX local model support is not wired in the native iOS app yet. Pick Apple Intelligence, OpenAI, or Claude API for now.")
+            return try await NativeMLX.complete(
+                settings: ai,
+                instructions: instructions,
+                prompt: prompt,
+                maxTokens: maxTokens,
+                jsonMode: jsonMode
+            )
         default:
             throw NativeAIError.unavailable("Provider \(ai.provider) is not available in the native iOS app.")
         }

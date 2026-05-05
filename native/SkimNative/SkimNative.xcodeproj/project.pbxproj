@@ -9,18 +9,24 @@
 /* Begin PBXBuildFile section */
 		014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9167BE3C78659C05031D238 /* SettingsSheet.swift */; };
 		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
+		214DC26687D7CFE6647B4E3C /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = C72D1637C2C2401209468AAB /* MLXLLM */; };
+		436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */; };
 		568EFC6280529AB7F91222BD /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8734D4E26C300D1AD49D4262 /* SkimCore */; };
 		6048C096F85B46DFAF8590AF /* Style.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038284DEE00F91A360324653 /* Style.swift */; };
 		61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */; };
 		705834903C7D5B0F2442C2D8 /* SkimMacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */; };
 		8B797999B22B89495C05CA39 /* AquireBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */; };
 		8ED4B358481AC4273C225054 /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474BA38A4E522DB5D3ECB21 /* WebView.swift */; };
+		9A48EFF3F29B3477E0CE9120 /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 8B0DFA296F4A48F6B090AFBC /* Hub */; };
 		C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BCD3DD03D305C558D07614 /* NativeAI.swift */; };
 		C1D91C8A78E543F0F69FFE82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0C79E51007F91AE5C8286F40 /* Assets.xcassets */; };
 		D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A483594667B890576E4D368D /* SkimNativeApp.swift */; };
+		DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BA45434D97C1ACA953B839 /* NativeMLX.swift */; };
+		DFC1782BE965DCD3BBEAFEC9 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */; };
 		E0006C62ED6F6DE502164145 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9AD11F7D9C976F34C0C9347 /* RootView.swift */; };
 		E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */; };
 		F22F6907C7390FE6C195AD8C /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 96F35F36DD1B890E9DE5ACBA /* SkimCore */; };
+		F77D922DF2F50121B27BDD3B /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = A6EF4FD219591BC7A9787950 /* MLX */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -39,6 +45,8 @@
 		B9167BE3C78659C05031D238 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleDetailView.swift; sourceTree = "<group>"; };
 		D60276D39C8ED76452B2EB26 /* Skim iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Skim iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXRunner.swift; sourceTree = "<group>"; };
+		F6BA45434D97C1ACA953B839 /* NativeMLX.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMLX.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -55,6 +63,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				568EFC6280529AB7F91222BD /* SkimCore in Frameworks */,
+				F77D922DF2F50121B27BDD3B /* MLX in Frameworks */,
+				DFC1782BE965DCD3BBEAFEC9 /* MLXLMCommon in Frameworks */,
+				214DC26687D7CFE6647B4E3C /* MLXLLM in Frameworks */,
+				9A48EFF3F29B3477E0CE9120 /* Hub in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,7 +131,9 @@
 		996846EA10E61EE5D576648A /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */,
 				A1BCD3DD03D305C558D07614 /* NativeAI.swift */,
+				F6BA45434D97C1ACA953B839 /* NativeMLX.swift */,
 				038284DEE00F91A360324653 /* Style.swift */,
 				1474BA38A4E522DB5D3ECB21 /* WebView.swift */,
 			);
@@ -173,6 +187,10 @@
 			name = "Skim iOS";
 			packageProductDependencies = (
 				8734D4E26C300D1AD49D4262 /* SkimCore */,
+				A6EF4FD219591BC7A9787950 /* MLX */,
+				01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */,
+				C72D1637C2C2401209468AAB /* MLXLLM */,
+				8B0DFA296F4A48F6B090AFBC /* Hub */,
 			);
 			productName = "Skim iOS";
 			productReference = D60276D39C8ED76452B2EB26 /* Skim iOS.app */;
@@ -226,6 +244,9 @@
 			mainGroup = 1A2D47319E7CFF24CC9F78AD;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				67D103D1C16F827F3B1E7819 /* XCRemoteSwiftPackageReference "mlx-swift" */,
+				8EFD0C399CD27477B350989C /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
+				9A45BD01B133ECCCE6766556 /* XCRemoteSwiftPackageReference "swift-transformers" */,
 				DD3DF580024801F9AE4E4899 /* XCLocalSwiftPackageReference "../SkimCore" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -267,7 +288,9 @@
 				61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */,
 				1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */,
 				E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */,
+				436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */,
 				C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */,
+				DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */,
 				E0006C62ED6F6DE502164145 /* RootView.swift in Sources */,
 				014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */,
 				D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */,
@@ -285,7 +308,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
@@ -372,7 +395,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
@@ -397,7 +420,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
@@ -430,7 +453,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
@@ -551,14 +574,61 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		67D103D1C16F827F3B1E7819 /* XCRemoteSwiftPackageReference "mlx-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.18.0;
+			};
+		};
+		8EFD0C399CD27477B350989C /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.21.0;
+			};
+		};
+		9A45BD01B133ECCCE6766556 /* XCRemoteSwiftPackageReference "swift-transformers" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-transformers";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8EFD0C399CD27477B350989C /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLMCommon;
+		};
 		8734D4E26C300D1AD49D4262 /* SkimCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SkimCore;
 		};
+		8B0DFA296F4A48F6B090AFBC /* Hub */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 9A45BD01B133ECCCE6766556 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Hub;
+		};
 		96F35F36DD1B890E9DE5ACBA /* SkimCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SkimCore;
+		};
+		A6EF4FD219591BC7A9787950 /* MLX */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 67D103D1C16F827F3B1E7819 /* XCRemoteSwiftPackageReference "mlx-swift" */;
+			productName = MLX;
+		};
+		C72D1637C2C2401209468AAB /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8EFD0C399CD27477B350989C /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			productName = MLXLLM;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

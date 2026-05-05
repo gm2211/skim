@@ -1212,7 +1212,8 @@ private enum AutoGroupClassifier {
             settings: settings,
             instructions: systemInstructions,
             prompt: prompt(for: feeds, correctiveNote: correctiveNote),
-            maxTokens: max(512, feeds.count * 4 + 160)
+            maxTokens: max(512, feeds.count * 4 + 160),
+            jsonMode: true
         )
         return try decodeProposals(from: content, feeds: feeds)
     }

@@ -117,6 +117,7 @@ public struct AISettings: Codable, Equatable, Sendable {
     public var provider: String
     public var apiKey: String?
     public var model: String?
+    public var localModelPath: String?
     public var endpoint: String?
     public var chatProvider: String?
     public var chatModel: String?
@@ -132,6 +133,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         provider: String = "foundation-models",
         apiKey: String? = nil,
         model: String? = nil,
+        localModelPath: String? = nil,
         endpoint: String? = nil,
         chatProvider: String? = nil,
         chatModel: String? = nil,
@@ -146,6 +148,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         self.provider = provider
         self.apiKey = apiKey
         self.model = model
+        self.localModelPath = localModelPath
         self.endpoint = endpoint
         self.chatProvider = chatProvider
         self.chatModel = chatModel
@@ -162,6 +165,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         case provider
         case apiKey
         case model
+        case localModelPath
         case endpoint
         case chatProvider
         case chatModel
@@ -176,6 +180,7 @@ public struct AISettings: Codable, Equatable, Sendable {
 
     enum LegacyCodingKeys: String, CodingKey {
         case api_key
+        case local_model_path
         case chat_provider
         case chat_model
         case chat_api_key
@@ -193,6 +198,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         provider = try container.decodeIfPresent(String.self, forKey: .provider) ?? "foundation-models"
         apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? legacy.decodeIfPresent(String.self, forKey: .api_key)
         model = try container.decodeIfPresent(String.self, forKey: .model)
+        localModelPath = try container.decodeIfPresent(String.self, forKey: .localModelPath) ?? legacy.decodeIfPresent(String.self, forKey: .local_model_path)
         endpoint = try container.decodeIfPresent(String.self, forKey: .endpoint)
         chatProvider = try container.decodeIfPresent(String.self, forKey: .chatProvider) ?? legacy.decodeIfPresent(String.self, forKey: .chat_provider)
         chatModel = try container.decodeIfPresent(String.self, forKey: .chatModel) ?? legacy.decodeIfPresent(String.self, forKey: .chat_model)

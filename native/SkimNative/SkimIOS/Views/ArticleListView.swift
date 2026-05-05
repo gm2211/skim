@@ -841,10 +841,14 @@ private struct AutoGroupSheet: View {
     }
 
     private func runAI() async {
+        if model.feeds.isEmpty {
+            await model.reloadArticles()
+        }
+
         guard !model.feeds.isEmpty else {
             didRunAI = true
             proposals = []
-            aiMessage = nil
+            aiMessage = "No feeds found yet. Add RSS feeds or import OPML first."
             return
         }
 
@@ -854,12 +858,15 @@ private struct AutoGroupSheet: View {
         aiMessage = nil
 
         do {
-            let result = try await AutoGroupClassifier.aiProposals(for: model.feeds)
+            let result = try await AutoGroupClassifier.aiProposals(for: model.feeds, settings: model.settings)
             proposals = result
-            aiMessage = "Grouped with Apple Foundation Models."
+            aiMessage = "Grouped with \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider))."
         } catch {
-            proposals = []
-            aiMessage = "AI grouping unavailable: \(error.localizedDescription)"
+            proposals = AutoGroupClassifier.fallbackProposals(for: model.feeds)
+            usedFallback = true
+            aiMessage = proposals.isEmpty
+                ? "AI grouping unavailable: \(error.localizedDescription)"
+                : "AI grouping unavailable: \(error.localizedDescription)\nShowing local fallback categories."
         }
 
         isRunningAI = false
@@ -903,13 +910,33 @@ private struct AutoGroupProposalRow: View {
 }
 
 private enum AutoGroupClassifier {
-    static func aiProposals(for feeds: [Feed]) async throws -> [AutoGroupProposal] {
-#if canImport(FoundationModels)
-        if #available(iOS 26.0, *) {
-            return try await FoundationModelFeedOrganizer.proposals(for: deduplicate(feeds))
+    static func aiProposals(for feeds: [Feed], settings: AppSettings) async throws -> [AutoGroupProposal] {
+        let uniqueFeeds = deduplicate(feeds)
+        guard !uniqueFeeds.isEmpty else { return [] }
+
+        let content = try await NativeAI.complete(
+            settings: settings,
+            instructions: """
+            You group RSS feeds into topical folders. Output JSON only.
+            Each feed must appear in exactly one folder. Use 4-8 folders when possible.
+            Use short folder names of 2-4 words. Refer to feeds by their numeric handle.
+            """,
+            prompt: prompt(for: uniqueFeeds),
+            maxTokens: max(512, uniqueFeeds.count * 4 + 180)
+        )
+        return try decodeProposals(from: content, feeds: uniqueFeeds)
+    }
+
+    static func providerLabel(for provider: String) -> String {
+        switch provider {
+        case "foundation-models": return "Apple Intelligence"
+        case "openai": return "OpenAI"
+        case "anthropic": return "Claude API"
+        case "claude-subscription": return "Claude Pro/Max"
+        case "openrouter": return "OpenRouter"
+        case "custom": return "custom provider"
+        default: return provider
         }
-#endif
-        throw AutoGroupAIError.unavailable("Foundation Models are not available in this build.")
     }
 
     static func fallbackProposals(for feeds: [Feed]) -> [AutoGroupProposal] {
@@ -941,6 +968,90 @@ private enum AutoGroupClassifier {
             seen.insert(key)
             return true
         }
+    }
+
+    private static func prompt(for feeds: [Feed]) -> String {
+        """
+        Feeds, one per line as handle TAB title TAB site:
+        \(listing(for: feeds))
+
+        Return exactly this JSON shape:
+        {"folders":[{"name":"Distributed Systems","feeds":[0,3,7]}]}
+        """
+    }
+
+    private static func listing(for feeds: [Feed]) -> String {
+        feeds.enumerated()
+            .map { index, feed in
+                let title = feed.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                let site = feed.siteURL?.host() ?? feed.url.host() ?? ""
+                return "\(index)\t\(title)\t\(site)"
+            }
+            .joined(separator: "\n")
+    }
+
+    private static func decodeProposals(from content: String, feeds: [Feed]) throws -> [AutoGroupProposal] {
+        let json = extractJSON(from: content)
+        guard let data = json.data(using: .utf8) else {
+            throw AutoGroupAIError.invalidResponse("AI returned unreadable JSON.")
+        }
+
+        let folders: [AutoGroupAIFolder]
+        do {
+            folders = try JSONDecoder().decode(AutoGroupAIResponse.self, from: data).folders
+        } catch {
+            do {
+                folders = try JSONDecoder().decode([AutoGroupAIFolder].self, from: data)
+            } catch {
+                throw AutoGroupAIError.invalidResponse("Could not parse AI folder JSON.")
+            }
+        }
+
+        let lookup = FeedReferenceLookup(feeds: feeds)
+        var seenFeedIDs: Set<String> = []
+        let proposals = folders.compactMap { folder -> AutoGroupProposal? in
+            let selectedFeeds = folder.feeds.compactMap { reference -> Feed? in
+                guard let feed = lookup.feed(for: reference) else { return nil }
+                guard seenFeedIDs.insert(feed.id).inserted else { return nil }
+                return feed
+            }
+
+            let name = folder.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, !selectedFeeds.isEmpty else { return nil }
+
+            return AutoGroupProposal(
+                baseName: name,
+                feeds: selectedFeeds.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+            )
+        }
+
+        if proposals.isEmpty {
+            throw AutoGroupAIError.invalidResponse("AI did not return any usable folders.")
+        }
+
+        return proposals
+    }
+
+    private static func extractJSON(from content: String) -> String {
+        let withoutFence = content
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```JSON", with: "")
+            .replacingOccurrences(of: "```", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let start = withoutFence.firstIndex(of: "{"),
+           let end = withoutFence.lastIndex(of: "}"),
+           start <= end {
+            return String(withoutFence[start...end])
+        }
+
+        if let start = withoutFence.firstIndex(of: "["),
+           let end = withoutFence.lastIndex(of: "]"),
+           start <= end {
+            return String(withoutFence[start...end])
+        }
+
+        return withoutFence
     }
 
     private static func categoryWords(for feed: Feed) -> [String] {
@@ -1012,39 +1123,173 @@ private enum AutoGroupAIError: LocalizedError {
 
 private struct AutoGroupAIResponse: Decodable {
     var folders: [AutoGroupAIFolder]
-}
 
-private struct AutoGroupAIFolder: Decodable {
-    var name: String
-    var feeds: [Int]
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case feeds
-        case feedIDs = "feed_ids"
-        case ids
+    private enum CodingKeys: String, CodingKey {
+        case folders
+        case groups
+        case categories
+        case topics
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        name = try container.decode(String.self, forKey: .name)
-
-        let key: CodingKeys
-        if container.contains(.feeds) {
-            key = .feeds
-        } else if container.contains(.feedIDs) {
-            key = .feedIDs
+        if let folders = try? container.decode([AutoGroupAIFolder].self, forKey: .folders) {
+            self.folders = folders
+        } else if let groups = try? container.decode([AutoGroupAIFolder].self, forKey: .groups) {
+            self.folders = groups
+        } else if let categories = try? container.decode([AutoGroupAIFolder].self, forKey: .categories) {
+            self.folders = categories
+        } else if let topics = try? container.decode([AutoGroupAIFolder].self, forKey: .topics) {
+            self.folders = topics
         } else {
-            key = .ids
+            self.folders = []
         }
+    }
+}
 
-        if let values = try? container.decode([Int].self, forKey: key) {
-            feeds = values
-        } else if let values = try? container.decode([String].self, forKey: key) {
-            feeds = values.compactMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        } else {
-            feeds = []
+private struct AutoGroupAIFolder: Decodable {
+    var name: String
+    var feeds: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case title
+        case folder
+        case category
+        case feeds
+        case feedIDs = "feed_ids"
+        case feedIds
+        case feedIndices = "feed_indices"
+        case feedIndexes = "feed_indexes"
+        case feedHandles = "feed_handles"
+        case ids
+        case items
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = (
+            (try? container.decode(String.self, forKey: .name)) ??
+            (try? container.decode(String.self, forKey: .title)) ??
+            (try? container.decode(String.self, forKey: .folder)) ??
+            (try? container.decode(String.self, forKey: .category)) ??
+            ""
+        )
+
+        feeds = Self.decodeFeedReferences(from: container)
+    }
+
+    private static func decodeFeedReferences(from container: KeyedDecodingContainer<CodingKeys>) -> [String] {
+        let keys: [CodingKeys] = [
+            .feeds,
+            .feedIDs,
+            .feedIds,
+            .feedIndices,
+            .feedIndexes,
+            .feedHandles,
+            .ids,
+            .items
+        ]
+
+        for key in keys where container.contains(key) {
+            if let values = try? container.decode([AutoGroupFeedReference].self, forKey: key) {
+                return values.compactMap(\.value)
+            }
         }
+        return []
+    }
+}
+
+private struct AutoGroupFeedReference: Decodable {
+    var value: String?
+
+    init(from decoder: Decoder) throws {
+        let single = try? decoder.singleValueContainer()
+        if let index = try? single?.decode(Int.self) {
+            value = String(index)
+        } else if let text = try? single?.decode(String.self) {
+            value = text
+        } else if let object = try? AutoGroupFeedReferenceObject(from: decoder) {
+            value = object.value
+        } else {
+            value = nil
+        }
+    }
+}
+
+private struct AutoGroupFeedReferenceObject: Decodable {
+    var value: String?
+
+    enum CodingKeys: String, CodingKey {
+        case index
+        case handle
+        case id
+        case title
+        case feed
+        case name
+        case url
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let index = try? container.decode(Int.self, forKey: .index) {
+            value = String(index)
+        } else if let handle = try? container.decode(Int.self, forKey: .handle) {
+            value = String(handle)
+        } else if let id = try? container.decode(String.self, forKey: .id) {
+            value = id
+        } else if let title = try? container.decode(String.self, forKey: .title) {
+            value = title
+        } else if let feed = try? container.decode(String.self, forKey: .feed) {
+            value = feed
+        } else if let name = try? container.decode(String.self, forKey: .name) {
+            value = name
+        } else if let url = try? container.decode(String.self, forKey: .url) {
+            value = url
+        } else {
+            value = nil
+        }
+    }
+}
+
+private struct FeedReferenceLookup {
+    private let feeds: [Feed]
+    private let byID: [String: Feed]
+    private let byTitle: [String: Feed]
+    private let byURL: [String: Feed]
+
+    init(feeds: [Feed]) {
+        self.feeds = feeds
+        byID = Dictionary(feeds.map { ($0.id.lowercased(), $0) }, uniquingKeysWith: { first, _ in first })
+        byTitle = Dictionary(feeds.map { ($0.title.normalizedFeedReference, $0) }, uniquingKeysWith: { first, _ in first })
+        byURL = Dictionary(feeds.flatMap { feed in
+            [
+                (feed.url.absoluteString.lowercased(), feed),
+                (feed.url.host()?.lowercased() ?? "", feed),
+                (feed.siteURL?.absoluteString.lowercased() ?? "", feed),
+                (feed.siteURL?.host()?.lowercased() ?? "", feed)
+            ].filter { !$0.0.isEmpty }
+        }, uniquingKeysWith: { first, _ in first })
+    }
+
+    func feed(for reference: String) -> Feed? {
+        let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let index = Int(trimmed), feeds.indices.contains(index) {
+            return feeds[index]
+        }
+        let lower = trimmed.lowercased()
+        if let feed = byID[lower] ?? byURL[lower] {
+            return feed
+        }
+        return byTitle[trimmed.normalizedFeedReference]
+    }
+}
+
+private extension String {
+    var normalizedFeedReference: String {
+        trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
     }
 }
 
@@ -1117,11 +1362,11 @@ private enum FoundationModelFeedOrganizer {
             throw AutoGroupAIError.invalidResponse("Could not parse AI folder JSON.")
         }
 
+        let lookup = FeedReferenceLookup(feeds: feeds)
         var seenFeedIDs: Set<String> = []
         let proposals = decoded.folders.compactMap { folder -> AutoGroupProposal? in
-            let selectedFeeds = folder.feeds.compactMap { handle -> Feed? in
-                guard feeds.indices.contains(handle) else { return nil }
-                let feed = feeds[handle]
+            let selectedFeeds = folder.feeds.compactMap { reference -> Feed? in
+                guard let feed = lookup.feed(for: reference) else { return nil }
                 guard seenFeedIDs.insert(feed.id).inserted else { return nil }
                 return feed
             }

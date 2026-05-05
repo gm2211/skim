@@ -161,7 +161,7 @@ struct ArticleListView: View {
             title: "Quick Catch-up",
             subtitle: "\(articles.count) visible articles"
         ) {
-            try await NativeAI.quickCatchUp(articles: articles)
+            try await NativeAI.quickCatchUp(articles: articles, settings: model.settings)
         }
     }
 
@@ -171,7 +171,7 @@ struct ArticleListView: View {
             title: "Chat with Articles",
             placeholder: "Ask about the currently visible articles."
         ) { question in
-            try await NativeAI.chat(question: question, articles: articles)
+            try await NativeAI.chat(question: question, articles: articles, settings: model.settings)
         }
     }
 
@@ -181,7 +181,7 @@ struct ArticleListView: View {
             title: "AI Inbox",
             subtitle: "Smart triage across \(articles.count) visible articles"
         ) {
-            try await NativeAI.aiInbox(articles: articles)
+            try await NativeAI.aiInbox(articles: articles, settings: model.settings)
         }
     }
 

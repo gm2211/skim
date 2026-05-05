@@ -52,8 +52,9 @@ enum NativeAI {
         )
     }
 
-    static func quickCatchUp(articles: [Article]) async throws -> String {
+    static func quickCatchUp(articles: [Article], settings: AppSettings) async throws -> String {
         try await complete(
+            settings: settings,
             instructions: "You write crisp catch-up reports for a news/RSS reader. Be useful, specific, and concise.",
             prompt: """
             Create a Super Quick Catch-up from these articles. Group related items into themes, name what matters, and keep it scannable.
@@ -64,11 +65,15 @@ enum NativeAI {
         )
     }
 
-    static func aiInbox(articles: [Article]) async throws -> String {
+    static func aiInbox(articles: [Article], settings: AppSettings) async throws -> String {
         try await complete(
+            settings: settings,
             instructions: "You triage RSS articles for a smart inbox. Pick what seems most worth reading and explain why.",
             prompt: """
             Rank the most interesting articles from this list. Return 8-12 picks with a short reason for each. Favor novelty, depth, engineering relevance, and things a curious technical reader would not want to miss.
+
+            User interests:
+            \(settings.ai.triageUserPrompt?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "No explicit interests configured.")
 
             \(articleDigest(articles, limit: 45))
             """,
@@ -76,20 +81,22 @@ enum NativeAI {
         )
     }
 
-    static func summarize(article: Article) async throws -> String {
+    static func summarize(article: Article, settings: AppSettings) async throws -> String {
         try await complete(
-            instructions: "You summarize articles accurately. Preserve nuance, avoid hype, and mention uncertainty when the source is thin.",
+            settings: settings,
+            instructions: summaryInstructions(settings.ai),
             prompt: """
-            Summarize this article in one concise paragraph, then give 3 bullet takeaways.
+            Summarize this article. Target length: \(summaryLengthDescription(settings.ai)).
 
             \(articleDigest([article], limit: 1))
             """,
-            maxTokens: 420
+            maxTokens: summaryMaxTokens(settings.ai)
         )
     }
 
-    static func chat(question: String, article: Article) async throws -> String {
+    static func chat(question: String, article: Article, settings: AppSettings) async throws -> String {
         try await complete(
+            settings: settings,
             instructions: "You answer questions about a single article using only the provided article text. If the answer is not in the article, say so.",
             prompt: """
             Article:
@@ -102,8 +109,9 @@ enum NativeAI {
         )
     }
 
-    static func chat(question: String, articles: [Article]) async throws -> String {
+    static func chat(question: String, articles: [Article], settings: AppSettings) async throws -> String {
         try await complete(
+            settings: settings,
             instructions: "You answer questions across a set of RSS articles. Cite article titles naturally when using them.",
             prompt: """
             Articles:
@@ -116,7 +124,25 @@ enum NativeAI {
         )
     }
 
-    static func complete(instructions: String, prompt: String, maxTokens: Int) async throws -> String {
+    static func complete(settings: AppSettings, instructions: String, prompt: String, maxTokens: Int) async throws -> String {
+        let ai = settings.ai
+        switch ai.provider {
+        case "none":
+            throw NativeAIError.unavailable("AI features are disabled in Settings.")
+        case "foundation-models":
+            return try await completeWithFoundationModels(instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+        case "openai", "openrouter", "custom":
+            return try await completeOpenAICompatible(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+        case "anthropic", "claude-subscription":
+            return try await completeAnthropic(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+        case "mlx":
+            throw NativeAIError.unavailable("MLX local model support is not wired in the native iOS app yet. Pick Apple Intelligence, OpenAI, or Claude API for now.")
+        default:
+            throw NativeAIError.unavailable("Provider \(ai.provider) is not available in the native iOS app.")
+        }
+    }
+
+    static func completeWithFoundationModels(instructions: String, prompt: String, maxTokens: Int) async throws -> String {
 #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             let model = SystemLanguageModel(useCase: .general)
@@ -140,6 +166,155 @@ enum NativeAI {
         }
 #endif
         throw NativeAIError.unavailable("Foundation Models are not available in this build.")
+    }
+
+    private static func completeOpenAICompatible(settings: AISettings, instructions: String, prompt: String, maxTokens: Int) async throws -> String {
+        let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let provider = settings.provider
+        if provider != "custom", key == nil {
+            throw NativeAIError.unavailable("Add an API key for \(providerDisplayName(provider)) in Settings.")
+        }
+
+        var request = URLRequest(url: openAICompatibleURL(settings))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        if let key {
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        }
+        if provider == "openrouter" {
+            request.setValue("Skim", forHTTPHeaderField: "X-Title")
+        }
+
+        let body: [String: Any] = [
+            "model": settings.model?.nilIfEmpty ?? defaultModel(for: provider),
+            "messages": [
+                ["role": "system", "content": instructions],
+                ["role": "user", "content": prompt]
+            ],
+            "temperature": 0.2,
+            "max_tokens": maxTokens
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response: response, data: data, provider: providerDisplayName(provider))
+        let decoded = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+        guard let content = decoded.choices.first?.message.content.nilIfEmpty else {
+            throw NativeAIError.unavailable("The \(providerDisplayName(provider)) response was empty.")
+        }
+        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func completeAnthropic(settings: AISettings, instructions: String, prompt: String, maxTokens: Int) async throws -> String {
+        let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        guard let key else {
+            throw NativeAIError.unavailable("Add a Claude API key or Claude subscription token in Settings.")
+        }
+
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        if settings.provider == "claude-subscription" {
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+            request.setValue("oauth-2025-04-20,claude-code-20250219", forHTTPHeaderField: "anthropic-beta")
+        } else {
+            request.setValue(key, forHTTPHeaderField: "x-api-key")
+        }
+
+        let body: [String: Any] = [
+            "model": settings.model?.nilIfEmpty ?? defaultModel(for: settings.provider),
+            "system": instructions,
+            "messages": [
+                ["role": "user", "content": prompt]
+            ],
+            "temperature": 0.2,
+            "max_tokens": maxTokens
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
+        let decoded = try JSONDecoder().decode(AnthropicResponse.self, from: data)
+        let content = decoded.content.compactMap(\.text).joined(separator: "\n").nilIfEmpty
+        guard let content else {
+            throw NativeAIError.unavailable("The Claude response was empty.")
+        }
+        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func openAICompatibleURL(_ settings: AISettings) -> URL {
+        let base: String
+        switch settings.provider {
+        case "openai":
+            base = "https://api.openai.com"
+        case "openrouter":
+            base = "https://openrouter.ai/api"
+        default:
+            base = settings.endpoint?.nilIfEmpty ?? "https://api.openai.com"
+        }
+
+        if base.contains("/chat/completions") {
+            return URL(string: base)!
+        }
+        return URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/v1/chat/completions")!
+    }
+
+    private static func validate(response: URLResponse, data: Data, provider: String) throws {
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            let text = String(data: data, encoding: .utf8) ?? "No response body."
+            throw NativeAIError.unavailable("\(provider) request failed (\(status)): \(text.prefix(500))")
+        }
+    }
+
+    private static func defaultModel(for provider: String) -> String {
+        switch provider {
+        case "anthropic", "claude-subscription":
+            return "claude-sonnet-4-5"
+        case "openrouter":
+            return "openai/gpt-4o-mini"
+        default:
+            return "gpt-4o-mini"
+        }
+    }
+
+    private static func providerDisplayName(_ provider: String) -> String {
+        switch provider {
+        case "openai": "OpenAI"
+        case "openrouter": "OpenRouter"
+        case "anthropic": "Claude API"
+        case "claude-subscription": "Claude subscription"
+        case "custom": "Custom provider"
+        default: provider
+        }
+    }
+
+    private static func summaryInstructions(_ settings: AISettings) -> String {
+        let tone = settings.summaryTone?.nilIfEmpty ?? "concise"
+        return "You summarize articles accurately in a \(tone) style. Preserve nuance, avoid hype, and mention uncertainty when the source is thin."
+    }
+
+    private static func summaryLengthDescription(_ settings: AISettings) -> String {
+        if let words = settings.summaryCustomWordCount, words > 0 {
+            return "about \(words) words"
+        }
+        switch settings.summaryLength?.nilIfEmpty ?? "short" {
+        case "tiny": return "1-2 sentences"
+        case "medium": return "one paragraph plus 3 bullets"
+        case "long": return "a detailed summary with key context"
+        default: return "one concise paragraph plus 3 bullet takeaways"
+        }
+    }
+
+    private static func summaryMaxTokens(_ settings: AISettings) -> Int {
+        if let words = settings.summaryCustomWordCount, words > 0 {
+            return max(160, min(1600, Int(Double(words) * 1.8)))
+        }
+        switch settings.summaryLength?.nilIfEmpty ?? "short" {
+        case "tiny": return 180
+        case "medium": return 520
+        case "long": return 900
+        default: return 420
+        }
     }
 
     private static func articleDigest(_ articles: [Article], limit: Int) -> String {
@@ -187,6 +362,27 @@ enum NativeAIError: LocalizedError {
             message
         }
     }
+}
+
+private struct OpenAIResponse: Decodable {
+    struct Choice: Decodable {
+        struct Message: Decodable {
+            var content: String
+        }
+
+        var message: Message
+    }
+
+    var choices: [Choice]
+}
+
+private struct AnthropicResponse: Decodable {
+    struct ContentBlock: Decodable {
+        var type: String?
+        var text: String?
+    }
+
+    var content: [ContentBlock]
 }
 
 struct AIResultSheet: View {
@@ -398,6 +594,11 @@ private extension Article {
 }
 
 private extension String {
+    var nilIfEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     var plainTextFromHTML: String {
         replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)

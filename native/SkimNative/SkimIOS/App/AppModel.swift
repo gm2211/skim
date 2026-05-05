@@ -44,6 +44,7 @@ final class AppModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var unreadCounts: [String: Int] = [:]
     @Published var totalUnreadCount = 0
+    @Published var settings = AppSettings()
 
     let store: SkimStore
     private let importer = OPMLImportService()
@@ -89,6 +90,7 @@ final class AppModel: ObservableObject {
         defer { isLoading = false }
         do {
             feeds = try await store.listFeeds()
+            settings = try await store.loadSettings()
             articles = try await store.listArticles(filter: filter)
             try await refreshCounts()
             errorMessage = nil
@@ -183,6 +185,16 @@ final class AppModel: ObservableObject {
         do {
             try await store.toggleStar(id: article.id)
             await reloadArticles()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func saveSettings(_ next: AppSettings) async {
+        do {
+            try await store.saveSettings(next)
+            settings = next
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }

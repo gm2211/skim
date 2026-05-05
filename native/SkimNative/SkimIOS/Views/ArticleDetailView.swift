@@ -134,7 +134,7 @@ struct ArticleDetailView: View {
             title: "AI Summary",
             subtitle: article.title
         ) {
-            try await NativeAI.summarize(article: article)
+            try await NativeAI.summarize(article: article, settings: model.settings)
         }
     }
 
@@ -144,7 +144,7 @@ struct ArticleDetailView: View {
             title: "Chat with Article",
             placeholder: article.title
         ) { question in
-            try await NativeAI.chat(question: question, article: article)
+            try await NativeAI.chat(question: question, article: article, settings: model.settings)
         }
     }
 }

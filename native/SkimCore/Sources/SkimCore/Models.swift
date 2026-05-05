@@ -94,9 +94,109 @@ public struct ArticleFilter: Sendable, Equatable {
 
 public struct AppSettings: Codable, Equatable, Sendable {
     public var prefersUnreadOnly: Bool
+    public var ai: AISettings
 
-    public init(prefersUnreadOnly: Bool = true) {
+    public init(prefersUnreadOnly: Bool = true, ai: AISettings = AISettings()) {
         self.prefersUnreadOnly = prefersUnreadOnly
+        self.ai = ai
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case prefersUnreadOnly
+        case ai
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        prefersUnreadOnly = try container.decodeIfPresent(Bool.self, forKey: .prefersUnreadOnly) ?? true
+        ai = try container.decodeIfPresent(AISettings.self, forKey: .ai) ?? AISettings()
+    }
+}
+
+public struct AISettings: Codable, Equatable, Sendable {
+    public var provider: String
+    public var apiKey: String?
+    public var model: String?
+    public var endpoint: String?
+    public var chatProvider: String?
+    public var chatModel: String?
+    public var chatApiKey: String?
+    public var chatEndpoint: String?
+    public var summaryLength: String?
+    public var summaryTone: String?
+    public var summaryCustomWordCount: Int?
+    public var triageUserPrompt: String?
+
+    public init(
+        provider: String = "foundation-models",
+        apiKey: String? = nil,
+        model: String? = nil,
+        endpoint: String? = nil,
+        chatProvider: String? = nil,
+        chatModel: String? = nil,
+        chatApiKey: String? = nil,
+        chatEndpoint: String? = nil,
+        summaryLength: String? = "short",
+        summaryTone: String? = "concise",
+        summaryCustomWordCount: Int? = nil,
+        triageUserPrompt: String? = nil
+    ) {
+        self.provider = provider
+        self.apiKey = apiKey
+        self.model = model
+        self.endpoint = endpoint
+        self.chatProvider = chatProvider
+        self.chatModel = chatModel
+        self.chatApiKey = chatApiKey
+        self.chatEndpoint = chatEndpoint
+        self.summaryLength = summaryLength
+        self.summaryTone = summaryTone
+        self.summaryCustomWordCount = summaryCustomWordCount
+        self.triageUserPrompt = triageUserPrompt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case provider
+        case apiKey
+        case model
+        case endpoint
+        case chatProvider
+        case chatModel
+        case chatApiKey
+        case chatEndpoint
+        case summaryLength
+        case summaryTone
+        case summaryCustomWordCount
+        case triageUserPrompt
+    }
+
+    enum LegacyCodingKeys: String, CodingKey {
+        case api_key
+        case chat_provider
+        case chat_model
+        case chat_api_key
+        case chat_endpoint
+        case summary_length
+        case summary_tone
+        case summary_custom_word_count
+        case triage_user_prompt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let legacy = try decoder.container(keyedBy: LegacyCodingKeys.self)
+        provider = try container.decodeIfPresent(String.self, forKey: .provider) ?? "foundation-models"
+        apiKey = try container.decodeIfPresent(String.self, forKey: .apiKey) ?? legacy.decodeIfPresent(String.self, forKey: .api_key)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        endpoint = try container.decodeIfPresent(String.self, forKey: .endpoint)
+        chatProvider = try container.decodeIfPresent(String.self, forKey: .chatProvider) ?? legacy.decodeIfPresent(String.self, forKey: .chat_provider)
+        chatModel = try container.decodeIfPresent(String.self, forKey: .chatModel) ?? legacy.decodeIfPresent(String.self, forKey: .chat_model)
+        chatApiKey = try container.decodeIfPresent(String.self, forKey: .chatApiKey) ?? legacy.decodeIfPresent(String.self, forKey: .chat_api_key)
+        chatEndpoint = try container.decodeIfPresent(String.self, forKey: .chatEndpoint) ?? legacy.decodeIfPresent(String.self, forKey: .chat_endpoint)
+        summaryLength = try container.decodeIfPresent(String.self, forKey: .summaryLength) ?? legacy.decodeIfPresent(String.self, forKey: .summary_length) ?? "short"
+        summaryTone = try container.decodeIfPresent(String.self, forKey: .summaryTone) ?? legacy.decodeIfPresent(String.self, forKey: .summary_tone) ?? "concise"
+        summaryCustomWordCount = try container.decodeIfPresent(Int.self, forKey: .summaryCustomWordCount) ?? legacy.decodeIfPresent(Int.self, forKey: .summary_custom_word_count)
+        triageUserPrompt = try container.decodeIfPresent(String.self, forKey: .triageUserPrompt) ?? legacy.decodeIfPresent(String.self, forKey: .triage_user_prompt)
     }
 }
 

@@ -7,13 +7,50 @@ import MLX
 import MLXLMCommon
 import MLXLLM
 
+// MARK: - Model family detection
+
+enum MLXModelFamily {
+    case gemma
+    case llama
+    case qwen
+    case phi
+    case unknown
+
+    /// Stop strings that mark end-of-turn for this model family.
+    var extraEOSTokens: Set<String> {
+        switch self {
+        case .gemma:
+            return ["<end_of_turn>", "<eos>"]
+        case .llama:
+            return ["<|eot_id|>", "<|end_of_text|>"]
+        case .qwen:
+            return ["<|im_end|>", "<|endoftext|>"]
+        case .phi:
+            return ["<|end|>", "<|endoftext|>"]
+        case .unknown:
+            return []
+        }
+    }
+
+    static func detect(from repoId: String) -> MLXModelFamily {
+        let lower = repoId.lowercased()
+        if lower.contains("gemma") { return .gemma }
+        if lower.contains("llama") { return .llama }
+        if lower.contains("qwen") { return .qwen }
+        if lower.contains("phi") { return .phi }
+        return .unknown
+    }
+}
+
 actor MLXRunner {
     static let shared = MLXRunner()
     static let defaultRepoId = "mlx-community/gemma-3-1b-it-4bit"
 
     private var currentRepoId: String = MLXRunner.defaultRepoId
     private var loadedContainer: ModelContainer?
+    private var loadedRepoId: String?
     private var loadingTask: Task<ModelContainer, Error>?
+    private var loadingRepoId: String?
     private var progressSink: (@Sendable (Double) -> Void)?
 
     enum MLXError: LocalizedError {
@@ -156,7 +193,10 @@ actor MLXRunner {
         guard repoId != currentRepoId else { return }
         currentRepoId = repoId
         loadedContainer = nil
+        loadedRepoId = nil
+        loadingTask?.cancel()
         loadingTask = nil
+        loadingRepoId = nil
     }
 
     func selectDownloadedModel(preferredRepoId: String) {
@@ -179,7 +219,10 @@ actor MLXRunner {
 
     func evict() {
         loadedContainer = nil
+        loadedRepoId = nil
+        loadingTask?.cancel()
         loadingTask = nil
+        loadingRepoId = nil
     }
 
     func isModelDownloaded(repoId: String) -> Bool {
@@ -203,7 +246,10 @@ actor MLXRunner {
                 }
             )
             loadedContainer = nil
+            loadedRepoId = nil
+            loadingTask?.cancel()
             loadingTask = nil
+            loadingRepoId = nil
             sink?(1.0)
         } catch {
             MLXRunner.cleanupPartialDownloads(repoId: repoId)
@@ -218,7 +264,10 @@ actor MLXRunner {
         }
         if currentRepoId == repoId {
             loadedContainer = nil
+            loadedRepoId = nil
+            loadingTask?.cancel()
             loadingTask = nil
+            loadingRepoId = nil
         }
     }
 
@@ -228,18 +277,32 @@ actor MLXRunner {
             throw MLXError.unavailable("MLX inference requires a real iPhone. The Simulator cannot run the MLX backend.")
         }
 
-        if let container = loadedContainer { return container }
-        if let task = loadingTask { return try await task.value }
-
         let repoId = currentRepoId
+        if let container = loadedContainer, loadedRepoId == repoId {
+            return container
+        }
+        loadedContainer = nil
+        loadedRepoId = nil
+
+        if let task = loadingTask, loadingRepoId == repoId {
+            return try await task.value
+        }
+        loadingTask?.cancel()
+        loadingTask = nil
+        loadingRepoId = nil
+
         guard MLXRunner.isRepoDownloaded(repoId) else {
             throw MLXError.loadFailed("Model \(repoId) is not downloaded.")
         }
 
         let sink = progressSink
+        let family = MLXModelFamily.detect(from: repoId)
         let task = Task { () throws -> ModelContainer in
             do {
-                let config = ModelConfiguration(id: repoId)
+                let config = ModelConfiguration(
+                    id: repoId,
+                    extraEOSTokens: family.extraEOSTokens
+                )
                 return try await LLMModelFactory.shared.loadContainer(
                     configuration: config,
                     progressHandler: { progress in
@@ -251,14 +314,20 @@ actor MLXRunner {
             }
         }
         loadingTask = task
+        loadingRepoId = repoId
 
         do {
             let container = try await task.value
-            loadedContainer = container
+            if currentRepoId == repoId {
+                loadedContainer = container
+                loadedRepoId = repoId
+            }
             loadingTask = nil
+            loadingRepoId = nil
             return container
         } catch {
             loadingTask = nil
+            loadingRepoId = nil
             throw error
         }
     }
@@ -277,10 +346,15 @@ actor MLXRunner {
             ["role": "system", "content": finalSystem],
             ["role": "user", "content": userPrompt]
         ]
-        let params = GenerateParameters(temperature: 0.3)
+        let params = GenerateParameters(
+            temperature: 0.3,
+            repetitionPenalty: 1.1,
+            repetitionContextSize: 64
+        )
+        let family = MLXModelFamily.detect(from: currentRepoId)
 
         do {
-            return try await container.perform { (context: ModelContext) -> String in
+            let raw = try await container.perform { (context: ModelContext) -> String in
                 let userInput = UserInput(messages: messages)
                 let lmInput = try await context.processor.prepare(input: userInput)
 
@@ -293,10 +367,32 @@ actor MLXRunner {
                 }
                 return result.output
             }
+            return sanitizeOutput(raw, family: family)
         } catch let error as MLXError {
             throw error
         } catch {
             throw MLXError.generationFailed("\(error)")
         }
+    }
+
+    // Strip any leaked stop tokens from the output.
+    private func sanitizeOutput(_ text: String, family: MLXModelFamily) -> String {
+        var result = text
+        // Strip all known stop strings for this family
+        for token in family.extraEOSTokens {
+            result = result.replacingOccurrences(of: token, with: "")
+        }
+        // Also strip any remaining angle-bracket special tokens like <end_of_turn>, <eos>, <|...|>
+        result = result.replacingOccurrences(
+            of: "<[^>]{1,30}>",
+            with: "",
+            options: .regularExpression
+        )
+        result = result.replacingOccurrences(
+            of: "<\\|[^|]{1,30}\\|>",
+            with: "",
+            options: .regularExpression
+        )
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

@@ -272,6 +272,11 @@ struct ArticleDetailView: View {
                     let text = try await NativeAI.summarize(article: article, settings: settings)
                     return AIResultAnswer(text: text, articles: [article])
                 },
+                streamAction: { onToken in
+                    let text = try await NativeAI.summarizeStreaming(
+                        article: article, settings: settings, onToken: onToken)
+                    return AIResultAnswer(text: text, articles: [article])
+                },
                 clearAction: {
                     NativeAI.clearSummaryCache(articleID: article.id, ai: settings.ai)
                 },

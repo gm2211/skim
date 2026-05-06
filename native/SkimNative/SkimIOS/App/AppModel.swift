@@ -75,10 +75,6 @@ final class AppModel: ObservableObject {
         )
     }
 
-    func setArticleFeedback(articleID: String, feedID: String, feedTitle: String, rating: ArticleFeedbackRating) {
-        tasteStore.setFeedback(articleID: articleID, feedID: feedID, feedTitle: feedTitle, rating: rating)
-    }
-
     func setPriorityOverride(articleID: String, feedID: String, feedTitle: String, override: ArticlePriorityOverride) {
         tasteStore.setPriorityOverride(articleID: articleID, feedID: feedID, feedTitle: feedTitle, override: override)
     }

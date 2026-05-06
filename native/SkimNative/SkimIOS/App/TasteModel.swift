@@ -3,12 +3,6 @@ import SkimCore
 
 // MARK: - Taste Signal Types
 
-enum ArticleFeedbackRating: String, Codable {
-    case positive
-    case negative
-    case neutral
-}
-
 enum ArticlePriorityOverride: String, Codable {
     case pin
     case hide
@@ -20,7 +14,6 @@ struct ArticleTasteSignal: Codable {
     var feedID: String
     var feedTitle: String
     var dwellSeconds: Double
-    var rating: ArticleFeedbackRating
     var priorityOverride: ArticlePriorityOverride
     var recordedAt: Date
 
@@ -29,7 +22,6 @@ struct ArticleTasteSignal: Codable {
         self.feedID = feedID
         self.feedTitle = feedTitle
         self.dwellSeconds = 0
-        self.rating = .neutral
         self.priorityOverride = .none
         self.recordedAt = Date()
     }
@@ -69,14 +61,6 @@ final class TasteStore {
         save()
     }
 
-    func setFeedback(articleID: String, feedID: String, feedTitle: String, rating: ArticleFeedbackRating) {
-        var signal = signals[articleID] ?? ArticleTasteSignal(articleID: articleID, feedID: feedID, feedTitle: feedTitle)
-        signal.rating = rating
-        signal.recordedAt = Date()
-        signals[articleID] = signal
-        save()
-    }
-
     func setPriorityOverride(articleID: String, feedID: String, feedTitle: String, override: ArticlePriorityOverride) {
         var signal = signals[articleID] ?? ArticleTasteSignal(articleID: articleID, feedID: feedID, feedTitle: feedTitle)
         signal.priorityOverride = override
@@ -107,13 +91,6 @@ final class TasteStore {
             if dwell >= 60 { score += 1.0 }
             else if dwell >= 10 { score += 0.5 }
             else if dwell > 0 && dwell < 5 { score -= 0.3 }
-
-            // Explicit rating
-            switch signal.rating {
-            case .positive: score += 1.5
-            case .negative: score -= 1.5
-            case .neutral: break
-            }
 
             // Priority override
             switch signal.priorityOverride {

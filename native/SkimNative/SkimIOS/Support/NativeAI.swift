@@ -130,6 +130,10 @@ enum NativeAI {
         )
     }
 
+    /// Maximum number of articles fed into the catch-up prompt.
+    /// Raised from the old hardcoded 35 so larger inboxes get real coverage.
+    static let catchUpArticleLimit = 1000
+
     static func quickCatchUp(articles: [Article], settings: AppSettings) async throws -> String {
         try await complete(
             settings: settings,
@@ -139,10 +143,67 @@ enum NativeAI {
             prompt: """
             Create a Super Quick Catch-up from these articles. Group related items into themes, name what matters, and keep it scannable.
 
-            \(articleDigest(articles, limit: 35))
+            \(articleDigest(articles, limit: catchUpArticleLimit))
             """,
             maxTokens: 700
         )
+    }
+
+    /// Structured catch-up items returned by the AI.
+    struct CatchUpItem {
+        var title: String
+        var summary: String
+        /// 1-based index into the articles array passed to `quickCatchUpStructured`.
+        var articleIndex: Int?
+    }
+
+    /// Returns structured catch-up items. On JSON parse failure returns `nil` so the
+    /// caller can fall back to the plain-text path.
+    static func quickCatchUpStructured(articles: [Article], settings: AppSettings) async throws -> [CatchUpItem]? {
+        let raw = try await complete(
+            settings: settings,
+            instructions: """
+            You write crisp catch-up items for a news/RSS reader. Respond ONLY with a single valid JSON object — no markdown fences, no commentary. The format is exactly:
+            {"items":[{"title":"...","summary":"...","articleIndex":3},{"title":"...","summary":"...","articleIndex":null}]}
+            Rules:
+            - "title": short headline (≤10 words).
+            - "summary": 1–2 sentence plain-text summary, no markdown.
+            - "articleIndex": 1-based integer matching the [N] tag in the article list, or null if the item covers multiple articles.
+            - Return 5–12 items covering the most important stories.
+            - Do NOT wrap the JSON in a code block or add any text outside the JSON.
+            """,
+            prompt: """
+            Create a Quick Catch-up from these articles.
+
+            \(articleDigest(articles, limit: catchUpArticleLimit))
+            """,
+            maxTokens: 1200
+        )
+
+        return parseCatchUpItems(raw)
+    }
+
+    private static func parseCatchUpItems(_ raw: String) -> [CatchUpItem]? {
+        // Strip markdown code fences if the model adds them anyway
+        let cleaned = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "^```[a-z]*\\n?", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "```$", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let data = cleaned.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rawItems = json["items"] as? [[String: Any]]
+        else { return nil }
+
+        let items = rawItems.compactMap { dict -> CatchUpItem? in
+            guard let title = dict["title"] as? String,
+                  let summary = dict["summary"] as? String
+            else { return nil }
+            let index = dict["articleIndex"] as? Int
+            return CatchUpItem(title: title, summary: summary, articleIndex: index)
+        }
+        return items.isEmpty ? nil : items
     }
 
     static func aiInbox(articles: [Article], settings: AppSettings) async throws -> String {
@@ -737,11 +798,13 @@ struct AIChatSheet: View {
     private func send() async {
         let question = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !isSending else { return }
+        let toSend = question
         input = ""
-        messages.append(AIChatMessage(role: .user, text: question))
+        focused = true
+        messages.append(AIChatMessage(role: .user, text: toSend))
         isSending = true
         do {
-            let answer = try await request.answer(question)
+            let answer = try await request.answer(toSend)
             messages.append(
                 AIChatMessage(
                     role: .assistant,

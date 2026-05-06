@@ -242,11 +242,6 @@ struct AIInboxSheet: View {
                     case .hide: articleBoost -= 10 // effectively remove
                     case .none: break
                     }
-                    switch signal.rating {
-                    case .positive: articleBoost += 0.5
-                    case .negative: articleBoost -= 0.5
-                    case .neutral: break
-                    }
                 }
 
                 copy.blendedScore = aiNorm * 0.7 + feedWeight * 0.3 + articleBoost

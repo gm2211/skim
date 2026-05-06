@@ -626,7 +626,7 @@ private struct FeedPickerSheet: View {
                     SkimWordmark(size: 50)
                         .padding(.horizontal, 38)
                         .padding(.top, 18)
-                        .padding(.bottom, model.isLoading ? 14 : 46)
+                        .padding(.bottom, model.isLoading ? 14 : 24)
 
                     if model.isLoading {
                         FeedPaneLoadingSpinner()
@@ -634,19 +634,13 @@ private struct FeedPickerSheet: View {
                             .padding(.bottom, 34)
                     }
 
-                    VStack(alignment: .leading, spacing: 18) {
-                        pickerRow(
-                            icon: nil,
-                            title: "All Articles",
-                            count: model.totalUnreadCount,
-                            isSelected: model.selectedFeedID == nil && model.listMode == .all,
-                            action: {
-                                model.selectedFeedID = nil
-                                model.listMode = .all
-                                isPresented = false
-                                Task { await model.reloadArticles() }
-                            }
-                        )
+                    VStack(alignment: .leading, spacing: 4) {
+                        pickerRow(iconSystemName: "square.grid.2x2", title: "All Articles", count: model.totalUnreadCount, isSelected: model.selectedFeedID == nil && model.listMode == .all) {
+                            model.selectedFeedID = nil
+                            model.listMode = .all
+                            isPresented = false
+                            Task { await model.reloadArticles() }
+                        }
 
                         pickerRow(iconSystemName: "star", title: "Starred", count: nil, isSelected: model.listMode == .starred) {
                             model.selectedFeedID = nil
@@ -662,35 +656,35 @@ private struct FeedPickerSheet: View {
                             Task { await model.reloadArticles() }
                         }
 
-                        Spacer(minLength: 38)
-
                         pickerRow(iconSystemName: "tray", title: "AI Inbox", count: model.totalUnreadCount, isSelected: false) {
                             onAIInbox()
                         }
                     }
-                    .padding(.horizontal, 38)
-                    .padding(.bottom, 36)
+                    .padding(.bottom, 8)
 
                     HStack {
                         Text("Feeds")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundStyle(SkimStyle.text)
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .textCase(.uppercase)
+                            .tracking(1.1)
                         Spacer()
                         Button(action: onAutoGroup) {
                             Image(systemName: "folder.badge.plus")
-                                .font(.system(size: 17, weight: .regular))
+                                .font(.system(size: 16, weight: .regular))
                                 .foregroundStyle(SkimStyle.secondary)
                                 .frame(width: 36, height: 36)
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 38)
-                    .padding(.bottom, 16)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+                    .padding(.bottom, 4)
 
                     LazyVStack(alignment: .leading, spacing: 0) {
                         if model.folders.isEmpty {
                             // No folders — flat feed list (legacy behaviour)
-                            LazyVStack(alignment: .leading, spacing: 14) {
+                            LazyVStack(alignment: .leading, spacing: 0) {
                                 ForEach(uniqueFeeds) { feed in
                                     pickerRow(
                                         icon: AnyView(FeedIcon(feed: feed)),
@@ -713,20 +707,23 @@ private struct FeedPickerSheet: View {
                                         unreadCounts: model.unreadCounts,
                                         onSelect: { selectFeed($0) }
                                     )
-                                    .padding(.bottom, 18)
+                                    .padding(.bottom, 4)
                                 }
                             }
 
                             let unfoldered = uniqueFeeds.filter { $0.folderID == nil }
                             if !unfoldered.isEmpty {
-                                VStack(alignment: .leading, spacing: 10) {
+                                VStack(alignment: .leading, spacing: 4) {
                                     Text("Uncategorized")
                                         .font(.system(size: 13, weight: .bold))
                                         .foregroundStyle(SkimStyle.secondary)
                                         .textCase(.uppercase)
                                         .tracking(1.1)
+                                        .padding(.horizontal, 20)
+                                        .padding(.top, 14)
+                                        .padding(.bottom, 2)
 
-                                    LazyVStack(alignment: .leading, spacing: 14) {
+                                    LazyVStack(alignment: .leading, spacing: 0) {
                                         ForEach(unfoldered) { feed in
                                             pickerRow(
                                                 icon: AnyView(FeedIcon(feed: feed)),
@@ -741,7 +738,6 @@ private struct FeedPickerSheet: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 38)
                 }
             }
             .coordinateSpace(name: "feedPaneScroll")
@@ -807,10 +803,14 @@ private struct FeedPickerSheet: View {
     ) -> some View {
         pickerRow(
             icon: AnyView(
-                Image(systemName: iconSystemName)
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundStyle(SkimStyle.secondary)
-                    .frame(width: 26)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(SkimStyle.surface)
+                    Image(systemName: iconSystemName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isSelected ? SkimStyle.accent : SkimStyle.secondary)
+                }
+                .frame(width: 24, height: 24)
             ),
             title: title,
             count: count,
@@ -827,14 +827,14 @@ private struct FeedPickerSheet: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 if let icon {
                     icon
                 }
 
                 Text(title)
-                    .font(.system(size: 17, weight: isSelected ? .bold : .regular))
-                    .foregroundStyle(isSelected ? SkimStyle.text : SkimStyle.secondary)
+                    .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? SkimStyle.text : SkimStyle.text.opacity(0.78))
                     .lineLimit(1)
                     .truncationMode(.tail)
 
@@ -842,11 +842,13 @@ private struct FeedPickerSheet: View {
 
                 if let count, count > 0 {
                     Text(count.formatted())
-                        .font(.system(size: 17, weight: .regular))
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
                 }
             }
-            .frame(minHeight: 27)
+            .frame(minHeight: 44)
+            .padding(.horizontal, 20)
+            .background(isSelected ? SkimStyle.surface.opacity(0.6) : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -886,20 +888,24 @@ private struct FolderSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 0) {
             Button {
                 withAnimation(.smooth(duration: 0.18)) {
                     isExpanded.toggle()
                 }
             } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: isExpanded ? "folder.fill" : "folder")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(SkimStyle.accent)
-                        .frame(width: 22)
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(SkimStyle.surface)
+                        Image(systemName: isExpanded ? "folder.fill" : "folder")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(SkimStyle.accent)
+                    }
+                    .frame(width: 24, height: 24)
 
                     Text(folder.name)
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(SkimStyle.text)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -917,22 +923,29 @@ private struct FolderSection: View {
                         .foregroundStyle(SkimStyle.secondary.opacity(0.6))
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
+                .frame(minHeight: 44)
+                .padding(.horizontal, 20)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             if isExpanded {
-                LazyVStack(alignment: .leading, spacing: 12) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(feeds) { feed in
+                        let isSelected = selectedFeedID == feed.id
                         Button {
                             onSelect(feed)
                         } label: {
-                            HStack(spacing: 16) {
+                            HStack(spacing: 12) {
+                                // Indent to align with folder icon column
+                                Color.clear.frame(width: 24)
+                                    .padding(.leading, 20)
+
                                 FeedIcon(feed: feed)
 
                                 Text(feed.title)
-                                    .font(.system(size: 16, weight: selectedFeedID == feed.id ? .bold : .regular))
-                                    .foregroundStyle(selectedFeedID == feed.id ? SkimStyle.text : SkimStyle.secondary)
+                                    .font(.system(size: 16, weight: isSelected ? .semibold : .regular))
+                                    .foregroundStyle(isSelected ? SkimStyle.text : SkimStyle.text.opacity(0.78))
                                     .lineLimit(1)
                                     .truncationMode(.tail)
 
@@ -940,15 +953,16 @@ private struct FolderSection: View {
 
                                 if let count = unreadCounts[feed.id], count > 0 {
                                     Text(count.formatted())
-                                        .font(.system(size: 15, weight: .regular))
+                                        .font(.system(size: 14, weight: .regular))
                                         .foregroundStyle(SkimStyle.secondary)
                                 }
                             }
-                            .frame(minHeight: 27)
+                            .frame(minHeight: 40)
+                            .padding(.trailing, 20)
+                            .background(isSelected ? SkimStyle.surface.opacity(0.6) : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .padding(.leading, 38)
                     }
                 }
             }

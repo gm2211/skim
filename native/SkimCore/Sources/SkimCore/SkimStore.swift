@@ -1,12 +1,33 @@
 import Foundation
 import SQLite3
 
-public actor SkimStore: FeedStore, ArticleStore, SettingsStore {
+public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
     private let db: SQLiteDatabase
 
     public init(databaseURL: URL) throws {
         self.db = try SQLiteDatabase(url: databaseURL)
         try db.migrate()
+    }
+
+    public func listFolders() async throws -> [FeedFolder] {
+        try db.listFolders()
+    }
+
+    public func upsertFolder(_ folder: FeedFolder) async throws {
+        try db.upsertFolder(folder)
+    }
+
+    public func deleteFolder(id: String) async throws {
+        try db.execute("UPDATE feeds SET folder_id = NULL WHERE folder_id = ?", [.text(id)])
+        try db.execute("DELETE FROM folders WHERE id = ?", [.text(id)])
+    }
+
+    public func setFeedFolder(feedID: String, folderID: String?) async throws {
+        if let folderID {
+            try db.execute("UPDATE feeds SET folder_id = ? WHERE id = ?", [.text(folderID), .text(feedID)])
+        } else {
+            try db.execute("UPDATE feeds SET folder_id = NULL WHERE id = ?", [.text(feedID)])
+        }
     }
 
     public func listFeeds() async throws -> [Feed] {
@@ -102,6 +123,14 @@ private final class SQLiteDatabase: @unchecked Sendable {
 
     func migrate() throws {
         try execute("""
+        CREATE TABLE IF NOT EXISTS folders (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0
+        )
+        """)
+
+        try execute("""
         CREATE TABLE IF NOT EXISTS feeds (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
@@ -111,6 +140,9 @@ private final class SQLiteDatabase: @unchecked Sendable {
             fetched_at REAL
         )
         """)
+
+        // Migration: add folder_id column if it doesn't exist (safe no-op if already present)
+        try? execute("ALTER TABLE feeds ADD COLUMN folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL")
 
         try execute("""
         CREATE TABLE IF NOT EXISTS articles (
@@ -147,11 +179,38 @@ private final class SQLiteDatabase: @unchecked Sendable {
         }
     }
 
+    func upsertFolder(_ folder: FeedFolder) throws {
+        try execute(
+            """
+            INSERT INTO folders (id, name, sort_order)
+            VALUES (?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                name = excluded.name,
+                sort_order = excluded.sort_order
+            """,
+            [
+                .text(folder.id),
+                .text(folder.name),
+                .int(folder.sortOrder)
+            ]
+        )
+    }
+
+    func listFolders() throws -> [FeedFolder] {
+        try query("SELECT id, name, sort_order FROM folders ORDER BY sort_order ASC, name COLLATE NOCASE ASC") { statement in
+            FeedFolder(
+                id: columnText(statement, 0),
+                name: columnText(statement, 1),
+                sortOrder: Int(sqlite3_column_int(statement, 2))
+            )
+        }
+    }
+
     func upsertFeed(_ feed: Feed) throws {
         try execute(
             """
-            INSERT INTO feeds (id, title, url, site_url, icon_url, fetched_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO feeds (id, title, url, site_url, icon_url, fetched_at, folder_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 title = excluded.title,
                 url = excluded.url,
@@ -165,7 +224,8 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 .text(feed.url.absoluteString),
                 .optionalText(feed.siteURL?.absoluteString),
                 .optionalText(feed.iconURL?.absoluteString),
-                .date(feed.fetchedAt)
+                .date(feed.fetchedAt),
+                .optionalText(feed.folderID)
             ]
         )
     }
@@ -208,14 +268,15 @@ private final class SQLiteDatabase: @unchecked Sendable {
     }
 
     func listFeeds() throws -> [Feed] {
-        try query("SELECT id, title, url, site_url, icon_url, fetched_at FROM feeds ORDER BY title COLLATE NOCASE") { statement in
+        try query("SELECT id, title, url, site_url, icon_url, fetched_at, folder_id FROM feeds ORDER BY title COLLATE NOCASE") { statement in
             Feed(
                 id: columnText(statement, 0),
                 title: columnText(statement, 1),
                 url: URL(string: columnText(statement, 2))!,
                 siteURL: columnURL(statement, 3),
                 iconURL: columnURL(statement, 4),
-                fetchedAt: columnDate(statement, 5)
+                fetchedAt: columnDate(statement, 5),
+                folderID: columnOptionalText(statement, 6)
             )
         }
     }

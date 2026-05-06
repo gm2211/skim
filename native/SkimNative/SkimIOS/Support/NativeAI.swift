@@ -8,6 +8,7 @@ struct AIResultRequest: Identifiable {
     let id = UUID()
     var title: String
     var subtitle: String
+    var statusLabel = "Running AI..."
     var action: () async throws -> AIResultAnswer
 }
 
@@ -35,6 +36,28 @@ struct NativeAIAvailabilityStatus {
 }
 
 enum NativeAI {
+    static func loadingStatusLabel(for ai: AISettings) -> String {
+        switch ai.provider {
+        case "foundation-models":
+            return "Asking Apple Intelligence..."
+        case "mlx":
+            let repoId = ai.localModelPath?.nilIfEmpty ?? ai.model?.nilIfEmpty ?? NativeMLX.defaultRepoId
+            return "Running \(NativeMLX.option(for: repoId).label)..."
+        case "claude-subscription":
+            return "Asking Claude Pro/Max..."
+        case "custom":
+            return "Calling \(ai.model?.nilIfEmpty ?? "custom provider")..."
+        case "anthropic":
+            return "Asking Claude..."
+        case "openai":
+            return "Calling OpenAI..."
+        case "openrouter":
+            return "Calling OpenRouter..."
+        default:
+            return "Running AI..."
+        }
+    }
+
     static func availabilityStatus() -> NativeAIAvailabilityStatus {
 #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
@@ -437,7 +460,7 @@ struct AIResultSheet: View {
                         HStack(spacing: 12) {
                             ProgressView()
                                 .tint(SkimStyle.accent)
-                            Text("Asking Apple Foundation Models...")
+                            Text(request.statusLabel)
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(SkimStyle.secondary)
                         }

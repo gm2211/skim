@@ -205,7 +205,8 @@ struct ArticleListView: View {
         let articles = model.articles
         activeAIResult = AIResultRequest(
             title: "Quick Catch-up",
-            subtitle: articles.isEmpty ? "Latest articles" : "\(articles.count) visible articles"
+            subtitle: articles.isEmpty ? "Latest articles" : "\(articles.count) visible articles",
+            statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai)
         ) {
             let context = try await model.articlesForAIContext(preferred: articles)
             guard !context.isEmpty else {
@@ -237,7 +238,8 @@ struct ArticleListView: View {
         let articles = model.articles
         activeAIResult = AIResultRequest(
             title: "AI Inbox",
-            subtitle: articles.isEmpty ? "Smart triage across latest articles" : "Smart triage across \(articles.count) visible articles"
+            subtitle: articles.isEmpty ? "Smart triage across latest articles" : "Smart triage across \(articles.count) visible articles",
+            statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai)
         ) {
             let context = try await model.articlesForAIContext(preferred: articles)
             guard !context.isEmpty else {
@@ -1026,7 +1028,7 @@ private struct AutoGroupSheet: View {
                 ProgressView()
                     .controlSize(.small)
                     .tint(SkimStyle.accent)
-                Text("Asking Apple Foundation Models...")
+                Text("Asking \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider))...")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(SkimStyle.secondary)
             }

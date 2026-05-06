@@ -9,6 +9,7 @@ private enum DetailPage: String, CaseIterable {
 struct ArticleDetailView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
     let articleID: String
 
@@ -28,9 +29,11 @@ struct ArticleDetailView: View {
 
                 TabView(selection: $page) {
                     ReaderPage(article: article, isLoading: isLoading)
+                        .contextMenu { detailContextMenu }
                         .tag(DetailPage.reader)
 
                     WebPage(article: article)
+                        .contextMenu { detailContextMenu }
                         .tag(DetailPage.web)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -110,6 +113,37 @@ struct ArticleDetailView: View {
             }
     }
 
+    @ViewBuilder
+    private var detailContextMenu: some View {
+        if let article {
+            Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? "circle" : "checkmark.circle") {
+                Task { await toggleRead() }
+            }
+
+            Button(article.isStarred ? "Unfavorite" : "Mark Favorite", systemImage: article.isStarred ? "star.slash" : "star") {
+                Task { await toggleStar() }
+            }
+
+            Divider()
+
+            Button("Summarize", systemImage: "doc.text") {
+                presentSummary()
+            }
+
+            Button("Chat with Article", systemImage: "bubble.left") {
+                presentArticleChat()
+            }
+
+            if let url = article.url {
+                Divider()
+
+                Button("Open Link", systemImage: "safari") {
+                    openURL(url)
+                }
+            }
+        }
+    }
+
     private func load(markRead: Bool) async {
         isLoading = true
         defer { isLoading = false }
@@ -154,7 +188,8 @@ struct ArticleDetailView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
             activeAIResult = AIResultRequest(
                 title: "AI Summary",
-                subtitle: article.title
+                subtitle: article.title,
+                statusLabel: NativeAI.loadingStatusLabel(for: settings.ai)
             ) {
                 let text = try await NativeAI.summarize(article: article, settings: settings)
                 return AIResultAnswer(text: text, articles: [article])

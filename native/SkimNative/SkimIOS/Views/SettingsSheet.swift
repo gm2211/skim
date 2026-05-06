@@ -146,25 +146,21 @@ struct SettingsSheet: View {
             Divider()
                 .overlay(SkimStyle.separator)
 
-            HStack(spacing: 12) {
-                Picker("Summary", selection: summaryLengthBinding) {
-                    Text("Tiny").tag("tiny")
-                    Text("Short").tag("short")
-                    Text("Medium").tag("medium")
-                    Text("Long").tag("long")
-                }
-                .pickerStyle(.menu)
-                .tint(SkimStyle.accent)
-
-                Picker("Tone", selection: summaryToneBinding) {
-                    Text("Concise").tag("concise")
-                    Text("Detailed").tag("detailed")
-                    Text("Casual").tag("casual")
-                    Text("Technical").tag("technical")
-                }
-                .pickerStyle(.menu)
-                .tint(SkimStyle.accent)
+            Stepper(value: summaryWordCountBinding, in: 30...600, step: 25) {
+                Text("Summary length: \(draft.ai.summaryCustomWordCount ?? 150) words")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(SkimStyle.text)
             }
+            .tint(SkimStyle.accent)
+
+            Picker("Tone", selection: summaryToneBinding) {
+                Text("Concise").tag("concise")
+                Text("Detailed").tag("detailed")
+                Text("Casual").tag("casual")
+                Text("Technical").tag("technical")
+            }
+            .pickerStyle(.menu)
+            .tint(SkimStyle.accent)
 
             SettingsTextField(
                 title: "Summary prompt",
@@ -416,10 +412,10 @@ struct SettingsSheet: View {
         )
     }
 
-    private var summaryLengthBinding: Binding<String> {
+    private var summaryWordCountBinding: Binding<Int> {
         Binding(
-            get: { draft.ai.summaryLength ?? "short" },
-            set: { value in updateAI { $0.summaryLength = value } }
+            get: { draft.ai.summaryCustomWordCount ?? 150 },
+            set: { value in updateAI { $0.summaryCustomWordCount = value } }
         )
     }
 

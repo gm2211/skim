@@ -556,7 +556,7 @@ struct ArticleListView: View {
             .buttonStyle(.plain)
             .foregroundStyle(showSearch || !model.searchQuery.isEmpty ? SkimStyle.accent : SkimStyle.secondary)
         }
-        .frame(height: 52)
+        .frame(height: 38)
         .frame(maxWidth: .infinity)
         .background(SkimStyle.chrome.opacity(0.96))
         .overlay(alignment: .top) {

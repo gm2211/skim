@@ -27,6 +27,74 @@ struct ClaudeTokenSet: Decodable {
     }
 }
 
+// MARK: - Keychain token store
+
+/// Manages Keychain persistence for Claude OAuth tokens.
+///
+/// Tokens are stored under service "com.skim.native.claude-oauth" with
+/// distinct account names for access token, refresh token, and expiry.
+/// On first launch after migration, tokens previously stored in
+/// AISettings.apiKey (via the settings database) are moved into Keychain
+/// and the old value is cleared.
+enum ClaudeKeychainStore {
+    private static let service = "com.skim.native.claude-oauth"
+    private static let accountAccess = "access_token"
+    private static let accountRefresh = "refresh_token"
+    private static let accountExpiry = "expires_at"
+
+    // MARK: Save
+
+    static func save(_ tokenSet: ClaudeTokenSet) {
+        NativeKeychain.set(tokenSet.accessToken, service: service, account: accountAccess)
+        if let refresh = tokenSet.refreshToken {
+            NativeKeychain.set(refresh, service: service, account: accountRefresh)
+        }
+        if let expiresIn = tokenSet.expiresIn {
+            let expiresAt = Date().addingTimeInterval(TimeInterval(expiresIn))
+            let iso = ISO8601DateFormatter().string(from: expiresAt)
+            NativeKeychain.set(iso, service: service, account: accountExpiry)
+        }
+    }
+
+    // MARK: Load
+
+    static func loadAccessToken() -> String? {
+        NativeKeychain.get(service: service, account: accountAccess)
+    }
+
+    static func loadRefreshToken() -> String? {
+        NativeKeychain.get(service: service, account: accountRefresh)
+    }
+
+    static func loadExpiresAt() -> Date? {
+        guard let iso = NativeKeychain.get(service: service, account: accountExpiry) else { return nil }
+        return ISO8601DateFormatter().date(from: iso)
+    }
+
+    // MARK: Clear
+
+    static func clear() {
+        NativeKeychain.delete(service: service, account: accountAccess)
+        NativeKeychain.delete(service: service, account: accountRefresh)
+        NativeKeychain.delete(service: service, account: accountExpiry)
+    }
+
+    // MARK: Migration
+
+    /// Migrates a bare access token from the legacy storage location
+    /// (AISettings.apiKey in the settings database) to Keychain.
+    ///
+    /// - Parameter legacyToken: The raw token string from the old location.
+    ///   After calling this, callers should nil out their old reference so the
+    ///   bearer token is no longer stored in the settings database.
+    static func migrateIfNeeded(legacyToken: String) {
+        // Only migrate if Keychain is empty to avoid overwriting a newer token.
+        guard NativeKeychain.get(service: service, account: accountAccess) == nil else { return }
+        let tokenSet = ClaudeTokenSet(accessToken: legacyToken, refreshToken: nil, expiresIn: nil)
+        save(tokenSet)
+    }
+}
+
 // MARK: - OAuth engine
 
 enum NativeClaudeOAuth {
@@ -144,6 +212,46 @@ enum NativeClaudeOAuth {
         return try await exchangeCode(code, flow: flow)
     }
 
+    // MARK: Token refresh
+
+    /// Attempts to refresh the stored access token using the stored refresh token.
+    ///
+    /// On success, saves the new token set to Keychain and returns the new access token.
+    /// On failure (e.g. refresh token invalid / revoked), clears all Keychain entries
+    /// and throws `ClaudeOAuthError.refreshFailed` so callers can prompt re-authentication.
+    @discardableResult
+    static func refreshStoredTokens() async throws -> String {
+        guard let refreshToken = ClaudeKeychainStore.loadRefreshToken() else {
+            ClaudeKeychainStore.clear()
+            throw ClaudeOAuthError.refreshFailed("No refresh token stored. Sign in again.")
+        }
+
+        var request = URLRequest(url: tokenURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        let body: [String: String] = [
+            "grant_type": "refresh_token",
+            "refresh_token": refreshToken,
+            "client_id": clientID
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw ClaudeOAuthError.invalidResponse
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            // Refresh token is invalid or revoked — clear everything.
+            ClaudeKeychainStore.clear()
+            let text = String(data: data, encoding: .utf8) ?? "empty response"
+            throw ClaudeOAuthError.refreshFailed("Claude token refresh \(http.statusCode): \(text). Sign in again.")
+        }
+
+        let tokenSet = try JSONDecoder().decode(ClaudeTokenSet.self, from: data)
+        ClaudeKeychainStore.save(tokenSet)
+        return tokenSet.accessToken
+    }
+
     // MARK: Shared token exchange
 
     private static func exchangeCode(_ code: String, flow: ClaudeOAuthFlow) async throws -> ClaudeTokenSet {
@@ -210,6 +318,7 @@ enum ClaudeOAuthError: LocalizedError {
     case invalidResponse
     case userCancelled
     case tokenEndpoint(String)
+    case refreshFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -226,6 +335,8 @@ enum ClaudeOAuthError: LocalizedError {
         case .userCancelled:
             return nil // user dismissed — no toast needed
         case .tokenEndpoint(let message):
+            return message
+        case .refreshFailed(let message):
             return message
         }
     }

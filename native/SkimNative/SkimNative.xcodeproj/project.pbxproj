@@ -24,6 +24,7 @@
 		96F49A7819D5D167616F137F /* LegalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8387834F563CFA86721EBF1D /* LegalView.swift */; };
 		9A48EFF3F29B3477E0CE9120 /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 8B0DFA296F4A48F6B090AFBC /* Hub */; };
 		A20D6777CCE9FF23884FB7F1 /* NativeClaudeOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */; };
+		AA11BB22CC33DD44EE55FF66 /* NativeKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF6600AA /* NativeKeychain.swift */; };
 		C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BCD3DD03D305C558D07614 /* NativeAI.swift */; };
 		C1D91C8A78E543F0F69FFE82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0C79E51007F91AE5C8286F40 /* Assets.xcassets */; };
 		D575AB676AA07786E29C32A0 /* CatchUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 839B1584F0E39B5A14D96C79 /* CatchUpView.swift */; };
@@ -56,6 +57,7 @@
 		AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		AE1C488D608B0EBF3FD76FE7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeClaudeOAuth.swift; sourceTree = "<group>"; };
+		BB22CC33DD44EE55FF6600AA /* NativeKeychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeKeychain.swift; sourceTree = "<group>"; };
 		B72B2D107E596891809ECA5E /* Skim macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Skim macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9167BE3C78659C05031D238 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleDetailView.swift; sourceTree = "<group>"; };
@@ -151,6 +153,7 @@
 				E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */,
 				A1BCD3DD03D305C558D07614 /* NativeAI.swift */,
 				B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */,
+				BB22CC33DD44EE55FF6600AA /* NativeKeychain.swift */,
 				F6BA45434D97C1ACA953B839 /* NativeMLX.swift */,
 				038284DEE00F91A360324653 /* Style.swift */,
 				1474BA38A4E522DB5D3ECB21 /* WebView.swift */,
@@ -319,6 +322,7 @@
 				436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */,
 				C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */,
 				A20D6777CCE9FF23884FB7F1 /* NativeClaudeOAuth.swift in Sources */,
+				AA11BB22CC33DD44EE55FF66 /* NativeKeychain.swift in Sources */,
 				DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */,
 				E0006C62ED6F6DE502164145 /* RootView.swift in Sources */,
 				014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */,

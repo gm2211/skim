@@ -588,22 +588,69 @@ enum NativeAI {
     }
 
     private static func completeAnthropic(settings: AISettings, instructions: String, prompt: String, maxTokens: Int) async throws -> String {
+        if settings.provider == "claude-subscription" {
+            return try await completeAnthropicSubscription(settings: settings, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+        }
+        // API-key path (provider == "anthropic")
         let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         guard let key else {
-            throw NativeAIError.unavailable("Add a Claude API key or Claude subscription token in Settings.")
+            throw NativeAIError.unavailable("Add a Claude API key in Settings.")
+        }
+        let request = try buildAnthropicRequest(settings: settings, accessToken: key, isSubscription: false, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
+        return try decodeAnthropicContent(data: data)
+    }
+
+    /// Handles the claude-subscription path with Keychain token storage, migration,
+    /// and automatic one-shot refresh on 401.
+    private static func completeAnthropicSubscription(settings: AISettings, instructions: String, prompt: String, maxTokens: Int) async throws -> String {
+        // Resolve the access token: prefer Keychain, fall back to settings.apiKey
+        // (legacy location), migrating if found.
+        let accessToken: String
+        if let keychainToken = ClaudeKeychainStore.loadAccessToken() {
+            accessToken = keychainToken
+        } else if let legacyToken = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
+            // Migrate legacy token from settings database to Keychain.
+            ClaudeKeychainStore.migrateIfNeeded(legacyToken: legacyToken)
+            accessToken = legacyToken
+        } else {
+            throw NativeAIError.unavailable("Sign in with Claude in Settings to use your Claude subscription.")
         }
 
+        let request = try buildAnthropicRequest(settings: settings, accessToken: accessToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        // On 401, attempt token refresh and retry once.
+        if let http = response as? HTTPURLResponse, http.statusCode == 401 {
+            let newToken: String
+            do {
+                newToken = try await NativeClaudeOAuth.refreshStoredTokens()
+            } catch {
+                // Refresh failed — Keychain already cleared inside refreshStoredTokens().
+                throw NativeAIError.requiresReauthentication
+            }
+            let retryRequest = try buildAnthropicRequest(settings: settings, accessToken: newToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+            let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
+            try validate(response: retryResponse, data: retryData, provider: providerDisplayName(settings.provider))
+            return try decodeAnthropicContent(data: retryData)
+        }
+
+        try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
+        return try decodeAnthropicContent(data: data)
+    }
+
+    private static func buildAnthropicRequest(settings: AISettings, accessToken: String, isSubscription: Bool, instructions: String, prompt: String, maxTokens: Int) throws -> URLRequest {
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        if settings.provider == "claude-subscription" {
-            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        if isSubscription {
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
             request.setValue("oauth-2025-04-20,claude-code-20250219", forHTTPHeaderField: "anthropic-beta")
         } else {
-            request.setValue(key, forHTTPHeaderField: "x-api-key")
+            request.setValue(accessToken, forHTTPHeaderField: "x-api-key")
         }
-
         let body: [String: Any] = [
             "model": settings.model?.nilIfEmpty ?? defaultModel(for: settings.provider),
             "system": instructions,
@@ -614,8 +661,10 @@ enum NativeAI {
             "max_tokens": maxTokens
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
+        return request
+    }
+
+    private static func decodeAnthropicContent(data: Data) throws -> String {
         let decoded = try JSONDecoder().decode(AnthropicResponse.self, from: data)
         let content = decoded.content.compactMap(\.text).joined(separator: "\n").nilIfEmpty
         guard let content else {
@@ -732,11 +781,16 @@ enum NativeAI {
 
 enum NativeAIError: LocalizedError {
     case unavailable(String)
+    /// The Claude subscription token has expired and the refresh token is invalid.
+    /// The user must sign in again.
+    case requiresReauthentication
 
     var errorDescription: String? {
         switch self {
         case .unavailable(let message):
             message
+        case .requiresReauthentication:
+            "Your Claude session has expired. Sign in again in Settings."
         }
     }
 }

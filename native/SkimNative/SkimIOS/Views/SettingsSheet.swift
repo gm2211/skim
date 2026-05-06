@@ -147,6 +147,8 @@ struct SettingsSheet: View {
             Divider()
                 .overlay(SkimStyle.separator)
 
+            WordCountPresetChips(wordCount: summaryWordCountBinding)
+
             Stepper(value: summaryWordCountBinding, in: 30...600, step: 25) {
                 Text("Summary length: \(draft.ai.summaryCustomWordCount ?? 150) words")
                     .font(.system(size: 16, weight: .regular))
@@ -1132,6 +1134,54 @@ private final class WindowScenePresentationContext: NSObject,
 
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         window
+    }
+}
+
+// MARK: - Word Count Preset Chips
+
+private struct WordCountPresetChips: View {
+    @Binding var wordCount: Int
+
+    private struct Preset {
+        let label: String
+        let value: Int
+    }
+
+    private let presets: [Preset] = [
+        Preset(label: "Short", value: 50),
+        Preset(label: "Medium", value: 150),
+        Preset(label: "Long", value: 400),
+        Preset(label: "XL", value: 600),
+    ]
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(presets, id: \.value) { preset in
+                let isSelected = wordCount == preset.value
+                Button {
+                    wordCount = preset.value
+                } label: {
+                    Text("\(preset.label) \(preset.value)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.white : SkimStyle.accent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            isSelected
+                                ? AnyShapeStyle(SkimStyle.accent)
+                                : AnyShapeStyle(Color.clear),
+                            in: Capsule()
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(SkimStyle.accent, lineWidth: 1.5)
+                        )
+                }
+                .buttonStyle(.plain)
+                .animation(.smooth(duration: 0.18), value: isSelected)
+            }
+            Spacer()
+        }
     }
 }
 

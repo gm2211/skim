@@ -558,7 +558,10 @@ struct ArticleListView: View {
         }
         .frame(height: 38)
         .frame(maxWidth: .infinity)
-        .background(SkimStyle.chrome.opacity(0.96))
+        .background(
+            SkimStyle.chrome.opacity(0.96)
+                .ignoresSafeArea(.all, edges: .bottom)
+        )
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(SkimStyle.separator)

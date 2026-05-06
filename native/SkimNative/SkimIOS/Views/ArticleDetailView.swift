@@ -560,6 +560,8 @@ private struct ReaderPage: View {
                 .lineSpacing(7)
                 .foregroundStyle(SkimStyle.text)
                 .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -639,11 +641,22 @@ private extension Article {
         let body = contentText?.decodingHTMLEntities.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? contentHTML?.skimPlainText.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? ""
-        return body.removingReaderBoilerplate
+        return body
+            .unescapingLiteralEscapes
+            .removingReaderBoilerplate
     }
 }
 
 private extension String {
+    /// Replaces literal two-character escape sequences (backslash-n, backslash-t) with their
+    /// actual control characters. This handles content that was double-escaped during JSON
+    /// extraction — e.g. a Next.js blob where `\\n` in the JSON source string was stored as
+    /// the literal two characters `\` + `n` rather than a real newline.
+    var unescapingLiteralEscapes: String {
+        replacingOccurrences(of: "\\n", with: "\n")
+            .replacingOccurrences(of: "\\t", with: "\t")
+    }
+
     var removingReaderBoilerplate: String {
         let normalized = replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)

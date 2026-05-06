@@ -494,6 +494,9 @@ struct AIResultSheet: View {
                                 }
                             }
                         }
+
+                        AIDisclaimerLabel()
+                            .padding(.top, 8)
                     }
                 }
                 .padding(24)
@@ -580,6 +583,8 @@ struct AIChatSheet: View {
                                     AIChatBubble(message: message)
                                         .id(message.id)
                                 }
+                                AIDisclaimerLabel()
+                                    .padding(.top, 4)
                             }
 
                             if isSending {

@@ -21,6 +21,9 @@ struct ArticleListView: View {
     @State private var aiInboxSourceArticles: [Article] = []
     @State private var showSearch = false
     @FocusState private var isSearchFocused: Bool
+    /// Shown when user triggers an AI feature before accepting the disclaimer.
+    @State private var showAIDisclaimerGate = false
+    @State private var pendingAIAction: (() -> Void)?
 
     var body: some View {
         ZStack {
@@ -161,6 +164,14 @@ struct ArticleListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
+        .fullScreenCover(isPresented: $showAIDisclaimerGate) {
+            AIBootDisclaimerView {
+                AIBootDisclaimerView.markAccepted()
+                showAIDisclaimerGate = false
+                pendingAIAction?()
+                pendingAIAction = nil
+            }
+        }
         .onChange(of: model.listMode) { _, _ in
             dismissTextEntry()
             Task { await model.reloadArticles() }
@@ -209,43 +220,60 @@ struct ArticleListView: View {
         }
     }
 
+    /// Executes `action` immediately if the AI disclaimer has been accepted;
+    /// otherwise presents the boot disclaimer and enqueues `action` to run after acceptance.
+    private func gatedAI(_ action: @escaping () -> Void) {
+        if AIBootDisclaimerView.isAccepted {
+            action()
+        } else {
+            pendingAIAction = action
+            showAIDisclaimerGate = true
+        }
+    }
+
     private func presentQuickCatchUp() {
-        dismissTextEntry()
-        let articles = model.articles
-        activeAIResult = AIResultRequest(
-            title: "Quick Catch-up",
-            subtitle: articles.isEmpty ? "Latest articles" : "\(articles.count) visible articles",
-            statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai)
-        ) {
-            let context = try await model.articlesForAIContext(preferred: articles)
-            guard !context.isEmpty else {
-                throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before running Quick Catch-up.")
+        gatedAI {
+            dismissTextEntry()
+            let articles = model.articles
+            activeAIResult = AIResultRequest(
+                title: "Quick Catch-up",
+                subtitle: articles.isEmpty ? "Latest articles" : "\(articles.count) visible articles",
+                statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai)
+            ) {
+                let context = try await model.articlesForAIContext(preferred: articles)
+                guard !context.isEmpty else {
+                    throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before running Quick Catch-up.")
+                }
+                let text = try await NativeAI.quickCatchUp(articles: context, settings: model.settings)
+                return AIResultAnswer(text: text, articles: context)
             }
-            let text = try await NativeAI.quickCatchUp(articles: context, settings: model.settings)
-            return AIResultAnswer(text: text, articles: context)
         }
     }
 
     private func presentArticleChat() {
-        dismissTextEntry()
-        let articles = model.articles
-        activeAIChat = AIChatRequest(
-            title: "Chat with Articles",
-            placeholder: articles.isEmpty ? "Ask about the latest articles." : "Ask about the currently visible articles."
-        ) { question in
-            let context = try await model.articlesForAIContext(preferred: articles)
-            guard !context.isEmpty else {
-                throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before chatting.")
+        gatedAI {
+            dismissTextEntry()
+            let articles = model.articles
+            activeAIChat = AIChatRequest(
+                title: "Chat with Articles",
+                placeholder: articles.isEmpty ? "Ask about the latest articles." : "Ask about the currently visible articles."
+            ) { question in
+                let context = try await model.articlesForAIContext(preferred: articles)
+                guard !context.isEmpty else {
+                    throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before chatting.")
+                }
+                let text = try await NativeAI.chat(question: question, articles: context, settings: model.settings)
+                return AIChatAnswer(text: text, articles: context)
             }
-            let text = try await NativeAI.chat(question: question, articles: context, settings: model.settings)
-            return AIChatAnswer(text: text, articles: context)
         }
     }
 
     private func presentAIInbox() {
-        dismissTextEntry()
-        aiInboxSourceArticles = model.articles
-        showAIInbox = true
+        gatedAI {
+            dismissTextEntry()
+            aiInboxSourceArticles = model.articles
+            showAIInbox = true
+        }
     }
 
     private var openFeedPickerGesture: some Gesture {
@@ -1108,6 +1136,11 @@ private struct AutoGroupSheet: View {
                     .padding(.bottom, 8)
                 }
                 .scrollIndicators(.hidden)
+            }
+
+            if !proposals.isEmpty && !isRunningAI {
+                AIDisclaimerLabel()
+                    .padding(.top, 2)
             }
 
             HStack(spacing: 12) {

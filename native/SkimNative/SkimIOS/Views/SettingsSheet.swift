@@ -23,6 +23,7 @@ struct SettingsSheet: View {
                     header
                     aiSection
                     librarySection
+                    legalSection
                     aboutSection
                 }
                 .padding(.horizontal, 24)
@@ -211,6 +212,34 @@ struct SettingsSheet: View {
         SettingsSection(title: "About") {
             SettingRow(systemName: "app", title: "Skim", detail: appVersionText)
             SettingRow(systemName: "iphone", title: "Native iOS", detail: "SwiftUI reading loop with local SQLite storage.")
+        }
+    }
+
+    private var legalSection: some View {
+        SettingsSection(title: "Legal") {
+            NavigationLink(destination: LegalView()) {
+                HStack(spacing: 14) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .frame(width: 26)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("AI Disclaimer")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(SkimStyle.text)
+                        Text("How Skim uses third-party AI providers.")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary.opacity(0.7))
+                }
+                .frame(minHeight: 34)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 

@@ -111,6 +111,11 @@ struct AIInboxSheet: View {
     private var articleList: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
+                AIDisclaimerLabel()
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
+                    .padding(.bottom, 6)
+
                 ForEach(Array(rankedItems.enumerated()), id: \.element.id) { index, item in
                     NavigationLink(value: item.article.id) {
                         InboxArticleRow(rank: index + 1, item: item)

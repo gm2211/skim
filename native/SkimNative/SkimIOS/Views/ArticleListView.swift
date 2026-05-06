@@ -1163,11 +1163,10 @@ private enum AutoGroupClassifier {
     static func providerLabel(for provider: String) -> String {
         switch provider {
         case "foundation-models": return "Apple Intelligence"
-        case "openai": return "OpenAI"
-        case "anthropic": return "Claude API"
         case "claude-subscription": return "Claude Pro/Max"
-        case "openrouter": return "OpenRouter"
-        case "custom": return "custom provider"
+        case "mlx": return "MLX"
+        case "custom", "openai", "openrouter": return "custom provider"
+        case "anthropic": return "Claude Pro/Max"
         default: return provider
         }
     }

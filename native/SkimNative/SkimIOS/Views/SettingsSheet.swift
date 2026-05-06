@@ -56,6 +56,7 @@ struct SettingsSheet: View {
             }
             .onAppear {
                 draft = model.settings
+                draft.ai = normalizedAISettings(draft.ai)
             }
         }
     }
@@ -108,8 +109,8 @@ struct SettingsSheet: View {
 
             if providerNeedsAPIKey {
                 SettingsTextField(
-                    title: draft.ai.provider == "claude-subscription" ? "Claude OAuth token" : "API key",
-                    placeholder: draft.ai.provider == "anthropic" || draft.ai.provider == "claude-subscription" ? "sk-ant-..." : "sk-...",
+                    title: draft.ai.provider == "claude-subscription" ? "Claude OAuth token" : "Bearer token or API key",
+                    placeholder: draft.ai.provider == "claude-subscription" ? "sk-ant-..." : "sk-...",
                     text: aiAPIKeyBinding,
                     isSecure: true
                 )
@@ -132,7 +133,7 @@ struct SettingsSheet: View {
             if draft.ai.provider == "custom" {
                 SettingsTextField(
                     title: "Endpoint",
-                    placeholder: "https://api.example.com",
+                    placeholder: "https://api.openai.com",
                     text: aiEndpointBinding
                 )
             }
@@ -222,13 +223,9 @@ struct SettingsSheet: View {
     private var nativeAIProviders: [(value: String, label: String, description: String)] {
         [
             ("foundation-models", "Apple Intelligence", "Apple's on-device model. Requires Apple Intelligence to finish preparing its language model."),
-            ("openai", "OpenAI", "Uses api.openai.com with your API key."),
-            ("anthropic", "Claude API Key", "Uses api.anthropic.com with an Anthropic API key."),
-            ("claude-subscription", "Claude Pro/Max", "Opens Claude sign-in, then exchanges the pasted code for a bearer token."),
-            ("openrouter", "OpenRouter", "Uses OpenRouter's OpenAI-compatible API."),
-            ("custom", "Custom", "Any OpenAI-compatible endpoint."),
             ("mlx", "On-device MLX", "Download and run a small MLX model on this iPhone. Offline after download."),
-            ("none", "None", "Disable AI features.")
+            ("claude-subscription", "Claude Pro/Max", "Opens Claude sign-in, then exchanges the pasted code for a bearer token."),
+            ("custom", "Custom", "Any OpenAI-compatible endpoint or API-key provider. ChatGPT subscriptions do not expose an app API token.")
         ]
     }
 
@@ -237,7 +234,7 @@ struct SettingsSheet: View {
     }
 
     private var providerNeedsAPIKey: Bool {
-        ["openai", "anthropic", "claude-subscription", "openrouter", "custom"].contains(draft.ai.provider)
+        ["claude-subscription", "custom"].contains(draft.ai.provider)
     }
 
     private var providerIsReady: Bool {
@@ -246,10 +243,12 @@ struct SettingsSheet: View {
             return aiStatus.isAvailable
         case "mlx":
             return NativeMLX.isAvailable && NativeMLX.isDownloadedSync(mlxSelectedRepoId)
-        case "none":
-            return false
+        case "custom":
+            return draft.ai.apiKey?.nilIfEmpty != nil || draft.ai.endpoint?.nilIfEmpty != nil
+        case "claude-subscription":
+            return draft.ai.apiKey?.nilIfEmpty != nil
         default:
-            return draft.ai.apiKey?.nilIfEmpty != nil || draft.ai.provider == "custom"
+            return draft.ai.apiKey?.nilIfEmpty != nil
         }
     }
 
@@ -257,13 +256,15 @@ struct SettingsSheet: View {
         switch draft.ai.provider {
         case "foundation-models":
             return aiStatus.title
-        case "none":
-            return "AI disabled"
         case "mlx":
             if !NativeMLX.isAvailable {
                 return "MLX unavailable here"
             }
             return NativeMLX.isDownloadedSync(mlxSelectedRepoId) ? "On-device MLX ready" : "Download a model"
+        case "claude-subscription":
+            return providerIsReady ? "Claude configured" : "Claude sign-in needed"
+        case "custom":
+            return providerIsReady ? "Custom provider configured" : "Provider details needed"
         default:
             return providerIsReady ? "Provider configured" : "API key needed"
         }
@@ -273,8 +274,6 @@ struct SettingsSheet: View {
         switch draft.ai.provider {
         case "foundation-models":
             return aiStatus.detail
-        case "none":
-            return "Choose another provider to use summaries, chat, catch-up, and AI Inbox."
         case "mlx":
             let option = NativeMLX.option(for: mlxSelectedRepoId)
             if !NativeMLX.isAvailable {
@@ -284,6 +283,10 @@ struct SettingsSheet: View {
                 return "\(option.label) is cached locally and ready for summaries, chat, catch-up, and AI Inbox."
             }
             return "Choose a model, download it once, then Skim can run AI locally on-device."
+        case "claude-subscription":
+            return providerIsReady ? "Skim will use your Claude Pro/Max token for chat, summaries, catch-up, and AI Inbox." : "Open Claude sign-in below, paste the returned code, then save settings."
+        case "custom":
+            return providerIsReady ? "Skim will call this OpenAI-compatible endpoint for chat, summaries, catch-up, and AI Inbox." : "Add an API key, an endpoint, or both. For OpenAI API, use https://api.openai.com with a platform API key."
         default:
             return providerIsReady ? "Skim will use this provider for chat, summaries, catch-up, and AI Inbox." : "Paste a token or API key, then save settings."
         }
@@ -291,10 +294,8 @@ struct SettingsSheet: View {
 
     private var defaultModelPlaceholder: String {
         switch draft.ai.provider {
-        case "anthropic", "claude-subscription":
+        case "claude-subscription":
             return "claude-sonnet-4-5"
-        case "openrouter":
-            return "openai/gpt-4o-mini"
         default:
             return "gpt-4o-mini"
         }
@@ -316,10 +317,42 @@ struct SettingsSheet: View {
                         let repoId = $0.localModelPath?.nilIfEmpty ?? $0.model?.nilIfEmpty ?? NativeMLX.defaultRepoId
                         $0.localModelPath = repoId
                         $0.model = repoId
+                    } else if value == "foundation-models" {
+                        $0.localModelPath = nil
+                        $0.model = nil
+                        $0.endpoint = nil
+                    } else if value == "claude-subscription" {
+                        $0.endpoint = nil
+                        $0.model = $0.model?.nilIfEmpty ?? "claude-sonnet-4-5"
+                    } else if value == "custom" {
+                        $0.model = $0.model?.nilIfEmpty ?? "gpt-4o-mini"
                     }
                 }
             }
         )
+    }
+
+    private func normalizedAISettings(_ ai: AISettings) -> AISettings {
+        var next = ai
+        switch ai.provider {
+        case "foundation-models", "mlx", "claude-subscription", "custom":
+            break
+        case "openai":
+            next.provider = "custom"
+            next.endpoint = next.endpoint?.nilIfEmpty ?? "https://api.openai.com"
+            next.model = next.model?.nilIfEmpty ?? "gpt-4o-mini"
+        case "openrouter":
+            next.provider = "custom"
+            next.endpoint = next.endpoint?.nilIfEmpty ?? "https://openrouter.ai/api"
+            next.model = next.model?.nilIfEmpty ?? "openai/gpt-4o-mini"
+        case "anthropic":
+            next.provider = "claude-subscription"
+            next.model = next.model?.nilIfEmpty ?? "claude-sonnet-4-5"
+        default:
+            next.provider = "foundation-models"
+            next.endpoint = nil
+        }
+        return next
     }
 
     private var aiSettingsBinding: Binding<AISettings> {

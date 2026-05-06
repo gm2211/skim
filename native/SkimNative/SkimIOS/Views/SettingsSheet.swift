@@ -33,16 +33,6 @@ struct SettingsSheet: View {
             }
             .background(SkimStyle.background.ignoresSafeArea())
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Save") {
-                        Task {
-                            await model.saveSettings(draft)
-                            isPresented = false
-                        }
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                }
-
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         isPresented = false
@@ -59,6 +49,11 @@ struct SettingsSheet: View {
             .onAppear {
                 draft = model.settings
                 draft.ai = normalizedAISettings(draft.ai)
+            }
+            .onChange(of: draft) { _, newValue in
+                Task {
+                    await model.saveSettings(newValue)
+                }
             }
         }
     }
@@ -1104,7 +1099,7 @@ private struct ClaudeOAuthPastePanel: View {
     private func storeToken(_ tokenSet: ClaudeTokenSet) {
         ai.apiKey = tokenSet.accessToken
         ai.model = ai.model?.nilIfEmpty ?? "claude-sonnet-4-5"
-        successMessage = "Signed in with Claude. Tap Save to keep this token."
+        successMessage = "Signed in with Claude. Token saved automatically."
     }
 
     private func notice(color: Color, text: String) -> some View {

@@ -238,15 +238,16 @@ struct ArticleListView: View {
             activeAIResult = AIResultRequest(
                 title: "Quick Catch-up",
                 subtitle: articles.isEmpty ? "Latest articles" : "\(articles.count) visible articles",
-                statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai)
-            ) {
-                let context = try await model.articlesForAIContext(preferred: articles)
-                guard !context.isEmpty else {
-                    throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before running Quick Catch-up.")
+                statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai),
+                action: {
+                    let context = try await model.articlesForAIContext(preferred: articles)
+                    guard !context.isEmpty else {
+                        throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before running Quick Catch-up.")
+                    }
+                    let text = try await NativeAI.quickCatchUp(articles: context, settings: model.settings)
+                    return AIResultAnswer(text: text, articles: context)
                 }
-                let text = try await NativeAI.quickCatchUp(articles: context, settings: model.settings)
-                return AIResultAnswer(text: text, articles: context)
-            }
+            )
         }
     }
 

@@ -10,6 +10,9 @@ struct AIResultRequest: Identifiable {
     var subtitle: String
     var statusLabel = "Running AI..."
     var action: () async throws -> AIResultAnswer
+    /// When set, the sheet shows a "Clear" button instead of "Run Again".
+    /// Invoking it removes the cached result and dismisses the sheet.
+    var clearAction: (() -> Void)? = nil
 }
 
 struct AIResultAnswer {
@@ -33,6 +36,48 @@ struct NativeAIAvailabilityStatus {
     var title: String
     var detail: String
     var isAvailable: Bool
+}
+
+// MARK: - Summary LRU Cache
+
+/// In-memory LRU cache for article summaries. Keyed by articleId + model + length settings.
+/// Max 20 entries; evicts least-recently-used on overflow. Not persisted to disk so stale-on-config
+/// change is not an issue.
+private final class SummaryLRUCache: @unchecked Sendable {
+    static let shared = SummaryLRUCache()
+
+    private let maxSize = 20
+    private var store: [String: String] = [:]
+    // Tracks insertion/access order; last element = most recently used
+    private var order: [String] = []
+    private let lock = NSLock()
+
+    func get(_ key: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        guard let value = store[key] else { return nil }
+        // Move to most-recently-used position
+        order.removeAll(where: { $0 == key })
+        order.append(key)
+        return value
+    }
+
+    func set(_ key: String, value: String) {
+        lock.lock(); defer { lock.unlock() }
+        if store[key] != nil {
+            order.removeAll(where: { $0 == key })
+        } else if store.count >= maxSize, let lru = order.first {
+            store.removeValue(forKey: lru)
+            order.removeFirst()
+        }
+        store[key] = value
+        order.append(key)
+    }
+
+    func remove(_ key: String) {
+        lock.lock(); defer { lock.unlock() }
+        store.removeValue(forKey: key)
+        order.removeAll(where: { $0 == key })
+    }
 }
 
 enum NativeAI {
@@ -119,7 +164,11 @@ enum NativeAI {
     }
 
     static func summarize(article: Article, settings: AppSettings) async throws -> String {
-        try await complete(
+        let key = summaryCacheKey(articleID: article.id, ai: settings.ai)
+        if let cached = SummaryLRUCache.shared.get(key) {
+            return cached
+        }
+        let result = try await complete(
             settings: settings,
             instructions: summaryInstructions(settings.ai),
             prompt: """
@@ -129,6 +178,24 @@ enum NativeAI {
             """,
             maxTokens: summaryMaxTokens(settings.ai)
         )
+        SummaryLRUCache.shared.set(key, value: result)
+        return result
+    }
+
+    /// Evicts the cached summary for the given article + settings combination.
+    static func clearSummaryCache(articleID: String, ai: AISettings) {
+        SummaryLRUCache.shared.remove(summaryCacheKey(articleID: articleID, ai: ai))
+    }
+
+    private static func summaryCacheKey(articleID: String, ai: AISettings) -> String {
+        let model = ai.model?.nilIfEmpty ?? ai.provider
+        let length: String
+        if let words = ai.summaryCustomWordCount, words > 0 {
+            length = "words:\(words)"
+        } else {
+            length = ai.summaryLength?.nilIfEmpty ?? "short"
+        }
+        return "\(articleID)|\(model)|\(length)"
     }
 
     static func chat(question: String, article: Article, settings: AppSettings) async throws -> String {
@@ -512,8 +579,16 @@ struct AIResultSheet: View {
                     Button("Close") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Run Again") { Task { await run() } }
+                    if let clearAction = request.clearAction {
+                        Button("Clear", role: .destructive) {
+                            clearAction()
+                            dismiss()
+                        }
                         .disabled(isLoading)
+                    } else {
+                        Button("Run Again") { Task { await run() } }
+                            .disabled(isLoading)
+                    }
                 }
             }
             .task { await run() }

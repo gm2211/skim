@@ -314,11 +314,15 @@ struct ArticleDetailView: View {
             activeAIResult = AIResultRequest(
                 title: "AI Summary",
                 subtitle: article.title,
-                statusLabel: NativeAI.loadingStatusLabel(for: settings.ai)
-            ) {
-                let text = try await NativeAI.summarize(article: article, settings: settings)
-                return AIResultAnswer(text: text, articles: [article])
-            }
+                statusLabel: NativeAI.loadingStatusLabel(for: settings.ai),
+                action: {
+                    let text = try await NativeAI.summarize(article: article, settings: settings)
+                    return AIResultAnswer(text: text, articles: [article])
+                },
+                clearAction: {
+                    NativeAI.clearSummaryCache(articleID: article.id, ai: settings.ai)
+                }
+            )
         }
     }
 }

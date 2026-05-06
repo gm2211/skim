@@ -16,6 +16,7 @@ struct ArticleListView: View {
     @State private var showAutoGroup = false
     @State private var showSettings = false
     @State private var activeAIResult: AIResultRequest?
+    @State private var activeCatchUp: CatchUpRequest?
     @State private var activeAIChat: AIChatRequest?
     @State private var showAIInbox = false
     @State private var aiInboxSourceArticles: [Article] = []
@@ -151,6 +152,13 @@ struct ArticleListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
+        .sheet(item: $activeCatchUp) { request in
+            CatchUpSheet(request: request)
+                .environmentObject(model)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(SkimStyle.chrome)
+        }
         .sheet(item: $activeAIChat) { request in
             AIChatSheet(request: request)
                 .presentationDetents([.large])
@@ -199,6 +207,11 @@ struct ArticleListView: View {
                 dismissTextEntry()
             }
         }
+        .onChange(of: activeCatchUp?.id) { _, requestID in
+            if requestID != nil {
+                dismissTextEntry()
+            }
+        }
         .onChange(of: activeAIChat?.id) { _, requestID in
             if requestID != nil {
                 dismissTextEntry()
@@ -235,17 +248,24 @@ struct ArticleListView: View {
         gatedAI {
             dismissTextEntry()
             let articles = model.articles
-            activeAIResult = AIResultRequest(
-                title: "Quick Catch-up",
-                subtitle: articles.isEmpty ? "Latest articles" : "\(articles.count) visible articles",
+            let articleLimit = NativeAI.catchUpArticleLimit
+            let subtitle = articles.isEmpty
+                ? "Latest articles (up to \(articleLimit))"
+                : "\(min(articles.count, articleLimit)) articles"
+            activeCatchUp = CatchUpRequest(
+                subtitle: subtitle,
                 statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai)
             ) {
-                let context = try await model.articlesForAIContext(preferred: articles)
+                let context = try await model.articlesForAIContext(preferred: articles, limit: articleLimit)
                 guard !context.isEmpty else {
                     throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before running Quick Catch-up.")
                 }
+                // Try structured JSON output; fall back to plain text on parse failure
+                if let structuredItems = try? await NativeAI.quickCatchUpStructured(articles: context, settings: model.settings) {
+                    return CatchUpResult(items: structuredItems, fallbackText: nil, articles: context)
+                }
                 let text = try await NativeAI.quickCatchUp(articles: context, settings: model.settings)
-                return AIResultAnswer(text: text, articles: context)
+                return CatchUpResult(items: [], fallbackText: text, articles: context)
             }
         }
     }

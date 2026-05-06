@@ -662,11 +662,13 @@ struct AIChatSheet: View {
     private func send() async {
         let question = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !isSending else { return }
+        let toSend = question
         input = ""
-        messages.append(AIChatMessage(role: .user, text: question))
+        focused = true
+        messages.append(AIChatMessage(role: .user, text: toSend))
         isSending = true
         do {
-            let answer = try await request.answer(question)
+            let answer = try await request.answer(toSend)
             messages.append(
                 AIChatMessage(
                     role: .assistant,

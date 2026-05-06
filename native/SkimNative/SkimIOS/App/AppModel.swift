@@ -87,6 +87,9 @@ final class AppModel: ObservableObject {
         if let selectedFeedID, let feed = feeds.first(where: { $0.id == selectedFeedID }) {
             return feed.title
         }
+        if let selectedFolderID, let folder = folders.first(where: { $0.id == selectedFolderID }) {
+            return folder.name
+        }
         switch listMode {
         case .starred:
             return "Starred"
@@ -101,6 +104,10 @@ final class AppModel: ObservableObject {
         if let selectedFeedID {
             return unreadCounts[selectedFeedID] ?? 0
         }
+        if let selectedFolderID {
+            let folderFeeds = feeds.filter { $0.folderID == selectedFolderID }
+            return folderFeeds.compactMap { unreadCounts[$0.id] }.reduce(0, +)
+        }
         return totalUnreadCount
     }
 
@@ -114,6 +121,13 @@ final class AppModel: ObservableObject {
         )
     }
 
+    /// Feed IDs belonging to the selected folder, or nil if no folder is selected.
+    private var selectedFolderFeedIDs: Set<String>? {
+        guard let selectedFolderID else { return nil }
+        let ids = feeds.filter { $0.folderID == selectedFolderID }.map(\.id)
+        return Set(ids)
+    }
+
     func load() async {
         isLoading = true
         defer { isLoading = false }
@@ -121,7 +135,8 @@ final class AppModel: ObservableObject {
             folders = try await store.listFolders()
             feeds = try await store.listFeeds()
             settings = try await store.loadSettings()
-            articles = try await store.listArticles(filter: filter)
+            let fetched = try await store.listArticles(filter: filter)
+            articles = applyFolderFilter(fetched)
             try await refreshCounts()
             errorMessage = nil
         } catch {
@@ -133,12 +148,19 @@ final class AppModel: ObservableObject {
         do {
             folders = try await store.listFolders()
             feeds = try await store.listFeeds()
-            articles = try await store.listArticles(filter: filter)
+            let fetched = try await store.listArticles(filter: filter)
+            articles = applyFolderFilter(fetched)
             try await refreshCounts()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Filters articles to only those belonging to the selected folder, if any.
+    private func applyFolderFilter(_ fetched: [Article]) -> [Article] {
+        guard let folderFeedIDs = selectedFolderFeedIDs else { return fetched }
+        return fetched.filter { folderFeedIDs.contains($0.feedID) }
     }
 
     func refreshAll() async {
@@ -185,6 +207,7 @@ final class AppModel: ObservableObject {
             )
             try await refresher.refresh(feed: feed, store: store)
             selectedFeedID = feed.id
+            selectedFolderID = nil
             listMode = .unread
             await reloadArticles()
         } catch {

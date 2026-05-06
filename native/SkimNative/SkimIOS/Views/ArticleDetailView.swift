@@ -24,8 +24,6 @@ struct ArticleDetailView: View {
 
     // Reading-time tracking
     @State private var openedAt: Date?
-    // Feedback state (mirrors persisted signal so UI stays in sync)
-    @State private var currentFeedbackRating: ArticleFeedbackRating = .neutral
     @State private var currentPriorityOverride: ArticlePriorityOverride = .none
 
     var body: some View {
@@ -59,7 +57,6 @@ struct ArticleDetailView: View {
             openedAt = Date()
             if let article {
                 let signal = model.tasteStore.signal(for: article.id)
-                currentFeedbackRating = signal?.rating ?? .neutral
                 currentPriorityOverride = signal?.priorityOverride ?? .none
             }
         }
@@ -119,18 +116,6 @@ struct ArticleDetailView: View {
         )
     }
 
-    private func applyFeedback(_ rating: ArticleFeedbackRating) {
-        guard let article else { return }
-        let newRating: ArticleFeedbackRating = currentFeedbackRating == rating ? .neutral : rating
-        currentFeedbackRating = newRating
-        model.setArticleFeedback(
-            articleID: article.id,
-            feedID: article.feedID,
-            feedTitle: article.feedTitle,
-            rating: newRating
-        )
-    }
-
     private func applyPriorityOverride(_ override: ArticlePriorityOverride) {
         guard let article else { return }
         let newOverride: ArticlePriorityOverride = currentPriorityOverride == override ? .none : override
@@ -162,25 +147,6 @@ struct ArticleDetailView: View {
             }
             BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 22, tapSize: 40) {
                 presentArticleChat()
-            }
-            // Taste feedback buttons
-            BorderlessIconButton(
-                systemName: currentFeedbackRating == .positive ? "hand.thumbsup.fill" : "hand.thumbsup",
-                title: "Helpful",
-                isActive: currentFeedbackRating == .positive,
-                size: 22,
-                tapSize: 40
-            ) {
-                applyFeedback(.positive)
-            }
-            BorderlessIconButton(
-                systemName: currentFeedbackRating == .negative ? "hand.thumbsdown.fill" : "hand.thumbsdown",
-                title: "Not helpful",
-                isActive: currentFeedbackRating == .negative,
-                size: 22,
-                tapSize: 40
-            ) {
-                applyFeedback(.negative)
             }
             BorderlessIconButton(systemName: article?.isStarred == true ? "star.fill" : "star", title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 26, tapSize: 42) {
                 Task { await toggleStar() }
@@ -215,20 +181,6 @@ struct ArticleDetailView: View {
             }
 
             Divider()
-
-            Button(
-                currentFeedbackRating == .positive ? "Remove Helpful Mark" : "Mark as Helpful",
-                systemImage: currentFeedbackRating == .positive ? "hand.thumbsup.fill" : "hand.thumbsup"
-            ) {
-                applyFeedback(.positive)
-            }
-
-            Button(
-                currentFeedbackRating == .negative ? "Remove Not Helpful Mark" : "Mark as Not Helpful",
-                systemImage: currentFeedbackRating == .negative ? "hand.thumbsdown.fill" : "hand.thumbsdown"
-            ) {
-                applyFeedback(.negative)
-            }
 
             Button(
                 currentPriorityOverride == .pin ? "Unpin" : "Pin to Top",
@@ -277,7 +229,6 @@ struct ArticleDetailView: View {
 
         // Sync taste state from persisted signals
         let signal = model.tasteStore.signal(for: loaded.id)
-        currentFeedbackRating = signal?.rating ?? .neutral
         currentPriorityOverride = signal?.priorityOverride ?? .none
     }
 

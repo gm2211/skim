@@ -13,7 +13,9 @@ actor MLXRunner {
 
     private var currentRepoId: String = MLXRunner.defaultRepoId
     private var loadedContainer: ModelContainer?
+    private var loadedRepoId: String?
     private var loadingTask: Task<ModelContainer, Error>?
+    private var loadingRepoId: String?
     private var progressSink: (@Sendable (Double) -> Void)?
 
     enum MLXError: LocalizedError {
@@ -156,7 +158,10 @@ actor MLXRunner {
         guard repoId != currentRepoId else { return }
         currentRepoId = repoId
         loadedContainer = nil
+        loadedRepoId = nil
+        loadingTask?.cancel()
         loadingTask = nil
+        loadingRepoId = nil
     }
 
     func selectDownloadedModel(preferredRepoId: String) {
@@ -179,7 +184,10 @@ actor MLXRunner {
 
     func evict() {
         loadedContainer = nil
+        loadedRepoId = nil
+        loadingTask?.cancel()
         loadingTask = nil
+        loadingRepoId = nil
     }
 
     func isModelDownloaded(repoId: String) -> Bool {
@@ -203,7 +211,10 @@ actor MLXRunner {
                 }
             )
             loadedContainer = nil
+            loadedRepoId = nil
+            loadingTask?.cancel()
             loadingTask = nil
+            loadingRepoId = nil
             sink?(1.0)
         } catch {
             MLXRunner.cleanupPartialDownloads(repoId: repoId)
@@ -218,7 +229,10 @@ actor MLXRunner {
         }
         if currentRepoId == repoId {
             loadedContainer = nil
+            loadedRepoId = nil
+            loadingTask?.cancel()
             loadingTask = nil
+            loadingRepoId = nil
         }
     }
 
@@ -228,10 +242,20 @@ actor MLXRunner {
             throw MLXError.unavailable("MLX inference requires a real iPhone. The Simulator cannot run the MLX backend.")
         }
 
-        if let container = loadedContainer { return container }
-        if let task = loadingTask { return try await task.value }
-
         let repoId = currentRepoId
+        if let container = loadedContainer, loadedRepoId == repoId {
+            return container
+        }
+        loadedContainer = nil
+        loadedRepoId = nil
+
+        if let task = loadingTask, loadingRepoId == repoId {
+            return try await task.value
+        }
+        loadingTask?.cancel()
+        loadingTask = nil
+        loadingRepoId = nil
+
         guard MLXRunner.isRepoDownloaded(repoId) else {
             throw MLXError.loadFailed("Model \(repoId) is not downloaded.")
         }
@@ -251,14 +275,20 @@ actor MLXRunner {
             }
         }
         loadingTask = task
+        loadingRepoId = repoId
 
         do {
             let container = try await task.value
-            loadedContainer = container
+            if currentRepoId == repoId {
+                loadedContainer = container
+                loadedRepoId = repoId
+            }
             loadingTask = nil
+            loadingRepoId = nil
             return container
         } catch {
             loadingTask = nil
+            loadingRepoId = nil
             throw error
         }
     }

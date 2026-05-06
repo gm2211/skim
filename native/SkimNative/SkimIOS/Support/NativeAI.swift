@@ -233,11 +233,14 @@ enum NativeAI {
             return cached
         }
         let wordCount = summaryTargetWordCount(settings.ai)
+        // Pass wordCount into instructions so the system prompt carries the full directive.
+        // The user turn contains only the article body to avoid FM echoing the instruction
+        // text back as part of the response (a known issue with some Foundation Models builds).
         let result = try await complete(
             settings: settings,
-            instructions: summaryInstructions(settings.ai),
+            instructions: summaryInstructions(settings.ai, wordCount: wordCount),
             prompt: """
-            Summarize this article. Write a summary of approximately \(wordCount) words.
+            Article to summarize:
 
             \(articleDigest([article], limit: 1))
             """,
@@ -340,10 +343,56 @@ enum NativeAI {
                     maximumResponseTokens: maxTokens
                 )
             )
-            return response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            let raw = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            return stripEchoedPrompt(raw, prompt: prompt)
         }
 #endif
         throw NativeAIError.unavailable("Foundation Models are not available in this build.")
+    }
+
+    /// Foundation Models occasionally echoes the user prompt back before the actual
+    /// response. This strips such an echo when it occurs so callers always receive
+    /// clean output.
+    ///
+    /// Strategy: if the response begins with ≥40 characters that also appear verbatim
+    /// at the start of the prompt, or if the response contains the prompt body
+    /// followed by a blank line, strip the repeated portion and any leading whitespace.
+    private static func stripEchoedPrompt(_ response: String, prompt: String) -> String {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedResponse = response.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Case 1: response literally starts with the full prompt
+        if trimmedResponse.hasPrefix(trimmedPrompt) {
+            let afterPrompt = trimmedResponse.dropFirst(trimmedPrompt.count)
+            return afterPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // Case 2: response starts with a substantial prefix of the prompt (≥40 chars).
+        // FM sometimes truncates the echo slightly, so we check a leading window.
+        let prefixLength = min(trimmedPrompt.count, 120)
+        if prefixLength >= 40 {
+            let promptPrefix = String(trimmedPrompt.prefix(prefixLength))
+            if trimmedResponse.hasPrefix(promptPrefix) {
+                // Find end of the echoed block: scan to the first blank line after the echo
+                let lines = trimmedResponse.components(separatedBy: "\n")
+                var consuming = true
+                var resultLines: [String] = []
+                for line in lines {
+                    if consuming && trimmedPrompt.contains(line) && !line.trimmingCharacters(in: .whitespaces).isEmpty {
+                        continue
+                    } else {
+                        consuming = false
+                        resultLines.append(line)
+                    }
+                }
+                let candidate = resultLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                if !candidate.isEmpty {
+                    return candidate
+                }
+            }
+        }
+
+        return trimmedResponse
     }
 
     private static func completeOpenAICompatible(settings: AISettings, instructions: String, prompt: String, maxTokens: Int) async throws -> String {
@@ -466,9 +515,12 @@ enum NativeAI {
         }
     }
 
-    private static func summaryInstructions(_ settings: AISettings) -> String {
+    private static func summaryInstructions(_ settings: AISettings, wordCount: Int? = nil) -> String {
         let tone = settings.summaryTone?.nilIfEmpty ?? "concise"
         var instructions = "You summarize articles accurately in a \(tone) style. Preserve nuance, avoid hype, and mention uncertainty when the source is thin."
+        if let wordCount {
+            instructions += " Write approximately \(wordCount) words. Output only the summary — no preamble, no restating the title, no metadata."
+        }
         if let custom = settings.summaryCustomPrompt?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
             instructions += "\n\nUser summary instructions:\n\(custom)"
         }

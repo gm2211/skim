@@ -72,11 +72,19 @@ enum NativeMLX {
             ?? settings.model?.nilIfEmpty
             ?? defaultRepoId
         await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
+
+        // Use caller's maxTokens unless user has overridden it in settings
+        let resolvedMaxTokens = settings.mlxMaxTokens ?? maxTokens
+
         return try await MLXRunner.shared.complete(
             systemPrompt: instructions,
             userPrompt: prompt,
             jsonMode: jsonMode,
-            maxTokens: maxTokens
+            maxTokens: resolvedMaxTokens,
+            temperature: settings.mlxTemperature.map { Float($0) },
+            topP: settings.mlxTopP.map { Float($0) },
+            repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) },
+            repetitionContextSize: settings.mlxRepetitionContextSize
         )
         .trimmingCharacters(in: .whitespacesAndNewlines)
     }

@@ -353,10 +353,10 @@ enum NativeAI {
             return "about \(words) words"
         }
         switch settings.summaryLength?.nilIfEmpty ?? "short" {
-        case "tiny": return "1-2 sentences"
-        case "medium": return "one paragraph plus 3 bullets"
-        case "long": return "a detailed summary with key context"
-        default: return "one concise paragraph plus 3 bullet takeaways"
+        case "tiny": return "1-2 sentences maximum — be extremely brief"
+        case "medium": return "one paragraph (3-4 sentences) followed by exactly 3 bullet takeaways"
+        case "long": return "a detailed summary of 4-6 paragraphs covering the main argument, key evidence, implications, and any caveats"
+        default: return "one concise paragraph (2-3 sentences) plus 3 bullet takeaways"
         }
     }
 

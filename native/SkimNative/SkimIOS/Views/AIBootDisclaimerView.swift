@@ -16,8 +16,11 @@ struct AIBootDisclaimerView: View {
             Color.black.opacity(0.72)
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+            VStack {
+                Spacer()
+
+                ScrollView {
+                  VStack(alignment: .leading, spacing: 0) {
                     // Header
                     HStack(spacing: 8) {
                         Image(systemName: "brain")
@@ -109,21 +112,24 @@ struct AIBootDisclaimerView: View {
                         }
                         .buttonStyle(.plain)
                     }
+                  }
+                  .padding(22)
                 }
-                .padding(22)
+                .frame(maxWidth: min(480, UIScreen.main.bounds.width - 40))
+                .frame(maxHeight: UIScreen.main.bounds.height * 0.80)
+                .background(
+                    Color(red: 22/255, green: 27/255, blue: 34/255).opacity(0.98),
+                    in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.5), radius: 32, x: 0, y: 8)
+                .padding(.horizontal, 20)
+
+                Spacer()
             }
-            .frame(maxWidth: min(480, UIScreen.main.bounds.width - 40))
-            .background(
-                Color(red: 22/255, green: 27/255, blue: 34/255).opacity(0.98),
-                in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.5), radius: 32, x: 0, y: 8)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 40)
         }
         .interactiveDismissDisabled(true)
     }

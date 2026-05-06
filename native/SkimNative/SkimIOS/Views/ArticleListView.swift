@@ -519,6 +519,7 @@ struct ArticleListView: View {
         HStack(spacing: 0) {
             Button {
                 dismissTextEntry()
+                model.selectedFolderID = nil
                 model.listMode = .unread
             } label: {
                 Label("Unread", systemImage: "checkmark.circle.fill")
@@ -527,12 +528,13 @@ struct ArticleListView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(model.listMode == .unread ? SkimStyle.accent : SkimStyle.secondary)
+            .foregroundStyle(model.listMode == .unread && model.selectedFolderID == nil ? SkimStyle.accent : SkimStyle.secondary)
 
             ForEach(ArticleListMode.allCases) { mode in
                 if mode != .unread {
                     Button {
                         dismissTextEntry()
+                        model.selectedFolderID = nil
                         model.listMode = mode
                     } label: {
                         Label(mode.title, systemImage: mode.systemImage)
@@ -541,7 +543,7 @@ struct ArticleListView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(model.listMode == mode ? SkimStyle.accent : SkimStyle.secondary)
+                    .foregroundStyle(model.listMode == mode && model.selectedFolderID == nil ? SkimStyle.accent : SkimStyle.secondary)
                 }
             }
 
@@ -577,6 +579,10 @@ struct ArticleListView: View {
         if let selectedFeedID = model.selectedFeedID,
            let feed = model.feeds.first(where: { $0.id == selectedFeedID }) {
             return feed.title
+        }
+        if let selectedFolderID = model.selectedFolderID,
+           let folder = model.folders.first(where: { $0.id == selectedFolderID }) {
+            return folder.name
         }
 
         switch model.listMode {
@@ -642,22 +648,25 @@ private struct FeedPickerSheet: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        pickerRow(iconSystemName: "square.grid.2x2", title: "All Articles", count: model.totalUnreadCount, isSelected: model.selectedFeedID == nil && model.listMode == .all) {
+                        pickerRow(iconSystemName: "square.grid.2x2", title: "All Articles", count: model.totalUnreadCount, isSelected: model.selectedFeedID == nil && model.selectedFolderID == nil && model.listMode == .all) {
                             model.selectedFeedID = nil
+                            model.selectedFolderID = nil
                             model.listMode = .all
                             isPresented = false
                             Task { await model.reloadArticles() }
                         }
 
-                        pickerRow(iconSystemName: "star", title: "Starred", count: nil, isSelected: model.listMode == .starred) {
+                        pickerRow(iconSystemName: "star", title: "Starred", count: nil, isSelected: model.listMode == .starred && model.selectedFolderID == nil) {
                             model.selectedFeedID = nil
+                            model.selectedFolderID = nil
                             model.listMode = .starred
                             isPresented = false
                             Task { await model.reloadArticles() }
                         }
 
-                        pickerRow(iconSystemName: "clock", title: "Recent", count: nil, isSelected: model.selectedFeedID == nil && model.listMode == .recent) {
+                        pickerRow(iconSystemName: "clock", title: "Recent", count: nil, isSelected: model.selectedFeedID == nil && model.selectedFolderID == nil && model.listMode == .recent) {
                             model.selectedFeedID = nil
+                            model.selectedFolderID = nil
                             model.listMode = .recent
                             isPresented = false
                             Task { await model.reloadArticles() }
@@ -711,8 +720,10 @@ private struct FeedPickerSheet: View {
                                         folder: folder,
                                         feeds: folderFeeds,
                                         selectedFeedID: model.selectedFeedID,
+                                        selectedFolderID: model.selectedFolderID,
                                         unreadCounts: model.unreadCounts,
-                                        onSelect: { selectFeed($0) }
+                                        onSelect: { selectFeed($0) },
+                                        onSelectFolder: { selectFolder($0) }
                                     )
                                     .padding(.bottom, 4)
                                 }
@@ -864,8 +875,20 @@ private struct FeedPickerSheet: View {
     private func selectFeed(_ feed: Feed) {
         dismissUIKitKeyboard()
         model.selectedFeedID = feed.id
+        model.selectedFolderID = nil
         if model.listMode == .recent {
             model.listMode = .unread
+        }
+        isPresented = false
+        Task { await model.reloadArticles() }
+    }
+
+    private func selectFolder(_ folder: FeedFolder) {
+        dismissUIKitKeyboard()
+        model.selectedFolderID = folder.id
+        model.selectedFeedID = nil
+        if model.listMode == .starred || model.listMode == .recent {
+            model.listMode = .all
         }
         isPresented = false
         Task { await model.reloadArticles() }
@@ -886,55 +909,74 @@ private struct FolderSection: View {
     var folder: FeedFolder
     var feeds: [Feed]
     var selectedFeedID: String?
+    var selectedFolderID: String?
     var unreadCounts: [String: Int]
     var onSelect: (Feed) -> Void
+    var onSelectFolder: (FeedFolder) -> Void
     @State private var isExpanded = true
 
     private var folderUnread: Int {
         feeds.compactMap { unreadCounts[$0.id] }.reduce(0, +)
     }
 
+    private var isFolderSelected: Bool {
+        selectedFolderID == folder.id
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.smooth(duration: 0.18)) {
-                    isExpanded.toggle()
+            HStack(spacing: 12) {
+                // Tapping the icon + name area = select folder (filter)
+                Button {
+                    onSelectFolder(folder)
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(SkimStyle.surface)
+                            Image(systemName: isExpanded ? "folder.fill" : "folder")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(isFolderSelected ? SkimStyle.accent : SkimStyle.accent.opacity(0.7))
+                        }
+                        .frame(width: 24, height: 24)
+
+                        Text(folder.name)
+                            .font(.system(size: 16, weight: isFolderSelected ? .semibold : .semibold))
+                            .foregroundStyle(isFolderSelected ? SkimStyle.text : SkimStyle.text)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Spacer()
+
+                        if folderUnread > 0 {
+                            Text(folderUnread.formatted())
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(SkimStyle.secondary)
+                        }
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
-            } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(SkimStyle.surface)
-                        Image(systemName: isExpanded ? "folder.fill" : "folder")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(SkimStyle.accent)
+                .buttonStyle(.plain)
+
+                // Chevron button — only expands/collapses, does not filter
+                Button {
+                    withAnimation(.smooth(duration: 0.18)) {
+                        isExpanded.toggle()
                     }
-                    .frame(width: 24, height: 24)
-
-                    Text(folder.name)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(SkimStyle.text)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-
-                    Spacer()
-
-                    if folderUnread > 0 {
-                        Text(folderUnread.formatted())
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(SkimStyle.secondary)
-                    }
-
+                } label: {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(SkimStyle.secondary.opacity(0.6))
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .frame(width: 36, height: 44)
+                        .contentShape(Rectangle())
                 }
-                .frame(minHeight: 44)
-                .padding(.horizontal, 20)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(.leading, 20)
+            .padding(.trailing, 12)
+            .background(isFolderSelected ? SkimStyle.surface.opacity(0.6) : Color.clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             if isExpanded {
                 LazyVStack(alignment: .leading, spacing: 0) {

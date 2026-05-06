@@ -17,6 +17,8 @@ struct ArticleListView: View {
     @State private var showSettings = false
     @State private var activeAIResult: AIResultRequest?
     @State private var activeAIChat: AIChatRequest?
+    @State private var showAIInbox = false
+    @State private var aiInboxSourceArticles: [Article] = []
     @State private var showSearch = false
     @FocusState private var isSearchFocused: Bool
 
@@ -152,6 +154,13 @@ struct ArticleListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
+        .sheet(isPresented: $showAIInbox) {
+            AIInboxSheet(sourceArticles: aiInboxSourceArticles)
+                .environmentObject(model)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(SkimStyle.chrome)
+        }
         .onChange(of: model.listMode) { _, _ in
             dismissTextEntry()
             Task { await model.reloadArticles() }
@@ -235,19 +244,8 @@ struct ArticleListView: View {
 
     private func presentAIInbox() {
         dismissTextEntry()
-        let articles = model.articles
-        activeAIResult = AIResultRequest(
-            title: "AI Inbox",
-            subtitle: articles.isEmpty ? "Smart triage across latest articles" : "Smart triage across \(articles.count) visible articles",
-            statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai)
-        ) {
-            let context = try await model.articlesForAIContext(preferred: articles)
-            guard !context.isEmpty else {
-                throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before opening AI Inbox.")
-            }
-            let text = try await NativeAI.aiInbox(articles: context, settings: model.settings)
-            return AIResultAnswer(text: text, articles: context)
-        }
+        aiInboxSourceArticles = model.articles
+        showAIInbox = true
     }
 
     private var openFeedPickerGesture: some Gesture {

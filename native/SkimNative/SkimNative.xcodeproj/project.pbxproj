@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9167BE3C78659C05031D238 /* SettingsSheet.swift */; };
+		18CED8EE0C6AA5C517B1D143 /* AIInboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE465769D153A0A0D17504 /* AIInboxView.swift */; };
 		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
 		214DC26687D7CFE6647B4E3C /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = C72D1637C2C2401209468AAB /* MLXLLM */; };
 		436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */; };
@@ -15,6 +16,7 @@
 		6048C096F85B46DFAF8590AF /* Style.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038284DEE00F91A360324653 /* Style.swift */; };
 		61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */; };
 		705834903C7D5B0F2442C2D8 /* SkimMacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */; };
+		7C87C81EDE030A9459473E8D /* TasteModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA32ECFFFAF834236FDF04E /* TasteModel.swift */; };
 		8B797999B22B89495C05CA39 /* AquireBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */; };
 		8ED4B358481AC4273C225054 /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474BA38A4E522DB5D3ECB21 /* WebView.swift */; };
 		9A48EFF3F29B3477E0CE9120 /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 8B0DFA296F4A48F6B090AFBC /* Hub */; };
@@ -34,6 +36,8 @@
 		038284DEE00F91A360324653 /* Style.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Style.swift; sourceTree = "<group>"; };
 		0C79E51007F91AE5C8286F40 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1474BA38A4E522DB5D3ECB21 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
+		4FA32ECFFFAF834236FDF04E /* TasteModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteModel.swift; sourceTree = "<group>"; };
+		4FDE465769D153A0A0D17504 /* AIInboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInboxView.swift; sourceTree = "<group>"; };
 		55C58C12B9B2AB383B4BA89C /* SkimCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimCore; path = ../SkimCore; sourceTree = SOURCE_ROOT; };
 		63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = AquireBold.otf; sourceTree = "<group>"; };
 		6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleListView.swift; sourceTree = "<group>"; };
@@ -99,6 +103,7 @@
 			children = (
 				AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */,
 				A483594667B890576E4D368D /* SkimNativeApp.swift */,
+				4FA32ECFFFAF834236FDF04E /* TasteModel.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -164,6 +169,7 @@
 		F8A894C5E58672BA9365DF76 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				4FDE465769D153A0A0D17504 /* AIInboxView.swift */,
 				D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */,
 				6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */,
 				A9AD11F7D9C976F34C0C9347 /* RootView.swift */,
@@ -288,6 +294,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				18CED8EE0C6AA5C517B1D143 /* AIInboxView.swift in Sources */,
 				61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */,
 				1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */,
 				E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */,
@@ -299,6 +306,7 @@
 				014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */,
 				D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */,
 				6048C096F85B46DFAF8590AF /* Style.swift in Sources */,
+				7C87C81EDE030A9459473E8D /* TasteModel.swift in Sources */,
 				8ED4B358481AC4273C225054 /* WebView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

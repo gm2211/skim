@@ -20,6 +20,12 @@ struct ArticleDetailView: View {
     @State private var activeAIChat: AIChatRequest?
     @State private var activeSummaryConfiguration: Article?
 
+    // Reading-time tracking
+    @State private var openedAt: Date?
+    // Feedback state (mirrors persisted signal so UI stays in sync)
+    @State private var currentFeedbackRating: ArticleFeedbackRating = .neutral
+    @State private var currentPriorityOverride: ArticlePriorityOverride = .none
+
     var body: some View {
         ZStack {
             SkimStyle.background.ignoresSafeArea()
@@ -47,6 +53,17 @@ struct ArticleDetailView: View {
         .task {
             await load(markRead: true)
         }
+        .onAppear {
+            openedAt = Date()
+            if let article {
+                let signal = model.tasteStore.signal(for: article.id)
+                currentFeedbackRating = signal?.rating ?? .neutral
+                currentPriorityOverride = signal?.priorityOverride ?? .none
+            }
+        }
+        .onDisappear {
+            recordDwell()
+        }
         .alert("Skim", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -72,6 +89,41 @@ struct ArticleDetailView: View {
         }
     }
 
+    private func recordDwell() {
+        guard let article, let openedAt else { return }
+        let dwell = Date().timeIntervalSince(openedAt)
+        model.recordReadingTime(
+            articleID: article.id,
+            feedID: article.feedID,
+            feedTitle: article.feedTitle,
+            dwellSeconds: dwell
+        )
+    }
+
+    private func applyFeedback(_ rating: ArticleFeedbackRating) {
+        guard let article else { return }
+        let newRating: ArticleFeedbackRating = currentFeedbackRating == rating ? .neutral : rating
+        currentFeedbackRating = newRating
+        model.setArticleFeedback(
+            articleID: article.id,
+            feedID: article.feedID,
+            feedTitle: article.feedTitle,
+            rating: newRating
+        )
+    }
+
+    private func applyPriorityOverride(_ override: ArticlePriorityOverride) {
+        guard let article else { return }
+        let newOverride: ArticlePriorityOverride = currentPriorityOverride == override ? .none : override
+        currentPriorityOverride = newOverride
+        model.setPriorityOverride(
+            articleID: article.id,
+            feedID: article.feedID,
+            feedTitle: article.feedTitle,
+            override: newOverride
+        )
+    }
+
     private var topBar: some View {
         HStack(spacing: 12) {
             BorderlessIconButton(systemName: "chevron.left", title: "Back", size: 25, tapSize: 42) {
@@ -91,6 +143,25 @@ struct ArticleDetailView: View {
             }
             BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 22, tapSize: 40) {
                 presentArticleChat()
+            }
+            // Taste feedback buttons
+            BorderlessIconButton(
+                systemName: currentFeedbackRating == .positive ? "hand.thumbsup.fill" : "hand.thumbsup",
+                title: "Helpful",
+                isActive: currentFeedbackRating == .positive,
+                size: 22,
+                tapSize: 40
+            ) {
+                applyFeedback(.positive)
+            }
+            BorderlessIconButton(
+                systemName: currentFeedbackRating == .negative ? "hand.thumbsdown.fill" : "hand.thumbsdown",
+                title: "Not helpful",
+                isActive: currentFeedbackRating == .negative,
+                size: 22,
+                tapSize: 40
+            ) {
+                applyFeedback(.negative)
             }
             BorderlessIconButton(systemName: article?.isStarred == true ? "star.fill" : "star", title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 26, tapSize: 42) {
                 Task { await toggleStar() }
@@ -126,6 +197,36 @@ struct ArticleDetailView: View {
 
             Divider()
 
+            Button(
+                currentFeedbackRating == .positive ? "Remove Helpful Mark" : "Mark as Helpful",
+                systemImage: currentFeedbackRating == .positive ? "hand.thumbsup.fill" : "hand.thumbsup"
+            ) {
+                applyFeedback(.positive)
+            }
+
+            Button(
+                currentFeedbackRating == .negative ? "Remove Not Helpful Mark" : "Mark as Not Helpful",
+                systemImage: currentFeedbackRating == .negative ? "hand.thumbsdown.fill" : "hand.thumbsdown"
+            ) {
+                applyFeedback(.negative)
+            }
+
+            Button(
+                currentPriorityOverride == .pin ? "Unpin" : "Pin to Top",
+                systemImage: currentPriorityOverride == .pin ? "pin.slash" : "pin"
+            ) {
+                applyPriorityOverride(.pin)
+            }
+
+            Button(
+                currentPriorityOverride == .hide ? "Unhide" : "Hide from Inbox",
+                systemImage: currentPriorityOverride == .hide ? "eye" : "eye.slash"
+            ) {
+                applyPriorityOverride(.hide)
+            }
+
+            Divider()
+
             Button("Summarize", systemImage: "doc.text") {
                 presentSummary()
             }
@@ -154,6 +255,11 @@ struct ArticleDetailView: View {
             loaded.isRead = true
         }
         article = loaded
+
+        // Sync taste state from persisted signals
+        let signal = model.tasteStore.signal(for: loaded.id)
+        currentFeedbackRating = signal?.rating ?? .neutral
+        currentPriorityOverride = signal?.priorityOverride ?? .none
     }
 
     private func toggleRead() async {

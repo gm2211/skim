@@ -47,6 +47,7 @@ final class AppModel: ObservableObject {
     @Published var settings = AppSettings()
 
     let store: SkimStore
+    let tasteStore = TasteStore()
     private let importer = OPMLImportService()
     private let refresher = FeedRefreshService()
 
@@ -59,6 +60,29 @@ final class AppModel: ObservableObject {
         } catch {
             fatalError("Could not open Skim database: \(error)")
         }
+    }
+
+    // MARK: - Taste Tracking APIs
+
+    func recordReadingTime(articleID: String, feedID: String, feedTitle: String, dwellSeconds: Double) {
+        tasteStore.recordReadingTime(
+            articleID: articleID,
+            feedID: feedID,
+            feedTitle: feedTitle,
+            dwellSeconds: dwellSeconds
+        )
+    }
+
+    func setArticleFeedback(articleID: String, feedID: String, feedTitle: String, rating: ArticleFeedbackRating) {
+        tasteStore.setFeedback(articleID: articleID, feedID: feedID, feedTitle: feedTitle, rating: rating)
+    }
+
+    func setPriorityOverride(articleID: String, feedID: String, feedTitle: String, override: ArticlePriorityOverride) {
+        tasteStore.setPriorityOverride(articleID: articleID, feedID: feedID, feedTitle: feedTitle, override: override)
+    }
+
+    func getPreferenceProfile() -> PreferenceProfile {
+        tasteStore.getPreferenceProfile()
     }
 
     var title: String {

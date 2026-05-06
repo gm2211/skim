@@ -7,6 +7,41 @@ import MLX
 import MLXLMCommon
 import MLXLLM
 
+// MARK: - Model family detection
+
+enum MLXModelFamily {
+    case gemma
+    case llama
+    case qwen
+    case phi
+    case unknown
+
+    /// Stop strings that mark end-of-turn for this model family.
+    var extraEOSTokens: Set<String> {
+        switch self {
+        case .gemma:
+            return ["<end_of_turn>", "<eos>"]
+        case .llama:
+            return ["<|eot_id|>", "<|end_of_text|>"]
+        case .qwen:
+            return ["<|im_end|>", "<|endoftext|>"]
+        case .phi:
+            return ["<|end|>", "<|endoftext|>"]
+        case .unknown:
+            return []
+        }
+    }
+
+    static func detect(from repoId: String) -> MLXModelFamily {
+        let lower = repoId.lowercased()
+        if lower.contains("gemma") { return .gemma }
+        if lower.contains("llama") { return .llama }
+        if lower.contains("qwen") { return .qwen }
+        if lower.contains("phi") { return .phi }
+        return .unknown
+    }
+}
+
 actor MLXRunner {
     static let shared = MLXRunner()
     static let defaultRepoId = "mlx-community/gemma-3-1b-it-4bit"
@@ -261,9 +296,13 @@ actor MLXRunner {
         }
 
         let sink = progressSink
+        let family = MLXModelFamily.detect(from: repoId)
         let task = Task { () throws -> ModelContainer in
             do {
-                let config = ModelConfiguration(id: repoId)
+                let config = ModelConfiguration(
+                    id: repoId,
+                    extraEOSTokens: family.extraEOSTokens
+                )
                 return try await LLMModelFactory.shared.loadContainer(
                     configuration: config,
                     progressHandler: { progress in
@@ -307,10 +346,15 @@ actor MLXRunner {
             ["role": "system", "content": finalSystem],
             ["role": "user", "content": userPrompt]
         ]
-        let params = GenerateParameters(temperature: 0.3)
+        let params = GenerateParameters(
+            temperature: 0.3,
+            repetitionPenalty: 1.1,
+            repetitionContextSize: 64
+        )
+        let family = MLXModelFamily.detect(from: currentRepoId)
 
         do {
-            return try await container.perform { (context: ModelContext) -> String in
+            let raw = try await container.perform { (context: ModelContext) -> String in
                 let userInput = UserInput(messages: messages)
                 let lmInput = try await context.processor.prepare(input: userInput)
 
@@ -323,10 +367,32 @@ actor MLXRunner {
                 }
                 return result.output
             }
+            return sanitizeOutput(raw, family: family)
         } catch let error as MLXError {
             throw error
         } catch {
             throw MLXError.generationFailed("\(error)")
         }
+    }
+
+    // Strip any leaked stop tokens from the output.
+    private func sanitizeOutput(_ text: String, family: MLXModelFamily) -> String {
+        var result = text
+        // Strip all known stop strings for this family
+        for token in family.extraEOSTokens {
+            result = result.replacingOccurrences(of: token, with: "")
+        }
+        // Also strip any remaining angle-bracket special tokens like <end_of_turn>, <eos>, <|...|>
+        result = result.replacingOccurrences(
+            of: "<[^>]{1,30}>",
+            with: "",
+            options: .regularExpression
+        )
+        result = result.replacingOccurrences(
+            of: "<\\|[^|]{1,30}\\|>",
+            with: "",
+            options: .regularExpression
+        )
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

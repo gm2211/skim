@@ -523,7 +523,7 @@ struct ArticleListView: View {
             } label: {
                 Label("Unread", systemImage: "checkmark.circle.fill")
                     .labelStyle(.iconOnly)
-                    .font(.system(size: 19, weight: .medium))
+                    .font(.system(size: 24, weight: .medium))
             }
             .buttonStyle(.plain)
             .foregroundStyle(model.listMode == .unread ? SkimStyle.accent : SkimStyle.secondary)
@@ -536,7 +536,7 @@ struct ArticleListView: View {
                     } label: {
                         Label(mode.title, systemImage: mode.systemImage)
                             .labelStyle(.iconOnly)
-                            .font(.system(size: 18, weight: .medium))
+                            .font(.system(size: 24, weight: .medium))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(model.listMode == mode ? SkimStyle.accent : SkimStyle.secondary)
@@ -551,7 +551,7 @@ struct ArticleListView: View {
             } label: {
                 Label("Search", systemImage: "magnifyingglass")
                     .labelStyle(.iconOnly)
-                    .font(.system(size: 19, weight: .medium))
+                    .font(.system(size: 24, weight: .medium))
             }
             .buttonStyle(.plain)
             .foregroundStyle(showSearch || !model.searchQuery.isEmpty ? SkimStyle.accent : SkimStyle.secondary)

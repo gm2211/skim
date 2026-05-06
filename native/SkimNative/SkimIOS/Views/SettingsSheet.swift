@@ -1163,8 +1163,10 @@ private struct WordCountPresetChips: View {
                 } label: {
                     Text("\(preset.label) \(preset.value)")
                         .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                         .foregroundStyle(isSelected ? Color.white : SkimStyle.accent)
-                        .padding(.horizontal, 12)
+                        .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                         .background(
                             isSelected
@@ -1180,7 +1182,6 @@ private struct WordCountPresetChips: View {
                 .buttonStyle(.plain)
                 .animation(.smooth(duration: 0.18), value: isSelected)
             }
-            Spacer()
         }
     }
 }

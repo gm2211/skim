@@ -18,6 +18,7 @@ struct ArticleDetailView: View {
     @State private var isLoading = true
     @State private var activeAIResult: AIResultRequest?
     @State private var activeAIChat: AIChatRequest?
+    @State private var activeChatInitialMessage: String? = nil
     @State private var activeSummaryConfiguration: Article?
     @State private var showAIDisclaimerGate = false
     @State private var pendingAIAction: (() -> Void)?
@@ -82,9 +83,10 @@ struct ArticleDetailView: View {
             .presentationBackground(SkimStyle.chrome)
         }
         .sheet(item: $activeAIChat) { request in
-            AIChatSheet(request: request)
+            AIChatSheet(request: request, initialAssistantMessage: activeChatInitialMessage)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+                .onDisappear { activeChatInitialMessage = nil }
         }
         .fullScreenCover(isPresented: $showAIDisclaimerGate) {
             AIBootDisclaimerView {
@@ -272,6 +274,19 @@ struct ArticleDetailView: View {
                 },
                 clearAction: {
                     NativeAI.clearSummaryCache(articleID: article.id, ai: settings.ai)
+                },
+                continueInChat: { [self] summaryText in
+                    // Dismiss the summary sheet (already done by AIResultSheet before calling this),
+                    // then open the chat sheet with the summary pre-loaded.
+                    activeAIResult = nil
+                    activeChatInitialMessage = summaryText
+                    activeAIChat = AIChatRequest(
+                        title: "Chat with Article",
+                        placeholder: article.title
+                    ) { question in
+                        let text = try await NativeAI.chat(question: question, article: article, settings: model.settings)
+                        return AIChatAnswer(text: text, articles: [article])
+                    }
                 }
             )
         }

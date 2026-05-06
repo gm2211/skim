@@ -131,6 +131,13 @@ public struct AISettings: Codable, Equatable, Sendable {
     public var summaryCustomPrompt: String?
     public var triageUserPrompt: String?
 
+    // MLX sampling parameters (nil means use per-model preset)
+    public var mlxTemperature: Double?
+    public var mlxTopP: Double?
+    public var mlxRepetitionPenalty: Double?
+    public var mlxRepetitionContextSize: Int?
+    public var mlxMaxTokens: Int?
+
     public init(
         provider: String = "foundation-models",
         apiKey: String? = nil,
@@ -145,7 +152,12 @@ public struct AISettings: Codable, Equatable, Sendable {
         summaryTone: String? = "concise",
         summaryCustomWordCount: Int? = nil,
         summaryCustomPrompt: String? = nil,
-        triageUserPrompt: String? = nil
+        triageUserPrompt: String? = nil,
+        mlxTemperature: Double? = nil,
+        mlxTopP: Double? = nil,
+        mlxRepetitionPenalty: Double? = nil,
+        mlxRepetitionContextSize: Int? = nil,
+        mlxMaxTokens: Int? = nil
     ) {
         self.provider = provider
         self.apiKey = apiKey
@@ -161,6 +173,11 @@ public struct AISettings: Codable, Equatable, Sendable {
         self.summaryCustomWordCount = summaryCustomWordCount
         self.summaryCustomPrompt = summaryCustomPrompt
         self.triageUserPrompt = triageUserPrompt
+        self.mlxTemperature = mlxTemperature
+        self.mlxTopP = mlxTopP
+        self.mlxRepetitionPenalty = mlxRepetitionPenalty
+        self.mlxRepetitionContextSize = mlxRepetitionContextSize
+        self.mlxMaxTokens = mlxMaxTokens
     }
 
     enum CodingKeys: String, CodingKey {
@@ -178,6 +195,11 @@ public struct AISettings: Codable, Equatable, Sendable {
         case summaryCustomWordCount
         case summaryCustomPrompt
         case triageUserPrompt
+        case mlxTemperature
+        case mlxTopP
+        case mlxRepetitionPenalty
+        case mlxRepetitionContextSize
+        case mlxMaxTokens
     }
 
     enum LegacyCodingKeys: String, CodingKey {
@@ -211,6 +233,11 @@ public struct AISettings: Codable, Equatable, Sendable {
         summaryCustomWordCount = try container.decodeIfPresent(Int.self, forKey: .summaryCustomWordCount) ?? legacy.decodeIfPresent(Int.self, forKey: .summary_custom_word_count)
         summaryCustomPrompt = try container.decodeIfPresent(String.self, forKey: .summaryCustomPrompt) ?? legacy.decodeIfPresent(String.self, forKey: .summary_custom_prompt)
         triageUserPrompt = try container.decodeIfPresent(String.self, forKey: .triageUserPrompt) ?? legacy.decodeIfPresent(String.self, forKey: .triage_user_prompt)
+        mlxTemperature = try container.decodeIfPresent(Double.self, forKey: .mlxTemperature)
+        mlxTopP = try container.decodeIfPresent(Double.self, forKey: .mlxTopP)
+        mlxRepetitionPenalty = try container.decodeIfPresent(Double.self, forKey: .mlxRepetitionPenalty)
+        mlxRepetitionContextSize = try container.decodeIfPresent(Int.self, forKey: .mlxRepetitionContextSize)
+        mlxMaxTokens = try container.decodeIfPresent(Int.self, forKey: .mlxMaxTokens)
     }
 }
 

@@ -457,6 +457,7 @@ private struct MLXSettingsPanel: View {
     @State private var downloadProgress: Double?
     @State private var isWorking = false
     @State private var errorMessage: String?
+    @State private var showSamplingParams = false
 
     private var selectedRepoId: String {
         ai.localModelPath?.nilIfEmpty
@@ -478,6 +479,11 @@ private struct MLXSettingsPanel: View {
                 refreshDownloadState()
             }
         )
+    }
+
+    // Per-model preset for display
+    private var preset: MLXSamplingPreset {
+        MLXSamplingPreset.preset(for: selectedRepoId)
     }
 
     var body: some View {
@@ -543,10 +549,54 @@ private struct MLXSettingsPanel: View {
                     .disabled(isWorking)
                 }
             }
+
+            Divider()
+                .overlay(SkimStyle.separator)
+
+            // Tuning note
+            providerNotice(
+                color: .blue,
+                title: "Local model tuning",
+                detail: "Local models need tuning. Defaults are tuned for the recommended model — adjust temperature (lower = more focused) and repetition penalty (higher = less repetitive) if output is poor."
+            )
+
+            // Sampling parameters section
+            Button {
+                withAnimation(.smooth(duration: 0.2)) {
+                    showSamplingParams.toggle()
+                }
+            } label: {
+                HStack {
+                    Text("Sampling Parameters")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SkimStyle.text)
+                    Spacer()
+                    if hasCustomParams {
+                        Text("Custom")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(SkimStyle.accent)
+                    }
+                    Image(systemName: showSamplingParams ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if showSamplingParams {
+                MLXSamplingParamsPanel(ai: $ai, preset: preset)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
         .task(id: selectedRepoId) {
             await refreshDownloadStateAsync()
         }
+    }
+
+    private var hasCustomParams: Bool {
+        ai.mlxTemperature != nil || ai.mlxTopP != nil
+            || ai.mlxRepetitionPenalty != nil || ai.mlxRepetitionContextSize != nil
+            || ai.mlxMaxTokens != nil
     }
 
     private func providerNotice(color: Color, title: String, detail: String) -> some View {
@@ -621,6 +671,209 @@ private struct MLXSettingsPanel: View {
             isDownloaded = NativeMLX.isDownloadedSync(repoId)
         }
         isWorking = false
+    }
+}
+
+private struct MLXSamplingParamsPanel: View {
+    @Binding var ai: AISettings
+    var preset: MLXSamplingPreset
+
+    private var temperatureValue: Double {
+        ai.mlxTemperature ?? Double(preset.temperature)
+    }
+    private var topPValue: Double {
+        ai.mlxTopP ?? Double(preset.topP)
+    }
+    private var repPenaltyValue: Double {
+        ai.mlxRepetitionPenalty ?? Double(preset.repetitionPenalty)
+    }
+    private var repCtxValue: Double {
+        Double(ai.mlxRepetitionContextSize ?? preset.repetitionContextSize)
+    }
+    private var maxTokensValue: Double {
+        Double(ai.mlxMaxTokens ?? 512)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Temperature
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Temperature")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .textCase(.uppercase)
+                        .tracking(0.7)
+                    Spacer()
+                    Text(String(format: "%.2f", temperatureValue))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ai.mlxTemperature != nil ? SkimStyle.accent : SkimStyle.secondary)
+                    if ai.mlxTemperature != nil {
+                        Button("Reset") { ai.mlxTemperature = nil }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                }
+                Slider(value: Binding(
+                    get: { temperatureValue },
+                    set: { ai.mlxTemperature = $0 }
+                ), in: 0.0...1.5, step: 0.05)
+                .tint(SkimStyle.accent)
+                Text("Lower = more focused and deterministic. Preset for this model: \(String(format: "%.2f", preset.temperature))")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+            }
+
+            // Top P
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Top P")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .textCase(.uppercase)
+                        .tracking(0.7)
+                    Spacer()
+                    Text(String(format: "%.2f", topPValue))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ai.mlxTopP != nil ? SkimStyle.accent : SkimStyle.secondary)
+                    if ai.mlxTopP != nil {
+                        Button("Reset") { ai.mlxTopP = nil }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                }
+                Slider(value: Binding(
+                    get: { topPValue },
+                    set: { ai.mlxTopP = $0 }
+                ), in: 0.5...1.0, step: 0.05)
+                .tint(SkimStyle.accent)
+                Text("Nucleus sampling cutoff. Preset: \(String(format: "%.2f", preset.topP))")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+            }
+
+            // Repetition Penalty
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Repetition Penalty")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .textCase(.uppercase)
+                        .tracking(0.7)
+                    Spacer()
+                    Text(String(format: "%.2f", repPenaltyValue))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ai.mlxRepetitionPenalty != nil ? SkimStyle.accent : SkimStyle.secondary)
+                    if ai.mlxRepetitionPenalty != nil {
+                        Button("Reset") { ai.mlxRepetitionPenalty = nil }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                }
+                Slider(value: Binding(
+                    get: { repPenaltyValue },
+                    set: { ai.mlxRepetitionPenalty = $0 }
+                ), in: 1.0...1.5, step: 0.01)
+                .tint(SkimStyle.accent)
+                Text("Higher = less repetitive output. Preset: \(String(format: "%.2f", preset.repetitionPenalty))")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+            }
+
+            // Repetition Context Size
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Repetition Context")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .textCase(.uppercase)
+                        .tracking(0.7)
+                    Spacer()
+                    Text("\(Int(repCtxValue)) tokens")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ai.mlxRepetitionContextSize != nil ? SkimStyle.accent : SkimStyle.secondary)
+                    if ai.mlxRepetitionContextSize != nil {
+                        Button("Reset") { ai.mlxRepetitionContextSize = nil }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                }
+                Slider(value: Binding(
+                    get: { repCtxValue },
+                    set: { ai.mlxRepetitionContextSize = Int($0) }
+                ), in: 16...256, step: 8)
+                .tint(SkimStyle.accent)
+                Text("Token window for repetition penalty. Preset: \(preset.repetitionContextSize)")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+            }
+
+            // Max Tokens override
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Max Output Tokens")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .textCase(.uppercase)
+                        .tracking(0.7)
+                    Spacer()
+                    if let override = ai.mlxMaxTokens {
+                        Text("\(override)")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(SkimStyle.accent)
+                        Button("Reset") { ai.mlxMaxTokens = nil }
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                    } else {
+                        Text("Auto")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                }
+                Slider(value: Binding(
+                    get: { maxTokensValue },
+                    set: { ai.mlxMaxTokens = Int($0) }
+                ), in: 128...2048, step: 64)
+                .tint(SkimStyle.accent)
+                .disabled(ai.mlxMaxTokens == nil)
+                HStack(spacing: 10) {
+                    Toggle("Override", isOn: Binding(
+                        get: { ai.mlxMaxTokens != nil },
+                        set: { enabled in
+                            ai.mlxMaxTokens = enabled ? 512 : nil
+                        }
+                    ))
+                    .toggleStyle(.switch)
+                    .tint(SkimStyle.accent)
+                    .labelsHidden()
+                    Text("Override per-task token budget")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+            }
+
+            // Reset all button
+            Button {
+                ai.mlxTemperature = nil
+                ai.mlxTopP = nil
+                ai.mlxRepetitionPenalty = nil
+                ai.mlxRepetitionContextSize = nil
+                ai.mlxMaxTokens = nil
+            } label: {
+                Text("Reset All to Model Defaults")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(14)
+        .background(SkimStyle.chrome.opacity(0.6), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(SkimStyle.separator, lineWidth: 1)
+        }
     }
 }
 

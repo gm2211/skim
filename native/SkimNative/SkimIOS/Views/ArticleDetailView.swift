@@ -19,6 +19,8 @@ struct ArticleDetailView: View {
     @State private var activeAIResult: AIResultRequest?
     @State private var activeAIChat: AIChatRequest?
     @State private var activeSummaryConfiguration: Article?
+    @State private var showAIDisclaimerGate = false
+    @State private var pendingAIAction: (() -> Void)?
 
     // Reading-time tracking
     @State private var openedAt: Date?
@@ -86,6 +88,23 @@ struct ArticleDetailView: View {
             AIChatSheet(request: request)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $showAIDisclaimerGate) {
+            AIBootDisclaimerView {
+                AIBootDisclaimerView.markAccepted()
+                showAIDisclaimerGate = false
+                pendingAIAction?()
+                pendingAIAction = nil
+            }
+        }
+    }
+
+    private func gatedAI(_ action: @escaping () -> Void) {
+        if AIBootDisclaimerView.isAccepted {
+            action()
+        } else {
+            pendingAIAction = action
+            showAIDisclaimerGate = true
         }
     }
 
@@ -279,7 +298,7 @@ struct ArticleDetailView: View {
 
     private func presentSummary() {
         guard let article else { return }
-        activeSummaryConfiguration = article
+        gatedAI { activeSummaryConfiguration = article }
     }
 
     private func runSummary(article: Article, summarySettings: AISettings) {
@@ -450,12 +469,14 @@ private extension String {
 private extension ArticleDetailView {
     func presentArticleChat() {
         guard let article else { return }
-        activeAIChat = AIChatRequest(
-            title: "Chat with Article",
-            placeholder: article.title
-        ) { question in
-            let text = try await NativeAI.chat(question: question, article: article, settings: model.settings)
-            return AIChatAnswer(text: text, articles: [article])
+        gatedAI {
+            activeAIChat = AIChatRequest(
+                title: "Chat with Article",
+                placeholder: article.title
+            ) { question in
+                let text = try await NativeAI.chat(question: question, article: article, settings: model.settings)
+                return AIChatAnswer(text: text, articles: [article])
+            }
         }
     }
 }

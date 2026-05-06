@@ -12,7 +12,6 @@
 		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
 		214DC26687D7CFE6647B4E3C /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = C72D1637C2C2401209468AAB /* MLXLLM */; };
 		31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89737FFF993802E562860605 /* AIDisclaimerLabel.swift */; };
-		3E5A7B0012349CD78FAB2211 /* CatchUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E5A7B0112349CD78FAB2212 /* CatchUpView.swift */; };
 		436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */; };
 		568EFC6280529AB7F91222BD /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8734D4E26C300D1AD49D4262 /* SkimCore */; };
 		6048C096F85B46DFAF8590AF /* Style.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038284DEE00F91A360324653 /* Style.swift */; };
@@ -27,6 +26,7 @@
 		A20D6777CCE9FF23884FB7F1 /* NativeClaudeOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */; };
 		C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BCD3DD03D305C558D07614 /* NativeAI.swift */; };
 		C1D91C8A78E543F0F69FFE82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0C79E51007F91AE5C8286F40 /* Assets.xcassets */; };
+		D575AB676AA07786E29C32A0 /* CatchUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 839B1584F0E39B5A14D96C79 /* CatchUpView.swift */; };
 		D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A483594667B890576E4D368D /* SkimNativeApp.swift */; };
 		DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BA45434D97C1ACA953B839 /* NativeMLX.swift */; };
 		DFC1782BE965DCD3BBEAFEC9 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */; };
@@ -46,14 +46,15 @@
 		63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = AquireBold.otf; sourceTree = "<group>"; };
 		6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleListView.swift; sourceTree = "<group>"; };
 		8387834F563CFA86721EBF1D /* LegalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegalView.swift; sourceTree = "<group>"; };
+		839B1584F0E39B5A14D96C79 /* CatchUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchUpView.swift; sourceTree = "<group>"; };
 		89737FFF993802E562860605 /* AIDisclaimerLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDisclaimerLabel.swift; sourceTree = "<group>"; };
-		3E5A7B0112349CD78FAB2212 /* CatchUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchUpView.swift; sourceTree = "<group>"; };
 		911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkimMacOSApp.swift; sourceTree = "<group>"; };
 		959A59B5B27E8C969D084B8F /* AIBootDisclaimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIBootDisclaimerView.swift; sourceTree = "<group>"; };
 		A1BCD3DD03D305C558D07614 /* NativeAI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAI.swift; sourceTree = "<group>"; };
 		A483594667B890576E4D368D /* SkimNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkimNativeApp.swift; sourceTree = "<group>"; };
 		A9AD11F7D9C976F34C0C9347 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		AE1C488D608B0EBF3FD76FE7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeClaudeOAuth.swift; sourceTree = "<group>"; };
 		B72B2D107E596891809ECA5E /* Skim macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Skim macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9167BE3C78659C05031D238 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
@@ -120,6 +121,7 @@
 			isa = PBXGroup;
 			children = (
 				0C79E51007F91AE5C8286F40 /* Assets.xcassets */,
+				AE1C488D608B0EBF3FD76FE7 /* Info.plist */,
 				3417775593F58D71E2EF3871 /* App */,
 				996846EA10E61EE5D576648A /* Support */,
 				F8A894C5E58672BA9365DF76 /* Views */,
@@ -182,7 +184,7 @@
 				4FDE465769D153A0A0D17504 /* AIInboxView.swift */,
 				D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */,
 				6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */,
-				3E5A7B0112349CD78FAB2212 /* CatchUpView.swift */,
+				839B1584F0E39B5A14D96C79 /* CatchUpView.swift */,
 				8387834F563CFA86721EBF1D /* LegalView.swift */,
 				A9AD11F7D9C976F34C0C9347 /* RootView.swift */,
 				B9167BE3C78659C05031D238 /* SettingsSheet.swift */,
@@ -309,10 +311,10 @@
 				7487CDA38AA993612EB4880B /* AIBootDisclaimerView.swift in Sources */,
 				31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */,
 				18CED8EE0C6AA5C517B1D143 /* AIInboxView.swift in Sources */,
-				3E5A7B0012349CD78FAB2211 /* CatchUpView.swift in Sources */,
 				61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */,
 				1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */,
 				E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */,
+				D575AB676AA07786E29C32A0 /* CatchUpView.swift in Sources */,
 				96F49A7819D5D167616F137F /* LegalView.swift in Sources */,
 				436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */,
 				C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */,
@@ -336,7 +338,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
@@ -423,7 +425,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
@@ -448,9 +450,10 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SkimIOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news";
@@ -481,9 +484,10 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 8;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SkimIOS/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.news";

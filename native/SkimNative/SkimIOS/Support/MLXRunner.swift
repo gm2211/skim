@@ -478,14 +478,16 @@ actor MLXRunner {
         let resolvedRepPenalty = repetitionPenalty ?? preset.repetitionPenalty
         let resolvedRepCtxSize = repetitionContextSize ?? preset.repetitionContextSize
 
+        // maxTokens is passed directly into GenerateParameters so the TokenIterator
+        // can terminate internally without relying solely on the callback counting tokens.
         let params = GenerateParameters(
+            maxTokens: maxTokens,
             temperature: resolvedTemperature,
             topP: resolvedTopP,
             repetitionPenalty: resolvedRepPenalty,
             repetitionContextSize: resolvedRepCtxSize
         )
         let family = MLXModelFamily.detect(from: currentRepoId)
-        let tokenBudget = maxTokens
 
         do {
             let raw = try await container.perform { (context: ModelContext) -> String in
@@ -496,10 +498,73 @@ actor MLXRunner {
                     input: lmInput,
                     parameters: params,
                     context: context
-                ) { tokens in
-                    tokens.count >= tokenBudget ? .stop : .more
-                }
+                ) { (_: [Int]) in GenerateDisposition.more }
                 return result.output
+            }
+            return sanitizeOutput(raw, family: family)
+        } catch let error as MLXError {
+            throw error
+        } catch {
+            throw MLXError.generationFailed("\(error)")
+        }
+    }
+
+    /// Stream tokens as they are generated, calling `onToken` with each decoded chunk.
+    /// Returns the full sanitized output when generation is complete.
+    func stream(
+        systemPrompt: String,
+        userPrompt: String,
+        jsonMode: Bool,
+        maxTokens: Int,
+        temperature: Float? = nil,
+        topP: Float? = nil,
+        repetitionPenalty: Float? = nil,
+        repetitionContextSize: Int? = nil,
+        onToken: @Sendable @escaping (String) -> Void
+    ) async throws -> String {
+        let container = try await ensureLoaded()
+        let finalSystem = jsonMode
+            ? systemPrompt + "\n\nRespond with a single JSON object. No prose, no code fences."
+            : systemPrompt
+        let messages: [[String: String]] = [
+            ["role": "system", "content": finalSystem],
+            ["role": "user", "content": userPrompt]
+        ]
+
+        // Resolve sampling params: caller override > per-model preset > hardcoded fallback
+        let preset = MLXSamplingPreset.preset(for: currentRepoId)
+        let resolvedTemperature = temperature ?? preset.temperature
+        let resolvedTopP = topP ?? preset.topP
+        let resolvedRepPenalty = repetitionPenalty ?? preset.repetitionPenalty
+        let resolvedRepCtxSize = repetitionContextSize ?? preset.repetitionContextSize
+
+        let params = GenerateParameters(
+            maxTokens: maxTokens,
+            temperature: resolvedTemperature,
+            topP: resolvedTopP,
+            repetitionPenalty: resolvedRepPenalty,
+            repetitionContextSize: resolvedRepCtxSize
+        )
+        let family = MLXModelFamily.detect(from: currentRepoId)
+
+        do {
+            let raw = try await container.perform { (context: ModelContext) -> String in
+                let userInput = UserInput(messages: messages)
+                let lmInput = try await context.processor.prepare(input: userInput)
+
+                var accumulated = ""
+                for await item in try MLXLMCommon.generate(
+                    input: lmInput,
+                    cache: nil,
+                    parameters: params,
+                    context: context
+                ) {
+                    if let chunk = item.chunk {
+                        accumulated += chunk
+                        onToken(chunk)
+                    }
+                }
+                return accumulated
             }
             return sanitizeOutput(raw, family: family)
         } catch let error as MLXError {

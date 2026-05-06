@@ -88,6 +88,38 @@ enum NativeMLX {
         )
         .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    /// Streaming variant of `complete`. Calls `onToken` with each decoded chunk as it is generated,
+    /// then returns the full sanitized output. Use this for summary and chat paths so the UI can
+    /// display tokens progressively rather than waiting for the full generation to finish.
+    static func stream(
+        settings: AISettings,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        jsonMode: Bool = false,
+        onToken: @Sendable @escaping (String) -> Void
+    ) async throws -> String {
+        let repoId = settings.localModelPath?.nilIfEmpty
+            ?? settings.model?.nilIfEmpty
+            ?? defaultRepoId
+        await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
+
+        let resolvedMaxTokens = settings.mlxMaxTokens ?? maxTokens
+
+        return try await MLXRunner.shared.stream(
+            systemPrompt: instructions,
+            userPrompt: prompt,
+            jsonMode: jsonMode,
+            maxTokens: resolvedMaxTokens,
+            temperature: settings.mlxTemperature.map { Float($0) },
+            topP: settings.mlxTopP.map { Float($0) },
+            repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) },
+            repetitionContextSize: settings.mlxRepetitionContextSize,
+            onToken: onToken
+        )
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 private extension String {

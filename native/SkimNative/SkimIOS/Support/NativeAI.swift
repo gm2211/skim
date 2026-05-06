@@ -10,6 +10,11 @@ struct AIResultRequest: Identifiable {
     var subtitle: String
     var statusLabel = "Running AI..."
     var action: () async throws -> AIResultAnswer
+    /// When provided, the sheet streams tokens into the result area as they arrive
+    /// instead of waiting for the full completion. The callback is called on the main
+    /// actor with each decoded chunk. The closure must still return the final complete
+    /// answer (for cache writes etc.).
+    var streamAction: ((@MainActor @escaping (String) -> Void) async throws -> AIResultAnswer)? = nil
     /// When set, the sheet shows a "Clear" button instead of "Run Again".
     /// Invoking it removes the cached result and dismisses the sheet.
     var clearAction: (() -> Void)? = nil
@@ -246,6 +251,55 @@ enum NativeAI {
             """,
             maxTokens: summaryMaxTokens(wordCount)
         )
+        SummaryLRUCache.shared.set(key, value: result)
+        return result
+    }
+
+    /// Streaming variant of `summarize`. For MLX provider this calls `NativeMLX.stream()`
+    /// so the UI can render tokens progressively. `onToken` is called on the calling context
+    /// with each decoded chunk. For non-MLX providers the result is delivered in one shot
+    /// (onToken is not called during generation; the final text is returned normally).
+    /// Returns the full sanitized summary and writes it to the LRU cache.
+    static func summarizeStreaming(
+        article: Article,
+        settings: AppSettings,
+        onToken: @MainActor @escaping (String) -> Void
+    ) async throws -> String {
+        let key = summaryCacheKey(articleID: article.id, ai: settings.ai)
+        if let cached = SummaryLRUCache.shared.get(key) {
+            await onToken(cached)
+            return cached
+        }
+        let wordCount = summaryTargetWordCount(settings.ai)
+        let prompt = """
+        Summarize this article. Write a summary of approximately \(wordCount) words.
+
+        \(articleDigest([article], limit: 1))
+        """
+        let instructions = summaryInstructions(settings.ai)
+        let maxTok = summaryMaxTokens(wordCount)
+
+        let result: String
+        if settings.ai.provider == "mlx" {
+            result = try await NativeMLX.stream(
+                settings: settings.ai,
+                instructions: instructions,
+                prompt: prompt,
+                maxTokens: maxTok,
+                jsonMode: false,
+                onToken: { chunk in
+                    Task { @MainActor in onToken(chunk) }
+                }
+            )
+        } else {
+            result = try await complete(
+                settings: settings,
+                instructions: instructions,
+                prompt: prompt,
+                maxTokens: maxTok
+            )
+        }
+
         SummaryLRUCache.shared.set(key, value: result)
         return result
     }
@@ -622,7 +676,7 @@ struct AIResultSheet: View {
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
 
-                    if isLoading {
+                    if isLoading && result.isEmpty {
                         HStack(spacing: 12) {
                             ProgressView()
                                 .tint(SkimStyle.accent)
@@ -713,8 +767,18 @@ struct AIResultSheet: View {
         result = ""
         referencedArticles = []
         do {
-            let answer = try await request.action()
-            result = answer.text
+            let answer: AIResultAnswer
+            if let streamAction = request.streamAction {
+                // Streaming path: tokens arrive progressively; show them as they land.
+                answer = try await streamAction { @MainActor chunk in
+                    result += chunk
+                }
+                // Use the canonical final text from the answer (sanitized by the runner).
+                result = answer.text
+            } else {
+                answer = try await request.action()
+                result = answer.text
+            }
             referencedArticles = ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles)
         } catch {
             errorMessage = error.localizedDescription

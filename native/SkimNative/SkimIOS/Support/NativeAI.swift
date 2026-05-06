@@ -13,6 +13,9 @@ struct AIResultRequest: Identifiable {
     /// When set, the sheet shows a "Clear" button instead of "Run Again".
     /// Invoking it removes the cached result and dismisses the sheet.
     var clearAction: (() -> Void)? = nil
+    /// When set, the sheet shows a "Continue in Chat" button.
+    /// Invoking it dismisses this sheet and opens the chat with the result pre-loaded.
+    var continueInChat: ((String) -> Void)? = nil
 }
 
 struct AIResultAnswer {
@@ -623,15 +626,28 @@ struct AIResultSheet: View {
                     Button("Close") { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    if let clearAction = request.clearAction {
-                        Button("Clear", role: .destructive) {
-                            clearAction()
-                            dismiss()
+                    HStack(spacing: 16) {
+                        if let continueInChat = request.continueInChat, !isLoading, errorMessage == nil {
+                            Button {
+                                let captured = result
+                                dismiss()
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                    continueInChat(captured)
+                                }
+                            } label: {
+                                Label("Chat", systemImage: "bubble.left")
+                            }
                         }
-                        .disabled(isLoading)
-                    } else {
-                        Button("Run Again") { Task { await run() } }
+                        if let clearAction = request.clearAction {
+                            Button("Clear", role: .destructive) {
+                                clearAction()
+                                dismiss()
+                            }
                             .disabled(isLoading)
+                        } else {
+                            Button("Run Again") { Task { await run() } }
+                                .disabled(isLoading)
+                        }
                     }
                 }
             }
@@ -680,6 +696,9 @@ private struct PrettyAIText: View {
 
 struct AIChatSheet: View {
     var request: AIChatRequest
+    /// When non-nil and the conversation starts empty, this text is seeded as the
+    /// first assistant message so the user can immediately ask follow-up questions.
+    var initialAssistantMessage: String? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var messages: [AIChatMessage] = []
     @State private var input = ""
@@ -765,7 +784,12 @@ struct AIChatSheet: View {
                     Button("Close") { dismiss() }
                 }
             }
-            .onAppear { focused = true }
+            .onAppear {
+                if let seed = initialAssistantMessage, messages.isEmpty {
+                    messages.append(AIChatMessage(role: .assistant, text: seed))
+                }
+                focused = true
+            }
         }
     }
 

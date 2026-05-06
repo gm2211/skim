@@ -1,3 +1,4 @@
+import OSLog
 import SkimCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -1436,6 +1437,10 @@ private struct AutoGroupProposalRow: View {
     }
 }
 
+// Triage JSON parse-failure logger for auto-group path.
+// Visible in Console.app: subsystem "com.skim.app" category "triage-json"
+private let autoGroupTriageLogger = Logger(subsystem: "com.skim.app", category: "triage-json")
+
 private enum AutoGroupClassifier {
     static func aiProposals(for feeds: [Feed], settings: AppSettings) async throws -> [AutoGroupProposal] {
         let uniqueFeeds = deduplicate(feeds)
@@ -1512,12 +1517,16 @@ private enum AutoGroupClassifier {
             maxTokens: max(512, feeds.count * 4 + 160),
             jsonMode: true
         )
-        return try decodeProposals(from: content, feeds: feeds)
+        let modelID: String = {
+            let candidates = [settings.ai.localModelPath, settings.ai.model, settings.ai.provider]
+            return candidates.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first(where: { !$0.isEmpty }) ?? settings.ai.provider
+        }()
+        return try decodeProposals(from: content, feeds: feeds, modelID: modelID)
     }
 
     private static var systemInstructions: String {
         """
-        You group RSS feeds into 4-8 topical folders. Output JSON only.
+        You group RSS feeds into 4-8 topical folders. Output ONLY valid JSON. No prose. No markdown fences. No explanation before or after the JSON.
         Each feed goes in exactly one folder. Short folder names (2-4 words).
         Refer to feeds by their numeric handle.
         """
@@ -1530,7 +1539,7 @@ private enum AutoGroupClassifier {
         \(correction)Feeds (handle TAB title [TAB site]):
         \(listing(for: feeds))
 
-        Output JSON:
+        Output ONLY this JSON shape, nothing else:
         {"folders":[{"name":"Tech","feeds":[0,3,7]}]}
         """
     }
@@ -1545,19 +1554,35 @@ private enum AutoGroupClassifier {
             .joined(separator: "\n")
     }
 
-    private static func decodeProposals(from content: String, feeds: [Feed]) throws -> [AutoGroupProposal] {
-        let json = extractJSON(from: content)
+    private static func decodeProposals(from content: String, feeds: [Feed], modelID: String = "unknown") throws -> [AutoGroupProposal] {
+        // 1. Try strict decode first (no repair)
+        let decoder = JSONDecoder()
+        var strictSucceeded = false
+        if let rawData = content.data(using: .utf8),
+           (try? decoder.decode(AutoGroupAIResponse.self, from: rawData)) != nil {
+            strictSucceeded = true
+        }
+
+        // 2. Use shared JSON repair: strip fences + find balanced braces
+        let json = NativeAI.repairTriageJSON(content)
+        if !strictSucceeded && json != content {
+            autoGroupTriageLogger.warning("Auto-group JSON repaired for model '\(modelID, privacy: .public)': stripped fences/junk.")
+        }
+
         guard let data = json.data(using: .utf8) else {
+            autoGroupTriageLogger.error("Auto-group JSON unreadable for model '\(modelID, privacy: .public)'.")
             throw AutoGroupAIError.invalidResponse("AI returned unreadable JSON.")
         }
 
         let folders: [AutoGroupAIFolder]
         do {
-            folders = try JSONDecoder().decode(AutoGroupAIResponse.self, from: data).folders
+            folders = try decoder.decode(AutoGroupAIResponse.self, from: data).folders
         } catch {
             do {
-                folders = try JSONDecoder().decode([AutoGroupAIFolder].self, from: data)
+                folders = try decoder.decode([AutoGroupAIFolder].self, from: data)
             } catch {
+                let preview = String(content.prefix(200)).replacingOccurrences(of: "\n", with: " ")
+                autoGroupTriageLogger.error("Auto-group JSON parse failed for model '\(modelID, privacy: .public)'. Raw: \(preview, privacy: .public)")
                 throw AutoGroupAIError.invalidResponse("Could not parse AI folder JSON.")
             }
         }
@@ -1608,28 +1633,6 @@ private enum AutoGroupClassifier {
         default:
             return 4
         }
-    }
-
-    private static func extractJSON(from content: String) -> String {
-        let withoutFence = content
-            .replacingOccurrences(of: "```json", with: "")
-            .replacingOccurrences(of: "```JSON", with: "")
-            .replacingOccurrences(of: "```", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if let start = withoutFence.firstIndex(of: "{"),
-           let end = withoutFence.lastIndex(of: "}"),
-           start <= end {
-            return String(withoutFence[start...end])
-        }
-
-        if let start = withoutFence.firstIndex(of: "["),
-           let end = withoutFence.lastIndex(of: "]"),
-           start <= end {
-            return String(withoutFence[start...end])
-        }
-
-        return withoutFence
     }
 
     private static func categoryWords(for feed: Feed) -> [String] {

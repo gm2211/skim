@@ -1,8 +1,14 @@
+import OSLog
 import SkimCore
 import SwiftUI
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
+
+// MARK: - Triage JSON parse-failure logger
+// Visible in Console.app under subsystem "com.skim.app" category "triage-json".
+// Filter: subsystem:com.skim.app category:triage-json
+private let triageJSONLogger = Logger(subsystem: "com.skim.app", category: "triage-json")
 
 struct AIResultRequest: Identifiable {
     let id = UUID()
@@ -171,14 +177,14 @@ enum NativeAI {
         let raw = try await complete(
             settings: settings,
             instructions: """
-            You write crisp catch-up items for a news/RSS reader. Respond ONLY with a single valid JSON object — no markdown fences, no commentary. The format is exactly:
+            You write crisp catch-up items for a news/RSS reader. Output ONLY valid JSON. No prose. No markdown fences. The format is exactly:
             {"items":[{"title":"...","summary":"...","articleIndex":3},{"title":"...","summary":"...","articleIndex":null}]}
             Rules:
             - "title": short headline (≤10 words).
             - "summary": 1–2 sentence plain-text summary, no markdown.
             - "articleIndex": 1-based integer matching the [N] tag in the article list, or null if the item covers multiple articles.
             - Return 5–12 items covering the most important stories.
-            - Do NOT wrap the JSON in a code block or add any text outside the JSON.
+            - Output ONLY the JSON object above. No text before or after. No code block.
             """,
             prompt: """
             Create a Quick Catch-up from these articles.
@@ -192,12 +198,8 @@ enum NativeAI {
     }
 
     private static func parseCatchUpItems(_ raw: String) -> [CatchUpItem]? {
-        // Strip markdown code fences if the model adds them anyway
-        let cleaned = raw
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "^```[a-z]*\\n?", with: "", options: .regularExpression)
-            .replacingOccurrences(of: "```$", with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Reuse shared repair: strip code fences + find balanced JSON
+        let cleaned = repairTriageJSON(raw)
 
         guard let data = cleaned.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -218,7 +220,7 @@ enum NativeAI {
         try await complete(
             settings: settings,
             instructions: """
-            You triage RSS articles for a smart inbox. Pick what seems most worth reading and explain why. Use Markdown bullets. Cite every selected article with its numeric handle like [3] and title so the app can make it clickable.
+            You triage RSS articles for a smart inbox. Pick what seems most worth reading and explain why. Use Markdown bullets. Cite every selected article with its numeric handle like [3] and title so the app can make it clickable. Output ONLY plain Markdown — no JSON, no code fences.
             """,
             prompt: """
             Rank the most interesting articles from this list. Return 8-12 picks with a short reason for each. Favor novelty, depth, engineering relevance, and things a curious technical reader would not want to miss.
@@ -230,6 +232,106 @@ enum NativeAI {
             """,
             maxTokens: 750
         )
+    }
+
+    // MARK: - Structured triage JSON (used by auto-group and future JSON consumers)
+
+    /// Decode a raw MLX/model string as triage JSON, applying a repair pass on failure.
+    /// Logs parse failures via `triageJSONLogger` so Console.app shows which model misbehaved.
+    /// - Returns: decoded value on success, throws on unrecoverable failure.
+    static func decodeTriageJSON<T: Decodable>(
+        _ type: T.Type,
+        from raw: String,
+        modelID: String
+    ) throws -> T {
+        let decoder = JSONDecoder()
+
+        // 1. Strict decode first
+        if let data = raw.data(using: .utf8),
+           let value = try? decoder.decode(type, from: data) {
+            return value
+        }
+
+        // 2. Attempt repair: strip code fences, find outermost balanced braces/brackets
+        let repaired = repairTriageJSON(raw)
+        if repaired != raw {
+            if let data = repaired.data(using: .utf8),
+               let value = try? decoder.decode(type, from: data) {
+                triageJSONLogger.warning("Triage JSON repaired for model '\(modelID, privacy: .public)': stripped fences/junk. Consider upgrading prompt.")
+                return value
+            }
+        }
+
+        // 3. Log failure and throw
+        let preview = String(raw.prefix(200)).replacingOccurrences(of: "\n", with: " ")
+        triageJSONLogger.error("Triage JSON parse failed for model '\(modelID, privacy: .public)'. Raw preview: \(preview, privacy: .public)")
+        throw NativeAIError.unavailable("Could not parse triage JSON from model '\(modelID)'. Falling back to local triage.")
+    }
+
+    /// Strip markdown code fences, find the outermost `{...}` or `[...]`, drop trailing junk.
+    static func repairTriageJSON(_ raw: String) -> String {
+        // Strip code fences
+        let withoutFences = raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "^```[a-zA-Z]*\\n?", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "```$", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Find balanced { ... }
+        if let start = withoutFences.firstIndex(of: "{") {
+            var depth = 0
+            var inString = false
+            var escaped = false
+            var idx = withoutFences.startIndex
+            while idx < withoutFences.endIndex {
+                let ch = withoutFences[idx]
+                if escaped {
+                    escaped = false
+                } else if ch == "\\" && inString {
+                    escaped = true
+                } else if ch == "\"" {
+                    inString.toggle()
+                } else if !inString {
+                    if ch == "{" { depth += 1 }
+                    else if ch == "}" {
+                        depth -= 1
+                        if depth == 0, idx >= start {
+                            return String(withoutFences[start...idx])
+                        }
+                    }
+                }
+                idx = withoutFences.index(after: idx)
+            }
+        }
+
+        // Fallback: find balanced [ ... ]
+        if let start = withoutFences.firstIndex(of: "[") {
+            var depth = 0
+            var inString = false
+            var escaped = false
+            var idx = withoutFences.startIndex
+            while idx < withoutFences.endIndex {
+                let ch = withoutFences[idx]
+                if escaped {
+                    escaped = false
+                } else if ch == "\\" && inString {
+                    escaped = true
+                } else if ch == "\"" {
+                    inString.toggle()
+                } else if !inString {
+                    if ch == "[" { depth += 1 }
+                    else if ch == "]" {
+                        depth -= 1
+                        if depth == 0, idx >= start {
+                            return String(withoutFences[start...idx])
+                        }
+                    }
+                }
+                idx = withoutFences.index(after: idx)
+            }
+        }
+
+        return withoutFences
     }
 
     static func summarize(article: Article, settings: AppSettings) async throws -> String {

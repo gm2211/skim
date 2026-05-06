@@ -19,6 +19,13 @@ public protocol SettingsStore: Sendable {
     func saveSettings(_ settings: AppSettings) async throws
 }
 
+public protocol FolderStore: Sendable {
+    func listFolders() async throws -> [FeedFolder]
+    func upsertFolder(_ folder: FeedFolder) async throws
+    func deleteFolder(id: String) async throws
+    func setFeedFolder(feedID: String, folderID: String?) async throws
+}
+
 public struct FeedRefreshService: Sendable {
     private let session: URLSession
 
@@ -45,7 +52,8 @@ public struct FeedRefreshService: Sendable {
             url: feedURL,
             siteURL: parsed.siteURL ?? feed.siteURL,
             iconURL: feed.iconURL,
-            fetchedAt: Date()
+            fetchedAt: Date(),
+            folderID: feed.folderID
         )
         let articles = parsed.articles.map { parsedArticle in
             Article(

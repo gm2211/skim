@@ -641,18 +641,61 @@ private struct FeedPickerSheet: View {
                     .padding(.horizontal, 38)
                     .padding(.bottom, 16)
 
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(uniqueFeeds) { feed in
-                            pickerRow(
-                                icon: AnyView(FeedIcon(feed: feed)),
-                                title: feed.title,
-                                count: model.unreadCounts[feed.id],
-                                isSelected: model.selectedFeedID == feed.id
-                            ) { selectFeed(feed) }
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        if model.folders.isEmpty {
+                            // No folders — flat feed list (legacy behaviour)
+                            LazyVStack(alignment: .leading, spacing: 14) {
+                                ForEach(uniqueFeeds) { feed in
+                                    pickerRow(
+                                        icon: AnyView(FeedIcon(feed: feed)),
+                                        title: feed.title,
+                                        count: model.unreadCounts[feed.id],
+                                        isSelected: model.selectedFeedID == feed.id
+                                    ) { selectFeed(feed) }
+                                }
+                            }
+                            .padding(.bottom, 34)
+                        } else {
+                            // Grouped by folder
+                            ForEach(model.folders) { folder in
+                                let folderFeeds = uniqueFeeds.filter { $0.folderID == folder.id }
+                                if !folderFeeds.isEmpty {
+                                    FolderSection(
+                                        folder: folder,
+                                        feeds: folderFeeds,
+                                        selectedFeedID: model.selectedFeedID,
+                                        unreadCounts: model.unreadCounts,
+                                        onSelect: { selectFeed($0) }
+                                    )
+                                    .padding(.bottom, 18)
+                                }
+                            }
+
+                            let unfoldered = uniqueFeeds.filter { $0.folderID == nil }
+                            if !unfoldered.isEmpty {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text("Uncategorized")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundStyle(SkimStyle.secondary)
+                                        .textCase(.uppercase)
+                                        .tracking(1.1)
+
+                                    LazyVStack(alignment: .leading, spacing: 14) {
+                                        ForEach(unfoldered) { feed in
+                                            pickerRow(
+                                                icon: AnyView(FeedIcon(feed: feed)),
+                                                title: feed.title,
+                                                count: model.unreadCounts[feed.id],
+                                                isSelected: model.selectedFeedID == feed.id
+                                            ) { selectFeed(feed) }
+                                        }
+                                    }
+                                }
+                                .padding(.bottom, 34)
+                            }
                         }
                     }
                     .padding(.horizontal, 38)
-                    .padding(.bottom, 34)
                 }
             }
             .coordinateSpace(name: "feedPaneScroll")
@@ -784,6 +827,89 @@ private struct FeedPickerSheet: View {
     }
 }
 
+private struct FolderSection: View {
+    var folder: FeedFolder
+    var feeds: [Feed]
+    var selectedFeedID: String?
+    var unreadCounts: [String: Int]
+    var onSelect: (Feed) -> Void
+    @State private var isExpanded = true
+
+    private var folderUnread: Int {
+        feeds.compactMap { unreadCounts[$0.id] }.reduce(0, +)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.smooth(duration: 0.18)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: isExpanded ? "folder.fill" : "folder")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(SkimStyle.accent)
+                        .frame(width: 22)
+
+                    Text(folder.name)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SkimStyle.text)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+
+                    Spacer()
+
+                    if folderUnread > 0 {
+                        Text(folderUnread.formatted())
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary.opacity(0.6))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    ForEach(feeds) { feed in
+                        Button {
+                            onSelect(feed)
+                        } label: {
+                            HStack(spacing: 16) {
+                                FeedIcon(feed: feed)
+
+                                Text(feed.title)
+                                    .font(.system(size: 16, weight: selectedFeedID == feed.id ? .bold : .regular))
+                                    .foregroundStyle(selectedFeedID == feed.id ? SkimStyle.text : SkimStyle.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+
+                                Spacer()
+
+                                if let count = unreadCounts[feed.id], count > 0 {
+                                    Text(count.formatted())
+                                        .font(.system(size: 15, weight: .regular))
+                                        .foregroundStyle(SkimStyle.secondary)
+                                }
+                            }
+                            .frame(minHeight: 27)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, 38)
+                    }
+                }
+            }
+        }
+    }
+}
+
 private struct FeedPaneLoadingSpinner: View {
     var body: some View {
         ProgressView()
@@ -877,9 +1003,14 @@ private struct AutoGroupProposal: Identifiable {
     var id: String { "\(baseName)-\(feeds.map(\.id).joined(separator: ","))" }
     var baseName: String
     var feeds: [Feed]
+    /// User-edited override; nil = derive from baseName + nameStyle
+    var customName: String?
 
     func displayName(style: AutoGroupNameStyle) -> String {
-        style.formatName(baseName)
+        if let customName, !customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return customName.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return style.formatName(baseName)
     }
 }
 
@@ -889,6 +1020,7 @@ private struct AutoGroupSheet: View {
     @State private var nameStyle: AutoGroupNameStyle = .titleCase
     @State private var proposals: [AutoGroupProposal] = []
     @State private var isRunningAI = false
+    @State private var isApplying = false
     @State private var aiMessage: String?
     @State private var didRunAI = false
     @State private var usedFallback = false
@@ -968,8 +1100,11 @@ private struct AutoGroupSheet: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 12) {
-                        ForEach(proposals) { proposal in
-                            AutoGroupProposalRow(proposal: proposal, nameStyle: nameStyle)
+                        ForEach($proposals) { $proposal in
+                            AutoGroupProposalRow(
+                                proposal: $proposal,
+                                nameStyle: nameStyle
+                            )
                         }
                     }
                     .padding(.bottom, 8)
@@ -978,10 +1113,6 @@ private struct AutoGroupSheet: View {
             }
 
             HStack(spacing: 12) {
-                Text(usedFallback ? "Local fallback preview. Not AI." : "AI preview until native folder persistence lands.")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(SkimStyle.secondary)
-                Spacer()
                 Button {
                     Task { await runAI() }
                 } label: {
@@ -996,15 +1127,44 @@ private struct AutoGroupSheet: View {
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(SkimStyle.text)
+                .foregroundStyle(isRunningAI ? SkimStyle.secondary : SkimStyle.text)
                 .padding(.horizontal, 15)
                 .frame(height: 42)
-                .background(SkimStyle.accent.opacity(isRunningAI ? 0.45 : 0.95), in: Capsule())
+                .background(SkimStyle.surface.opacity(0.85), in: Capsule())
                 .overlay {
                     Capsule()
-                        .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                        .stroke(SkimStyle.separator, lineWidth: 1)
                 }
-                .disabled(isRunningAI)
+                .disabled(isRunningAI || isApplying)
+
+                Spacer()
+
+                if !proposals.isEmpty {
+                    Button {
+                        Task { await applyProposals() }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isApplying {
+                                ProgressView()
+                                    .controlSize(.mini)
+                                    .tint(SkimStyle.text)
+                            }
+                            Text(isApplying ? "Applying…" : "Apply")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(SkimStyle.text)
+                    .padding(.horizontal, 15)
+                    .frame(height: 42)
+                    .background(SkimStyle.accent.opacity(isApplying ? 0.45 : 0.95), in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                    }
+                    .disabled(isRunningAI || isApplying)
+                }
+
                 Button("Done") {
                     isPresented = false
                 }
@@ -1071,6 +1231,17 @@ private struct AutoGroupSheet: View {
         return didRunAI ? "Regroup" : "Run AI"
     }
 
+    private func applyProposals() async {
+        dismissUIKitKeyboard()
+        isApplying = true
+        let organized: [(folderName: String, feedIDs: [String])] = proposals.map { proposal in
+            (folderName: proposal.displayName(style: nameStyle), feedIDs: proposal.feeds.map(\.id))
+        }
+        await model.applyOrganization(proposal: organized)
+        isApplying = false
+        isPresented = false
+    }
+
     private func runAI() async {
         if model.feeds.isEmpty {
             await model.reloadArticles()
@@ -1105,17 +1276,28 @@ private struct AutoGroupSheet: View {
 }
 
 private struct AutoGroupProposalRow: View {
-    var proposal: AutoGroupProposal
+    @Binding var proposal: AutoGroupProposal
     var nameStyle: AutoGroupNameStyle
+
+    private var editingName: Binding<String> {
+        Binding(
+            get: { proposal.customName ?? proposal.displayName(style: nameStyle) },
+            set: { proposal.customName = $0 }
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 10) {
-                Text(proposal.displayName(style: nameStyle))
-                    .font(.system(size: 19, weight: .bold))
+                Image(systemName: "folder")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SkimStyle.accent)
+                    .frame(width: 22)
+
+                TextField("Folder name", text: editingName)
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(SkimStyle.text)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                    .submitLabel(.done)
 
                 Spacer()
 

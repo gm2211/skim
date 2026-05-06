@@ -7,14 +7,16 @@ public struct Feed: Identifiable, Codable, Hashable, Sendable {
     public var siteURL: URL?
     public var iconURL: URL?
     public var fetchedAt: Date?
+    public var folderID: String?
 
-    public init(id: String, title: String, url: URL, siteURL: URL? = nil, iconURL: URL? = nil, fetchedAt: Date? = nil) {
+    public init(id: String, title: String, url: URL, siteURL: URL? = nil, iconURL: URL? = nil, fetchedAt: Date? = nil, folderID: String? = nil) {
         self.id = id
         self.title = title
         self.url = url
         self.siteURL = siteURL
         self.iconURL = iconURL
         self.fetchedAt = fetchedAt
+        self.folderID = folderID
     }
 }
 
@@ -209,6 +211,18 @@ public struct AISettings: Codable, Equatable, Sendable {
         summaryCustomWordCount = try container.decodeIfPresent(Int.self, forKey: .summaryCustomWordCount) ?? legacy.decodeIfPresent(Int.self, forKey: .summary_custom_word_count)
         summaryCustomPrompt = try container.decodeIfPresent(String.self, forKey: .summaryCustomPrompt) ?? legacy.decodeIfPresent(String.self, forKey: .summary_custom_prompt)
         triageUserPrompt = try container.decodeIfPresent(String.self, forKey: .triageUserPrompt) ?? legacy.decodeIfPresent(String.self, forKey: .triage_user_prompt)
+    }
+}
+
+public struct FeedFolder: Identifiable, Codable, Hashable, Sendable {
+    public var id: String
+    public var name: String
+    public var sortOrder: Int
+
+    public init(id: String, name: String, sortOrder: Int = 0) {
+        self.id = id
+        self.name = name
+        self.sortOrder = sortOrder
     }
 }
 

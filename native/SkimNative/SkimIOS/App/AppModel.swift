@@ -36,9 +36,11 @@ enum ArticleListMode: String, CaseIterable, Identifiable {
 @MainActor
 final class AppModel: ObservableObject {
     @Published var feeds: [Feed] = []
+    @Published var folders: [FeedFolder] = []
     @Published var articles: [Article] = []
     @Published var listMode: ArticleListMode = .unread
     @Published var selectedFeedID: String?
+    @Published var selectedFolderID: String?
     @Published var searchQuery = ""
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -96,6 +98,7 @@ final class AppModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
+            folders = try await store.listFolders()
             feeds = try await store.listFeeds()
             settings = try await store.loadSettings()
             articles = try await store.listArticles(filter: filter)
@@ -108,6 +111,7 @@ final class AppModel: ObservableObject {
 
     func reloadArticles() async {
         do {
+            folders = try await store.listFolders()
             feeds = try await store.listFeeds()
             articles = try await store.listArticles(filter: filter)
             try await refreshCounts()
@@ -201,6 +205,37 @@ final class AppModel: ObservableObject {
         do {
             try await store.saveSettings(next)
             settings = next
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Applies an auto-group proposal: creates missing folders, assigns feeds, persists all.
+    /// `proposal` maps folder name → array of feed IDs to assign.
+    func applyOrganization(proposal: [(folderName: String, feedIDs: [String])]) async {
+        do {
+            // Remove existing folder assignments for all feeds being touched
+            let touchedFeedIDs = proposal.flatMap(\.feedIDs)
+            for feedID in touchedFeedIDs {
+                try await store.setFeedFolder(feedID: feedID, folderID: nil)
+            }
+
+            // Create or reuse folders and assign feeds
+            for (index, entry) in proposal.enumerated() {
+                let name = entry.folderName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty, !entry.feedIDs.isEmpty else { continue }
+
+                let folderID = stableID(prefix: "folder", value: name.lowercased())
+                let folder = FeedFolder(id: folderID, name: name, sortOrder: index)
+                try await store.upsertFolder(folder)
+
+                for feedID in entry.feedIDs {
+                    try await store.setFeedFolder(feedID: feedID, folderID: folderID)
+                }
+            }
+
+            await reloadArticles()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

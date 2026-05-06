@@ -229,15 +229,16 @@ enum NativeAI {
         if let cached = SummaryLRUCache.shared.get(key) {
             return cached
         }
+        let wordCount = summaryTargetWordCount(settings.ai)
         let result = try await complete(
             settings: settings,
             instructions: summaryInstructions(settings.ai),
             prompt: """
-            Summarize this article. Target length: \(summaryLengthDescription(settings.ai)).
+            Summarize this article. Write a summary of approximately \(wordCount) words.
 
             \(articleDigest([article], limit: 1))
             """,
-            maxTokens: summaryMaxTokens(settings.ai)
+            maxTokens: summaryMaxTokens(wordCount)
         )
         SummaryLRUCache.shared.set(key, value: result)
         return result
@@ -250,13 +251,8 @@ enum NativeAI {
 
     private static func summaryCacheKey(articleID: String, ai: AISettings) -> String {
         let model = ai.model?.nilIfEmpty ?? ai.provider
-        let length: String
-        if let words = ai.summaryCustomWordCount, words > 0 {
-            length = "words:\(words)"
-        } else {
-            length = ai.summaryLength?.nilIfEmpty ?? "short"
-        }
-        return "\(articleID)|\(model)|\(length)"
+        let wordCount = summaryTargetWordCount(ai)
+        return "\(articleID)|\(model)|\(wordCount)"
     }
 
     static func chat(question: String, article: Article, settings: AppSettings) async throws -> String {
@@ -476,28 +472,15 @@ enum NativeAI {
         return instructions
     }
 
-    private static func summaryLengthDescription(_ settings: AISettings) -> String {
+    private static func summaryTargetWordCount(_ settings: AISettings) -> Int {
         if let words = settings.summaryCustomWordCount, words > 0 {
-            return "about \(words) words"
+            return words
         }
-        switch settings.summaryLength?.nilIfEmpty ?? "short" {
-        case "tiny": return "1-2 sentences maximum — be extremely brief"
-        case "medium": return "one paragraph (3-4 sentences) followed by exactly 3 bullet takeaways"
-        case "long": return "a detailed summary of 4-6 paragraphs covering the main argument, key evidence, implications, and any caveats"
-        default: return "one concise paragraph (2-3 sentences) plus 3 bullet takeaways"
-        }
+        return 150
     }
 
-    private static func summaryMaxTokens(_ settings: AISettings) -> Int {
-        if let words = settings.summaryCustomWordCount, words > 0 {
-            return max(160, min(1600, Int(Double(words) * 1.8)))
-        }
-        switch settings.summaryLength?.nilIfEmpty ?? "short" {
-        case "tiny": return 180
-        case "medium": return 520
-        case "long": return 900
-        default: return 420
-        }
+    private static func summaryMaxTokens(_ wordCount: Int) -> Int {
+        Int(Double(wordCount) * 1.5) + 50
     }
 
     private static func articleDigest(_ articles: [Article], limit: Int) -> String {

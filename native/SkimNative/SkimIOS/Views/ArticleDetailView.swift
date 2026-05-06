@@ -285,8 +285,7 @@ private struct SummaryConfigurationSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var style: String
-    @State private var length: String
-    @State private var maxWords: String
+    @State private var wordCount: Int
     @State private var customPrompt: String
 
     init(article: Article, defaults: AISettings, onRun: @escaping (AISettings) -> Void) {
@@ -294,8 +293,7 @@ private struct SummaryConfigurationSheet: View {
         self.defaults = defaults
         self.onRun = onRun
         _style = State(initialValue: defaults.summaryTone ?? "concise")
-        _length = State(initialValue: defaults.summaryLength ?? "short")
-        _maxWords = State(initialValue: defaults.summaryCustomWordCount.map(String.init) ?? "")
+        _wordCount = State(initialValue: defaults.summaryCustomWordCount ?? 150)
         _customPrompt = State(initialValue: defaults.summaryCustomPrompt ?? "")
     }
 
@@ -328,26 +326,11 @@ private struct SummaryConfigurationSheet: View {
                     VStack(alignment: .leading, spacing: 14) {
                         Text("Length")
                             .summaryControlLabel()
-                        Picker("Length", selection: $length) {
-                            Text("Tiny").tag("tiny")
-                            Text("Short").tag("short")
-                            Text("Medium").tag("medium")
-                            Text("Long").tag("long")
+                        Stepper(value: $wordCount, in: 30...600, step: 25) {
+                            Text("\(wordCount) words")
+                                .font(.system(size: 17, weight: .regular))
+                                .foregroundStyle(SkimStyle.text)
                         }
-                        .pickerStyle(.segmented)
-
-                        TextField("Optional max words", text: $maxWords)
-                            .keyboardType(.numberPad)
-                            .textInputAutocapitalization(.never)
-                            .font(.system(size: 17, weight: .regular))
-                            .foregroundStyle(SkimStyle.text)
-                            .padding(.horizontal, 14)
-                            .frame(height: 46)
-                            .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(SkimStyle.separator, lineWidth: 1)
-                            }
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
@@ -392,16 +375,9 @@ private struct SummaryConfigurationSheet: View {
     private var configuredSettings: AISettings {
         var next = defaults
         next.summaryTone = style
-        next.summaryLength = length
-        next.summaryCustomWordCount = normalizedWordCount
+        next.summaryCustomWordCount = wordCount
         next.summaryCustomPrompt = customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         return next
-    }
-
-    private var normalizedWordCount: Int? {
-        let trimmed = maxWords.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let words = Int(trimmed), words > 0 else { return nil }
-        return min(words, 900)
     }
 }
 

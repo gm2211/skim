@@ -570,8 +570,9 @@ struct ArticleListView: View {
             .foregroundStyle(showSearch || !model.searchQuery.isEmpty ? SkimStyle.accent : SkimStyle.secondary)
         }
         .padding(.horizontal, 24)
-        .padding(.bottom, bottomSafeAreaInset / 2)
-        .frame(height: 44 + bottomSafeAreaInset)
+        .frame(height: 44)
+        .offset(y: bottomSafeAreaInset / 2)
+        .frame(height: 44 + bottomSafeAreaInset, alignment: .top)
         .frame(maxWidth: .infinity)
         .background(
             SkimStyle.chrome.opacity(0.96)
@@ -2245,15 +2246,7 @@ private struct FeedIcon: View {
     }
 
     private var initials: String {
-        // Skip leading non-alpha characters (e.g. "/" in "/r/technology")
-        // then take up to 2 first chars of space-separated words.
-        let cleaned = feed.title.drop(while: { !$0.isLetter && !$0.isNumber })
-        let words = cleaned
-            .split(separator: " ")
-            .prefix(2)
-            .compactMap { word in word.first(where: { $0.isLetter || $0.isNumber }) }
-        let value = String(words).uppercased()
-        return value.isEmpty ? "S" : value
+        feed.title.skimFeedInitials(fallback: "S")
     }
 
     private var color: Color {
@@ -2482,15 +2475,7 @@ private struct ArticleSourceIcon: View {
     }
 
     private var initials: String {
-        // Skip leading non-alpha characters (e.g. "/" in "/r/technology")
-        // then take up to 2 first chars of space-separated words.
-        let cleaned = article.feedTitle.drop(while: { !$0.isLetter && !$0.isNumber })
-        let words = cleaned
-            .split(separator: " ")
-            .prefix(2)
-            .compactMap { word in word.first(where: { $0.isLetter || $0.isNumber }) }
-        let value = String(words).uppercased()
-        return value.isEmpty ? "S" : value
+        article.feedTitle.skimFeedInitials(fallback: "S")
     }
 
     private var color: Color {
@@ -2511,4 +2496,22 @@ private func dismissUIKitKeyboard() {
 #if canImport(UIKit)
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
 #endif
+}
+
+private extension String {
+    func skimFeedInitials(fallback: String) -> String {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.replacingOccurrences(
+            of: #"^/?r/([^/\s]+).*"#,
+            with: "$1",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        let cleaned = normalized.drop(while: { !$0.isLetter && !$0.isNumber })
+        let words = cleaned
+            .split { !$0.isLetter && !$0.isNumber }
+            .prefix(2)
+            .compactMap { word in word.first(where: { $0.isLetter || $0.isNumber }) }
+        let value = String(words).uppercased()
+        return value.isEmpty ? fallback : value
+    }
 }

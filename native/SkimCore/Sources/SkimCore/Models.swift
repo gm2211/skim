@@ -245,11 +245,15 @@ public struct FeedFolder: Identifiable, Codable, Hashable, Sendable {
     public var id: String
     public var name: String
     public var sortOrder: Int
+    public var isSmart: Bool
+    public var rulesJSON: String?
 
-    public init(id: String, name: String, sortOrder: Int = 0) {
+    public init(id: String, name: String, sortOrder: Int = 0, isSmart: Bool = false, rulesJSON: String? = nil) {
         self.id = id
         self.name = name
         self.sortOrder = sortOrder
+        self.isSmart = isSmart
+        self.rulesJSON = rulesJSON
     }
 }
 

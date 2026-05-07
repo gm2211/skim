@@ -144,6 +144,10 @@ private final class SQLiteDatabase: @unchecked Sendable {
         // Migration: add folder_id column if it doesn't exist (safe no-op if already present)
         try? execute("ALTER TABLE feeds ADD COLUMN folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL")
 
+        // Migration: add smart folder columns if they don't exist (safe no-op if already present)
+        try? execute("ALTER TABLE folders ADD COLUMN is_smart INTEGER NOT NULL DEFAULT 0")
+        try? execute("ALTER TABLE folders ADD COLUMN rules_json TEXT")
+
         try execute("""
         CREATE TABLE IF NOT EXISTS articles (
             id TEXT PRIMARY KEY,
@@ -182,26 +186,32 @@ private final class SQLiteDatabase: @unchecked Sendable {
     func upsertFolder(_ folder: FeedFolder) throws {
         try execute(
             """
-            INSERT INTO folders (id, name, sort_order)
-            VALUES (?, ?, ?)
+            INSERT INTO folders (id, name, sort_order, is_smart, rules_json)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 name = excluded.name,
-                sort_order = excluded.sort_order
+                sort_order = excluded.sort_order,
+                is_smart = excluded.is_smart,
+                rules_json = excluded.rules_json
             """,
             [
                 .text(folder.id),
                 .text(folder.name),
-                .int(folder.sortOrder)
+                .int(folder.sortOrder),
+                .bool(folder.isSmart),
+                .optionalText(folder.rulesJSON)
             ]
         )
     }
 
     func listFolders() throws -> [FeedFolder] {
-        try query("SELECT id, name, sort_order FROM folders ORDER BY sort_order ASC, name COLLATE NOCASE ASC") { statement in
+        try query("SELECT id, name, sort_order, is_smart, rules_json FROM folders ORDER BY sort_order ASC, name COLLATE NOCASE ASC") { statement in
             FeedFolder(
                 id: columnText(statement, 0),
                 name: columnText(statement, 1),
-                sortOrder: Int(sqlite3_column_int(statement, 2))
+                sortOrder: Int(sqlite3_column_int(statement, 2)),
+                isSmart: sqlite3_column_int(statement, 3) != 0,
+                rulesJSON: columnOptionalText(statement, 4)
             )
         }
     }

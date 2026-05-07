@@ -105,7 +105,7 @@ final class AppModel: ObservableObject {
             return unreadCounts[selectedFeedID] ?? 0
         }
         if let selectedFolderID {
-            let folderFeeds = feeds.filter { $0.folderID == selectedFolderID }
+            let folderFeeds = feedsInFolder(id: selectedFolderID)
             return folderFeeds.compactMap { unreadCounts[$0.id] }.reduce(0, +)
         }
         return totalUnreadCount
@@ -121,11 +121,24 @@ final class AppModel: ObservableObject {
         )
     }
 
+    // MARK: - Smart Folder Helpers
+
+    /// Returns feeds that belong to a given folder.
+    /// For regular folders: feeds explicitly assigned via folder_id.
+    /// For smart folders: feeds that match the folder's rules_json at call time.
+    func feedsInFolder(id folderID: String) -> [Feed] {
+        guard let folder = folders.first(where: { $0.id == folderID }) else { return [] }
+        if folder.isSmart {
+            return feeds.filter { SmartFolderEval.feedMatches(rulesJSON: folder.rulesJSON, feed: $0) }
+        } else {
+            return feeds.filter { $0.folderID == folderID }
+        }
+    }
+
     /// Feed IDs belonging to the selected folder, or nil if no folder is selected.
     private var selectedFolderFeedIDs: Set<String>? {
         guard let selectedFolderID else { return nil }
-        let ids = feeds.filter { $0.folderID == selectedFolderID }.map(\.id)
-        return Set(ids)
+        return Set(feedsInFolder(id: selectedFolderID).map(\.id))
     }
 
     func load() async {

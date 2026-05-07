@@ -570,19 +570,15 @@ struct ArticleListView: View {
             .foregroundStyle(showSearch || !model.searchQuery.isEmpty ? SkimStyle.accent : SkimStyle.secondary)
         }
         .padding(.horizontal, 24)
-        .frame(height: 32)
-        .offset(y: bottomSafeAreaInset * 0.25)
-        .frame(height: 32 + bottomSafeAreaInset, alignment: .top)
+        .frame(height: 36)
         .frame(maxWidth: .infinity)
-        .background(
-            SkimStyle.chrome.opacity(0.96)
-                .ignoresSafeArea(.all, edges: .bottom)
-        )
+        .background(SkimStyle.chrome.opacity(0.96))
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(SkimStyle.separator)
                 .frame(height: 1)
         }
+        .ignoresSafeArea(.all, edges: .bottom)
         .ignoresSafeArea(.all, edges: .bottom)
     }
 

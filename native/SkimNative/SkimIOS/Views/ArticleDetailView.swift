@@ -36,11 +36,11 @@ struct ArticleDetailView: View {
 
                 TabView(selection: $page) {
                     ReaderPage(article: article, isLoading: isLoading)
-                        .contextMenu { detailContextMenu }
+                        .contextMenu(menuItems: { detailContextMenu }, preview: { contextMenuPreview })
                         .tag(DetailPage.reader)
 
                     WebPage(article: article)
-                        .contextMenu { detailContextMenu }
+                        .contextMenu(menuItems: { detailContextMenu }, preview: { contextMenuPreview })
                         .tag(DetailPage.web)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -169,6 +169,23 @@ struct ArticleDetailView: View {
                 guard shouldDismiss else { return }
                 dismiss()
             }
+    }
+
+    // Providing an explicit preview forces iOS to composite the glass-blur backdrop
+    // synchronously on the first render frame, preventing the 1-2s lag where menu
+    // items appear unreadable against the article content below.
+    @ViewBuilder
+    private var contextMenuPreview: some View {
+        if let article {
+            Text(article.title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(SkimStyle.text)
+                .lineLimit(3)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: 280, alignment: .leading)
+                .background(SkimStyle.chrome)
+        }
     }
 
     @ViewBuilder

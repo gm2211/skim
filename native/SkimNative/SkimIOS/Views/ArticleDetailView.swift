@@ -553,7 +553,15 @@ private struct ReaderPage: View {
         .task(id: article?.id) {
             guard let article else { return }
             if article.aggregatorKind != nil {
+                // Run comments fetch and external-article extraction concurrently.
+                // loadComments sets redditSelftext; we wait for it before deciding whether
+                // to auto-extract so we know if this is a selftext post or a link post.
                 await loadComments(for: article)
+                // Auto-extract the linked article for link posts (aggregator with externalURL
+                // but no selftext). Reddit selftext posts keep their current rendering.
+                if let externalURL = article.externalURL, redditSelftext == nil {
+                    await loadExternalArticle(url: externalURL)
+                }
             } else {
                 await autoExtractIfNeeded(article: article)
             }
@@ -613,15 +621,17 @@ private struct ReaderPage: View {
                 externalURLCard(url: externalURL, article: article)
             }
 
-            // Extracted body (after tapping "Load article") — not shown for Reddit
-            if article.aggregatorKind != .reddit {
+            // Extracted body — shown when auto-extract is in progress or complete.
+            // Applies to all aggregator kinds including Reddit link posts.
+            // (Reddit selftext posts show body via `redditSelftext` above instead.)
+            if article.externalURL != nil && redditSelftext == nil {
                 switch extractedBody {
                 case .idle:
                     EmptyView()
                 case .loading:
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
-                        Text("Fetching article…")
+                        Text("Loading article…")
                             .font(.system(size: 15))
                             .foregroundStyle(SkimStyle.secondary)
                     }
@@ -684,12 +694,12 @@ private struct ReaderPage: View {
                     .stroke(SkimStyle.separator, lineWidth: 1)
             }
 
-            // Load article button (only when not already loaded or loading)
-            if case .idle = extractedBody {
+            // Retry button only shown after a failed extraction attempt
+            if case .failed = extractedBody {
                 Button {
                     Task { await loadExternalArticle(url: url) }
                 } label: {
-                    Label("Load Article", systemImage: "arrow.down.doc")
+                    Label("Retry", systemImage: "arrow.clockwise")
                         .font(.system(size: 17, weight: .semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 14)

@@ -37,6 +37,8 @@ struct ArticleListView: View {
                     searchBar
                 }
                 content
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomFilter
             }
             .contentShape(Rectangle())
@@ -563,12 +565,9 @@ struct ArticleListView: View {
             .foregroundStyle(showSearch || !model.searchQuery.isEmpty ? SkimStyle.accent : SkimStyle.secondary)
         }
         .padding(.horizontal, 24)
-        .frame(height: 38)
+        .frame(height: 44)
         .frame(maxWidth: .infinity)
-        .background(
-            SkimStyle.chrome.opacity(0.96)
-                .ignoresSafeArea(.all, edges: .bottom)
-        )
+        .background(SkimStyle.chrome.opacity(0.96))
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(SkimStyle.separator)

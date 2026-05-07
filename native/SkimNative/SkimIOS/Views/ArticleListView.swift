@@ -570,6 +570,7 @@ struct ArticleListView: View {
             .foregroundStyle(showSearch || !model.searchQuery.isEmpty ? SkimStyle.accent : SkimStyle.secondary)
         }
         .padding(.horizontal, 24)
+        .padding(.bottom, bottomSafeAreaInset / 2)
         .frame(height: 44 + bottomSafeAreaInset)
         .frame(maxWidth: .infinity)
         .background(
@@ -2232,10 +2233,10 @@ private struct FeedIcon: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
+            Circle()
                 .fill(color)
             Text(initials)
-                .font(.system(size: 10, weight: .black))
+                .font(.system(size: size * 0.42, weight: .black))
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.55)
@@ -2244,10 +2245,13 @@ private struct FeedIcon: View {
     }
 
     private var initials: String {
-        let words = feed.title
+        // Skip leading non-alpha characters (e.g. "/" in "/r/technology")
+        // then take up to 2 first chars of space-separated words.
+        let cleaned = feed.title.drop(while: { !$0.isLetter && !$0.isNumber })
+        let words = cleaned
             .split(separator: " ")
             .prefix(2)
-            .compactMap { $0.first }
+            .compactMap { word in word.first(where: { $0.isLetter || $0.isNumber }) }
         let value = String(words).uppercased()
         return value.isEmpty ? "S" : value
     }
@@ -2454,7 +2458,7 @@ private struct ArticleSourceIcon: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
+            Circle()
                 .fill(color)
             Text(initials)
                 .font(.system(size: 11, weight: .black))
@@ -2466,10 +2470,13 @@ private struct ArticleSourceIcon: View {
     }
 
     private var initials: String {
-        let words = article.feedTitle
+        // Skip leading non-alpha characters (e.g. "/" in "/r/technology")
+        // then take up to 2 first chars of space-separated words.
+        let cleaned = article.feedTitle.drop(while: { !$0.isLetter && !$0.isNumber })
+        let words = cleaned
             .split(separator: " ")
             .prefix(2)
-            .compactMap { $0.first }
+            .compactMap { word in word.first(where: { $0.isLetter || $0.isNumber }) }
         let value = String(words).uppercased()
         return value.isEmpty ? "S" : value
     }

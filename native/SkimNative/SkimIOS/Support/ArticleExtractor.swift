@@ -48,12 +48,26 @@ enum ArticleExtractor {
             .decodingBasicHTMLEntities()
             .collapsingWhitespace()
 
-        // 5. Garbage detector — reject Tailwind / CSS fragment leakage
-        if looksLikeMarkup(plain) {
+        // 5. Drop leaked utility-class lines and reject all-garbage output.
+        let sanitized = sanitizeReaderText(plain)
+        if sanitized.isEmpty || looksLikeMarkup(sanitized) {
             throw Error.contentLooksLikeMarkup
         }
 
-        return plain
+        return sanitized
+    }
+
+    /// Removes CSS/attribute fragments that can leak from JS-heavy pages into
+    /// reader text. If the whole extraction looks like class-name debris,
+    /// returns an empty string so callers can fall back to the web view.
+    static func sanitizeReaderText(_ text: String) -> String {
+        let lines = text
+            .components(separatedBy: .newlines)
+            .map { $0.collapsingWhitespace() }
+            .filter { !$0.isEmpty && !$0.isTailwindClassFragment }
+
+        let sanitized = lines.joined(separator: "\n\n").collapsingWhitespace()
+        return sanitized.isLikelyReaderGarbage ? "" : sanitized
     }
 
     // MARK: - Garbage detector
@@ -201,5 +215,59 @@ private extension String {
         replacingOccurrences(of: "[ \\t]+", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "\\n{3,}", with: "\n\n", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var isTailwindClassFragment: Bool {
+        let lowercased = lowercased()
+        if lowercased.contains("[&>:") || lowercased.contains("[&>") {
+            return true
+        }
+
+        let markers = [
+            "first-child]:",
+            "last-child]:",
+            "rounded-[",
+            "h-full w-full",
+            "max-h-full",
+            "overflow-hidden",
+            "class=\"",
+            "class='",
+            "classname="
+        ]
+        let markerCount = markers.filter { lowercased.contains($0) }.count
+        if markerCount >= 2 { return true }
+
+        let tokens = lowercased.split(whereSeparator: \.isWhitespace)
+        guard tokens.count >= 3 else { return false }
+        let utilityTokens = tokens.filter { token in
+            token.contains("]:") ||
+                token.contains("[") && token.contains("]") ||
+                token.hasPrefix("h-") ||
+                token.hasPrefix("w-") ||
+                token.hasPrefix("mb-") ||
+                token.hasPrefix("max-h-") ||
+                token.hasPrefix("overflow-") ||
+                token.hasPrefix("rounded-")
+        }
+        return utilityTokens.count >= 3 && Double(utilityTokens.count) / Double(tokens.count) > 0.45
+    }
+
+    var isLikelyReaderGarbage: Bool {
+        let lowercased = lowercased()
+        if lowercased.contains("[&>:") { return true }
+
+        let tokens = lowercased.split(whereSeparator: \.isWhitespace)
+        guard tokens.count >= 4 else { return false }
+        let classLikeTokens = tokens.filter { token in
+            token.contains("]:") ||
+                token.contains("[&") ||
+                token.hasPrefix("h-") ||
+                token.hasPrefix("w-") ||
+                token.hasPrefix("mb-") ||
+                token.hasPrefix("max-h-") ||
+                token.hasPrefix("overflow-") ||
+                token.hasPrefix("rounded-")
+        }
+        return classLikeTokens.count >= 4 && Double(classLikeTokens.count) / Double(tokens.count) > 0.35
     }
 }

@@ -1053,9 +1053,10 @@ private extension Article {
         let body = contentText?.decodingHTMLEntities.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? contentHTML?.skimPlainText.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? ""
-        return body
+        let cleaned = body
             .unescapingLiteralEscapes
             .removingReaderBoilerplate
+        return ArticleExtractor.sanitizeReaderText(cleaned)
     }
 
     /// True if the RSS-provided body is long enough and not boilerplate to use directly,

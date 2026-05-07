@@ -37,8 +37,6 @@ struct ArticleListView: View {
                     searchBar
                 }
                 content
-            }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
                 bottomFilter
             }
             .contentShape(Rectangle())
@@ -518,6 +516,13 @@ struct ArticleListView: View {
         }
     }
 
+    private var bottomSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: \.isKeyWindow)?
+            .safeAreaInsets.bottom ?? 0
+    }
+
     private var bottomFilter: some View {
         HStack(spacing: 0) {
             Button {
@@ -565,14 +570,18 @@ struct ArticleListView: View {
             .foregroundStyle(showSearch || !model.searchQuery.isEmpty ? SkimStyle.accent : SkimStyle.secondary)
         }
         .padding(.horizontal, 24)
-        .frame(height: 44)
+        .frame(height: 44 + bottomSafeAreaInset)
         .frame(maxWidth: .infinity)
-        .background(SkimStyle.chrome.opacity(0.96))
+        .background(
+            SkimStyle.chrome.opacity(0.96)
+                .ignoresSafeArea(.all, edges: .bottom)
+        )
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(SkimStyle.separator)
                 .frame(height: 1)
         }
+        .ignoresSafeArea(.all, edges: .bottom)
     }
 
     private var compactTitle: String {

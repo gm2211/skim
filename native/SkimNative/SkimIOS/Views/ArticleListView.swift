@@ -715,7 +715,7 @@ private struct FeedPickerSheet: View {
                         } else {
                             // Grouped by folder
                             ForEach(model.folders) { folder in
-                                let folderFeeds = uniqueFeeds.filter { $0.folderID == folder.id }
+                                let folderFeeds = model.feedsInFolder(id: folder.id)
                                 if !folderFeeds.isEmpty {
                                     FolderSection(
                                         folder: folder,
@@ -907,6 +907,7 @@ private struct FeedPickerSheet: View {
 }
 
 private struct FolderSection: View {
+    @EnvironmentObject private var model: AppModel
     var folder: FeedFolder
     var feeds: [Feed]
     var selectedFeedID: String?
@@ -915,6 +916,7 @@ private struct FolderSection: View {
     var onSelect: (Feed) -> Void
     var onSelectFolder: (FeedFolder) -> Void
     @State private var isExpanded = true
+    @State private var showSmartFolderEditor = false
 
     private var folderUnread: Int {
         feeds.compactMap { unreadCounts[$0.id] }.reduce(0, +)
@@ -922,6 +924,13 @@ private struct FolderSection: View {
 
     private var isFolderSelected: Bool {
         selectedFolderID == folder.id
+    }
+
+    private var folderSystemImage: String {
+        if folder.isSmart {
+            return isExpanded ? "folder.badge.gearshape" : "folder.badge.gearshape"
+        }
+        return isExpanded ? "folder.fill" : "folder"
     }
 
     var body: some View {
@@ -935,7 +944,7 @@ private struct FolderSection: View {
                         ZStack {
                             RoundedRectangle(cornerRadius: 6, style: .continuous)
                                 .fill(SkimStyle.surface)
-                            Image(systemName: isExpanded ? "folder.fill" : "folder")
+                            Image(systemName: folderSystemImage)
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(isFolderSelected ? SkimStyle.accent : SkimStyle.accent.opacity(0.7))
                         }
@@ -959,6 +968,27 @@ private struct FolderSection: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    if folder.isSmart {
+                        Button("Edit Rules", systemImage: "slider.horizontal.3") {
+                            showSmartFolderEditor = true
+                        }
+                        Button("Convert to Regular Folder", systemImage: "folder") {
+                            Task { await convertToRegularFolder() }
+                        }
+                    } else {
+                        Button("Convert to Smart Folder", systemImage: "folder.badge.gearshape") {
+                            showSmartFolderEditor = true
+                        }
+                    }
+                }
+                .sheet(isPresented: $showSmartFolderEditor) {
+                    SmartFolderEditor(isPresented: $showSmartFolderEditor, folder: folder)
+                        .environmentObject(model)
+                        .presentationDetents([.medium, .large])
+                        .presentationDragIndicator(.visible)
+                        .presentationBackground(SkimStyle.chrome)
+                }
 
                 // Chevron button — only expands/collapses, does not filter
                 Button {
@@ -1016,6 +1046,18 @@ private struct FolderSection: View {
                     }
                 }
             }
+        }
+    }
+
+    private func convertToRegularFolder() async {
+        var updated = folder
+        updated.isSmart = false
+        updated.rulesJSON = nil
+        do {
+            try await model.store.upsertFolder(updated)
+            model.folders = try await model.store.listFolders()
+        } catch {
+            // Silently ignore — folder reverts on next load
         }
     }
 }

@@ -2276,6 +2276,8 @@ private struct ArticleRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
+            // Icon column with polished unread indicator: 8pt filled circle,
+            // vertically centered against the 30pt icon (y: 11 = 15 center − 4 half-dot).
             ZStack(alignment: .topLeading) {
                 if let feed {
                     FeedIcon(feed: feed, size: 30)
@@ -2286,8 +2288,8 @@ private struct ArticleRow: View {
                 if !article.isRead {
                     Circle()
                         .fill(SkimStyle.accent)
-                        .frame(width: 6, height: 6)
-                        .offset(x: -8, y: 11)
+                        .frame(width: 8, height: 8)
+                        .offset(x: -10, y: 11)
                 }
             }
             .padding(.top, 20)
@@ -2330,9 +2332,10 @@ private struct ArticleRow: View {
                 .font(.system(size: 15, weight: .regular))
             }
 
-            Spacer(minLength: 4)
-
+            // Only reserve space for the trailing image when one is present;
+            // image-less rows let the title block expand to the full row width.
             if let imageURL = article.imageURL {
+                Spacer(minLength: 4)
                 AsyncImage(url: imageURL) { phase in
                     switch phase {
                     case .success(let image):
@@ -2354,15 +2357,16 @@ private struct ArticleRow: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, 46)
-        .padding(.trailing, 28)
+        // ~18pt horizontal margins so content doesn't abut screen edges.
+        .padding(.leading, 18)
+        .padding(.trailing, 18)
         .padding(.vertical, 11)
         .background(SkimStyle.chrome)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(SkimStyle.separator.opacity(0.5))
                 .frame(height: 1)
-                .padding(.leading, 92)
+                .padding(.leading, 64)
         }
         .contextMenu {
             Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? "circle" : "checkmark.circle") {

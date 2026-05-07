@@ -498,6 +498,8 @@ private struct ReaderPage: View {
     @State private var extractedBody: ArticleLoadState = .idle
     // Tracks whether the 3s auto-extract timeout has fired (shows fallback button)
     @State private var autoExtractTimedOut = false
+    // Reddit self-post body text fetched from the .json API
+    @State private var redditSelftext: String? = nil
 
     var body: some View {
         ScrollView {
@@ -529,6 +531,7 @@ private struct ReaderPage: View {
             commentsState = .idle
             extractedBody = .idle
             autoExtractTimedOut = false
+            redditSelftext = nil
         }
         .task(id: article?.id) {
             guard let article else { return }
@@ -577,46 +580,59 @@ private struct ReaderPage: View {
     @ViewBuilder
     private func aggregatorSection(_ article: Article) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            // External URL card
-            if let externalURL = article.externalURL {
-                externalURLCard(url: externalURL, article: article)
-            }
-
-            // Extracted body (after tapping "Load article")
-            switch extractedBody {
-            case .idle:
-                EmptyView()
-            case .loading:
-                HStack(spacing: 10) {
-                    ProgressView().controlSize(.small)
-                    Text("Fetching article…")
-                        .font(.system(size: 15))
-                        .foregroundStyle(SkimStyle.secondary)
-                }
-                .padding(.vertical, 4)
-            case .loaded(let text):
-                Text(text)
+            // Reddit self-post body (fetched from .json API)
+            if let selftext = redditSelftext {
+                Text(selftext)
                     .font(.system(size: 19, weight: .regular))
                     .lineSpacing(7)
                     .foregroundStyle(SkimStyle.text)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-            case .failed(let reason):
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Could not extract article.")
-                        .font(.system(size: 17, weight: .semibold))
+            }
+
+            // External URL card (link posts or non-self-post aggregator items)
+            if let externalURL = article.externalURL {
+                externalURLCard(url: externalURL, article: article)
+            }
+
+            // Extracted body (after tapping "Load article") — not shown for Reddit
+            if article.aggregatorKind != .reddit {
+                switch extractedBody {
+                case .idle:
+                    EmptyView()
+                case .loading:
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small)
+                        Text("Fetching article…")
+                            .font(.system(size: 15))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                    .padding(.vertical, 4)
+                case .loaded(let text):
+                    Text(text)
+                        .font(.system(size: 19, weight: .regular))
+                        .lineSpacing(7)
                         .foregroundStyle(SkimStyle.text)
-                    Text(reason)
-                        .font(.system(size: 14))
-                        .foregroundStyle(SkimStyle.secondary)
-                    Text("Swipe left for the web view.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(SkimStyle.secondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                case .failed(let reason):
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Could not extract article.")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(SkimStyle.text)
+                        Text(reason)
+                            .font(.system(size: 14))
+                            .foregroundStyle(SkimStyle.secondary)
+                        Text("Swipe left for the web view.")
+                            .font(.system(size: 14))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .skimGlass(cornerRadius: 16)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(16)
-                .skimGlass(cornerRadius: 16)
             }
 
             // Comments section
@@ -817,12 +833,30 @@ private struct ReaderPage: View {
     private func loadComments(for article: Article) async {
         commentsState = .loading
         let service = AggregatorService()
-        let fetched = await service.fetchComments(for: article, limit: 10)
-        comments = fetched
-        commentsState = fetched.isEmpty ? .failed("No comments returned.") : .loaded("")
+        // For Reddit self-posts, fetch the post body alongside comments
+        if article.aggregatorKind == .reddit {
+            async let selftextTask = service.fetchRedditSelftext(for: article)
+            async let commentsTask = service.fetchComments(for: article, limit: 10)
+            let (fetchedSelftext, fetched) = await (selftextTask, commentsTask)
+            redditSelftext = fetchedSelftext
+            comments = fetched
+            commentsState = fetched.isEmpty ? .failed("No comments returned.") : .loaded("")
+        } else {
+            let fetched = await service.fetchComments(for: article, limit: 10)
+            comments = fetched
+            commentsState = fetched.isEmpty ? .failed("No comments returned.") : .loaded("")
+        }
     }
 
     private func loadExternalArticle(url: URL) async {
+        // Reddit pages require auth/JS and will always yield garbage — never run the HTML
+        // extractor on them. The selftext path (via .json API) handles Reddit self-posts.
+        if let host = url.host?.lowercased(),
+           (host == "reddit.com" || host.hasSuffix(".reddit.com") || host == "redd.it") {
+            extractedBody = .failed("Reddit pages require the web view. Swipe left to open.")
+            return
+        }
+
         extractedBody = .loading
         do {
             var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
@@ -832,12 +866,14 @@ private struct ReaderPage: View {
                 extractedBody = .failed("Could not decode page.")
                 return
             }
-            let extracted = ArticleExtractor.extract(from: html, baseURL: url)
+            let extracted = try ArticleExtractor.extract(from: html, baseURL: url)
             if extracted.count < 200 {
                 extractedBody = .failed("Page content could not be extracted (anti-bot or paywall). Try the web view.")
             } else {
                 extractedBody = .loaded(extracted)
             }
+        } catch ArticleExtractor.Error.contentLooksLikeMarkup {
+            extractedBody = .failed("Page content could not be extracted (markup noise detected). Try the web view.")
         } catch {
             extractedBody = .failed(error.localizedDescription)
         }
@@ -859,13 +895,15 @@ private struct ReaderPage: View {
                 extractedBody = .failed("Could not decode page.")
                 return
             }
-            let extracted = ArticleExtractor.extract(from: html, baseURL: url)
+            let extracted = try ArticleExtractor.extract(from: html, baseURL: url)
             if extracted.count < 200 {
                 extractedBody = .failed("Page content could not be extracted (anti-bot or paywall). Try the web view.")
             } else {
                 ExtractedContentCache.shared.set(articleID, value: extracted)
                 extractedBody = .loaded(extracted)
             }
+        } catch ArticleExtractor.Error.contentLooksLikeMarkup {
+            extractedBody = .failed("Page content could not be extracted (markup noise detected). Try the web view.")
         } catch {
             extractedBody = .failed(error.localizedDescription)
         }

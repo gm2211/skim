@@ -55,8 +55,15 @@ public struct FeedRefreshService: Sendable {
             fetchedAt: Date(),
             folderID: feed.folderID
         )
-        let aggregatorKind = AggregatorDetector.kind(for: feedURL)
+        // Detect aggregator kind from the feed URL first; fall back to item URLs
+        // (some Reddit RSS variants omit the host in the feed URL but include it in item URLs).
+        let feedLevelKind = AggregatorDetector.kind(for: feedURL)
         let articles = parsed.articles.map { parsedArticle in
+            // Resolve per-article aggregator kind: prefer feed-level detection, then
+            // fall back to checking the item URL host so we catch old.reddit.com, etc.
+            let aggregatorKind: AggregatorKind? = feedLevelKind
+                ?? parsedArticle.url.flatMap { AggregatorDetector.kind(for: $0) }
+                ?? parsedArticle.commentsURL.flatMap { AggregatorDetector.kind(for: $0) }
             // For aggregator feeds, build the externalURL / commentsURL from what the parser captured.
             let (extURL, commentsURL) = AggregatorDetector.externalAndCommentsURL(
                 from: parsedArticle,

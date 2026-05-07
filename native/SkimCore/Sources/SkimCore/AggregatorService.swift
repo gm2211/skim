@@ -98,6 +98,40 @@ public struct AggregatorService: Sendable {
         return nil
     }
 
+    // MARK: - Reddit selftext
+
+    /// Fetches the selftext body of a Reddit self-post. Returns `nil` for link posts
+    /// (where selftext is empty) or when the request fails.
+    public func fetchRedditSelftext(for article: SkimCore.Article) async -> String? {
+        guard let commentsURL = article.commentsURL ?? article.url else { return nil }
+        guard var components = URLComponents(url: commentsURL, resolvingAgainstBaseURL: false) else { return nil }
+        var path = components.path
+        if path.hasSuffix("/") { path.removeLast() }
+        path += ".json"
+        components.path = path
+        components.queryItems = [URLQueryItem(name: "limit", value: "1")]
+        guard let jsonURL = components.url else { return nil }
+
+        do {
+            var request = URLRequest(url: jsonURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
+            request.setValue("ios:com.skimapp.skim:v1.0 (by /u/skim_reader)", forHTTPHeaderField: "User-Agent")
+            let (data, _) = try await session.data(for: request)
+            guard let root = try JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+                  let postListing = root.first,
+                  let listingData = postListing["data"] as? [String: Any],
+                  let children = listingData["children"] as? [[String: Any]],
+                  let postData = children.first?["data"] as? [String: Any],
+                  let selftext = postData["selftext"] as? String,
+                  !selftext.isEmpty,
+                  selftext != "[deleted]",
+                  selftext != "[removed]"
+            else { return nil }
+            return selftext.trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            return nil
+        }
+    }
+
     // MARK: - Reddit
 
     private func fetchRedditComments(article: SkimCore.Article, limit: Int) async -> [AggregatorComment] {

@@ -119,7 +119,8 @@ actor MLXRunner {
     }
 
     init() {
-        Self.cleanupAllPartialDownloads()
+        // Note: we no longer eagerly wipe .incomplete files on startup. The background
+        // URLSession preserves them so interrupted downloads can resume on next launch.
         Task { await self.installObservers() }
     }
 
@@ -344,9 +345,12 @@ actor MLXRunner {
         let sink = progressSink
         let config = ModelConfiguration(id: repoId)
         do {
-            MLXRunner.cleanupPartialDownloads(repoId: repoId)
+            // Use a background URLSession so the OS can continue (or restart) the download
+            // even when the app is suspended or killed. Incomplete shard files are preserved
+            // across launches so the Hub library can resume from where it left off.
+            let hub = HubApi(useBackgroundSession: true)
             _ = try await MLXLMCommon.downloadModel(
-                hub: HubApi(),
+                hub: hub,
                 configuration: config,
                 progressHandler: { progress in
                     sink?(progress.fractionCompleted)
@@ -366,10 +370,8 @@ actor MLXRunner {
             loadingRepoId = nil
             sink?(1.0)
         } catch let mlxErr as MLXError {
-            MLXRunner.cleanupPartialDownloads(repoId: repoId)
             throw mlxErr
         } catch {
-            MLXRunner.cleanupPartialDownloads(repoId: repoId)
             throw MLXError.downloadFailed("\(error)")
         }
     }

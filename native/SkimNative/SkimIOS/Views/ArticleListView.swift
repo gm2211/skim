@@ -2372,7 +2372,10 @@ private struct ArticleRow: View {
                 .frame(height: 1)
                 .padding(.leading, 64)
         }
-        .contextMenu {
+        // Providing an explicit preview forces iOS to composite the glass-blur backdrop
+        // synchronously on the first render frame, preventing the 1-2s lag where menu
+        // items appear unreadable against the article list content below.
+        .contextMenu(menuItems: {
             Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? "circle" : "checkmark.circle") {
                 Task { await model.setRead(article, isRead: !article.isRead) }
             }
@@ -2409,7 +2412,16 @@ private struct ArticleRow: View {
                     openURL(url)
                 }
             }
-        }
+        }, preview: {
+            Text(article.title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(SkimStyle.text)
+                .lineLimit(3)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .frame(maxWidth: 280, alignment: .leading)
+                .background(SkimStyle.chrome)
+        })
     }
 
     private var currentIndex: Int? {

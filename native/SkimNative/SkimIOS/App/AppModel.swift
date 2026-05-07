@@ -2,6 +2,40 @@ import Foundation
 import SkimCore
 import UniformTypeIdentifiers
 
+// MARK: - Extracted Content LRU Cache
+
+/// In-memory LRU cache for auto-extracted article bodies. Keyed by articleID.
+/// Max 50 entries; evicts least-recently-used on overflow. Not persisted across app restarts.
+final class ExtractedContentCache: @unchecked Sendable {
+    static let shared = ExtractedContentCache()
+
+    private let maxSize = 50
+    private var store: [String: String] = [:]
+    // Tracks insertion/access order; last element = most recently used
+    private var order: [String] = []
+    private let lock = NSLock()
+
+    func get(_ articleID: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        guard let value = store[articleID] else { return nil }
+        order.removeAll(where: { $0 == articleID })
+        order.append(articleID)
+        return value
+    }
+
+    func set(_ articleID: String, value: String) {
+        lock.lock(); defer { lock.unlock() }
+        if store[articleID] != nil {
+            order.removeAll(where: { $0 == articleID })
+        } else if store.count >= maxSize, let lru = order.first {
+            store.removeValue(forKey: lru)
+            order.removeFirst()
+        }
+        store[articleID] = value
+        order.append(articleID)
+    }
+}
+
 enum ArticleListMode: String, CaseIterable, Identifiable {
     case unread
     case all

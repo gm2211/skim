@@ -496,6 +496,8 @@ private struct ReaderPage: View {
     @State private var comments: [AggregatorComment] = []
     @State private var commentsState: ArticleLoadState = .idle
     @State private var extractedBody: ArticleLoadState = .idle
+    // Tracks whether the 3s auto-extract timeout has fired (shows fallback button)
+    @State private var autoExtractTimedOut = false
 
     var body: some View {
         ScrollView {
@@ -526,10 +528,15 @@ private struct ReaderPage: View {
             comments = []
             commentsState = .idle
             extractedBody = .idle
+            autoExtractTimedOut = false
         }
         .task(id: article?.id) {
-            guard let article, article.aggregatorKind != nil else { return }
-            await loadComments(for: article)
+            guard let article else { return }
+            if article.aggregatorKind != nil {
+                await loadComments(for: article)
+            } else {
+                await autoExtractIfNeeded(article: article)
+            }
         }
     }
 
@@ -704,29 +711,105 @@ private struct ReaderPage: View {
 
     @ViewBuilder
     private func articleBody(_ article: Article) -> some View {
-        let body = article.displayBody
+        let rssFeedBody = article.displayBody
 
-        if body.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Reader text is not available for this article.")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(SkimStyle.text)
-                Text("Swipe left for the web view.")
-                    .font(.system(size: 17))
-                    .foregroundStyle(SkimStyle.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20)
-            .skimGlass(cornerRadius: 20)
-        } else {
-            Text(body)
+        // Determine the body to display:
+        // 1. Use a cached extracted body if one exists.
+        // 2. Use the RSS body if it meets the threshold and isn't boilerplate.
+        // 3. Otherwise, show state based on auto-extract progress.
+        if case .loaded(let text) = extractedBody {
+            Text(text)
                 .font(.system(size: 19, weight: .regular))
                 .lineSpacing(7)
                 .foregroundStyle(SkimStyle.text)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        } else if article.isSufficientRSSBody {
+            Text(rssFeedBody)
+                .font(.system(size: 19, weight: .regular))
+                .lineSpacing(7)
+                .foregroundStyle(SkimStyle.text)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            // RSS body is thin — show auto-extract UI states
+            switch extractedBody {
+            case .idle:
+                // Haven't started yet (or waiting for task to kick off)
+                ProgressView()
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, minHeight: 100)
+            case .loading:
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 12) {
+                        ProgressView().controlSize(.regular)
+                        Text("Loading article…")
+                            .font(.system(size: 17))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    // Show fallback button after 3s timeout so the user isn't stuck
+                    if autoExtractTimedOut, let url = article.url {
+                        readerFallbackCard(url: url, article: article)
+                    }
+                }
+            case .loaded:
+                // Handled above — shouldn't reach here
+                EmptyView()
+            case .failed:
+                if let url = article.url {
+                    readerFallbackCard(url: url, article: article)
+                } else {
+                    noReaderTextCard
+                }
+            }
         }
+    }
+
+    @ViewBuilder
+    private func readerFallbackCard(url: URL, article: Article) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Reader text not available.")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(SkimStyle.text)
+
+            Button {
+                Task { await loadArticleForReader(url: url, articleID: article.id) }
+            } label: {
+                Label("Load Article", systemImage: "arrow.down.doc")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .foregroundStyle(.white)
+                    .background(SkimStyle.accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            Text("Swipe left for web view.")
+                .font(.system(size: 14))
+                .foregroundStyle(SkimStyle.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .skimGlass(cornerRadius: 20)
+    }
+
+    @ViewBuilder
+    private var noReaderTextCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Reader text is not available for this article.")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(SkimStyle.text)
+            Text("Swipe left for the web view.")
+                .font(.system(size: 17))
+                .foregroundStyle(SkimStyle.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .skimGlass(cornerRadius: 20)
     }
 
     // MARK: - Async actions
@@ -758,6 +841,66 @@ private struct ReaderPage: View {
         } catch {
             extractedBody = .failed(error.localizedDescription)
         }
+    }
+
+    /// Fetch and extract the article body for the reader pane (non-aggregator articles).
+    /// Writes result to the shared ExtractedContentCache so it survives navigation back/forward.
+    private func loadArticleForReader(url: URL, articleID: String) async {
+        extractedBody = .loading
+        autoExtractTimedOut = false
+        do {
+            var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+            request.setValue(
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+                forHTTPHeaderField: "User-Agent"
+            )
+            let (data, _) = try await URLSession.shared.data(for: request)
+            guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
+                extractedBody = .failed("Could not decode page.")
+                return
+            }
+            let extracted = ArticleExtractor.extract(from: html, baseURL: url)
+            if extracted.count < 200 {
+                extractedBody = .failed("Page content could not be extracted (anti-bot or paywall). Try the web view.")
+            } else {
+                ExtractedContentCache.shared.set(articleID, value: extracted)
+                extractedBody = .loaded(extracted)
+            }
+        } catch {
+            extractedBody = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Triggered on `.task` for non-aggregator articles. If the RSS body is too thin,
+    /// auto-extracts the article URL. Checks the LRU cache first to avoid redundant fetches.
+    private func autoExtractIfNeeded(article: Article) async {
+        // Already sufficient RSS content — nothing to do
+        guard !article.isSufficientRSSBody else { return }
+
+        // Check LRU cache first
+        if let cached = ExtractedContentCache.shared.get(article.id) {
+            extractedBody = .loaded(cached)
+            return
+        }
+
+        guard let url = article.url else {
+            // No URL to extract from — show static unavailable card
+            extractedBody = .failed("No article URL available.")
+            return
+        }
+
+        // Start auto-extraction
+        extractedBody = .loading
+
+        // Race auto-extract against a 3s timeout; if extraction takes longer,
+        // reveal the manual "Load Article" fallback button while still waiting.
+        let timeoutTask = Task {
+            try await Task.sleep(nanoseconds: 3_000_000_000)
+            autoExtractTimedOut = true
+        }
+
+        await loadArticleForReader(url: url, articleID: article.id)
+        timeoutTask.cancel()
     }
 }
 
@@ -876,6 +1019,13 @@ private extension Article {
             .unescapingLiteralEscapes
             .removingReaderBoilerplate
     }
+
+    /// True if the RSS-provided body is long enough and not boilerplate to use directly,
+    /// so we skip auto-extraction. Threshold: 200 chars after stripping boilerplate.
+    var isSufficientRSSBody: Bool {
+        let body = displayBody
+        return body.count >= 200 && !body.isRSSBoilerplate
+    }
 }
 
 private extension String {
@@ -898,5 +1048,31 @@ private extension String {
         }
 
         return self
+    }
+
+    /// Returns true if this string looks like a stub/teaser rather than real article body.
+    /// Used to decide whether to auto-extract even when char count >= threshold.
+    var isRSSBoilerplate: Bool {
+        let normalized = trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .lowercased()
+
+        // Common feed stub patterns
+        let stubPatterns: [String] = [
+            #"^the post .{0,80} appeared first on"#,       // syndication footers
+            #"click (here )?to (read|view|continue)"#,     // "Click here to read more"
+            #"read (the )?(full|more|rest|complete)"#,      // "Read the full article"
+            #"continue reading"#,
+            #"this is a summary"#,
+            #"view full (article|post|story)"#,
+            #"^<p>\s*</p>$"#,                              // bare empty paragraph
+        ]
+
+        for pattern in stubPatterns {
+            if normalized.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil {
+                return true
+            }
+        }
+        return false
     }
 }

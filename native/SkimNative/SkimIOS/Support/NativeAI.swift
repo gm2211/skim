@@ -1122,15 +1122,24 @@ private struct PrettyAIText: View {
 
 struct AIChatSheet: View {
     var request: AIChatRequest
-    /// When non-nil and the conversation starts empty, this text is seeded as the
-    /// first assistant message so the user can immediately ask follow-up questions.
-    var initialAssistantMessage: String? = nil
     @Environment(\.dismiss) private var dismiss
-    @State private var messages: [AIChatMessage] = []
+    @State private var messages: [AIChatMessage]
     @State private var input = ""
     @State private var isSending = false
     @FocusState private var focused: Bool
     private let bottomAnchorID = "chat-bottom-anchor"
+
+    /// Initialise the sheet, optionally seeding the first assistant message.
+    /// Seeding at init time (via `_messages`) guarantees the message is present
+    /// on the very first render — no `.onAppear` race, no SwiftUI state reset window.
+    init(request: AIChatRequest, initialAssistantMessage: String? = nil) {
+        self.request = request
+        if let seed = initialAssistantMessage {
+            _messages = State(initialValue: [AIChatMessage(role: .assistant, text: seed)])
+        } else {
+            _messages = State(initialValue: [])
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -1211,9 +1220,6 @@ struct AIChatSheet: View {
                 }
             }
             .onAppear {
-                if let seed = initialAssistantMessage, messages.isEmpty {
-                    messages.append(AIChatMessage(role: .assistant, text: seed))
-                }
                 focused = true
             }
         }

@@ -532,7 +532,7 @@ struct ArticleListView: View {
             } label: {
                 Label("Unread", systemImage: "checkmark.circle.fill")
                     .labelStyle(.iconOnly)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 17, weight: .medium))
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
@@ -547,7 +547,7 @@ struct ArticleListView: View {
                     } label: {
                         Label(mode.title, systemImage: mode.systemImage)
                             .labelStyle(.iconOnly)
-                            .font(.system(size: 20, weight: .medium))
+                            .font(.system(size: 17, weight: .medium))
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.plain)
@@ -563,16 +563,16 @@ struct ArticleListView: View {
             } label: {
                 Label("Search", systemImage: "magnifyingglass")
                     .labelStyle(.iconOnly)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 17, weight: .medium))
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
             .foregroundStyle(showSearch || !model.searchQuery.isEmpty ? SkimStyle.accent : SkimStyle.secondary)
         }
         .padding(.horizontal, 24)
-        .frame(height: 44)
-        .offset(y: bottomSafeAreaInset / 2)
-        .frame(height: 44 + bottomSafeAreaInset, alignment: .top)
+        .frame(height: 32)
+        .offset(y: bottomSafeAreaInset * 0.25)
+        .frame(height: 32 + bottomSafeAreaInset, alignment: .top)
         .frame(maxWidth: .infinity)
         .background(
             SkimStyle.chrome.opacity(0.96)
@@ -2273,20 +2273,12 @@ private struct ArticleRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // Icon column with polished unread indicator: 8pt filled circle,
-            // vertically centered against the 30pt icon (y: 11 = 15 center − 4 half-dot).
-            ZStack(alignment: .topLeading) {
+            // Icon column — read/unread state is conveyed by title text color, not a dot.
+            Group {
                 if let feed {
                     FeedIcon(feed: feed, size: 30)
                 } else {
                     ArticleSourceIcon(article: article)
-                }
-
-                if !article.isRead {
-                    Circle()
-                        .fill(SkimStyle.accent)
-                        .frame(width: 8, height: 8)
-                        .offset(x: -10, y: 11)
                 }
             }
             .padding(.top, 20)

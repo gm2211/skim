@@ -5,17 +5,27 @@ import Foundation
 ///
 /// Strategy (in order):
 /// 1. Strip `<script>` / `<style>` / `<nav>` / `<header>` / `<footer>` blocks.
-/// 2. Look for common article body containers: `<article>`, `<main>`,
+/// 2. Strip noisy HTML attribute values (class, style, data-*, aria-*) so they
+///    don't leak into the extracted text.
+/// 3. Look for common article body containers: `<article>`, `<main>`,
 ///    `[role="main"]`, `#content`, `.article-body`, `.post-body`, etc.
-/// 3. Strip remaining HTML tags and decode entities.
-/// 4. Collapse whitespace.
+/// 4. Strip remaining HTML tags and decode entities.
+/// 5. Collapse whitespace.
+/// 6. Reject the result if it looks like raw markup / Tailwind CSS fragments.
 ///
-/// This is a best-effort extractor — if the result is too short the caller
-/// should fall back to a web view.
+/// This is a best-effort extractor — if the result is too short or looks like
+/// markup junk the caller should fall back to a web view.
 enum ArticleExtractor {
 
+    enum Error: Swift.Error {
+        /// Extracted text contains enough markup-like noise that it is unusable.
+        case contentLooksLikeMarkup
+    }
+
     /// Extract the main article body from HTML. Returns plain text.
-    static func extract(from html: String, baseURL: URL) -> String {
+    /// - Throws: `ArticleExtractor.Error.contentLooksLikeMarkup` when the result
+    ///   appears to contain CSS fragments or other markup noise.
+    static func extract(from html: String, baseURL: URL) throws -> String {
         var work = html
 
         // 1. Remove script/style/nav/header/footer blocks entirely
@@ -23,21 +33,82 @@ enum ArticleExtractor {
             work = removeBlockTags(tag, from: work)
         }
 
-        // 2. Try to isolate the article body container
+        // 2. Strip noisy attribute values BEFORE tag-stripping so they don't
+        //    bleed into the plain-text output. Target: class, style, data-*, aria-*.
+        work = stripNoisyAttributes(from: work)
+
+        // 3. Try to isolate the article body container
         if let candidate = extractContainer(from: work), candidate.count > 200 {
             work = candidate
         }
 
-        // 3. Strip tags → plain text, decode entities
+        // 4. Strip tags → plain text, decode entities
         let plain = work
             .strippingHTMLTags()
             .decodingBasicHTMLEntities()
             .collapsingWhitespace()
 
+        // 5. Garbage detector — reject Tailwind / CSS fragment leakage
+        if looksLikeMarkup(plain) {
+            throw Error.contentLooksLikeMarkup
+        }
+
         return plain
     }
 
+    // MARK: - Garbage detector
+
+    /// Returns true when extracted text contains too many markup/CSS noise signals.
+    static func looksLikeMarkup(_ text: String) -> Bool {
+        guard !text.isEmpty else { return false }
+
+        // Pattern 1: Tailwind-style CSS selectors / responsive utilities
+        let tailwindPattern = #"\[&>:[^\]]*\]|(?:\]:(?:h-full|w-full|mb-|max-h-|overflow-))|&gt;:"#
+        if let regex = try? NSRegularExpression(pattern: tailwindPattern, options: []),
+           regex.firstMatch(in: text, range: NSRange(text.startIndex..<text.endIndex, in: text)) != nil {
+            return true
+        }
+
+        // Pattern 2: High ratio of markup/CSS noise characters ([ { &)
+        let total = text.unicodeScalars.count
+        guard total > 0 else { return false }
+        let noiseCount = text.unicodeScalars.filter { $0 == "[" || $0 == "{" || $0 == "&" }.count
+        let noiseRatio = Double(noiseCount) / Double(total)
+        if noiseRatio > 0.05 {
+            return true
+        }
+
+        return false
+    }
+
     // MARK: - Helpers
+
+    /// Removes attribute values for class, style, data-*, and aria-* attributes
+    /// from the raw HTML so they can't bleed into the extracted text.
+    private static func stripNoisyAttributes(from html: String) -> String {
+        var result = html
+        // Patterns: class="...", style="...", data-foo="...", aria-bar="..."
+        // We blank the value (keep the attribute name so tag structure stays valid)
+        let attributePatterns: [String] = [
+            #"\bclass\s*=\s*"[^"]*""#,
+            #"\bclass\s*=\s*'[^']*'"#,
+            #"\bstyle\s*=\s*"[^"]*""#,
+            #"\bstyle\s*=\s*'[^']*'"#,
+            #"\bdata-[^=\s>]+\s*=\s*"[^"]*""#,
+            #"\bdata-[^=\s>]+\s*=\s*'[^']*'"#,
+            #"\baria-[^=\s>]+\s*=\s*"[^"]*""#,
+            #"\baria-[^=\s>]+\s*=\s*'[^']*'"#,
+        ]
+        for pattern in attributePatterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { continue }
+            result = regex.stringByReplacingMatches(
+                in: result,
+                range: NSRange(result.startIndex..<result.endIndex, in: result),
+                withTemplate: ""
+            )
+        }
+        return result
+    }
 
     private static func removeBlockTags(_ tag: String, from html: String) -> String {
         let pattern = "(?is)<\(tag)\\b[^>]*>.*?</\(tag)>"

@@ -1134,6 +1134,8 @@ private struct AutoGroupSheet: View {
     @State private var aiMessage: String?
     @State private var didRunAI = false
     @State private var usedFallback = false
+    @State private var draggingFeedID: String?
+    @State private var dropTargetProposalID: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -1213,7 +1215,18 @@ private struct AutoGroupSheet: View {
                         ForEach($proposals) { $proposal in
                             AutoGroupProposalRow(
                                 proposal: $proposal,
-                                nameStyle: nameStyle
+                                nameStyle: nameStyle,
+                                draggingFeedID: $draggingFeedID,
+                                isDropTarget: dropTargetProposalID == proposal.id
+                            )
+                            .onDrop(
+                                of: ["public.plain-text"],
+                                delegate: FeedDropDelegate(
+                                    targetProposalID: proposal.id,
+                                    proposals: $proposals,
+                                    draggingFeedID: $draggingFeedID,
+                                    dropTargetProposalID: $dropTargetProposalID
+                                )
                             )
                         }
                     }
@@ -1393,6 +1406,8 @@ private struct AutoGroupSheet: View {
 private struct AutoGroupProposalRow: View {
     @Binding var proposal: AutoGroupProposal
     var nameStyle: AutoGroupNameStyle
+    @Binding var draggingFeedID: String?
+    var isDropTarget: Bool
 
     private var editingName: Binding<String> {
         Binding(
@@ -1403,6 +1418,7 @@ private struct AutoGroupProposalRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
+            // Folder header row
             HStack(spacing: 10) {
                 Image(systemName: "folder")
                     .font(.system(size: 15, weight: .semibold))
@@ -1421,19 +1437,106 @@ private struct AutoGroupProposalRow: View {
                     .foregroundStyle(SkimStyle.secondary)
             }
 
-            Text(proposal.feeds.map(\.title).joined(separator: ", "))
-                .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(SkimStyle.secondary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            // Per-feed rows with drag handles
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(proposal.feeds, id: \.id) { feed in
+                    let isDraggingThis = draggingFeedID == feed.id
+                    HStack(spacing: 8) {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary.opacity(0.6))
+                            .frame(width: 22)
+
+                        Text(feed.title)
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(isDraggingThis ? SkimStyle.secondary.opacity(0.4) : SkimStyle.secondary)
+                            .lineLimit(1)
+
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                    .opacity(isDraggingThis ? 0.4 : 1.0)
+                    .onDrag {
+                        draggingFeedID = feed.id
+                        return NSItemProvider(object: feed.id as NSString)
+                    }
+                }
+            }
+            .padding(.leading, 4)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .background(SkimStyle.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+        .background(
+            isDropTarget
+                ? SkimStyle.accent.opacity(0.10)
+                : SkimStyle.surface.opacity(0.72),
+            in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+        )
         .overlay {
             RoundedRectangle(cornerRadius: 15, style: .continuous)
-                .stroke(SkimStyle.separator, lineWidth: 1)
+                .stroke(
+                    isDropTarget ? SkimStyle.accent.opacity(0.6) : SkimStyle.separator,
+                    lineWidth: isDropTarget ? 1.5 : 1
+                )
         }
+        .animation(.easeInOut(duration: 0.15), value: isDropTarget)
+    }
+}
+
+private struct FeedDropDelegate: DropDelegate {
+    let targetProposalID: String
+    @Binding var proposals: [AutoGroupProposal]
+    @Binding var draggingFeedID: String?
+    @Binding var dropTargetProposalID: String?
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: ["public.plain-text"])
+    }
+
+    func dropEntered(info: DropInfo) {
+        dropTargetProposalID = targetProposalID
+    }
+
+    func dropExited(info: DropInfo) {
+        if dropTargetProposalID == targetProposalID {
+            dropTargetProposalID = nil
+        }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dropTargetProposalID = nil
+        guard let item = info.itemProviders(for: ["public.plain-text"]).first else { return false }
+
+        item.loadItem(forTypeIdentifier: "public.plain-text", options: nil) { data, _ in
+            guard
+                let data = data as? Data,
+                let feedID = String(data: data, encoding: .utf8)
+            else { return }
+
+            DispatchQueue.main.async {
+                // Find which source proposal contains this feed
+                guard
+                    let sourceIdx = proposals.firstIndex(where: { $0.feeds.contains(where: { $0.id == feedID }) }),
+                    let targetIdx = proposals.firstIndex(where: { $0.id == targetProposalID }),
+                    sourceIdx != targetIdx,
+                    let feed = proposals[sourceIdx].feeds.first(where: { $0.id == feedID })
+                else {
+                    draggingFeedID = nil
+                    return
+                }
+
+                withAnimation(.smooth(duration: 0.22)) {
+                    proposals[sourceIdx].feeds.removeAll { $0.id == feedID }
+                    proposals[targetIdx].feeds.append(feed)
+                    // Remove empty source folder
+                    if proposals[sourceIdx].feeds.isEmpty {
+                        proposals.remove(at: sourceIdx)
+                    }
+                }
+                draggingFeedID = nil
+            }
+        }
+        return true
     }
 }
 

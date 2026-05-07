@@ -1446,6 +1446,15 @@ private enum AutoGroupClassifier {
         let uniqueFeeds = deduplicate(feeds)
         guard !uniqueFeeds.isEmpty else { return [] }
 
+        // FM guided-generation fast path — schema-constrained output, bypasses JSON repair.
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
+            let proposals = try await FoundationModelFeedOrganizer.proposals(for: uniqueFeeds)
+            try validate(proposals: proposals, feedCount: uniqueFeeds.count)
+            return proposals
+        }
+#endif
+
         do {
             let proposals = try await requestProposals(for: uniqueFeeds, settings: settings, correctiveNote: nil)
             try validate(proposals: proposals, feedCount: uniqueFeeds.count)
@@ -1877,6 +1886,9 @@ private extension String {
 #if canImport(FoundationModels)
 @available(iOS 26.0, *)
 private enum FoundationModelFeedOrganizer {
+    /// Groups feeds using Foundation Models `@Generable` guided generation.
+    /// Bypasses JSON parsing and the `repairTriageJSON` path entirely — the schema
+    /// guarantees well-formed output.
     static func proposals(for feeds: [Feed]) async throws -> [AutoGroupProposal] {
         guard !feeds.isEmpty else { return [] }
 
@@ -1891,23 +1903,23 @@ private enum FoundationModelFeedOrganizer {
         let session = LanguageModelSession(
             model: model,
             instructions: """
-            You group RSS feeds into topical folders. Output JSON only.
-            Each feed must appear in exactly one folder. Use 4-8 folders when possible.
-            Use short folder names of 2-4 words. Refer to feeds only by numeric handle.
+            You group RSS feeds into topical folders.
+            Each feed must appear in exactly one folder. Use 4–8 folders when possible.
+            Use short folder names of 2–4 words. Refer to each feed only by its zero-based numeric handle.
             """
         )
 
-        let maxTokens = max(512, feeds.count * 4 + 160)
+        let maxTokens = max(512, feeds.count * 6 + 160)
         let response = try await session.respond(
             to: prompt(for: feeds),
+            generating: NativeAI.FMAutoGroupProposal.self,
             options: GenerationOptions(
                 sampling: .greedy,
-                temperature: 0.1,
                 maximumResponseTokens: maxTokens
             )
         )
 
-        return try decodeProposals(from: response.content, feeds: feeds)
+        return try buildProposals(from: response.content, feeds: feeds)
     }
 
     private static func prompt(for feeds: [Feed]) -> String {
@@ -1915,8 +1927,8 @@ private enum FoundationModelFeedOrganizer {
         Feeds, one per line as handle TAB title TAB site:
         \(listing(for: feeds))
 
-        Return exactly this JSON shape:
-        {"folders":[{"name":"Distributed Systems","feeds":[0,3,7]}]}
+        Group every feed into 4–8 topical folders. Each feed must appear exactly once.
+        Use the zero-based numeric handle to reference feeds.
         """
     }
 
@@ -1930,31 +1942,22 @@ private enum FoundationModelFeedOrganizer {
             .joined(separator: "\n")
     }
 
-    private static func decodeProposals(from content: String, feeds: [Feed]) throws -> [AutoGroupProposal] {
-        let json = extractJSONObject(from: content)
-        guard let data = json.data(using: .utf8) else {
-            throw AutoGroupAIError.invalidResponse("AI returned unreadable JSON.")
-        }
-
-        let decoded: AutoGroupAIResponse
-        do {
-            decoded = try JSONDecoder().decode(AutoGroupAIResponse.self, from: data)
-        } catch {
-            throw AutoGroupAIError.invalidResponse("Could not parse AI folder JSON.")
-        }
-
-        let lookup = FeedReferenceLookup(feeds: feeds)
+    /// Convert the `@Generable` FM output into `AutoGroupProposal` values.
+    /// Uses zero-based `feedIndices` directly — no string parsing required.
+    private static func buildProposals(
+        from fmProposal: NativeAI.FMAutoGroupProposal,
+        feeds: [Feed]
+    ) throws -> [AutoGroupProposal] {
         var seenFeedIDs: Set<String> = []
-        let proposals = decoded.folders.compactMap { folder -> AutoGroupProposal? in
-            let selectedFeeds = folder.feeds.compactMap { reference -> Feed? in
-                guard let feed = lookup.feed(for: reference) else { return nil }
+        let proposals = fmProposal.folders.compactMap { folder -> AutoGroupProposal? in
+            let selectedFeeds = folder.feedIndices.compactMap { index -> Feed? in
+                guard feeds.indices.contains(index) else { return nil }
+                let feed = feeds[index]
                 guard seenFeedIDs.insert(feed.id).inserted else { return nil }
                 return feed
             }
-
             let name = folder.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty, !selectedFeeds.isEmpty else { return nil }
-
             return AutoGroupProposal(
                 baseName: name,
                 feeds: selectedFeeds.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
@@ -1962,21 +1965,10 @@ private enum FoundationModelFeedOrganizer {
         }
 
         if proposals.isEmpty {
-            throw AutoGroupAIError.invalidResponse("AI did not return any usable folders.")
+            throw AutoGroupAIError.invalidResponse("Foundation Models returned no usable folder proposals.")
         }
 
         return proposals
-    }
-
-    private static func extractJSONObject(from content: String) -> String {
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let start = trimmed.firstIndex(of: "{"),
-              let end = trimmed.lastIndex(of: "}"),
-              start <= end
-        else {
-            return trimmed
-        }
-        return String(trimmed[start...end])
     }
 
     private static func reasonDescription(_ reason: SystemLanguageModel.Availability.UnavailableReason) -> String {

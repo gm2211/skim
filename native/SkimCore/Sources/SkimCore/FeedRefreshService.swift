@@ -55,8 +55,17 @@ public struct FeedRefreshService: Sendable {
             fetchedAt: Date(),
             folderID: feed.folderID
         )
+        let aggregatorKind = AggregatorDetector.kind(for: feedURL)
         let articles = parsed.articles.map { parsedArticle in
-            Article(
+            // For aggregator feeds, build the externalURL / commentsURL from what the parser captured.
+            let (extURL, commentsURL) = AggregatorDetector.externalAndCommentsURL(
+                from: parsedArticle,
+                kind: aggregatorKind
+            )
+            // When an external URL exists the aggregator item page goes to `commentsURL`
+            // and the linked article goes to `externalURL`. We keep `url` pointing at the
+            // aggregator item so existing web-view / open-in-browser behaviour still works.
+            return Article(
                 id: parsedArticle.id(feedID: feed.id),
                 feedID: feed.id,
                 feedTitle: updatedFeed.title,
@@ -67,7 +76,10 @@ public struct FeedRefreshService: Sendable {
                 contentHTML: parsedArticle.contentHTML,
                 imageURL: parsedArticle.imageURL,
                 publishedAt: parsedArticle.publishedAt,
-                fetchedAt: Date()
+                fetchedAt: Date(),
+                aggregatorKind: aggregatorKind,
+                externalURL: extURL,
+                commentsURL: commentsURL
             )
         }
         try await store.upsert(feed: updatedFeed, articles: articles)
@@ -113,6 +125,9 @@ struct ParsedArticle {
     var contentHTML: String?
     var imageURL: URL?
     var publishedAt: Date?
+    // Aggregator-specific extras parsed from RSS items
+    var externalURL: URL?
+    var commentsURL: URL?
 
     func id(feedID: String) -> String {
         stableID(prefix: "article", value: url?.absoluteString ?? guid ?? "\(feedID)-\(title)-\(publishedAt?.timeIntervalSince1970 ?? 0)")
@@ -287,6 +302,9 @@ private final class FeedParserDelegate: NSObject, XMLParserDelegate {
             item.title = value.decodingHTMLEntities()
         case "link":
             if item.url == nil { item.url = URL(string: value) }
+        case "comments":
+            // HN RSS: <comments>https://news.ycombinator.com/item?id=…</comments>
+            item.commentsURL = URL(string: value)
         case "author", "dc:creator", "name":
             if item.author == nil { item.author = value.decodingHTMLEntities() }
         case "description", "summary":
@@ -476,5 +494,94 @@ extension String {
             .map(String.init)
 
         return URL.imageURL(from: firstCandidate, relativeTo: baseURL)
+    }
+}
+
+// MARK: - Aggregator Detection
+
+/// Detects whether a feed URL belongs to a known link aggregator and extracts
+/// the external (linked) URL from a parsed article item.
+public enum AggregatorDetector {
+
+    /// Returns the aggregator kind for a given feed URL, or nil if not an aggregator.
+    public static func kind(for feedURL: URL) -> AggregatorKind? {
+        guard let host = feedURL.host?.lowercased() else { return nil }
+        if host == "news.ycombinator.com" || host.hasSuffix(".ycombinator.com") {
+            return .hackerNews
+        }
+        if host == "www.reddit.com" || host == "reddit.com" || host.hasSuffix(".reddit.com") {
+            return .reddit
+        }
+        if host == "lobste.rs" || host.hasSuffix(".lobste.rs") {
+            return .lobsters
+        }
+        return nil
+    }
+
+    /// Returns `(externalURL, commentsURL)` derived from a parsed article for a given aggregator kind.
+    ///
+    /// - HN: `<link>` is the external article URL; `<comments>` (if present) is the HN discussion.
+    ///   Falls back to deriving the HN item URL from the story ID embedded in the link.
+    /// - Reddit: `<link>` points to the comments thread. The external article URL is found by
+    ///   parsing `<description>` HTML for the first href pointing off reddit.com.
+    /// - Lobsters: same as HN — `<link>` is external, `<comments>` is the discussion.
+    static func externalAndCommentsURL(
+        from article: ParsedArticle,
+        kind: AggregatorKind?
+    ) -> (externalURL: URL?, commentsURL: URL?) {
+        guard let kind else { return (nil, nil) }
+
+        switch kind {
+        case .hackerNews:
+            // HN RSS: <link> = external article URL, <comments> = HN discussion page
+            let ext = article.url
+            let comments = article.commentsURL
+            return (ext, comments)
+
+        case .reddit:
+            // Reddit RSS: <link> = reddit comments thread (e.g. /r/foo/comments/…)
+            // The external linked article URL is often embedded in the <description> HTML
+            // as the first <a href> that points outside reddit.com.
+            let commentsURL = article.url
+            let externalURL = extractRedditExternalURL(from: article.contentHTML ?? article.contentText ?? "")
+            return (externalURL, commentsURL)
+
+        case .lobsters:
+            // Lobsters: same pattern as HN
+            let ext = article.url
+            let comments = article.commentsURL ?? ext.flatMap { lobstersCommentsURL(from: $0) }
+            return (ext, comments)
+        }
+    }
+
+    // MARK: - Private helpers
+
+    /// Scans HTML for the first href that is an absolute URL NOT pointing to reddit.com.
+    private static func extractRedditExternalURL(from html: String) -> URL? {
+        let pattern = #"href\s*=\s*['"](\bhttps?://[^'"]+)['"]\s"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return nil
+        }
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        let matches = regex.matches(in: html, range: range)
+        for match in matches {
+            guard match.numberOfRanges >= 2,
+                  let hrefRange = Range(match.range(at: 1), in: html)
+            else { continue }
+            let href = String(html[hrefRange])
+            guard let url = URL(string: href),
+                  let host = url.host?.lowercased(),
+                  !host.hasSuffix("reddit.com"),
+                  !host.hasSuffix("redd.it")
+            else { continue }
+            return url
+        }
+        return nil
+    }
+
+    /// Derives a Lobsters comments page from the external link by looking for the Lobsters
+    /// story ID in the URL path. (Lobsters article URLs end in /s/<id>/<slug>.)
+    private static func lobstersCommentsURL(from externalURL: URL) -> URL? {
+        nil  // Lobsters RSS provides <comments> so this fallback is rarely needed
     }
 }

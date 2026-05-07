@@ -482,9 +482,20 @@ private extension ArticleDetailView {
     }
 }
 
+private enum ArticleLoadState {
+    case idle
+    case loading
+    case loaded(String)
+    case failed(String)
+}
+
 private struct ReaderPage: View {
     var article: Article?
     var isLoading: Bool
+
+    @State private var comments: [AggregatorComment] = []
+    @State private var commentsState: ArticleLoadState = .idle
+    @State private var extractedBody: ArticleLoadState = .idle
 
     var body: some View {
         ScrollView {
@@ -495,7 +506,11 @@ private struct ReaderPage: View {
                         .frame(maxWidth: .infinity, minHeight: 260)
                 } else if let article {
                     articleHeader(article)
-                    articleBody(article)
+                    if article.aggregatorKind != nil {
+                        aggregatorSection(article)
+                    } else {
+                        articleBody(article)
+                    }
                 } else {
                     ContentUnavailableView("Article not found", systemImage: "doc.text.magnifyingglass")
                         .foregroundStyle(SkimStyle.text)
@@ -507,7 +522,18 @@ private struct ReaderPage: View {
             .padding(.bottom, 56)
         }
         .scrollIndicators(.visible)
+        .onChange(of: article?.id) { _, _ in
+            comments = []
+            commentsState = .idle
+            extractedBody = .idle
+        }
+        .task(id: article?.id) {
+            guard let article, article.aggregatorKind != nil else { return }
+            await loadComments(for: article)
+        }
     }
+
+    // MARK: - Header
 
     private func articleHeader(_ article: Article) -> some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -539,6 +565,143 @@ private struct ReaderPage: View {
         }
     }
 
+    // MARK: - Aggregator section
+
+    @ViewBuilder
+    private func aggregatorSection(_ article: Article) -> some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // External URL card
+            if let externalURL = article.externalURL {
+                externalURLCard(url: externalURL, article: article)
+            }
+
+            // Extracted body (after tapping "Load article")
+            switch extractedBody {
+            case .idle:
+                EmptyView()
+            case .loading:
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Fetching article…")
+                        .font(.system(size: 15))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+                .padding(.vertical, 4)
+            case .loaded(let text):
+                Text(text)
+                    .font(.system(size: 19, weight: .regular))
+                    .lineSpacing(7)
+                    .foregroundStyle(SkimStyle.text)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            case .failed(let reason):
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Could not extract article.")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(SkimStyle.text)
+                    Text(reason)
+                        .font(.system(size: 14))
+                        .foregroundStyle(SkimStyle.secondary)
+                    Text("Swipe left for the web view.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .skimGlass(cornerRadius: 16)
+            }
+
+            // Comments section
+            commentsSection
+        }
+    }
+
+    @ViewBuilder
+    private func externalURLCard(url: URL, article: Article) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Linked article card
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    Image(systemName: "link")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(SkimStyle.accent)
+                    Text(url.host(percentEncoded: false) ?? url.absoluteString)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(SkimStyle.accent)
+                        .lineLimit(1)
+                }
+                Text(url.absoluteString)
+                    .font(.system(size: 12))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(SkimStyle.separator, lineWidth: 1)
+            }
+
+            // Load article button (only when not already loaded or loading)
+            if case .idle = extractedBody {
+                Button {
+                    Task { await loadExternalArticle(url: url) }
+                } label: {
+                    Label("Load Article", systemImage: "arrow.down.doc")
+                        .font(.system(size: 17, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .foregroundStyle(.white)
+                        .background(SkimStyle.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var commentsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Comments")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(SkimStyle.secondary)
+                .textCase(.uppercase)
+                .tracking(1.2)
+
+            switch commentsState {
+            case .idle:
+                EmptyView()
+            case .loading:
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Loading comments…")
+                        .font(.system(size: 15))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+            case .failed:
+                Text("Comments unavailable.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(SkimStyle.secondary)
+            case .loaded:
+                if comments.isEmpty {
+                    Text("No comments yet.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(SkimStyle.secondary)
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 14) {
+                        ForEach(comments) { comment in
+                            CommentRow(comment: comment)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Standard body
+
     @ViewBuilder
     private func articleBody(_ article: Article) -> some View {
         let body = article.displayBody
@@ -563,6 +726,73 @@ private struct ReaderPage: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    // MARK: - Async actions
+
+    private func loadComments(for article: Article) async {
+        commentsState = .loading
+        let service = AggregatorService()
+        let fetched = await service.fetchComments(for: article, limit: 10)
+        comments = fetched
+        commentsState = fetched.isEmpty ? .failed("No comments returned.") : .loaded("")
+    }
+
+    private func loadExternalArticle(url: URL) async {
+        extractedBody = .loading
+        do {
+            var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+            request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
+            let (data, _) = try await URLSession.shared.data(for: request)
+            guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
+                extractedBody = .failed("Could not decode page.")
+                return
+            }
+            let extracted = ArticleExtractor.extract(from: html, baseURL: url)
+            if extracted.count < 200 {
+                extractedBody = .failed("Page content could not be extracted (anti-bot or paywall). Try the web view.")
+            } else {
+                extractedBody = .loaded(extracted)
+            }
+        } catch {
+            extractedBody = .failed(error.localizedDescription)
+        }
+    }
+}
+
+// MARK: - Comment row
+
+private struct CommentRow: View {
+    var comment: AggregatorComment
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(comment.author)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(SkimStyle.accent)
+                if let score = comment.score {
+                    Text("·")
+                        .foregroundStyle(SkimStyle.secondary)
+                    Text("\(score) pts")
+                        .font(.system(size: 12))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+            }
+            Text(comment.body)
+                .font(.system(size: 15))
+                .foregroundStyle(SkimStyle.text)
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+        }
+        .padding(14)
+        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(SkimStyle.separator, lineWidth: 0.5)
         }
     }
 }

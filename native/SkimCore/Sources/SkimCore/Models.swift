@@ -20,6 +20,14 @@ public struct Feed: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
+/// Identifies articles sourced from a link aggregator, where the RSS item points
+/// to an external article rather than providing the full article content itself.
+public enum AggregatorKind: String, Codable, Hashable, Sendable {
+    case hackerNews
+    case reddit
+    case lobsters
+}
+
 public struct Article: Identifiable, Codable, Hashable, Sendable {
     public var id: String
     public var feedID: String
@@ -35,6 +43,12 @@ public struct Article: Identifiable, Codable, Hashable, Sendable {
     public var isRead: Bool
     public var isStarred: Bool
 
+    // Aggregator support: set when the article is from HN, Reddit, Lobsters, etc.
+    // `url` is the aggregator item page; `externalURL` is the linked external article.
+    public var aggregatorKind: AggregatorKind?
+    public var externalURL: URL?
+    public var commentsURL: URL?
+
     public init(
         id: String,
         feedID: String,
@@ -48,7 +62,10 @@ public struct Article: Identifiable, Codable, Hashable, Sendable {
         publishedAt: Date? = nil,
         fetchedAt: Date = Date(),
         isRead: Bool = false,
-        isStarred: Bool = false
+        isStarred: Bool = false,
+        aggregatorKind: AggregatorKind? = nil,
+        externalURL: URL? = nil,
+        commentsURL: URL? = nil
     ) {
         self.id = id
         self.feedID = feedID
@@ -63,6 +80,9 @@ public struct Article: Identifiable, Codable, Hashable, Sendable {
         self.fetchedAt = fetchedAt
         self.isRead = isRead
         self.isStarred = isStarred
+        self.aggregatorKind = aggregatorKind
+        self.externalURL = externalURL
+        self.commentsURL = commentsURL
     }
 }
 

@@ -173,7 +173,17 @@ enum NativeAI {
 
     /// Returns structured catch-up items. On JSON parse failure returns `nil` so the
     /// caller can fall back to the plain-text path.
+    ///
+    /// When the provider is "foundation-models" on iOS 26+, uses `@Generable`
+    /// guided generation to bypass the JSON parse / repair path entirely.
     static func quickCatchUpStructured(articles: [Article], settings: AppSettings) async throws -> [CatchUpItem]? {
+        // FM guided-generation fast path — no JSON parsing required.
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
+            return try await quickCatchUpStructuredFM(articles: articles)
+        }
+#endif
+
         let raw = try await complete(
             settings: settings,
             instructions: """
@@ -217,7 +227,14 @@ enum NativeAI {
     }
 
     static func aiInbox(articles: [Article], settings: AppSettings) async throws -> String {
-        try await complete(
+        // FM guided-generation fast path — schema-constrained output, no JSON parsing.
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
+            return try await aiInboxFM(articles: articles)
+        }
+#endif
+
+        return try await complete(
             settings: settings,
             instructions: """
             You triage RSS articles for a smart inbox. Pick what seems most worth reading and explain why. Use Markdown bullets. Cite every selected article with its numeric handle like [3] and title so the app can make it clickable. Output ONLY plain Markdown — no JSON, no code fences.
@@ -774,6 +791,143 @@ enum NativeAI {
             "the language model is not ready"
         @unknown default:
             "unknown reason"
+        }
+    }
+
+    // MARK: - @Generable triage types (Foundation Models guided generation)
+    //
+    // These types are used with `session.respond(to:generating:)` to produce
+    // schema-constrained output, eliminating JSON parsing errors entirely.
+    // Only used when the provider is "foundation-models" on iOS 26+.
+
+    /// Guided-generation output for AI Inbox triage.
+    @available(iOS 26.0, macOS 26.0, *)
+    @Generable
+    struct FMTriageEntry {
+        /// 1-based index into the articles array.
+        @Guide(description: "1-based index of the article in the provided list")
+        var articleIndex: Int
+        /// Short explanation of why this article is worth reading.
+        @Guide(description: "One sentence explanation of why this article is worth reading")
+        var reason: String
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    @Generable
+    struct FMTriageProposal {
+        /// Ranked list of picked articles, best first.
+        @Guide(description: "8 to 12 articles ranked by interest, best first")
+        var ranked: [FMTriageEntry]
+    }
+
+    /// Guided-generation output for auto-group.
+    @available(iOS 26.0, macOS 26.0, *)
+    @Generable
+    struct FMAutoGroupFolder {
+        @Guide(description: "Short folder name, 2 to 4 words")
+        var name: String
+        /// Zero-based numeric handles matching the feed listing.
+        @Guide(description: "Zero-based numeric handles of feeds belonging to this folder")
+        var feedIndices: [Int]
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    @Generable
+    struct FMAutoGroupProposal {
+        @Guide(description: "4 to 8 topical folders, each feed in exactly one folder")
+        var folders: [FMAutoGroupFolder]
+    }
+
+    /// Guided-generation output for structured catch-up.
+    @available(iOS 26.0, macOS 26.0, *)
+    @Generable
+    struct FMCatchUpEntry {
+        @Guide(description: "Short headline, 10 words or fewer")
+        var title: String
+        @Guide(description: "1 to 2 sentence plain-text summary")
+        var summary: String
+        /// 1-based index, or -1 when the item spans multiple articles.
+        @Guide(description: "1-based article index, or -1 when the item covers multiple articles")
+        var articleIndex: Int
+    }
+
+    @available(iOS 26.0, macOS 26.0, *)
+    @Generable
+    struct FMCatchUpStructured {
+        @Guide(description: "5 to 12 items covering the most important stories")
+        var items: [FMCatchUpEntry]
+    }
+
+    // MARK: - FM guided-generation triage methods
+
+    /// Uses Foundation Models guided generation to produce structured AI Inbox picks.
+    /// Returns a formatted Markdown string equivalent to the free-text `aiInbox` path,
+    /// but bypasses JSON parsing by using `@Generable` schema-constrained output.
+    @available(iOS 26.0, macOS 26.0, *)
+    static func aiInboxFM(articles: [Article]) async throws -> String {
+        let model = SystemLanguageModel(useCase: .general)
+        guard case .available = model.availability else {
+            throw NativeAIError.unavailable("Apple Intelligence is not available.")
+        }
+        let session = LanguageModelSession(
+            model: model,
+            instructions: """
+            You triage RSS articles for a smart inbox. Rank the most interesting articles and provide a short reason for each pick.
+            """
+        )
+        let digest = articleDigest(articles, limit: 45)
+        let response = try await session.respond(
+            to: """
+            Rank 8–12 articles from this list. Favor novelty, depth, and things a curious technical reader would not want to miss.
+
+            \(digest)
+            """,
+            generating: FMTriageProposal.self,
+            options: GenerationOptions(sampling: .greedy, maximumResponseTokens: 800)
+        )
+        let proposal = response.content
+        // Convert to Markdown bullets matching the free-text path format.
+        let lines = proposal.ranked.compactMap { entry -> String? in
+            let idx = entry.articleIndex
+            guard articles.indices.contains(idx - 1) else { return nil }
+            let article = articles[idx - 1]
+            return "- [\(idx)] **\(article.title)** — \(entry.reason)"
+        }
+        guard !lines.isEmpty else {
+            throw NativeAIError.unavailable("Foundation Models returned no triage picks.")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    /// Uses Foundation Models guided generation for structured catch-up items.
+    /// Bypasses `repairTriageJSON` — guided generation guarantees valid output.
+    @available(iOS 26.0, macOS 26.0, *)
+    static func quickCatchUpStructuredFM(articles: [Article]) async throws -> [CatchUpItem] {
+        let model = SystemLanguageModel(useCase: .general)
+        guard case .available = model.availability else {
+            throw NativeAIError.unavailable("Apple Intelligence is not available.")
+        }
+        let session = LanguageModelSession(
+            model: model,
+            instructions: "You write crisp catch-up summaries for a news/RSS reader."
+        )
+        let response = try await session.respond(
+            to: """
+            Create a Quick Catch-up from these articles. Cover the 5–12 most important stories.
+
+            \(articleDigest(articles, limit: catchUpArticleLimit))
+            """,
+            generating: FMCatchUpStructured.self,
+            options: GenerationOptions(sampling: .greedy, maximumResponseTokens: 1200)
+        )
+        let structured = response.content
+        return structured.items.map { entry in
+            CatchUpItem(
+                title: entry.title,
+                summary: entry.summary,
+                // Convert sentinel -1 back to nil (no specific article)
+                articleIndex: entry.articleIndex < 1 ? nil : entry.articleIndex
+            )
         }
     }
 #endif

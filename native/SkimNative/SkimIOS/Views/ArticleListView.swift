@@ -29,7 +29,7 @@ struct ArticleListView: View {
 
     var body: some View {
         ZStack {
-            SkimStyle.chrome.ignoresSafeArea()
+            SkimStyle.chrome.ignoresSafeArea(.all, edges: [.top, .horizontal])
 
             VStack(spacing: 0) {
                 topBar

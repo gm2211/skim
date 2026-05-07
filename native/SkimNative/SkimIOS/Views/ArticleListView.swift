@@ -532,7 +532,7 @@ struct ArticleListView: View {
             } label: {
                 Label("Unread", systemImage: "checkmark.circle.fill")
                     .labelStyle(.iconOnly)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 17, weight: .medium))
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
@@ -547,7 +547,7 @@ struct ArticleListView: View {
                     } label: {
                         Label(mode.title, systemImage: mode.systemImage)
                             .labelStyle(.iconOnly)
-                            .font(.system(size: 20, weight: .medium))
+                            .font(.system(size: 17, weight: .medium))
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.plain)
@@ -563,15 +563,16 @@ struct ArticleListView: View {
             } label: {
                 Label("Search", systemImage: "magnifyingglass")
                     .labelStyle(.iconOnly)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 17, weight: .medium))
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
             .foregroundStyle(showSearch || !model.searchQuery.isEmpty ? SkimStyle.accent : SkimStyle.secondary)
         }
         .padding(.horizontal, 24)
-        .padding(.bottom, bottomSafeAreaInset / 2)
-        .frame(height: 44 + bottomSafeAreaInset)
+        .frame(height: 32)
+        .offset(y: bottomSafeAreaInset * 0.25)
+        .frame(height: 32 + bottomSafeAreaInset, alignment: .top)
         .frame(maxWidth: .infinity)
         .background(
             SkimStyle.chrome.opacity(0.96)
@@ -2245,15 +2246,7 @@ private struct FeedIcon: View {
     }
 
     private var initials: String {
-        // Skip leading non-alpha characters (e.g. "/" in "/r/technology")
-        // then take up to 2 first chars of space-separated words.
-        let cleaned = feed.title.drop(while: { !$0.isLetter && !$0.isNumber })
-        let words = cleaned
-            .split(separator: " ")
-            .prefix(2)
-            .compactMap { word in word.first(where: { $0.isLetter || $0.isNumber }) }
-        let value = String(words).uppercased()
-        return value.isEmpty ? "S" : value
+        feed.title.skimFeedInitials(fallback: "S")
     }
 
     private var color: Color {
@@ -2280,20 +2273,12 @@ private struct ArticleRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // Icon column with polished unread indicator: 8pt filled circle,
-            // vertically centered against the 30pt icon (y: 11 = 15 center − 4 half-dot).
-            ZStack(alignment: .topLeading) {
+            // Icon column — read/unread state is conveyed by title text color, not a dot.
+            Group {
                 if let feed {
                     FeedIcon(feed: feed, size: 30)
                 } else {
                     ArticleSourceIcon(article: article)
-                }
-
-                if !article.isRead {
-                    Circle()
-                        .fill(SkimStyle.accent)
-                        .frame(width: 8, height: 8)
-                        .offset(x: -10, y: 11)
                 }
             }
             .padding(.top, 20)
@@ -2482,15 +2467,7 @@ private struct ArticleSourceIcon: View {
     }
 
     private var initials: String {
-        // Skip leading non-alpha characters (e.g. "/" in "/r/technology")
-        // then take up to 2 first chars of space-separated words.
-        let cleaned = article.feedTitle.drop(while: { !$0.isLetter && !$0.isNumber })
-        let words = cleaned
-            .split(separator: " ")
-            .prefix(2)
-            .compactMap { word in word.first(where: { $0.isLetter || $0.isNumber }) }
-        let value = String(words).uppercased()
-        return value.isEmpty ? "S" : value
+        article.feedTitle.skimFeedInitials(fallback: "S")
     }
 
     private var color: Color {
@@ -2511,4 +2488,22 @@ private func dismissUIKitKeyboard() {
 #if canImport(UIKit)
     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
 #endif
+}
+
+private extension String {
+    func skimFeedInitials(fallback: String) -> String {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.replacingOccurrences(
+            of: #"^/?r/([^/\s]+).*"#,
+            with: "$1",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        let cleaned = normalized.drop(while: { !$0.isLetter && !$0.isNumber })
+        let words = cleaned
+            .split { !$0.isLetter && !$0.isNumber }
+            .prefix(2)
+            .compactMap { word in word.first(where: { $0.isLetter || $0.isNumber }) }
+        let value = String(words).uppercased()
+        return value.isEmpty ? fallback : value
+    }
 }

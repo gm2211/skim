@@ -13,7 +13,12 @@ use db::{queries, Database};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::{Manager, RunEvent};
+#[cfg(desktop)]
+use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
+
+const SUPPORT_URL: &str = "https://gm2211.github.io/skim/";
+const ISSUES_URL: &str = "https://github.com/gm2211/skim/issues";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -23,6 +28,83 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_skim_ai::init())
         .setup(|app| {
+            #[cfg(desktop)]
+            {
+                use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+
+                let about_meta = AboutMetadataBuilder::new()
+                    .name(Some("Skim"))
+                    .website(Some("https://github.com/gm2211/skim"))
+                    .build();
+
+                let app_submenu = SubmenuBuilder::new(app, "Skim")
+                    .about(Some(about_meta))
+                    .separator()
+                    .services()
+                    .separator()
+                    .hide()
+                    .hide_others()
+                    .show_all()
+                    .separator()
+                    .quit()
+                    .build()?;
+
+                let edit_submenu = SubmenuBuilder::new(app, "Edit")
+                    .undo()
+                    .redo()
+                    .separator()
+                    .cut()
+                    .copy()
+                    .paste()
+                    .select_all()
+                    .build()?;
+
+                let view_submenu = SubmenuBuilder::new(app, "View")
+                    .fullscreen()
+                    .build()?;
+
+                let window_submenu = SubmenuBuilder::new(app, "Window")
+                    .minimize()
+                    .separator()
+                    .close_window()
+                    .build()?;
+
+                let support_item = MenuItemBuilder::with_id("help-support", "Skim Support")
+                    .build(app)?;
+                let issues_item = MenuItemBuilder::with_id("help-issues", "Report an Issue")
+                    .build(app)?;
+                let help_submenu = SubmenuBuilder::new(app, "Help")
+                    .item(&support_item)
+                    .item(&issues_item)
+                    .build()?;
+
+                let menu = MenuBuilder::new(app)
+                    .items(&[
+                        &app_submenu,
+                        &edit_submenu,
+                        &view_submenu,
+                        &window_submenu,
+                        &help_submenu,
+                    ])
+                    .build()?;
+
+                app.set_menu(menu)?;
+
+                app.on_menu_event(move |app, event| match event.id().as_ref() {
+                    "help-support" => {
+                        if let Err(e) = app.opener().open_url(SUPPORT_URL, None::<&str>) {
+                            log::warn!("failed to open support url: {}", e);
+                        }
+                    }
+                    "help-issues" => {
+                        if let Err(e) = app.opener().open_url(ISSUES_URL, None::<&str>) {
+                            log::warn!("failed to open issues url: {}", e);
+                        }
+                    }
+                    _ => {}
+                });
+            }
+
             let app_dir = app
                 .path()
                 .app_data_dir()

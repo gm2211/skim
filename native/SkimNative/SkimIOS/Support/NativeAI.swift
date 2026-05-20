@@ -54,13 +54,15 @@ struct NativeAIAvailabilityStatus {
 
 // MARK: - Summary LRU Cache
 
-/// In-memory LRU cache for article summaries. Keyed by articleId + model + length settings.
-/// Max 20 entries; evicts least-recently-used on overflow. Not persisted to disk so stale-on-config
-/// change is not an issue.
+/// Small persisted LRU cache for article summaries. Keyed by article + provider/model
+/// and summary settings so changing the summary style does not return stale text.
 private final class SummaryLRUCache: @unchecked Sendable {
     static let shared = SummaryLRUCache()
 
     private let maxSize = 20
+    private let defaults = UserDefaults.standard
+    private let orderKey = "skim.summaryCache.order"
+    private let valuePrefix = "skim.summaryCache.value."
     private var store: [String: String] = [:]
     // Tracks insertion/access order; last element = most recently used
     private var order: [String] = []
@@ -68,29 +70,58 @@ private final class SummaryLRUCache: @unchecked Sendable {
 
     func get(_ key: String) -> String? {
         lock.lock(); defer { lock.unlock() }
-        guard let value = store[key] else { return nil }
+        restoreOrderIfNeeded()
+        let value: String
+        if let memoryValue = store[key] {
+            value = memoryValue
+        } else if let persistedValue = defaults.string(forKey: storageKey(for: key)) {
+            value = persistedValue
+            store[key] = persistedValue
+        } else {
+            return nil
+        }
         // Move to most-recently-used position
         order.removeAll(where: { $0 == key })
         order.append(key)
+        persistOrder()
         return value
     }
 
     func set(_ key: String, value: String) {
         lock.lock(); defer { lock.unlock() }
-        if store[key] != nil {
+        restoreOrderIfNeeded()
+        if store[key] != nil || order.contains(key) {
             order.removeAll(where: { $0 == key })
-        } else if store.count >= maxSize, let lru = order.first {
+        } else if order.count >= maxSize, let lru = order.first {
             store.removeValue(forKey: lru)
+            defaults.removeObject(forKey: storageKey(for: lru))
             order.removeFirst()
         }
         store[key] = value
         order.append(key)
+        defaults.set(value, forKey: storageKey(for: key))
+        persistOrder()
     }
 
     func remove(_ key: String) {
         lock.lock(); defer { lock.unlock() }
         store.removeValue(forKey: key)
         order.removeAll(where: { $0 == key })
+        defaults.removeObject(forKey: storageKey(for: key))
+        persistOrder()
+    }
+
+    private func storageKey(for key: String) -> String {
+        valuePrefix + key
+    }
+
+    private func restoreOrderIfNeeded() {
+        guard order.isEmpty else { return }
+        order = defaults.stringArray(forKey: orderKey) ?? []
+    }
+
+    private func persistOrder() {
+        defaults.set(Array(order.suffix(maxSize)), forKey: orderKey)
     }
 }
 
@@ -431,13 +462,23 @@ enum NativeAI {
     private static func summaryCacheKey(articleID: String, ai: AISettings) -> String {
         let model = ai.model?.nilIfEmpty ?? ai.provider
         let wordCount = summaryTargetWordCount(ai)
-        return "\(articleID)|\(model)|\(wordCount)"
+        return [
+            articleID,
+            ai.provider,
+            model,
+            ai.endpoint?.nilIfEmpty ?? "",
+            ai.localModelPath?.nilIfEmpty ?? "",
+            ai.summaryLength?.nilIfEmpty ?? "",
+            ai.summaryTone?.nilIfEmpty ?? "",
+            String(wordCount),
+            ai.summaryCustomPrompt?.nilIfEmpty ?? "",
+        ].joined(separator: "|")
     }
 
     static func chat(question: String, article: Article, settings: AppSettings) async throws -> String {
         try await complete(
             settings: settings,
-            instructions: "You answer questions about a single article using only the provided article text. If the answer is not in the article, say so.",
+            instructions: "You answer questions about a single article using only the provided article text and the conversation transcript. Answer the latest user question directly. Do not repeat a prior answer unless the user asks you to recap it. If the answer is not in the article, say so.",
             prompt: """
             Article:
             \(articleDigest([article], limit: 1))
@@ -453,7 +494,7 @@ enum NativeAI {
         try await complete(
             settings: settings,
             instructions: """
-            You answer questions across a set of RSS articles. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable.
+            You answer questions across a set of RSS articles using the provided article list and the conversation transcript. Answer the latest user question directly and do not repeat prior answers unless asked. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable.
             """,
             prompt: """
             Articles:
@@ -1238,12 +1279,14 @@ struct AIChatSheet: View {
         let question = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !isSending else { return }
         let toSend = question
+        let priorMessages = messages
+        let contextualQuestion = questionWithHistory(toSend, priorMessages: priorMessages)
         input = ""
         focused = true
         messages.append(AIChatMessage(role: .user, text: toSend))
         isSending = true
         do {
-            let answer = try await request.answer(toSend)
+            let answer = try await request.answer(contextualQuestion)
             messages.append(
                 AIChatMessage(
                     role: .assistant,
@@ -1256,10 +1299,27 @@ struct AIChatSheet: View {
         }
         isSending = false
     }
+
+    private func questionWithHistory(_ question: String, priorMessages: [AIChatMessage]) -> String {
+        let transcript = priorMessages.suffix(8).map { message in
+            let role = message.role == .user ? "User" : "Assistant"
+            return "\(role): \(message.text)"
+        }
+        .joined(separator: "\n\n")
+
+        guard !transcript.isEmpty else { return question }
+        return """
+        Conversation so far:
+        \(transcript)
+
+        Latest user question:
+        \(question)
+        """
+    }
 }
 
 private struct AIChatMessage: Identifiable {
-    enum Role {
+    enum Role: Equatable {
         case user
         case assistant
     }

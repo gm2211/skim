@@ -245,7 +245,7 @@ struct SettingsSheet: View {
 
     private var nativeAIProviders: [(value: String, label: String, description: String)] {
         [
-            ("foundation-models", "Apple Intelligence", "Apple's on-device model. Requires Apple Intelligence to finish preparing its language model."),
+            ("foundation-models", "Apple Intelligence", "Apple's on-device model. Apple exposes use cases, not selectable quality tiers or ChatGPT routing for app prompts."),
             ("mlx", "On-device MLX", "Download and run a small MLX model on this iPhone. Offline after download."),
             ("claude-subscription", "Claude Pro/Max", "Signs in with Claude in-app and saves the bearer token automatically."),
             ("custom", "Custom", "Any OpenAI-compatible endpoint or API-key provider. ChatGPT subscriptions do not expose an app API token.")

@@ -66,6 +66,19 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
 
         CREATE INDEX IF NOT EXISTS idx_triage_priority ON article_triage(priority DESC);
 
+        CREATE TABLE IF NOT EXISTS article_summaries (
+            article_id     TEXT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+            cache_key      TEXT NOT NULL,
+            bullet_summary TEXT,
+            full_summary   TEXT,
+            provider       TEXT,
+            model          TEXT,
+            created_at     INTEGER NOT NULL,
+            PRIMARY KEY (article_id, cache_key)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_article_summaries_created_at ON article_summaries(created_at);
+
         -- Learning system: track user engagement signals
         CREATE TABLE IF NOT EXISTS article_interactions (
             article_id       TEXT PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
@@ -216,16 +229,22 @@ fn consolidate_duplicate_interactions(conn: &Connection) -> Result<(), rusqlite:
                  priority_override = ?4,
                  updated_at = ?5
              WHERE article_id = ?6",
-            rusqlite::params![total_reading, total_chat, feedback, priority, updated_at, canonical],
+            rusqlite::params![
+                total_reading,
+                total_chat,
+                feedback,
+                priority,
+                updated_at,
+                canonical
+            ],
         )?;
     }
     Ok(())
 }
 
 fn backfill_feed_icons(conn: &Connection) -> Result<(), rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "SELECT id, site_url, url FROM feeds WHERE icon_url IS NULL OR icon_url = ''",
-    )?;
+    let mut stmt = conn
+        .prepare("SELECT id, site_url, url FROM feeds WHERE icon_url IS NULL OR icon_url = ''")?;
     let rows: Vec<(String, Option<String>, String)> = stmt
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
         .filter_map(|r| r.ok())

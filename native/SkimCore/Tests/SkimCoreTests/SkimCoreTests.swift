@@ -46,13 +46,19 @@ import Testing
         title: "Important story",
         url: URL(string: "https://example.com/story"),
         contentText: "Body",
-        publishedAt: Date(timeIntervalSince1970: 100)
+        publishedAt: Date(timeIntervalSince1970: 100),
+        aggregatorKind: .hackerNews,
+        externalURL: URL(string: "https://example.com/original"),
+        commentsURL: URL(string: "https://news.ycombinator.com/item?id=1")
     )
 
     try await store.upsert(feed: feed, articles: [article])
 
     let unread = try await store.listArticles(filter: ArticleFilter(readState: .unread))
     #expect(unread.map(\.id) == ["article-1"])
+    #expect(unread.first?.aggregatorKind == .hackerNews)
+    #expect(unread.first?.externalURL?.absoluteString == "https://example.com/original")
+    #expect(unread.first?.commentsURL?.absoluteString == "https://news.ycombinator.com/item?id=1")
     #expect(try await store.countUnread(feedID: nil) == 1)
 
     try await store.setArticleRead(id: "article-1", isRead: true)

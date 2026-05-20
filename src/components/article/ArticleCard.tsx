@@ -182,6 +182,18 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
             <span className="text-text-muted" style={{ fontSize: 12 }}>
               {timeAgo(article.published_at ?? article.fetched_at)}
             </span>
+            {article.is_starred && (
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="text-warning flex-shrink-0"
+                aria-label="Starred"
+              >
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            )}
             {themeTags?.map((tag) => (
               <span
                 key={tag.themeId}
@@ -193,31 +205,16 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
             ))}
           </div>
         </div>
-        <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt=""
-              className="rounded-md object-cover"
-              style={{ width: 72, height: 72 }}
-              loading="lazy"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
-          ) : null}
-          <div className="flex items-center gap-1.5">
-            {article.is_starred && (
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                className="text-warning"
-              >
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-            )}
-          </div>
-        </div>
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt=""
+            className="rounded-md object-cover flex-shrink-0"
+            style={{ width: 72, height: 72 }}
+            loading="lazy"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        ) : null}
       </div>
     </div>
   );

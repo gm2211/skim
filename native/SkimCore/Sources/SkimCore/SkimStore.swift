@@ -166,6 +166,10 @@ private final class SQLiteDatabase: @unchecked Sendable {
         )
         """)
 
+        try? execute("ALTER TABLE articles ADD COLUMN aggregator_kind TEXT")
+        try? execute("ALTER TABLE articles ADD COLUMN external_url TEXT")
+        try? execute("ALTER TABLE articles ADD COLUMN comments_url TEXT")
+
         try execute("CREATE INDEX IF NOT EXISTS idx_articles_feed ON articles(feed_id)")
         try execute("CREATE INDEX IF NOT EXISTS idx_articles_read ON articles(is_read)")
         try execute("CREATE INDEX IF NOT EXISTS idx_articles_starred ON articles(is_starred)")
@@ -245,9 +249,10 @@ private final class SQLiteDatabase: @unchecked Sendable {
             """
             INSERT INTO articles (
                 id, feed_id, feed_title, title, url, author, content_text, content_html,
-                image_url, published_at, fetched_at, is_read, is_starred
+                image_url, published_at, fetched_at, is_read, is_starred,
+                aggregator_kind, external_url, comments_url
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 feed_title = excluded.feed_title,
                 title = excluded.title,
@@ -257,7 +262,10 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 content_html = excluded.content_html,
                 image_url = excluded.image_url,
                 published_at = excluded.published_at,
-                fetched_at = excluded.fetched_at
+                fetched_at = excluded.fetched_at,
+                aggregator_kind = excluded.aggregator_kind,
+                external_url = excluded.external_url,
+                comments_url = excluded.comments_url
             """,
             [
                 .text(article.id),
@@ -272,7 +280,10 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 .date(article.publishedAt),
                 .date(article.fetchedAt),
                 .bool(article.isRead),
-                .bool(article.isStarred)
+                .bool(article.isStarred),
+                .optionalText(article.aggregatorKind?.rawValue),
+                .optionalText(article.externalURL?.absoluteString),
+                .optionalText(article.commentsURL?.absoluteString)
             ]
         )
     }
@@ -321,7 +332,8 @@ private final class SQLiteDatabase: @unchecked Sendable {
         return try query(
             """
             SELECT id, feed_id, feed_title, title, url, author, content_text, content_html,
-                   image_url, published_at, fetched_at, is_read, is_starred
+                   image_url, published_at, fetched_at, is_read, is_starred,
+                   aggregator_kind, external_url, comments_url
             FROM articles
             \(whereClause)
             ORDER BY COALESCE(published_at, fetched_at) DESC
@@ -337,7 +349,8 @@ private final class SQLiteDatabase: @unchecked Sendable {
         try query(
             """
             SELECT id, feed_id, feed_title, title, url, author, content_text, content_html,
-                   image_url, published_at, fetched_at, is_read, is_starred
+                   image_url, published_at, fetched_at, is_read, is_starred,
+                   aggregator_kind, external_url, comments_url
             FROM articles
             WHERE id = ?
             LIMIT 1
@@ -463,7 +476,10 @@ private func makeArticle(from statement: OpaquePointer) -> Article {
         publishedAt: columnDate(statement, 9),
         fetchedAt: columnDate(statement, 10) ?? Date(),
         isRead: sqlite3_column_int(statement, 11) != 0,
-        isStarred: sqlite3_column_int(statement, 12) != 0
+        isStarred: sqlite3_column_int(statement, 12) != 0,
+        aggregatorKind: columnOptionalText(statement, 13).flatMap(AggregatorKind.init(rawValue:)),
+        externalURL: columnURL(statement, 14),
+        commentsURL: columnURL(statement, 15)
     )
 }
 

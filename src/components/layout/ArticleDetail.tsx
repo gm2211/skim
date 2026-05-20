@@ -1421,16 +1421,16 @@ export function ArticleDetail() {
                 <div
                   style={{
                     ...readerRefresh.pullToRefreshContentStyle,
-                    maxWidth: 720,
+                    maxWidth: 760,
                     width: "100%",
                     margin: "0 auto",
-                    padding: isPhone ? "16px 16px 64px" : "24px 40px 80px",
+                    padding: isPhone ? "20px 18px 72px" : "34px 48px 96px",
                     overflowX: "hidden",
                   }}
                 >
-                  <div style={{ marginBottom: 28 }}>
-                    <h1 className="text-text-primary" style={{ fontSize: 26, fontWeight: 700, lineHeight: 1.3, marginBottom: 12 }}>{article.title}</h1>
-                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1" style={{ fontSize: 13 }}>
+                  <div className="article-reader-header">
+                    <h1 className="text-text-primary article-reader-title">{article.title}</h1>
+                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1 article-reader-meta">
                       <span className="text-accent font-medium">{article.feed_title}</span>
                       {article.author && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{article.author}</span></>)}
                       <span className="text-text-muted">·</span>

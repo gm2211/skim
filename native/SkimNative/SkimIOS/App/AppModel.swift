@@ -86,6 +86,9 @@ final class AppModel: ObservableObject {
     let tasteStore = TasteStore()
     private let importer = OPMLImportService()
     private let refresher = FeedRefreshService()
+    private let readLingerDuration: TimeInterval = 120
+    private var recentlyReadArticles: [String: (article: Article, expiresAt: Date)] = [:]
+    private var readLingerTask: Task<Void, Never>?
 
     init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -183,7 +186,7 @@ final class AppModel: ObservableObject {
             feeds = try await store.listFeeds()
             settings = try await store.loadSettings()
             let fetched = try await store.listArticles(filter: filter)
-            articles = applyFolderFilter(fetched)
+            articles = displayedArticles(from: fetched)
             try await refreshCounts()
             errorMessage = nil
         } catch {
@@ -196,7 +199,7 @@ final class AppModel: ObservableObject {
             folders = try await store.listFolders()
             feeds = try await store.listFeeds()
             let fetched = try await store.listArticles(filter: filter)
-            articles = applyFolderFilter(fetched)
+            articles = displayedArticles(from: fetched)
             try await refreshCounts()
             errorMessage = nil
         } catch {
@@ -208,6 +211,91 @@ final class AppModel: ObservableObject {
     private func applyFolderFilter(_ fetched: [Article]) -> [Article] {
         guard let folderFeedIDs = selectedFolderFeedIDs else { return fetched }
         return fetched.filter { folderFeedIDs.contains($0.feedID) }
+    }
+
+    private func displayedArticles(from fetched: [Article]) -> [Article] {
+        var visible = applyFolderFilter(fetched)
+        guard listMode == .unread else {
+            clearReadLingerState()
+            return visible
+        }
+
+        pruneReadLinger()
+        let visibleIDs = Set(visible.map(\.id))
+        let additions = recentlyReadArticles.values
+            .map(\.article)
+            .filter { article in
+                !visibleIDs.contains(article.id) && articleStillMatchesCurrentScope(article)
+            }
+
+        guard !additions.isEmpty else { return visible }
+        visible.append(contentsOf: additions)
+        visible.sort { lhs, rhs in
+            (lhs.publishedAt ?? lhs.fetchedAt) > (rhs.publishedAt ?? rhs.fetchedAt)
+        }
+        return visible
+    }
+
+    private func articleStillMatchesCurrentScope(_ article: Article) -> Bool {
+        if let selectedFeedID, article.feedID != selectedFeedID {
+            return false
+        }
+        if let folderFeedIDs = selectedFolderFeedIDs, !folderFeedIDs.contains(article.feedID) {
+            return false
+        }
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !query.isEmpty {
+            let haystack = [
+                article.title,
+                article.feedTitle,
+                article.author ?? "",
+                article.contentText ?? "",
+            ].joined(separator: " ").localizedLowercase
+            if !haystack.contains(query.localizedLowercase) {
+                return false
+            }
+        }
+        return true
+    }
+
+    private func rememberRecentlyRead(_ article: Article) {
+        guard listMode == .unread else { return }
+        var copy = article
+        copy.isRead = true
+        recentlyReadArticles[article.id] = (copy, Date().addingTimeInterval(readLingerDuration))
+        scheduleReadLingerExpiry()
+    }
+
+    private func pruneReadLinger() {
+        let now = Date()
+        recentlyReadArticles = recentlyReadArticles.filter { $0.value.expiresAt > now }
+    }
+
+    func clearReadLingeredArticles() async {
+        guard !recentlyReadArticles.isEmpty else { return }
+        clearReadLingerState()
+        await reloadArticles()
+    }
+
+    private func clearReadLingerState() {
+        recentlyReadArticles.removeAll()
+        readLingerTask?.cancel()
+        readLingerTask = nil
+    }
+
+    private func scheduleReadLingerExpiry() {
+        readLingerTask?.cancel()
+        pruneReadLinger()
+        guard let nextExpiry = recentlyReadArticles.values.map(\.expiresAt).min() else {
+            readLingerTask = nil
+            return
+        }
+        let delay = max(0, nextExpiry.timeIntervalSinceNow)
+        readLingerTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard let self else { return }
+            await self.reloadArticles()
+        }
     }
 
     func refreshAll() async {
@@ -264,6 +352,11 @@ final class AppModel: ObservableObject {
 
     func setRead(_ article: Article, isRead: Bool) async {
         do {
+            if isRead {
+                rememberRecentlyRead(article)
+            } else {
+                recentlyReadArticles.removeValue(forKey: article.id)
+            }
             try await store.setArticleRead(id: article.id, isRead: isRead)
             await reloadArticles()
         } catch {
@@ -274,6 +367,11 @@ final class AppModel: ObservableObject {
     func setRead(_ articles: [Article], isRead: Bool) async {
         do {
             for article in articles {
+                if isRead {
+                    rememberRecentlyRead(article)
+                } else {
+                    recentlyReadArticles.removeValue(forKey: article.id)
+                }
                 try await store.setArticleRead(id: article.id, isRead: isRead)
             }
             await reloadArticles()

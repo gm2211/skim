@@ -1,17 +1,18 @@
 use crate::ai::local_provider::SharedModelState;
 use crate::ai::prompts;
-use crate::ai::provider::{ChatMessage, ChatRequest, create_provider};
-#[cfg(target_os = "ios")]
-use tauri_plugin_skim_ai::{CompleteArgs, SkimAiExt};
-use crate::db::models::{ArticleFilter, ArticleSummary, Theme};
+use crate::ai::provider::{create_provider, ChatMessage, ChatRequest};
+use crate::db::models::{AiSettings, ArticleFilter, ArticleSummary, Theme};
 use crate::db::queries;
 use crate::db::Database;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
+#[cfg(target_os = "ios")]
+use tauri_plugin_skim_ai::{CompleteArgs, SkimAiExt};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -46,28 +47,27 @@ impl SummaryCache {
         }
     }
 
-    pub fn get(&self, article_id: &str) -> Option<&ArticleSummary> {
-        self.map.get(article_id)
+    pub fn get(&self, cache_key: &str) -> Option<&ArticleSummary> {
+        self.map.get(cache_key)
     }
 
-    pub fn insert(&mut self, summary: ArticleSummary) {
-        let id = summary.article_id.clone();
-        if self.map.contains_key(&id) {
+    pub fn insert(&mut self, cache_key: String, summary: ArticleSummary) {
+        if self.map.contains_key(&cache_key) {
             // Move to back (most recent)
-            self.order.retain(|k| k != &id);
+            self.order.retain(|k| k != &cache_key);
         } else if self.order.len() >= SUMMARY_CACHE_MAX {
             // Evict oldest
             if let Some(oldest) = self.order.pop_front() {
                 self.map.remove(&oldest);
             }
         }
-        self.order.push_back(id.clone());
-        self.map.insert(id, summary);
+        self.order.push_back(cache_key.clone());
+        self.map.insert(cache_key, summary);
     }
 
-    pub fn remove(&mut self, article_id: &str) {
-        self.map.remove(article_id);
-        self.order.retain(|k| k != article_id);
+    pub fn remove(&mut self, cache_key: &str) {
+        self.map.remove(cache_key);
+        self.order.retain(|k| k != cache_key);
     }
 
     pub fn clear(&mut self) {
@@ -78,12 +78,51 @@ impl SummaryCache {
 
 pub type SharedSummaryCache = Arc<Mutex<SummaryCache>>;
 
+fn summary_cache_key(article_id: &str, ai: &AiSettings) -> String {
+    #[derive(Serialize)]
+    struct SummaryKey<'a> {
+        article_id: &'a str,
+        provider: &'a str,
+        model: Option<&'a str>,
+        endpoint: Option<&'a str>,
+        local_model_path: Option<&'a str>,
+        summary_length: Option<&'a str>,
+        summary_tone: Option<&'a str>,
+        summary_format: Option<&'a str>,
+        summary_custom_prompt: Option<&'a str>,
+        summary_custom_word_count: Option<i32>,
+    }
+
+    let key = SummaryKey {
+        article_id,
+        provider: &ai.provider,
+        model: ai.model.as_deref(),
+        endpoint: ai.endpoint.as_deref(),
+        local_model_path: ai.local_model_path.as_deref(),
+        summary_length: ai.summary_length.as_deref(),
+        summary_tone: ai.summary_tone.as_deref(),
+        summary_format: ai.summary_format.as_deref(),
+        summary_custom_prompt: ai.summary_custom_prompt.as_deref(),
+        summary_custom_word_count: ai.summary_custom_word_count,
+    };
+
+    let bytes = serde_json::to_vec(&key).unwrap_or_default();
+    let digest = Sha256::digest(bytes);
+    format!("{digest:x}")
+}
+
 /// Minimal cleanup: only strip ChatML tokens and code fences (structural, not heuristic).
 /// All real parsing is done by extract_json_object() which finds the first valid JSON object.
 fn clean_raw_output(text: &str) -> String {
     let mut s = text.to_string();
     // Remove ChatML tokens
-    for token in &["<|im_start|>", "<|im_end|>", "<|im_start|>system", "<|im_start|>user", "<|im_start|>assistant"] {
+    for token in &[
+        "<|im_start|>",
+        "<|im_end|>",
+        "<|im_start|>system",
+        "<|im_start|>user",
+        "<|im_start|>assistant",
+    ] {
         s = s.replace(token, "");
     }
     // Remove markdown code fences
@@ -150,12 +189,10 @@ fn extract_bullets_field(raw: &str) -> String {
 /// This handles cases where the model outputs JSON-like structure but with unquoted multiline strings.
 fn extract_field_fuzzy(text: &str, field: &str) -> Option<String> {
     // Look for "field": or "field" :
-    let patterns = [
-        format!("\"{}\":", field),
-        format!("\"{}\" :", field),
-    ];
+    let patterns = [format!("\"{}\":", field), format!("\"{}\" :", field)];
 
-    let field_start = patterns.iter()
+    let field_start = patterns
+        .iter()
         .filter_map(|p| text.find(p).map(|pos| pos + p.len()))
         .min()?;
 
@@ -163,7 +200,8 @@ fn extract_field_fuzzy(text: &str, field: &str) -> Option<String> {
 
     // Find where the next field starts ("notes": or end of object })
     let end_markers = ["\"notes\"", "\"notes\" ", "}\n", "\n}"];
-    let end_pos = end_markers.iter()
+    let end_pos = end_markers
+        .iter()
         .filter_map(|m| after.find(m))
         .min()
         .unwrap_or(after.len());
@@ -171,7 +209,8 @@ fn extract_field_fuzzy(text: &str, field: &str) -> Option<String> {
     let value = after[..end_pos].trim();
 
     // Clean up: strip surrounding quotes, trailing commas, brackets
-    let value = value.trim_start_matches('"')
+    let value = value
+        .trim_start_matches('"')
         .trim_start_matches('[')
         .trim_end_matches('"')
         .trim_end_matches(',')
@@ -205,7 +244,10 @@ async fn fetch_article_text(url: &str) -> Result<String, String> {
     // Strip everything outside <body>, then remove script/style/nav/etc
     // before handing off to html2text.
     let body = if let Some(start) = html.find("<body") {
-        let content_start = html[start..].find('>').map(|i| start + i + 1).unwrap_or(start);
+        let content_start = html[start..]
+            .find('>')
+            .map(|i| start + i + 1)
+            .unwrap_or(start);
         if let Some(end) = html[content_start..].find("</body>") {
             html[content_start..content_start + end].to_string()
         } else {
@@ -216,7 +258,9 @@ async fn fetch_article_text(url: &str) -> Result<String, String> {
     };
 
     let mut clean = body;
-    for tag in &["script", "style", "nav", "header", "footer", "noscript", "aside", "form", "svg", "iframe"] {
+    for tag in &[
+        "script", "style", "nav", "header", "footer", "noscript", "aside", "form", "svg", "iframe",
+    ] {
         loop {
             let lower = clean.to_lowercase();
             let open = format!("<{}", tag);
@@ -277,17 +321,14 @@ fn ios_local_summary_text(text: &str) -> String {
 }
 
 #[tauri::command]
-pub async fn cancel_summarize(
-    generation: State<'_, SummaryGeneration>,
-) -> Result<(), String> {
+pub async fn cancel_summarize(generation: State<'_, SummaryGeneration>) -> Result<(), String> {
     generation.0.fetch_add(1, Ordering::SeqCst);
     Ok(())
 }
 
 #[tauri::command]
 pub async fn summarize_article(
-    #[cfg_attr(not(target_os = "ios"), allow(unused_variables))]
-    app: AppHandle,
+    #[cfg_attr(not(target_os = "ios"), allow(unused_variables))] app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     summary_cache: State<'_, SharedSummaryCache>,
@@ -300,24 +341,14 @@ pub async fn summarize_article(
     summary_custom_prompt: Option<String>,
 ) -> Result<ArticleSummary, String> {
     let gen_id = generation.0.fetch_add(1, Ordering::SeqCst) + 1;
-    // Check in-memory cache (skip if force re-summarize)
-    {
-        let mut cache = summary_cache.lock().await;
-        if force.unwrap_or(false) {
-            cache.remove(&article_id);
-        } else if let Some(existing) = cache.get(&article_id) {
-            return Ok(existing.clone());
-        }
-    }
-
     // Get article content and settings
     let (article, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let article = queries::get_article_by_id(&conn, &article_id)
             .map_err(|e| e.to_string())?
             .ok_or("Article not found")?;
-        let settings_json = queries::get_setting(&conn, "app_settings")
-            .map_err(|e| e.to_string())?;
+        let settings_json =
+            queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
         (article, settings_json)
     };
 
@@ -342,8 +373,51 @@ pub async fn summarize_article(
         }
     }
 
+    // claude-subscription / anthropic only accept Claude models. Override
+    // any stale OpenAI model carried over from a previous provider before
+    // deriving the cache key.
+    if (settings.ai.provider == "claude-subscription" || settings.ai.provider == "anthropic")
+        && settings
+            .ai
+            .model
+            .as_deref()
+            .map(|m| !is_claude_model(m))
+            .unwrap_or(false)
+    {
+        settings.ai.model = None;
+    }
+
     if settings.ai.provider == "none" {
-        return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
+        return Err(
+            "No AI provider configured. Go to Settings to set up an AI provider.".to_string(),
+        );
+    }
+
+    let cache_key = summary_cache_key(&article_id, &settings.ai);
+    {
+        let mut cache = summary_cache.lock().await;
+        if force.unwrap_or(false) {
+            cache.remove(&cache_key);
+        } else if let Some(existing) = cache.get(&cache_key) {
+            return Ok(existing.clone());
+        }
+    }
+
+    let cached_from_db = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        if force.unwrap_or(false) {
+            queries::delete_article_summary(&conn, &article_id, &cache_key)
+                .map_err(|e| e.to_string())?;
+            None
+        } else {
+            queries::get_article_summary(&conn, &article_id, &cache_key)
+                .map_err(|e| e.to_string())?
+        }
+    };
+    if let Some(existing) = cached_from_db {
+        let mut cache = summary_cache.lock().await;
+        cache.insert(cache_key.clone(), existing.clone());
+        return Ok(existing);
     }
 
     let title = &article.article.title;
@@ -357,7 +431,10 @@ pub async fn summarize_article(
         if provider_name == "mlx" || provider_name == "foundation-models" {
             // Resolve article body the same way the desktop path does below.
             let content_text = article.article.content_text.as_deref().unwrap_or("");
-            let html_as_text = article.article.content_html.as_deref()
+            let html_as_text = article
+                .article
+                .content_html
+                .as_deref()
                 .map(|h| html2text::from_read(h.as_bytes(), 10000))
                 .unwrap_or_default();
             let local_text = if html_as_text.len() > content_text.len() {
@@ -368,7 +445,12 @@ pub async fn summarize_article(
             let text = if local_text.trim().chars().count() < 400 {
                 if let Some(ref url) = article.article.url {
                     match fetch_article_text(url).await {
-                        Ok(fetched) if fetched.trim().chars().count() > local_text.trim().chars().count() => fetched,
+                        Ok(fetched)
+                            if fetched.trim().chars().count()
+                                > local_text.trim().chars().count() =>
+                        {
+                            fetched
+                        }
                         _ => local_text,
                     }
                 } else {
@@ -441,8 +523,13 @@ pub async fn summarize_article(
                 created_at: Utc::now().timestamp(),
             };
             {
+                {
+                    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+                    queries::upsert_article_summary(&conn, &cache_key, &summary)
+                        .map_err(|e| e.to_string())?;
+                }
                 let mut cache = summary_cache.lock().await;
-                cache.insert(summary.clone());
+                cache.insert(cache_key.clone(), summary.clone());
             }
             return Ok(summary);
         }
@@ -450,24 +537,20 @@ pub async fn summarize_article(
 
     settings.ai.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
 
-    // claude-subscription / anthropic only accept Claude models. Override
-    // any stale OpenAI model carried over from a previous provider.
-    if (settings.ai.provider == "claude-subscription" || settings.ai.provider == "anthropic")
-        && settings.ai.model.as_deref().map(|m| !is_claude_model(m)).unwrap_or(false)
-    {
-        settings.ai.model = None;
-    }
+    let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
 
-    let provider = create_provider(
-        &settings.ai,
-        Some(model_state.inner().clone()),
-    )?;
-
-    let model = settings.ai.model.clone().unwrap_or_else(|| default_model(&settings.ai.provider));
+    let model = settings
+        .ai
+        .model
+        .clone()
+        .unwrap_or_else(|| default_model(&settings.ai.provider));
 
     // Use the longest available content — prefer content_text, fall back to HTML stripped to text
     let content_text = article.article.content_text.as_deref().unwrap_or("");
-    let html_as_text = article.article.content_html.as_deref()
+    let html_as_text = article
+        .article
+        .content_html
+        .as_deref()
         .map(|h| html2text::from_read(h.as_bytes(), 10000))
         .unwrap_or_default();
     let local_text = if html_as_text.len() > content_text.len() {
@@ -482,7 +565,11 @@ pub async fn summarize_article(
     let text = if local_text.trim().chars().count() < 400 {
         if let Some(ref url) = article.article.url {
             match fetch_article_text(url).await {
-                Ok(fetched) if fetched.trim().chars().count() > local_text.trim().chars().count() => fetched,
+                Ok(fetched)
+                    if fetched.trim().chars().count() > local_text.trim().chars().count() =>
+                {
+                    fetched
+                }
                 _ => local_text,
             }
         } else {
@@ -504,8 +591,16 @@ pub async fn summarize_article(
         let req = ChatRequest {
             model: model.clone(),
             messages: vec![
-                ChatMessage { role: "system".to_string(), content: system_prompt.clone(), content_blocks: None },
-                ChatMessage { role: "user".to_string(), content: bullet_prompt, content_blocks: None },
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: system_prompt.clone(),
+                    content_blocks: None,
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: bullet_prompt,
+                    content_blocks: None,
+                },
             ],
             temperature: Some(0.5),
             max_tokens: Some(prompts::bullet_max_tokens(&settings.ai)),
@@ -528,8 +623,16 @@ pub async fn summarize_article(
         let req = ChatRequest {
             model: model.clone(),
             messages: vec![
-                ChatMessage { role: "system".to_string(), content: system_prompt, content_blocks: None },
-                ChatMessage { role: "user".to_string(), content: full_prompt, content_blocks: None },
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: system_prompt,
+                    content_blocks: None,
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: full_prompt,
+                    content_blocks: None,
+                },
             ],
             temperature: Some(0.3),
             max_tokens: Some(prompts::full_max_tokens(&settings.ai)),
@@ -542,11 +645,17 @@ pub async fn summarize_article(
     };
 
     let bullet_text = bullet_response.map(|r| {
-        log::info!("Bullet raw response: {}", &r.content[..r.content.len().min(200)]);
+        log::info!(
+            "Bullet raw response: {}",
+            &r.content[..r.content.len().min(200)]
+        );
         extract_bullets_field(&r.content)
     });
     let full_text = full_response.map(|r| {
-        log::info!("Summary raw response: {}", &r.content[..r.content.len().min(500)]);
+        log::info!(
+            "Summary raw response: {}",
+            &r.content[..r.content.len().min(500)]
+        );
         let result = extract_summary_field(&r.content);
         log::info!("Extracted summary: {}", &result[..result.len().min(200)]);
         result
@@ -561,10 +670,15 @@ pub async fn summarize_article(
         created_at: Utc::now().timestamp(),
     };
 
-    // Cache in memory
+    // Cache in SQLite and memory.
     {
+        {
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            queries::upsert_article_summary(&conn, &cache_key, &summary)
+                .map_err(|e| e.to_string())?;
+        }
         let mut cache = summary_cache.lock().await;
-        cache.insert(summary.clone());
+        cache.insert(cache_key, summary.clone());
     }
 
     Ok(summary)
@@ -590,7 +704,9 @@ struct ThemeArticleRef {
     relevance: f64,
 }
 
-fn default_relevance() -> f64 { 1.0 }
+fn default_relevance() -> f64 {
+    1.0
+}
 
 #[derive(Serialize, Clone)]
 struct ThemeProgress {
@@ -657,7 +773,8 @@ pub async fn generate_themes(
             };
             queries::get_articles(&conn, &filter).map_err(|e| e.to_string())?
         };
-        let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
+        let settings_json =
+            queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
         (articles, settings_json)
     };
 
@@ -672,17 +789,19 @@ pub async fn generate_themes(
         .unwrap_or_default();
 
     if settings.ai.provider == "none" {
-        return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
+        return Err(
+            "No AI provider configured. Go to Settings to set up an AI provider.".to_string(),
+        );
     }
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
-    let provider = create_provider(
-        &ai_settings,
-        Some(model_state.inner().clone()),
-    )?;
+    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
 
-    let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
+    let model = ai_settings
+        .model
+        .clone()
+        .unwrap_or_else(|| default_model(&ai_settings.provider));
 
     // Batch articles so we can emit real progress per batch. Local models
     // are slow so use smaller batches; remote providers can handle more.
@@ -710,7 +829,12 @@ pub async fn generate_themes(
         // Build TSV listing using handles LOCAL to this batch.
         let mut listing = String::new();
         for (i, a) in chunk.iter().enumerate() {
-            listing.push_str(&format!("{}\t{}\t[{}]\n", i, a.article.title.trim(), a.feed_title));
+            listing.push_str(&format!(
+                "{}\t{}\t[{}]\n",
+                i,
+                a.article.title.trim(),
+                a.feed_title
+            ));
         }
         let max_tokens = (chunk.len() as i64 * 6 + 400).min(3072);
 
@@ -719,7 +843,9 @@ pub async fn generate_themes(
             messages: vec![
                 ChatMessage {
                     role: "system".to_string(),
-                    content: prompts::theme_grouping_system_prompt(ai_settings.triage_user_prompt.as_deref()),
+                    content: prompts::theme_grouping_system_prompt(
+                        ai_settings.triage_user_prompt.as_deref(),
+                    ),
                     content_blocks: None,
                 },
                 ChatMessage {
@@ -751,9 +877,9 @@ pub async fn generate_themes(
                                 .iter()
                                 .filter_map(|r| {
                                     let uuid = match &r.id {
-                                        serde_json::Value::Number(n) => n
-                                            .as_u64()
-                                            .and_then(|i| chunk.get(i as usize).map(|a| a.article.id.clone())),
+                                        serde_json::Value::Number(n) => n.as_u64().and_then(|i| {
+                                            chunk.get(i as usize).map(|a| a.article.id.clone())
+                                        }),
                                         serde_json::Value::String(s) => {
                                             if let Ok(i) = s.trim().parse::<usize>() {
                                                 chunk.get(i).map(|a| a.article.id.clone())
@@ -784,7 +910,12 @@ pub async fn generate_themes(
                         }
                     }
                     Err(e) => {
-                        log::warn!("Theme batch {} parse failed: {}. Raw: {}", batch_num, e, &content[..content.len().min(200)]);
+                        log::warn!(
+                            "Theme batch {} parse failed: {}. Raw: {}",
+                            batch_num,
+                            e,
+                            &content[..content.len().min(200)]
+                        );
                     }
                 }
             }
@@ -802,7 +933,13 @@ pub async fn generate_themes(
         );
     }
 
-    emit_progress(&app, "saving", total_batches, total_batches, "Saving themes...");
+    emit_progress(
+        &app,
+        "saving",
+        total_batches,
+        total_batches,
+        "Saving themes...",
+    );
     let now = Utc::now().timestamp();
     let expires_at = now + 6 * 3600; // 6 hours
 
@@ -957,17 +1094,21 @@ pub async fn triage_articles(
             };
             queries::get_articles(&conn, &filter).map_err(|e| e.to_string())?
         } else {
-            queries::get_untriaged_article_ids(&conn, MAX_PER_RUN)
-                .map_err(|e| e.to_string())?
+            queries::get_untriaged_article_ids(&conn, MAX_PER_RUN).map_err(|e| e.to_string())?
         };
-        let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
+        let settings_json =
+            queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
         let prefs = queries::build_preference_profile(&conn).ok();
         (articles, settings_json, prefs)
     };
 
     if articles.is_empty() {
         emit_triage_progress(&app, "done", 1, 1, "Nothing to triage");
-        return Ok(crate::db::models::TriageResult { triaged_count: 0, batches: 0, errors: vec![] });
+        return Ok(crate::db::models::TriageResult {
+            triaged_count: 0,
+            batches: 0,
+            errors: vec![],
+        });
     }
 
     let settings: crate::db::models::AppSettings = settings_json
@@ -976,13 +1117,18 @@ pub async fn triage_articles(
         .unwrap_or_default();
 
     if settings.ai.provider == "none" {
-        return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
+        return Err(
+            "No AI provider configured. Go to Settings to set up an AI provider.".to_string(),
+        );
     }
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
     let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
-    let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
+    let model = ai_settings
+        .model
+        .clone()
+        .unwrap_or_else(|| default_model(&ai_settings.provider));
 
     let batch_size = match ai_settings.provider.as_str() {
         "local" => 15,
@@ -1003,7 +1149,12 @@ pub async fn triage_articles(
             "batch",
             batch_count as u32 - 1,
             total_batches,
-            &format!("Triaging {}/{} ({} articles)", batch_count, total_batches, articles.len()),
+            &format!(
+                "Triaging {}/{} ({} articles)",
+                batch_count,
+                total_batches,
+                articles.len()
+            ),
         );
 
         // Compact TSV listing using numeric handles. UUIDs (36 chars each)
@@ -1021,7 +1172,10 @@ pub async fn triage_articles(
             let excerpt_clean = excerpt.replace(['\n', '\t'], " ");
             listing.push_str(&format!(
                 "{}\t{}\t[{}]\t{}\n",
-                i, a.article.title.trim(), a.feed_title, excerpt_clean
+                i,
+                a.article.title.trim(),
+                a.feed_title,
+                excerpt_clean
             ));
         }
         // ~30 output tokens per item is plenty for handle + priority + short reason.
@@ -1030,8 +1184,19 @@ pub async fn triage_articles(
         let request = ChatRequest {
             model: model.clone(),
             messages: vec![
-                ChatMessage { role: "system".to_string(), content: prompts::triage_system_prompt(preferences.as_ref(), ai_settings.triage_user_prompt.as_deref()), content_blocks: None },
-                ChatMessage { role: "user".to_string(), content: prompts::triage_user_prompt(&listing), content_blocks: None },
+                ChatMessage {
+                    role: "system".to_string(),
+                    content: prompts::triage_system_prompt(
+                        preferences.as_ref(),
+                        ai_settings.triage_user_prompt.as_deref(),
+                    ),
+                    content_blocks: None,
+                },
+                ChatMessage {
+                    role: "user".to_string(),
+                    content: prompts::triage_user_prompt(&listing),
+                    content_blocks: None,
+                },
             ],
             temperature: Some(0.3),
             max_tokens: Some(max_tokens),
@@ -1050,9 +1215,9 @@ pub async fn triage_articles(
                             .into_iter()
                             .filter_map(|t| {
                                 let article_id = match &t.id {
-                                    serde_json::Value::Number(n) => n
-                                        .as_u64()
-                                        .and_then(|i| chunk.get(i as usize).map(|a| a.article.id.clone())),
+                                    serde_json::Value::Number(n) => n.as_u64().and_then(|i| {
+                                        chunk.get(i as usize).map(|a| a.article.id.clone())
+                                    }),
                                     serde_json::Value::String(s) => {
                                         if let Ok(i) = s.trim().parse::<usize>() {
                                             chunk.get(i).map(|a| a.article.id.clone())
@@ -1077,10 +1242,16 @@ pub async fn triage_articles(
 
                         triaged_count += triage_items.len() as i32;
                         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                        queries::upsert_triage_batch(&conn, &triage_items).map_err(|e| e.to_string())?;
+                        queries::upsert_triage_batch(&conn, &triage_items)
+                            .map_err(|e| e.to_string())?;
                     }
                     Err(e) => {
-                        log::warn!("Failed to parse triage batch {}: {}. Response: {}", batch_count, e, &content[..content.len().min(300)]);
+                        log::warn!(
+                            "Failed to parse triage batch {}: {}. Response: {}",
+                            batch_count,
+                            e,
+                            &content[..content.len().min(300)]
+                        );
                         errors.push(format!("Batch {}: parse error: {}", batch_count, e));
                     }
                 }
@@ -1121,18 +1292,21 @@ pub async fn triage_articles(
         &format!("Triaged {} articles", triaged_count),
     );
 
-    Ok(crate::db::models::TriageResult { triaged_count, batches: batch_count, errors })
+    Ok(crate::db::models::TriageResult {
+        triaged_count,
+        batches: batch_count,
+        errors,
+    })
 }
 
 fn extract_keywords(text: &str) -> std::collections::HashSet<String> {
     const STOPWORDS: &[&str] = &[
-        "the", "and", "for", "that", "this", "with", "from", "your", "about",
-        "into", "over", "have", "has", "been", "were", "was", "are", "not",
-        "how", "why", "when", "what", "who", "which", "will", "just", "its",
-        "they", "them", "their", "there", "these", "those", "then", "than",
-        "because", "also", "some", "more", "most", "like", "between",
-        "against", "upon", "after", "before", "during", "only", "such",
-        "any", "all", "but", "can", "you", "your", "our",
+        "the", "and", "for", "that", "this", "with", "from", "your", "about", "into", "over",
+        "have", "has", "been", "were", "was", "are", "not", "how", "why", "when", "what", "who",
+        "which", "will", "just", "its", "they", "them", "their", "there", "these", "those", "then",
+        "than", "because", "also", "some", "more", "most", "like", "between", "against", "upon",
+        "after", "before", "during", "only", "such", "any", "all", "but", "can", "you", "your",
+        "our",
     ];
     let stop: std::collections::HashSet<&str> = STOPWORDS.iter().copied().collect();
     text.to_lowercase()
@@ -1163,7 +1337,9 @@ fn compute_rerank_adjustments(
     let mut cluster_size: Vec<usize> = vec![0; per_article.len()];
     for i in 0..per_article.len() {
         for j in 0..per_article.len() {
-            if i == j { continue; }
+            if i == j {
+                continue;
+            }
             let overlap = per_article[i].1.intersection(&per_article[j].1).count();
             if overlap >= 2 {
                 cluster_size[i] += 1;
@@ -1213,12 +1389,20 @@ pub async fn get_inbox_articles(
     offset: Option<i64>,
 ) -> Result<Vec<crate::db::models::ArticleWithTriage>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    queries::get_inbox_articles(&conn, min_priority, is_read, limit.unwrap_or(1000), offset.unwrap_or(0))
-        .map_err(|e| e.to_string())
+    queries::get_inbox_articles(
+        &conn,
+        min_priority,
+        is_read,
+        limit.unwrap_or(1000),
+        offset.unwrap_or(0),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn get_triage_stats(db: State<'_, Database>) -> Result<crate::db::models::TriageStats, String> {
+pub async fn get_triage_stats(
+    db: State<'_, Database>,
+) -> Result<crate::db::models::TriageStats, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     queries::get_triage_stats(&conn).map_err(|e| e.to_string())
 }
@@ -1297,7 +1481,10 @@ struct CatchupRawItem {
     article_ids: serde_json::Value,
 }
 
-fn resolve_handles(v: &serde_json::Value, articles: &[crate::db::models::ArticleWithFeed]) -> Vec<String> {
+fn resolve_handles(
+    v: &serde_json::Value,
+    articles: &[crate::db::models::ArticleWithFeed],
+) -> Vec<String> {
     let arr = match v.as_array() {
         Some(a) => a,
         None => return vec![],
@@ -1329,7 +1516,8 @@ pub async fn generate_catchup_report(
 ) -> Result<CatchupReport, String> {
     let (pool, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
+        let settings_json =
+            queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
         let pool: Vec<crate::db::models::ArticleWithFeed> = match scope.as_deref() {
             Some("inbox") => {
                 let inbox = queries::get_inbox_articles(&conn, Some(3), Some(false), 100, 0)
@@ -1395,10 +1583,17 @@ pub async fn generate_catchup_report(
             .take(220)
             .collect();
         let clean = excerpt.replace(['\n', '\t'], " ");
-        listing.push_str(&format!("{}\t{}\t[{}]\t{}\n", i, a.article.title.trim(), a.feed_title, clean));
+        listing.push_str(&format!(
+            "{}\t{}\t[{}]\t{}\n",
+            i,
+            a.article.title.trim(),
+            a.feed_title,
+            clean
+        ));
     }
 
-    let system = "You write a super-quick catch-up brief over a reader's RSS feed. Output JSON only. \
+    let system =
+        "You write a super-quick catch-up brief over a reader's RSS feed. Output JSON only. \
                   Extract the 10 most important takeaways and 5-8 notable mentions (smaller items \
                   worth knowing about). Each item is one tight sentence and cites the numeric \
                   handles of the supporting articles.";
@@ -1412,8 +1607,16 @@ Output JSON:
     let req = ChatRequest {
         model,
         messages: vec![
-            ChatMessage { role: "system".to_string(), content: system.to_string(), content_blocks: None },
-            ChatMessage { role: "user".to_string(), content: user, content_blocks: None },
+            ChatMessage {
+                role: "system".to_string(),
+                content: system.to_string(),
+                content_blocks: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: user,
+                content_blocks: None,
+            },
         ],
         temperature: Some(0.3),
         max_tokens: Some(2000),
@@ -1424,8 +1627,13 @@ Output JSON:
     let response = provider.chat(req).await?;
     let content = response.content.trim();
     let json_str = extract_json_object(content).unwrap_or(content);
-    let raw: CatchupRaw = serde_json::from_str(json_str)
-        .map_err(|e| format!("Failed to parse catchup response: {}. Raw: {}", e, &content[..content.len().min(300)]))?;
+    let raw: CatchupRaw = serde_json::from_str(json_str).map_err(|e| {
+        format!(
+            "Failed to parse catchup response: {}. Raw: {}",
+            e,
+            &content[..content.len().min(300)]
+        )
+    })?;
 
     let takeaways: Vec<CatchupItem> = raw
         .takeaways
@@ -1471,14 +1679,15 @@ Output JSON:
         })
         .collect();
 
-    Ok(CatchupReport { takeaways, notable_mentions, sources })
+    Ok(CatchupReport {
+        takeaways,
+        notable_mentions,
+        sources,
+    })
 }
 
 #[tauri::command]
-pub async fn count_read_matches(
-    db: State<'_, Database>,
-    query: String,
-) -> Result<i64, String> {
+pub async fn count_read_matches(db: State<'_, Database>, query: String) -> Result<i64, String> {
     let trimmed = query.trim();
     if trimmed.is_empty() {
         return Ok(0);

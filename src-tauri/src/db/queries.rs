@@ -78,7 +78,10 @@ pub fn get_feed_by_id(conn: &Connection, feed_id: &str) -> Result<Option<Feed>, 
     }
 }
 
-pub fn get_feedly_entry_ids(conn: &Connection, article_ids: &[String]) -> Result<Vec<(String, String)>, rusqlite::Error> {
+pub fn get_feedly_entry_ids(
+    conn: &Connection,
+    article_ids: &[String],
+) -> Result<Vec<(String, String)>, rusqlite::Error> {
     let mut results = Vec::new();
     for id in article_ids {
         let mut stmt = conn.prepare(
@@ -99,7 +102,11 @@ pub fn delete_feed(conn: &Connection, feed_id: &str) -> Result<(), rusqlite::Err
     Ok(())
 }
 
-pub fn rename_feed(conn: &Connection, feed_id: &str, new_title: &str) -> Result<(), rusqlite::Error> {
+pub fn rename_feed(
+    conn: &Connection,
+    feed_id: &str,
+    new_title: &str,
+) -> Result<(), rusqlite::Error> {
     conn.execute(
         "UPDATE feeds SET title = ?1, updated_at = ?2 WHERE id = ?3",
         params![new_title, chrono::Utc::now().timestamp(), feed_id],
@@ -157,7 +164,11 @@ pub fn list_folders(conn: &Connection) -> Result<Vec<Folder>, rusqlite::Error> {
     Ok(rows)
 }
 
-pub fn rename_folder(conn: &Connection, folder_id: &str, new_name: &str) -> Result<(), rusqlite::Error> {
+pub fn rename_folder(
+    conn: &Connection,
+    folder_id: &str,
+    new_name: &str,
+) -> Result<(), rusqlite::Error> {
     conn.execute(
         "UPDATE folders SET name = ?1 WHERE id = ?2",
         params![new_name, folder_id],
@@ -183,10 +194,7 @@ pub fn delete_folder(conn: &Connection, folder_id: &str) -> Result<(), rusqlite:
     Ok(())
 }
 
-pub fn reorder_folders(
-    conn: &Connection,
-    folder_ids: &[String],
-) -> Result<(), rusqlite::Error> {
+pub fn reorder_folders(conn: &Connection, folder_ids: &[String]) -> Result<(), rusqlite::Error> {
     let tx = conn.unchecked_transaction()?;
     for (idx, id) in folder_ids.iter().enumerate() {
         tx.execute(
@@ -224,10 +232,7 @@ pub fn merge_feed(
         "DELETE FROM articles WHERE feed_id = ?1",
         params![from_feed_id],
     )?;
-    tx.execute(
-        "DELETE FROM feeds WHERE id = ?1",
-        params![from_feed_id],
-    )?;
+    tx.execute("DELETE FROM feeds WHERE id = ?1", params![from_feed_id])?;
     tx.commit()?;
     Ok(())
 }
@@ -270,10 +275,7 @@ pub fn insert_article(conn: &Connection, article: &Article) -> Result<bool, rusq
     Ok(result > 0)
 }
 
-pub fn count_articles(
-    conn: &Connection,
-    filter: &ArticleFilter,
-) -> Result<i64, rusqlite::Error> {
+pub fn count_articles(conn: &Connection, filter: &ArticleFilter) -> Result<i64, rusqlite::Error> {
     let mut sql = String::from("SELECT COUNT(*) FROM articles a");
     let mut conditions = Vec::new();
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -362,7 +364,8 @@ pub fn get_articles(
         sql.push_str(&format!(" OFFSET {}", offset));
     }
 
-    let params_ref: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|p| p.as_ref()).collect();
 
     let mut stmt = conn.prepare(&sql)?;
     let articles = stmt
@@ -429,15 +432,81 @@ pub fn get_article_by_id(
     }
 }
 
+pub fn get_article_summary(
+    conn: &Connection,
+    article_id: &str,
+    cache_key: &str,
+) -> Result<Option<ArticleSummary>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT article_id, bullet_summary, full_summary, provider, model, created_at
+         FROM article_summaries
+         WHERE article_id = ?1 AND cache_key = ?2
+         LIMIT 1",
+    )?;
+    let mut rows = stmt.query_map(params![article_id, cache_key], |row| {
+        Ok(ArticleSummary {
+            article_id: row.get(0)?,
+            bullet_summary: row.get(1)?,
+            full_summary: row.get(2)?,
+            provider: row.get(3)?,
+            model: row.get(4)?,
+            created_at: row.get(5)?,
+        })
+    })?;
+    match rows.next() {
+        Some(Ok(summary)) => Ok(Some(summary)),
+        Some(Err(e)) => Err(e),
+        None => Ok(None),
+    }
+}
+
+pub fn upsert_article_summary(
+    conn: &Connection,
+    cache_key: &str,
+    summary: &ArticleSummary,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO article_summaries (
+            article_id, cache_key, bullet_summary, full_summary, provider, model, created_at
+         )
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(article_id, cache_key) DO UPDATE SET
+            bullet_summary = excluded.bullet_summary,
+            full_summary = excluded.full_summary,
+            provider = excluded.provider,
+            model = excluded.model,
+            created_at = excluded.created_at",
+        params![
+            summary.article_id,
+            cache_key,
+            summary.bullet_summary,
+            summary.full_summary,
+            summary.provider,
+            summary.model,
+            summary.created_at,
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn delete_article_summary(
+    conn: &Connection,
+    article_id: &str,
+    cache_key: &str,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "DELETE FROM article_summaries WHERE article_id = ?1 AND cache_key = ?2",
+        params![article_id, cache_key],
+    )?;
+    Ok(())
+}
+
 pub fn mark_articles_read(
     conn: &Connection,
     article_ids: &[String],
 ) -> Result<(), rusqlite::Error> {
     for id in article_ids {
-        conn.execute(
-            "UPDATE articles SET is_read = 1 WHERE id = ?1",
-            params![id],
-        )?;
+        conn.execute("UPDATE articles SET is_read = 1 WHERE id = ?1", params![id])?;
     }
     Ok(())
 }
@@ -447,10 +516,7 @@ pub fn mark_articles_unread(
     article_ids: &[String],
 ) -> Result<(), rusqlite::Error> {
     for id in article_ids {
-        conn.execute(
-            "UPDATE articles SET is_read = 0 WHERE id = ?1",
-            params![id],
-        )?;
+        conn.execute("UPDATE articles SET is_read = 0 WHERE id = ?1", params![id])?;
     }
     Ok(())
 }
@@ -534,7 +600,11 @@ pub fn get_total_unread_count(conn: &Connection) -> Result<i64, rusqlite::Error>
     )
 }
 
-pub fn update_feed_fetched(conn: &Connection, feed_id: &str, timestamp: i64) -> Result<(), rusqlite::Error> {
+pub fn update_feed_fetched(
+    conn: &Connection,
+    feed_id: &str,
+    timestamp: i64,
+) -> Result<(), rusqlite::Error> {
     conn.execute(
         "UPDATE feeds SET last_fetched_at = ?1, updated_at = ?1 WHERE id = ?2",
         params![timestamp, feed_id],
@@ -547,12 +617,23 @@ pub fn insert_theme(conn: &Connection, theme: &Theme) -> Result<(), rusqlite::Er
     conn.execute(
         "INSERT OR REPLACE INTO themes (id, label, summary, created_at, expires_at)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![theme.id, theme.label, theme.summary, theme.created_at, theme.expires_at],
+        params![
+            theme.id,
+            theme.label,
+            theme.summary,
+            theme.created_at,
+            theme.expires_at
+        ],
     )?;
     Ok(())
 }
 
-pub fn insert_theme_article(conn: &Connection, theme_id: &str, article_id: &str, relevance: f64) -> Result<(), rusqlite::Error> {
+pub fn insert_theme_article(
+    conn: &Connection,
+    theme_id: &str,
+    article_id: &str,
+    relevance: f64,
+) -> Result<(), rusqlite::Error> {
     conn.execute(
         "INSERT OR REPLACE INTO theme_articles (theme_id, article_id, relevance)
          VALUES (?1, ?2, ?3)",
@@ -616,7 +697,10 @@ pub fn list_article_theme_pairs(
 }
 
 // Triage queries
-pub fn upsert_triage_batch(conn: &Connection, items: &[ArticleTriage]) -> Result<(), rusqlite::Error> {
+pub fn upsert_triage_batch(
+    conn: &Connection,
+    items: &[ArticleTriage],
+) -> Result<(), rusqlite::Error> {
     let tx = conn.unchecked_transaction()?;
     {
         let mut stmt = tx.prepare(
@@ -625,8 +709,12 @@ pub fn upsert_triage_batch(conn: &Connection, items: &[ArticleTriage]) -> Result
         )?;
         for item in items {
             stmt.execute(params![
-                item.article_id, item.priority, item.reason,
-                item.provider, item.model, item.created_at,
+                item.article_id,
+                item.priority,
+                item.reason,
+                item.provider,
+                item.model,
+                item.created_at,
             ])?;
         }
     }
@@ -649,7 +737,7 @@ pub fn get_inbox_articles(
          FROM articles a
          JOIN feeds f ON a.feed_id = f.id
          LEFT JOIN article_triage t ON a.id = t.article_id
-         WHERE 1=1"
+         WHERE 1=1",
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
@@ -666,11 +754,12 @@ pub fn get_inbox_articles(
     sql.push_str(
         " ORDER BY CASE WHEN t.priority IS NULL THEN 1 ELSE 0 END,
                    t.priority DESC,
-                   COALESCE(a.published_at, a.fetched_at) DESC"
+                   COALESCE(a.published_at, a.fetched_at) DESC",
     );
     sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
 
-    let params_ref: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+    let params_ref: Vec<&dyn rusqlite::types::ToSql> =
+        param_values.iter().map(|p| p.as_ref()).collect();
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt
         .query_map(params_ref.as_slice(), |row| {
@@ -699,7 +788,10 @@ pub fn get_inbox_articles(
     Ok(rows)
 }
 
-pub fn get_untriaged_article_ids(conn: &Connection, limit: i64) -> Result<Vec<ArticleWithFeed>, rusqlite::Error> {
+pub fn get_untriaged_article_ids(
+    conn: &Connection,
+    limit: i64,
+) -> Result<Vec<ArticleWithFeed>, rusqlite::Error> {
     let mut stmt = conn.prepare(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
                 a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id,
@@ -709,7 +801,7 @@ pub fn get_untriaged_article_ids(conn: &Connection, limit: i64) -> Result<Vec<Ar
          LEFT JOIN article_triage t ON a.id = t.article_id
          WHERE a.is_read = 0 AND t.article_id IS NULL
          ORDER BY COALESCE(a.published_at, a.fetched_at) DESC
-         LIMIT ?1"
+         LIMIT ?1",
     )?;
     let rows = stmt
         .query_map(params![limit], |row| {
@@ -743,12 +835,10 @@ pub fn get_triage_stats(conn: &Connection) -> Result<TriageStats, rusqlite::Erro
          FROM article_triage t
          JOIN articles a ON t.article_id = a.id
          WHERE a.is_read = 0
-         GROUP BY t.priority"
+         GROUP BY t.priority",
     )?;
     let mut by_priority = std::collections::HashMap::new();
-    let rows = stmt.query_map([], |row| {
-        Ok((row.get::<_, i32>(0)?, row.get::<_, i64>(1)?))
-    })?;
+    let rows = stmt.query_map([], |row| Ok((row.get::<_, i32>(0)?, row.get::<_, i64>(1)?)))?;
     for row in rows {
         let (priority, count) = row?;
         by_priority.insert(priority, count);
@@ -797,7 +887,10 @@ pub fn clear_hallucinated_triage(conn: &Connection) -> Result<i64, rusqlite::Err
 /// Collect signal titles: starred articles + high-engagement articles.
 /// Used by the triage reranker to boost articles similar to what the
 /// reader has already shown interest in.
-pub fn collect_signal_titles(conn: &Connection, limit: i64) -> Result<Vec<String>, rusqlite::Error> {
+pub fn collect_signal_titles(
+    conn: &Connection,
+    limit: i64,
+) -> Result<Vec<String>, rusqlite::Error> {
     let mut titles = Vec::new();
     // Starred
     {
@@ -852,7 +945,11 @@ pub fn list_unread_triaged(
     )?;
     let rows = stmt
         .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i32>(2)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i32>(2)?,
+            ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
@@ -909,10 +1006,7 @@ fn canonical_interaction_id(
 /// for the clicked article *and* any siblings with the same (title, feed_title)
 /// pair — duplicate feed imports produce multiple articles with distinct IDs,
 /// so deleting only one row leaves clones that re-surface on re-fetch.
-pub fn delete_interaction(
-    conn: &Connection,
-    article_id: &str,
-) -> Result<(), rusqlite::Error> {
+pub fn delete_interaction(conn: &Connection, article_id: &str) -> Result<(), rusqlite::Error> {
     conn.execute(
         "DELETE FROM article_interactions
          WHERE article_id IN (
@@ -1050,7 +1144,9 @@ fn normalize_for_dedup(url: &str) -> String {
         .strip_prefix("https://")
         .or_else(|| lower.strip_prefix("http://"))
         .unwrap_or(&lower);
-    let without_www = without_scheme.strip_prefix("www.").unwrap_or(without_scheme);
+    let without_www = without_scheme
+        .strip_prefix("www.")
+        .unwrap_or(without_scheme);
     let no_hash = without_www.split('#').next().unwrap_or("");
     // Strip query string entirely for dedup purposes — tracking params vary.
     let no_query = no_hash.split('?').next().unwrap_or("");
@@ -1125,7 +1221,9 @@ pub fn set_priority_override(
 
 /// Build a preference profile from interaction history.
 /// Returns top feeds, preferred/deprioritized topics extracted from article titles.
-pub fn build_preference_profile(conn: &Connection) -> Result<UserPreferenceProfile, rusqlite::Error> {
+pub fn build_preference_profile(
+    conn: &Connection,
+) -> Result<UserPreferenceProfile, rusqlite::Error> {
     // Top feeds by engagement (reading_time weighted)
     let mut stmt = conn.prepare(
         "SELECT f.title, SUM(i.reading_time_sec) + SUM(i.chat_messages) * 60 as engagement
@@ -1135,7 +1233,7 @@ pub fn build_preference_profile(conn: &Connection) -> Result<UserPreferenceProfi
          WHERE i.reading_time_sec > 10 OR i.chat_messages > 0 OR i.feedback = 'more'
          GROUP BY f.id
          ORDER BY engagement DESC
-         LIMIT 10"
+         LIMIT 10",
     )?;
     let top_feeds: Vec<String> = stmt
         .query_map([], |row| row.get::<_, String>(0))?
@@ -1150,7 +1248,7 @@ pub fn build_preference_profile(conn: &Connection) -> Result<UserPreferenceProfi
          WHERE i.feedback = 'more' OR i.reading_time_sec > 120 OR i.chat_messages >= 2
              OR i.priority_override >= 4
          ORDER BY i.updated_at DESC
-         LIMIT 30"
+         LIMIT 30",
     )?;
     let preferred_topics: Vec<String> = stmt
         .query_map([], |row| row.get::<_, String>(0))?
@@ -1164,7 +1262,7 @@ pub fn build_preference_profile(conn: &Connection) -> Result<UserPreferenceProfi
          JOIN articles a ON i.article_id = a.id
          WHERE i.feedback = 'less' OR i.priority_override <= 1
          ORDER BY i.updated_at DESC
-         LIMIT 20"
+         LIMIT 20",
     )?;
     let deprioritized_topics: Vec<String> = stmt
         .query_map([], |row| row.get::<_, String>(0))?
@@ -1230,4 +1328,3 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), rusq
     )?;
     Ok(())
 }
-

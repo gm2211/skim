@@ -150,13 +150,40 @@ button, a, input, select, textarea, [role="button"] {
   background: var(--color-text-muted);
 }
 
+.article-reader-header {
+  margin-bottom: 34px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.article-reader-title {
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: 0;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 600px) {
+  .article-reader-title {
+    font-size: 30px;
+  }
+}
+
+.article-reader-meta {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 /* Article content styling */
-.article-content {
-  line-height: 1.7;
-  font-size: 15px;
+.article-content,
+.full-article-content {
+  line-height: 1.78;
+  font-size: 18px;
   max-width: 100%;
   overflow-x: hidden;
   overflow-wrap: anywhere;
+  color: var(--color-text-primary);
 }
 
 .article-content *,
@@ -168,67 +195,106 @@ button, a, input, select, textarea, [role="button"] {
 .article-content h1,
 .article-content h2,
 .article-content h3,
-.article-content h4 {
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
-  font-weight: 600;
+.article-content h4,
+.full-article-content h1,
+.full-article-content h2,
+.full-article-content h3,
+.full-article-content h4 {
+  color: var(--color-text-primary);
+  line-height: 1.22;
+  margin-top: 1.65em;
+  margin-bottom: 0.55em;
+  font-weight: 750;
+  letter-spacing: 0;
 }
 
-.article-content p {
-  margin-bottom: 1em;
+.article-content h1,
+.full-article-content h1 {
+  font-size: 1.55em;
 }
 
-.article-content a {
+.article-content h2,
+.full-article-content h2 {
+  font-size: 1.32em;
+}
+
+.article-content h3,
+.full-article-content h3 {
+  font-size: 1.15em;
+}
+
+.article-content p,
+.full-article-content p {
+  margin: 0 0 1.18em;
+}
+
+.article-content a,
+.full-article-content a {
   color: var(--color-accent);
-  text-decoration: none;
-}
-
-.article-content a:hover {
   text-decoration: underline;
+  text-decoration-color: rgba(88, 166, 255, 0.32);
+  text-underline-offset: 0.18em;
 }
 
-.article-content img {
+.article-content a:hover,
+.full-article-content a:hover {
+  text-decoration-color: var(--color-accent);
+}
+
+.article-content img,
+.full-article-content img {
   max-width: 100%;
   height: auto;
-  border-radius: 6px;
-  margin: 1em 0;
+  border-radius: 10px;
+  margin: 1.25em 0;
 }
 
 .article-content iframe,
 .article-content video,
 .article-content embed,
-.article-content object {
+.article-content object,
+.full-article-content iframe,
+.full-article-content video,
+.full-article-content embed,
+.full-article-content object {
   max-width: 100%;
   width: 100%;
   height: auto;
   aspect-ratio: 16 / 9;
-  border-radius: 6px;
-  margin: 1em 0;
+  border-radius: 10px;
+  margin: 1.25em 0;
   border: none;
+  display: block;
 }
 
-.article-content blockquote {
-  border-left: 3px solid var(--color-border);
+.article-content blockquote,
+.full-article-content blockquote {
+  border-left: 3px solid var(--color-accent);
   padding-left: 1em;
-  margin: 1em 0;
+  margin: 1.35em 0;
   color: var(--color-text-secondary);
+  font-size: 0.96em;
 }
 
-.article-content code {
+.article-content code,
+.full-article-content code {
   background: var(--color-bg-tertiary);
-  padding: 0.2em 0.4em;
-  border-radius: 4px;
+  padding: 0.18em 0.38em;
+  border-radius: 5px;
   font-size: 0.9em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.article-content pre {
+.article-content pre,
+.full-article-content pre {
   background: var(--color-bg-tertiary);
-  padding: 1em;
-  border-radius: 6px;
+  padding: 1em 1.1em;
+  border-radius: 10px;
   overflow-x: hidden;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  margin: 1em 0;
+  margin: 1.25em 0;
 }
 
 .article-content pre code {
@@ -238,13 +304,18 @@ button, a, input, select, textarea, [role="button"] {
   overflow-wrap: inherit;
 }
 
-.article-content ul, .article-content ol {
-  margin: 1em 0;
-  padding-left: 2em;
+.article-content ul,
+.article-content ol,
+.full-article-content ul,
+.full-article-content ol {
+  margin: 1.1em 0 1.25em;
+  padding-left: 1.45em;
 }
 
-.article-content li {
-  margin-bottom: 0.5em;
+.article-content li,
+.full-article-content li {
+  margin-bottom: 0.52em;
+  padding-left: 0.08em;
 }
 
 .article-content table,
@@ -287,16 +358,6 @@ button, a, input, select, textarea, [role="button"] {
   overflow: hidden;
 }
 
-/* Full article content — render like the actual webpage */
-.full-article-content {
-  font-size: 16px;
-  line-height: 1.8;
-  color: var(--color-text-primary);
-  max-width: 100%;
-  overflow-x: hidden;
-  overflow-wrap: anywhere;
-}
-
 /* Neutralize absolute/fixed/sticky positioning from website styles */
 .full-article-content * {
   position: static !important;
@@ -309,48 +370,6 @@ button, a, input, select, textarea, [role="button"] {
 .full-article-content [style*="absolute"],
 .full-article-content [style*="z-index"] {
   position: static !important;
-}
-
-.full-article-content img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 8px;
-  margin: 1em 0;
-}
-
-.full-article-content iframe,
-.full-article-content video,
-.full-article-content embed,
-.full-article-content object {
-  max-width: 100%;
-  width: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
-  border-radius: 8px;
-  margin: 1em 0;
-  border: none;
-  display: block;
-}
-
-.full-article-content pre {
-  overflow-x: hidden;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.full-article-content code {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.full-article-content a {
-  color: var(--color-accent);
-  text-decoration: underline;
-  text-decoration-color: rgba(88, 166, 255, 0.3);
-}
-
-.full-article-content a:hover {
-  text-decoration-color: var(--color-accent);
 }
 
 /* Hide common website UI junk that leaks into fetched articles */

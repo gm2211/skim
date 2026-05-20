@@ -19,6 +19,13 @@ const PRIORITY_GROUP_LABELS: Record<number, string> = {
   1: "SKIP",
 };
 
+const STICKY_READ_TTL_MS = 2 * 60 * 1000;
+
+type StickyArticleEntry = {
+  article: any;
+  expiresAt: number;
+};
+
 function groupByPriority(articles: ArticleWithTriage[]) {
   const groups: { label: string; indices: number[] }[] = [];
   let currentKey: string | number = "";
@@ -85,6 +92,7 @@ export function ArticleList() {
     sidebarCollapsed,
     listCollapsed,
     isPhone,
+    phonePane,
     setPhonePane,
     setShowCatchup,
   } = useUiStore();
@@ -172,29 +180,63 @@ export function ArticleList() {
 
   // Sticky-read retention: in unread-only views, an article that just
   // got marked read would otherwise drop out on the next refetch and
-  // shift everything below it. Keep it pinned (styled as read) until
-  // the user actually navigates away from the list. Reset on:
-  // - view/filter change (so all↔unread toggles never bleed read items)
-  // - phone leaves the list pane (returning re-fetches fresh)
-  const stickyMapRef = useRef<Map<string, any>>(new Map());
+  // shift everything below it. Keep it pinned briefly (styled as read)
+  // while the reader is open, then let unread filters become strict again.
+  const stickyMapRef = useRef<Map<string, StickyArticleEntry>>(new Map());
   // Bumped whenever we deliberately want to drop the sticky map and
   // re-derive `articles` from rawArticles only.
   const [stickyEpoch, setStickyEpoch] = useState(0);
-  useEffect(() => {
+  const clearStickyArticles = useCallback(() => {
     stickyMapRef.current = new Map();
-  }, [sidebarView, listFilter]);
+    setStickyEpoch((n) => n + 1);
+  }, []);
+
+  useEffect(() => {
+    clearStickyArticles();
+  }, [clearStickyArticles, sidebarView, listFilter]);
+
+  useEffect(() => {
+    if (!selectedArticleId && (!isPhone || phonePane === "list")) {
+      clearStickyArticles();
+    }
+  }, [clearStickyArticles, isPhone, phonePane, selectedArticleId]);
+
   // Only accumulate sticky entries while we are actually in an
   // unread-style view; otherwise the map would carry read items from
   // "all" into a subsequent "unread" toggle.
   const stickyEnabled = isInbox || listFilter === "unread";
   if (rawArticles && stickyEnabled) {
-    for (const a of rawArticles) stickyMapRef.current.set(a.id, a);
+    const expiresAt = Date.now() + STICKY_READ_TTL_MS;
+    for (const a of rawArticles) {
+      if (!a.is_read) stickyMapRef.current.set(a.id, { article: a, expiresAt });
+    }
   }
+
+  useEffect(() => {
+    if (!stickyEnabled || stickyMapRef.current.size === 0) return;
+
+    const now = Date.now();
+    const nextExpiry = Math.min(...Array.from(stickyMapRef.current.values(), (entry) => entry.expiresAt));
+    const timeout = window.setTimeout(() => {
+      const cutoff = Date.now();
+      let changed = false;
+      for (const [id, entry] of stickyMapRef.current) {
+        if (entry.expiresAt <= cutoff) {
+          stickyMapRef.current.delete(id);
+          changed = true;
+        }
+      }
+      if (changed) setStickyEpoch((n) => n + 1);
+    }, Math.max(0, nextExpiry - now) + 50);
+
+    return () => window.clearTimeout(timeout);
+  }, [rawArticles, stickyEnabled, stickyEpoch]);
 
   const articles = useMemo(() => {
     if (!rawArticles) return rawArticles;
     const have = new Set(rawArticles.map((a) => a.id));
     const injected: any[] = [];
+    const now = Date.now();
     // Unread-only queries (listFilter==="unread", inbox, or hidden
     // is_read:false) drop read articles on refetch. For every
     // previously-seen article missing from rawArticles, inject the
@@ -202,12 +244,16 @@ export function ArticleList() {
     // stays in position.
     const unreadOnly = isInbox || listFilter === "unread";
     if (unreadOnly) {
-      for (const [id, cached] of stickyMapRef.current) {
-        if (!have.has(id)) injected.push({ ...cached, is_read: true });
+      for (const [id, entry] of stickyMapRef.current) {
+        if (entry.expiresAt <= now) {
+          stickyMapRef.current.delete(id);
+        } else if (!have.has(id)) {
+          injected.push({ ...entry.article, is_read: true });
+        }
       }
     } else if (selectedArticleId && !have.has(selectedArticleId)) {
       const cached = stickyMapRef.current.get(selectedArticleId);
-      if (cached) injected.push(cached);
+      if (cached && cached.expiresAt > now) injected.push(cached.article);
     }
     if (injected.length === 0) return rawArticles;
     const combined = [...(rawArticles as any[]), ...injected];
@@ -696,8 +742,7 @@ export function ArticleList() {
             // sticky-read map and bump the epoch so the articles memo
             // re-runs without injecting previously-read entries.
             if (listFilter === "unread") {
-              stickyMapRef.current = new Map();
-              setStickyEpoch((n) => n + 1);
+              clearStickyArticles();
             }
             setListFilter("unread");
           }}

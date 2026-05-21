@@ -25,9 +25,11 @@
 		7C87C81EDE030A9459473E8D /* TasteModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA32ECFFFAF834236FDF04E /* TasteModel.swift */; };
 		8B797999B22B89495C05CA39 /* AquireBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */; };
 		8ED4B358481AC4273C225054 /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474BA38A4E522DB5D3ECB21 /* WebView.swift */; };
+		949AEC33EE8019F0584D6253 /* ArticleExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */; };
 		96F49A7819D5D167616F137F /* LegalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8387834F563CFA86721EBF1D /* LegalView.swift */; };
 		9A48EFF3F29B3477E0CE9120 /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 8B0DFA296F4A48F6B090AFBC /* Hub */; };
 		A20D6777CCE9FF23884FB7F1 /* NativeClaudeOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */; };
+		B953F0D786947B4765B2827E /* hackernoon-9m0.html in Resources */ = {isa = PBXBuildFile; fileRef = 7F972FCF70051CCDDFB99F04 /* hackernoon-9m0.html */; };
 		C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BCD3DD03D305C558D07614 /* NativeAI.swift */; };
 		C1D91C8A78E543F0F69FFE82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0C79E51007F91AE5C8286F40 /* Assets.xcassets */; };
 		D575AB676AA07786E29C32A0 /* CatchUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 839B1584F0E39B5A14D96C79 /* CatchUpView.swift */; };
@@ -40,18 +42,31 @@
 		F77D922DF2F50121B27BDD3B /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = A6EF4FD219591BC7A9787950 /* MLX */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		8CA74C38EBCC49CC2E963C05 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BF2799439C611FAABE478155 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D929318313B1392530E756B1;
+			remoteInfo = "Skim iOS";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		038284DEE00F91A360324653 /* Style.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Style.swift; sourceTree = "<group>"; };
+		093BD7166E85CDD2AC4F89C7 /* Skim iOS Tests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = "Skim iOS Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		0C79E51007F91AE5C8286F40 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderEditor.swift; sourceTree = "<group>"; };
 		1474BA38A4E522DB5D3ECB21 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
 		3442125155D4E58EF8001611 /* SmartFolderEval.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderEval.swift; sourceTree = "<group>"; };
+		3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleExtractorTests.swift; sourceTree = "<group>"; };
 		4FA32ECFFFAF834236FDF04E /* TasteModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteModel.swift; sourceTree = "<group>"; };
 		4FDE465769D153A0A0D17504 /* AIInboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInboxView.swift; sourceTree = "<group>"; };
 		55C58C12B9B2AB383B4BA89C /* SkimCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimCore; path = ../SkimCore; sourceTree = SOURCE_ROOT; };
 		63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = AquireBold.otf; sourceTree = "<group>"; };
 		6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleListView.swift; sourceTree = "<group>"; };
 		7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleExtractor.swift; sourceTree = "<group>"; };
+		7F972FCF70051CCDDFB99F04 /* hackernoon-9m0.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = "hackernoon-9m0.html"; sourceTree = "<group>"; };
 		8387834F563CFA86721EBF1D /* LegalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegalView.swift; sourceTree = "<group>"; };
 		839B1584F0E39B5A14D96C79 /* CatchUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchUpView.swift; sourceTree = "<group>"; };
 		89737FFF993802E562860605 /* AIDisclaimerLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDisclaimerLabel.swift; sourceTree = "<group>"; };
@@ -102,9 +117,18 @@
 				F382D506BD65E61FC2E26B85 /* fonts */,
 				5D931F04FC8D63ECE5B39F74 /* Packages */,
 				3E35E50044D8E41517AC148A /* SkimIOS */,
+				9A9C260A0D04A7C6FA1C365C /* SkimIOSTests */,
 				2BC0ADE719452D0F6EFFCB9A /* SkimMacOS */,
 				D7ABB738AAC39584D7DAB6DD /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		2491A6F269A3E3AB095AC9AD /* Fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				7F972FCF70051CCDDFB99F04 /* hackernoon-9m0.html */,
+			);
+			path = Fixtures;
 			sourceTree = "<group>";
 		};
 		2BC0ADE719452D0F6EFFCB9A /* SkimMacOS */ = {
@@ -169,9 +193,19 @@
 			path = Support;
 			sourceTree = "<group>";
 		};
+		9A9C260A0D04A7C6FA1C365C /* SkimIOSTests */ = {
+			isa = PBXGroup;
+			children = (
+				3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */,
+				2491A6F269A3E3AB095AC9AD /* Fixtures */,
+			);
+			path = SkimIOSTests;
+			sourceTree = "<group>";
+		};
 		D7ABB738AAC39584D7DAB6DD /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				093BD7166E85CDD2AC4F89C7 /* Skim iOS Tests.xctest */,
 				D60276D39C8ED76452B2EB26 /* Skim iOS.app */,
 				B72B2D107E596891809ECA5E /* Skim macOS.app */,
 			);
@@ -207,6 +241,25 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		B3AC36DCA5A75EAA653A61CB /* Skim iOS Tests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1B120E4F9E31DC215B3E7396 /* Build configuration list for PBXNativeTarget "Skim iOS Tests" */;
+			buildPhases = (
+				CFC5988FA2CBE764860703B5 /* Sources */,
+				7E5E1EE12F76A08E0FE4CE66 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				095049336C7DB52133B2EEA4 /* PBXTargetDependency */,
+			);
+			name = "Skim iOS Tests";
+			packageProductDependencies = (
+			);
+			productName = "Skim iOS Tests";
+			productReference = 093BD7166E85CDD2AC4F89C7 /* Skim iOS Tests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		D929318313B1392530E756B1 /* Skim iOS */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 08C47FB093FD6FC316B8207B /* Build configuration list for PBXNativeTarget "Skim iOS" */;
@@ -259,6 +312,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					B3AC36DCA5A75EAA653A61CB = {
+						DevelopmentTeam = 6KQV68SJ5P;
+						ProvisioningStyle = Automatic;
+					};
 					D929318313B1392530E756B1 = {
 						DevelopmentTeam = 6KQV68SJ5P;
 						ProvisioningStyle = Automatic;
@@ -290,12 +347,21 @@
 			projectRoot = "";
 			targets = (
 				D929318313B1392530E756B1 /* Skim iOS */,
+				B3AC36DCA5A75EAA653A61CB /* Skim iOS Tests */,
 				EC587717C8EAD7BD3D55046E /* Skim macOS */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		7E5E1EE12F76A08E0FE4CE66 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B953F0D786947B4765B2827E /* hackernoon-9m0.html in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8DAF624E914995313E502099 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -313,6 +379,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				705834903C7D5B0F2442C2D8 /* SkimMacOSApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CFC5988FA2CBE764860703B5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				949AEC33EE8019F0584D6253 /* ArticleExtractorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -346,6 +420,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		095049336C7DB52133B2EEA4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D929318313B1392530E756B1 /* Skim iOS */;
+			targetProxy = 8CA74C38EBCC49CC2E963C05 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		075E812BDEEEFF5A0A4F9E66 /* Debug */ = {
@@ -456,6 +538,48 @@
 				PRODUCT_NAME = Skim;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		4929B228B9DA6DD68A65F34E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 6KQV68SJ5P;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gm2211.skim.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Skim.app/Skim";
+			};
+			name = Debug;
+		};
+		98D31486DEF92EEE4E6269D6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 6KQV68SJ5P;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.gm2211.skim.tests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Skim.app/Skim";
 			};
 			name = Release;
 		};
@@ -591,6 +715,15 @@
 			buildConfigurations = (
 				E724FA0F7DC71E746A550215 /* Debug */,
 				D4F28219C4B8BC5A5122BE93 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		1B120E4F9E31DC215B3E7396 /* Build configuration list for PBXNativeTarget "Skim iOS Tests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4929B228B9DA6DD68A65F34E /* Debug */,
+				98D31486DEF92EEE4E6269D6 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

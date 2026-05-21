@@ -4,6 +4,9 @@ import Foundation
 /// articles from aggregator posts (HN, Reddit, Lobsters).
 ///
 /// Strategy (in order):
+/// 0. Check for JSON-LD `<script type="application/ld+json">` blocks containing
+///    a structured `articleBody` field — client-rendered sites (e.g. HackerNoon)
+///    embed the full article text there even when the DOM body is mostly JS.
 /// 1. Strip `<script>` / `<style>` / `<nav>` / `<header>` / `<footer>` blocks.
 /// 2. Strip noisy HTML attribute values (class, style, data-*, aria-*) so they
 ///    don't leak into the extracted text.
@@ -26,6 +29,17 @@ enum ArticleExtractor {
     /// - Throws: `ArticleExtractor.Error.contentLooksLikeMarkup` when the result
     ///   appears to contain CSS fragments or other markup noise.
     static func extract(from html: String, baseURL: URL) throws -> String {
+        // 0. Try JSON-LD articleBody BEFORE stripping <script> blocks.
+        //    Client-rendered sites (e.g. HackerNoon / Next.js) put the full
+        //    article text in a <script type="application/ld+json"> block even
+        //    though the visible DOM body is mostly JS shell.
+        if let jsonLDBody = extractJSONLDArticleBody(from: html) {
+            let sanitized = sanitizeReaderText(
+                jsonLDBody.decodingBasicHTMLEntities().collapsingWhitespace()
+            )
+            if !sanitized.isEmpty { return sanitized }
+        }
+
         var work = html
 
         // 1. Remove script/style/nav/header/footer blocks entirely
@@ -96,6 +110,72 @@ enum ArticleExtractor {
     }
 
     // MARK: - Helpers
+
+    /// Scans for `<script type="application/ld+json">` blocks and returns the
+    /// first `articleBody` string whose length is ≥ 200, or `nil` if none found.
+    ///
+    /// Handles the common JSON-LD shapes:
+    ///   - Single node: `{ "@type": "NewsArticle", "articleBody": "..." }`
+    ///   - `@graph` array: `{ "@graph": [ { "@type": "Article", "articleBody": "..." } ] }`
+    ///   - Top-level array: `[ { "@type": "BlogPosting", "articleBody": "..." } ]`
+    ///
+    /// Returns nil on any parse failure — tolerant by design.
+    private static func extractJSONLDArticleBody(from html: String) -> String? {
+        // Match <script type="application/ld+json"> ... </script> (case-insensitive, DOTALL)
+        let scriptPattern = #"<script[^>]*type\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script>"#
+        guard let scriptRegex = try? NSRegularExpression(
+            pattern: scriptPattern,
+            options: [.caseInsensitive, .dotMatchesLineSeparators]
+        ) else { return nil }
+
+        let htmlRange = NSRange(html.startIndex..<html.endIndex, in: html)
+        let scriptMatches = scriptRegex.matches(in: html, range: htmlRange)
+
+        let articleTypes: Set<String> = [
+            "article", "newsarticle", "blogposting", "techarticle", "report"
+        ]
+
+        for scriptMatch in scriptMatches {
+            guard scriptMatch.numberOfRanges >= 2,
+                  let contentRange = Range(scriptMatch.range(at: 1), in: html)
+            else { continue }
+
+            let jsonText = String(html[contentRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let jsonData = jsonText.data(using: .utf8),
+                  let parsed = try? JSONSerialization.jsonObject(with: jsonData, options: [.allowFragments])
+            else { continue }
+
+            // Collect candidate nodes from the various JSON-LD shapes
+            var nodes: [[String: Any]] = []
+            if let dict = parsed as? [String: Any] {
+                if let graph = dict["@graph"] as? [[String: Any]] {
+                    nodes = graph
+                } else {
+                    nodes = [dict]
+                }
+            } else if let array = parsed as? [[String: Any]] {
+                nodes = array
+            }
+
+            for node in nodes {
+                // @type may be a String or an array of Strings
+                var types: [String] = []
+                if let typeStr = node["@type"] as? String {
+                    types = [typeStr]
+                } else if let typeArr = node["@type"] as? [String] {
+                    types = typeArr
+                }
+
+                let typeMatches = types.contains { articleTypes.contains($0.lowercased()) }
+                guard typeMatches else { continue }
+
+                if let body = node["articleBody"] as? String, body.count >= 200 {
+                    return body
+                }
+            }
+        }
+        return nil
+    }
 
     /// Removes attribute values for class, style, data-*, and aria-* attributes
     /// from the raw HTML so they can't bleed into the extracted text.

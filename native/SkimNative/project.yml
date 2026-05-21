@@ -63,6 +63,23 @@ targets:
           - CFBundleURLName: com.gm2211.skim.oauth
             CFBundleURLSchemes:
               - skim
+  Skim iOS Tests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - SkimIOSTests
+    dependencies:
+      - target: Skim iOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gm2211.skim.tests
+        DEVELOPMENT_TEAM: 6KQV68SJ5P
+        SWIFT_VERSION: 6.0
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Skim.app/Skim"
+        BUNDLE_LOADER: "$(TEST_HOST)"
   Skim macOS:
     type: application
     platform: macOS

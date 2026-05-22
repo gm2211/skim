@@ -86,7 +86,7 @@ final class AppModel: ObservableObject {
     let tasteStore = TasteStore()
     private let importer = OPMLImportService()
     private let refresher = FeedRefreshService()
-    private let readLingerDuration: TimeInterval = 120
+    private let readLingerDuration: TimeInterval = 30 * 60
     private var recentlyReadArticles: [String: (article: Article, expiresAt: Date)] = [:]
     private var readLingerTask: Task<Void, Never>?
 
@@ -258,11 +258,15 @@ final class AppModel: ObservableObject {
         return true
     }
 
-    private func rememberRecentlyRead(_ article: Article) {
+    private func rememberRecentlyOpenedRead(_ article: Article) {
         guard listMode == .unread else { return }
         var copy = article
         copy.isRead = true
-        recentlyReadArticles[article.id] = (copy, Date().addingTimeInterval(readLingerDuration))
+        if let existing = recentlyReadArticles[article.id] {
+            recentlyReadArticles[article.id] = (copy, existing.expiresAt)
+        } else {
+            recentlyReadArticles[article.id] = (copy, Date().addingTimeInterval(readLingerDuration))
+        }
         scheduleReadLingerExpiry()
     }
 
@@ -275,6 +279,11 @@ final class AppModel: ObservableObject {
         recentlyReadArticles.removeAll()
         readLingerTask?.cancel()
         readLingerTask = nil
+    }
+
+    func clearReadLingerAndReloadArticles() async {
+        clearReadLingerState()
+        await reloadArticles()
     }
 
     private func scheduleReadLingerExpiry() {
@@ -344,11 +353,11 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func setRead(_ article: Article, isRead: Bool) async {
+    func setRead(_ article: Article, isRead: Bool, keepVisibleInUnreadList: Bool = false) async {
         do {
-            if isRead {
-                rememberRecentlyRead(article)
-            } else {
+            if isRead, keepVisibleInUnreadList {
+                rememberRecentlyOpenedRead(article)
+            } else if !isRead {
                 recentlyReadArticles.removeValue(forKey: article.id)
             }
             try await store.setArticleRead(id: article.id, isRead: isRead)
@@ -361,9 +370,7 @@ final class AppModel: ObservableObject {
     func setRead(_ articles: [Article], isRead: Bool) async {
         do {
             for article in articles {
-                if isRead {
-                    rememberRecentlyRead(article)
-                } else {
+                if !isRead {
                     recentlyReadArticles.removeValue(forKey: article.id)
                 }
                 try await store.setArticleRead(id: article.id, isRead: isRead)

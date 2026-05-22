@@ -243,7 +243,7 @@ struct ArticleDetailView: View {
 
         guard var loaded = await model.updatedArticle(id: articleID) else { return }
         if markRead, !loaded.isRead {
-            await model.setRead(loaded, isRead: true)
+            await model.setRead(loaded, isRead: true, keepVisibleInUnreadList: true)
             loaded.isRead = true
         }
         article = loaded
@@ -257,7 +257,7 @@ struct ArticleDetailView: View {
     private func toggleRead() async {
         guard var article else { return }
         let next = !article.isRead
-        await model.setRead(article, isRead: next)
+        await model.setRead(article, isRead: next, keepVisibleInUnreadList: next)
         article.isRead = next
         self.article = article
     }

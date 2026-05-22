@@ -191,6 +191,7 @@ struct ArticleListView: View {
         .onChange(of: showFeedPicker) { _, isShowing in
             if isShowing {
                 dismissTextEntry()
+                Task { await model.clearReadLingerAndReloadArticles() }
             }
         }
         .onChange(of: showAutoGroup) { _, isShowing in

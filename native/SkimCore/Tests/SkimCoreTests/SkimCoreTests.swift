@@ -214,6 +214,38 @@ import Testing
     #expect(article.contentText == "submitted by /u/ControlCAD [link] & [comments]")
 }
 
+@Test func extractsRedditExternalArticleFromRSSDescription() throws {
+    let commentsURL = "https://www.reddit.com/r/swift/comments/abc123/example_post/"
+    let article = ParsedArticle(
+        guid: nil,
+        title: "Example Reddit Link",
+        url: URL(string: commentsURL),
+        author: nil,
+        contentText: nil,
+        contentHTML: """
+        &#32; submitted by &#32;<a href="https://www.reddit.com/user/example">/u/example</a><br/>
+        <span><a href="https://example.com/story?x=1&amp;y=2">[link]</a></span>
+        <span><a href="\(commentsURL)">[comments]</a></span>
+        """,
+        imageURL: nil,
+        publishedAt: nil
+    )
+
+    let urls = AggregatorDetector.externalAndCommentsURL(from: article, kind: .reddit)
+    #expect(urls.commentsURL?.absoluteString == commentsURL)
+    #expect(urls.externalURL?.absoluteString == "https://example.com/story?x=1&y=2")
+}
+
+@Test func resolvesRedditExternalArticleFromJSON() throws {
+    let postData: [String: Any] = [
+        "is_self": false,
+        "url_overridden_by_dest": "https://example.com/from-json?one=1&amp;two=2"
+    ]
+
+    let externalURL = AggregatorService.redditExternalURL(from: postData)
+    #expect(externalURL?.absoluteString == "https://example.com/from-json?one=1&two=2")
+}
+
 private func temporaryStore() throws -> SkimStore {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     let url = dir.appendingPathComponent("skim.sqlite")

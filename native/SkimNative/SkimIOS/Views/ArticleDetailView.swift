@@ -517,6 +517,8 @@ private struct ReaderPage: View {
     @State private var autoExtractTimedOut = false
     // Reddit self-post body text fetched from the .json API
     @State private var redditSelftext: String? = nil
+    // External article URL resolved from Reddit JSON when older entries lack it.
+    @State private var resolvedExternalURL: URL? = nil
 
     var body: some View {
         ScrollView {
@@ -549,6 +551,7 @@ private struct ReaderPage: View {
             extractedBody = .idle
             autoExtractTimedOut = false
             redditSelftext = nil
+            resolvedExternalURL = nil
         }
         .task(id: article?.id) {
             guard let article else { return }
@@ -559,7 +562,9 @@ private struct ReaderPage: View {
                 await loadComments(for: article)
                 // Auto-extract the linked article for link posts (aggregator with externalURL
                 // but no selftext). Reddit selftext posts keep their current rendering.
-                if let externalURL = article.externalURL, redditSelftext == nil {
+                let externalURL = await externalArticleURL(for: article)
+                resolvedExternalURL = externalURL
+                if let externalURL, redditSelftext == nil {
                     await loadExternalArticle(url: externalURL)
                 }
             } else {
@@ -604,6 +609,8 @@ private struct ReaderPage: View {
 
     @ViewBuilder
     private func aggregatorSection(_ article: Article) -> some View {
+        let externalURL = article.externalURL ?? resolvedExternalURL
+
         VStack(alignment: .leading, spacing: 20) {
             // Reddit self-post body (fetched from .json API)
             if let selftext = redditSelftext {
@@ -617,14 +624,14 @@ private struct ReaderPage: View {
             }
 
             // External URL card (link posts or non-self-post aggregator items)
-            if let externalURL = article.externalURL {
+            if let externalURL {
                 externalURLCard(url: externalURL, article: article)
             }
 
             // Extracted body — shown when auto-extract is in progress or complete.
             // Applies to all aggregator kinds including Reddit link posts.
             // (Reddit selftext posts show body via `redditSelftext` above instead.)
-            if article.externalURL != nil && redditSelftext == nil {
+            if externalURL != nil && redditSelftext == nil {
                 switch extractedBody {
                 case .idle:
                     EmptyView()
@@ -857,6 +864,16 @@ private struct ReaderPage: View {
 
     // MARK: - Async actions
 
+    private func externalArticleURL(for article: Article) async -> URL? {
+        if let externalURL = article.externalURL {
+            return externalURL
+        }
+        guard article.aggregatorKind == .reddit,
+              let redditURL = article.commentsURL ?? article.url
+        else { return nil }
+        return await AggregatorService().fetchRedditExternalURL(from: redditURL)
+    }
+
     private func loadComments(for article: Article) async {
         commentsState = .loading
         let service = AggregatorService()
@@ -911,8 +928,14 @@ private struct ReaderPage: View {
     private func loadArticleForReader(url: URL, articleID: String) async {
         extractedBody = .loading
         autoExtractTimedOut = false
+        let effectiveURL = await readerURL(for: url) ?? url
+        if Self.isRedditURL(effectiveURL) {
+            extractedBody = .failed("Could not find the linked article in this Reddit post. Swipe left for the web view.")
+            return
+        }
+
         do {
-            var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
+            var request = URLRequest(url: effectiveURL, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
             request.setValue(
                 "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
                 forHTTPHeaderField: "User-Agent"
@@ -922,7 +945,7 @@ private struct ReaderPage: View {
                 extractedBody = .failed("Could not decode page.")
                 return
             }
-            let extracted = try ArticleExtractor.extract(from: html, baseURL: url)
+            let extracted = try ArticleExtractor.extract(from: html, baseURL: effectiveURL)
             if extracted.count < 200 {
                 extractedBody = .failed("Page content could not be extracted (anti-bot or paywall). Try the web view.")
             } else {
@@ -934,6 +957,22 @@ private struct ReaderPage: View {
         } catch {
             extractedBody = .failed(error.localizedDescription)
         }
+    }
+
+    private func readerURL(for url: URL) async -> URL? {
+        guard Self.isRedditURL(url) else { return url }
+        let service = AggregatorService()
+        return await service.fetchRedditExternalURL(from: url)
+    }
+
+    private static func isRedditURL(_ url: URL) -> Bool {
+        guard let host = url.host?.lowercased() else { return false }
+        return host == "reddit.com"
+            || host == "www.reddit.com"
+            || host == "old.reddit.com"
+            || host == "new.reddit.com"
+            || host.hasSuffix(".reddit.com")
+            || host == "redd.it"
     }
 
     /// Triggered on `.task` for non-aggregator articles. If the RSS body is too thin,

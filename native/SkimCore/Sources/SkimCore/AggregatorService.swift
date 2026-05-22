@@ -103,15 +103,47 @@ public struct AggregatorService: Sendable {
     /// Fetches the selftext body of a Reddit self-post. Returns `nil` for link posts
     /// (where selftext is empty) or when the request fails.
     public func fetchRedditSelftext(for article: SkimCore.Article) async -> String? {
-        guard let commentsURL = article.commentsURL ?? article.url else { return nil }
-        guard var components = URLComponents(url: commentsURL, resolvingAgainstBaseURL: false) else { return nil }
-        var path = components.path
-        if path.hasSuffix("/") { path.removeLast() }
-        path += ".json"
-        components.path = path
-        components.queryItems = [URLQueryItem(name: "limit", value: "1")]
-        guard let jsonURL = components.url else { return nil }
+        guard let commentsURL = article.commentsURL ?? article.url,
+              let postData = await fetchRedditPostData(from: commentsURL)
+        else { return nil }
 
+        guard let selftext = postData["selftext"] as? String,
+              !selftext.isEmpty,
+              selftext != "[deleted]",
+              selftext != "[removed]"
+        else { return nil }
+        return selftext.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Fetches the external link for a Reddit link post. Returns `nil` for self-posts,
+    /// Reddit-internal links, and failed requests.
+    public func fetchRedditExternalURL(for article: SkimCore.Article) async -> URL? {
+        guard let commentsURL = article.commentsURL ?? article.url else { return nil }
+        return await fetchRedditExternalURL(from: commentsURL)
+    }
+
+    /// Fetches the external link for a Reddit comments/permalink URL.
+    public func fetchRedditExternalURL(from commentsURL: URL) async -> URL? {
+        guard let postData = await fetchRedditPostData(from: commentsURL) else { return nil }
+        return Self.redditExternalURL(from: postData)
+    }
+
+    static func redditExternalURL(from postData: [String: Any]) -> URL? {
+        let isSelf = postData["is_self"] as? Bool ?? false
+        guard !isSelf else { return nil }
+
+        let candidate = (postData["url_overridden_by_dest"] as? String)
+            ?? (postData["url"] as? String)
+        guard let candidate,
+              let url = URL(string: candidate.decodingHTMLEntities()),
+              let host = url.host?.lowercased(),
+              !Self.isRedditHost(host)
+        else { return nil }
+        return url
+    }
+
+    private func fetchRedditPostData(from commentsURL: URL) async -> [String: Any]? {
+        guard let jsonURL = redditJSONURL(from: commentsURL, queryItems: [URLQueryItem(name: "limit", value: "1")]) else { return nil }
         do {
             var request = URLRequest(url: jsonURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
             request.setValue("ios:com.skimapp.skim:v1.0 (by /u/skim_reader)", forHTTPHeaderField: "User-Agent")
@@ -120,13 +152,9 @@ public struct AggregatorService: Sendable {
                   let postListing = root.first,
                   let listingData = postListing["data"] as? [String: Any],
                   let children = listingData["children"] as? [[String: Any]],
-                  let postData = children.first?["data"] as? [String: Any],
-                  let selftext = postData["selftext"] as? String,
-                  !selftext.isEmpty,
-                  selftext != "[deleted]",
-                  selftext != "[removed]"
+                  let postData = children.first?["data"] as? [String: Any]
             else { return nil }
-            return selftext.trimmingCharacters(in: .whitespacesAndNewlines)
+            return postData
         } catch {
             return nil
         }
@@ -137,19 +165,14 @@ public struct AggregatorService: Sendable {
     private func fetchRedditComments(article: SkimCore.Article, limit: Int) async -> [AggregatorComment] {
         // Reddit comments API: append .json to the comments permalink
         guard let commentsURL = article.commentsURL ?? article.url else { return [] }
-        guard var components = URLComponents(url: commentsURL, resolvingAgainstBaseURL: false) else { return [] }
-        // Strip trailing slash, then add .json
-        var path = components.path
-        if path.hasSuffix("/") { path.removeLast() }
-        path += ".json"
-        components.path = path
-        // Ask for top comments only
-        components.queryItems = [
-            URLQueryItem(name: "sort", value: "top"),
-            URLQueryItem(name: "limit", value: "\(limit)"),
-            URLQueryItem(name: "depth", value: "1")
-        ]
-        guard let jsonURL = components.url else { return [] }
+        guard let jsonURL = redditJSONURL(
+            from: commentsURL,
+            queryItems: [
+                URLQueryItem(name: "sort", value: "top"),
+                URLQueryItem(name: "limit", value: "\(limit)"),
+                URLQueryItem(name: "depth", value: "1")
+            ]
+        ) else { return [] }
 
         do {
             var request = URLRequest(url: jsonURL, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
@@ -186,6 +209,30 @@ public struct AggregatorService: Sendable {
             body: body.trimmingCharacters(in: .whitespacesAndNewlines),
             depth: 0
         )
+    }
+
+    private func redditJSONURL(from commentsURL: URL, queryItems: [URLQueryItem]) -> URL? {
+        guard var components = URLComponents(url: commentsURL, resolvingAgainstBaseURL: false) else { return nil }
+        if let host = components.host?.lowercased(), Self.isRedditHost(host) {
+            components.host = "www.reddit.com"
+        }
+        var path = components.path
+        if path.hasSuffix("/") { path.removeLast() }
+        if !path.hasSuffix(".json") {
+            path += ".json"
+        }
+        components.path = path
+        components.queryItems = queryItems
+        return components.url
+    }
+
+    private static func isRedditHost(_ host: String) -> Bool {
+        host == "reddit.com"
+            || host == "www.reddit.com"
+            || host == "old.reddit.com"
+            || host == "new.reddit.com"
+            || host.hasSuffix(".reddit.com")
+            || host == "redd.it"
     }
 
     // MARK: - Lobsters

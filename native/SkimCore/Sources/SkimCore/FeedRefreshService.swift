@@ -565,7 +565,7 @@ public enum AggregatorDetector {
 
     /// Scans HTML for the first href that is an absolute URL NOT pointing to reddit.com.
     private static func extractRedditExternalURL(from html: String) -> URL? {
-        let pattern = #"href\s*=\s*['"](\bhttps?://[^'"]+)['"]\s"#
+        let pattern = #"href\s*=\s*['"]([^'"]+)['"]"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil
         }
@@ -576,6 +576,8 @@ public enum AggregatorDetector {
                   let hrefRange = Range(match.range(at: 1), in: html)
             else { continue }
             let href = String(html[hrefRange])
+                .decodingHTMLEntities()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
             guard let url = URL(string: href),
                   let host = url.host?.lowercased(),
                   !host.hasSuffix("reddit.com"),

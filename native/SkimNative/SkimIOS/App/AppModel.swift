@@ -271,12 +271,6 @@ final class AppModel: ObservableObject {
         recentlyReadArticles = recentlyReadArticles.filter { $0.value.expiresAt > now }
     }
 
-    func clearReadLingeredArticles() async {
-        guard !recentlyReadArticles.isEmpty else { return }
-        clearReadLingerState()
-        await reloadArticles()
-    }
-
     private func clearReadLingerState() {
         recentlyReadArticles.removeAll()
         readLingerTask?.cancel()

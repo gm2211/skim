@@ -92,7 +92,6 @@ export function ArticleList() {
     sidebarCollapsed,
     listCollapsed,
     isPhone,
-    phonePane,
     setPhonePane,
     setShowCatchup,
   } = useUiStore();
@@ -181,7 +180,8 @@ export function ArticleList() {
   // Sticky-read retention: in unread-only views, an article that just
   // got marked read would otherwise drop out on the next refetch and
   // shift everything below it. Keep it pinned briefly (styled as read)
-  // while the reader is open, then let unread filters become strict again.
+  // even if the user returns to the list, then let unread filters become
+  // strict again after the linger timer or a scope/filter change.
   const stickyMapRef = useRef<Map<string, StickyArticleEntry>>(new Map());
   // Bumped whenever we deliberately want to drop the sticky map and
   // re-derive `articles` from rawArticles only.
@@ -194,12 +194,6 @@ export function ArticleList() {
   useEffect(() => {
     clearStickyArticles();
   }, [clearStickyArticles, sidebarView, listFilter]);
-
-  useEffect(() => {
-    if (!selectedArticleId && (!isPhone || phonePane === "list")) {
-      clearStickyArticles();
-    }
-  }, [clearStickyArticles, isPhone, phonePane, selectedArticleId]);
 
   // Only accumulate sticky entries while we are actually in an
   // unread-style view; otherwise the map would carry read items from

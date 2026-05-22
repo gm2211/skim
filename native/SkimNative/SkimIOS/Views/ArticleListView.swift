@@ -90,9 +90,6 @@ struct ArticleListView: View {
         .animation(.smooth(duration: 0.26), value: showFeedPicker)
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear {
-            Task { await model.clearReadLingeredArticles() }
-        }
         .fileImporter(
             isPresented: $showImporter,
             allowedContentTypes: [.xml, .data],

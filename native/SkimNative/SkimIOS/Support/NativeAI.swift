@@ -397,7 +397,7 @@ enum NativeAI {
             prompt: """
             Article to summarize:
 
-            \(articleDigest([article], limit: 1))
+            \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
             """,
             maxTokens: summaryMaxTokens(wordCount)
         )
@@ -424,7 +424,7 @@ enum NativeAI {
         let prompt = """
         Summarize this article. Write a summary of approximately \(wordCount) words.
 
-        \(articleDigest([article], limit: 1))
+        \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
         """
         let instructions = summaryInstructions(settings.ai)
         let maxTok = summaryMaxTokens(wordCount)
@@ -481,7 +481,7 @@ enum NativeAI {
             instructions: "You answer questions about a single article using only the provided article text and the conversation transcript. Answer the latest user question directly. Do not repeat a prior answer unless the user asks you to recap it. If the answer is not in the article, say so.",
             prompt: """
             Article:
-            \(articleDigest([article], limit: 1))
+            \(articleDigest([article], limit: 1, wordsPerArticle: 1800))
 
             Question:
             \(question)
@@ -801,7 +801,7 @@ enum NativeAI {
         Int(Double(wordCount) * 1.5) + 50
     }
 
-    private static func articleDigest(_ articles: [Article], limit: Int) -> String {
+    private static func articleDigest(_ articles: [Article], limit: Int, wordsPerArticle: Int = 95) -> String {
         let selected = articles.prefix(limit)
         if selected.isEmpty {
             return "No articles are available."
@@ -809,7 +809,7 @@ enum NativeAI {
 
         return selected.enumerated().map { index, article in
             let text = article.plainBody.trimmingCharacters(in: .whitespacesAndNewlines)
-            let excerpt = text.isEmpty ? "No reader text available." : text.prefixWords(95)
+            let excerpt = text.isEmpty ? "No reader text available." : text.prefixWords(wordsPerArticle)
             return """
             [\(index + 1)] \(article.title)
             Feed: \(article.feedTitle)

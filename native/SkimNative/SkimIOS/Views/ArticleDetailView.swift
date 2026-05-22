@@ -1,3 +1,4 @@
+import PDFKit
 import SkimCore
 import SwiftUI
 
@@ -22,6 +23,7 @@ struct ArticleDetailView: View {
     @State private var activeSummaryConfiguration: Article?
     @State private var showAIDisclaimerGate = false
     @State private var pendingAIAction: (() -> Void)?
+    @State private var webSnapshot = WebViewSnapshot()
 
     // Reading-time tracking
     @State private var openedAt: Date?
@@ -39,7 +41,7 @@ struct ArticleDetailView: View {
                         .contextMenu(menuItems: { detailContextMenu }, preview: { contextMenuPreview })
                         .tag(DetailPage.reader)
 
-                    WebPage(article: article)
+                    WebPage(article: article, snapshot: $webSnapshot)
                         .contextMenu(menuItems: { detailContextMenu }, preview: { contextMenuPreview })
                         .tag(DetailPage.web)
                 }
@@ -245,6 +247,7 @@ struct ArticleDetailView: View {
             loaded.isRead = true
         }
         article = loaded
+        webSnapshot = WebViewSnapshot(url: loaded.url, title: nil, text: nil)
 
         // Sync taste state from persisted signals
         let signal = model.tasteStore.signal(for: loaded.id)
@@ -275,6 +278,8 @@ struct ArticleDetailView: View {
         var settings = model.settings
         settings.ai = summarySettings
         activeSummaryConfiguration = nil
+        let useWebContext = page == .web
+        let webSnapshot = webSnapshot
 
         Task {
             await model.saveSettings(settings)
@@ -283,19 +288,36 @@ struct ArticleDetailView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
             activeAIResult = AIResultRequest(
                 title: "AI Summary",
-                subtitle: article.title,
+                subtitle: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
                 statusLabel: NativeAI.loadingStatusLabel(for: settings.ai),
                 action: {
-                    let text = try await NativeAI.summarize(article: article, settings: settings)
-                    return AIResultAnswer(text: text, articles: [article])
+                    let contextArticle = try await WebAIContext.article(
+                        base: article,
+                        preferWeb: useWebContext,
+                        snapshot: webSnapshot
+                    )
+                    let text = try await NativeAI.summarize(article: contextArticle, settings: settings)
+                    return AIResultAnswer(text: text, articles: [contextArticle])
                 },
                 streamAction: { onToken in
+                    let contextArticle = try await WebAIContext.article(
+                        base: article,
+                        preferWeb: useWebContext,
+                        snapshot: webSnapshot
+                    )
                     let text = try await NativeAI.summarizeStreaming(
-                        article: article, settings: settings, onToken: onToken)
-                    return AIResultAnswer(text: text, articles: [article])
+                        article: contextArticle, settings: settings, onToken: onToken)
+                    return AIResultAnswer(text: text, articles: [contextArticle])
                 },
                 clearAction: {
-                    NativeAI.clearSummaryCache(articleID: article.id, ai: settings.ai)
+                    NativeAI.clearSummaryCache(
+                        articleID: WebAIContext.articleID(
+                            base: article,
+                            preferWeb: useWebContext,
+                            snapshot: webSnapshot
+                        ),
+                        ai: settings.ai
+                    )
                 },
                 continueInChat: { [self] summaryText in
                     // Dismiss the summary sheet (already done by AIResultSheet before calling this),
@@ -304,10 +326,15 @@ struct ArticleDetailView: View {
                     activeChatInitialMessage = summaryText
                     activeAIChat = AIChatRequest(
                         title: "Chat with Article",
-                        placeholder: article.title
+                        placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot)
                     ) { question in
-                        let text = try await NativeAI.chat(question: question, article: article, settings: model.settings)
-                        return AIChatAnswer(text: text, articles: [article])
+                        let contextArticle = try await WebAIContext.article(
+                            base: article,
+                            preferWeb: useWebContext,
+                            snapshot: webSnapshot
+                        )
+                        let text = try await NativeAI.chat(question: question, article: contextArticle, settings: model.settings)
+                        return AIChatAnswer(text: text, articles: [contextArticle])
                     }
                 }
             )
@@ -487,13 +514,20 @@ private extension String {
 private extension ArticleDetailView {
     func presentArticleChat() {
         guard let article else { return }
+        let useWebContext = page == .web
+        let webSnapshot = webSnapshot
         gatedAI {
             activeAIChat = AIChatRequest(
-                title: "Chat with Article",
-                placeholder: article.title
+                title: useWebContext ? "Chat with Web Page" : "Chat with Article",
+                placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot)
             ) { question in
-                let text = try await NativeAI.chat(question: question, article: article, settings: model.settings)
-                return AIChatAnswer(text: text, articles: [article])
+                let contextArticle = try await WebAIContext.article(
+                    base: article,
+                    preferWeb: useWebContext,
+                    snapshot: webSnapshot
+                )
+                let text = try await NativeAI.chat(question: question, article: contextArticle, settings: model.settings)
+                return AIChatAnswer(text: text, articles: [contextArticle])
             }
         }
     }
@@ -1046,14 +1080,157 @@ private struct CommentRow: View {
 
 private struct WebPage: View {
     var article: Article?
+    @Binding var snapshot: WebViewSnapshot
 
     var body: some View {
         if let url = article?.url {
-            WebView(url: url)
+            WebView(url: url, snapshot: $snapshot)
                 .ignoresSafeArea(edges: .bottom)
         } else {
             ContentUnavailableView("Web page unavailable", systemImage: "globe.badge.chevron.backward")
                 .foregroundStyle(SkimStyle.text)
+        }
+    }
+}
+
+private enum WebAIContext {
+    private static let minimumUsefulTextLength = 200
+
+    static func article(base: Article, preferWeb: Bool, snapshot: WebViewSnapshot) async throws -> Article {
+        guard preferWeb else { return base }
+
+        let contextURL = snapshot.url ?? base.externalURL ?? base.url
+        let title = snapshot.title?.nilIfEmpty ?? contextURL?.host(percentEncoded: false) ?? base.title
+
+        if let snapshotText = sanitizedText(snapshot.text), snapshotText.count >= minimumUsefulTextLength {
+            return article(base: base, id: articleID(base: base, preferWeb: true, snapshot: snapshot), title: title, url: contextURL, text: snapshotText)
+        }
+
+        guard let contextURL else {
+            if let snapshotText = sanitizedText(snapshot.text), !snapshotText.isEmpty {
+                return article(base: base, id: articleID(base: base, preferWeb: true, snapshot: snapshot), title: title, url: nil, text: snapshotText)
+            }
+            return base
+        }
+
+        let loaded = try await loadDocument(at: contextURL, fallbackTitle: title)
+        return article(
+            base: base,
+            id: articleID(base: base, preferWeb: true, snapshot: snapshot),
+            title: loaded.title ?? title,
+            url: loaded.url,
+            text: loaded.text
+        )
+    }
+
+    static func articleID(base: Article, preferWeb: Bool, snapshot: WebViewSnapshot) -> String {
+        guard preferWeb else { return base.id }
+        return "\(base.id)|web|\((snapshot.url ?? base.externalURL ?? base.url)?.absoluteString ?? "current")"
+    }
+
+    static func subtitle(base: Article, preferWeb: Bool, snapshot: WebViewSnapshot) -> String {
+        guard preferWeb else { return base.title }
+        return snapshot.title?.nilIfEmpty
+            ?? (snapshot.url ?? base.externalURL ?? base.url)?.absoluteString
+            ?? base.title
+    }
+
+    private struct LoadedDocument {
+        var title: String?
+        var url: URL
+        var text: String
+    }
+
+    private static func article(base: Article, id: String, title: String, url: URL?, text: String) -> Article {
+        Article(
+            id: id,
+            feedID: base.feedID,
+            feedTitle: "Web View",
+            title: title,
+            url: url,
+            author: base.author,
+            contentText: text,
+            contentHTML: nil,
+            imageURL: base.imageURL,
+            publishedAt: base.publishedAt,
+            fetchedAt: base.fetchedAt,
+            isRead: base.isRead,
+            isStarred: base.isStarred,
+            aggregatorKind: base.aggregatorKind,
+            externalURL: base.externalURL,
+            commentsURL: base.commentsURL
+        )
+    }
+
+    private static func loadDocument(at url: URL, fallbackTitle: String) async throws -> LoadedDocument {
+        var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 20)
+        request.setValue(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            forHTTPHeaderField: "User-Agent"
+        )
+        request.setValue("text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<400).contains(http.statusCode) {
+            throw WebAIContextError.unavailable("The current web page could not be loaded for AI context.")
+        }
+
+        let responseURL = response.url ?? url
+        let mimeType = response.mimeType?.lowercased() ?? ""
+        if isPDF(url: responseURL, mimeType: mimeType, data: data) {
+            guard let text = pdfText(from: data), text.count >= minimumUsefulTextLength else {
+                throw WebAIContextError.unavailable("The current PDF did not contain extractable text.")
+            }
+            return LoadedDocument(title: fallbackTitle, url: responseURL, text: text)
+        }
+
+        guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
+            throw WebAIContextError.unavailable("The current web page could not be decoded for AI context.")
+        }
+
+        let extracted = (try? ArticleExtractor.extract(from: html, baseURL: responseURL))
+            ?? sanitizedText(html.skimPlainText)
+            ?? ""
+        guard extracted.count >= minimumUsefulTextLength else {
+            throw WebAIContextError.unavailable("The current web page did not contain enough readable text for AI context.")
+        }
+        return LoadedDocument(title: fallbackTitle, url: responseURL, text: extracted)
+    }
+
+    private static func sanitizedText(_ text: String?) -> String? {
+        guard let text else { return nil }
+        let cleaned = ArticleExtractor.sanitizeReaderText(
+            text
+                .decodingHTMLEntities
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        return cleaned.nilIfEmpty
+    }
+
+    private static func isPDF(url: URL, mimeType: String, data: Data) -> Bool {
+        if mimeType.contains("pdf") || url.pathExtension.lowercased() == "pdf" {
+            return true
+        }
+        return Data(data.prefix(5)) == Data("%PDF-".utf8)
+    }
+
+    private static func pdfText(from data: Data) -> String? {
+        guard let document = PDFDocument(data: data) else { return nil }
+        let pages = (0..<document.pageCount).compactMap { index in
+            document.page(at: index)?.string?.nilIfEmpty
+        }
+        return sanitizedText(pages.joined(separator: "\n\n"))
+    }
+}
+
+private enum WebAIContextError: LocalizedError {
+    case unavailable(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unavailable(let message):
+            message
         }
     }
 }

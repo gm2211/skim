@@ -49,6 +49,7 @@ struct SettingsSheet: View {
             .onAppear {
                 draft = model.settings
                 draft.ai = normalizedAISettings(draft.ai)
+                Task { await model.refreshOfflineCacheStats() }
             }
             .onChange(of: draft) { _, newValue in
                 Task {
@@ -199,6 +200,58 @@ struct SettingsSheet: View {
             SettingsAction(systemName: "folder.badge.plus", title: "Auto-group Feeds", action: onAutoGroup)
             SettingsAction(systemName: "arrow.clockwise", title: model.isLoading ? "Refreshing..." : "Refresh Feeds", action: onRefresh)
                 .disabled(model.isLoading)
+
+            Divider()
+                .overlay(SkimStyle.separator)
+
+            SettingRow(
+                systemName: "tray.and.arrow.down",
+                title: "Offline Cache",
+                detail: "\(model.offlineCachedArticleCount.formatted()) extracted articles cached. RSS article bodies are already stored locally."
+            )
+
+            Stepper(value: offlinePreloadLimitBinding, in: 25...1_000, step: 25) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Preload \(draft.offlinePreloadLimit.formatted()) Articles")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(SkimStyle.text)
+                    Text("Newest articles are prepared for offline reading.")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+            }
+            .tint(SkimStyle.accent)
+
+            if let progress = model.preloadProgress, model.isPreloadingArticles {
+                VStack(alignment: .leading, spacing: 8) {
+                    ProgressView(value: progress.fraction)
+                        .tint(SkimStyle.accent)
+                    Text("\(progress.completed) of \(progress.total) · \(progress.detailText)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(SkimStyle.secondary)
+                    if let currentTitle = progress.currentTitle {
+                        Text(currentTitle)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .lineLimit(2)
+                    }
+                }
+            }
+
+            if let message = model.offlinePreloadMessage {
+                Text(message)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            SettingsAction(
+                systemName: "arrow.down.doc",
+                title: model.isPreloadingArticles ? "Preloading Articles..." : "Preload Articles"
+            ) {
+                Task { await model.preloadArticlesForOffline() }
+            }
+            .disabled(model.isPreloadingArticles)
         }
     }
 
@@ -435,6 +488,17 @@ struct SettingsSheet: View {
         Binding(
             get: { draft.ai.triageUserPrompt ?? "" },
             set: { value in updateAI { $0.triageUserPrompt = value.nilIfEmpty } }
+        )
+    }
+
+    private var offlinePreloadLimitBinding: Binding<Int> {
+        Binding(
+            get: { max(25, draft.offlinePreloadLimit) },
+            set: { value in
+                var next = draft
+                next.offlinePreloadLimit = max(25, min(value, 1_000))
+                draft = next
+            }
         )
     }
 

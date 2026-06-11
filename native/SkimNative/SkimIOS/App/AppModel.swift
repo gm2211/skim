@@ -67,6 +67,31 @@ enum ArticleListMode: String, CaseIterable, Identifiable {
     }
 }
 
+struct OfflinePreloadProgress: Equatable {
+    var completed: Int
+    var total: Int
+    var cached: Int
+    var alreadyReady: Int
+    var failed: Int
+    var currentTitle: String?
+
+    var fraction: Double {
+        guard total > 0 else { return 0 }
+        return Double(completed) / Double(total)
+    }
+
+    var detailText: String {
+        var parts = [
+            "\(alreadyReady) ready",
+            "\(cached) cached",
+        ]
+        if failed > 0 {
+            parts.append("\(failed) failed")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var feeds: [Feed] = []
@@ -81,6 +106,10 @@ final class AppModel: ObservableObject {
     @Published var unreadCounts: [String: Int] = [:]
     @Published var totalUnreadCount = 0
     @Published var settings = AppSettings()
+    @Published var isPreloadingArticles = false
+    @Published var preloadProgress: OfflinePreloadProgress?
+    @Published var offlineCachedArticleCount = 0
+    @Published var offlinePreloadMessage: String?
 
     let store: SkimStore
     let tasteStore = TasteStore()
@@ -188,6 +217,7 @@ final class AppModel: ObservableObject {
             let fetched = try await store.listArticles(filter: filter)
             articles = displayedArticles(from: fetched)
             try await refreshCounts()
+            await refreshOfflineCacheStats()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -201,6 +231,7 @@ final class AppModel: ObservableObject {
             let fetched = try await store.listArticles(filter: filter)
             articles = displayedArticles(from: fetched)
             try await refreshCounts()
+            await refreshOfflineCacheStats()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -386,6 +417,105 @@ final class AppModel: ObservableObject {
             try await store.toggleStar(id: article.id)
             await reloadArticles()
         } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func cachedReaderText(articleID: String) async -> String? {
+        try? await store.cachedReaderText(articleID: articleID)
+    }
+
+    func cacheReaderText(articleID: String, url: URL?, text: String) async {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        do {
+            try await store.cacheReaderText(articleID: articleID, url: url, text: trimmed)
+            ExtractedContentCache.shared.set(articleID, value: trimmed)
+            await refreshOfflineCacheStats()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func refreshOfflineCacheStats() async {
+        offlineCachedArticleCount = (try? await store.countCachedReaderTexts()) ?? offlineCachedArticleCount
+    }
+
+    func preloadArticlesForOffline() async {
+        guard !isPreloadingArticles else { return }
+
+        isPreloadingArticles = true
+        offlinePreloadMessage = nil
+        preloadProgress = OfflinePreloadProgress(
+            completed: 0,
+            total: 0,
+            cached: 0,
+            alreadyReady: 0,
+            failed: 0,
+            currentTitle: nil
+        )
+        defer { isPreloadingArticles = false }
+
+        let limit = max(1, min(settings.offlinePreloadLimit, 2_000))
+        do {
+            let candidates = try await store.listArticles(filter: ArticleFilter(readState: .all, limit: limit))
+            var cached = 0
+            var alreadyReady = 0
+            var failed = 0
+
+            preloadProgress = OfflinePreloadProgress(
+                completed: 0,
+                total: candidates.count,
+                cached: cached,
+                alreadyReady: alreadyReady,
+                failed: failed,
+                currentTitle: candidates.first?.title
+            )
+
+            for (index, article) in candidates.enumerated() {
+                if Task.isCancelled { break }
+
+                preloadProgress = OfflinePreloadProgress(
+                    completed: index,
+                    total: candidates.count,
+                    cached: cached,
+                    alreadyReady: alreadyReady,
+                    failed: failed,
+                    currentTitle: article.title
+                )
+
+                if ArticleReaderContentLoader.isSufficientRSSBody(article) {
+                    alreadyReady += 1
+                } else if let cachedText = try await store.cachedReaderText(articleID: article.id),
+                          !cachedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ExtractedContentCache.shared.set(article.id, value: cachedText)
+                    alreadyReady += 1
+                } else {
+                    do {
+                        let loaded = try await ArticleReaderContentLoader.loadText(for: article)
+                        try await store.cacheReaderText(articleID: article.id, url: loaded.url, text: loaded.text)
+                        ExtractedContentCache.shared.set(article.id, value: loaded.text)
+                        cached += 1
+                    } catch {
+                        failed += 1
+                    }
+                }
+
+                preloadProgress = OfflinePreloadProgress(
+                    completed: index + 1,
+                    total: candidates.count,
+                    cached: cached,
+                    alreadyReady: alreadyReady,
+                    failed: failed,
+                    currentTitle: article.title
+                )
+            }
+
+            await refreshOfflineCacheStats()
+            offlinePreloadMessage = "Offline preload finished: \(alreadyReady + cached) ready, \(cached) newly cached, \(failed) failed."
+        } catch {
+            offlinePreloadMessage = "Offline preload failed: \(error.localizedDescription)"
             errorMessage = error.localizedDescription
         }
     }

@@ -538,9 +538,25 @@ private enum ArticleLoadState {
     case loading
     case loaded(String)
     case failed(String)
+
+    var isLoaded: Bool {
+        if case .loaded = self { return true }
+        return false
+    }
+
+    var shouldDisplay: Bool {
+        switch self {
+        case .idle:
+            return false
+        case .loading, .loaded, .failed:
+            return true
+        }
+    }
 }
 
 private struct ReaderPage: View {
+    @EnvironmentObject private var model: AppModel
+
     var article: Article?
     var isLoading: Bool
 
@@ -590,6 +606,7 @@ private struct ReaderPage: View {
         .task(id: article?.id) {
             guard let article else { return }
             if article.aggregatorKind != nil {
+                await loadCachedReaderText(for: article)
                 // Run comments fetch and external-article extraction concurrently.
                 // loadComments sets redditSelftext; we wait for it before deciding whether
                 // to auto-extract so we know if this is a selftext post or a link post.
@@ -598,8 +615,8 @@ private struct ReaderPage: View {
                 // but no selftext). Reddit selftext posts keep their current rendering.
                 let externalURL = await externalArticleURL(for: article)
                 resolvedExternalURL = externalURL
-                if let externalURL, redditSelftext == nil {
-                    await loadExternalArticle(url: externalURL)
+                if let externalURL, redditSelftext == nil, !extractedBody.isLoaded {
+                    await loadExternalArticle(url: externalURL, articleID: article.id)
                 }
             } else {
                 await autoExtractIfNeeded(article: article)
@@ -665,7 +682,7 @@ private struct ReaderPage: View {
             // Extracted body — shown when auto-extract is in progress or complete.
             // Applies to all aggregator kinds including Reddit link posts.
             // (Reddit selftext posts show body via `redditSelftext` above instead.)
-            if externalURL != nil && redditSelftext == nil {
+            if redditSelftext == nil && (externalURL != nil || extractedBody.shouldDisplay) {
                 switch extractedBody {
                 case .idle:
                     EmptyView()
@@ -738,7 +755,7 @@ private struct ReaderPage: View {
             // Retry button only shown after a failed extraction attempt
             if case .failed = extractedBody {
                 Button {
-                    Task { await loadExternalArticle(url: url) }
+                    Task { await loadExternalArticle(url: url, articleID: article.id) }
                 } label: {
                     Label("Retry", systemImage: "arrow.clockwise")
                         .font(.system(size: 17, weight: .semibold))
@@ -795,7 +812,7 @@ private struct ReaderPage: View {
 
     @ViewBuilder
     private func articleBody(_ article: Article) -> some View {
-        let rssFeedBody = article.displayBody
+        let rssFeedBody = ArticleReaderContentLoader.displayBody(for: article)
 
         // Determine the body to display:
         // 1. Use a cached extracted body if one exists.
@@ -809,7 +826,7 @@ private struct ReaderPage: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-        } else if article.isSufficientRSSBody {
+        } else if ArticleReaderContentLoader.isSufficientRSSBody(article) {
             Text(rssFeedBody)
                 .font(.system(size: 19, weight: .regular))
                 .lineSpacing(7)
@@ -917,6 +934,9 @@ private struct ReaderPage: View {
             async let commentsTask = service.fetchComments(for: article, limit: 10)
             let (fetchedSelftext, fetched) = await (selftextTask, commentsTask)
             redditSelftext = fetchedSelftext
+            if let text = ArticleReaderContentLoader.sanitizedText(fetchedSelftext) {
+                await model.cacheReaderText(articleID: article.id, url: article.commentsURL ?? article.url, text: text)
+            }
             comments = fetched
             commentsState = fetched.isEmpty ? .failed("No comments returned.") : .loaded("")
         } else {
@@ -926,97 +946,44 @@ private struct ReaderPage: View {
         }
     }
 
-    private func loadExternalArticle(url: URL) async {
-        // Reddit pages require auth/JS and will always yield garbage — never run the HTML
-        // extractor on them. The selftext path (via .json API) handles Reddit self-posts.
-        if let host = url.host?.lowercased(),
-           (host == "reddit.com" || host.hasSuffix(".reddit.com") || host == "redd.it") {
-            extractedBody = .failed("Reddit pages require the web view. Swipe left to open.")
-            return
-        }
-
+    private func loadExternalArticle(url: URL, articleID: String) async {
         extractedBody = .loading
         do {
-            var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
-            request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
-            let (data, _) = try await URLSession.shared.data(for: request)
-            guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
-                extractedBody = .failed("Could not decode page.")
-                return
-            }
-            let extracted = try ArticleExtractor.extract(from: html, baseURL: url)
-            if extracted.count < 200 {
-                extractedBody = .failed("Page content could not be extracted (anti-bot or paywall). Try the web view.")
-            } else {
-                extractedBody = .loaded(extracted)
-            }
-        } catch ArticleExtractor.Error.contentLooksLikeMarkup {
-            extractedBody = .failed("Page content could not be extracted (markup noise detected). Try the web view.")
+            let loaded = try await ArticleReaderContentLoader.loadText(from: url)
+            await model.cacheReaderText(articleID: articleID, url: loaded.url, text: loaded.text)
+            extractedBody = .loaded(loaded.text)
         } catch {
             extractedBody = .failed(error.localizedDescription)
         }
     }
 
     /// Fetch and extract the article body for the reader pane (non-aggregator articles).
-    /// Writes result to the shared ExtractedContentCache so it survives navigation back/forward.
+    /// Writes result to the persistent reader cache so it survives navigation and app restarts.
     private func loadArticleForReader(url: URL, articleID: String) async {
         extractedBody = .loading
         autoExtractTimedOut = false
-        let effectiveURL = await readerURL(for: url) ?? url
-        if Self.isRedditURL(effectiveURL) {
-            extractedBody = .failed("Could not find the linked article in this Reddit post. Swipe left for the web view.")
-            return
-        }
 
         do {
-            var request = URLRequest(url: effectiveURL, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 15)
-            request.setValue(
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-                forHTTPHeaderField: "User-Agent"
-            )
-            let (data, _) = try await URLSession.shared.data(for: request)
-            guard let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) else {
-                extractedBody = .failed("Could not decode page.")
-                return
-            }
-            let extracted = try ArticleExtractor.extract(from: html, baseURL: effectiveURL)
-            if extracted.count < 200 {
-                extractedBody = .failed("Page content could not be extracted (anti-bot or paywall). Try the web view.")
-            } else {
-                ExtractedContentCache.shared.set(articleID, value: extracted)
-                extractedBody = .loaded(extracted)
-            }
-        } catch ArticleExtractor.Error.contentLooksLikeMarkup {
-            extractedBody = .failed("Page content could not be extracted (markup noise detected). Try the web view.")
+            let loaded = try await ArticleReaderContentLoader.loadText(from: url)
+            await model.cacheReaderText(articleID: articleID, url: loaded.url, text: loaded.text)
+            extractedBody = .loaded(loaded.text)
         } catch {
             extractedBody = .failed(error.localizedDescription)
         }
     }
 
-    private func readerURL(for url: URL) async -> URL? {
-        guard Self.isRedditURL(url) else { return url }
-        let service = AggregatorService()
-        return await service.fetchRedditExternalURL(from: url)
-    }
-
-    private static func isRedditURL(_ url: URL) -> Bool {
-        guard let host = url.host?.lowercased() else { return false }
-        return host == "reddit.com"
-            || host == "www.reddit.com"
-            || host == "old.reddit.com"
-            || host == "new.reddit.com"
-            || host.hasSuffix(".reddit.com")
-            || host == "redd.it"
-    }
-
     /// Triggered on `.task` for non-aggregator articles. If the RSS body is too thin,
-    /// auto-extracts the article URL. Checks the LRU cache first to avoid redundant fetches.
+    /// auto-extracts the article URL. Checks the persistent cache first to avoid redundant fetches.
     private func autoExtractIfNeeded(article: Article) async {
         // Already sufficient RSS content — nothing to do
-        guard !article.isSufficientRSSBody else { return }
+        guard !ArticleReaderContentLoader.isSufficientRSSBody(article) else { return }
 
-        // Check LRU cache first
+        if await loadCachedReaderText(for: article) {
+            return
+        }
+
         if let cached = ExtractedContentCache.shared.get(article.id) {
+            await model.cacheReaderText(articleID: article.id, url: article.url, text: cached)
             extractedBody = .loaded(cached)
             return
         }
@@ -1039,6 +1006,17 @@ private struct ReaderPage: View {
 
         await loadArticleForReader(url: url, articleID: article.id)
         timeoutTask.cancel()
+    }
+
+    @discardableResult
+    private func loadCachedReaderText(for article: Article) async -> Bool {
+        guard let cached = await model.cachedReaderText(articleID: article.id),
+              !cached.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return false }
+
+        ExtractedContentCache.shared.set(article.id, value: cached)
+        extractedBody = .loaded(cached)
+        return true
     }
 }
 

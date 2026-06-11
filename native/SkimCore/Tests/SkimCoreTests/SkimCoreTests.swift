@@ -69,6 +69,49 @@ import Testing
     #expect(starred.first?.isStarred == true)
 }
 
+@Test func persistsReaderCache() async throws {
+    let store = try temporaryStore()
+    let feed = Feed(id: "feed-1", title: "A Feed", url: URL(string: "https://example.com/rss")!)
+    let article = Article(
+        id: "article-1",
+        feedID: feed.id,
+        feedTitle: feed.title,
+        title: "Important story",
+        url: URL(string: "https://example.com/story"),
+        contentText: "Preview"
+    )
+
+    try await store.upsert(feed: feed, articles: [article])
+
+    #expect(try await store.cachedReaderText(articleID: article.id) == nil)
+    #expect(try await store.countCachedReaderTexts() == 0)
+
+    try await store.cacheReaderText(
+        articleID: article.id,
+        url: URL(string: "https://example.com/story"),
+        text: "Extracted article body"
+    )
+
+    #expect(try await store.cachedReaderText(articleID: article.id) == "Extracted article body")
+    #expect(try await store.countCachedReaderTexts() == 1)
+
+    try await store.cacheReaderText(
+        articleID: article.id,
+        url: URL(string: "https://example.com/story?updated=1"),
+        text: "Updated article body"
+    )
+
+    #expect(try await store.cachedReaderText(articleID: article.id) == "Updated article body")
+    #expect(try await store.countCachedReaderTexts() == 1)
+}
+
+@Test func appSettingsDefaultOfflinePreloadLimit() throws {
+    let settings = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
+
+    #expect(settings.prefersUnreadOnly == true)
+    #expect(settings.offlinePreloadLimit == 300)
+}
+
 @Test func importsFeedsIntoStore() async throws {
     let store = try temporaryStore()
     try await store.importFeeds([

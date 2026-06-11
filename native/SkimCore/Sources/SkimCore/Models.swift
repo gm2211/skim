@@ -116,21 +116,25 @@ public struct ArticleFilter: Sendable, Equatable {
 
 public struct AppSettings: Codable, Equatable, Sendable {
     public var prefersUnreadOnly: Bool
+    public var offlinePreloadLimit: Int
     public var ai: AISettings
 
-    public init(prefersUnreadOnly: Bool = true, ai: AISettings = AISettings()) {
+    public init(prefersUnreadOnly: Bool = true, offlinePreloadLimit: Int = 300, ai: AISettings = AISettings()) {
         self.prefersUnreadOnly = prefersUnreadOnly
+        self.offlinePreloadLimit = offlinePreloadLimit
         self.ai = ai
     }
 
     enum CodingKeys: String, CodingKey {
         case prefersUnreadOnly
+        case offlinePreloadLimit
         case ai
     }
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         prefersUnreadOnly = try container.decodeIfPresent(Bool.self, forKey: .prefersUnreadOnly) ?? true
+        offlinePreloadLimit = try container.decodeIfPresent(Int.self, forKey: .offlinePreloadLimit) ?? 300
         ai = try container.decodeIfPresent(AISettings.self, forKey: .ai) ?? AISettings()
     }
 }

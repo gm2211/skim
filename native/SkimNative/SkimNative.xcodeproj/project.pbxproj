@@ -22,6 +22,7 @@
 		705834903C7D5B0F2442C2D8 /* SkimMacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */; };
 		7487CDA38AA993612EB4880B /* AIBootDisclaimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959A59B5B27E8C969D084B8F /* AIBootDisclaimerView.swift */; };
 		751B168D630209B01DAFF073 /* ArticleExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */; };
+		77DA3EA9CDD533959D7EBE99 /* ArticleReaderContentLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09444431BA1054837AA91213 /* ArticleReaderContentLoader.swift */; };
 		7C87C81EDE030A9459473E8D /* TasteModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA32ECFFFAF834236FDF04E /* TasteModel.swift */; };
 		8B797999B22B89495C05CA39 /* AquireBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */; };
 		8ED4B358481AC4273C225054 /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474BA38A4E522DB5D3ECB21 /* WebView.swift */; };
@@ -55,6 +56,7 @@
 /* Begin PBXFileReference section */
 		038284DEE00F91A360324653 /* Style.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Style.swift; sourceTree = "<group>"; };
 		093BD7166E85CDD2AC4F89C7 /* Skim iOS Tests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = "Skim iOS Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		09444431BA1054837AA91213 /* ArticleReaderContentLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleReaderContentLoader.swift; sourceTree = "<group>"; };
 		0C79E51007F91AE5C8286F40 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderEditor.swift; sourceTree = "<group>"; };
 		1474BA38A4E522DB5D3ECB21 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
@@ -181,6 +183,7 @@
 			isa = PBXGroup;
 			children = (
 				7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */,
+				09444431BA1054837AA91213 /* ArticleReaderContentLoader.swift */,
 				E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */,
 				A1BCD3DD03D305C558D07614 /* NativeAI.swift */,
 				B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */,
@@ -401,6 +404,7 @@
 				1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */,
 				751B168D630209B01DAFF073 /* ArticleExtractor.swift in Sources */,
 				E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */,
+				77DA3EA9CDD533959D7EBE99 /* ArticleReaderContentLoader.swift in Sources */,
 				D575AB676AA07786E29C32A0 /* CatchUpView.swift in Sources */,
 				96F49A7819D5D167616F137F /* LegalView.swift in Sources */,
 				436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */,

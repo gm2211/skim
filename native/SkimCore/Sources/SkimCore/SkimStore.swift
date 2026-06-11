@@ -80,6 +80,18 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         try db.execute("UPDATE articles SET is_starred = CASE is_starred WHEN 0 THEN 1 ELSE 0 END WHERE id = ?", [.text(id)])
     }
 
+    public func cachedReaderText(articleID: String) async throws -> String? {
+        try db.cachedReaderText(articleID: articleID)
+    }
+
+    public func cacheReaderText(articleID: String, url: URL?, text: String) async throws {
+        try db.cacheReaderText(articleID: articleID, url: url, text: text, cachedAt: Date())
+    }
+
+    public func countCachedReaderTexts() async throws -> Int {
+        try db.countCachedReaderTexts()
+    }
+
     public func loadSettings() async throws -> AppSettings {
         guard let json = try db.setting(key: "app_settings"), let data = json.data(using: .utf8) else {
             return AppSettings()
@@ -173,6 +185,17 @@ private final class SQLiteDatabase: @unchecked Sendable {
         try execute("CREATE INDEX IF NOT EXISTS idx_articles_feed ON articles(feed_id)")
         try execute("CREATE INDEX IF NOT EXISTS idx_articles_read ON articles(is_read)")
         try execute("CREATE INDEX IF NOT EXISTS idx_articles_starred ON articles(is_starred)")
+
+        try execute("""
+        CREATE TABLE IF NOT EXISTS article_reader_cache (
+            article_id TEXT PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+            url TEXT,
+            text TEXT NOT NULL,
+            cached_at REAL NOT NULL
+        )
+        """)
+        try execute("CREATE INDEX IF NOT EXISTS idx_article_reader_cache_cached_at ON article_reader_cache(cached_at)")
+
         try execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     }
 
@@ -369,6 +392,40 @@ private final class SQLiteDatabase: @unchecked Sendable {
             values.append(.text(feedID))
         }
         return try query(sql, values) { statement in
+            Int(sqlite3_column_int(statement, 0))
+        }.first ?? 0
+    }
+
+    func cachedReaderText(articleID: String) throws -> String? {
+        try query(
+            "SELECT text FROM article_reader_cache WHERE article_id = ? LIMIT 1",
+            [.text(articleID)]
+        ) { statement in
+            columnText(statement, 0)
+        }.first
+    }
+
+    func cacheReaderText(articleID: String, url: URL?, text: String, cachedAt: Date) throws {
+        try execute(
+            """
+            INSERT INTO article_reader_cache (article_id, url, text, cached_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(article_id) DO UPDATE SET
+                url = excluded.url,
+                text = excluded.text,
+                cached_at = excluded.cached_at
+            """,
+            [
+                .text(articleID),
+                .optionalText(url?.absoluteString),
+                .text(text),
+                .date(cachedAt)
+            ]
+        )
+    }
+
+    func countCachedReaderTexts() throws -> Int {
+        try query("SELECT COUNT(*) FROM article_reader_cache") { statement in
             Int(sqlite3_column_int(statement, 0))
         }.first ?? 0
     }

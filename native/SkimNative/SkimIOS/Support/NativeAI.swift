@@ -34,11 +34,64 @@ struct AIResultAnswer {
     var articles: [Article]
 }
 
+struct AIChatConversation: Sendable {
+    struct Turn: Sendable {
+        enum Role: String, Sendable {
+            case user
+            case assistant
+        }
+
+        var role: Role
+        var text: String
+    }
+
+    var priorTurns: [Turn]
+    var latestQuestion: String
+
+    init(latestQuestion: String, priorMessages: [AIChatMessage] = []) {
+        self.latestQuestion = latestQuestion
+        self.priorTurns = priorMessages
+            .filter { !$0.isError }
+            .suffix(8)
+            .map { message in
+                Turn(
+                    role: message.role == .user ? .user : .assistant,
+                    text: message.text
+                )
+            }
+    }
+
+    var promptSection: String {
+        let latest = latestQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !priorTurns.isEmpty else {
+            return """
+            Latest user question to answer now:
+            \(latest)
+            """
+        }
+
+        let transcript = priorTurns.map { turn in
+            let role = turn.role == .user ? "User" : "Assistant"
+            return "\(role): \(turn.text)"
+        }
+        .joined(separator: "\n\n")
+
+        return """
+        Previous conversation for context only. Do not answer these older turns again:
+        \(transcript)
+
+        Latest user question to answer now:
+        \(latest)
+        """
+    }
+}
+
 struct AIChatRequest: Identifiable {
     let id = UUID()
+    var sessionKey = UUID().uuidString
     var title: String
     var placeholder: String
-    var answer: (String) async throws -> AIChatAnswer
+    var answer: (AIChatConversation) async throws -> AIChatAnswer
 }
 
 struct AIChatAnswer {
@@ -476,32 +529,46 @@ enum NativeAI {
     }
 
     static func chat(question: String, article: Article, settings: AppSettings) async throws -> String {
+        try await chat(
+            conversation: AIChatConversation(latestQuestion: question),
+            article: article,
+            settings: settings
+        )
+    }
+
+    static func chat(conversation: AIChatConversation, article: Article, settings: AppSettings) async throws -> String {
         try await complete(
             settings: settings,
-            instructions: "You answer questions about a single article using only the provided article text and the conversation transcript. Answer the latest user question directly. Do not repeat a prior answer unless the user asks you to recap it. If the answer is not in the article, say so.",
+            instructions: "You answer questions about a single article using only the provided article text and the conversation context. Answer only the latest user question. Use previous turns only to resolve references like 'that' or 'the second one'. Do not repeat a prior answer unless the latest question explicitly asks you to recap it. If the answer is not in the article, say so.",
             prompt: """
             Article:
             \(articleDigest([article], limit: 1, wordsPerArticle: 1800))
 
-            Question:
-            \(question)
+            \(conversation.promptSection)
             """,
             maxTokens: 650
         )
     }
 
     static func chat(question: String, articles: [Article], settings: AppSettings) async throws -> String {
+        try await chat(
+            conversation: AIChatConversation(latestQuestion: question),
+            articles: articles,
+            settings: settings
+        )
+    }
+
+    static func chat(conversation: AIChatConversation, articles: [Article], settings: AppSettings) async throws -> String {
         try await complete(
             settings: settings,
             instructions: """
-            You answer questions across a set of RSS articles using the provided article list and the conversation transcript. Answer the latest user question directly and do not repeat prior answers unless asked. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable.
+            You answer questions across a set of RSS articles using the provided article list and conversation context. Answer only the latest user question. Use previous turns only to resolve references like 'that' or 'the second one'. Do not repeat prior answers unless the latest question explicitly asks. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable.
             """,
             prompt: """
             Articles:
             \(articleDigest(articles, limit: 35))
 
-            Question:
-            \(question)
+            \(conversation.promptSection)
             """,
             maxTokens: 850
         )
@@ -1164,22 +1231,17 @@ private struct PrettyAIText: View {
 struct AIChatSheet: View {
     var request: AIChatRequest
     @Environment(\.dismiss) private var dismiss
-    @State private var messages: [AIChatMessage]
+    @Binding private var messages: [AIChatMessage]
     @State private var input = ""
     @State private var isSending = false
     @FocusState private var focused: Bool
+    private var initialAssistantMessage: String?
     private let bottomAnchorID = "chat-bottom-anchor"
 
-    /// Initialise the sheet, optionally seeding the first assistant message.
-    /// Seeding at init time (via `_messages`) guarantees the message is present
-    /// on the very first render — no `.onAppear` race, no SwiftUI state reset window.
-    init(request: AIChatRequest, initialAssistantMessage: String? = nil) {
+    init(request: AIChatRequest, messages: Binding<[AIChatMessage]>, initialAssistantMessage: String? = nil) {
         self.request = request
-        if let seed = initialAssistantMessage {
-            _messages = State(initialValue: [AIChatMessage(role: .assistant, text: seed)])
-        } else {
-            _messages = State(initialValue: [])
-        }
+        _messages = messages
+        self.initialAssistantMessage = initialAssistantMessage
     }
 
     var body: some View {
@@ -1261,9 +1323,18 @@ struct AIChatSheet: View {
                 }
             }
             .onAppear {
+                seedInitialMessageIfNeeded()
                 focused = true
             }
         }
+    }
+
+    private func seedInitialMessageIfNeeded() {
+        guard messages.isEmpty,
+              let seed = initialAssistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !seed.isEmpty
+        else { return }
+        messages = [AIChatMessage(role: .assistant, text: seed)]
     }
 
     private func scrollToLatest(_ proxy: ScrollViewProxy) {
@@ -1280,13 +1351,13 @@ struct AIChatSheet: View {
         guard !question.isEmpty, !isSending else { return }
         let toSend = question
         let priorMessages = messages
-        let contextualQuestion = questionWithHistory(toSend, priorMessages: priorMessages)
+        let conversation = AIChatConversation(latestQuestion: toSend, priorMessages: priorMessages)
         input = ""
         focused = true
         messages.append(AIChatMessage(role: .user, text: toSend))
         isSending = true
         do {
-            let answer = try await request.answer(contextualQuestion)
+            let answer = try await request.answer(conversation)
             messages.append(
                 AIChatMessage(
                     role: .assistant,
@@ -1299,27 +1370,10 @@ struct AIChatSheet: View {
         }
         isSending = false
     }
-
-    private func questionWithHistory(_ question: String, priorMessages: [AIChatMessage]) -> String {
-        let transcript = priorMessages.suffix(8).map { message in
-            let role = message.role == .user ? "User" : "Assistant"
-            return "\(role): \(message.text)"
-        }
-        .joined(separator: "\n\n")
-
-        guard !transcript.isEmpty else { return question }
-        return """
-        Conversation so far:
-        \(transcript)
-
-        Latest user question:
-        \(question)
-        """
-    }
 }
 
-private struct AIChatMessage: Identifiable {
-    enum Role: Equatable {
+struct AIChatMessage: Identifiable, Sendable {
+    enum Role: Equatable, Sendable {
         case user
         case assistant
     }

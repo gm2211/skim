@@ -19,6 +19,7 @@ struct ArticleListView: View {
     @State private var activeAIResult: AIResultRequest?
     @State private var activeCatchUp: CatchUpRequest?
     @State private var activeAIChat: AIChatRequest?
+    @State private var visibleArticlesChatMessages: [AIChatMessage] = []
     @State private var showAIInbox = false
     @State private var aiInboxSourceArticles: [Article] = []
     @State private var showSearch = false
@@ -161,7 +162,7 @@ struct ArticleListView: View {
                 .presentationBackground(SkimStyle.chrome)
         }
         .sheet(item: $activeAIChat) { request in
-            AIChatSheet(request: request)
+            AIChatSheet(request: request, messages: $visibleArticlesChatMessages)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
@@ -277,14 +278,15 @@ struct ArticleListView: View {
             dismissTextEntry()
             let articles = model.articles
             activeAIChat = AIChatRequest(
+                sessionKey: "visible-articles",
                 title: "Chat with Articles",
                 placeholder: articles.isEmpty ? "Ask about the latest articles." : "Ask about the currently visible articles."
-            ) { question in
+            ) { conversation in
                 let context = try await model.articlesForAIContext(preferred: articles)
                 guard !context.isEmpty else {
                     throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before chatting.")
                 }
-                let text = try await NativeAI.chat(question: question, articles: context, settings: model.settings)
+                let text = try await NativeAI.chat(conversation: conversation, articles: context, settings: model.settings)
                 return AIChatAnswer(text: text, articles: context)
             }
         }

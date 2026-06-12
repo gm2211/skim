@@ -20,6 +20,7 @@ struct ArticleDetailView: View {
     @State private var activeAIResult: AIResultRequest?
     @State private var activeAIChat: AIChatRequest?
     @State private var activeChatInitialMessage: String? = nil
+    @State private var chatMessagesBySession: [String: [AIChatMessage]] = [:]
     @State private var activeSummaryConfiguration: Article?
     @State private var showAIDisclaimerGate = false
     @State private var pendingAIAction: (() -> Void)?
@@ -85,7 +86,11 @@ struct ArticleDetailView: View {
             .presentationBackground(SkimStyle.chrome)
         }
         .sheet(item: $activeAIChat) { request in
-            AIChatSheet(request: request, initialAssistantMessage: activeChatInitialMessage)
+            AIChatSheet(
+                request: request,
+                messages: chatMessagesBinding(for: request.sessionKey),
+                initialAssistantMessage: activeChatInitialMessage
+            )
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .onDisappear { activeChatInitialMessage = nil }
@@ -325,20 +330,32 @@ struct ArticleDetailView: View {
                     activeAIResult = nil
                     activeChatInitialMessage = summaryText
                     activeAIChat = AIChatRequest(
+                        sessionKey: chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
                         title: "Chat with Article",
                         placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot)
-                    ) { question in
+                    ) { conversation in
                         let contextArticle = try await WebAIContext.article(
                             base: article,
                             preferWeb: useWebContext,
                             snapshot: webSnapshot
                         )
-                        let text = try await NativeAI.chat(question: question, article: contextArticle, settings: model.settings)
+                        let text = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
                         return AIChatAnswer(text: text, articles: [contextArticle])
                     }
                 }
             )
         }
+    }
+
+    private func chatMessagesBinding(for sessionKey: String) -> Binding<[AIChatMessage]> {
+        Binding(
+            get: { chatMessagesBySession[sessionKey] ?? [] },
+            set: { chatMessagesBySession[sessionKey] = $0 }
+        )
+    }
+
+    private func chatSessionKey(base article: Article, preferWeb: Bool, snapshot: WebViewSnapshot) -> String {
+        WebAIContext.articleID(base: article, preferWeb: preferWeb, snapshot: snapshot)
     }
 }
 
@@ -518,15 +535,16 @@ private extension ArticleDetailView {
         let webSnapshot = webSnapshot
         gatedAI {
             activeAIChat = AIChatRequest(
+                sessionKey: chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
                 title: useWebContext ? "Chat with Web Page" : "Chat with Article",
                 placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot)
-            ) { question in
+            ) { conversation in
                 let contextArticle = try await WebAIContext.article(
                     base: article,
                     preferWeb: useWebContext,
                     snapshot: webSnapshot
                 )
-                let text = try await NativeAI.chat(question: question, article: contextArticle, settings: model.settings)
+                let text = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
                 return AIChatAnswer(text: text, articles: [contextArticle])
             }
         }

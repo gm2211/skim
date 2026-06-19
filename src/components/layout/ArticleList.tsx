@@ -3,7 +3,7 @@ import { useArticles, useArticleCount, useMarkAllRead, useMarkRead, useMarkUnrea
 import { useInboxArticles } from "../../hooks/useInbox";
 import { useThemes, useArticleThemeTags } from "../../hooks/useThemes";
 import { useRecentArticles, useReadMatchCount, useRemoveRecent } from "../../hooks/useRecent";
-import { useRefreshAllFeeds } from "../../hooks/useFeeds";
+import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
@@ -25,6 +25,68 @@ type StickyArticleEntry = {
   article: any;
   expiresAt: number;
 };
+
+type EmptyArticleStateProps = {
+  title: string;
+  body: string;
+  showSourceActions: boolean;
+  onAddFeed: () => void;
+  onImportFeedly: () => void;
+};
+
+function EmptyArticleState({
+  title,
+  body,
+  showSourceActions,
+  onAddFeed,
+  onImportFeedly,
+}: EmptyArticleStateProps) {
+  return (
+    <div className="flex flex-col items-center justify-center px-6 text-center" style={{ minHeight: 236 }}>
+      <svg
+        width="34"
+        height="34"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        className="text-text-muted mb-3 opacity-45"
+      >
+        <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V9a2 2 0 0 0-2-2h-1" />
+      </svg>
+      <p className="text-text-secondary" style={{ fontSize: 14, fontWeight: 600, marginBottom: 5 }}>
+        {title}
+      </p>
+      <p className="text-text-muted" style={{ fontSize: 12, lineHeight: 1.5, maxWidth: 290 }}>
+        {body}
+      </p>
+      {showSourceActions && (
+        <div className="flex flex-wrap items-center justify-center gap-2" style={{ marginTop: 16 }}>
+          <button
+            onClick={onAddFeed}
+            className="bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors inline-flex items-center gap-1.5"
+            style={{ padding: "8px 13px", fontSize: 13, fontWeight: 500 }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Add feed
+          </button>
+          <button
+            onClick={onImportFeedly}
+            className="bg-white/10 text-text-primary rounded-lg hover:bg-white/15 transition-colors inline-flex items-center gap-1.5"
+            style={{ padding: "8px 13px", fontSize: 13, fontWeight: 500 }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            </svg>
+            Import Feedly
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function groupByPriority(articles: ArticleWithTriage[]) {
   const groups: { label: string; indices: number[] }[] = [];
@@ -94,6 +156,7 @@ export function ArticleList() {
     isPhone,
     setPhonePane,
     setShowCatchup,
+    setShowAddFeed,
   } = useUiStore();
   const markAllRead = useMarkAllRead();
   const markRead = useMarkRead();
@@ -102,6 +165,7 @@ export function ArticleList() {
   const toggleStar = useToggleStar();
   const removeRecent = useRemoveRecent();
   const refreshAllFeeds = useRefreshAllFeeds();
+  const { data: feeds } = useFeeds();
   const [searchQuery, setSearchQuery] = useState("");
   const [askOpen, setAskOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
@@ -362,6 +426,57 @@ export function ArticleList() {
     ? filteredArticles[contextMenu.articleIndex]
     : null;
 
+  const hasFeeds = (feeds?.length ?? 0) > 0;
+  const emptyState = useMemo(() => {
+    if (!hasFeeds) {
+      return {
+        title: "No articles yet",
+        body: "Add an RSS feed or import your Feedly subscriptions to start reading.",
+        showSourceActions: true,
+      };
+    }
+    if (searchQuery.trim()) {
+      return {
+        title: "No matching articles",
+        body: "Try a different search, or show read articles when unread filtering is active.",
+        showSourceActions: false,
+      };
+    }
+    if (isRecent) {
+      return {
+        title: "No reading history",
+        body: "Articles you open will show up here for quick return trips.",
+        showSourceActions: false,
+      };
+    }
+    if (sidebarView.type === "starred" || listFilter === "starred") {
+      return {
+        title: "No starred articles",
+        body: "Star articles you want to save and they will collect here.",
+        showSourceActions: false,
+      };
+    }
+    if (isInbox) {
+      return {
+        title: "AI Inbox is empty",
+        body: "Add feeds or import Feedly so Skim has articles to triage.",
+        showSourceActions: true,
+      };
+    }
+    if (listFilter === "unread") {
+      return {
+        title: "No unread articles",
+        body: "Add another source, import Feedly, or switch to All to browse read items.",
+        showSourceActions: true,
+      };
+    }
+    return {
+      title: "No articles",
+      body: "Refresh your feeds, add another RSS feed, or import from Feedly.",
+      showSourceActions: true,
+    };
+  }, [hasFeeds, searchQuery, isRecent, sidebarView.type, listFilter, isInbox]);
+
   // Infinite scroll: grow pageLimit when the user nears the bottom of the
   // list. Only applies to the paged (regular) query; inbox/recent queries
   // have their own server-side caps.
@@ -428,6 +543,17 @@ export function ArticleList() {
           </button>
         )}
         <div className="flex-1" />
+        {!isPhone && (
+          <button
+            onClick={() => setShowAddFeed(true)}
+            className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
+            title="Add feed"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        )}
         <button
           onClick={() => setShowCatchup(true)}
           className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
@@ -640,20 +766,13 @@ export function ArticleList() {
               </div>
             ))
           ) : (
-            <div className="flex flex-col items-center justify-center h-48 px-6">
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                className="text-text-muted mb-3 opacity-40"
-              >
-                <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1m2 13a2 2 0 0 1-2-2V9a2 2 0 0 0-2-2h-1" />
-              </svg>
-              <span className="text-text-muted" style={{ fontSize: 13 }}>No articles</span>
-            </div>
+            <EmptyArticleState
+              title={emptyState.title}
+              body={emptyState.body}
+              showSourceActions={emptyState.showSourceActions}
+              onAddFeed={() => setShowAddFeed(true)}
+              onImportFeedly={() => setShowAddFeed(true, "feedly")}
+            />
           )}
         </div>
       </div>

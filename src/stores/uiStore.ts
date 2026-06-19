@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { SidebarView } from "../services/types";
 
 type ListFilter = "all" | "unread" | "starred";
+export type AddFeedTab = "url" | "feedly";
 
 type PhonePane = "sidebar" | "list" | "detail";
 type ArticleReturnTarget = "catchup";
@@ -11,6 +12,7 @@ interface UiState {
   selectedArticleId: string | null;
   articleReturnTarget: ArticleReturnTarget | null;
   showAddFeed: boolean;
+  addFeedTab: AddFeedTab;
   showSettings: boolean;
   showCatchup: boolean;
   sidebarCollapsed: boolean;
@@ -27,7 +29,7 @@ interface UiState {
   setSelectedArticleId: (id: string | null) => void;
   openArticleFromCatchup: (id: string) => void;
   closeArticleDetail: () => void;
-  setShowAddFeed: (show: boolean) => void;
+  setShowAddFeed: (show: boolean, tab?: AddFeedTab) => void;
   setShowSettings: (show: boolean) => void;
   setShowCatchup: (show: boolean) => void;
   toggleSidebar: () => void;
@@ -49,6 +51,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   selectedArticleId: null,
   articleReturnTarget: null,
   showAddFeed: false,
+  addFeedTab: "url",
   showSettings: false,
   showCatchup: false,
   sidebarCollapsed: false,
@@ -97,7 +100,11 @@ export const useUiStore = create<UiState>((set, get) => ({
         phonePane: state.isPhone ? "list" : state.phonePane,
       };
     }),
-  setShowAddFeed: (show) => set({ showAddFeed: show }),
+  setShowAddFeed: (show, tab) =>
+    set((state) => ({
+      showAddFeed: show,
+      addFeedTab: show ? tab ?? "url" : state.addFeedTab,
+    })),
   setShowSettings: (show) => set({ showSettings: show }),
   setShowCatchup: (show) => set({ showCatchup: show }),
 

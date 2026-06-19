@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAddFeed } from "../../hooks/useFeeds";
-import { useUiStore } from "../../stores/uiStore";
+import { useUiStore, type AddFeedTab } from "../../stores/uiStore";
 import {
   feedlyOauthAvailable,
   feedlyOauthLogin,
@@ -39,16 +39,21 @@ function Step({ number, title, children }: { number: number; title: string; chil
   );
 }
 
-type Tab = "url" | "feedly";
+type Tab = AddFeedTab;
 
 export function AddFeedDialog() {
-  const [tab, setTab] = useState<Tab>("url");
+  const initialTab = useUiStore((s) => s.addFeedTab);
+  const [tab, setTab] = useState<Tab>(initialTab);
   const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
   const isPhone = useUiStore((s) => s.isPhone);
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(
     isPhone,
     () => setShowAddFeed(false),
   );
+
+  useEffect(() => {
+    setTab(initialTab);
+  }, [initialTab]);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">

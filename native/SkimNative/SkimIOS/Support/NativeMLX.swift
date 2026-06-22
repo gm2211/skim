@@ -68,8 +68,11 @@ enum NativeMLX {
         maxTokens: Int,
         jsonMode: Bool
     ) async throws -> String {
+        // Only use settings.model as a repo id when it actually looks like one (contains "/").
+        // A leaked cloud model id (e.g. "claude-sonnet-4-5") must not be passed to MLX.
+        let modelRepo = settings.model?.nilIfEmpty.flatMap { $0.contains("/") ? $0 : nil }
         let repoId = settings.localModelPath?.nilIfEmpty
-            ?? settings.model?.nilIfEmpty
+            ?? modelRepo
             ?? defaultRepoId
         await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
 
@@ -100,8 +103,11 @@ enum NativeMLX {
         jsonMode: Bool = false,
         onToken: @Sendable @escaping (String) -> Void
     ) async throws -> String {
+        // Only use settings.model as a repo id when it actually looks like one (contains "/").
+        // A leaked cloud model id (e.g. "claude-sonnet-4-5") must not be passed to MLX.
+        let modelRepo = settings.model?.nilIfEmpty.flatMap { $0.contains("/") ? $0 : nil }
         let repoId = settings.localModelPath?.nilIfEmpty
-            ?? settings.model?.nilIfEmpty
+            ?? modelRepo
             ?? defaultRepoId
         await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
 

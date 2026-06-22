@@ -657,6 +657,31 @@ enum NativeAI {
         }
     }
 
+    /// Build a multi-turn messages array for local MLX chat. Produces:
+    ///   [system] instructions + article context + optional web block
+    ///   [user/assistant] one message per prior turn in conversation.priorTurns
+    ///   [user] conversation.latestQuestion
+    private static func buildLocalChatMessages(
+        instructions: String,
+        articleContext: String,
+        conversation: AIChatConversation,
+        webBlock: String?
+    ) -> [[String: String]] {
+        var systemContent = instructions + "\n\nArticle:\n\(articleContext)"
+        if let webBlock {
+            systemContent += "\n\n\(webBlock)"
+        }
+        let systemMessage: [String: String] = ["role": "system", "content": systemContent]
+
+        let priorTurnMessages: [[String: String]] = conversation.priorTurns.map { turn in
+            ["role": turn.role == .user ? "user" : "assistant", "content": turn.text]
+        }
+
+        let finalUser: [String: String] = ["role": "user", "content": conversation.latestQuestion]
+
+        return [systemMessage] + priorTurnMessages + [finalUser]
+    }
+
     /// Local MLX chat with optional web-search augmentation (2-pass: router + answer).
     /// Falls back to a plain local answer on any failure in the router or search step.
     private static func chatLocalWithSearch(
@@ -681,53 +706,48 @@ enum NativeAI {
 
         switch decision {
         case .answer:
+            let msgs = buildLocalChatMessages(
+                instructions: instructions,
+                articleContext: articleContext,
+                conversation: conversation,
+                webBlock: nil
+            )
             return try await NativeMLX.complete(
                 settings: settings.ai,
-                instructions: instructions,
-                prompt: """
-                Article:
-                \(articleContext)
-
-                \(conversation.promptSection)
-                """,
-                maxTokens: answerMaxTokens,
-                jsonMode: false
+                messages: msgs,
+                maxTokens: answerMaxTokens
             )
 
         case .search(let query):
             let results = (try? await NativeWebSearch.run(query: query, maxResults: 4)) ?? []
             guard !results.isEmpty else {
+                // Empty results: fall back to answering from article only (multi-turn, no web block)
+                let msgs = buildLocalChatMessages(
+                    instructions: instructions,
+                    articleContext: articleContext,
+                    conversation: conversation,
+                    webBlock: nil
+                )
                 return try await NativeMLX.complete(
                     settings: settings.ai,
-                    instructions: instructions,
-                    prompt: """
-                    Article:
-                    \(articleContext)
-
-                    \(conversation.promptSection)
-                    """,
-                    maxTokens: answerMaxTokens,
-                    jsonMode: false
+                    messages: msgs,
+                    maxTokens: answerMaxTokens
                 )
             }
             let webBlock = formatWebResultsBlock(query: query, results: results)
             // Trim article digest when search fires to stay within 1B token budget
             let trimmedContext = articleContext.prefixWords(700)
             let answerInstructions = instructions + "\n\nWeb search results are provided below; use them for facts the article doesn't cover; if they don't help, say what you couldn't find."
-            let answerPrompt = """
-            \(webBlock)
-
-            Article:
-            \(trimmedContext)
-
-            \(conversation.promptSection)
-            """
+            let msgs = buildLocalChatMessages(
+                instructions: answerInstructions,
+                articleContext: trimmedContext,
+                conversation: conversation,
+                webBlock: webBlock
+            )
             return try await NativeMLX.complete(
                 settings: settings.ai,
-                instructions: answerInstructions,
-                prompt: answerPrompt,
-                maxTokens: answerMaxTokens,
-                jsonMode: false
+                messages: msgs,
+                maxTokens: answerMaxTokens
             )
         }
     }
@@ -756,6 +776,22 @@ enum NativeAI {
                 instructions: baseInstructions,
                 answerMaxTokens: 650,
                 settings: settings
+            )
+        }
+
+        // MLX without web search: still use multi-turn messages for better instruct-model behavior
+        if settings.ai.provider == "mlx" {
+            let articleContext = articleDigest([article], limit: 1, wordsPerArticle: 1800)
+            let msgs = buildLocalChatMessages(
+                instructions: baseInstructions,
+                articleContext: articleContext,
+                conversation: conversation,
+                webBlock: nil
+            )
+            return try await NativeMLX.complete(
+                settings: settings.ai,
+                messages: msgs,
+                maxTokens: 650
             )
         }
 

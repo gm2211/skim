@@ -1,4 +1,3 @@
-import AuthenticationServices
 import SkimCore
 import SwiftUI
 
@@ -937,37 +936,32 @@ private struct MLXSamplingParamsPanel: View {
 
 /// Sign-in panel for Claude Pro/Max.
 ///
-/// Primary path: ASWebAuthenticationSession presents an in-app Safari view that
-/// auto-returns the code via the `skim://oauth/claude/callback` URL scheme.
+/// Sign-in panel for Claude OAuth.
 ///
-/// Fallback path: if the user taps "Sign in manually" (or ASWeb is unavailable),
-/// the panel shows the legacy paste-code UI.  The manual flow opens Safari, the
-/// user copies the code from the Anthropic success page, and pastes it here.
+/// Opens Claude's sign-in page in Safari via the paste flow (the only supported
+/// path). The user copies the code from the Anthropic success page and pastes it
+/// here to complete authentication.
 private struct ClaudeOAuthPastePanel: View {
     @Binding var ai: AISettings
-    /// Used only by the paste fallback to open the Anthropic page in Safari.
+    /// Used to open the Anthropic OAuth page in Safari.
     var openURL: (URL) -> Void
 
     // MARK: State
 
-    /// Non-nil while a paste flow is active (fallback path only).
+    /// Non-nil while a paste flow is active.
     @State private var pasteFlow: ClaudeOAuthFlow?
     @State private var pastedCode = ""
     @State private var isWorking = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
-    @State private var showManualFallback = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
             primarySignInButton
-            fallbackToggle
 
-            if showManualFallback {
-                manualFallbackUI
-            }
+            pasteUI
 
             if let successMessage {
                 notice(color: .green, text: successMessage)
@@ -994,7 +988,7 @@ private struct ClaudeOAuthPastePanel: View {
                 Text("Sign in with Claude")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(SkimStyle.text)
-                Text("Opens Claude's OAuth page in-app and saves the bearer token automatically.")
+                Text("Opens Claude's sign-in page in Safari. Paste the code shown on the Anthropic page to finish signing in.")
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(SkimStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1005,9 +999,9 @@ private struct ClaudeOAuthPastePanel: View {
     private var primarySignInButton: some View {
         HStack(spacing: 10) {
             Button {
-                Task { await beginASWebSignIn() }
+                beginPasteSignIn()
             } label: {
-                Label(isWorking ? "Signing in..." : "Sign in with Claude", systemImage: "person.crop.circle")
+                Label(pasteFlow == nil ? "Sign in with Claude" : "Open again", systemImage: "person.crop.circle")
                     .font(.system(size: 15, weight: .semibold))
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
@@ -1020,7 +1014,6 @@ private struct ClaudeOAuthPastePanel: View {
                 Button(role: .destructive) {
                     ai.apiKey = nil
                     successMessage = nil
-                    showManualFallback = false
                     pasteFlow = nil
                 } label: {
                     Text("Clear")
@@ -1032,41 +1025,10 @@ private struct ClaudeOAuthPastePanel: View {
         }
     }
 
-    private var fallbackToggle: some View {
-        Button {
-            withAnimation(.smooth(duration: 0.18)) {
-                showManualFallback.toggle()
-                if !showManualFallback { pasteFlow = nil; pastedCode = "" }
-            }
-        } label: {
-            Text(showManualFallback ? "Hide manual sign-in" : "Sign in manually instead")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(SkimStyle.secondary)
-        }
-        .buttonStyle(.plain)
-    }
-
     @ViewBuilder
-    private var manualFallbackUI: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Opens Safari, then paste the code from the Anthropic success page.")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(SkimStyle.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Button {
-                beginPasteSignIn()
-            } label: {
-                Label(pasteFlow == nil ? "Open Claude sign-in page" : "Open again", systemImage: "safari")
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-            }
-            .buttonStyle(.bordered)
-            .tint(SkimStyle.accent)
-            .disabled(isWorking)
-
-            if pasteFlow != nil {
+    private var pasteUI: some View {
+        if pasteFlow != nil {
+            VStack(alignment: .leading, spacing: 10) {
                 SettingsTextField(
                     title: "Paste code from Anthropic",
                     placeholder: "code#state",
@@ -1085,42 +1047,9 @@ private struct ClaudeOAuthPastePanel: View {
                 .tint(SkimStyle.accent)
                 .disabled(isWorking || pastedCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+            .padding(10)
+            .background(SkimStyle.background.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
-        .padding(10)
-        .background(SkimStyle.background.opacity(0.4), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    // MARK: Actions — ASWeb path
-
-    @MainActor
-    private func beginASWebSignIn() async {
-        errorMessage = nil
-        successMessage = nil
-        isWorking = true
-
-        guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene })
-            .first(where: { $0.activationState == .foregroundActive }),
-              let window = scene.windows.first else {
-            // No active window scene — rare but possible; drop back to paste
-            showManualFallback = true
-            isWorking = false
-            return
-        }
-
-        let contextProvider = WindowScenePresentationContext(window: window)
-        do {
-            let tokenSet = try await NativeClaudeOAuth.signInWithASWeb(from: contextProvider)
-            storeToken(tokenSet)
-        } catch ClaudeOAuthError.userCancelled {
-            // User dismissed — no toast
-        } catch {
-            // Preserve the error; show manual option if it looks like the server
-            // rejected the custom scheme redirect_uri.
-            errorMessage = error.localizedDescription
-            withAnimation(.smooth(duration: 0.18)) { showManualFallback = true }
-        }
-        isWorking = false
     }
 
     // MARK: Actions — paste path
@@ -1171,28 +1100,6 @@ private struct ClaudeOAuthPastePanel: View {
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(color)
             .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-// MARK: - ASWebAuthenticationSession presentation context
-
-/// Provides the presentation anchor (window) for ASWebAuthenticationSession.
-///
-/// Marked `@unchecked Sendable` because UIWindow is a reference type that is
-/// read-only after initialization and is always accessed on the main thread in
-/// practice (ASWebAuthenticationSession calls the delegate on main).
-private final class WindowScenePresentationContext: NSObject,
-    ASWebAuthenticationPresentationContextProviding,
-    @unchecked Sendable
-{
-    private let window: UIWindow
-
-    init(window: UIWindow) {
-        self.window = window
-    }
-
-    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        window
     }
 }
 

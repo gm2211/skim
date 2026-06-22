@@ -1,4 +1,3 @@
-import AuthenticationServices
 import CryptoKit
 import Foundation
 
@@ -103,21 +102,11 @@ enum NativeClaudeOAuth {
     static let tokenURL = URL(string: "https://console.anthropic.com/v1/oauth/token")!
     static let scope = "user:profile user:inference"
 
-    /// Redirect URI used with ASWebAuthenticationSession (custom URL scheme).
-    /// Anthropic's OAuth server must allow this redirect_uri.  If they reject it
-    /// the ASWeb path will fail with a token-endpoint error and the UI falls back
-    /// to the paste flow automatically.
-    static let customSchemeRedirectURI = "skim://oauth/claude/callback"
-
-    /// Fallback redirect URI — the Anthropic success page where the user copies
+    /// Redirect URI for the paste flow — the Anthropic success page where the user copies
     /// the code string manually.
     static let pasteRedirectURI = "https://console.anthropic.com/oauth/code/callback"
 
     // MARK: Flow builders
-
-    static func beginASWebFlow() throws -> ClaudeOAuthFlow {
-        try buildFlow(redirectURI: customSchemeRedirectURI)
-    }
 
     static func beginPasteFlow() throws -> ClaudeOAuthFlow {
         try buildFlow(redirectURI: pasteRedirectURI)
@@ -142,58 +131,6 @@ enum NativeClaudeOAuth {
             throw ClaudeOAuthError.invalidAuthorizeURL
         }
         return ClaudeOAuthFlow(authorizeURL: url, state: state, verifier: verifier, redirectURI: redirectURI)
-    }
-
-    // MARK: ASWebAuthenticationSession path
-
-    /// Presents an in-app browser via ASWebAuthenticationSession.
-    /// Returns a token set on success.
-    /// Throws `ClaudeOAuthError.userCancelled` (silent) if the user dismisses.
-    /// Throws `ClaudeOAuthError.customSchemeRejected` if the server refuses the
-    /// custom redirect_uri — callers should then fall back to the paste path.
-    @MainActor
-    static func signInWithASWeb(
-        from contextProvider: ASWebAuthenticationPresentationContextProviding
-    ) async throws -> ClaudeTokenSet {
-        let flow = try beginASWebFlow()
-
-        // Wrap ASWebAuthenticationSession in a helper class so Swift 6 strict
-        // concurrency is satisfied: the session object itself is not Sendable,
-        // but all access happens on the MainActor and the completion handler only
-        // calls continuation.resume which is thread-safe.
-        let callbackURL: URL = try await withCheckedThrowingContinuation { continuation in
-            let session = ASWebAuthenticationSession(
-                url: flow.authorizeURL,
-                callbackURLScheme: "skim"
-            ) { url, error in
-                if let error {
-                    let nsError = error as NSError
-                    if nsError.domain == ASWebAuthenticationSessionErrorDomain,
-                       nsError.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
-                        continuation.resume(throwing: ClaudeOAuthError.userCancelled)
-                    } else {
-                        continuation.resume(throwing: error)
-                    }
-                    return
-                }
-                guard let url else {
-                    continuation.resume(throwing: ClaudeOAuthError.missingCallbackURL)
-                    return
-                }
-                continuation.resume(returning: url)
-            }
-            session.presentationContextProvider = contextProvider
-            // Keep any existing Claude session cookies so users who are already
-            // signed in to claude.ai don't need to re-enter credentials.
-            session.prefersEphemeralWebBrowserSession = false
-            session.start()
-        }
-
-        let (code, returnedState) = try extractCodeAndState(from: callbackURL)
-        guard returnedState == flow.state else {
-            throw ClaudeOAuthError.stateMismatch
-        }
-        return try await exchangeCode(code, flow: flow)
     }
 
     // MARK: Paste-flow exchange
@@ -281,16 +218,6 @@ enum NativeClaudeOAuth {
 
     // MARK: URL helpers
 
-    private static func extractCodeAndState(from url: URL) throws -> (code: String, state: String) {
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-              let codeValue = components.queryItems?.first(where: { $0.name == "code" })?.value,
-              !codeValue.isEmpty else {
-            throw ClaudeOAuthError.missingCode
-        }
-        let state = components.queryItems?.first(where: { $0.name == "state" })?.value ?? ""
-        return (codeValue, state)
-    }
-
     private static func codeChallenge(for verifier: String) -> String {
         let digest = SHA256.hash(data: Data(verifier.utf8))
         return Data(digest).base64URLEncodedString()
@@ -313,7 +240,6 @@ enum NativeClaudeOAuth {
 enum ClaudeOAuthError: LocalizedError {
     case invalidAuthorizeURL
     case missingCode
-    case missingCallbackURL
     case stateMismatch
     case invalidResponse
     case userCancelled
@@ -326,8 +252,6 @@ enum ClaudeOAuthError: LocalizedError {
             return "Could not build the Claude sign-in URL."
         case .missingCode:
             return "Paste the code shown after Claude sign-in."
-        case .missingCallbackURL:
-            return "No callback URL was returned after sign-in."
         case .stateMismatch:
             return "Claude sign-in state mismatch. Start sign-in again."
         case .invalidResponse:

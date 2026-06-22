@@ -496,14 +496,26 @@ actor MLXRunner {
                 let userInput = UserInput(messages: messages)
                 let lmInput = try await context.processor.prepare(input: userInput)
 
-                let result = try MLXLMCommon.generate(
-                    input: lmInput,
-                    parameters: params,
-                    context: context
-                ) { (_: [Int]) in GenerateDisposition.more }
+                // Wrap in MLX.withError so C-layer errors (e.g. from MLXArray.eval during
+                // token sampling) become catchable Swift errors instead of calling fatalError
+                // and aborting the process. The scoped handler must be active on the same
+                // thread/task that MLX eval runs on — placing it inside container.perform's
+                // closure body guarantees that.
+                let result = try MLX.withError {
+                    try MLXLMCommon.generate(
+                        input: lmInput,
+                        parameters: params,
+                        context: context
+                    ) { (_: [Int]) in GenerateDisposition.more }
+                }
                 return result.output
             }
             return sanitizeOutput(raw, family: family)
+        } catch let error as MLX.MLXError {
+            // MLX C-layer runtime error surfaced via scoped withError handler.
+            // MLX.MLXError is mlx-swift's type (distinct from Skim's local MLXError);
+            // map it into Skim's error hierarchy so callers see a consistent type.
+            throw MLXError.generationFailed(error.localizedDescription)
         } catch let error as MLXError {
             throw error
         } catch {
@@ -554,21 +566,32 @@ actor MLXRunner {
                 let userInput = UserInput(messages: messages)
                 let lmInput = try await context.processor.prepare(input: userInput)
 
-                var accumulated = ""
-                for await item in try MLXLMCommon.generate(
-                    input: lmInput,
-                    cache: nil,
-                    parameters: params,
-                    context: context
-                ) {
-                    if let chunk = item.chunk {
-                        accumulated += chunk
-                        onToken(chunk)
+                // Async withError wraps the streaming loop so any MLX C-layer error
+                // emitted during token sampling (MLXArray.item / MLXArray.eval) is thrown
+                // as a Swift error instead of aborting the process via fatalError.
+                // Placed inside container.perform to ensure the scoped handler is active
+                // on the same task where MLX evaluation actually runs.
+                return try await MLX.withError {
+                    var accumulated = ""
+                    for await item in try MLXLMCommon.generate(
+                        input: lmInput,
+                        cache: nil,
+                        parameters: params,
+                        context: context
+                    ) {
+                        if let chunk = item.chunk {
+                            accumulated += chunk
+                            onToken(chunk)
+                        }
                     }
+                    return accumulated
                 }
-                return accumulated
             }
             return sanitizeOutput(raw, family: family)
+        } catch let error as MLX.MLXError {
+            // MLX C-layer runtime error surfaced via scoped withError handler.
+            // Map to Skim's error hierarchy for consistent error handling by callers.
+            throw MLXError.generationFailed(error.localizedDescription)
         } catch let error as MLXError {
             throw error
         } catch {

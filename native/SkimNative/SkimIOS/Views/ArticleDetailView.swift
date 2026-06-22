@@ -1093,7 +1093,36 @@ private enum WebAIContext {
     private static let minimumUsefulTextLength = 200
 
     static func article(base: Article, preferWeb: Bool, snapshot: WebViewSnapshot) async throws -> Article {
-        guard preferWeb else { return base }
+        guard preferWeb else {
+            // Non-web path: if the article body is thin (aggregator/link posts) and
+            // there is an externalURL pointing to the real article, fetch and extract it.
+            if articleBodyIsThin(base), let externalURL = base.externalURL {
+                if let loaded = try? await loadDocument(at: externalURL, fallbackTitle: base.title),
+                   loaded.text.count >= minimumUsefulTextLength {
+                    // Preserve base.id so chat session keys remain stable.
+                    // Preserve base.feedTitle (not "Web View") so provenance is clear.
+                    return Article(
+                        id: base.id,
+                        feedID: base.feedID,
+                        feedTitle: base.feedTitle,
+                        title: loaded.title?.nilIfEmpty ?? base.title,
+                        url: loaded.url,
+                        author: base.author,
+                        contentText: loaded.text,
+                        contentHTML: nil,
+                        imageURL: base.imageURL,
+                        publishedAt: base.publishedAt,
+                        fetchedAt: base.fetchedAt,
+                        isRead: base.isRead,
+                        isStarred: base.isStarred,
+                        aggregatorKind: base.aggregatorKind,
+                        externalURL: base.externalURL,
+                        commentsURL: base.commentsURL
+                    )
+                }
+            }
+            return base
+        }
 
         let contextURL = snapshot.url ?? base.externalURL ?? base.url
         let title = snapshot.title?.nilIfEmpty ?? contextURL?.host(percentEncoded: false) ?? base.title
@@ -1202,6 +1231,16 @@ private enum WebAIContext {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         )
         return cleaned.nilIfEmpty
+    }
+
+    /// Returns true when the article's readable body text is absent or shorter than
+    /// `minimumUsefulTextLength`. Used to detect aggregator/link posts (HN, lobste.rs,
+    /// Reddit) whose RSS items carry only a stub and whose real content lives at
+    /// `externalURL`.
+    private static func articleBodyIsThin(_ base: Article) -> Bool {
+        let body = sanitizedText(base.contentText) ?? sanitizedText(base.contentHTML?.skimPlainText)
+        guard let body else { return true }
+        return body.count < minimumUsefulTextLength
     }
 
     private static func isPDF(url: URL, mimeType: String, data: Data) -> Bool {

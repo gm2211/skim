@@ -454,10 +454,12 @@ actor MLXRunner {
         }
     }
 
+    // MARK: - Core messages-based generation (shared implementation)
+
+    /// Core completion from an arbitrary messages array. All other complete/stream
+    /// variants delegate here after building their messages array.
     func complete(
-        systemPrompt: String,
-        userPrompt: String,
-        jsonMode: Bool,
+        messages: [[String: String]],
         maxTokens: Int,
         temperature: Float? = nil,
         topP: Float? = nil,
@@ -465,13 +467,6 @@ actor MLXRunner {
         repetitionContextSize: Int? = nil
     ) async throws -> String {
         let container = try await ensureLoaded()
-        let finalSystem = jsonMode
-            ? systemPrompt + "\n\nRespond with a single JSON object. No prose, no code fences."
-            : systemPrompt
-        let messages: [[String: String]] = [
-            ["role": "system", "content": finalSystem],
-            ["role": "user", "content": userPrompt]
-        ]
 
         // Resolve sampling params: caller override > per-model preset > hardcoded fallback
         let preset = MLXSamplingPreset.preset(for: currentRepoId)
@@ -523,12 +518,9 @@ actor MLXRunner {
         }
     }
 
-    /// Stream tokens as they are generated, calling `onToken` with each decoded chunk.
-    /// Returns the full sanitized output when generation is complete.
+    /// Core streaming generation from an arbitrary messages array.
     func stream(
-        systemPrompt: String,
-        userPrompt: String,
-        jsonMode: Bool,
+        messages: [[String: String]],
         maxTokens: Int,
         temperature: Float? = nil,
         topP: Float? = nil,
@@ -537,13 +529,6 @@ actor MLXRunner {
         onToken: @Sendable @escaping (String) -> Void
     ) async throws -> String {
         let container = try await ensureLoaded()
-        let finalSystem = jsonMode
-            ? systemPrompt + "\n\nRespond with a single JSON object. No prose, no code fences."
-            : systemPrompt
-        let messages: [[String: String]] = [
-            ["role": "system", "content": finalSystem],
-            ["role": "user", "content": userPrompt]
-        ]
 
         // Resolve sampling params: caller override > per-model preset > hardcoded fallback
         let preset = MLXSamplingPreset.preset(for: currentRepoId)
@@ -597,6 +582,66 @@ actor MLXRunner {
         } catch {
             throw MLXError.generationFailed("\(error)")
         }
+    }
+
+    // MARK: - Legacy single-turn wrappers (delegate to the messages-based core)
+
+    func complete(
+        systemPrompt: String,
+        userPrompt: String,
+        jsonMode: Bool,
+        maxTokens: Int,
+        temperature: Float? = nil,
+        topP: Float? = nil,
+        repetitionPenalty: Float? = nil,
+        repetitionContextSize: Int? = nil
+    ) async throws -> String {
+        let finalSystem = jsonMode
+            ? systemPrompt + "\n\nRespond with a single JSON object. No prose, no code fences."
+            : systemPrompt
+        let messages: [[String: String]] = [
+            ["role": "system", "content": finalSystem],
+            ["role": "user", "content": userPrompt]
+        ]
+        return try await complete(
+            messages: messages,
+            maxTokens: maxTokens,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            repetitionContextSize: repetitionContextSize
+        )
+    }
+
+    /// Stream tokens as they are generated, calling `onToken` with each decoded chunk.
+    /// Returns the full sanitized output when generation is complete.
+    func stream(
+        systemPrompt: String,
+        userPrompt: String,
+        jsonMode: Bool,
+        maxTokens: Int,
+        temperature: Float? = nil,
+        topP: Float? = nil,
+        repetitionPenalty: Float? = nil,
+        repetitionContextSize: Int? = nil,
+        onToken: @Sendable @escaping (String) -> Void
+    ) async throws -> String {
+        let finalSystem = jsonMode
+            ? systemPrompt + "\n\nRespond with a single JSON object. No prose, no code fences."
+            : systemPrompt
+        let messages: [[String: String]] = [
+            ["role": "system", "content": finalSystem],
+            ["role": "user", "content": userPrompt]
+        ]
+        return try await stream(
+            messages: messages,
+            maxTokens: maxTokens,
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            repetitionContextSize: repetitionContextSize,
+            onToken: onToken
+        )
     }
 
     // Strip any leaked stop tokens from the output.

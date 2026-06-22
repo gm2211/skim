@@ -92,6 +92,34 @@ enum NativeMLX {
         .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Multi-turn completion from an arbitrary messages array. Used by local MLX chat
+    /// to pass real system + prior-turn + final-user messages through the chat template.
+    static func complete(
+        settings: AISettings,
+        messages: [[String: String]],
+        maxTokens: Int
+    ) async throws -> String {
+        // Only use settings.model as a repo id when it actually looks like one (contains "/").
+        // A leaked cloud model id (e.g. "claude-sonnet-4-5") must not be passed to MLX.
+        let modelRepo = settings.model?.nilIfEmpty.flatMap { $0.contains("/") ? $0 : nil }
+        let repoId = settings.localModelPath?.nilIfEmpty
+            ?? modelRepo
+            ?? defaultRepoId
+        await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
+
+        let resolvedMaxTokens = settings.mlxMaxTokens ?? maxTokens
+
+        return try await MLXRunner.shared.complete(
+            messages: messages,
+            maxTokens: resolvedMaxTokens,
+            temperature: settings.mlxTemperature.map { Float($0) },
+            topP: settings.mlxTopP.map { Float($0) },
+            repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) },
+            repetitionContextSize: settings.mlxRepetitionContextSize
+        )
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Streaming variant of `complete`. Calls `onToken` with each decoded chunk as it is generated,
     /// then returns the full sanitized output. Use this for summary and chat paths so the UI can
     /// display tokens progressively rather than waiting for the full generation to finish.

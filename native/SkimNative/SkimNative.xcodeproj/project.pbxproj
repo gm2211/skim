@@ -34,6 +34,7 @@
 		C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BCD3DD03D305C558D07614 /* NativeAI.swift */; };
 		C1D91C8A78E543F0F69FFE82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0C79E51007F91AE5C8286F40 /* Assets.xcassets */; };
 		D575AB676AA07786E29C32A0 /* CatchUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 839B1584F0E39B5A14D96C79 /* CatchUpView.swift */; };
+		D5D2795C99FD3003AA0F056B /* NativeWebSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1B88832F456973EA297F0F /* NativeWebSearch.swift */; };
 		D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A483594667B890576E4D368D /* SkimNativeApp.swift */; };
 		DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BA45434D97C1ACA953B839 /* NativeMLX.swift */; };
 		DFC1782BE965DCD3BBEAFEC9 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */; };
@@ -72,6 +73,7 @@
 		8387834F563CFA86721EBF1D /* LegalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegalView.swift; sourceTree = "<group>"; };
 		839B1584F0E39B5A14D96C79 /* CatchUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchUpView.swift; sourceTree = "<group>"; };
 		89737FFF993802E562860605 /* AIDisclaimerLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDisclaimerLabel.swift; sourceTree = "<group>"; };
+		8A1B88832F456973EA297F0F /* NativeWebSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeWebSearch.swift; sourceTree = "<group>"; };
 		911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkimMacOSApp.swift; sourceTree = "<group>"; };
 		959A59B5B27E8C969D084B8F /* AIBootDisclaimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIBootDisclaimerView.swift; sourceTree = "<group>"; };
 		A1BCD3DD03D305C558D07614 /* NativeAI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAI.swift; sourceTree = "<group>"; };
@@ -189,6 +191,7 @@
 				B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */,
 				B1B69429F0218849C4A4E655 /* NativeKeychain.swift */,
 				F6BA45434D97C1ACA953B839 /* NativeMLX.swift */,
+				8A1B88832F456973EA297F0F /* NativeWebSearch.swift */,
 				3442125155D4E58EF8001611 /* SmartFolderEval.swift */,
 				038284DEE00F91A360324653 /* Style.swift */,
 				1474BA38A4E522DB5D3ECB21 /* WebView.swift */,
@@ -412,6 +415,7 @@
 				A20D6777CCE9FF23884FB7F1 /* NativeClaudeOAuth.swift in Sources */,
 				2A601923CBA16F4DD268D2C9 /* NativeKeychain.swift in Sources */,
 				DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */,
+				D5D2795C99FD3003AA0F056B /* NativeWebSearch.swift in Sources */,
 				E0006C62ED6F6DE502164145 /* RootView.swift in Sources */,
 				014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */,
 				D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */,

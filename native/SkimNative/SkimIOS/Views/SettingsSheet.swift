@@ -1091,7 +1091,13 @@ private struct ClaudeOAuthPastePanel: View {
 
     private func storeToken(_ tokenSet: ClaudeTokenSet) {
         ai.apiKey = tokenSet.accessToken
-        ai.model = ai.model?.nilIfEmpty ?? "claude-sonnet-4-5"
+        // If the stored model id looks like a Claude model, keep it; otherwise replace it
+        // (an MLX repo id like "mlx-community/gemma-3-1b-it-4bit" must not survive sign-in).
+        if let existing = ai.model?.nilIfEmpty, existing.hasPrefix("claude") {
+            // already a valid Claude model id — leave it
+        } else {
+            ai.model = "claude-sonnet-4-5"
+        }
         successMessage = "Signed in with Claude. Token saved automatically."
     }
 

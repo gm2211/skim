@@ -806,7 +806,7 @@ enum NativeAI {
             request.setValue(accessToken, forHTTPHeaderField: "x-api-key")
         }
         var body: [String: Any] = [
-            "model": settings.model?.nilIfEmpty ?? defaultModel(for: settings.provider),
+            "model": resolveAnthropicModel(settings),
             "system": instructions,
             "messages": messages,
             "temperature": 0.2,
@@ -1073,6 +1073,15 @@ enum NativeAI {
             let text = String(data: data, encoding: .utf8) ?? "No response body."
             throw NativeAIError.unavailable("\(provider) request failed (\(status)): \(text.prefix(500))")
         }
+    }
+
+    /// Returns the correct Anthropic model id, guarding against a leaked MLX repo id
+    /// (e.g. "mlx-community/gemma-3-1b-it-4bit") that the shared `ai.model` field may
+    /// contain when the user previously used local inference and then signed into Claude.
+    private static func resolveAnthropicModel(_ settings: AISettings) -> String {
+        let m = settings.model?.nilIfEmpty
+        if let m, m.hasPrefix("claude") { return m }
+        return defaultModel(for: settings.provider)
     }
 
     private static func defaultModel(for provider: String) -> String {

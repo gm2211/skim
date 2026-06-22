@@ -137,6 +137,17 @@ struct SettingsSheet: View {
 
             if draft.ai.provider == "mlx" {
                 MLXSettingsPanel(ai: aiSettingsBinding)
+
+                Toggle(isOn: Binding(
+                    get: { draft.ai.localChatWebSearch ?? true },
+                    set: { value in updateAI { $0.localChatWebSearch = value } }
+                )) {
+                    Text("Web search in chat")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(SkimStyle.text)
+                }
+                .toggleStyle(.switch)
+                .tint(SkimStyle.accent)
             }
 
             Divider()

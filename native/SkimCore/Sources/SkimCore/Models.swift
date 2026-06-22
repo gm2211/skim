@@ -162,6 +162,9 @@ public struct AISettings: Codable, Equatable, Sendable {
     public var mlxRepetitionContextSize: Int?
     public var mlxMaxTokens: Int?
 
+    // MLX chat web search (nil = default on)
+    public var localChatWebSearch: Bool?
+
     public init(
         provider: String = "foundation-models",
         apiKey: String? = nil,
@@ -181,7 +184,8 @@ public struct AISettings: Codable, Equatable, Sendable {
         mlxTopP: Double? = nil,
         mlxRepetitionPenalty: Double? = nil,
         mlxRepetitionContextSize: Int? = nil,
-        mlxMaxTokens: Int? = nil
+        mlxMaxTokens: Int? = nil,
+        localChatWebSearch: Bool? = nil
     ) {
         self.provider = provider
         self.apiKey = apiKey
@@ -202,6 +206,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         self.mlxRepetitionPenalty = mlxRepetitionPenalty
         self.mlxRepetitionContextSize = mlxRepetitionContextSize
         self.mlxMaxTokens = mlxMaxTokens
+        self.localChatWebSearch = localChatWebSearch
     }
 
     enum CodingKeys: String, CodingKey {
@@ -224,6 +229,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         case mlxRepetitionPenalty
         case mlxRepetitionContextSize
         case mlxMaxTokens
+        case localChatWebSearch
     }
 
     enum LegacyCodingKeys: String, CodingKey {
@@ -262,6 +268,7 @@ public struct AISettings: Codable, Equatable, Sendable {
         mlxRepetitionPenalty = try container.decodeIfPresent(Double.self, forKey: .mlxRepetitionPenalty)
         mlxRepetitionContextSize = try container.decodeIfPresent(Int.self, forKey: .mlxRepetitionContextSize)
         mlxMaxTokens = try container.decodeIfPresent(Int.self, forKey: .mlxMaxTokens)
+        localChatWebSearch = try container.decodeIfPresent(Bool.self, forKey: .localChatWebSearch)
     }
 }
 

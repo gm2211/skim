@@ -528,6 +528,210 @@ enum NativeAI {
         ].joined(separator: "|")
     }
 
+    // MARK: - Local MLX web search (skim-7oi1)
+
+    /// Decision produced by the router pass for local MLX chat.
+    enum LocalSearchDecision {
+        case answer
+        case search(String)
+    }
+
+    /// Parse the single-line router output from the local model.
+    /// Returns `.search(query)` if the output matches `SEARCH: <query>`,
+    /// `.answer` if it contains "ANSWER", and `.answer` for any ambiguous/empty/garbage output.
+    static func parseRouterDecision(_ raw: String) -> LocalSearchDecision {
+        let line = raw
+            .components(separatedBy: .newlines)
+            .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+            ?? ""
+
+        // Try SEARCH: <query> pattern (case-insensitive)
+        let pattern = #"^\s*SEARCH\s*[:\-]\s*(.+)$"#
+        if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+            let ns = line as NSString
+            if let match = regex.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) {
+                let queryRange = match.range(at: 1)
+                if queryRange.location != NSNotFound, let range = Range(queryRange, in: line) {
+                    var query = String(line[range])
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    // Strip surrounding quotes / backticks / angle brackets
+                    query = query.trimmingCharacters(in: CharacterSet(charactersIn: "\"'`<>"))
+                    // Reject placeholder-like values or very long strings
+                    if query.isEmpty || query.lowercased() == "query" || query.count > 200 {
+                        return .answer
+                    }
+                    // Clamp to at most 12 words
+                    let words = query.split(separator: " ").prefix(12)
+                    query = words.joined(separator: " ")
+                    return .search(query)
+                }
+            }
+        }
+
+        // If output contains ANSWER (case-insensitive) -> answer
+        if line.range(of: "ANSWER", options: .caseInsensitive) != nil {
+            return .answer
+        }
+
+        // Default: ambiguous/empty -> answer (never search on garbage)
+        return .answer
+    }
+
+    /// Format web search results into a plain numbered block for injection into the answer prompt.
+    static func formatWebResultsBlock(query: String, results: [SearchResult]) -> String {
+        let header = "Web search results for \"\(query)\" (use for facts not in the article; answer in prose):"
+        let body = results.enumerated().map { index, result in
+            let label = "(W\(index + 1))"
+            return "\(label) \(result.title)\n    \(result.snippet)\n    \(result.url)"
+        }
+        .joined(separator: "\n")
+        return header + "\n" + body
+    }
+
+    /// Returns true when local MLX web search is enabled for the given settings.
+    private static func localWebSearchEnabled(_ ai: AISettings) -> Bool {
+        ai.provider == "mlx" && (ai.localChatWebSearch ?? true)
+    }
+
+    /// Pre-gate: return true to skip the router and answer directly.
+    /// Only suppresses the router — never forces a search.
+    /// Conservative: returns false when in doubt.
+    private static func canSkipRouter(conversation: AIChatConversation, articleCount: Int) -> Bool {
+        guard articleCount == 1 else { return false }
+        let q = conversation.latestQuestion.lowercased()
+        guard q.split(separator: " ").count <= 8 else { return false }
+        let freshnessTokens = ["latest", "current", "today", "now", "recent", "price", "weather",
+                               "who won", "look up", "search", "google"]
+        for token in freshnessTokens {
+            if q.contains(token) { return false }
+        }
+        return true
+    }
+
+    /// Router pass: ask the local model whether to ANSWER or SEARCH, with maxTokens 24.
+    /// Never throws — returns .answer on any error.
+    private static func routeLocalChat(
+        conversation: AIChatConversation,
+        articleContext: String,
+        settings: AppSettings
+    ) async -> LocalSearchDecision {
+        let routerSystem = """
+        You are a routing assistant. Decide whether to answer from the article or search the web.
+        Reply with EXACTLY one line — either:
+          ANSWER
+        or:
+          SEARCH: <concise search query>
+
+        Examples:
+          User: What is the author's main argument?
+          Reply: ANSWER
+
+          User: What is the current price of Bitcoin?
+          Reply: SEARCH: Bitcoin price today
+
+          User: Who won the 2024 US election?
+          Reply: SEARCH: 2024 US election winner
+
+          User: Summarize the article.
+          Reply: ANSWER
+
+        If you are not sure, reply ANSWER. Never explain your choice.
+        """
+        let digest = articleContext.prefixWords(400)
+        let routerUser = """
+        \(digest)
+
+        \(conversation.latestQuestion)
+        """
+        do {
+            let raw = try await NativeMLX.complete(
+                settings: settings.ai,
+                instructions: routerSystem,
+                prompt: routerUser,
+                maxTokens: 24,
+                jsonMode: false
+            )
+            return parseRouterDecision(raw)
+        } catch {
+            return .answer
+        }
+    }
+
+    /// Local MLX chat with optional web-search augmentation (2-pass: router + answer).
+    /// Falls back to a plain local answer on any failure in the router or search step.
+    private static func chatLocalWithSearch(
+        conversation: AIChatConversation,
+        articleContext: String,
+        instructions: String,
+        answerMaxTokens: Int,
+        settings: AppSettings
+    ) async throws -> String {
+        let skipRouter = canSkipRouter(conversation: conversation, articleCount: 1)
+
+        let decision: LocalSearchDecision
+        if skipRouter {
+            decision = .answer
+        } else {
+            decision = await routeLocalChat(
+                conversation: conversation,
+                articleContext: articleContext,
+                settings: settings
+            )
+        }
+
+        switch decision {
+        case .answer:
+            return try await NativeMLX.complete(
+                settings: settings.ai,
+                instructions: instructions,
+                prompt: """
+                Article:
+                \(articleContext)
+
+                \(conversation.promptSection)
+                """,
+                maxTokens: answerMaxTokens,
+                jsonMode: false
+            )
+
+        case .search(let query):
+            let results = (try? await NativeWebSearch.run(query: query, maxResults: 4)) ?? []
+            guard !results.isEmpty else {
+                return try await NativeMLX.complete(
+                    settings: settings.ai,
+                    instructions: instructions,
+                    prompt: """
+                    Article:
+                    \(articleContext)
+
+                    \(conversation.promptSection)
+                    """,
+                    maxTokens: answerMaxTokens,
+                    jsonMode: false
+                )
+            }
+            let webBlock = formatWebResultsBlock(query: query, results: results)
+            // Trim article digest when search fires to stay within 1B token budget
+            let trimmedContext = articleContext.prefixWords(700)
+            let answerInstructions = instructions + "\n\nWeb search results are provided below; use them for facts the article doesn't cover; if they don't help, say what you couldn't find."
+            let answerPrompt = """
+            \(webBlock)
+
+            Article:
+            \(trimmedContext)
+
+            \(conversation.promptSection)
+            """
+            return try await NativeMLX.complete(
+                settings: settings.ai,
+                instructions: answerInstructions,
+                prompt: answerPrompt,
+                maxTokens: answerMaxTokens,
+                jsonMode: false
+            )
+        }
+    }
+
     static func chat(question: String, article: Article, settings: AppSettings) async throws -> String {
         try await chat(
             conversation: AIChatConversation(latestQuestion: question),
@@ -542,6 +746,19 @@ enum NativeAI {
         let instructions = toolsOK
             ? baseInstructions + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices."
             : baseInstructions
+
+        // Local MLX web-search path (skim-7oi1)
+        if localWebSearchEnabled(settings.ai) {
+            let articleContext = articleDigest([article], limit: 1, wordsPerArticle: 1800)
+            return try await chatLocalWithSearch(
+                conversation: conversation,
+                articleContext: articleContext,
+                instructions: baseInstructions,
+                answerMaxTokens: 650,
+                settings: settings
+            )
+        }
+
         return try await complete(
             settings: settings,
             instructions: instructions,
@@ -572,6 +789,8 @@ enum NativeAI {
         let instructions = toolsOK
             ? baseInstructions + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices."
             : baseInstructions
+        // Note (skim-7oi1 v1): local MLX web search is scoped to single-article chat only.
+        // Multi-article chat falls through to the plain complete() path.
         return try await complete(
             settings: settings,
             instructions: instructions,

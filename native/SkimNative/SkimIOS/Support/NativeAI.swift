@@ -537,16 +537,22 @@ enum NativeAI {
     }
 
     static func chat(conversation: AIChatConversation, article: Article, settings: AppSettings) async throws -> String {
-        try await complete(
+        let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
+        let baseInstructions = "You answer questions about a single article using only the provided article text and the conversation context. Answer only the latest user question. Use previous turns only to resolve references like 'that' or 'the second one'. Do not repeat a prior answer unless the latest question explicitly asks you to recap it. If the answer is not in the article, say so."
+        let instructions = toolsOK
+            ? baseInstructions + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices."
+            : baseInstructions
+        return try await complete(
             settings: settings,
-            instructions: "You answer questions about a single article using only the provided article text and the conversation context. Answer only the latest user question. Use previous turns only to resolve references like 'that' or 'the second one'. Do not repeat a prior answer unless the latest question explicitly asks you to recap it. If the answer is not in the article, say so.",
+            instructions: instructions,
             prompt: """
             Article:
             \(articleDigest([article], limit: 1, wordsPerArticle: 1800))
 
             \(conversation.promptSection)
             """,
-            maxTokens: 650
+            maxTokens: 650,
+            enableWebSearch: toolsOK
         )
     }
 
@@ -559,18 +565,24 @@ enum NativeAI {
     }
 
     static func chat(conversation: AIChatConversation, articles: [Article], settings: AppSettings) async throws -> String {
-        try await complete(
-            settings: settings,
-            instructions: """
+        let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
+        let baseInstructions = """
             You answer questions across a set of RSS articles using the provided article list and conversation context. Answer only the latest user question. Use previous turns only to resolve references like 'that' or 'the second one'. Do not repeat prior answers unless the latest question explicitly asks. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable.
-            """,
+            """
+        let instructions = toolsOK
+            ? baseInstructions + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices."
+            : baseInstructions
+        return try await complete(
+            settings: settings,
+            instructions: instructions,
             prompt: """
             Articles:
             \(articleDigest(articles, limit: 35))
 
             \(conversation.promptSection)
             """,
-            maxTokens: 850
+            maxTokens: 850,
+            enableWebSearch: toolsOK
         )
     }
 
@@ -579,7 +591,8 @@ enum NativeAI {
         instructions: String,
         prompt: String,
         maxTokens: Int,
-        jsonMode: Bool = false
+        jsonMode: Bool = false,
+        enableWebSearch: Bool = false
     ) async throws -> String {
         let ai = settings.ai
         switch ai.provider {
@@ -590,6 +603,9 @@ enum NativeAI {
         case "openai", "openrouter", "custom":
             return try await completeOpenAICompatible(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
         case "anthropic", "claude-subscription":
+            if enableWebSearch {
+                return try await completeAnthropicWithTools(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+            }
             return try await completeAnthropic(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
         case "mlx":
             return try await NativeMLX.complete(
@@ -765,7 +781,20 @@ enum NativeAI {
         return try decodeAnthropicContent(data: data)
     }
 
-    private static func buildAnthropicRequest(settings: AISettings, accessToken: String, isSubscription: Bool, instructions: String, prompt: String, maxTokens: Int) throws -> URLRequest {
+    // MARK: - Anthropic request builder (extended)
+
+    /// Full-featured request builder. `messages` is the complete array of chat turns;
+    /// `tools` (optional) injects tool definitions. This is the single source of truth
+    /// for all Anthropic HTTP requests.
+    private static func buildAnthropicRequestFull(
+        settings: AISettings,
+        accessToken: String,
+        isSubscription: Bool,
+        instructions: String,
+        messages: [[String: Any]],
+        maxTokens: Int,
+        tools: [[String: Any]]? = nil
+    ) throws -> URLRequest {
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -776,17 +805,33 @@ enum NativeAI {
         } else {
             request.setValue(accessToken, forHTTPHeaderField: "x-api-key")
         }
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": settings.model?.nilIfEmpty ?? defaultModel(for: settings.provider),
             "system": instructions,
-            "messages": [
-                ["role": "user", "content": prompt]
-            ],
+            "messages": messages,
             "temperature": 0.2,
             "max_tokens": maxTokens
         ]
+        if let tools {
+            body["tools"] = tools
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
+    }
+
+    /// Thin wrapper preserving the original single-message, no-tools signature
+    /// used by all non-chat callers (summarize, triage, inbox). Byte-for-byte
+    /// equivalent to the old `buildAnthropicRequest`.
+    private static func buildAnthropicRequest(settings: AISettings, accessToken: String, isSubscription: Bool, instructions: String, prompt: String, maxTokens: Int) throws -> URLRequest {
+        try buildAnthropicRequestFull(
+            settings: settings,
+            accessToken: accessToken,
+            isSubscription: isSubscription,
+            instructions: instructions,
+            messages: [["role": "user", "content": prompt]],
+            maxTokens: maxTokens,
+            tools: nil
+        )
     }
 
     private static func decodeAnthropicContent(data: Data) throws -> String {
@@ -796,6 +841,213 @@ enum NativeAI {
             throw NativeAIError.unavailable("The Claude response was empty.")
         }
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - web_search tool definition
+
+    private static var webSearchToolDefinition: [String: Any] {
+        [
+            "name": "web_search",
+            "description": "Search the public web (DuckDuckGo) for fresh information not present in the user's article context. Returns up to `max_results` title/url/snippet tuples. Call this when the provided articles don't cover the user's question.",
+            "input_schema": [
+                "type": "object",
+                "properties": [
+                    "query": [
+                        "type": "string",
+                        "description": "Search query."
+                    ],
+                    "max_results": [
+                        "type": "integer",
+                        "description": "Max results to return (1-10). Defaults to 5.",
+                        "minimum": 1,
+                        "maximum": 10
+                    ]
+                ],
+                "required": ["query"]
+            ] as [String: Any]
+        ]
+    }
+
+    // MARK: - Anthropic tool-use loop
+
+    /// Chat completion with web_search tool support. Handles both api-key and
+    /// subscription providers. Loops up to 3 tool iterations then returns.
+    private static func completeAnthropicWithTools(
+        settings: AISettings,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int
+    ) async throws -> String {
+        let isSubscription = settings.provider == "claude-subscription"
+
+        // Resolve access token (mirrors completeAnthropic / completeAnthropicSubscription)
+        let accessToken: String
+        if isSubscription {
+            if let keychainToken = ClaudeKeychainStore.loadAccessToken() {
+                accessToken = keychainToken
+            } else if let legacyToken = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
+                ClaudeKeychainStore.migrateIfNeeded(legacyToken: legacyToken)
+                accessToken = legacyToken
+            } else {
+                throw NativeAIError.unavailable("Sign in with Claude in Settings to use your Claude subscription.")
+            }
+        } else {
+            guard let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty else {
+                throw NativeAIError.unavailable("Add a Claude API key in Settings.")
+            }
+            accessToken = key
+        }
+
+        let tools: [[String: Any]] = [webSearchToolDefinition]
+        var messages: [[String: Any]] = [["role": "user", "content": prompt]]
+
+        let maxIterations = 3
+        var currentToken = accessToken
+
+        for iteration in 0...maxIterations {
+            let request = try buildAnthropicRequestFull(
+                settings: settings,
+                accessToken: currentToken,
+                isSubscription: isSubscription,
+                instructions: instructions,
+                messages: messages,
+                maxTokens: maxTokens,
+                tools: tools
+            )
+
+            // Execute the request, handling subscription 401 refresh once per iteration.
+            let data: Data
+            let response: URLResponse
+            (data, response) = try await URLSession.shared.data(for: request)
+
+            if isSubscription, let http = response as? HTTPURLResponse, http.statusCode == 401 {
+                let newToken: String
+                do {
+                    newToken = try await NativeClaudeOAuth.refreshStoredTokens()
+                } catch {
+                    throw NativeAIError.requiresReauthentication
+                }
+                currentToken = newToken
+                let retryRequest = try buildAnthropicRequestFull(
+                    settings: settings,
+                    accessToken: newToken,
+                    isSubscription: isSubscription,
+                    instructions: instructions,
+                    messages: messages,
+                    maxTokens: maxTokens,
+                    tools: tools
+                )
+                let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
+                try validate(response: retryResponse, data: retryData, provider: providerDisplayName(settings.provider))
+                return try decodeAnthropicContent(data: retryData)
+            }
+
+            try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
+
+            let decoded = try JSONDecoder().decode(AnthropicResponse.self, from: data)
+            let textBlocks = decoded.content.filter { $0.type == "text" }
+            let toolUseBlocks = decoded.content.filter { $0.type == "tool_use" }
+
+            let joinedText = textBlocks.compactMap(\.text).joined(separator: "\n")
+
+            // No tool calls → done.
+            if toolUseBlocks.isEmpty {
+                let trimmed = joinedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else {
+                    throw NativeAIError.unavailable("The Claude response was empty.")
+                }
+                return trimmed
+            }
+
+            if iteration == maxIterations {
+                // Hit iteration cap; return whatever text we have.
+                let trimmed = joinedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? "(No response)" : trimmed
+            }
+
+            // --- Build assistant turn (text block + tool_use blocks) ---
+            var assistantContentBlocks: [[String: Any]] = []
+            if !joinedText.isEmpty {
+                assistantContentBlocks.append(["type": "text", "text": joinedText])
+            }
+            for block in toolUseBlocks {
+                var tb: [String: Any] = ["type": "tool_use"]
+                if let id = block.id   { tb["id"]    = id }
+                if let name = block.name { tb["name"] = name }
+                if let input = block.input {
+                    tb["input"] = input.mapValues { $0.foundationObject }
+                } else {
+                    tb["input"] = [String: Any]()
+                }
+                assistantContentBlocks.append(tb)
+            }
+            messages.append(["role": "assistant", "content": assistantContentBlocks])
+
+            // --- Execute each tool call ---
+            var resultBlocks: [[String: Any]] = []
+            for block in toolUseBlocks {
+                let toolUseID = block.id ?? ""
+                let toolName  = block.name ?? ""
+                let input     = block.input ?? [:]
+
+                if toolName == "web_search" {
+                    let query = input["query"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let maxResults = input["max_results"]?.intValue.map { max(1, min(10, $0)) } ?? 5
+
+                    if query.isEmpty {
+                        resultBlocks.append([
+                            "type": "tool_result",
+                            "tool_use_id": toolUseID,
+                            "is_error": true,
+                            "content": "web_search called with empty query"
+                        ])
+                        continue
+                    }
+
+                    do {
+                        let results = try await NativeWebSearch.run(query: query, maxResults: maxResults)
+                        if results.isEmpty {
+                            resultBlocks.append([
+                                "type": "tool_result",
+                                "tool_use_id": toolUseID,
+                                "is_error": true,
+                                "content": "web_search returned no results for: \(query)"
+                            ])
+                        } else {
+                            let payload: [String: Any] = [
+                                "query": query,
+                                "results": results.map { ["title": $0.title, "url": $0.url, "snippet": $0.snippet] }
+                            ]
+                            let payloadData = try JSONSerialization.data(withJSONObject: payload)
+                            let payloadString = String(data: payloadData, encoding: .utf8) ?? "{}"
+                            resultBlocks.append([
+                                "type": "tool_result",
+                                "tool_use_id": toolUseID,
+                                "content": payloadString
+                            ])
+                        }
+                    } catch {
+                        resultBlocks.append([
+                            "type": "tool_result",
+                            "tool_use_id": toolUseID,
+                            "is_error": true,
+                            "content": "web_search failed: \(error.localizedDescription)"
+                        ])
+                    }
+                } else {
+                    resultBlocks.append([
+                        "type": "tool_result",
+                        "tool_use_id": toolUseID,
+                        "is_error": true,
+                        "content": "Unknown tool: \(toolName)"
+                    ])
+                }
+            }
+            messages.append(["role": "user", "content": resultBlocks])
+        }
+
+        // Should never reach here due to loop structure, but satisfy the compiler.
+        throw NativeAIError.unavailable("Tool-use loop exited without a final response.")
     }
 
     private static func openAICompatibleURL(_ settings: AISettings) -> URL {
@@ -1069,13 +1321,90 @@ private struct OpenAIResponse: Decodable {
     var choices: [Choice]
 }
 
+// MARK: - JSONValue: lightweight dynamic JSON for tool_use input payloads
+
+private enum JSONValue: Codable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+    case null
+    case array([JSONValue])
+    case object([String: JSONValue])
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let s = try? container.decode(String.self)  { self = .string(s); return }
+        if let d = try? container.decode(Double.self)  { self = .number(d); return }
+        if let b = try? container.decode(Bool.self)    { self = .bool(b);   return }
+        if container.decodeNil()                        { self = .null;      return }
+        if let a = try? container.decode([JSONValue].self)         { self = .array(a);  return }
+        if let o = try? container.decode([String: JSONValue].self) { self = .object(o); return }
+        throw DecodingError.typeMismatch(JSONValue.self,
+            .init(codingPath: decoder.codingPath, debugDescription: "Unrecognised JSON value"))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .string(let s): try c.encode(s)
+        case .number(let d): try c.encode(d)
+        case .bool(let b):   try c.encode(b)
+        case .null:          try c.encodeNil()
+        case .array(let a):  try c.encode(a)
+        case .object(let o): try c.encode(o)
+        }
+    }
+
+    // Convenience accessors
+    var stringValue: String? {
+        if case .string(let s) = self { return s }
+        return nil
+    }
+    var intValue: Int? {
+        if case .number(let d) = self { return Int(d) }
+        return nil
+    }
+
+    /// Re-serialise this value as a JSON string.
+    var jsonString: String {
+        let data = (try? JSONEncoder().encode(self)) ?? Data()
+        return String(data: data, encoding: .utf8) ?? "null"
+    }
+
+    /// Convert to a plain Foundation object for JSONSerialization.
+    var foundationObject: Any {
+        switch self {
+        case .string(let s):  return s
+        case .number(let d):  return d
+        case .bool(let b):    return b
+        case .null:           return NSNull()
+        case .array(let a):   return a.map { $0.foundationObject }
+        case .object(let o):  return o.mapValues { $0.foundationObject }
+        }
+    }
+}
+
 private struct AnthropicResponse: Decodable {
     struct ContentBlock: Decodable {
         var type: String?
         var text: String?
+        // tool_use fields
+        var id: String?
+        var name: String?
+        var input: [String: JSONValue]?
+
+        private enum CodingKeys: String, CodingKey {
+            case type, text, id, name, input
+        }
     }
 
     var content: [ContentBlock]
+    var stopReason: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case content
+        case stopReason = "stop_reason"
+    }
 }
 
 struct AIResultSheet: View {

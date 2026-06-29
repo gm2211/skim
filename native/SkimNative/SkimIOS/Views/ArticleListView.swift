@@ -163,6 +163,7 @@ struct ArticleListView: View {
         }
         .sheet(item: $activeAIChat) { request in
             AIChatSheet(request: request, messages: $visibleArticlesChatMessages)
+                .environmentObject(model)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)

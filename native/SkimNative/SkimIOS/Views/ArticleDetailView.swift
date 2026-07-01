@@ -91,6 +91,7 @@ struct ArticleDetailView: View {
                 messages: chatMessagesBinding(for: request.sessionKey),
                 initialAssistantMessage: activeChatInitialMessage
             )
+                .environmentObject(model)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .onDisappear { activeChatInitialMessage = nil }

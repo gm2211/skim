@@ -178,15 +178,33 @@ enum NativeClaudeOAuth {
             throw ClaudeOAuthError.invalidResponse
         }
         guard (200..<300).contains(http.statusCode) else {
-            // Refresh token is invalid or revoked — clear everything.
-            ClaudeKeychainStore.clear()
             let text = String(data: data, encoding: .utf8) ?? "empty response"
-            throw ClaudeOAuthError.refreshFailed("Claude token refresh \(http.statusCode): \(text). Sign in again.")
+            // Only a definitive invalid_grant (400/401) means the refresh token is
+            // dead — clear Keychain so the user is prompted to sign in again. For any
+            // other non-2xx (e.g. transient 5xx server blip) preserve the refresh
+            // token and surface a recoverable error so a retry can still succeed.
+            if http.statusCode == 400 || http.statusCode == 401 {
+                ClaudeKeychainStore.clear()
+                throw ClaudeOAuthError.refreshFailed("Claude token refresh \(http.statusCode): \(text). Sign in again.")
+            }
+            throw ClaudeOAuthError.refreshFailed("Claude token refresh \(http.statusCode): \(text).")
         }
 
         let tokenSet = try JSONDecoder().decode(ClaudeTokenSet.self, from: data)
         ClaudeKeychainStore.save(tokenSet)
         return tokenSet.accessToken
+    }
+
+    /// Returns a valid access token, proactively refreshing if the stored token is
+    /// expired or within 60s of expiry. Falls back to the stored access token if no
+    /// expiry is known or refresh fails (the request layer still handles 401).
+    static func validAccessToken() async -> String? {
+        guard let token = ClaudeKeychainStore.loadAccessToken() else { return nil }
+        guard let expiresAt = ClaudeKeychainStore.loadExpiresAt() else { return token }
+        if expiresAt.timeIntervalSinceNow > 60 { return token }
+        // expired / near expiry — try refresh, but tolerate failure
+        if let refreshed = try? await refreshStoredTokens() { return refreshed }
+        return token
     }
 
     // MARK: Shared token exchange

@@ -1004,7 +1004,11 @@ enum NativeAI {
         // Resolve the access token: prefer Keychain, fall back to settings.apiKey
         // (legacy location), migrating if found.
         let accessToken: String
-        if let keychainToken = ClaudeKeychainStore.loadAccessToken() {
+        if ClaudeKeychainStore.loadAccessToken() != nil {
+            // Proactively refresh if the stored token is expired/near-expiry.
+            guard let keychainToken = await NativeClaudeOAuth.validAccessToken() else {
+                throw NativeAIError.requiresReauthentication
+            }
             accessToken = keychainToken
         } else if let legacyToken = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
             // Migrate legacy token from settings database to Keychain.
@@ -1138,7 +1142,11 @@ enum NativeAI {
         // Resolve access token (mirrors completeAnthropic / completeAnthropicSubscription)
         let accessToken: String
         if isSubscription {
-            if let keychainToken = ClaudeKeychainStore.loadAccessToken() {
+            if ClaudeKeychainStore.loadAccessToken() != nil {
+                // Proactively refresh if the stored token is expired/near-expiry.
+                guard let keychainToken = await NativeClaudeOAuth.validAccessToken() else {
+                    throw NativeAIError.requiresReauthentication
+                }
                 accessToken = keychainToken
             } else if let legacyToken = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
                 ClaudeKeychainStore.migrateIfNeeded(legacyToken: legacyToken)
@@ -1827,6 +1835,7 @@ struct AIChatSheet: View {
     @Binding private var messages: [AIChatMessage]
     @State private var input = ""
     @State private var isSending = false
+    @State private var showReauth = false
     @FocusState private var focused: Bool
     private var initialAssistantMessage: String?
     private let bottomAnchorID = "chat-bottom-anchor"
@@ -1849,7 +1858,7 @@ struct AIChatSheet: View {
                                     .padding(.top, 80)
                             } else {
                                 ForEach(messages) { message in
-                                    AIChatBubble(message: message)
+                                    AIChatBubble(message: message, onReauth: { showReauth = true })
                                         .id(message.id)
                                 }
                                 AIDisclaimerLabel()
@@ -1919,6 +1928,9 @@ struct AIChatSheet: View {
                 seedInitialMessageIfNeeded()
                 focused = true
             }
+            .sheet(isPresented: $showReauth) {
+                ClaudeReauthSheet()
+            }
         }
     }
 
@@ -1959,7 +1971,11 @@ struct AIChatSheet: View {
                 )
             )
         } catch {
-            messages.append(AIChatMessage(role: .assistant, text: error.localizedDescription, isError: true))
+            let reauth: Bool = {
+                if case NativeAIError.requiresReauthentication = error { return true }
+                return false
+            }()
+            messages.append(AIChatMessage(role: .assistant, text: error.localizedDescription, isError: true, needsReauth: reauth))
         }
         isSending = false
     }
@@ -1976,10 +1992,12 @@ struct AIChatMessage: Identifiable, Sendable {
     var text: String
     var referencedArticles: [Article] = []
     var isError = false
+    var needsReauth = false
 }
 
 private struct AIChatBubble: View {
     var message: AIChatMessage
+    var onReauth: (() -> Void)? = nil
 
     var body: some View {
         HStack {
@@ -1993,6 +2011,19 @@ private struct AIChatBubble: View {
                     .foregroundStyle(message.isError ? Color.red.opacity(0.95) : SkimStyle.text)
                     .lineSpacing(4)
                     .textSelection(.enabled)
+
+                if message.needsReauth, let onReauth {
+                    Button {
+                        onReauth()
+                    } label: {
+                        Label("Sign in again", systemImage: "person.crop.circle")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(SkimStyle.accent)
+                }
 
                 if !message.referencedArticles.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {

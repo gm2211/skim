@@ -952,8 +952,10 @@ private struct MLXSamplingParamsPanel: View {
 /// Opens Claude's sign-in page in Safari via the paste flow (the only supported
 /// path). The user copies the code from the Anthropic success page and pastes it
 /// here to complete authentication.
-private struct ClaudeOAuthPastePanel: View {
+struct ClaudeOAuthPastePanel: View {
     @Binding var ai: AISettings
+    /// Invoked after a successful sign-in so callers can dismiss a presenting sheet.
+    var onSignedIn: (() -> Void)? = nil
     /// Used to open the Anthropic OAuth page in Safari.
     var openURL: (URL) -> Void
 
@@ -1109,7 +1111,12 @@ private struct ClaudeOAuthPastePanel: View {
         } else {
             ai.model = "claude-sonnet-4-5"
         }
+        // Persist the FULL token set (refresh_token + expiry) to Keychain so silent
+        // refresh works later. Without this, only the short-lived access token is kept
+        // (in ai.apiKey) and the next expiry forces full manual reauthentication.
+        ClaudeKeychainStore.save(tokenSet)
         successMessage = "Signed in with Claude. Token saved automatically."
+        onSignedIn?()
     }
 
     private func notice(color: Color, text: String) -> some View {

@@ -58,8 +58,20 @@ export function Sidebar() {
       {/* Top bar: action buttons right */}
       <div
         className="flex items-center gap-3 relative z-20"
-        style={{ height: isPhone ? 60 : 40, paddingLeft: isPhone ? 10 : 0, paddingRight: isPhone ? 10 : 16 }}
+        style={{ height: isPhone ? 60 : 40, paddingLeft: isPhone ? 16 : 16, paddingRight: isPhone ? 10 : 16 }}
       >
+        <h1 style={{
+          fontFamily: "'Aquire', sans-serif",
+          fontSize: isPhone ? 22 : 18,
+          fontWeight: 700,
+          letterSpacing: "0.15em",
+          transform: "scaleX(1.6)",
+          transformOrigin: "left center",
+          color: "#e6edf3",
+          textShadow: "0 0 14px rgba(136, 200, 255, 0.35)",
+          lineHeight: 1,
+          whiteSpace: "nowrap",
+        }}>SKIM</h1>
         <div className="flex-1" />
         <button
           onClick={() => useUiStore.getState().toggleSidebar()}
@@ -126,23 +138,8 @@ export function Sidebar() {
         />
       )}
 
-      {/* App title */}
-      <div style={{ padding: "12px 24px 28px 24px" }}>
-        <h1 style={{
-          fontFamily: "'Aquire', sans-serif",
-          fontSize: 38,
-          fontWeight: 700,
-          letterSpacing: "0.15em",
-          transform: "scaleX(1.6)",
-          transformOrigin: "left",
-          color: "#e6edf3",
-          textShadow: "0 0 14px rgba(136, 200, 255, 0.35)",
-          lineHeight: 1,
-        }}>SKIM</h1>
-      </div>
-
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto" style={{ padding: "0 16px 16px 16px" }}>
+      <div className="flex-1 overflow-y-auto" style={{ padding: "8px 16px 16px 16px" }}>
         {/* All Articles */}
         <div style={{ marginBottom: 32, padding: "0 8px" }}>
           <div

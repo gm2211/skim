@@ -1333,9 +1333,81 @@ enum NativeAI {
     private static func validate(response: URLResponse, data: Data, provider: String) throws {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            let text = String(data: data, encoding: .utf8) ?? "No response body."
-            throw NativeAIError.unavailable("\(provider) request failed (\(status)): \(text.prefix(500))")
+            let rawBody = String(data: data, encoding: .utf8) ?? "No response body."
+            // Never surface the raw error body in the UI (raw JSON reads as broken and
+            // would look bad in App Store review) — log the full body for debugging and
+            // throw a friendly, actionable message instead.
+            print("[NativeAI] \(provider) request failed (\(status)): \(rawBody.prefix(2000))")
+            throw NativeAIError.unavailable(friendlyErrorMessage(status: status, data: data, provider: provider))
         }
+    }
+
+    /// Builds a friendly, actionable user-facing message for a failed AI provider request.
+    /// Parses the `{"error": {"type": ..., "message": ...}}` envelope used by both the
+    /// Anthropic API and OpenAI-compatible providers when possible, but always falls back
+    /// to a generic message — raw JSON error bodies must never reach the UI.
+    private static func friendlyErrorMessage(status: Int, data: Data, provider: String) -> String {
+        let isClaude = provider.hasPrefix("Claude")
+        let errorType = parsedErrorType(from: data)
+        let errorMessage = parsedErrorMessage(from: data)
+
+        switch status {
+        case 401:
+            return isClaude
+                ? "Claude sign-in expired. Sign in again in Settings."
+                : "\(provider) sign-in expired. Check your API key in Settings."
+        case 402, 403:
+            return isClaude
+                ? "Your Claude plan doesn't allow this request."
+                : "Your \(provider) plan doesn't allow this request."
+        case 429:
+            let base = isClaude
+                ? "Claude is rate-limited right now. Wait a bit and try again."
+                : "\(provider) is rate-limited right now. Wait a bit and try again."
+            // If the provider included a specific, human-readable detail (e.g. a
+            // subscription usage limit reset time), surface it — but never the raw
+            // JSON envelope, and never a non-descriptive placeholder like "Error".
+            if let detail = errorMessage, isInformativeErrorDetail(detail) {
+                return "\(base) (\(detail))"
+            }
+            return base
+        case 500...599:
+            return isClaude
+                ? "Claude is temporarily unavailable. Try again shortly."
+                : "\(provider) is temporarily unavailable. Try again shortly."
+        default:
+            if errorType == "overloaded_error" {
+                return isClaude
+                    ? "Claude is temporarily unavailable. Try again shortly."
+                    : "\(provider) is temporarily unavailable. Try again shortly."
+            }
+            return isClaude
+                ? "Claude request failed (\(status)). Try again."
+                : "\(provider) request failed (\(status)). Try again."
+        }
+    }
+
+    /// Parses the `error` object out of a provider error body, e.g.
+    /// `{"type":"error","error":{"type":"rate_limit_error","message":"..."}}` (Anthropic)
+    /// or `{"error":{"message":"...","type":"...","code":"..."}}` (OpenAI-compatible).
+    private static func parsedErrorEnvelope(from data: Data) -> [String: Any]? {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return obj["error"] as? [String: Any]
+    }
+
+    private static func parsedErrorType(from data: Data) -> String? {
+        parsedErrorEnvelope(from: data)?["type"] as? String
+    }
+
+    private static func parsedErrorMessage(from data: Data) -> String? {
+        parsedErrorEnvelope(from: data)?["message"] as? String
+    }
+
+    /// Filters out placeholder/non-descriptive error messages (e.g. Anthropic's generic
+    /// `"Error"`) so we don't surface something that reads as broken or unhelpful.
+    private static func isInformativeErrorDetail(_ message: String) -> Bool {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.count > 10 && trimmed.lowercased() != "error"
     }
 
     /// Returns the correct Anthropic model id, guarding against a leaked MLX repo id
@@ -1576,7 +1648,7 @@ enum NativeAIError: LocalizedError {
         case .unavailable(let message):
             message
         case .requiresReauthentication:
-            "Your Claude session has expired. Sign in again in Settings."
+            "Claude sign-in expired. Sign in again in Settings."
         }
     }
 }

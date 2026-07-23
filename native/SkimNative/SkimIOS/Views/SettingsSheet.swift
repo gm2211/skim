@@ -1281,10 +1281,11 @@ private struct WordCountPresetChips: View {
                     Text("\(preset.label) \(preset.value)")
                         .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                        .minimumScaleFactor(0.9)
                         .foregroundStyle(isSelected ? Color.white : SkimStyle.accent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
                         .background(
                             isSelected
                                 ? AnyShapeStyle(SkimStyle.accent)

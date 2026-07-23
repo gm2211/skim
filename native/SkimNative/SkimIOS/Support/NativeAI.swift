@@ -890,8 +890,8 @@ enum NativeAI {
             let response = try await session.respond(
                 to: prompt,
                 options: GenerationOptions(
-                    sampling: .greedy,
-                    temperature: 0.2,
+                    sampling: .random(top: 50),
+                    temperature: 0.7,
                     maximumResponseTokens: maxTokens
                 )
             )
@@ -1515,7 +1515,7 @@ enum NativeAI {
             \(digest)
             """,
             generating: FMTriageProposal.self,
-            options: GenerationOptions(sampling: .greedy, maximumResponseTokens: 800)
+            options: GenerationOptions(sampling: .random(top: 50), temperature: 0.7, maximumResponseTokens: 800)
         )
         let proposal = response.content
         // Convert to Markdown bullets matching the free-text path format.
@@ -1550,7 +1550,7 @@ enum NativeAI {
             \(articleDigest(articles, limit: catchUpArticleLimit))
             """,
             generating: FMCatchUpStructured.self,
-            options: GenerationOptions(sampling: .greedy, maximumResponseTokens: 1200)
+            options: GenerationOptions(sampling: .random(top: 50), temperature: 0.7, maximumResponseTokens: 1200)
         )
         let structured = response.content
         return structured.items.map { entry in

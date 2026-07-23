@@ -332,6 +332,12 @@ struct ArticleListView: View {
                         Text("Syncing...")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(SkimStyle.secondary)
+                    } else if model.listMode == .starred && model.selectedFeedID == nil && model.selectedFolderID == nil {
+                        if !model.articles.isEmpty {
+                            Text("\(model.articles.count.formatted()) starred")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(SkimStyle.secondary.opacity(0.78))
+                        }
                     } else if model.currentUnreadCount > 0 {
                         Text("\(model.currentUnreadCount.formatted()) unread")
                             .font(.system(size: 12, weight: .medium))
@@ -2258,7 +2264,7 @@ private struct FeedIcon: View {
             Color(red: 0.91, green: 0.76, blue: 0.19),
             Color(red: 0.52, green: 0.17, blue: 0.30)
         ]
-        let index = abs(feed.id.hashValue) % palette.count
+        let index = Int(feed.id.skimStableHash % UInt64(palette.count))
         return palette[index]
     }
 }
@@ -2479,7 +2485,7 @@ private struct ArticleSourceIcon: View {
             Color(red: 0.91, green: 0.76, blue: 0.19),
             Color(red: 0.52, green: 0.17, blue: 0.30)
         ]
-        let index = abs(article.feedID.hashValue) % palette.count
+        let index = Int(article.feedID.skimStableHash % UInt64(palette.count))
         return palette[index]
     }
 }
@@ -2491,6 +2497,18 @@ private func dismissUIKitKeyboard() {
 }
 
 private extension String {
+    /// A deterministic hash that stays identical across app launches and processes.
+    /// Swift's built-in `String.hashValue` is seeded randomly per process, so it must
+    /// never be used to derive UI that should look the same everywhere (e.g. avatar colors).
+    var skimStableHash: UInt64 {
+        var hash: UInt64 = 14695981039346656037 // FNV-1a offset basis
+        for byte in utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 1099511628211 // FNV-1a prime
+        }
+        return hash
+    }
+
     func skimFeedInitials(fallback: String) -> String {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = trimmed.replacingOccurrences(

@@ -17,7 +17,9 @@ use tauri::{Manager, RunEvent};
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
 
+#[cfg(desktop)]
 const SUPPORT_URL: &str = "https://gm2211.github.io/skim/";
+#[cfg(desktop)]
 const ISSUES_URL: &str = "https://github.com/gm2211/skim/issues";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -104,19 +104,25 @@ struct SettingsSheet: View {
                 }
             }
 
-            if providerNeedsAPIKey {
+            if draft.ai.provider == "claude-subscription" {
+                // Two explicit paths: OAuth sign-in (default) or a manually
+                // pasted API token (secondary, collapsed by default). Showing
+                // both a token field and the paste-code flow at once is what
+                // caused users to paste a bearer token that has no refresh
+                // token behind it — the first 401 then wipes the Keychain.
+                ClaudeAuthSection(
+                    ai: aiSettingsBinding,
+                    apiKeyText: aiAPIKeyBinding,
+                    providerIsReady: providerIsReady,
+                    openURL: { url in openURL(url) }
+                )
+            } else if providerNeedsAPIKey {
                 SettingsTextField(
-                    title: draft.ai.provider == "claude-subscription" ? "Claude OAuth token" : "Bearer token or API key",
-                    placeholder: draft.ai.provider == "claude-subscription" ? "sk-ant-..." : "sk-...",
+                    title: "Bearer token or API key",
+                    placeholder: "sk-...",
                     text: aiAPIKeyBinding,
                     isSecure: true
                 )
-            }
-
-            if draft.ai.provider == "claude-subscription" {
-                ClaudeOAuthPastePanel(ai: aiSettingsBinding) { url in
-                    openURL(url)
-                }
             }
 
             if draft.ai.provider != "foundation-models" && draft.ai.provider != "none" && draft.ai.provider != "mlx" {
@@ -945,9 +951,71 @@ private struct MLXSamplingParamsPanel: View {
     }
 }
 
+/// Wraps `ClaudeOAuthPastePanel` (the "Sign in with Claude" flow) with an
+/// explicit, collapsed-by-default secondary path for pasting a raw API
+/// token. Keeping both paths visible at once is what led users to paste a
+/// bearer token into the wrong field (see SettingsSheet's claude-subscription
+/// branch for the full explanation).
+private struct ClaudeAuthSection: View {
+    @Binding var ai: AISettings
+    var apiKeyText: Binding<String>
+    var providerIsReady: Bool
+    var openURL: (URL) -> Void
+
+    /// Whether the "API token instead" disclosure starts expanded. Defaults
+    /// to expanded only when a token is already present in settings but no
+    /// OAuth refresh token is stored in Keychain — i.e. the user is already
+    /// relying on a manually pasted token and should keep seeing that field.
+    @State private var showAPIToken: Bool
+
+    init(ai: Binding<AISettings>, apiKeyText: Binding<String>, providerIsReady: Bool, openURL: @escaping (URL) -> Void) {
+        self._ai = ai
+        self.apiKeyText = apiKeyText
+        self.providerIsReady = providerIsReady
+        self.openURL = openURL
+        let hasManualToken = ai.wrappedValue.apiKey?.nilIfEmpty != nil
+        let hasOAuthRefreshToken = ClaudeKeychainStore.loadRefreshToken() != nil
+        self._showAPIToken = State(initialValue: hasManualToken && !hasOAuthRefreshToken)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ClaudeOAuthPastePanel(ai: $ai, collapseWhenSignedIn: providerIsReady) { url in
+                openURL(url)
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.16)) {
+                    showAPIToken.toggle()
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: showAPIToken ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                    Text(showAPIToken ? "Hide API token option" : "Use an API token instead")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(SkimStyle.secondary)
+            }
+            .buttonStyle(.plain)
+
+            if showAPIToken {
+                SettingsTextField(
+                    title: "Claude API token",
+                    placeholder: "sk-ant-...",
+                    text: apiKeyText,
+                    isSecure: true
+                )
+                Text("Only for a raw Anthropic API key. A bearer token copied from a browser session has no refresh token behind it and will stop working once it expires — use Sign in with Claude above instead.")
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
 /// Sign-in panel for Claude Pro/Max.
-///
-/// Sign-in panel for Claude OAuth.
 ///
 /// Opens Claude's sign-in page in Safari via the paste flow (the only supported
 /// path). The user copies the code from the Anthropic success page and pastes it
@@ -956,6 +1024,11 @@ struct ClaudeOAuthPastePanel: View {
     @Binding var ai: AISettings
     /// Invoked after a successful sign-in so callers can dismiss a presenting sheet.
     var onSignedIn: (() -> Void)? = nil
+    /// When true, and a token is already stored with no active paste flow,
+    /// renders a compact "signed in" row instead of the full sign-in UI.
+    /// Defaults to false so existing callers (e.g. ClaudeReauthSheet, which
+    /// always wants the full flow front and center) are unaffected.
+    var collapseWhenSignedIn: Bool = false
     /// Used to open the Anthropic OAuth page in Safari.
     var openURL: (URL) -> Void
 
@@ -968,13 +1041,21 @@ struct ClaudeOAuthPastePanel: View {
     @State private var errorMessage: String?
     @State private var successMessage: String?
 
+    private var isSignedIn: Bool {
+        ai.apiKey?.nilIfEmpty != nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            header
+            if collapseWhenSignedIn && isSignedIn && pasteFlow == nil {
+                signedInRow
+            } else {
+                header
 
-            primarySignInButton
+                primarySignInButton
 
-            pasteUI
+                pasteUI
+            }
 
             if let successMessage {
                 notice(color: .green, text: successMessage)
@@ -989,6 +1070,44 @@ struct ClaudeOAuthPastePanel: View {
     }
 
     // MARK: Sub-views
+
+    private var signedInRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(Color.green.opacity(0.85))
+                .frame(width: 28)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Signed in with Claude")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SkimStyle.text)
+                Text("Skim refreshes your session automatically.")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button {
+                beginPasteSignIn()
+            } label: {
+                Text("Re-authenticate")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .buttonStyle(.bordered)
+
+            Button(role: .destructive) {
+                ai.apiKey = nil
+                successMessage = nil
+                pasteFlow = nil
+            } label: {
+                Text("Sign out")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .buttonStyle(.bordered)
+        }
+    }
 
     private var header: some View {
         HStack(alignment: .top, spacing: 12) {

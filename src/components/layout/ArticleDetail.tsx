@@ -1358,7 +1358,7 @@ export function ArticleDetail() {
                   <a href="https://docs.anthropic.com/en/docs/about-claude/models" target="_blank" rel="noreferrer" className="text-accent hover:underline">
                     docs.anthropic.com/models
                   </a>{" "}
-                  (or use a family alias like <code className="text-accent">claude-sonnet-4-5</code>), then{" "}
+                  (or use a family alias like <code className="text-accent">claude-sonnet-5</code>), then{" "}
                   <button onClick={() => useUiStore.getState().setShowSettings(true)} className="text-accent hover:underline">
                     paste it into Settings → AI Provider → Model
                   </button>.

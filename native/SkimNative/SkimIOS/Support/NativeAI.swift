@@ -1422,7 +1422,7 @@ enum NativeAI {
     private static func defaultModel(for provider: String) -> String {
         switch provider {
         case "anthropic", "claude-subscription":
-            return "claude-sonnet-4-5"
+            return "claude-sonnet-5"
         case "openrouter":
             return "openai/gpt-4o-mini"
         default:

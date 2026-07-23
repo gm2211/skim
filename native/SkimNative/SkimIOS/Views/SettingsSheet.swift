@@ -387,7 +387,7 @@ struct SettingsSheet: View {
     private var defaultModelPlaceholder: String {
         switch draft.ai.provider {
         case "claude-subscription":
-            return "claude-sonnet-4-5"
+            return "claude-sonnet-5"
         default:
             return "gpt-4o-mini"
         }
@@ -415,7 +415,7 @@ struct SettingsSheet: View {
                         $0.endpoint = nil
                     } else if value == "claude-subscription" {
                         $0.endpoint = nil
-                        $0.model = $0.model?.nilIfEmpty ?? "claude-sonnet-4-5"
+                        $0.model = $0.model?.nilIfEmpty ?? "claude-sonnet-5"
                     } else if value == "custom" {
                         $0.model = $0.model?.nilIfEmpty ?? "gpt-4o-mini"
                     }
@@ -439,7 +439,7 @@ struct SettingsSheet: View {
             next.model = next.model?.nilIfEmpty ?? "openai/gpt-4o-mini"
         case "anthropic":
             next.provider = "claude-subscription"
-            next.model = next.model?.nilIfEmpty ?? "claude-sonnet-4-5"
+            next.model = next.model?.nilIfEmpty ?? "claude-sonnet-5"
         default:
             next.provider = "foundation-models"
             next.endpoint = nil
@@ -1072,40 +1072,48 @@ struct ClaudeOAuthPastePanel: View {
     // MARK: Sub-views
 
     private var signedInRow: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 20, weight: .regular))
-                .foregroundStyle(Color.green.opacity(0.85))
-                .frame(width: 28)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(Color.green.opacity(0.85))
+                    .frame(width: 28)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Signed in with Claude")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(SkimStyle.text)
-                Text("Skim refreshes your session automatically.")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(SkimStyle.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Signed in with Claude")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SkimStyle.text)
+                    Text("Skim refreshes your session automatically.")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+
+                Spacer(minLength: 8)
             }
 
-            Spacer(minLength: 8)
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
 
-            Button {
-                beginPasteSignIn()
-            } label: {
-                Text("Re-authenticate")
-                    .font(.system(size: 13, weight: .semibold))
-            }
-            .buttonStyle(.bordered)
+                Button {
+                    beginPasteSignIn()
+                } label: {
+                    Text("Re-authenticate")
+                        .font(.system(size: 13, weight: .semibold))
+                        .fixedSize()
+                }
+                .buttonStyle(.bordered)
 
-            Button(role: .destructive) {
-                ai.apiKey = nil
-                successMessage = nil
-                pasteFlow = nil
-            } label: {
-                Text("Sign out")
-                    .font(.system(size: 13, weight: .semibold))
+                Button(role: .destructive) {
+                    ai.apiKey = nil
+                    successMessage = nil
+                    pasteFlow = nil
+                } label: {
+                    Text("Sign out")
+                        .font(.system(size: 13, weight: .semibold))
+                        .fixedSize()
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
         }
     }
 
@@ -1228,7 +1236,7 @@ struct ClaudeOAuthPastePanel: View {
         if let existing = ai.model?.nilIfEmpty, existing.hasPrefix("claude") {
             // already a valid Claude model id — leave it
         } else {
-            ai.model = "claude-sonnet-4-5"
+            ai.model = "claude-sonnet-5"
         }
         // Persist the FULL token set (refresh_token + expiry) to Keychain so silent
         // refresh works later. Without this, only the short-lived access token is kept

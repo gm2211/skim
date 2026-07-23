@@ -886,17 +886,31 @@ enum NativeAI {
                 throw NativeAIError.unavailable("Apple Intelligence is not available: \(reasonDescription(reason)).")
             }
 
-            let session = LanguageModelSession(model: model, instructions: instructions)
-            let response = try await session.respond(
-                to: prompt,
-                options: GenerationOptions(
-                    sampling: .random(top: 50),
-                    temperature: 0.7,
-                    maximumResponseTokens: maxTokens
+            func attempt() async throws -> String {
+                let session = LanguageModelSession(model: model, instructions: instructions)
+                let response = try await session.respond(
+                    to: prompt,
+                    options: GenerationOptions(
+                        sampling: .random(top: 50),
+                        temperature: 0.7,
+                        maximumResponseTokens: maxTokens
+                    )
                 )
-            )
-            let raw = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
-            return stripEchoedPrompt(raw, prompt: prompt)
+                let raw = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                return stripEchoedPrompt(raw, prompt: prompt)
+            }
+
+            let first = try await attempt()
+            let (firstTrimmed, firstDegenerate) = degenerateRepetitionTrim(first)
+            guard firstDegenerate else { return first }
+
+            print("[NativeAI] Foundation Models output looked degenerate (repetitive); retrying once.")
+            let second = try await attempt()
+            let (secondTrimmed, secondDegenerate) = degenerateRepetitionTrim(second)
+            guard secondDegenerate else { return second }
+
+            print("[NativeAI] Foundation Models retry was also degenerate; returning the longer trimmed attempt.")
+            return firstTrimmed.count >= secondTrimmed.count ? firstTrimmed : secondTrimmed
         }
 #endif
         throw NativeAIError.unavailable("Foundation Models are not available in this build.")
@@ -945,6 +959,203 @@ enum NativeAI {
         }
 
         return trimmedResponse
+    }
+
+    // MARK: - Degenerate-output guard (Foundation Models only)
+    //
+    // Small on-device models occasionally loop: before the sampling fix in
+    // skim PR #70, Foundation Models emitted the same sentence dozens of times
+    // in a single summary (e.g. "The protest was held in the 21st century.").
+    // Stochastic sampling reduces this but doesn't eliminate it, so we detect
+    // and trim degenerate repetition defensively before output ever reaches
+    // the UI.
+
+    /// A contiguous chunk of text produced by `splitIntoSentenceChunks`, together
+    /// with its exact range in the source string so trimming can operate on the
+    /// original text (byte-for-byte) rather than a reconstructed approximation.
+    private struct SentenceChunk {
+        var range: Range<String.Index>
+        var text: String
+    }
+
+    /// Splits `text` into sentence-ish chunks, breaking after ". ", "! ", "? ",
+    /// or a newline. Deliberately simple and dependency-free: this is a heuristic
+    /// for repetition detection, not a linguistic sentence tokenizer. The chunks'
+    /// ranges are contiguous and cover the whole string, so joining chunk texts
+    /// back together reconstructs `text` exactly.
+    private static func splitIntoSentenceChunks(_ text: String) -> [SentenceChunk] {
+        var chunks: [SentenceChunk] = []
+        var start = text.startIndex
+        var i = text.startIndex
+        while i < text.endIndex {
+            let c = text[i]
+            if c == "\n" {
+                let end = text.index(after: i)
+                chunks.append(SentenceChunk(range: start..<end, text: String(text[start..<end])))
+                start = end
+                i = end
+                continue
+            }
+            if c == "." || c == "!" || c == "?" {
+                let next = text.index(after: i)
+                if next < text.endIndex && text[next] == " " {
+                    let end = text.index(after: next)
+                    chunks.append(SentenceChunk(range: start..<end, text: String(text[start..<end])))
+                    start = end
+                    i = end
+                    continue
+                } else if next == text.endIndex {
+                    chunks.append(SentenceChunk(range: start..<next, text: String(text[start..<next])))
+                    start = next
+                    i = next
+                    continue
+                }
+            }
+            i = text.index(after: i)
+        }
+        if start < text.endIndex {
+            chunks.append(SentenceChunk(range: start..<text.endIndex, text: String(text[start..<text.endIndex])))
+        }
+        return chunks
+    }
+
+    /// Case/whitespace-insensitive normalization used to compare sentences for
+    /// repetition purposes.
+    private static func normalizeSentence(_ s: String) -> String {
+        let collapsed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return collapsed
+    }
+
+    /// Detects a trailing sub-sentence loop: the raw text ends with the same
+    /// substring (>= 12 characters) repeated >= 4 times back-to-back, with no
+    /// sentence-level delimiters to split on (e.g. a runaway token loop). Returns
+    /// the text trimmed to the first occurrence of the repeating unit, or `nil`
+    /// if no such loop is found.
+    private static func trimTrailingSubstringLoop(_ text: String) -> String? {
+        let chars = Array(text)
+        let n = chars.count
+        guard n >= 48 else { return nil }
+        let maxPeriod = min(n / 4, 400)
+        guard maxPeriod >= 12 else { return nil }
+
+        for period in 12...maxPeriod {
+            let repeatLen = period * 4
+            guard repeatLen <= n else { break }
+            let tailStart = n - repeatLen
+            let unitRange = tailStart..<(tailStart + period)
+            let unit = chars[unitRange]
+            // Skip near-blank "units" (e.g. runs of spaces/newlines) — not a
+            // meaningful loop even if they repeat.
+            if unit.allSatisfy({ $0.isWhitespace }) { continue }
+
+            var isRepeating = true
+            for k in 1..<4 {
+                let segStart = tailStart + k * period
+                let seg = chars[segStart..<(segStart + period)]
+                if seg != unit {
+                    isRepeating = false
+                    break
+                }
+            }
+            if isRepeating {
+                // Extend backward to find where the loop actually starts, so we
+                // trim to exactly one occurrence of the unit rather than the
+                // four (or more) reps used to detect it.
+                var loopStart = tailStart
+                while loopStart - period >= 0 && chars[(loopStart - period)..<loopStart] == unit {
+                    loopStart -= period
+                }
+                let cutIndex = loopStart + period
+                return String(chars[0..<cutIndex])
+            }
+        }
+        return nil
+    }
+
+    /// Detects and trims degenerate repetitive output from a small on-device
+    /// model. Returns the (possibly trimmed) text and whether degeneration was
+    /// detected at all.
+    ///
+    /// Detection rules:
+    /// - The same normalized sentence appears >= 3 times consecutively, or
+    /// - The final N sentences (N >= 5) contain <= 2 unique normalized sentences, or
+    /// - The raw text ends with the same >= 12-character substring repeated
+    ///   >= 4 times back-to-back (sub-sentence loop, e.g. no punctuation).
+    ///
+    /// When degenerate, the output is trimmed to the point where the repetition
+    /// run begins, keeping everything before it. If trimming would remove the
+    /// entire string, the first occurrence of the repeated content is kept
+    /// instead so a non-empty input never yields an empty result.
+    static func degenerateRepetitionTrim(_ text: String) -> (text: String, wasDegenerate: Bool) {
+        guard !text.isEmpty else { return (text, false) }
+
+        // Sub-sentence loop check first — this catches degenerate output that
+        // has no clean sentence delimiters to split on.
+        if let trimmed = trimTrailingSubstringLoop(text), !trimmed.isEmpty {
+            return (trimmed, true)
+        }
+
+        let chunks = splitIntoSentenceChunks(text)
+        let nonBlank = chunks.enumerated().compactMap { _, chunk -> SentenceChunk? in
+            normalizeSentence(chunk.text).isEmpty ? nil : chunk
+        }
+        guard nonBlank.count >= 3 else { return (text, false) }
+        let normalized = nonBlank.map { normalizeSentence($0.text) }
+
+        var runStart: Int?
+
+        // Rule A: >= 3 consecutive identical normalized sentences.
+        var i = 0
+        while i < normalized.count {
+            var j = i
+            while j + 1 < normalized.count && normalized[j + 1] == normalized[i] {
+                j += 1
+            }
+            let runLength = j - i + 1
+            if runLength >= 3 {
+                runStart = i
+                break
+            }
+            i = j + 1
+        }
+
+        // Rule B: the final N sentences (N >= 5) contain <= 2 unique sentences.
+        // Search increasing window sizes from 5 so we find the smallest (least
+        // destructive) qualifying trim.
+        if runStart == nil {
+            let n = normalized.count
+            if n >= 5 {
+                for windowSize in 5...n {
+                    let windowStart = n - windowSize
+                    let uniqueCount = Set(normalized[windowStart...]).count
+                    if uniqueCount <= 2 {
+                        runStart = windowStart
+                        break
+                    }
+                }
+            }
+        }
+
+        guard let start = runStart else { return (text, false) }
+
+        if start == 0 {
+            // Nothing precedes the repetition — keep the first occurrence only
+            // so we never return an empty string.
+            let kept = String(text[text.startIndex..<nonBlank[0].range.upperBound])
+            return (kept, true)
+        }
+
+        let cutIndex = nonBlank[start].range.lowerBound
+        let kept = String(text[text.startIndex..<cutIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if kept.isEmpty {
+            let fallback = String(text[text.startIndex..<nonBlank[0].range.upperBound])
+            return (fallback, true)
+        }
+        return (kept, true)
     }
 
     private static func completeOpenAICompatible(settings: AISettings, instructions: String, prompt: String, maxTokens: Int) async throws -> String {
@@ -1573,34 +1784,49 @@ enum NativeAI {
         guard case .available = model.availability else {
             throw NativeAIError.unavailable("Apple Intelligence is not available.")
         }
-        let session = LanguageModelSession(
-            model: model,
-            instructions: """
-            You triage RSS articles for a smart inbox. Rank the most interesting articles and provide a short reason for each pick.
-            """
-        )
         let digest = articleDigest(articles, limit: 45)
-        let response = try await session.respond(
-            to: """
-            Rank 8–12 articles from this list. Favor novelty, depth, and things a curious technical reader would not want to miss.
 
-            \(digest)
-            """,
-            generating: FMTriageProposal.self,
-            options: GenerationOptions(sampling: .random(top: 50), temperature: 0.7, maximumResponseTokens: 800)
-        )
-        let proposal = response.content
-        // Convert to Markdown bullets matching the free-text path format.
-        let lines = proposal.ranked.compactMap { entry -> String? in
-            let idx = entry.articleIndex
-            guard articles.indices.contains(idx - 1) else { return nil }
-            let article = articles[idx - 1]
-            return "- [\(idx)] **\(article.title)** — \(entry.reason)"
+        func attempt() async throws -> String {
+            let session = LanguageModelSession(
+                model: model,
+                instructions: """
+                You triage RSS articles for a smart inbox. Rank the most interesting articles and provide a short reason for each pick.
+                """
+            )
+            let response = try await session.respond(
+                to: """
+                Rank 8–12 articles from this list. Favor novelty, depth, and things a curious technical reader would not want to miss.
+
+                \(digest)
+                """,
+                generating: FMTriageProposal.self,
+                options: GenerationOptions(sampling: .random(top: 50), temperature: 0.7, maximumResponseTokens: 800)
+            )
+            let proposal = response.content
+            // Convert to Markdown bullets matching the free-text path format.
+            let lines = proposal.ranked.compactMap { entry -> String? in
+                let idx = entry.articleIndex
+                guard articles.indices.contains(idx - 1) else { return nil }
+                let article = articles[idx - 1]
+                return "- [\(idx)] **\(article.title)** — \(entry.reason)"
+            }
+            guard !lines.isEmpty else {
+                throw NativeAIError.unavailable("Foundation Models returned no triage picks.")
+            }
+            return lines.joined(separator: "\n")
         }
-        guard !lines.isEmpty else {
-            throw NativeAIError.unavailable("Foundation Models returned no triage picks.")
-        }
-        return lines.joined(separator: "\n")
+
+        let first = try await attempt()
+        let (firstTrimmed, firstDegenerate) = degenerateRepetitionTrim(first)
+        guard firstDegenerate else { return first }
+
+        print("[NativeAI] AI Inbox (Foundation Models) output looked degenerate; retrying once.")
+        let second = try await attempt()
+        let (secondTrimmed, secondDegenerate) = degenerateRepetitionTrim(second)
+        guard secondDegenerate else { return second }
+
+        print("[NativeAI] AI Inbox retry was also degenerate; returning the longer trimmed attempt.")
+        return firstTrimmed.count >= secondTrimmed.count ? firstTrimmed : secondTrimmed
     }
 
     /// Uses Foundation Models guided generation for structured catch-up items.
@@ -1611,28 +1837,66 @@ enum NativeAI {
         guard case .available = model.availability else {
             throw NativeAIError.unavailable("Apple Intelligence is not available.")
         }
-        let session = LanguageModelSession(
-            model: model,
-            instructions: "You write crisp catch-up summaries for a news/RSS reader."
-        )
-        let response = try await session.respond(
-            to: """
-            Create a Quick Catch-up from these articles. Cover the 5–12 most important stories.
 
-            \(articleDigest(articles, limit: catchUpArticleLimit))
-            """,
-            generating: FMCatchUpStructured.self,
-            options: GenerationOptions(sampling: .random(top: 50), temperature: 0.7, maximumResponseTokens: 1200)
-        )
-        let structured = response.content
-        return structured.items.map { entry in
-            CatchUpItem(
-                title: entry.title,
-                summary: entry.summary,
-                // Convert sentinel -1 back to nil (no specific article)
-                articleIndex: entry.articleIndex < 1 ? nil : entry.articleIndex
+        func attempt() async throws -> [CatchUpItem] {
+            let session = LanguageModelSession(
+                model: model,
+                instructions: "You write crisp catch-up summaries for a news/RSS reader."
             )
+            let response = try await session.respond(
+                to: """
+                Create a Quick Catch-up from these articles. Cover the 5–12 most important stories.
+
+                \(articleDigest(articles, limit: catchUpArticleLimit))
+                """,
+                generating: FMCatchUpStructured.self,
+                options: GenerationOptions(sampling: .random(top: 50), temperature: 0.7, maximumResponseTokens: 1200)
+            )
+            let structured = response.content
+            return structured.items.map { entry in
+                CatchUpItem(
+                    title: entry.title,
+                    summary: entry.summary,
+                    // Convert sentinel -1 back to nil (no specific article)
+                    articleIndex: entry.articleIndex < 1 ? nil : entry.articleIndex
+                )
+            }
         }
+
+        // The degenerate-repetition guard operates on text, but this path
+        // returns structured items. Build a text digest of the items purely
+        // for detection, and if a retry is also degenerate, fall back to
+        // deduping consecutive near-identical items rather than trimming text.
+        func digestText(_ items: [CatchUpItem]) -> String {
+            items.map { "\($0.title). \($0.summary)" }.joined(separator: "\n")
+        }
+        func dedupeConsecutive(_ items: [CatchUpItem]) -> [CatchUpItem] {
+            var result: [CatchUpItem] = []
+            var lastNormalized: String?
+            for item in items {
+                let normalized = normalizeSentence(item.title + " " + item.summary)
+                if normalized == lastNormalized {
+                    continue
+                }
+                result.append(item)
+                lastNormalized = normalized
+            }
+            return result.isEmpty ? items : result
+        }
+
+        let first = try await attempt()
+        let (_, firstDegenerate) = degenerateRepetitionTrim(digestText(first))
+        guard firstDegenerate else { return first }
+
+        print("[NativeAI] Quick catch-up (Foundation Models) output looked degenerate; retrying once.")
+        let second = try await attempt()
+        let (_, secondDegenerate) = degenerateRepetitionTrim(digestText(second))
+        guard secondDegenerate else { return second }
+
+        print("[NativeAI] Quick catch-up retry was also degenerate; returning the best deduped attempt.")
+        let firstDeduped = dedupeConsecutive(first)
+        let secondDeduped = dedupeConsecutive(second)
+        return firstDeduped.count >= secondDeduped.count ? firstDeduped : secondDeduped
     }
 #endif
 }

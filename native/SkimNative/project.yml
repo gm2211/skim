@@ -35,6 +35,9 @@ targets:
         product: MLXLLM
       - package: swift-transformers
         product: Hub
+    scheme:
+      testTargets:
+        - Skim iOS Tests
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.gm2211.skim

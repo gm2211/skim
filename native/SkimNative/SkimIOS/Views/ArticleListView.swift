@@ -653,15 +653,11 @@ private struct FeedPickerSheet: View {
                 VStack(alignment: .leading, spacing: 0) {
                     topControls
 
-                    SkimWordmark(size: 50)
-                        .padding(.horizontal, 38)
-                        .padding(.top, 18)
-                        .padding(.bottom, model.isLoading ? 14 : 24)
-
                     if model.isLoading {
                         FeedPaneLoadingSpinner()
                             .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.bottom, 34)
+                            .padding(.top, 18)
+                            .padding(.bottom, 18)
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
@@ -693,6 +689,7 @@ private struct FeedPickerSheet: View {
                             onAIInbox()
                         }
                     }
+                    .padding(.top, 14)
                     .padding(.bottom, 8)
 
                     HStack {
@@ -789,7 +786,10 @@ private struct FeedPickerSheet: View {
 
     private var topControls: some View {
         HStack(spacing: 22) {
-            BorderlessIconButton(systemName: "gearshape", title: "Settings", size: 22, tapSize: 42, action: onSettings)
+            HStack(spacing: 12) {
+                BorderlessIconButton(systemName: "gearshape", title: "Settings", size: 22, tapSize: 42, action: onSettings)
+                SkimWordmark(size: 26)
+            }
             Spacer()
             BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 22, tapSize: 42, action: onChat)
             BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 23, tapSize: 42, action: onCatchUp)

@@ -253,9 +253,10 @@ struct ArticleListView: View {
             dismissTextEntry()
             let articles = model.articles
             let articleLimit = NativeAI.catchUpArticleLimit
+            let catchUpCount = min(articles.count, articleLimit)
             let subtitle = articles.isEmpty
                 ? "Latest articles (up to \(articleLimit))"
-                : "\(min(articles.count, articleLimit)) articles"
+                : "\(catchUpCount) \(catchUpCount == 1 ? "article" : "articles")"
             activeCatchUp = CatchUpRequest(
                 subtitle: subtitle,
                 statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai)
@@ -2377,22 +2378,22 @@ private struct ArticleRow: View {
 
             Divider()
 
-            Button("Mark All Above Read", systemImage: "arrow.up.to.line") {
+            Button("Mark Above as Read", systemImage: "arrow.up.to.line") {
                 Task { await model.setRead(articlesAbove, isRead: true) }
             }
             .disabled(articlesAbove.isEmpty)
 
-            Button("Mark All Above Unread", systemImage: "arrow.up.to.line") {
+            Button("Mark Above as Unread", systemImage: "arrow.up.to.line") {
                 Task { await model.setRead(articlesAbove, isRead: false) }
             }
             .disabled(articlesAbove.isEmpty)
 
-            Button("Mark All Below Read", systemImage: "arrow.down.to.line") {
+            Button("Mark Below as Read", systemImage: "arrow.down.to.line") {
                 Task { await model.setRead(articlesBelow, isRead: true) }
             }
             .disabled(articlesBelow.isEmpty)
 
-            Button("Mark All Below Unread", systemImage: "arrow.down.to.line") {
+            Button("Mark Below as Unread", systemImage: "arrow.down.to.line") {
                 Task { await model.setRead(articlesBelow, isRead: false) }
             }
             .disabled(articlesBelow.isEmpty)

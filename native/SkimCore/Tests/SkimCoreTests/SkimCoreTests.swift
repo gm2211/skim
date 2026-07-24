@@ -105,6 +105,193 @@ import Testing
     #expect(try await store.countCachedReaderTexts() == 1)
 }
 
+@Test func persistsStoryEditionDataWithoutChangingRawArticles() async throws {
+    let databaseURL = temporaryStoreURL()
+    let store = try SkimStore(databaseURL: databaseURL)
+    let feed = Feed(id: "feed-1", title: "A Feed", url: URL(string: "https://example.com/rss")!)
+    let newer = Article(
+        id: "article-newer",
+        feedID: feed.id,
+        feedTitle: feed.title,
+        title: "Newer coverage",
+        publishedAt: Date(timeIntervalSince1970: 200),
+        isRead: false,
+        isStarred: true
+    )
+    let older = Article(
+        id: "article-older",
+        feedID: feed.id,
+        feedTitle: feed.title,
+        title: "Older coverage",
+        publishedAt: Date(timeIntervalSince1970: 100),
+        isRead: true,
+        isStarred: false
+    )
+    try await store.upsert(feed: feed, articles: [older, newer])
+    let articlesBefore = try await store.listArticles(filter: ArticleFilter())
+
+    let story = Story(
+        id: "story-stable-1",
+        title: "A durable story",
+        summary: "Two sources cover one event.",
+        representativeArticleID: newer.id,
+        firstSeenAt: Date(timeIntervalSince1970: 100),
+        lastActivityAt: Date(timeIntervalSince1970: 200),
+        createdAt: Date(timeIntervalSince1970: 210),
+        updatedAt: Date(timeIntervalSince1970: 220)
+    )
+    try await store.upsertStory(story)
+    try await store.upsertStoryMembership(StoryArticleMembership(
+        storyID: story.id,
+        articleID: older.id,
+        membershipType: .coverage,
+        confidence: 0.87,
+        addedAt: Date(timeIntervalSince1970: 215)
+    ))
+
+    let revision = StoryRevision(
+        storyID: story.id,
+        revisionNumber: 1,
+        title: story.title,
+        summary: "The edition snapshot summary.",
+        deltaSummary: "A second source confirmed the event.",
+        representativeArticleID: newer.id,
+        sourceCount: 2,
+        contentFingerprint: "sha256:fixture",
+        isMaterialChange: true,
+        createdAt: Date(timeIntervalSince1970: 225)
+    )
+    try await store.insertStoryRevision(revision)
+    try await store.upsertStoryUserState(StoryUserState(
+        storyID: story.id,
+        lastSeenRevision: 1,
+        isFollowed: true,
+        updatedAt: Date(timeIntervalSince1970: 230)
+    ))
+
+    let edition = Edition(
+        id: "edition-2026-07-24",
+        title: "Today",
+        scope: "all",
+        storyLimit: 10,
+        status: .ready,
+        startsAt: Date(timeIntervalSince1970: 0),
+        endsAt: Date(timeIntervalSince1970: 86_400),
+        generatedAt: Date(timeIntervalSince1970: 240),
+        totalSourceCount: 2
+    )
+    let item = EditionItem(
+        editionID: edition.id,
+        storyID: story.id,
+        storyRevisionNumber: revision.revisionNumber,
+        position: 0,
+        section: "Top Stories",
+        snapshotTitle: revision.title,
+        snapshotSummary: revision.summary,
+        snapshotDeltaSummary: revision.deltaSummary,
+        snapshotSourceCount: revision.sourceCount,
+        snapshotReason: "Two independent sources",
+        isUniqueFind: false
+    )
+    try await store.persistEdition(edition, items: [item])
+
+    #expect(try await store.story(id: story.id) == story)
+    #expect(try await store.listStoryMemberships(storyID: story.id) == [
+        StoryArticleMembership(
+            storyID: story.id,
+            articleID: older.id,
+            membershipType: .coverage,
+            confidence: 0.87,
+            addedAt: Date(timeIntervalSince1970: 215)
+        )
+    ])
+    #expect(try await store.latestStoryRevision(storyID: story.id) == revision)
+    #expect(try await store.hasUnseenStoryRevision(storyID: story.id) == false)
+
+    try await store.markStoryCaughtUp(
+        storyID: story.id,
+        throughRevision: revision.revisionNumber,
+        at: Date(timeIntervalSince1970: 250)
+    )
+    let caughtUp = try #require(try await store.storyUserState(storyID: story.id))
+    #expect(caughtUp.lastSeenRevision == 1)
+    #expect(caughtUp.lastReadRevision == 1)
+    #expect(caughtUp.isFollowed == true)
+
+    try await store.setEditionItemConsumed(
+        editionID: edition.id,
+        storyID: story.id,
+        isConsumed: true,
+        at: Date(timeIntervalSince1970: 260)
+    )
+    try await store.updateEditionProgress(
+        id: edition.id,
+        status: .completed,
+        completedAt: Date(timeIntervalSince1970: 270),
+        totalSourceCount: 2
+    )
+
+    // Retrying generation with changed snapshot text cannot rewrite history.
+    var changedItem = item
+    changedItem.snapshotTitle = "A rewritten title"
+    changedItem.snapshotSummary = "A rewritten summary"
+    try await store.persistEdition(edition, items: [changedItem])
+    let persistedItem = try #require(try await store.listEditionItems(editionID: edition.id).first)
+    #expect(persistedItem.snapshotTitle == item.snapshotTitle)
+    #expect(persistedItem.snapshotSummary == item.snapshotSummary)
+    #expect(persistedItem.isConsumed == true)
+    #expect(persistedItem.consumedAt == Date(timeIntervalSince1970: 260))
+
+    let persistedEdition = try #require(try await store.edition(id: edition.id))
+    #expect(persistedEdition.status == .completed)
+    #expect(persistedEdition.completedAt == Date(timeIntervalSince1970: 270))
+
+    let articlesAfter = try await store.listArticles(filter: ArticleFilter())
+    #expect(articlesAfter == articlesBefore)
+    #expect(try await store.countUnread(feedID: nil) == 1)
+
+    // Reopening runs every CREATE TABLE/INDEX migration again.
+    let reopened = try SkimStore(databaseURL: databaseURL)
+    #expect(try await reopened.story(id: story.id) == story)
+    #expect(try await reopened.listArticles(filter: ArticleFilter()) == articlesBefore)
+}
+
+@Test func storyAndEditionModelsRoundTripCodableContract() throws {
+    let revision = StoryRevision(
+        storyID: "story-1",
+        revisionNumber: 3,
+        title: "Title",
+        summary: "Summary",
+        deltaSummary: "Delta",
+        sourceCount: 4,
+        contentFingerprint: "sha256:contract",
+        isMaterialChange: true,
+        createdAt: Date(timeIntervalSince1970: 1_234)
+    )
+    let edition = Edition(
+        id: "edition-1",
+        title: "Today",
+        scope: "folder:technology",
+        storyLimit: 5,
+        status: .completed,
+        startsAt: Date(timeIntervalSince1970: 1_000),
+        endsAt: Date(timeIntervalSince1970: 2_000),
+        generatedAt: Date(timeIntervalSince1970: 1_100),
+        completedAt: Date(timeIntervalSince1970: 1_200),
+        totalSourceCount: 9
+    )
+
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .secondsSince1970
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+
+    #expect(try decoder.decode(StoryRevision.self, from: encoder.encode(revision)) == revision)
+    #expect(try decoder.decode(Edition.self, from: encoder.encode(edition)) == edition)
+    #expect(StoryMembershipType.allCases.map(\.rawValue) == ["duplicate", "coverage", "update"])
+    #expect(EditionStatus.allCases.map(\.rawValue) == ["draft", "ready", "completed", "failed"])
+}
+
 @Test func appSettingsDefaultOfflinePreloadLimit() throws {
     let settings = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
 
@@ -290,9 +477,12 @@ import Testing
 }
 
 private func temporaryStore() throws -> SkimStore {
+    try SkimStore(databaseURL: temporaryStoreURL())
+}
+
+private func temporaryStoreURL() -> URL {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-    let url = dir.appendingPathComponent("skim.sqlite")
-    return try SkimStore(databaseURL: url)
+    return dir.appendingPathComponent("skim.sqlite")
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {

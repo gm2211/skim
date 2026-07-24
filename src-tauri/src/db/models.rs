@@ -100,6 +100,150 @@ pub struct Theme {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Story {
+    /// Stable identity retained as membership and revisions evolve.
+    pub id: String,
+    pub title: String,
+    pub summary: Option<String>,
+    pub representative_article_id: Option<String>,
+    pub first_seen_at: i64,
+    pub last_activity_at: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StoryMembershipType {
+    Duplicate,
+    Coverage,
+    Update,
+}
+
+impl StoryMembershipType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Duplicate => "duplicate",
+            Self::Coverage => "coverage",
+            Self::Update => "update",
+        }
+    }
+}
+
+impl TryFrom<&str> for StoryMembershipType {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "duplicate" => Ok(Self::Duplicate),
+            "coverage" => Ok(Self::Coverage),
+            "update" => Ok(Self::Update),
+            other => Err(format!("unknown story membership type: {other}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoryArticle {
+    pub story_id: String,
+    pub article_id: String,
+    pub membership_type: StoryMembershipType,
+    pub confidence: Option<f64>,
+    pub added_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoryRevision {
+    pub story_id: String,
+    pub revision_number: i64,
+    pub title: String,
+    pub summary: String,
+    pub delta_summary: Option<String>,
+    pub representative_article_id: Option<String>,
+    pub source_count: i64,
+    pub content_fingerprint: Option<String>,
+    pub is_material_change: bool,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoryUserState {
+    pub story_id: String,
+    pub last_seen_revision: Option<i64>,
+    pub last_read_revision: Option<i64>,
+    pub is_followed: bool,
+    pub is_hidden: bool,
+    pub caught_up_at: Option<i64>,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EditionStatus {
+    Draft,
+    Ready,
+    Completed,
+    Failed,
+}
+
+impl EditionStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Draft => "draft",
+            Self::Ready => "ready",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+impl TryFrom<&str> for EditionStatus {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "draft" => Ok(Self::Draft),
+            "ready" => Ok(Self::Ready),
+            "completed" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            other => Err(format!("unknown edition status: {other}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Edition {
+    pub id: String,
+    pub title: String,
+    pub scope: String,
+    pub story_limit: i64,
+    pub status: EditionStatus,
+    pub starts_at: i64,
+    pub ends_at: i64,
+    pub generated_at: i64,
+    pub completed_at: Option<i64>,
+    pub total_source_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditionItem {
+    pub edition_id: String,
+    pub story_id: String,
+    pub story_revision_number: i64,
+    pub position: i64,
+    pub section: String,
+    /// Immutable presentation fields copied from the selected revision.
+    pub snapshot_title: String,
+    pub snapshot_summary: String,
+    pub snapshot_delta_summary: Option<String>,
+    pub snapshot_source_count: i64,
+    pub snapshot_reason: Option<String>,
+    pub is_unique_find: bool,
+    pub is_consumed: bool,
+    pub consumed_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArticleFilter {
     pub feed_id: Option<String>,
     pub theme_id: Option<String>,

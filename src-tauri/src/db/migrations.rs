@@ -91,6 +91,127 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
 
         CREATE INDEX IF NOT EXISTS idx_interactions_feedback ON article_interactions(feedback);
         CREATE INDEX IF NOT EXISTS idx_interactions_reading ON article_interactions(reading_time_sec);
+
+        -- Durable story layer. Articles remain the source-of-truth feed rows;
+        -- these tables add stable clustering, revision, and edition identity.
+        -- All timestamps are caller-supplied Unix epoch seconds in UTC.
+        CREATE TABLE IF NOT EXISTS stories (
+            id                        TEXT PRIMARY KEY,
+            title                     TEXT NOT NULL,
+            summary                   TEXT,
+            representative_article_id TEXT REFERENCES articles(id) ON DELETE SET NULL,
+            first_seen_at             INTEGER NOT NULL,
+            last_activity_at          INTEGER NOT NULL,
+            created_at                INTEGER NOT NULL,
+            updated_at                INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_stories_last_activity
+            ON stories(last_activity_at DESC);
+
+        CREATE TABLE IF NOT EXISTS story_articles (
+            story_id       TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+            article_id     TEXT NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+            membership_type TEXT NOT NULL
+                CHECK (membership_type IN ('duplicate', 'coverage', 'update')),
+            confidence     REAL CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+            added_at       INTEGER NOT NULL,
+            PRIMARY KEY (story_id, article_id),
+            UNIQUE (article_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_story_articles_story_added
+            ON story_articles(story_id, added_at DESC);
+
+        CREATE TABLE IF NOT EXISTS story_revisions (
+            story_id                 TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+            revision_number          INTEGER NOT NULL CHECK (revision_number > 0),
+            title                    TEXT NOT NULL,
+            summary                  TEXT NOT NULL,
+            delta_summary            TEXT,
+            representative_article_id TEXT REFERENCES articles(id) ON DELETE SET NULL,
+            source_count             INTEGER NOT NULL DEFAULT 1 CHECK (source_count >= 1),
+            content_fingerprint       TEXT,
+            is_material_change        INTEGER NOT NULL DEFAULT 1
+                CHECK (is_material_change IN (0, 1)),
+            created_at               INTEGER NOT NULL,
+            PRIMARY KEY (story_id, revision_number)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_story_revisions_created
+            ON story_revisions(story_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS story_user_state (
+            story_id                 TEXT PRIMARY KEY REFERENCES stories(id) ON DELETE CASCADE,
+            last_seen_revision       INTEGER CHECK (last_seen_revision IS NULL OR last_seen_revision > 0),
+            last_read_revision       INTEGER CHECK (last_read_revision IS NULL OR last_read_revision > 0),
+            is_followed              INTEGER NOT NULL DEFAULT 0 CHECK (is_followed IN (0, 1)),
+            is_hidden                INTEGER NOT NULL DEFAULT 0 CHECK (is_hidden IN (0, 1)),
+            caught_up_at             INTEGER,
+            updated_at               INTEGER NOT NULL,
+            FOREIGN KEY (story_id, last_seen_revision)
+                REFERENCES story_revisions(story_id, revision_number),
+            FOREIGN KEY (story_id, last_read_revision)
+                REFERENCES story_revisions(story_id, revision_number)
+        );
+
+        CREATE TABLE IF NOT EXISTS editions (
+            id                 TEXT PRIMARY KEY,
+            title              TEXT NOT NULL,
+            scope              TEXT NOT NULL,
+            story_limit        INTEGER NOT NULL CHECK (story_limit > 0),
+            status             TEXT NOT NULL
+                CHECK (status IN ('draft', 'ready', 'completed', 'failed')),
+            starts_at          INTEGER NOT NULL,
+            ends_at            INTEGER NOT NULL CHECK (ends_at > starts_at),
+            generated_at       INTEGER NOT NULL,
+            completed_at       INTEGER,
+            total_source_count INTEGER NOT NULL DEFAULT 1 CHECK (total_source_count >= 1)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_editions_current
+            ON editions(scope, starts_at, ends_at, status, generated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS edition_items (
+            edition_id                 TEXT NOT NULL REFERENCES editions(id) ON DELETE CASCADE,
+            story_id                   TEXT NOT NULL REFERENCES stories(id) ON DELETE RESTRICT,
+            story_revision_number      INTEGER NOT NULL,
+            position                   INTEGER NOT NULL CHECK (position >= 0),
+            section                    TEXT NOT NULL,
+            snapshot_title             TEXT NOT NULL,
+            snapshot_summary           TEXT NOT NULL,
+            snapshot_delta_summary     TEXT,
+            snapshot_source_count      INTEGER NOT NULL CHECK (snapshot_source_count >= 1),
+            snapshot_reason            TEXT,
+            is_unique_find             INTEGER NOT NULL DEFAULT 0 CHECK (is_unique_find IN (0, 1)),
+            is_consumed                INTEGER NOT NULL DEFAULT 0 CHECK (is_consumed IN (0, 1)),
+            consumed_at                INTEGER,
+            PRIMARY KEY (edition_id, story_id),
+            UNIQUE (edition_id, position),
+            FOREIGN KEY (story_id, story_revision_number)
+                REFERENCES story_revisions(story_id, revision_number) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_edition_items_order
+            ON edition_items(edition_id, position);
+        CREATE INDEX IF NOT EXISTS idx_edition_items_story
+            ON edition_items(story_id);
+
+        CREATE TRIGGER IF NOT EXISTS trg_story_revisions_immutable
+        BEFORE UPDATE ON story_revisions
+        BEGIN
+            SELECT RAISE(ABORT, 'story revisions are immutable');
+        END;
+
+        CREATE TRIGGER IF NOT EXISTS trg_edition_snapshot_immutable
+        BEFORE UPDATE OF
+            edition_id, story_id, story_revision_number, position, section,
+            snapshot_title, snapshot_summary, snapshot_delta_summary,
+            snapshot_source_count, snapshot_reason, is_unique_find
+        ON edition_items
+        BEGIN
+            SELECT RAISE(ABORT, 'edition snapshot fields are immutable');
+        END;
         ",
     )?;
 

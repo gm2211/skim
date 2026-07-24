@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, types::Type, Connection, OptionalExtension};
 
 use super::models::*;
 
@@ -610,6 +610,510 @@ pub fn update_feed_fetched(
         params![timestamp, feed_id],
     )?;
     Ok(())
+}
+
+// Story, revision, and edition persistence
+
+fn story_from_row(row: &rusqlite::Row<'_>) -> Result<Story, rusqlite::Error> {
+    Ok(Story {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        summary: row.get(2)?,
+        representative_article_id: row.get(3)?,
+        first_seen_at: row.get(4)?,
+        last_activity_at: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
+    })
+}
+
+fn membership_type_from_row(
+    row: &rusqlite::Row<'_>,
+    index: usize,
+) -> Result<StoryMembershipType, rusqlite::Error> {
+    let raw: String = row.get(index)?;
+    StoryMembershipType::try_from(raw.as_str()).map_err(|message| {
+        rusqlite::Error::FromSqlConversionFailure(
+            index,
+            Type::Text,
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                message,
+            )),
+        )
+    })
+}
+
+pub fn upsert_story(conn: &Connection, story: &Story) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO stories (
+            id, title, summary, representative_article_id,
+            first_seen_at, last_activity_at, created_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         ON CONFLICT(id) DO UPDATE SET
+            title = excluded.title,
+            summary = excluded.summary,
+            representative_article_id = excluded.representative_article_id,
+            first_seen_at = MIN(stories.first_seen_at, excluded.first_seen_at),
+            last_activity_at = MAX(stories.last_activity_at, excluded.last_activity_at),
+            updated_at = excluded.updated_at",
+        params![
+            story.id,
+            story.title,
+            story.summary,
+            story.representative_article_id,
+            story.first_seen_at,
+            story.last_activity_at,
+            story.created_at,
+            story.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn get_story(
+    conn: &Connection,
+    story_id: &str,
+) -> Result<Option<Story>, rusqlite::Error> {
+    conn.query_row(
+        "SELECT id, title, summary, representative_article_id,
+                first_seen_at, last_activity_at, created_at, updated_at
+         FROM stories WHERE id = ?1",
+        params![story_id],
+        story_from_row,
+    )
+    .optional()
+}
+
+/// Stories active at or after `since`, newest activity first. This is the
+/// indexed rolling-window lookup used to find clustering candidates.
+pub fn list_recent_stories(
+    conn: &Connection,
+    since: i64,
+    limit: i64,
+) -> Result<Vec<Story>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, summary, representative_article_id,
+                first_seen_at, last_activity_at, created_at, updated_at
+         FROM stories
+         WHERE last_activity_at >= ?1
+         ORDER BY last_activity_at DESC, id
+         LIMIT ?2",
+    )?;
+    let stories = stmt
+        .query_map(params![since, limit], story_from_row)?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(stories)
+}
+
+pub fn delete_story(conn: &Connection, story_id: &str) -> Result<bool, rusqlite::Error> {
+    Ok(conn.execute("DELETE FROM stories WHERE id = ?1", params![story_id])? > 0)
+}
+
+pub fn upsert_story_article(
+    conn: &Connection,
+    membership: &StoryArticle,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO story_articles (
+            story_id, article_id, membership_type, confidence, added_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(article_id) DO UPDATE SET
+            story_id = excluded.story_id,
+            membership_type = excluded.membership_type,
+            confidence = excluded.confidence,
+            added_at = excluded.added_at",
+        params![
+            membership.story_id,
+            membership.article_id,
+            membership.membership_type.as_str(),
+            membership.confidence,
+            membership.added_at,
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn list_story_articles(
+    conn: &Connection,
+    story_id: &str,
+) -> Result<Vec<StoryArticle>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT story_id, article_id, membership_type, confidence, added_at
+         FROM story_articles
+         WHERE story_id = ?1
+         ORDER BY added_at DESC, article_id",
+    )?;
+    let memberships = stmt
+        .query_map(params![story_id], |row| {
+            Ok(StoryArticle {
+                story_id: row.get(0)?,
+                article_id: row.get(1)?,
+                membership_type: membership_type_from_row(row, 2)?,
+                confidence: row.get(3)?,
+                added_at: row.get(4)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(memberships)
+}
+
+pub fn delete_story_article(
+    conn: &Connection,
+    story_id: &str,
+    article_id: &str,
+) -> Result<bool, rusqlite::Error> {
+    Ok(conn.execute(
+        "DELETE FROM story_articles WHERE story_id = ?1 AND article_id = ?2",
+        params![story_id, article_id],
+    )? > 0)
+}
+
+/// Inserts an immutable story revision. Duplicate revision numbers are errors.
+pub fn insert_story_revision(
+    conn: &Connection,
+    revision: &StoryRevision,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO story_revisions (
+            story_id, revision_number, title, summary, delta_summary,
+            representative_article_id, source_count, content_fingerprint,
+            is_material_change, created_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            revision.story_id,
+            revision.revision_number,
+            revision.title,
+            revision.summary,
+            revision.delta_summary,
+            revision.representative_article_id,
+            revision.source_count,
+            revision.content_fingerprint,
+            revision.is_material_change as i32,
+            revision.created_at,
+        ],
+    )?;
+    Ok(())
+}
+
+fn revision_from_row(row: &rusqlite::Row<'_>) -> Result<StoryRevision, rusqlite::Error> {
+    Ok(StoryRevision {
+        story_id: row.get(0)?,
+        revision_number: row.get(1)?,
+        title: row.get(2)?,
+        summary: row.get(3)?,
+        delta_summary: row.get(4)?,
+        representative_article_id: row.get(5)?,
+        source_count: row.get(6)?,
+        content_fingerprint: row.get(7)?,
+        is_material_change: row.get::<_, i32>(8)? != 0,
+        created_at: row.get(9)?,
+    })
+}
+
+pub fn get_story_revision(
+    conn: &Connection,
+    story_id: &str,
+    revision_number: i64,
+) -> Result<Option<StoryRevision>, rusqlite::Error> {
+    conn.query_row(
+        "SELECT story_id, revision_number, title, summary, delta_summary,
+                representative_article_id, source_count, content_fingerprint,
+                is_material_change, created_at
+         FROM story_revisions
+         WHERE story_id = ?1 AND revision_number = ?2",
+        params![story_id, revision_number],
+        revision_from_row,
+    )
+    .optional()
+}
+
+pub fn get_latest_story_revision(
+    conn: &Connection,
+    story_id: &str,
+) -> Result<Option<StoryRevision>, rusqlite::Error> {
+    conn.query_row(
+        "SELECT story_id, revision_number, title, summary, delta_summary,
+                representative_article_id, source_count, content_fingerprint,
+                is_material_change, created_at
+         FROM story_revisions
+         WHERE story_id = ?1
+         ORDER BY revision_number DESC
+         LIMIT 1",
+        params![story_id],
+        revision_from_row,
+    )
+    .optional()
+}
+
+pub fn upsert_story_user_state(
+    conn: &Connection,
+    state: &StoryUserState,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO story_user_state (
+            story_id, last_seen_revision, last_read_revision,
+            is_followed, is_hidden, caught_up_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+         ON CONFLICT(story_id) DO UPDATE SET
+            last_seen_revision = excluded.last_seen_revision,
+            last_read_revision = excluded.last_read_revision,
+            is_followed = excluded.is_followed,
+            is_hidden = excluded.is_hidden,
+            caught_up_at = excluded.caught_up_at,
+            updated_at = excluded.updated_at",
+        params![
+            state.story_id,
+            state.last_seen_revision,
+            state.last_read_revision,
+            state.is_followed as i32,
+            state.is_hidden as i32,
+            state.caught_up_at,
+            state.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+pub fn get_story_user_state(
+    conn: &Connection,
+    story_id: &str,
+) -> Result<Option<StoryUserState>, rusqlite::Error> {
+    conn.query_row(
+        "SELECT story_id, last_seen_revision, last_read_revision,
+                is_followed, is_hidden, caught_up_at, updated_at
+         FROM story_user_state WHERE story_id = ?1",
+        params![story_id],
+        |row| {
+            Ok(StoryUserState {
+                story_id: row.get(0)?,
+                last_seen_revision: row.get(1)?,
+                last_read_revision: row.get(2)?,
+                is_followed: row.get::<_, i32>(3)? != 0,
+                is_hidden: row.get::<_, i32>(4)? != 0,
+                caught_up_at: row.get(5)?,
+                updated_at: row.get(6)?,
+            })
+        },
+    )
+    .optional()
+}
+
+/// Inserts an edition shell. Edition content is added with
+/// `insert_edition_items`; neither helper overwrites existing snapshots.
+pub fn insert_edition(conn: &Connection, edition: &Edition) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO editions (
+            id, title, scope, story_limit, status, starts_at, ends_at,
+            generated_at, completed_at, total_source_count
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        params![
+            edition.id,
+            edition.title,
+            edition.scope,
+            edition.story_limit,
+            edition.status.as_str(),
+            edition.starts_at,
+            edition.ends_at,
+            edition.generated_at,
+            edition.completed_at,
+            edition.total_source_count,
+        ],
+    )?;
+    Ok(())
+}
+
+fn edition_status_from_row(
+    row: &rusqlite::Row<'_>,
+    index: usize,
+) -> Result<EditionStatus, rusqlite::Error> {
+    let raw: String = row.get(index)?;
+    EditionStatus::try_from(raw.as_str()).map_err(|message| {
+        rusqlite::Error::FromSqlConversionFailure(
+            index,
+            Type::Text,
+            Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                message,
+            )),
+        )
+    })
+}
+
+fn edition_from_row(row: &rusqlite::Row<'_>) -> Result<Edition, rusqlite::Error> {
+    Ok(Edition {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        scope: row.get(2)?,
+        story_limit: row.get(3)?,
+        status: edition_status_from_row(row, 4)?,
+        starts_at: row.get(5)?,
+        ends_at: row.get(6)?,
+        generated_at: row.get(7)?,
+        completed_at: row.get(8)?,
+        total_source_count: row.get(9)?,
+    })
+}
+
+pub fn get_edition(
+    conn: &Connection,
+    edition_id: &str,
+) -> Result<Option<Edition>, rusqlite::Error> {
+    conn.query_row(
+        "SELECT id, title, scope, story_limit, status, starts_at, ends_at,
+                generated_at, completed_at, total_source_count
+         FROM editions WHERE id = ?1",
+        params![edition_id],
+        edition_from_row,
+    )
+    .optional()
+}
+
+pub fn get_current_edition(
+    conn: &Connection,
+    scope: &str,
+    timestamp: i64,
+) -> Result<Option<Edition>, rusqlite::Error> {
+    conn.query_row(
+        "SELECT id, title, scope, story_limit, status, starts_at, ends_at,
+                generated_at, completed_at, total_source_count
+         FROM editions
+         WHERE scope = ?1
+           AND starts_at <= ?2 AND ends_at > ?2
+           AND status IN ('ready', 'completed')
+         ORDER BY generated_at DESC, id DESC
+         LIMIT 1",
+        params![scope, timestamp],
+        edition_from_row,
+    )
+    .optional()
+}
+
+/// Updates mutable edition lifecycle metadata without touching item snapshots.
+pub fn update_edition_progress(
+    conn: &Connection,
+    edition_id: &str,
+    status: EditionStatus,
+    completed_at: Option<i64>,
+    total_source_count: i64,
+) -> Result<bool, rusqlite::Error> {
+    Ok(conn.execute(
+        "UPDATE editions
+         SET status = ?1, completed_at = ?2, total_source_count = ?3
+         WHERE id = ?4",
+        params![
+            status.as_str(),
+            completed_at,
+            total_source_count,
+            edition_id
+        ],
+    )? > 0)
+}
+
+/// Inserts immutable edition snapshots atomically. Every item must reference
+/// this edition and an existing story revision.
+pub fn insert_edition_items(
+    conn: &Connection,
+    edition_id: &str,
+    items: &[EditionItem],
+) -> Result<(), rusqlite::Error> {
+    let tx = conn.unchecked_transaction()?;
+    {
+        let mut stmt = tx.prepare(
+            "INSERT INTO edition_items (
+                edition_id, story_id, story_revision_number, position, section,
+                snapshot_title, snapshot_summary, snapshot_delta_summary,
+                snapshot_source_count, snapshot_reason, is_unique_find,
+                is_consumed, consumed_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+        )?;
+        for item in items {
+            if item.edition_id != edition_id {
+                return Err(rusqlite::Error::InvalidParameterName(format!(
+                    "edition item {} belongs to {}, expected {}",
+                    item.story_id, item.edition_id, edition_id
+                )));
+            }
+            stmt.execute(params![
+                item.edition_id,
+                item.story_id,
+                item.story_revision_number,
+                item.position,
+                item.section,
+                item.snapshot_title,
+                item.snapshot_summary,
+                item.snapshot_delta_summary,
+                item.snapshot_source_count,
+                item.snapshot_reason,
+                item.is_unique_find as i32,
+                item.is_consumed as i32,
+                item.consumed_at,
+            ])?;
+        }
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+pub fn list_edition_items(
+    conn: &Connection,
+    edition_id: &str,
+) -> Result<Vec<EditionItem>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT edition_id, story_id, story_revision_number, position, section,
+                snapshot_title, snapshot_summary, snapshot_delta_summary,
+                snapshot_source_count, snapshot_reason, is_unique_find,
+                is_consumed, consumed_at
+         FROM edition_items
+         WHERE edition_id = ?1
+         ORDER BY position",
+    )?;
+    let items = stmt
+        .query_map(params![edition_id], |row| {
+            Ok(EditionItem {
+                edition_id: row.get(0)?,
+                story_id: row.get(1)?,
+                story_revision_number: row.get(2)?,
+                position: row.get(3)?,
+                section: row.get(4)?,
+                snapshot_title: row.get(5)?,
+                snapshot_summary: row.get(6)?,
+                snapshot_delta_summary: row.get(7)?,
+                snapshot_source_count: row.get(8)?,
+                snapshot_reason: row.get(9)?,
+                is_unique_find: row.get::<_, i32>(10)? != 0,
+                is_consumed: row.get::<_, i32>(11)? != 0,
+                consumed_at: row.get(12)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(items)
+}
+
+/// Updates only consumption progress; immutable edition snapshot fields are
+/// never rewritten.
+pub fn set_edition_item_consumed(
+    conn: &Connection,
+    edition_id: &str,
+    story_id: &str,
+    is_consumed: bool,
+    consumed_at: Option<i64>,
+) -> Result<bool, rusqlite::Error> {
+    Ok(conn.execute(
+        "UPDATE edition_items
+         SET is_consumed = ?1, consumed_at = ?2
+         WHERE edition_id = ?3 AND story_id = ?4",
+        params![
+            is_consumed as i32,
+            consumed_at,
+            edition_id,
+            story_id
+        ],
+    )? > 0)
+}
+
+pub fn delete_edition(conn: &Connection, edition_id: &str) -> Result<bool, rusqlite::Error> {
+    Ok(conn.execute("DELETE FROM editions WHERE id = ?1", params![edition_id])? > 0)
 }
 
 // Theme queries
@@ -1327,4 +1831,362 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), rusq
         params![key, value],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod story_persistence_tests {
+    use super::*;
+    use crate::db::migrations;
+
+    fn setup() -> Connection {
+        let conn = Connection::open_in_memory().expect("open in-memory database");
+        conn.execute_batch("PRAGMA foreign_keys=ON;")
+            .expect("enable foreign keys");
+        migrations::run_migrations(&conn).expect("run migrations");
+        // Running migrations again must be harmless.
+        migrations::run_migrations(&conn).expect("rerun migrations");
+
+        insert_feed(
+            &conn,
+            &Feed {
+                id: "feed-1".into(),
+                title: "Example".into(),
+                url: "https://example.com/feed".into(),
+                site_url: Some("https://example.com".into()),
+                description: None,
+                icon_url: None,
+                feedly_id: None,
+                created_at: 10,
+                updated_at: 10,
+                last_fetched_at: None,
+                folder_id: None,
+                opml_category: None,
+            },
+        )
+        .expect("insert feed");
+
+        for (id, published_at, is_read, is_starred) in [
+            ("article-1", 100, false, true),
+            ("article-2", 300, true, false),
+            ("article-3", 200, false, false),
+        ] {
+            insert_article(
+                &conn,
+                &Article {
+                    id: id.into(),
+                    feed_id: "feed-1".into(),
+                    title: format!("Title {id}"),
+                    url: Some(format!("https://example.com/{id}")),
+                    author: None,
+                    content_html: None,
+                    content_text: Some(format!("Content {id}")),
+                    published_at: Some(published_at),
+                    fetched_at: published_at,
+                    is_read,
+                    is_starred,
+                    feedly_entry_id: None,
+                },
+            )
+            .expect("insert article");
+        }
+        conn
+    }
+
+    fn raw_article_state(conn: &Connection) -> Vec<(String, bool, bool)> {
+        get_articles(
+            conn,
+            &ArticleFilter {
+                feed_id: None,
+                theme_id: None,
+                is_read: None,
+                is_starred: None,
+                limit: Some(100),
+                offset: None,
+            },
+        )
+        .expect("list raw articles")
+        .into_iter()
+        .map(|row| {
+            (
+                row.article.id,
+                row.article.is_read,
+                row.article.is_starred,
+            )
+        })
+        .collect()
+    }
+
+    fn story_fixture() -> Story {
+        Story {
+            id: "story-stable-1".into(),
+            title: "Stable story".into(),
+            summary: Some("Current summary".into()),
+            representative_article_id: Some("article-2".into()),
+            first_seen_at: 100,
+            last_activity_at: 300,
+            created_at: 310,
+            updated_at: 310,
+        }
+    }
+
+    fn revision_fixture(number: i64) -> StoryRevision {
+        StoryRevision {
+            story_id: "story-stable-1".into(),
+            revision_number: number,
+            title: format!("Revision {number}"),
+            summary: format!("Summary {number}"),
+            delta_summary: (number > 1).then(|| "New confirmed facts".into()),
+            representative_article_id: Some("article-2".into()),
+            source_count: number + 1,
+            content_fingerprint: Some(format!("fingerprint-{number}")),
+            is_material_change: number > 1,
+            created_at: 310 + number,
+        }
+    }
+
+    #[test]
+    fn story_and_edition_crud_preserve_the_raw_feed() {
+        let conn = setup();
+        let raw_before = raw_article_state(&conn);
+        assert_eq!(
+            raw_before,
+            vec![
+                ("article-2".into(), true, false),
+                ("article-3".into(), false, false),
+                ("article-1".into(), false, true),
+            ]
+        );
+
+        let mut story = story_fixture();
+        upsert_story(&conn, &story).expect("insert story");
+        story.title = "Stable story, updated title".into();
+        story.first_seen_at = 200;
+        story.last_activity_at = 400;
+        story.updated_at = 400;
+        upsert_story(&conn, &story).expect("update story");
+        let stored_story = get_story(&conn, &story.id)
+            .expect("get story")
+            .expect("story exists");
+        assert_eq!(stored_story.id, "story-stable-1");
+        assert_eq!(stored_story.first_seen_at, 100);
+        assert_eq!(stored_story.last_activity_at, 400);
+        assert_eq!(
+            list_recent_stories(&conn, 350, 10)
+                .expect("rolling-window stories")
+                .len(),
+            1
+        );
+
+        for membership in [
+            StoryArticle {
+                story_id: story.id.clone(),
+                article_id: "article-1".into(),
+                membership_type: StoryMembershipType::Duplicate,
+                confidence: Some(0.99),
+                added_at: 320,
+            },
+            StoryArticle {
+                story_id: story.id.clone(),
+                article_id: "article-2".into(),
+                membership_type: StoryMembershipType::Coverage,
+                confidence: Some(0.85),
+                added_at: 321,
+            },
+            StoryArticle {
+                story_id: story.id.clone(),
+                article_id: "article-3".into(),
+                membership_type: StoryMembershipType::Update,
+                confidence: None,
+                added_at: 322,
+            },
+        ] {
+            upsert_story_article(&conn, &membership).expect("upsert membership");
+        }
+        let members = list_story_articles(&conn, &story.id).expect("list story members");
+        assert_eq!(members.len(), 3);
+        assert_eq!(members[0].membership_type, StoryMembershipType::Update);
+
+        insert_story_revision(&conn, &revision_fixture(1)).expect("insert first revision");
+        insert_story_revision(&conn, &revision_fixture(2)).expect("insert second revision");
+        assert!(insert_story_revision(&conn, &revision_fixture(2)).is_err());
+        assert!(conn
+            .execute(
+                "UPDATE story_revisions SET summary = 'rewritten'
+                 WHERE story_id = ?1 AND revision_number = 1",
+                params![story.id],
+            )
+            .is_err());
+        assert_eq!(
+            get_story_revision(&conn, &story.id, 1)
+                .expect("get first revision")
+                .expect("revision exists")
+                .revision_number,
+            1
+        );
+        let latest = get_latest_story_revision(&conn, &story.id)
+            .expect("latest revision")
+            .expect("revision exists");
+        assert_eq!(latest.revision_number, 2);
+        assert_eq!(latest.content_fingerprint.as_deref(), Some("fingerprint-2"));
+        assert!(latest.is_material_change);
+
+        upsert_story_user_state(
+            &conn,
+            &StoryUserState {
+                story_id: story.id.clone(),
+                last_seen_revision: Some(2),
+                last_read_revision: Some(1),
+                is_followed: true,
+                is_hidden: false,
+                caught_up_at: Some(500),
+                updated_at: 500,
+            },
+        )
+        .expect("upsert story state");
+        let state = get_story_user_state(&conn, &story.id)
+            .expect("get story state")
+            .expect("state exists");
+        assert_eq!(state.last_seen_revision, Some(2));
+        assert_eq!(state.last_read_revision, Some(1));
+        assert!(state.is_followed);
+
+        let edition = Edition {
+            id: "edition-1".into(),
+            title: "Today".into(),
+            scope: "all".into(),
+            story_limit: 10,
+            status: EditionStatus::Ready,
+            starts_at: 400,
+            ends_at: 1_000,
+            generated_at: 450,
+            completed_at: None,
+            total_source_count: 3,
+        };
+        insert_edition(&conn, &edition).expect("insert edition");
+        let item = EditionItem {
+            edition_id: edition.id.clone(),
+            story_id: story.id.clone(),
+            story_revision_number: 2,
+            position: 0,
+            section: "top_stories".into(),
+            snapshot_title: "Frozen title".into(),
+            snapshot_summary: "Frozen summary".into(),
+            snapshot_delta_summary: Some("Frozen delta".into()),
+            snapshot_source_count: 3,
+            snapshot_reason: Some("Widely covered".into()),
+            is_unique_find: false,
+            is_consumed: false,
+            consumed_at: None,
+        };
+        insert_edition_items(&conn, &edition.id, &[item]).expect("insert edition items");
+        assert!(conn
+            .execute(
+                "UPDATE edition_items SET snapshot_title = 'rewritten'
+                 WHERE edition_id = ?1 AND story_id = ?2",
+                params![edition.id, story.id],
+            )
+            .is_err());
+        assert!(insert_edition_items(
+            &conn,
+            &edition.id,
+            &[EditionItem {
+                snapshot_title: "Attempted overwrite".into(),
+                ..list_edition_items(&conn, &edition.id)
+                    .expect("load item")
+                    .remove(0)
+            }]
+        )
+        .is_err());
+
+        let current = get_current_edition(&conn, "all", 500)
+            .expect("current edition")
+            .expect("edition exists");
+        assert_eq!(current.id, edition.id);
+        assert!(set_edition_item_consumed(
+            &conn,
+            &edition.id,
+            &story.id,
+            true,
+            Some(550)
+        )
+        .expect("mark item consumed"));
+        let consumed = list_edition_items(&conn, &edition.id)
+            .expect("list edition items")
+            .remove(0);
+        assert_eq!(consumed.snapshot_title, "Frozen title");
+        assert!(consumed.is_consumed);
+        assert_eq!(consumed.consumed_at, Some(550));
+
+        assert!(update_edition_progress(
+            &conn,
+            &edition.id,
+            EditionStatus::Completed,
+            Some(600),
+            3
+        )
+        .expect("complete edition"));
+        let completed = get_edition(&conn, &edition.id)
+            .expect("get edition")
+            .expect("edition exists");
+        assert_eq!(completed.status, EditionStatus::Completed);
+        assert_eq!(completed.completed_at, Some(600));
+
+        assert!(delete_story_article(&conn, &story.id, "article-1")
+            .expect("delete story membership"));
+        assert!(delete_edition(&conn, &edition.id).expect("delete edition"));
+        assert!(delete_story(&conn, &story.id).expect("delete story"));
+        assert_eq!(raw_article_state(&conn), raw_before);
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM articles", [], |row| row.get::<_, i64>(0))
+                .expect("count articles"),
+            3
+        );
+    }
+
+    #[test]
+    fn story_schema_rejects_invalid_domain_values() {
+        let conn = setup();
+        let story = story_fixture();
+        upsert_story(&conn, &story).expect("insert story");
+        insert_story_revision(&conn, &revision_fixture(1)).expect("insert revision");
+
+        assert!(conn
+            .execute(
+                "INSERT INTO story_articles
+                    (story_id, article_id, membership_type, confidence, added_at)
+                 VALUES (?1, ?2, 'representative', 0.9, 1)",
+                params![story.id, "article-1"],
+            )
+            .is_err());
+        assert!(conn
+            .execute(
+                "INSERT INTO story_articles
+                    (story_id, article_id, membership_type, confidence, added_at)
+                 VALUES (?1, ?2, 'coverage', 1.1, 1)",
+                params![story.id, "article-1"],
+            )
+            .is_err());
+        assert!(conn
+            .execute(
+                "INSERT INTO editions (
+                    id, title, scope, story_limit, status, starts_at, ends_at,
+                    generated_at, total_source_count
+                 ) VALUES ('bad-edition', 'Bad', 'all', 10, 'unknown', 1, 2, 1, 1)",
+                [],
+            )
+            .is_err());
+        assert!(upsert_story_user_state(
+            &conn,
+            &StoryUserState {
+                story_id: story.id,
+                last_seen_revision: Some(99),
+                last_read_revision: None,
+                is_followed: false,
+                is_hidden: false,
+                caught_up_at: None,
+                updated_at: 1,
+            }
+        )
+        .is_err());
+    }
 }

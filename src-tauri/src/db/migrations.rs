@@ -197,8 +197,22 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         CREATE INDEX IF NOT EXISTS idx_edition_items_story
             ON edition_items(story_id);
 
-        CREATE TRIGGER IF NOT EXISTS trg_story_revisions_immutable
+        DROP TRIGGER IF EXISTS trg_story_revisions_immutable;
+        CREATE TRIGGER trg_story_revisions_immutable
         BEFORE UPDATE ON story_revisions
+        WHEN NOT (
+            OLD.representative_article_id IS NOT NULL
+            AND NEW.representative_article_id IS NULL
+            AND NEW.story_id IS OLD.story_id
+            AND NEW.revision_number IS OLD.revision_number
+            AND NEW.title IS OLD.title
+            AND NEW.summary IS OLD.summary
+            AND NEW.delta_summary IS OLD.delta_summary
+            AND NEW.source_count IS OLD.source_count
+            AND NEW.content_fingerprint IS OLD.content_fingerprint
+            AND NEW.is_material_change IS OLD.is_material_change
+            AND NEW.created_at IS OLD.created_at
+        )
         BEGIN
             SELECT RAISE(ABORT, 'story revisions are immutable');
         END;

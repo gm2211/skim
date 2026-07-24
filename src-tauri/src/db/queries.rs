@@ -614,6 +614,8 @@ pub fn update_feed_fetched(
 
 // Story, revision, and edition persistence
 
+// TODO(story-consumers): remove these per-function allowances as command/UI phases land.
+#[allow(dead_code)]
 fn story_from_row(row: &rusqlite::Row<'_>) -> Result<Story, rusqlite::Error> {
     Ok(Story {
         id: row.get(0)?,
@@ -627,6 +629,7 @@ fn story_from_row(row: &rusqlite::Row<'_>) -> Result<Story, rusqlite::Error> {
     })
 }
 
+#[allow(dead_code)]
 fn membership_type_from_row(
     row: &rusqlite::Row<'_>,
     index: usize,
@@ -644,6 +647,7 @@ fn membership_type_from_row(
     })
 }
 
+#[allow(dead_code)]
 pub fn upsert_story(conn: &Connection, story: &Story) -> Result<(), rusqlite::Error> {
     conn.execute(
         "INSERT INTO stories (
@@ -671,6 +675,7 @@ pub fn upsert_story(conn: &Connection, story: &Story) -> Result<(), rusqlite::Er
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn get_story(
     conn: &Connection,
     story_id: &str,
@@ -687,6 +692,7 @@ pub fn get_story(
 
 /// Stories active at or after `since`, newest activity first. This is the
 /// indexed rolling-window lookup used to find clustering candidates.
+#[allow(dead_code)]
 pub fn list_recent_stories(
     conn: &Connection,
     since: i64,
@@ -706,10 +712,12 @@ pub fn list_recent_stories(
     Ok(stories)
 }
 
+#[allow(dead_code)]
 pub fn delete_story(conn: &Connection, story_id: &str) -> Result<bool, rusqlite::Error> {
     Ok(conn.execute("DELETE FROM stories WHERE id = ?1", params![story_id])? > 0)
 }
 
+#[allow(dead_code)]
 pub fn upsert_story_article(
     conn: &Connection,
     membership: &StoryArticle,
@@ -734,6 +742,7 @@ pub fn upsert_story_article(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn list_story_articles(
     conn: &Connection,
     story_id: &str,
@@ -758,6 +767,7 @@ pub fn list_story_articles(
     Ok(memberships)
 }
 
+#[allow(dead_code)]
 pub fn delete_story_article(
     conn: &Connection,
     story_id: &str,
@@ -770,6 +780,7 @@ pub fn delete_story_article(
 }
 
 /// Inserts an immutable story revision. Duplicate revision numbers are errors.
+#[allow(dead_code)]
 pub fn insert_story_revision(
     conn: &Connection,
     revision: &StoryRevision,
@@ -796,6 +807,7 @@ pub fn insert_story_revision(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn revision_from_row(row: &rusqlite::Row<'_>) -> Result<StoryRevision, rusqlite::Error> {
     Ok(StoryRevision {
         story_id: row.get(0)?,
@@ -811,6 +823,7 @@ fn revision_from_row(row: &rusqlite::Row<'_>) -> Result<StoryRevision, rusqlite:
     })
 }
 
+#[allow(dead_code)]
 pub fn get_story_revision(
     conn: &Connection,
     story_id: &str,
@@ -828,6 +841,7 @@ pub fn get_story_revision(
     .optional()
 }
 
+#[allow(dead_code)]
 pub fn get_latest_story_revision(
     conn: &Connection,
     story_id: &str,
@@ -846,6 +860,7 @@ pub fn get_latest_story_revision(
     .optional()
 }
 
+#[allow(dead_code)]
 pub fn upsert_story_user_state(
     conn: &Connection,
     state: &StoryUserState,
@@ -875,6 +890,7 @@ pub fn upsert_story_user_state(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn get_story_user_state(
     conn: &Connection,
     story_id: &str,
@@ -901,6 +917,7 @@ pub fn get_story_user_state(
 
 /// Inserts an edition shell. Edition content is added with
 /// `insert_edition_items`; neither helper overwrites existing snapshots.
+#[allow(dead_code)]
 pub fn insert_edition(conn: &Connection, edition: &Edition) -> Result<(), rusqlite::Error> {
     conn.execute(
         "INSERT INTO editions (
@@ -923,6 +940,7 @@ pub fn insert_edition(conn: &Connection, edition: &Edition) -> Result<(), rusqli
     Ok(())
 }
 
+#[allow(dead_code)]
 fn edition_status_from_row(
     row: &rusqlite::Row<'_>,
     index: usize,
@@ -940,6 +958,7 @@ fn edition_status_from_row(
     })
 }
 
+#[allow(dead_code)]
 fn edition_from_row(row: &rusqlite::Row<'_>) -> Result<Edition, rusqlite::Error> {
     Ok(Edition {
         id: row.get(0)?,
@@ -955,6 +974,7 @@ fn edition_from_row(row: &rusqlite::Row<'_>) -> Result<Edition, rusqlite::Error>
     })
 }
 
+#[allow(dead_code)]
 pub fn get_edition(
     conn: &Connection,
     edition_id: &str,
@@ -969,6 +989,7 @@ pub fn get_edition(
     .optional()
 }
 
+#[allow(dead_code)]
 pub fn get_current_edition(
     conn: &Connection,
     scope: &str,
@@ -990,6 +1011,7 @@ pub fn get_current_edition(
 }
 
 /// Updates mutable edition lifecycle metadata without touching item snapshots.
+#[allow(dead_code)]
 pub fn update_edition_progress(
     conn: &Connection,
     edition_id: &str,
@@ -1012,6 +1034,7 @@ pub fn update_edition_progress(
 
 /// Inserts immutable edition snapshots atomically. Every item must reference
 /// this edition and an existing story revision.
+#[allow(dead_code)]
 pub fn insert_edition_items(
     conn: &Connection,
     edition_id: &str,
@@ -1055,6 +1078,7 @@ pub fn insert_edition_items(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn list_edition_items(
     conn: &Connection,
     edition_id: &str,
@@ -1092,6 +1116,7 @@ pub fn list_edition_items(
 
 /// Updates only consumption progress; immutable edition snapshot fields are
 /// never rewritten.
+#[allow(dead_code)]
 pub fn set_edition_item_consumed(
     conn: &Connection,
     edition_id: &str,
@@ -1112,6 +1137,7 @@ pub fn set_edition_item_consumed(
     )? > 0)
 }
 
+#[allow(dead_code)]
 pub fn delete_edition(conn: &Connection, edition_id: &str) -> Result<bool, rusqlite::Error> {
     Ok(conn.execute("DELETE FROM editions WHERE id = ?1", params![edition_id])? > 0)
 }
@@ -2141,6 +2167,34 @@ mod story_persistence_tests {
                 .expect("count articles"),
             3
         );
+    }
+
+    #[test]
+    fn deleting_representative_feed_nulls_revision_reference() {
+        let conn = setup();
+        let story = story_fixture();
+        upsert_story(&conn, &story).expect("insert story");
+        insert_story_revision(&conn, &revision_fixture(1)).expect("insert revision");
+
+        delete_feed(&conn, "feed-1").expect("delete representative feed");
+
+        assert_eq!(
+            conn.query_row("SELECT COUNT(*) FROM articles", [], |row| row.get::<_, i64>(0))
+                .expect("count remaining articles"),
+            0
+        );
+        assert_eq!(
+            get_story(&conn, &story.id)
+                .expect("get story")
+                .expect("story survives")
+                .representative_article_id,
+            None
+        );
+        let revision = get_story_revision(&conn, &story.id, 1)
+            .expect("get revision")
+            .expect("revision survives");
+        assert_eq!(revision.representative_article_id, None);
+        assert_eq!(revision.summary, "Summary 1");
     }
 
     #[test]

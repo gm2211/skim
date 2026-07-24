@@ -99,6 +99,8 @@ pub struct Theme {
     pub article_count: Option<i64>,
 }
 
+// TODO(story-consumers): remove these per-type allowances as command/UI phases land.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Story {
     /// Stable identity retained as membership and revisions evolve.
@@ -112,6 +114,7 @@ pub struct Story {
     pub updated_at: i64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StoryMembershipType {
@@ -120,6 +123,7 @@ pub enum StoryMembershipType {
     Update,
 }
 
+#[allow(dead_code)]
 impl StoryMembershipType {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -143,6 +147,7 @@ impl TryFrom<&str> for StoryMembershipType {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoryArticle {
     pub story_id: String,
@@ -152,6 +157,7 @@ pub struct StoryArticle {
     pub added_at: i64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoryRevision {
     pub story_id: String,
@@ -166,6 +172,7 @@ pub struct StoryRevision {
     pub created_at: i64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoryUserState {
     pub story_id: String,
@@ -177,6 +184,7 @@ pub struct StoryUserState {
     pub updated_at: i64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EditionStatus {
@@ -186,6 +194,7 @@ pub enum EditionStatus {
     Failed,
 }
 
+#[allow(dead_code)]
 impl EditionStatus {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -211,6 +220,7 @@ impl TryFrom<&str> for EditionStatus {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Edition {
     pub id: String,
@@ -225,6 +235,7 @@ pub struct Edition {
     pub total_source_count: i64,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EditionItem {
     pub edition_id: String,

@@ -693,8 +693,8 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 title = excluded.title,
                 summary = excluded.summary,
                 representative_article_id = excluded.representative_article_id,
-                first_seen_at = excluded.first_seen_at,
-                last_activity_at = excluded.last_activity_at,
+                first_seen_at = MIN(stories.first_seen_at, excluded.first_seen_at),
+                last_activity_at = MAX(stories.last_activity_at, excluded.last_activity_at),
                 updated_at = excluded.updated_at
             """,
             [
@@ -807,6 +807,34 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 .date(revision.createdAt)
             ]
         )
+        guard let stored = try storyRevision(
+            storyID: revision.storyID,
+            revisionNumber: revision.revisionNumber
+        ) else {
+            throw SkimCoreError.database(
+                "Story revision \(revision.storyID):\(revision.revisionNumber) was not persisted"
+            )
+        }
+        guard stored == revision else {
+            throw SkimCoreError.database(
+                "Conflicting story revision \(revision.storyID):\(revision.revisionNumber)"
+            )
+        }
+    }
+
+    func editionItem(editionID: String, storyID: String) throws -> EditionItem? {
+        try query(
+            """
+            SELECT edition_id, story_id, story_revision_number, position, section,
+                   snapshot_title, snapshot_summary, snapshot_delta_summary,
+                   snapshot_source_count, snapshot_reason, is_unique_find,
+                   is_consumed, consumed_at
+            FROM edition_items
+            WHERE edition_id = ? AND story_id = ?
+            LIMIT 1
+            """,
+            [.text(editionID), .text(storyID)]
+        ) { makeEditionItem(from: $0) }.first
     }
 
     func storyRevision(storyID: String, revisionNumber: Int) throws -> StoryRevision? {
@@ -950,6 +978,12 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 .int(edition.totalSourceCount)
             ]
         )
+        guard let stored = try self.edition(id: edition.id) else {
+            throw SkimCoreError.database("Edition \(edition.id) was not persisted")
+        }
+        guard stored == edition else {
+            throw SkimCoreError.database("Conflicting edition \(edition.id)")
+        }
     }
 
     func edition(id: String) throws -> Edition? {
@@ -1027,6 +1061,16 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 .date(item.consumedAt)
             ]
         )
+        guard let stored = try editionItem(editionID: item.editionID, storyID: item.storyID) else {
+            throw SkimCoreError.database(
+                "Edition item \(item.editionID):\(item.storyID) was not persisted"
+            )
+        }
+        guard stored == item else {
+            throw SkimCoreError.database(
+                "Conflicting edition item \(item.editionID):\(item.storyID)"
+            )
+        }
     }
 
     func listEditionItems(editionID: String) throws -> [EditionItem] {

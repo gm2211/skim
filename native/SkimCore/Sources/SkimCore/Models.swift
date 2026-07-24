@@ -317,9 +317,9 @@ public struct ArticleContent: Sendable, Equatable {
 /// `duplicate` means the article is interchangeable with another source item,
 /// while `coverage` preserves a distinct source's reporting on the same event.
 public enum StoryMembershipType: String, Codable, CaseIterable, Hashable, Sendable {
-    case duplicate
-    case coverage
-    case update
+    case duplicate = "duplicate"
+    case coverage = "coverage"
+    case update = "update"
 }
 
 public struct Story: Identifiable, Codable, Hashable, Sendable {
@@ -351,6 +351,17 @@ public struct Story: Identifiable, Codable, Hashable, Sendable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case summary
+        case representativeArticleID = "representative_article_id"
+        case firstSeenAt = "first_seen_at"
+        case lastActivityAt = "last_activity_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
 }
 
 public struct StoryArticleMembership: Codable, Hashable, Sendable {
@@ -372,6 +383,14 @@ public struct StoryArticleMembership: Codable, Hashable, Sendable {
         self.membershipType = membershipType
         self.confidence = confidence
         self.addedAt = addedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case storyID = "story_id"
+        case articleID = "article_id"
+        case membershipType = "membership_type"
+        case confidence
+        case addedAt = "added_at"
     }
 }
 
@@ -414,6 +433,19 @@ public struct StoryRevision: Identifiable, Codable, Hashable, Sendable {
         self.isMaterialChange = isMaterialChange
         self.createdAt = createdAt
     }
+
+    enum CodingKeys: String, CodingKey {
+        case storyID = "story_id"
+        case revisionNumber = "revision_number"
+        case title
+        case summary
+        case deltaSummary = "delta_summary"
+        case representativeArticleID = "representative_article_id"
+        case sourceCount = "source_count"
+        case contentFingerprint = "content_fingerprint"
+        case isMaterialChange = "is_material_change"
+        case createdAt = "created_at"
+    }
 }
 
 /// Per-story progress is revision based. It intentionally does not mirror or
@@ -444,13 +476,23 @@ public struct StoryUserState: Codable, Hashable, Sendable {
         self.caughtUpAt = caughtUpAt
         self.updatedAt = updatedAt
     }
+
+    enum CodingKeys: String, CodingKey {
+        case storyID = "story_id"
+        case lastSeenRevision = "last_seen_revision"
+        case lastReadRevision = "last_read_revision"
+        case isFollowed = "is_followed"
+        case isHidden = "is_hidden"
+        case caughtUpAt = "caught_up_at"
+        case updatedAt = "updated_at"
+    }
 }
 
 public enum EditionStatus: String, Codable, CaseIterable, Hashable, Sendable {
-    case draft
-    case ready
-    case completed
-    case failed
+    case draft = "draft"
+    case ready = "ready"
+    case completed = "completed"
+    case failed = "failed"
 }
 
 public struct Edition: Identifiable, Codable, Hashable, Sendable {
@@ -487,6 +529,19 @@ public struct Edition: Identifiable, Codable, Hashable, Sendable {
         self.generatedAt = generatedAt
         self.completedAt = completedAt
         self.totalSourceCount = totalSourceCount
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case scope
+        case storyLimit = "story_limit"
+        case status
+        case startsAt = "starts_at"
+        case endsAt = "ends_at"
+        case generatedAt = "generated_at"
+        case completedAt = "completed_at"
+        case totalSourceCount = "total_source_count"
     }
 }
 
@@ -539,6 +594,22 @@ public struct EditionItem: Identifiable, Codable, Hashable, Sendable {
         self.isUniqueFind = isUniqueFind
         self.isConsumed = isConsumed
         self.consumedAt = consumedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case editionID = "edition_id"
+        case storyID = "story_id"
+        case storyRevisionNumber = "story_revision_number"
+        case position
+        case section
+        case snapshotTitle = "snapshot_title"
+        case snapshotSummary = "snapshot_summary"
+        case snapshotDeltaSummary = "snapshot_delta_summary"
+        case snapshotSourceCount = "snapshot_source_count"
+        case snapshotReason = "snapshot_reason"
+        case isUniqueFind = "is_unique_find"
+        case isConsumed = "is_consumed"
+        case consumedAt = "consumed_at"
     }
 }
 

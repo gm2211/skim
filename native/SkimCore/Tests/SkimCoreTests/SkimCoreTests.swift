@@ -231,11 +231,6 @@ import Testing
         totalSourceCount: 2
     )
 
-    // Retrying generation with changed snapshot text cannot rewrite history.
-    var changedItem = item
-    changedItem.snapshotTitle = "A rewritten title"
-    changedItem.snapshotSummary = "A rewritten summary"
-    try await store.persistEdition(edition, items: [changedItem])
     let persistedItem = try #require(try await store.listEditionItems(editionID: edition.id).first)
     #expect(persistedItem.snapshotTitle == item.snapshotTitle)
     #expect(persistedItem.snapshotSummary == item.snapshotSummary)
@@ -256,38 +251,203 @@ import Testing
     #expect(try await reopened.listArticles(filter: ArticleFilter()) == articlesBefore)
 }
 
-@Test func storyAndEditionModelsRoundTripCodableContract() throws {
-    let revision = StoryRevision(
-        storyID: "story-1",
-        revisionNumber: 3,
-        title: "Title",
-        summary: "Summary",
-        deltaSummary: "Delta",
-        sourceCount: 4,
-        contentFingerprint: "sha256:contract",
-        isMaterialChange: true,
-        createdAt: Date(timeIntervalSince1970: 1_234)
+@Test func storyUpsertPreservesActivityBounds() async throws {
+    let store = try temporaryStore()
+    let initial = Story(
+        id: "story-bounds",
+        title: "Initial",
+        firstSeenAt: Date(timeIntervalSince1970: 100),
+        lastActivityAt: Date(timeIntervalSince1970: 200),
+        createdAt: Date(timeIntervalSince1970: 210),
+        updatedAt: Date(timeIntervalSince1970: 220)
     )
+    try await store.upsertStory(initial)
+
+    var update = initial
+    update.title = "Updated"
+    update.firstSeenAt = Date(timeIntervalSince1970: 150)
+    update.lastActivityAt = Date(timeIntervalSince1970: 190)
+    update.updatedAt = Date(timeIntervalSince1970: 230)
+    try await store.upsertStory(update)
+
+    var stored = try #require(try await store.story(id: initial.id))
+    #expect(stored.firstSeenAt == initial.firstSeenAt)
+    #expect(stored.lastActivityAt == initial.lastActivityAt)
+    #expect(stored.createdAt == initial.createdAt)
+
+    update.firstSeenAt = Date(timeIntervalSince1970: 50)
+    update.lastActivityAt = Date(timeIntervalSince1970: 300)
+    try await store.upsertStory(update)
+
+    stored = try #require(try await store.story(id: initial.id))
+    #expect(stored.firstSeenAt == Date(timeIntervalSince1970: 50))
+    #expect(stored.lastActivityAt == Date(timeIntervalSince1970: 300))
+}
+
+@Test func immutablePersistenceRetriesRequireIdenticalContent() async throws {
+    let store = try temporaryStore()
+    let feed = Feed(id: "feed-immutable", title: "Feed", url: URL(string: "https://example.com/feed")!)
+    let article = Article(
+        id: "article-immutable",
+        feedID: feed.id,
+        feedTitle: feed.title,
+        title: "Article"
+    )
+    try await store.upsert(feed: feed, articles: [article])
+
+    let story = Story(
+        id: "story-immutable",
+        title: "Story",
+        representativeArticleID: article.id,
+        firstSeenAt: Date(timeIntervalSince1970: 100),
+        lastActivityAt: Date(timeIntervalSince1970: 100)
+    )
+    try await store.upsertStory(story)
+    let revision = StoryRevision(
+        storyID: story.id,
+        revisionNumber: 1,
+        title: "Revision",
+        summary: "Frozen revision",
+        representativeArticleID: article.id,
+        sourceCount: 1,
+        createdAt: Date(timeIntervalSince1970: 110)
+    )
+    try await store.insertStoryRevision(revision)
+    try await store.insertStoryRevision(revision)
+
     let edition = Edition(
-        id: "edition-1",
+        id: "edition-immutable",
         title: "Today",
-        scope: "folder:technology",
+        scope: "all",
         storyLimit: 5,
-        status: .completed,
+        status: .ready,
         startsAt: Date(timeIntervalSince1970: 1_000),
         endsAt: Date(timeIntervalSince1970: 2_000),
         generatedAt: Date(timeIntervalSince1970: 1_100),
-        completedAt: Date(timeIntervalSince1970: 1_200),
-        totalSourceCount: 9
+        totalSourceCount: 1
     )
+    let item = EditionItem(
+        editionID: edition.id,
+        storyID: story.id,
+        storyRevisionNumber: revision.revisionNumber,
+        position: 0,
+        section: "top_stories",
+        snapshotTitle: revision.title,
+        snapshotSummary: revision.summary,
+        snapshotSourceCount: 1
+    )
+    try await store.persistEdition(edition, items: [item])
+    try await store.persistEdition(edition, items: [item])
+
+    var conflictingRevision = revision
+    conflictingRevision.summary = "Rewritten revision"
+    #expect(await operationThrows {
+        try await store.insertStoryRevision(conflictingRevision)
+    })
+
+    var conflictingEdition = edition
+    conflictingEdition.title = "Rewritten edition"
+    #expect(await operationThrows {
+        try await store.persistEdition(conflictingEdition, items: [item])
+    })
+
+    var conflictingItem = item
+    conflictingItem.snapshotSummary = "Rewritten snapshot"
+    #expect(await operationThrows {
+        try await store.persistEdition(edition, items: [conflictingItem])
+    })
+
+    #expect(try await store.storyRevision(storyID: story.id, revisionNumber: 1) == revision)
+    #expect(try await store.edition(id: edition.id) == edition)
+    #expect(try await store.listEditionItems(editionID: edition.id) == [item])
+}
+
+@Test func storyAndEditionModelsMatchSnakeCaseJSONContract() throws {
+    let goldenJSON = """
+    {
+      "story": {
+        "id": "story-1",
+        "title": "Story",
+        "summary": "Story summary",
+        "representative_article_id": "article-1",
+        "first_seen_at": 100,
+        "last_activity_at": 200,
+        "created_at": 210,
+        "updated_at": 220
+      },
+      "membership": {
+        "story_id": "story-1",
+        "article_id": "article-2",
+        "membership_type": "coverage",
+        "confidence": 0.85,
+        "added_at": 230
+      },
+      "revision": {
+        "story_id": "story-1",
+        "revision_number": 3,
+        "title": "Revision",
+        "summary": "Revision summary",
+        "delta_summary": "New facts",
+        "representative_article_id": "article-1",
+        "source_count": 4,
+        "content_fingerprint": "sha256:contract",
+        "is_material_change": true,
+        "created_at": 240
+      },
+      "user_state": {
+        "story_id": "story-1",
+        "last_seen_revision": 3,
+        "last_read_revision": 2,
+        "is_followed": true,
+        "is_hidden": false,
+        "caught_up_at": 250,
+        "updated_at": 260
+      },
+      "edition": {
+        "id": "edition-1",
+        "title": "Today",
+        "scope": "folder:technology",
+        "story_limit": 5,
+        "status": "completed",
+        "starts_at": 1000,
+        "ends_at": 2000,
+        "generated_at": 1100,
+        "completed_at": 1200,
+        "total_source_count": 9
+      },
+      "item": {
+        "edition_id": "edition-1",
+        "story_id": "story-1",
+        "story_revision_number": 3,
+        "position": 0,
+        "section": "top_stories",
+        "snapshot_title": "Frozen title",
+        "snapshot_summary": "Frozen summary",
+        "snapshot_delta_summary": "Frozen delta",
+        "snapshot_source_count": 4,
+        "snapshot_reason": "Widely covered",
+        "is_unique_find": false,
+        "is_consumed": true,
+        "consumed_at": 1300
+      }
+    }
+    """
 
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .secondsSince1970
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .secondsSince1970
 
-    #expect(try decoder.decode(StoryRevision.self, from: encoder.encode(revision)) == revision)
-    #expect(try decoder.decode(Edition.self, from: encoder.encode(edition)) == edition)
+    let goldenData = Data(goldenJSON.utf8)
+    let fixture = try decoder.decode(StoryContractFixture.self, from: goldenData)
+    #expect(fixture.membership.membershipType == .coverage)
+    #expect(fixture.revision.createdAt == Date(timeIntervalSince1970: 240))
+    #expect(fixture.edition.status == .completed)
+    #expect(fixture.item.isConsumed == true)
+
+    let encodedObject = try JSONSerialization.jsonObject(with: encoder.encode(fixture)) as? NSDictionary
+    let goldenObject = try JSONSerialization.jsonObject(with: goldenData) as? NSDictionary
+    #expect(encodedObject == goldenObject)
     #expect(StoryMembershipType.allCases.map(\.rawValue) == ["duplicate", "coverage", "update"])
     #expect(EditionStatus.allCases.map(\.rawValue) == ["draft", "ready", "completed", "failed"])
 }
@@ -474,6 +634,33 @@ import Testing
 
     let externalURL = AggregatorService.redditExternalURL(from: postData)
     #expect(externalURL?.absoluteString == "https://example.com/from-json?one=1&two=2")
+}
+
+private struct StoryContractFixture: Codable, Equatable {
+    var story: Story
+    var membership: StoryArticleMembership
+    var revision: StoryRevision
+    var userState: StoryUserState
+    var edition: Edition
+    var item: EditionItem
+
+    enum CodingKeys: String, CodingKey {
+        case story
+        case membership
+        case revision
+        case userState = "user_state"
+        case edition
+        case item
+    }
+}
+
+private func operationThrows(_ operation: () async throws -> Void) async -> Bool {
+    do {
+        try await operation()
+        return false
+    } catch {
+        return true
+    }
 }
 
 private func temporaryStore() throws -> SkimStore {

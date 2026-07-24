@@ -452,6 +452,370 @@ import Testing
     #expect(EditionStatus.allCases.map(\.rawValue) == ["draft", "ready", "completed", "failed"])
 }
 
+@Test func clusteringNormalizationAndStableIDMatchGoldenContract() throws {
+    let article = Article(
+        id: "article-golden",
+        feedID: "feed-golden",
+        feedTitle: "Golden",
+        title: "Acme launches solar battery | Example News",
+        url: URL(string: "https://Example.com:443/news/?b=2&utm_source=mail&a=1&source=rss#fragment"),
+        contentText: "Battery storage arrives today.",
+        publishedAt: Date(timeIntervalSince1970: 100),
+        fetchedAt: Date(timeIntervalSince1970: 200)
+    )
+    let clusterer = StoryClusterer()
+    let feature = clusterer.feature(for: article)
+
+    #expect(feature.canonicalURL == "https://example.com/news?a=1&b=2")
+    #expect(feature.normalizedTitle == "acme launches solar battery")
+    #expect(feature.normalizedLead == "battery storage arrives today")
+    #expect(feature.contentFingerprint == "58c49b19daae04bfbb6c0c09feb86ddc7dfaf7e798692cd4f092f442422257eb")
+    #expect(clusterer.stableStoryID(for: article, feature: feature) == "story-492ee725ea8735b8")
+    #expect(StoryClusterer.fnv1a64("https://example.com/news?a=1&b=2\n0") == "492ee725ea8735b8")
+
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .secondsSince1970
+    let object = try #require(
+        JSONSerialization.jsonObject(with: encoder.encode(feature)) as? [String: Any]
+    )
+    #expect(object["article_id"] as? String == article.id)
+    #expect(object["canonical_url"] as? String == feature.canonicalURL)
+    #expect(object["normalized_title"] as? String == feature.normalizedTitle)
+    #expect(object["content_fingerprint"] as? String == feature.contentFingerprint)
+    #expect(object["feature_version"] as? Int == StoryArticleFeature.currentVersion)
+    #expect(object["computed_at"] as? Double == 200)
+
+    let configurationObject = try #require(
+        JSONSerialization.jsonObject(
+            with: encoder.encode(StoryClusteringConfiguration())
+        ) as? [String: Any]
+    )
+    #expect(configurationObject["rolling_window"] as? Double == 345_600)
+    #expect(configurationObject["duplicate_threshold"] as? Double == 0.88)
+    #expect(configurationObject["coverage_threshold"] as? Double == 0.68)
+    #expect(configurationObject["borderline_threshold"] as? Double == 0.58)
+
+    let rankedObject = try #require(
+        JSONSerialization.jsonObject(with: encoder.encode(RankedStory(
+            storyID: "story-golden",
+            score: 7.5,
+            distinctFeedCount: 3,
+            rawArticleCount: 4,
+            isUniqueFind: false,
+            reason: "3_independent_sources"
+        ))) as? [String: Any]
+    )
+    #expect(rankedObject["story_id"] as? String == "story-golden")
+    #expect(rankedObject["distinct_feed_count"] as? Int == 3)
+    #expect(rankedObject["raw_article_count"] as? Int == 4)
+    #expect(rankedObject["is_unique_find"] as? Bool == false)
+}
+
+@Test func aggregatorClusteringPrefersExternalArticleTarget() {
+    let article = Article(
+        id: "aggregator-article",
+        feedID: "feed-hn",
+        feedTitle: "Hacker News",
+        title: "Acme launches solar battery",
+        url: URL(string: "https://news.ycombinator.com/item?id=123"),
+        fetchedAt: Date(timeIntervalSince1970: 300),
+        aggregatorKind: .hackerNews,
+        externalURL: URL(string: "https://acme.example/launch?utm_source=hn"),
+        commentsURL: URL(string: "https://news.ycombinator.com/item?id=123")
+    )
+
+    let feature = StoryClusterer().feature(for: article)
+
+    #expect(feature.canonicalURL == "https://acme.example/launch")
+}
+
+@Test func repeatedCoverageClassifiesWithoutDuplicateCollapse() {
+    let clusterer = StoryClusterer()
+    let first = clusteringArticle(
+        id: "article-first",
+        feedID: "feed-a",
+        title: "Acme launches solar battery for homes",
+        content: "The product starts shipping this month in cities.",
+        timestamp: 1_000
+    )
+    let second = clusteringArticle(
+        id: "article-second",
+        feedID: "feed-b",
+        title: "Acme launches home solar battery nationwide",
+        content: "The product begins shipping this month in cities.",
+        timestamp: 1_100
+    )
+    let firstFeature = clusterer.feature(for: first)
+    let decision = clusterer.decide(
+        article: second,
+        feature: clusterer.feature(for: second),
+        candidates: [StoryClusterCandidate(
+            storyID: "story-acme",
+            article: first,
+            feature: firstFeature
+        )]
+    )
+
+    #expect(decision.match?.storyID == "story-acme")
+    #expect(decision.match?.membershipType == .coverage)
+    #expect((decision.match?.confidence ?? 0) >= 0.68)
+    #expect((decision.match?.confidence ?? 1) < 0.88)
+
+    let update = clusteringArticle(
+        id: "article-update",
+        feedID: "feed-c",
+        title: "Acme launches solar battery update for homes after recall",
+        content: "The product starts shipping this month in cities.",
+        timestamp: 1_200
+    )
+    let updateDecision = clusterer.decide(
+        article: update,
+        feature: clusterer.feature(for: update),
+        candidates: [StoryClusterCandidate(
+            storyID: "story-acme",
+            article: first,
+            feature: firstFeature
+        )]
+    )
+    #expect(updateDecision.match?.membershipType == .update)
+}
+
+@Test func exactDuplicateCollapsesStoryButNeverLeaksFromRawFeed() async throws {
+    let store = try temporaryStore()
+    let feedA = Feed(id: "feed-a", title: "Feed A", url: URL(string: "https://a.example/rss")!)
+    let feedB = Feed(id: "feed-b", title: "Feed B", url: URL(string: "https://b.example/rss")!)
+    let first = clusteringArticle(
+        id: "article-a",
+        feedID: feedA.id,
+        feedTitle: feedA.title,
+        title: "Acme launches a solar battery",
+        url: "https://news.example/acme?utm_source=a",
+        timestamp: 2_000,
+        isRead: true
+    )
+    let duplicate = clusteringArticle(
+        id: "article-b",
+        feedID: feedB.id,
+        feedTitle: feedB.title,
+        title: "Acme launches a solar battery | Feed B",
+        url: "https://NEWS.example:443/acme?fbclid=tracking",
+        timestamp: 2_100,
+        isStarred: true
+    )
+
+    try await store.upsert(feed: feedA, articles: [first])
+    try await store.upsert(feed: feedB, articles: [duplicate])
+
+    let rawArticles = try await store.listArticles(filter: ArticleFilter())
+    #expect(Set(rawArticles.map(\.id)) == Set([first.id, duplicate.id]))
+    #expect(rawArticles.first(where: { $0.id == first.id })?.isRead == true)
+    #expect(rawArticles.first(where: { $0.id == duplicate.id })?.isStarred == true)
+
+    let stories = try await store.listStories()
+    let story = try #require(stories.first)
+    #expect(stories.count == 1)
+    let memberships = try await store.listStoryMemberships(storyID: story.id)
+    #expect(memberships.map(\.membershipType) == [.coverage, .duplicate])
+    #expect(try await store.listStoryRevisions(storyID: story.id).last?.sourceCount == 1)
+    let firstCanonicalURL = try await store.storyFeature(articleID: first.id)?.canonicalURL
+    let duplicateCanonicalURL = try await store.storyFeature(articleID: duplicate.id)?.canonicalURL
+    #expect(firstCanonicalURL == duplicateCanonicalURL)
+}
+
+@Test func entityGuardPreventsHighOverlapFalseMerge() {
+    let clusterer = StoryClusterer()
+    let apple = clusteringArticle(
+        id: "apple",
+        feedID: "feed-a",
+        title: "Quarterly profit rises sharply at Apple",
+        timestamp: 3_000
+    )
+    let microsoft = clusteringArticle(
+        id: "microsoft",
+        feedID: "feed-b",
+        title: "Quarterly profit rises sharply at Microsoft",
+        timestamp: 3_100
+    )
+    let decision = clusterer.decide(
+        article: microsoft,
+        feature: clusterer.feature(for: microsoft),
+        candidates: [StoryClusterCandidate(
+            storyID: "story-apple",
+            article: apple,
+            feature: clusterer.feature(for: apple)
+        )]
+    )
+
+    #expect(decision.match == nil)
+    #expect(decision.borderline == nil)
+}
+
+@Test func borderlineMatchesAreDeferredAndPersisted() async throws {
+    let store = try temporaryStore()
+    let feedA = Feed(id: "feed-a", title: "Feed A", url: URL(string: "https://a.example/rss")!)
+    let feedB = Feed(id: "feed-b", title: "Feed B", url: URL(string: "https://b.example/rss")!)
+    let first = clusteringArticle(
+        id: "borderline-a",
+        feedID: feedA.id,
+        feedTitle: feedA.title,
+        title: "Acme solar battery production begins nevada",
+        timestamp: 4_000
+    )
+    let second = clusteringArticle(
+        id: "borderline-b",
+        feedID: feedB.id,
+        feedTitle: feedB.title,
+        title: "Acme solar battery production opens texas",
+        timestamp: 4_100
+    )
+
+    try await store.upsert(feed: feedA, articles: [first])
+    try await store.upsert(feed: feedB, articles: [second])
+
+    let matches = try await store.listStoryBorderlineMatches()
+    let match = try #require(matches.first)
+    #expect(matches.count == 1)
+    #expect(match.articleID == second.id)
+    #expect(match.confidence >= 0.58)
+    #expect(match.confidence < 0.68)
+    #expect(try await store.listStories().count == 2)
+}
+
+@Test func rankingUsesDistinctSourcesAndProtectsUniqueFinds() {
+    let clusterer = StoryClusterer()
+    let now = Date(timeIntervalSince1970: 100_000)
+    let repeatedSingleSource = rankingCandidate(
+        id: "story-volume",
+        feedID: "feed-volume",
+        distinctFeedCount: 1,
+        articleCount: 100,
+        lastActivityAt: now
+    )
+    let independentlyCovered = rankingCandidate(
+        id: "story-sources",
+        feedID: "feed-source",
+        distinctFeedCount: 2,
+        articleCount: 2,
+        lastActivityAt: now
+    )
+    let trueSingleton = rankingCandidate(
+        id: "story-singleton",
+        feedID: "feed-singleton",
+        distinctFeedCount: 1,
+        articleCount: 1,
+        lastActivityAt: now
+    )
+    var hidden = rankingCandidate(
+        id: "story-hidden",
+        feedID: "feed-hidden",
+        distinctFeedCount: 10,
+        articleCount: 10,
+        lastActivityAt: now
+    )
+    hidden.preferenceSignal = 100
+    hidden.isHidden = true
+
+    let result = clusterer.rank(
+        [repeatedSingleSource, independentlyCovered, trueSingleton, hidden],
+        asOf: now
+    )
+
+    #expect(result.topStories.map(\.storyID) == ["story-sources", "story-volume"])
+    #expect(result.uniqueFinds.map(\.storyID) == ["story-singleton"])
+    #expect(result.uniqueFinds.first?.isUniqueFind == true)
+    #expect(result.topStories.first!.score > result.topStories.last!.score)
+    #expect(result.topStories.last?.isUniqueFind == false)
+    #expect(!result.topStories.map(\.storyID).contains(hidden.story.id))
+}
+
+@Test func rankingAppliesRepresentativeFeedDiversityWithStableTies() {
+    let clusterer = StoryClusterer()
+    let now = Date(timeIntervalSince1970: 200_000)
+    let candidates = [
+        rankingCandidate(id: "story-a", feedID: "feed-one", distinctFeedCount: 2, articleCount: 2, lastActivityAt: now),
+        rankingCandidate(id: "story-b", feedID: "feed-one", distinctFeedCount: 2, articleCount: 2, lastActivityAt: now),
+        rankingCandidate(id: "story-c", feedID: "feed-one", distinctFeedCount: 2, articleCount: 2, lastActivityAt: now),
+        rankingCandidate(id: "story-d", feedID: "feed-two", distinctFeedCount: 2, articleCount: 2, lastActivityAt: now)
+    ]
+    let result = clusterer.rank(
+        candidates,
+        asOf: now,
+        configuration: StoryRankingConfiguration(
+            topStoryLimit: 4,
+            uniqueFindLimit: 1,
+            maximumStoriesPerRepresentativeFeed: 2
+        )
+    )
+
+    #expect(result.topStories.map(\.storyID) == ["story-a", "story-b", "story-d"])
+}
+
+@Test func incrementalReprocessingIsDeterministicAndRawFeedInvariant() async throws {
+    let store = try temporaryStore()
+    let feedA = Feed(id: "feed-a", title: "Feed A", url: URL(string: "https://a.example/rss")!)
+    let feedB = Feed(id: "feed-b", title: "Feed B", url: URL(string: "https://b.example/rss")!)
+    let first = clusteringArticle(
+        id: "deterministic-a",
+        feedID: feedA.id,
+        feedTitle: feedA.title,
+        title: "Acme launches solar battery for homes",
+        content: "The product starts shipping this month in cities.",
+        timestamp: 5_000
+    )
+    let second = clusteringArticle(
+        id: "deterministic-b",
+        feedID: feedB.id,
+        feedTitle: feedB.title,
+        title: "Acme launches home solar battery nationwide",
+        content: "The product begins shipping this month in cities.",
+        timestamp: 5_100
+    )
+    try await store.upsert(feed: feedA, articles: [first])
+    try await store.upsert(feed: feedB, articles: [second])
+
+    let rawBefore = try await store.listArticles(filter: ArticleFilter())
+    let storiesBefore = try await store.listStories()
+    let story = try #require(storiesBefore.first)
+    let membershipsBefore = try await store.listStoryMemberships(storyID: story.id)
+    let revisionsBefore = try await store.listStoryRevisions(storyID: story.id)
+
+    let borderlines = try await store.clusterArticles([second, first])
+
+    #expect(borderlines.isEmpty)
+    #expect(try await store.listArticles(filter: ArticleFilter()) == rawBefore)
+    #expect(try await store.listStories() == storiesBefore)
+    #expect(try await store.listStoryMemberships(storyID: story.id) == membershipsBefore)
+    #expect(try await store.listStoryRevisions(storyID: story.id) == revisionsBefore)
+}
+
+@Test func recurringHeadlineOutsideWindowCreatesANewStory() async throws {
+    let store = try temporaryStore()
+    let feedA = Feed(id: "feed-a", title: "Feed A", url: URL(string: "https://a.example/rss")!)
+    let feedB = Feed(id: "feed-b", title: "Feed B", url: URL(string: "https://b.example/rss")!)
+    let first = clusteringArticle(
+        id: "wrap-one",
+        feedID: feedA.id,
+        feedTitle: feedA.title,
+        title: "Daily market wrap",
+        timestamp: 10_000
+    )
+    let later = clusteringArticle(
+        id: "wrap-two",
+        feedID: feedB.id,
+        feedTitle: feedB.title,
+        title: "Daily market wrap",
+        timestamp: 10_000 + (10 * 86_400)
+    )
+
+    try await store.upsert(feed: feedA, articles: [first])
+    try await store.upsert(feed: feedB, articles: [later])
+
+    let stories = try await store.listStories()
+    #expect(stories.count == 2)
+    #expect(Set(stories.map(\.id)).count == 2)
+    #expect(try await store.listArticles(filter: ArticleFilter()).count == 2)
+}
+
 @Test func appSettingsDefaultOfflinePreloadLimit() throws {
     let settings = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
 
@@ -652,6 +1016,53 @@ private struct StoryContractFixture: Codable, Equatable {
         case edition
         case item
     }
+}
+
+private func clusteringArticle(
+    id: String,
+    feedID: String,
+    feedTitle: String = "Feed",
+    title: String,
+    content: String? = nil,
+    url: String? = nil,
+    timestamp: TimeInterval,
+    isRead: Bool = false,
+    isStarred: Bool = false
+) -> Article {
+    Article(
+        id: id,
+        feedID: feedID,
+        feedTitle: feedTitle,
+        title: title,
+        url: url.flatMap(URL.init(string:)),
+        contentText: content,
+        publishedAt: Date(timeIntervalSince1970: timestamp),
+        fetchedAt: Date(timeIntervalSince1970: timestamp),
+        isRead: isRead,
+        isStarred: isStarred
+    )
+}
+
+private func rankingCandidate(
+    id: String,
+    feedID: String,
+    distinctFeedCount: Int,
+    articleCount: Int,
+    lastActivityAt: Date
+) -> StoryRankingCandidate {
+    StoryRankingCandidate(
+        story: Story(
+            id: id,
+            title: id,
+            firstSeenAt: lastActivityAt,
+            lastActivityAt: lastActivityAt,
+            createdAt: lastActivityAt,
+            updatedAt: lastActivityAt
+        ),
+        representativeFeedID: feedID,
+        distinctFeedCount: distinctFeedCount,
+        articleCount: articleCount
+    )
 }
 
 private func operationThrows(_ operation: () async throws -> Void) async -> Bool {

@@ -491,9 +491,9 @@ private struct SummaryWordCountPresetChips: View {
                     Text("\(preset.label) \(preset.value)")
                         .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.9)
+                        .minimumScaleFactor(0.7)
                         .foregroundStyle(isSelected ? Color.white : SkimStyle.accent)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, 8)
                         .padding(.vertical, 8)
                         .frame(maxWidth: .infinity)
                         .background(

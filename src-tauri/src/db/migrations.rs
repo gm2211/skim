@@ -196,7 +196,7 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
             ends_at            INTEGER NOT NULL CHECK (ends_at > starts_at),
             generated_at       INTEGER NOT NULL,
             completed_at       INTEGER,
-            total_source_count INTEGER NOT NULL DEFAULT 1 CHECK (total_source_count >= 1)
+            total_source_count INTEGER NOT NULL DEFAULT 0 CHECK (total_source_count >= 0)
         );
 
         CREATE INDEX IF NOT EXISTS idx_editions_current
@@ -226,6 +226,40 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
             ON edition_items(edition_id, position);
         CREATE INDEX IF NOT EXISTS idx_edition_items_story
             ON edition_items(story_id);
+
+        -- Immutable source roster for each edition snapshot. Article/feed
+        -- presentation fields are denormalized so later clustering or feed
+        -- deletion cannot rewrite what the edition contained.
+        CREATE TABLE IF NOT EXISTS edition_item_articles (
+            edition_id          TEXT NOT NULL,
+            story_id            TEXT NOT NULL,
+            article_id          TEXT NOT NULL,
+            feed_id             TEXT NOT NULL,
+            snapshot_feed_title TEXT NOT NULL,
+            snapshot_feed_icon_url TEXT,
+            snapshot_article_title TEXT NOT NULL,
+            snapshot_article_url TEXT,
+            snapshot_author     TEXT,
+            snapshot_published_at INTEGER,
+            membership_type     TEXT NOT NULL
+                CHECK (membership_type IN ('duplicate', 'coverage', 'update')),
+            confidence          REAL CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+            snapshot_order      INTEGER NOT NULL CHECK (snapshot_order >= 0),
+            is_representative   INTEGER NOT NULL DEFAULT 0 CHECK (is_representative IN (0, 1)),
+            PRIMARY KEY (edition_id, story_id, article_id),
+            UNIQUE (edition_id, story_id, snapshot_order),
+            FOREIGN KEY (edition_id, story_id)
+                REFERENCES edition_items(edition_id, story_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_edition_item_articles_order
+            ON edition_item_articles(edition_id, story_id, snapshot_order);
+
+        CREATE TRIGGER IF NOT EXISTS trg_edition_item_articles_immutable
+        BEFORE UPDATE ON edition_item_articles
+        BEGIN
+            SELECT RAISE(ABORT, 'edition source snapshots are immutable');
+        END;
 
         DROP TRIGGER IF EXISTS trg_story_revisions_immutable;
         CREATE TRIGGER trg_story_revisions_immutable

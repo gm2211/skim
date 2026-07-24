@@ -245,6 +245,126 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         try db.listEditionItems(editionID: editionID)
     }
 
+    public func getOrGenerateTodayEdition(
+        startsAt: Date,
+        endsAt: Date,
+        storyLimit: Int,
+        generatedAt: Date = Date()
+    ) async throws -> TodayEditionSnapshot {
+        guard TodayEditionBuilder.supportedStoryLimits.contains(storyLimit) else {
+            throw SkimCoreError.database("Today story limit must be 5, 10, or 20")
+        }
+        guard endsAt > startsAt else {
+            throw SkimCoreError.database("Today edition must end after it starts")
+        }
+        guard generatedAt >= startsAt, generatedAt < endsAt else {
+            throw SkimCoreError.database(
+                "Today generation time must fall inside the edition window"
+            )
+        }
+        let editionID = TodayEditionBuilder.stableID(
+            startsAt: startsAt,
+            endsAt: endsAt,
+            storyLimit: storyLimit
+        )
+        if try db.edition(id: editionID) != nil {
+            return try db.todayEditionSnapshot(id: editionID)
+        }
+
+        let candidates = try db.todayEditionCandidates(
+            startsAt: startsAt,
+            endsAt: endsAt
+        )
+        let generatedItems = TodayEditionBuilder.buildItems(
+            editionID: editionID,
+            candidates: candidates,
+            storyLimit: storyLimit,
+            generatedAt: generatedAt
+        )
+        let distinctFeedIDs = Set(
+            generatedItems
+                .flatMap(\.sourceArticles)
+                .filter { $0.membershipType != .duplicate }
+                .map(\.feedID)
+        )
+        let isEmpty = generatedItems.isEmpty
+        let edition = Edition(
+            id: editionID,
+            title: "Today",
+            scope: "today",
+            storyLimit: storyLimit,
+            status: isEmpty ? .completed : .ready,
+            startsAt: startsAt,
+            endsAt: endsAt,
+            generatedAt: generatedAt,
+            completedAt: isEmpty ? generatedAt : nil,
+            totalSourceCount: distinctFeedIDs.count
+        )
+        try db.transaction {
+            try db.insertEdition(edition)
+            for generated in generatedItems {
+                try db.insertEditionItem(generated.item)
+                for source in generated.sourceArticles {
+                    try db.insertEditionItemSource(
+                        editionID: editionID,
+                        storyID: generated.item.storyID,
+                        source: source
+                    )
+                }
+            }
+        }
+        return try db.todayEditionSnapshot(id: editionID)
+    }
+
+    public func todayEdition(id: String) async throws -> TodayEditionSnapshot? {
+        guard try db.edition(id: id) != nil else { return nil }
+        return try db.todayEditionSnapshot(id: id)
+    }
+
+    public func listTodayEditionItems(
+        editionID: String
+    ) async throws -> [TodayEditionItem] {
+        try db.todayEditionSnapshot(id: editionID).items
+    }
+
+    @discardableResult
+    public func setTodayEditionItemConsumed(
+        editionID: String,
+        storyID: String,
+        isConsumed: Bool,
+        at date: Date = Date()
+    ) async throws -> TodayEditionSnapshot {
+        guard try db.edition(id: editionID) != nil,
+              try db.editionItem(editionID: editionID, storyID: storyID) != nil
+        else {
+            throw SkimCoreError.database(
+                "Today edition item \(editionID):\(storyID) does not exist"
+            )
+        }
+        try db.transaction {
+            try db.setEditionItemConsumed(
+                editionID: editionID,
+                storyID: storyID,
+                isConsumed: isConsumed,
+                at: isConsumed ? date : nil
+            )
+            if isConsumed {
+                try db.markEditionSnapshotArticlesRead(
+                    editionID: editionID,
+                    storyID: storyID
+                )
+            }
+            let counts = try db.editionConsumptionCounts(editionID: editionID)
+            let completed = counts.total == 0 || counts.consumed == counts.total
+            try db.updateEditionCompletion(
+                id: editionID,
+                status: completed ? .completed : .ready,
+                completedAt: completed ? date : nil
+            )
+        }
+        return try db.todayEditionSnapshot(id: editionID)
+    }
+
     public func setEditionItemConsumed(
         editionID: String,
         storyID: String,
@@ -460,7 +580,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
             ends_at REAL NOT NULL CHECK (ends_at > starts_at),
             generated_at REAL NOT NULL,
             completed_at REAL,
-            total_source_count INTEGER NOT NULL CHECK (total_source_count >= 1)
+            total_source_count INTEGER NOT NULL CHECK (total_source_count >= 0)
         )
         """)
         try execute("CREATE INDEX IF NOT EXISTS idx_editions_current ON editions(starts_at, ends_at, generated_at DESC)")
@@ -488,6 +608,30 @@ private final class SQLiteDatabase: @unchecked Sendable {
         """)
         try execute("CREATE INDEX IF NOT EXISTS idx_edition_items_order ON edition_items(edition_id, position)")
         try execute("CREATE INDEX IF NOT EXISTS idx_edition_items_story ON edition_items(story_id)")
+
+        try execute("""
+        CREATE TABLE IF NOT EXISTS edition_item_articles (
+            edition_id TEXT NOT NULL,
+            story_id TEXT NOT NULL,
+            article_id TEXT NOT NULL,
+            feed_id TEXT NOT NULL,
+            feed_title TEXT NOT NULL,
+            article_title TEXT NOT NULL,
+            url TEXT,
+            published_at REAL,
+            membership_type TEXT NOT NULL
+                CHECK (membership_type IN ('duplicate', 'coverage', 'update')),
+            confidence REAL CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
+            position INTEGER NOT NULL CHECK (position >= 0),
+            is_representative INTEGER NOT NULL DEFAULT 0
+                CHECK (is_representative IN (0, 1)),
+            PRIMARY KEY (edition_id, story_id, article_id),
+            UNIQUE (edition_id, story_id, position),
+            FOREIGN KEY (edition_id, story_id)
+                REFERENCES edition_items(edition_id, story_id) ON DELETE CASCADE
+        )
+        """)
+        try execute("CREATE INDEX IF NOT EXISTS idx_edition_item_articles_order ON edition_item_articles(edition_id, story_id, position)")
     }
 
     func transaction(_ work: () throws -> Void) throws {
@@ -787,6 +931,87 @@ private final class SQLiteDatabase: @unchecked Sendable {
             """,
             [.int(limit)]
         ) { makeStory(from: $0) }
+    }
+
+    func todayEditionCandidates(
+        startsAt: Date,
+        endsAt: Date
+    ) throws -> [TodayEditionCandidate] {
+        let stories = try query(
+            """
+            SELECT id, title, summary, representative_article_id,
+                   first_seen_at, last_activity_at, created_at, updated_at
+            FROM stories
+            WHERE last_activity_at >= ? AND last_activity_at < ?
+            ORDER BY last_activity_at DESC, id ASC
+            """,
+            [.date(startsAt), .date(endsAt)]
+        ) { makeStory(from: $0) }
+
+        return try stories.compactMap { story in
+            guard let revision = try latestStoryRevision(storyID: story.id) else {
+                return nil
+            }
+            let sources = try todayEditionCandidateSources(storyID: story.id)
+            guard !sources.isEmpty else { return nil }
+            let distinctFeedCount = Set(
+                sources
+                    .filter { $0.membership.membershipType != .duplicate }
+                    .map(\.article.feedID)
+            ).count
+            let representativeFeedID = sources.first {
+                $0.article.id == revision.representativeArticleID
+            }?.article.feedID ?? sources[0].article.feedID
+            let state = try storyUserState(storyID: story.id)
+            return TodayEditionCandidate(
+                ranking: StoryRankingCandidate(
+                    story: story,
+                    representativeFeedID: representativeFeedID,
+                    distinctFeedCount: distinctFeedCount,
+                    articleCount: sources.count,
+                    preferenceSignal: state?.isFollowed == true ? 3 : 0,
+                    isHidden: state?.isHidden == true
+                ),
+                revision: revision,
+                sourceArticles: sources
+            )
+        }
+    }
+
+    private func todayEditionCandidateSources(
+        storyID: String
+    ) throws -> [TodayEditionCandidateSource] {
+        try query(
+            """
+            SELECT a.id, a.feed_id, a.feed_title, a.title, a.url, a.author,
+                   a.content_text, a.content_html, a.image_url, a.published_at,
+                   a.fetched_at, a.is_read, a.is_starred, a.aggregator_kind,
+                   a.external_url, a.comments_url, sa.story_id,
+                   sa.membership_type, sa.confidence, sa.added_at
+            FROM story_articles sa
+            JOIN articles a ON a.id = sa.article_id
+            WHERE sa.story_id = ?
+            ORDER BY COALESCE(a.published_at, a.fetched_at) DESC, a.id ASC
+            """,
+            [.text(storyID)]
+        ) { statement in
+            let rawType = columnText(statement, 17)
+            guard let membershipType = StoryMembershipType(rawValue: rawType) else {
+                throw SkimCoreError.database(
+                    "Invalid story membership type: \(rawType)"
+                )
+            }
+            return TodayEditionCandidateSource(
+                article: makeArticle(from: statement),
+                membership: StoryArticleMembership(
+                    storyID: columnText(statement, 16),
+                    articleID: columnText(statement, 0),
+                    membershipType: membershipType,
+                    confidence: columnOptionalDouble(statement, 18),
+                    addedAt: columnDate(statement, 19)!
+                )
+            )
+        }
     }
 
     func upsertStoryFeature(_ feature: StoryArticleFeature) throws {
@@ -1423,6 +1648,167 @@ private final class SQLiteDatabase: @unchecked Sendable {
             """,
             [.text(editionID)]
         ) { makeEditionItem(from: $0) }
+    }
+
+    func insertEditionItemSource(
+        editionID: String,
+        storyID: String,
+        source: TodayEditionSourceArticle
+    ) throws {
+        try execute(
+            """
+            INSERT INTO edition_item_articles (
+                edition_id, story_id, article_id, feed_id, feed_title,
+                article_title, url, published_at, membership_type, confidence,
+                position, is_representative
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(edition_id, story_id, article_id) DO NOTHING
+            """,
+            [
+                .text(editionID),
+                .text(storyID),
+                .text(source.articleID),
+                .text(source.feedID),
+                .text(source.feedTitle),
+                .text(source.articleTitle),
+                .optionalText(source.url?.absoluteString),
+                .date(source.publishedAt),
+                .text(source.membershipType.rawValue),
+                .optionalDouble(source.confidence),
+                .int(source.position),
+                .bool(source.isRepresentative)
+            ]
+        )
+    }
+
+    func listEditionItemSources(
+        editionID: String,
+        storyID: String
+    ) throws -> [TodayEditionSourceArticle] {
+        var sources = try query(
+            """
+            SELECT article_id, feed_id, feed_title, article_title, url,
+                   published_at, membership_type, confidence, position,
+                   is_representative
+            FROM edition_item_articles
+            WHERE edition_id = ? AND story_id = ?
+            ORDER BY position ASC, article_id ASC
+            """,
+            [.text(editionID), .text(storyID)]
+        ) { statement in
+            let rawType = columnText(statement, 6)
+            guard let membershipType = StoryMembershipType(rawValue: rawType) else {
+                throw SkimCoreError.database(
+                    "Invalid edition source membership type: \(rawType)"
+                )
+            }
+            return TodayEditionSourceArticle(
+                articleID: columnText(statement, 0),
+                feedID: columnText(statement, 1),
+                feedTitle: columnText(statement, 2),
+                articleTitle: columnText(statement, 3),
+                url: columnURL(statement, 4),
+                publishedAt: columnDate(statement, 5),
+                membershipType: membershipType,
+                confidence: columnOptionalDouble(statement, 7),
+                position: Int(sqlite3_column_int64(statement, 8)),
+                isRepresentative: sqlite3_column_int(statement, 9) != 0,
+                liveArticle: nil
+            )
+        }
+        for index in sources.indices {
+            sources[index].liveArticle = try article(id: sources[index].articleID)
+        }
+        return sources
+    }
+
+    func todayEditionSnapshot(id: String) throws -> TodayEditionSnapshot {
+        guard let edition = try edition(id: id) else {
+            throw SkimCoreError.database("Today edition \(id) does not exist")
+        }
+        let snapshots = try listEditionItems(editionID: id)
+        let items = try snapshots.map { snapshot in
+            guard let revision = try storyRevision(
+                storyID: snapshot.storyID,
+                revisionNumber: snapshot.storyRevisionNumber
+            ) else {
+                throw SkimCoreError.database(
+                    "Edition revision \(snapshot.storyID):\(snapshot.storyRevisionNumber) is missing"
+                )
+            }
+            let sources = try listEditionItemSources(
+                editionID: id,
+                storyID: snapshot.storyID
+            )
+            return TodayEditionItem(
+                snapshot: snapshot,
+                revision: revision,
+                representativeArticleID: sources.first(where: \.isRepresentative)?
+                    .articleID ?? revision.representativeArticleID,
+                memberArticleIDs: sources.map(\.articleID),
+                sourceArticles: sources
+            )
+        }
+        let consumed = items.filter(\.snapshot.isConsumed).count
+        return TodayEditionSnapshot(
+            edition: edition,
+            items: items,
+            consumedItemCount: consumed,
+            totalItemCount: items.count
+        )
+    }
+
+    func editionConsumptionCounts(
+        editionID: String
+    ) throws -> (consumed: Int, total: Int) {
+        try query(
+            """
+            SELECT COALESCE(SUM(CASE WHEN is_consumed = 1 THEN 1 ELSE 0 END), 0),
+                   COUNT(*)
+            FROM edition_items
+            WHERE edition_id = ?
+            """,
+            [.text(editionID)]
+        ) {
+            (
+                consumed: Int(sqlite3_column_int64($0, 0)),
+                total: Int(sqlite3_column_int64($0, 1))
+            )
+        }.first ?? (0, 0)
+    }
+
+    func updateEditionCompletion(
+        id: String,
+        status: EditionStatus,
+        completedAt: Date?
+    ) throws {
+        try execute(
+            """
+            UPDATE editions
+            SET status = ?, completed_at = ?
+            WHERE id = ?
+            """,
+            [.text(status.rawValue), .date(completedAt), .text(id)]
+        )
+    }
+
+    func markEditionSnapshotArticlesRead(
+        editionID: String,
+        storyID: String
+    ) throws {
+        try execute(
+            """
+            UPDATE articles
+            SET is_read = 1
+            WHERE id IN (
+                SELECT article_id
+                FROM edition_item_articles
+                WHERE edition_id = ? AND story_id = ?
+            )
+            """,
+            [.text(editionID), .text(storyID)]
+        )
     }
 
     func setEditionItemConsumed(

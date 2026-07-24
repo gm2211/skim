@@ -816,6 +816,249 @@ import Testing
     #expect(try await store.listArticles(filter: ArticleFilter()).count == 2)
 }
 
+@Test func todayEditionCapsAndSectionsFrozenSources() async throws {
+    let store = try temporaryStore()
+    let startsAt = Date(timeIntervalSince1970: 0)
+    let endsAt = Date(timeIntervalSince1970: 86_400)
+    let generatedAt = Date(timeIntervalSince1970: 80_000)
+
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-top-a",
+        sourceCount: 2,
+        timestamp: 10_000
+    )
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-top-b",
+        sourceCount: 2,
+        timestamp: 11_000
+    )
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-wide",
+        sourceCount: 3,
+        timestamp: 12_000
+    )
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-update",
+        sourceCount: 2,
+        timestamp: 13_000,
+        isUpdate: true
+    )
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-unique",
+        sourceCount: 1,
+        timestamp: 14_000
+    )
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-top-c",
+        sourceCount: 2,
+        timestamp: 15_000
+    )
+    let rawBefore = try await store.listArticles(filter: ArticleFilter())
+
+    let today = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt,
+        endsAt: endsAt,
+        storyLimit: 5,
+        generatedAt: generatedAt
+    )
+
+    #expect(today.id == "today-0-86400-5")
+    #expect(today.items.count == 5)
+    #expect(today.edition.storyLimit == 5)
+    #expect(today.edition.status == .ready)
+    #expect(Set(today.items.map(\.snapshot.section)) == Set([
+        EditionSectionRole.topStories.rawValue,
+        EditionSectionRole.widelyCovered.rawValue,
+        EditionSectionRole.uniqueFinds.rawValue,
+        EditionSectionRole.updates.rawValue
+    ]))
+    let sectionOrder: [String: Int] = [
+        EditionSectionRole.topStories.rawValue: 0,
+        EditionSectionRole.widelyCovered.rawValue: 1,
+        EditionSectionRole.updates.rawValue: 2,
+        EditionSectionRole.uniqueFinds.rawValue: 3
+    ]
+    let positions = today.items.map { sectionOrder[$0.snapshot.section]! }
+    #expect(positions == positions.sorted())
+    #expect(today.items.allSatisfy { !$0.memberArticleIDs.isEmpty })
+    #expect(today.items.allSatisfy {
+        $0.sourceArticles.map(\.articleID) == $0.memberArticleIDs
+    })
+    #expect(today.items.allSatisfy {
+        $0.representativeArticleID.map($0.memberArticleIDs.contains) ?? false
+    })
+    #expect(today.items.flatMap(\.sourceArticles).allSatisfy {
+        $0.liveArticle?.id == $0.articleID
+    })
+    let distinctFeeds = Set(
+        today.items
+            .flatMap(\.sourceArticles)
+            .filter { $0.membershipType != .duplicate }
+            .map(\.feedID)
+    )
+    #expect(today.edition.totalSourceCount == distinctFeeds.count)
+    #expect(try await store.listArticles(filter: ArticleFilter()) == rawBefore)
+}
+
+@Test func todayEditionReusesImmutableSnapshotForSameInputs() async throws {
+    let store = try temporaryStore()
+    let startsAt = Date(timeIntervalSince1970: 100_000)
+    let endsAt = Date(timeIntervalSince1970: 186_400)
+    let generatedAt = Date(timeIntervalSince1970: 180_000)
+    for index in 0..<6 {
+        _ = try await seedTodayStory(
+            store: store,
+            storyID: "story-freeze-\(index)",
+            sourceCount: index == 0 ? 3 : 2,
+            timestamp: 110_000 + TimeInterval(index * 1_000)
+        )
+    }
+
+    let first = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt,
+        endsAt: endsAt,
+        storyLimit: 5,
+        generatedAt: generatedAt
+    )
+    let frozenItem = try #require(first.items.first)
+    let frozenSources = frozenItem.memberArticleIDs
+    let frozenTitle = frozenItem.snapshot.snapshotTitle
+
+    let extraFeed = Feed(
+        id: "feed-late",
+        title: "Late Feed",
+        url: URL(string: "https://late.example/rss")!
+    )
+    let extraArticle = clusteringArticle(
+        id: "article-late",
+        feedID: extraFeed.id,
+        feedTitle: extraFeed.title,
+        title: "Late source joins frozen story",
+        url: "https://late.example/article",
+        timestamp: 170_000
+    )
+    try await store.upsert(feed: extraFeed, articles: [extraArticle])
+    try await store.upsertStoryMembership(StoryArticleMembership(
+        storyID: frozenItem.snapshot.storyID,
+        articleID: extraArticle.id,
+        membershipType: .coverage,
+        confidence: 0.9,
+        addedAt: Date(timeIntervalSince1970: 170_000)
+    ))
+
+    let reused = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt,
+        endsAt: endsAt,
+        storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 185_000)
+    )
+    let reusedItem = try #require(
+        reused.items.first(where: { $0.snapshot.storyID == frozenItem.snapshot.storyID })
+    )
+    #expect(reused.id == first.id)
+    #expect(reused.edition.generatedAt == generatedAt)
+    #expect(reusedItem.memberArticleIDs == frozenSources)
+    #expect(reusedItem.snapshot.snapshotTitle == frozenTitle)
+    #expect(!reusedItem.memberArticleIDs.contains(extraArticle.id))
+
+    let expanded = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt,
+        endsAt: endsAt,
+        storyLimit: 10,
+        generatedAt: Date(timeIntervalSince1970: 185_000)
+    )
+    #expect(expanded.id == "today-100000-186400-10")
+    #expect(expanded.id != first.id)
+    #expect(expanded.items.count >= first.items.count)
+}
+
+@Test func todayEditionConsumptionPersistsAndOnlyAdvancesRawReadState() async throws {
+    let databaseURL = temporaryStoreURL()
+    let store = try SkimStore(databaseURL: databaseURL)
+    for index in 0..<5 {
+        _ = try await seedTodayStory(
+            store: store,
+            storyID: "story-progress-\(index)",
+            sourceCount: 2,
+            timestamp: 210_000 + TimeInterval(index * 1_000)
+        )
+    }
+    let today = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 200_000),
+        endsAt: Date(timeIntervalSince1970: 286_400),
+        storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 280_000)
+    )
+    let firstItem = try #require(today.items.first)
+
+    var progress = try await store.setTodayEditionItemConsumed(
+        editionID: today.id,
+        storyID: firstItem.snapshot.storyID,
+        isConsumed: true,
+        at: Date(timeIntervalSince1970: 281_000)
+    )
+    #expect(progress.consumedItemCount == 1)
+    #expect(progress.progress == 0.2)
+    #expect(progress.edition.status == .ready)
+    for articleID in firstItem.memberArticleIDs {
+        #expect(try await store.article(id: articleID).isRead == true)
+    }
+
+    progress = try await store.setTodayEditionItemConsumed(
+        editionID: today.id,
+        storyID: firstItem.snapshot.storyID,
+        isConsumed: false,
+        at: Date(timeIntervalSince1970: 282_000)
+    )
+    #expect(progress.consumedItemCount == 0)
+    #expect(progress.progress == 0)
+    for articleID in firstItem.memberArticleIDs {
+        #expect(try await store.article(id: articleID).isRead == true)
+    }
+
+    for (index, item) in progress.items.enumerated() {
+        progress = try await store.setTodayEditionItemConsumed(
+            editionID: today.id,
+            storyID: item.snapshot.storyID,
+            isConsumed: true,
+            at: Date(timeIntervalSince1970: 283_000 + TimeInterval(index))
+        )
+    }
+    #expect(progress.consumedItemCount == progress.totalItemCount)
+    #expect(progress.progress == 1)
+    #expect(progress.edition.status == .completed)
+    #expect(progress.edition.completedAt == Date(timeIntervalSince1970: 283_004))
+
+    let reopened = try SkimStore(databaseURL: databaseURL)
+    let persisted = try #require(try await reopened.todayEdition(id: today.id))
+    #expect(persisted.progress == 1)
+    #expect(persisted.edition.status == .completed)
+    #expect(persisted.items.allSatisfy { $0.snapshot.isConsumed })
+}
+
+@Test func emptyTodayEditionCompletesDeterministically() async throws {
+    let store = try temporaryStore()
+    let today = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 300_000),
+        endsAt: Date(timeIntervalSince1970: 386_400),
+        storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 380_000)
+    )
+
+    #expect(today.id == "today-300000-386400-5")
+    #expect(today.items.isEmpty)
+    #expect(today.edition.totalSourceCount == 0)
+    #expect(today.edition.status == .completed)
+    #expect(today.edition.completedAt == Date(timeIntervalSince1970: 380_000))
+    #expect(today.progress == 1)
+}
+
 @Test func appSettingsDefaultOfflinePreloadLimit() throws {
     let settings = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
 
@@ -1063,6 +1306,80 @@ private func rankingCandidate(
         distinctFeedCount: distinctFeedCount,
         articleCount: articleCount
     )
+}
+
+@discardableResult
+private func seedTodayStory(
+    store: SkimStore,
+    storyID: String,
+    sourceCount: Int,
+    timestamp: TimeInterval,
+    isUpdate: Bool = false
+) async throws -> [String] {
+    var articles: [Article] = []
+    for index in 0..<sourceCount {
+        let feed = Feed(
+            id: "\(storyID)-feed-\(index)",
+            title: "\(storyID) Source \(index)",
+            url: URL(string: "https://\(storyID)-\(index).example/rss")!
+        )
+        let article = clusteringArticle(
+            id: "\(storyID)-article-\(index)",
+            feedID: feed.id,
+            feedTitle: feed.title,
+            title: "Development report concerning \(storyID.uppercased()) source \(index)",
+            content: "Source \(index) reports the \(storyID) development.",
+            url: "https://news.example/\(storyID)/\(index)",
+            timestamp: timestamp + TimeInterval(index)
+        )
+        try await store.upsert(feed: feed, articles: [article])
+        articles.append(article)
+    }
+
+    let representative = articles.last!
+    let story = Story(
+        id: storyID,
+        title: "\(storyID) frozen title",
+        summary: "\(storyID) frozen summary",
+        representativeArticleID: representative.id,
+        firstSeenAt: Date(timeIntervalSince1970: timestamp),
+        lastActivityAt: Date(
+            timeIntervalSince1970: timestamp + TimeInterval(sourceCount - 1)
+        ),
+        createdAt: Date(timeIntervalSince1970: timestamp),
+        updatedAt: Date(
+            timeIntervalSince1970: timestamp + TimeInterval(sourceCount - 1)
+        )
+    )
+    try await store.upsertStory(story)
+    for (index, article) in articles.enumerated() {
+        try await store.upsertStoryMembership(StoryArticleMembership(
+            storyID: storyID,
+            articleID: article.id,
+            membershipType: isUpdate && index == articles.count - 1
+                ? .update
+                : .coverage,
+            confidence: 0.9,
+            addedAt: Date(
+                timeIntervalSince1970: timestamp + TimeInterval(index)
+            )
+        ))
+    }
+    try await store.insertStoryRevision(StoryRevision(
+        storyID: storyID,
+        revisionNumber: 1,
+        title: story.title,
+        summary: story.summary!,
+        deltaSummary: isUpdate ? StoryMembershipType.update.rawValue : nil,
+        representativeArticleID: representative.id,
+        sourceCount: sourceCount,
+        contentFingerprint: "fixture:\(storyID)",
+        isMaterialChange: true,
+        createdAt: Date(
+            timeIntervalSince1970: timestamp + TimeInterval(sourceCount)
+        )
+    ))
+    return articles.map(\.id)
 }
 
 private func operationThrows(_ operation: () async throws -> Void) async -> Bool {

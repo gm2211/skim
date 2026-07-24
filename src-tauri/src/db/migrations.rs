@@ -123,6 +123,36 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         CREATE INDEX IF NOT EXISTS idx_story_articles_story_added
             ON story_articles(story_id, added_at DESC);
 
+        -- Offline lexical features are cached separately so incremental
+        -- clustering never rewrites or filters the raw article feed.
+        CREATE TABLE IF NOT EXISTS article_story_features (
+            article_id        TEXT PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+            canonical_url     TEXT,
+            normalized_title  TEXT NOT NULL,
+            normalized_lead   TEXT NOT NULL,
+            tokens_json       TEXT NOT NULL,
+            entities_json     TEXT NOT NULL,
+            content_hash      TEXT NOT NULL,
+            feature_version   INTEGER NOT NULL,
+            computed_at       INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_story_features_url
+            ON article_story_features(canonical_url);
+        CREATE INDEX IF NOT EXISTS idx_story_features_title
+            ON article_story_features(normalized_title);
+
+        CREATE TABLE IF NOT EXISTS story_borderline_matches (
+            article_id         TEXT PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+            candidate_story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+            confidence         REAL NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+            feature_version    INTEGER NOT NULL,
+            created_at         INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_story_borderlines_candidate
+            ON story_borderline_matches(candidate_story_id, confidence DESC);
+
         CREATE TABLE IF NOT EXISTS story_revisions (
             story_id                 TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
             revision_number          INTEGER NOT NULL CHECK (revision_number > 0),

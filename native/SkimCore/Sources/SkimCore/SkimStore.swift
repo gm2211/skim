@@ -1,5 +1,8 @@
 import Foundation
 import SQLite3
+import os
+
+private let skimStoreLogger = Logger(subsystem: "com.skim.app", category: "skim-store")
 
 public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
     private let db: SQLiteDatabase
@@ -122,7 +125,9 @@ private final class SQLiteDatabase: @unchecked Sendable {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         var db: OpaquePointer?
         guard sqlite3_open(url.path, &db) == SQLITE_OK, let db else {
-            throw SkimCoreError.database("Could not open \(url.path)")
+            let message = "Could not open \(url.path)"
+            skimStoreLogger.error("SQLite error: \(message, privacy: .public)")
+            throw SkimCoreError.database(message)
         }
         self.handle = db
         try execute("PRAGMA foreign_keys = ON")
@@ -513,6 +518,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
 
     private func error() -> SkimCoreError {
         let message = sqlite3_errmsg(handle).map { String(cString: $0) } ?? "Unknown SQLite error"
+        skimStoreLogger.error("SQLite error: \(message, privacy: .public)")
         return .database(message)
     }
 }

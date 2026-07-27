@@ -140,25 +140,25 @@ struct ArticleDetailView: View {
 
     private var topBar: some View {
         HStack(spacing: 12) {
-            BorderlessIconButton(systemName: "chevron.left", title: "Back", size: 25, tapSize: 42) {
+            BorderlessIconButton(systemName: "chevron.left", title: "Back", size: 24, tapSize: 42) {
                 dismiss()
             }
 
             Spacer(minLength: 4)
 
-            BorderlessIconButton(systemName: "book", title: "Reader", isActive: page == .reader, size: 25, tapSize: 42) {
+            BorderlessIconButton(systemName: "book", title: "Reader", isActive: page == .reader, size: 24, tapSize: 42) {
                 page = .reader
             }
-            BorderlessIconButton(systemName: "globe", title: "Web", isActive: page == .web, size: 26, tapSize: 42) {
+            BorderlessIconButton(systemName: "globe", title: "Web", isActive: page == .web, size: 24, tapSize: 42) {
                 page = .web
             }
-            BorderlessIconButton(systemName: "doc.text", title: "Summary", size: 23, tapSize: 40) {
+            BorderlessIconButton(systemName: "doc.text", title: "Summary", size: 24, tapSize: 42) {
                 presentSummary()
             }
-            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 22, tapSize: 40) {
+            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 24, tapSize: 42) {
                 presentArticleChat()
             }
-            BorderlessIconButton(systemName: article?.isStarred == true ? "star.fill" : "star", title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 26, tapSize: 42) {
+            BorderlessIconButton(systemName: article?.isStarred == true ? "star.fill" : "star", title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 24, tapSize: 42) {
                 Task { await toggleStar() }
             }
         }

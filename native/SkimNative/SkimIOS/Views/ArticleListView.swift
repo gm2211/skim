@@ -788,11 +788,11 @@ private struct FeedPickerSheet: View {
     private var topControls: some View {
         HStack(spacing: 22) {
             HStack(spacing: 12) {
-                BorderlessIconButton(systemName: "gearshape", title: "Settings", size: 22, tapSize: 42, action: onSettings)
+                BorderlessIconButton(systemName: "gearshape", title: "Settings", size: 23, tapSize: 42, action: onSettings)
                 SkimWordmark(size: 26)
             }
             Spacer()
-            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 22, tapSize: 42, action: onChat)
+            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 23, tapSize: 42, action: onChat)
             BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 23, tapSize: 42, action: onCatchUp)
             BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 23, tapSize: 42, action: onAddFeed)
         }

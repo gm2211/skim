@@ -325,7 +325,7 @@ public enum SkimCoreError: Error, LocalizedError, Sendable {
         case .invalidFeedURL: "Feed URL is invalid."
         case .feedParseFailed: "Could not parse the feed."
         case .articleNotFound: "Article not found."
-        case .database(let message): "Database error: \(message)"
+        case .database: "Something went wrong reading your library. Try restarting Skim."
         }
     }
 }

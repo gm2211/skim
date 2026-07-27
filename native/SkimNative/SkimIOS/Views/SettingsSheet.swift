@@ -1,5 +1,6 @@
 import SkimCore
 import SwiftUI
+import UIKit
 
 struct SettingsSheet: View {
     @EnvironmentObject private var model: AppModel
@@ -203,7 +204,7 @@ struct SettingsSheet: View {
     private var librarySection: some View {
         SettingsSection(title: "Library") {
             HStack {
-                SettingMetric(value: model.feeds.count.formatted(), label: "Feeds")
+                SettingMetric(value: model.feeds.count.formatted(), label: model.feeds.count == 1 ? "Feed" : "Feeds")
                 SettingMetric(value: model.totalUnreadCount.formatted(), label: "Unread")
                 SettingMetric(value: model.articles.count.formatted(), label: "Visible")
             }
@@ -227,13 +228,20 @@ struct SettingsSheet: View {
             )
 
             Stepper(value: offlinePreloadLimitBinding, in: 25...1_000, step: 25) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Preload \(draft.offlinePreloadLimit.formatted()) Articles")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(SkimStyle.text)
-                    Text("Newest articles are prepared for offline reading.")
-                        .font(.system(size: 14, weight: .regular))
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: "square.and.arrow.down.on.square")
+                        .font(.system(size: 20, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
+                        .frame(width: 26)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Preload limit: \(draft.offlinePreloadLimit.formatted()) articles")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(SkimStyle.text)
+                        Text("Newest articles are prepared for offline reading.")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
                 }
             }
             .tint(SkimStyle.accent)
@@ -273,9 +281,25 @@ struct SettingsSheet: View {
 
     private var aboutSection: some View {
         SettingsSection(title: "About") {
-            SettingRow(systemName: "app", title: "Skim", detail: appVersionText)
+            SettingRow(systemName: "app", title: "Skim", detail: appVersionText, iconView: appIconView)
             SettingRow(systemName: "iphone", title: "Native iOS", detail: "SwiftUI reading loop with local SQLite storage.")
         }
+    }
+
+    /// The real app icon, used in place of the "app" SF Symbol placeholder in the About row.
+    /// AppIcon icon sets are addressable by name on iOS; falls back to nil (and the
+    /// SettingRow's systemName placeholder) if the lookup ever fails.
+    private var appIconView: AnyView? {
+        guard let uiImage = UIImage(named: "AppIcon") ?? UIImage(named: "AppIcon60x60") else {
+            return nil
+        }
+        return AnyView(
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 26, height: 26)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        )
     }
 
     private var legalSection: some View {
@@ -1365,13 +1389,19 @@ private struct SettingRow: View {
     var systemName: String
     var title: String
     var detail: String
+    var iconView: AnyView? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: systemName)
-                .font(.system(size: 20, weight: .regular))
-                .foregroundStyle(SkimStyle.secondary)
-                .frame(width: 26)
+            if let iconView {
+                iconView
+                    .frame(width: 26)
+            } else {
+                Image(systemName: systemName)
+                    .font(.system(size: 20, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .frame(width: 26)
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)

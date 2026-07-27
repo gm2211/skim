@@ -64,15 +64,7 @@ struct AIBootDisclaimerView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(.bottom, 10)
 
-                    Group {
-                        Text("By tapping Got it you accept the ")
-                        + Text("Terms")
-                            .foregroundStyle(SkimStyle.accent)
-                        + Text(" and ")
-                        + Text("Privacy Policy")
-                            .foregroundStyle(SkimStyle.accent)
-                        + Text(".")
-                    }
+                    Text("By tapping Got it you accept the terms below.")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(SkimStyle.text)
                     .lineSpacing(3)

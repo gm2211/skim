@@ -1372,6 +1372,74 @@ enum NativeAI {
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    // MARK: - Anthropic models API (Settings > AI model picker)
+
+    /// Fetches the list of Claude models available to whichever credential
+    /// (subscription token or API key) is currently configured, for populating
+    /// the Model dropdown in Settings. Mirrors the auth-header selection in
+    /// `buildAnthropicRequestFull` — keep the two in sync if that logic changes.
+    static func fetchAnthropicModels(settings: AISettings) async throws -> [AnthropicModelInfo] {
+        let isSubscription = settings.provider == "claude-subscription"
+        let accessToken: String
+        if isSubscription {
+            if ClaudeKeychainStore.loadAccessToken() != nil {
+                guard let keychainToken = await NativeClaudeOAuth.validAccessToken() else {
+                    throw NativeAIError.requiresReauthentication
+                }
+                accessToken = keychainToken
+            } else if let legacyToken = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
+                accessToken = legacyToken
+            } else {
+                throw NativeAIError.unavailable("Sign in with Claude in Settings to use your Claude subscription.")
+            }
+        } else {
+            guard let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty else {
+                throw NativeAIError.unavailable("Add a Claude API key in Settings.")
+            }
+            accessToken = key
+        }
+
+        let request = buildAnthropicModelsRequest(accessToken: accessToken, isSubscription: isSubscription)
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        if isSubscription, let http = response as? HTTPURLResponse, http.statusCode == 401 {
+            let newToken: String
+            do {
+                newToken = try await NativeClaudeOAuth.refreshStoredTokens()
+            } catch {
+                throw NativeAIError.requiresReauthentication
+            }
+            let retryRequest = buildAnthropicModelsRequest(accessToken: newToken, isSubscription: true)
+            let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
+            try validate(response: retryResponse, data: retryData, provider: providerDisplayName(settings.provider))
+            return try parseAnthropicModelsResponse(retryData)
+        }
+
+        try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
+        return try parseAnthropicModelsResponse(data)
+    }
+
+    private static func buildAnthropicModelsRequest(accessToken: String, isSubscription: Bool) -> URLRequest {
+        var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/models")!)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        if isSubscription {
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("oauth-2025-04-20,claude-code-20250219", forHTTPHeaderField: "anthropic-beta")
+        } else {
+            request.setValue(accessToken, forHTTPHeaderField: "x-api-key")
+        }
+        return request
+    }
+
+    /// Parses the `{"data": [{"id": ..., "display_name": ...}, ...]}` envelope
+    /// returned by Anthropic's `/v1/models` endpoint, preserving API order.
+    /// Not private so unit tests can exercise it directly against fixtures.
+    static func parseAnthropicModelsResponse(_ data: Data) throws -> [AnthropicModelInfo] {
+        try JSONDecoder().decode(AnthropicModelsResponse.self, from: data).data
+    }
+
     // MARK: - web_search tool definition
 
     private static var webSearchToolDefinition: [String: Any] {
@@ -2019,6 +2087,25 @@ private struct OpenAIResponse: Decodable {
     }
 
     var choices: [Choice]
+}
+
+// MARK: - Anthropic /v1/models response
+
+/// One entry from Anthropic's `/v1/models` list, used to populate the Model
+/// dropdown in Settings > AI. Not private so `SettingsSheet` and unit tests
+/// can reference it directly.
+struct AnthropicModelInfo: Decodable, Equatable, Sendable {
+    var id: String
+    var displayName: String
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case displayName = "display_name"
+    }
+}
+
+private struct AnthropicModelsResponse: Decodable {
+    var data: [AnthropicModelInfo]
 }
 
 // MARK: - JSONValue: lightweight dynamic JSON for tool_use input payloads

@@ -127,11 +127,19 @@ struct SettingsSheet: View {
             }
 
             if draft.ai.provider != "foundation-models" && draft.ai.provider != "none" && draft.ai.provider != "mlx" {
-                SettingsTextField(
-                    title: "Model",
-                    placeholder: defaultModelPlaceholder,
-                    text: aiModelBinding
-                )
+                if draft.ai.provider == "claude-subscription" && providerIsReady {
+                    ClaudeModelPicker(
+                        modelID: aiModelBinding,
+                        settings: draft.ai,
+                        placeholder: defaultModelPlaceholder
+                    )
+                } else {
+                    SettingsTextField(
+                        title: "Model",
+                        placeholder: defaultModelPlaceholder,
+                        text: aiModelBinding
+                    )
+                }
             }
 
             if draft.ai.provider == "custom" {
@@ -546,6 +554,123 @@ struct SettingsSheet: View {
         var next = draft
         mutate(&next.ai)
         draft = next
+    }
+}
+
+/// Model picker for the Claude provider pane. Once a Claude credential
+/// (subscription token or API key) is configured, this fetches the live
+/// model list from Anthropic's `/v1/models` endpoint and renders it as a
+/// styled dropdown, matching the visual idiom of `MLXSettingsPanel`'s
+/// `Picker("Model", ...)` below. Falls back to the plain text field
+/// (never a dead control) whenever the list can't be loaded, and always
+/// keeps the currently stored model id visible/selectable even if the
+/// API didn't return it.
+private struct ClaudeModelPicker: View {
+    @Binding var modelID: String
+    var settings: AISettings
+    var placeholder: String
+
+    @State private var models: [AnthropicModelInfo] = []
+    @State private var isLoading = true
+    @State private var loadFailed = false
+
+    var body: some View {
+        Group {
+            if isLoading {
+                loadingRow
+            } else if loadFailed || models.isEmpty {
+                SettingsTextField(title: "Model", placeholder: placeholder, text: $modelID)
+            } else {
+                menuRow
+            }
+        }
+        .task(id: settings.apiKey ?? "") {
+            await load()
+        }
+    }
+
+    /// The fetched models, plus the currently stored id appended as a
+    /// synthetic entry (labeled with its raw id) when the API list doesn't
+    /// already contain it — so the current value is always visible/selected.
+    private var displayEntries: [AnthropicModelInfo] {
+        guard let current = modelID.nilIfEmpty, !models.contains(where: { $0.id == current }) else {
+            return models
+        }
+        return models + [AnthropicModelInfo(id: current, displayName: current)]
+    }
+
+    private var selectedLabel: String {
+        guard let current = modelID.nilIfEmpty else { return placeholder }
+        return displayEntries.first(where: { $0.id == current })?.displayName ?? current
+    }
+
+    private var menuRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            fieldLabel
+            Menu {
+                ForEach(displayEntries, id: \.id) { entry in
+                    Button {
+                        modelID = entry.id
+                    } label: {
+                        if entry.id == modelID {
+                            Label(entry.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(entry.displayName)
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    Text(selectedLabel)
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(SkimStyle.text)
+                        .lineLimit(1)
+                    Spacer()
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+                .fieldChrome
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var loadingRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            fieldLabel
+            HStack(spacing: 10) {
+                ProgressView()
+                    .tint(SkimStyle.accent)
+                Text(modelID.nilIfEmpty ?? placeholder)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+                Spacer()
+            }
+            .fieldChrome
+        }
+    }
+
+    private var fieldLabel: some View {
+        Text("Model")
+            .font(.system(size: 13, weight: .bold))
+            .foregroundStyle(SkimStyle.secondary)
+            .textCase(.uppercase)
+            .tracking(0.7)
+    }
+
+    @MainActor
+    private func load() async {
+        isLoading = true
+        loadFailed = false
+        do {
+            models = try await NativeAI.fetchAnthropicModels(settings: settings)
+        } catch {
+            models = []
+            loadFailed = true
+        }
+        isLoading = false
     }
 }
 
@@ -1421,6 +1546,21 @@ private extension View {
         self
             .font(.system(size: 16, weight: .regular))
             .foregroundStyle(SkimStyle.text)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(SkimStyle.chrome, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(SkimStyle.separator, lineWidth: 1)
+            }
+    }
+
+    /// Same padding/background/border as `textFieldStyle`, without forcing
+    /// font/foreground — for rows (like `ClaudeModelPicker`'s menu/loading
+    /// rows) that mix multiple `Text`/control styles inside the field chrome.
+    var fieldChrome: some View {
+        self
             .padding(.horizontal, 12)
             .padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -1752,11 +1752,22 @@ enum NativeAI {
         return trimmed.count > 10 && trimmed.lowercased() != "error"
     }
 
+    /// The old default Claude model id (pre-PR #73). A stored `ai.model` that matches this
+    /// exactly (rather than some other "claude*" id) means the user never customized the
+    /// field — it was auto-filled by the old default and should be migrated forward one time.
+    private static let legacyDefaultAnthropicModel = "claude-sonnet-4-5"
+
     /// Returns the correct Anthropic model id, guarding against a leaked MLX repo id
     /// (e.g. "mlx-community/gemma-3-1b-it-4bit") that the shared `ai.model` field may
     /// contain when the user previously used local inference and then signed into Claude.
+    /// Also migrates a stored model id that exactly matches the pre-PR #73 default
+    /// ("claude-sonnet-4-5") forward to the current default, since that value means the
+    /// user never customized it — a hand-typed "claude-sonnet-4-5" is indistinguishable
+    /// from the old auto-fill, but treating it as unmigrated would leave signed-in users
+    /// stuck on a stale default forever.
     private static func resolveAnthropicModel(_ settings: AISettings) -> String {
         let m = settings.model?.nilIfEmpty
+        if let m, m == legacyDefaultAnthropicModel { return defaultModel(for: settings.provider) }
         if let m, m.hasPrefix("claude") { return m }
         return defaultModel(for: settings.provider)
     }

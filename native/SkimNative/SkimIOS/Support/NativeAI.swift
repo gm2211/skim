@@ -1380,7 +1380,7 @@ enum NativeAI {
     /// (subscription token or API key) is currently configured, for populating
     /// the Model dropdown in Settings. Mirrors the auth-header selection in
     /// `buildAnthropicRequestFull` — keep the two in sync if that logic changes.
-    static func fetchAnthropicModels(settings: AISettings) async throws -> [AnthropicModelInfo] {
+    static func fetchAnthropicModels(settings: AISettings) async throws -> [AIModelInfo] {
         let isSubscription = settings.provider == "claude-subscription"
         let accessToken: String
         if isSubscription {
@@ -1438,8 +1438,46 @@ enum NativeAI {
     /// Parses the `{"data": [{"id": ..., "display_name": ...}, ...]}` envelope
     /// returned by Anthropic's `/v1/models` endpoint, preserving API order.
     /// Not private so unit tests can exercise it directly against fixtures.
-    static func parseAnthropicModelsResponse(_ data: Data) throws -> [AnthropicModelInfo] {
-        try JSONDecoder().decode(AnthropicModelsResponse.self, from: data).data
+    static func parseAnthropicModelsResponse(_ data: Data) throws -> [AIModelInfo] {
+        try JSONDecoder().decode(AIModelsResponse.self, from: data).data
+    }
+
+    /// Fetches the live model list from an OpenAI-compatible `/v1/models`
+    /// endpoint (OpenAI, xAI). Both return `{"data": [{"id": ...}, ...]}` with
+    /// no display name, so the id doubles as the label.
+    ///
+    /// Results are sorted by id: OpenAI in particular returns dozens of models
+    /// in no meaningful order, and an alphabetical list is at least predictable
+    /// to scan.
+    static func fetchOpenAICompatibleModels(settings: AISettings) async throws -> [AIModelInfo] {
+        guard let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty else {
+            throw NativeAIError.unavailable("Add an API key for \(providerDisplayName(settings.provider)) in Settings.")
+        }
+
+        var request = URLRequest(url: modelsURL(for: settings))
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
+        return try parseOpenAICompatibleModelsResponse(data)
+    }
+
+    static func parseOpenAICompatibleModelsResponse(_ data: Data) throws -> [AIModelInfo] {
+        try JSONDecoder().decode(AIModelsResponse.self, from: data).data
+            .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
+    }
+
+    /// Derives the `/v1/models` URL from the same base the completion path uses,
+    /// so a custom endpoint keeps working.
+    private static func modelsURL(for settings: AISettings) -> URL {
+        let completions = openAICompatibleURL(settings).absoluteString
+        guard let range = completions.range(of: "/chat/completions", options: .backwards) else {
+            return URL(string: "https://api.openai.com/v1/models")!
+        }
+        return URL(string: completions.replacingCharacters(in: range, with: "/models"))
+            ?? URL(string: "https://api.openai.com/v1/models")!
     }
 
     // MARK: - web_search tool definition
@@ -2101,7 +2139,7 @@ private struct OpenAIResponse: Decodable {
 /// One entry from Anthropic's `/v1/models` list, used to populate the Model
 /// dropdown in Settings > AI. Not private so `SettingsSheet` and unit tests
 /// can reference it directly.
-struct AnthropicModelInfo: Decodable, Equatable, Sendable {
+struct AIModelInfo: Decodable, Equatable, Sendable {
     var id: String
     var displayName: String
 
@@ -2109,10 +2147,24 @@ struct AnthropicModelInfo: Decodable, Equatable, Sendable {
         case id
         case displayName = "display_name"
     }
+
+    init(id: String, displayName: String) {
+        self.id = id
+        self.displayName = displayName
+    }
+
+    /// OpenAI-compatible `/v1/models` responses (OpenAI, xAI) carry only an
+    /// `id`, so fall back to it when `display_name` is absent.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try container.decode(String.self, forKey: .id)
+        self.id = id
+        self.displayName = (try? container.decode(String.self, forKey: .displayName)) ?? id
+    }
 }
 
-private struct AnthropicModelsResponse: Decodable {
-    var data: [AnthropicModelInfo]
+private struct AIModelsResponse: Decodable {
+    var data: [AIModelInfo]
 }
 
 // MARK: - JSONValue: lightweight dynamic JSON for tool_use input payloads

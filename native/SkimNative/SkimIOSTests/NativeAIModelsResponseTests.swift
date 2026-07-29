@@ -52,7 +52,7 @@ struct NativeAIModelsResponseTests {
         }
         """
         let models = try NativeAI.parseAnthropicModelsResponse(Data(json.utf8))
-        #expect(models == [AnthropicModelInfo(id: "claude-sonnet-5", displayName: "Claude Sonnet 5")])
+        #expect(models == [AIModelInfo(id: "claude-sonnet-5", displayName: "Claude Sonnet 5")])
     }
 
     @Test func throwsOnMalformedJSON() {
@@ -71,8 +71,40 @@ struct NativeAIModelsResponseTests {
         }
     }
 
+    @Test func openAICompatibleEntriesFallBackToIDAsDisplayName() throws {
+        // OpenAI and xAI return only "id" — the picker labels rows with
+        // displayName, so it has to fall back rather than failing to decode.
+        let json = """
+        {
+          "data": [
+            { "id": "grok-4.5", "object": "model", "owned_by": "xai" },
+            { "id": "grok-4.3", "object": "model", "owned_by": "xai" }
+          ]
+        }
+        """
+        let models = try NativeAI.parseOpenAICompatibleModelsResponse(Data(json.utf8))
+        #expect(models.map(\.displayName) == ["grok-4.3", "grok-4.5"])
+    }
+
+    @Test func openAICompatibleModelsAreSortedByID() throws {
+        let json = """
+        { "data": [ { "id": "gpt-5" }, { "id": "gpt-4o-mini" }, { "id": "gpt-4o" } ] }
+        """
+        let models = try NativeAI.parseOpenAICompatibleModelsResponse(Data(json.utf8))
+        #expect(models.map(\.id) == ["gpt-4o", "gpt-4o-mini", "gpt-5"])
+    }
+
+    @Test func openAICompatibleKeepsExplicitDisplayNameWhenPresent() throws {
+        // A compatible gateway may include display_name; don't discard it.
+        let json = """
+        { "data": [ { "id": "grok-4.5", "display_name": "Grok 4.5" } ] }
+        """
+        let models = try NativeAI.parseOpenAICompatibleModelsResponse(Data(json.utf8))
+        #expect(models == [AIModelInfo(id: "grok-4.5", displayName: "Grok 4.5")])
+    }
+
     @Test func throwsWhenModelEntryIsMissingRequiredID() {
-        // "id" is non-optional on AnthropicModelInfo — an entry without it
+        // "id" is non-optional on AIModelInfo — an entry without it
         // should fail to decode rather than silently substituting a default.
         let json = """
         { "data": [ { "display_name": "Claude Sonnet 5" } ] }

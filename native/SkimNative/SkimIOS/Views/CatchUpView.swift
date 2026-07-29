@@ -34,9 +34,6 @@ struct CatchUpSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    AIDisclaimerLabel()
-                        .padding(.bottom, 2)
-
                     Text(request.subtitle)
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
@@ -80,9 +77,15 @@ struct CatchUpSheet: View {
                     } else if !items.isEmpty {
                         CatchUpItemList(items: items, articles: articles)
 
+                        AIDisclaimerLabel()
+                            .padding(.top, 8)
+
                     } else if let fallbackText {
                         // Structured parse failed — render plain AI text as before
                         CatchUpFallbackText(fallbackText)
+
+                        AIDisclaimerLabel()
+                            .padding(.top, 8)
                     }
                 }
                 .padding(24)

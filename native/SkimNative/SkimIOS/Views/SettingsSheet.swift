@@ -126,28 +126,31 @@ struct SettingsSheet: View {
                 )
             }
 
-            if draft.ai.provider != "foundation-models" && draft.ai.provider != "none" && draft.ai.provider != "mlx" {
-                if draft.ai.provider == "claude-subscription" && providerIsReady {
-                    RemoteModelPicker(
-                        modelID: aiModelBinding,
-                        settings: draft.ai,
-                        placeholder: defaultModelPlaceholder,
-                        fetch: { try await NativeAI.fetchAnthropicModels(settings: $0) }
-                    )
-                } else if ["xai", "openai"].contains(draft.ai.provider) && providerIsReady {
-                    RemoteModelPicker(
-                        modelID: aiModelBinding,
-                        settings: draft.ai,
-                        placeholder: defaultModelPlaceholder,
-                        fetch: { try await NativeAI.fetchOpenAICompatibleModels(settings: $0) }
-                    )
-                } else {
-                    SettingsTextField(
-                        title: "Model",
-                        placeholder: defaultModelPlaceholder,
-                        text: aiModelBinding
-                    )
-                }
+            // Model selection appears only once the provider is authenticated:
+            // the list is fetched from the provider, so before sign-in there is
+            // nothing to choose from and a text field would just be showing a
+            // value the user never picked. `custom` is the exception — no
+            // discoverable list, so it stays a free-text field.
+            if draft.ai.provider == "custom" {
+                SettingsTextField(
+                    title: "Model",
+                    placeholder: defaultModelPlaceholder,
+                    text: aiModelBinding
+                )
+            } else if draft.ai.provider == "claude-subscription" && providerIsReady {
+                RemoteModelPicker(
+                    modelID: aiModelBinding,
+                    settings: draft.ai,
+                    placeholder: "Select a model",
+                    fetch: { try await NativeAI.fetchAnthropicModels(settings: $0) }
+                )
+            } else if ["xai", "openai"].contains(draft.ai.provider) && providerIsReady {
+                RemoteModelPicker(
+                    modelID: aiModelBinding,
+                    settings: draft.ai,
+                    placeholder: "Select a model",
+                    fetch: { try await NativeAI.fetchOpenAICompatibleModels(settings: $0) }
+                )
             }
 
             if draft.ai.provider == "custom" {
@@ -479,20 +482,14 @@ struct SettingsSheet: View {
                         $0.localModelPath = nil
                         $0.model = nil
                         $0.endpoint = nil
-                    } else if value == "claude-subscription" {
+                    } else if ["claude-subscription", "xai", "openai"].contains(value) {
+                        // These providers have a fixed base URL and a model list
+                        // fetched after sign-in. A model id from another provider
+                        // must not survive the switch, and substituting a
+                        // hardcoded default would just show a value the user
+                        // never chose — so clear it and let the picker fill in.
                         $0.endpoint = nil
-                        $0.model = $0.model?.nilIfEmpty ?? "claude-sonnet-5"
-                    } else if value == "xai" {
-                        // Fixed base URL, and a model id carried over from another
-                        // provider (claude-*, an MLX repo id) would 404 on xAI.
-                        $0.endpoint = nil
-                        let current = $0.model?.nilIfEmpty
-                        $0.model = current?.hasPrefix("grok") == true ? current : "grok-4.3"
-                    } else if value == "openai" {
-                        $0.endpoint = nil
-                        let current = $0.model?.nilIfEmpty
-                        let isOpenAIModel = current?.hasPrefix("gpt") == true || current?.hasPrefix("o") == true
-                        $0.model = isOpenAIModel ? current : "gpt-4o-mini"
+                        if !Self.model($0.model, belongsTo: value) { $0.model = nil }
                     } else if value == "custom" {
                         $0.model = $0.model?.nilIfEmpty ?? "gpt-4o-mini"
                     }
@@ -508,6 +505,20 @@ struct SettingsSheet: View {
     /// stored value no longer equals this constant, so the branch becomes a no-op.
     private let legacyDefaultAnthropicModel = "claude-sonnet-4-5"
 
+    /// Whether a stored model id plausibly belongs to `provider`.
+    ///
+    /// Used to drop ids that came from a different provider rather than send
+    /// them somewhere they'd 404. `custom` has no knowable list, so anything goes.
+    static func model(_ model: String?, belongsTo provider: String) -> Bool {
+        guard let model = model?.nilIfEmpty else { return false }
+        switch provider {
+        case "claude-subscription": return model.hasPrefix("claude")
+        case "xai": return model.hasPrefix("grok")
+        case "openai": return model.hasPrefix("gpt") || model.hasPrefix("o")
+        default: return true
+        }
+    }
+
     private func normalizedAISettings(_ ai: AISettings) -> AISettings {
         var next = ai
         switch ai.provider {
@@ -515,10 +526,10 @@ struct SettingsSheet: View {
             break
         case "claude-subscription":
             if next.model == legacyDefaultAnthropicModel { next.model = "claude-sonnet-5" }
-        case "xai":
-            next.model = next.model?.nilIfEmpty ?? "grok-4.3"
-        case "openai":
-            next.model = next.model?.nilIfEmpty ?? "gpt-4o-mini"
+            // Self-heal a foreign id left behind by an earlier provider switch.
+            if !Self.model(next.model, belongsTo: "claude-subscription") { next.model = nil }
+        case "xai", "openai":
+            if !Self.model(next.model, belongsTo: ai.provider) { next.model = nil }
         case "openrouter":
             next.provider = "custom"
             next.endpoint = next.endpoint?.nilIfEmpty ?? "https://openrouter.ai/api"

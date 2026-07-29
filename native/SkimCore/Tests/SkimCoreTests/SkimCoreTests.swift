@@ -289,6 +289,24 @@ import Testing
     #expect(externalURL?.absoluteString == "https://example.com/from-json?one=1&two=2")
 }
 
+@Test func recoversFromSimulatedIOErrorByReconnectingAndRetrying() async throws {
+    let store = try temporaryStore()
+    let feed = Feed(id: "feed-1", title: "A Feed", url: URL(string: "https://example.com/rss")!)
+    try await store.upsert(feed: feed, articles: [])
+
+    // Force the next single DB operation to behave as though it hit SQLITE_IOERR.
+    // The store should transparently close/reopen its connection and retry once,
+    // so the caller never sees an error.
+    await store.debugSimulateIOErrorOnce()
+
+    let feeds = try await store.listFeeds()
+    #expect(feeds.map(\.title) == ["A Feed"])
+
+    // Connection should be fully usable after the reconnect (not just for the retried op).
+    try await store.setArticleRead(id: "does-not-exist", isRead: true)
+    #expect(try await store.listFeeds().count == 1)
+}
+
 private func temporaryStore() throws -> SkimStore {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     let url = dir.appendingPathComponent("skim.sqlite")

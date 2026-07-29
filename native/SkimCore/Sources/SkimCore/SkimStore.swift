@@ -12,6 +12,15 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         try db.migrate()
     }
 
+    #if DEBUG
+    /// Test-only fault injection: forces the next single database operation to
+    /// fail as though it hit SQLITE_IOERR, exercising the reconnect-and-retry path.
+    /// Not part of the public API surface and compiled out of release builds.
+    func debugSimulateIOErrorOnce() {
+        db.debugSimulateIOErrorOnce()
+    }
+    #endif
+
     public func listFolders() async throws -> [FeedFolder] {
         try db.listFolders()
     }
@@ -119,9 +128,30 @@ private enum SQLiteValue {
 }
 
 private final class SQLiteDatabase: @unchecked Sendable {
-    private let handle: OpaquePointer
+    private let url: URL
+    private var handle: OpaquePointer
+    private var lastErrorCode: Int32 = 0
+
+    #if DEBUG
+    private var simulateIOErrorOnce = false
+
+    func debugSimulateIOErrorOnce() {
+        simulateIOErrorOnce = true
+    }
+    #endif
 
     init(url: URL) throws {
+        self.url = url
+        self.handle = try Self.open(at: url)
+        try executeOnce("PRAGMA foreign_keys = ON", [])
+        try executeOnce("PRAGMA journal_mode = WAL", [])
+    }
+
+    deinit {
+        sqlite3_close(handle)
+    }
+
+    private static func open(at url: URL) throws -> OpaquePointer {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         var db: OpaquePointer?
         guard sqlite3_open(url.path, &db) == SQLITE_OK, let db else {
@@ -129,13 +159,40 @@ private final class SQLiteDatabase: @unchecked Sendable {
             skimStoreLogger.error("SQLite error: \(message, privacy: .public)")
             throw SkimCoreError.database(message)
         }
-        self.handle = db
-        try execute("PRAGMA foreign_keys = ON")
-        try execute("PRAGMA journal_mode = WAL")
+        return db
     }
 
-    deinit {
+    /// Closes the current connection and reopens it against the same file.
+    /// Used to recover from SQLITE_IOERR (and extended IOERR_* codes), which can
+    /// leave a connection wedged after a transient disk/filesystem hiccup.
+    private func reopen() throws {
         sqlite3_close(handle)
+        handle = try Self.open(at: url)
+        try executeOnce("PRAGMA foreign_keys = ON", [])
+        try executeOnce("PRAGMA journal_mode = WAL", [])
+        skimStoreLogger.error("SQLite connection reopened after I/O error")
+    }
+
+    /// Returns true when `code` (a primary or extended SQLite result code) is in
+    /// the SQLITE_IOERR family. Extended codes encode the primary code in the
+    /// low byte, so this matches SQLITE_IOERR itself and every SQLITE_IOERR_* variant.
+    private func isIOError(_ code: Int32) -> Bool {
+        code & 0xff == SQLITE_IOERR
+    }
+
+    /// Centralized retry wrapper: runs `operation` once, and if it fails with a
+    /// SQLITE_IOERR-family error, closes and reopens the connection and retries
+    /// the operation exactly once before letting the (already friendly-mapped) error surface.
+    private func withIOErrorRetry<T>(_ operation: () throws -> T) throws -> T {
+        do {
+            return try operation()
+        } catch let skimError as SkimCoreError {
+            guard case .database = skimError, isIOError(lastErrorCode) else {
+                throw skimError
+            }
+            try reopen()
+            return try operation()
+        }
     }
 
     func migrate() throws {
@@ -449,6 +506,25 @@ private final class SQLiteDatabase: @unchecked Sendable {
     }
 
     func execute(_ sql: String, _ values: [SQLiteValue] = []) throws {
+        try withIOErrorRetry {
+            try executeOnce(sql, values)
+        }
+    }
+
+    func query<T>(_ sql: String, _ values: [SQLiteValue] = [], map: (OpaquePointer) throws -> T) throws -> [T] {
+        try withIOErrorRetry {
+            try queryOnce(sql, values, map: map)
+        }
+    }
+
+    private func executeOnce(_ sql: String, _ values: [SQLiteValue]) throws {
+        #if DEBUG
+        if simulateIOErrorOnce {
+            simulateIOErrorOnce = false
+            lastErrorCode = SQLITE_IOERR
+            throw SkimCoreError.database("simulated I/O error")
+        }
+        #endif
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
             throw error()
@@ -466,7 +542,14 @@ private final class SQLiteDatabase: @unchecked Sendable {
         }
     }
 
-    func query<T>(_ sql: String, _ values: [SQLiteValue] = [], map: (OpaquePointer) throws -> T) throws -> [T] {
+    private func queryOnce<T>(_ sql: String, _ values: [SQLiteValue], map: (OpaquePointer) throws -> T) throws -> [T] {
+        #if DEBUG
+        if simulateIOErrorOnce {
+            simulateIOErrorOnce = false
+            lastErrorCode = SQLITE_IOERR
+            throw SkimCoreError.database("simulated I/O error")
+        }
+        #endif
         var statement: OpaquePointer?
         guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
             throw error()
@@ -517,6 +600,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
     }
 
     private func error() -> SkimCoreError {
+        lastErrorCode = sqlite3_extended_errcode(handle)
         let message = sqlite3_errmsg(handle).map { String(cString: $0) } ?? "Unknown SQLite error"
         skimStoreLogger.error("SQLite error: \(message, privacy: .public)")
         return .database(message)

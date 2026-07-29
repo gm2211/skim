@@ -340,8 +340,8 @@ struct ArticleDetailView: View {
                             preferWeb: useWebContext,
                             snapshot: webSnapshot
                         )
-                        let text = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
-                        return AIChatAnswer(text: text, articles: [contextArticle])
+                        let (text, citations) = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
+                        return AIChatAnswer(text: text, articles: [contextArticle], webCitations: citations)
                     }
                 }
             )
@@ -546,8 +546,8 @@ private extension ArticleDetailView {
                     preferWeb: useWebContext,
                     snapshot: webSnapshot
                 )
-                let text = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
-                return AIChatAnswer(text: text, articles: [contextArticle])
+                let (text, citations) = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
+                return AIChatAnswer(text: text, articles: [contextArticle], webCitations: citations)
             }
         }
     }

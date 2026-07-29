@@ -796,7 +796,10 @@ private struct FeedPickerSheet: View {
             BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 23, tapSize: 42, action: onCatchUp)
             BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 23, tapSize: 42, action: onAddFeed)
         }
-        .padding(.horizontal, 26)
+        // Leading 11 centers the 42pt gear button on the picker rows' icon
+        // column below (20pt row inset + 12pt half-tile = 32pt = 11 + 21).
+        .padding(.leading, 11)
+        .padding(.trailing, 26)
         .frame(height: 56)
         .background(SkimStyle.chrome)
         .overlay(alignment: .bottom) {

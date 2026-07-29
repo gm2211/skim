@@ -177,11 +177,17 @@ final class AppModel: ObservableObject {
         return totalUnreadCount
     }
 
+    /// The magnifier-tab search is global: while a query is active it searches every
+    /// article regardless of the previously selected list scope (Starred/Unread/feed/folder).
+    var isSearchActive: Bool {
+        !searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var filter: ArticleFilter {
         ArticleFilter(
-            feedID: selectedFeedID,
-            readState: listMode == .unread ? .unread : .all,
-            starredOnly: listMode == .starred,
+            feedID: isSearchActive ? nil : selectedFeedID,
+            readState: isSearchActive ? .all : (listMode == .unread ? .unread : .all),
+            starredOnly: isSearchActive ? false : (listMode == .starred),
             searchQuery: searchQuery,
             limit: 500
         )
@@ -240,7 +246,7 @@ final class AppModel: ObservableObject {
 
     /// Filters articles to only those belonging to the selected folder, if any.
     private func applyFolderFilter(_ fetched: [Article]) -> [Article] {
-        guard let folderFeedIDs = selectedFolderFeedIDs else { return fetched }
+        guard !isSearchActive, let folderFeedIDs = selectedFolderFeedIDs else { return fetched }
         return fetched.filter { folderFeedIDs.contains($0.feedID) }
     }
 

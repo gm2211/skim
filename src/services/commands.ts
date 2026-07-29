@@ -25,6 +25,8 @@ import type {
   FeedlyConnectionStatus,
   Folder,
   SmartRules,
+  TodayEditionView,
+  TodayEditionItem,
 } from "./types";
 
 // Feeds
@@ -334,6 +336,34 @@ export interface CatchupReport {
 }
 export const generateCatchupReport = (scope: "inbox" | "unread" = "inbox") =>
   invoke<CatchupReport>("generate_catchup_report", { scope });
+
+// Today edition
+export const getOrGenerateTodayEdition = (
+  startsAt: number,
+  endsAt: number,
+  generatedAt: number,
+  storyLimit: number,
+) =>
+  invoke<TodayEditionView>("get_or_generate_today_edition", {
+    startsAt,
+    endsAt,
+    generatedAt,
+    storyLimit,
+  });
+export const listTodayEditionItems = (editionId: string) =>
+  invoke<TodayEditionItem[]>("list_today_edition_items", { editionId });
+export const setTodayEditionItemConsumed = (
+  editionId: string,
+  storyId: string,
+  isConsumed: boolean,
+  changedAt: number,
+) =>
+  invoke<TodayEditionView>("set_today_edition_item_consumed", {
+    editionId,
+    storyId,
+    isConsumed,
+    changedAt,
+  });
 
 // Learning / interactions
 export const recordReadingTime = (articleId: string, seconds: number) =>

@@ -1,6 +1,7 @@
 import { Sidebar } from "./components/layout/Sidebar";
 import { ArticleList } from "./components/layout/ArticleList";
 import { ArticleDetail } from "./components/layout/ArticleDetail";
+import { TodayEditionPane } from "./components/today/TodayEditionPane";
 import { AddFeedDialog } from "./components/feed/AddFeedDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { useUiStore } from "./stores/uiStore";
@@ -28,7 +29,8 @@ const PHONE_SETTLE_EASING = "cubic-bezier(0.2, 0.9, 0.2, 1)";
 const ACTIVE_FEED_TOAST_MAX_MS = 35000;
 
 function App() {
-  const { showAddFeed, showSettings, selectedArticleId, listCollapsed, isPhone, phonePane } = useUiStore();
+  const { showAddFeed, showSettings, selectedArticleId, listCollapsed, isPhone, phonePane, sidebarView } = useUiStore();
+  const isToday = sidebarView.type === "today";
   const qc = useQueryClient();
   const [showBootDisclaimer, setShowBootDisclaimer] = useState(true);
   const [opmlImportStatus, setOpmlImportStatus] = useState<OpmlImportStatus | null>(null);
@@ -455,7 +457,7 @@ function App() {
               }}
               aria-hidden={paneIndex !== 1}
             >
-              <ArticleList />
+              {isToday ? <TodayEditionPane /> : <ArticleList />}
             </div>
             <div
               className="w-1/3 h-full flex-shrink-0 overflow-hidden flex"
@@ -490,7 +492,7 @@ function App() {
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <div className="flex flex-1 min-w-0">
-          <ArticleList />
+          {isToday ? <TodayEditionPane /> : <ArticleList />}
           {selectedArticleId ? (
             <ArticleDetail />
           ) : (

@@ -183,6 +183,9 @@ export interface SyncSettings {
   refresh_interval_minutes: number;
   max_articles_per_feed: number;
   recent_cap: number;
+  /** Today edition story cap. Always 5, 10, or 20 — changing it starts a
+   *  fresh edition (the edition id is derived from the limit). */
+  today_story_limit: number;
 }
 
 export interface ArticleWithTriage extends Article {
@@ -250,11 +253,94 @@ export type SidebarView =
   | { type: "feed"; feedId: string }
   | { type: "inbox" }
   | { type: "recent" }
-  | { type: "theme"; themeId: string };
+  | { type: "theme"; themeId: string }
+  | { type: "today" };
 
 export interface ArticleWithInteraction extends Article {
   reading_time_sec: number;
   chat_messages: number;
   interaction_at: number;
   engagement_score: number;
+}
+
+// Today edition — persisted, finite, sectioned daily digest. See
+// src-tauri/src/db/today_edition.rs for the backend contract this mirrors.
+
+export type EditionStatus = "draft" | "ready" | "completed" | "failed";
+
+/** Display order: top_stories, widely_covered, updates, unique_finds. */
+export type EditionSection =
+  | "top_stories"
+  | "widely_covered"
+  | "updates"
+  | "unique_finds";
+
+export const EDITION_SECTION_ORDER: EditionSection[] = [
+  "top_stories",
+  "widely_covered",
+  "updates",
+  "unique_finds",
+];
+
+export type StoryMembershipType = "duplicate" | "coverage" | "update";
+
+export interface Edition {
+  id: string;
+  title: string;
+  scope: string;
+  story_limit: number;
+  status: EditionStatus;
+  starts_at: number;
+  ends_at: number;
+  generated_at: number;
+  completed_at: number | null;
+  total_source_count: number;
+}
+
+export interface TodayEditionMemberArticle {
+  article_id: string;
+  feed_id: string;
+  feed_title: string;
+  feed_icon_url: string | null;
+  title: string;
+  url: string | null;
+  author: string | null;
+  published_at: number | null;
+  membership_type: StoryMembershipType;
+  confidence: number | null;
+  is_representative: boolean;
+  /** Live interaction state — may change without changing snapshot content. */
+  is_read: boolean | null;
+  is_starred: boolean | null;
+}
+
+/**
+ * Flat because the Rust side uses `#[serde(flatten)]` on the immutable
+ * `EditionItem` snapshot. Never render a live story field here — only
+ * snapshot_* fields — snapshots must not mutate when stories later change.
+ */
+export interface TodayEditionItem {
+  edition_id: string;
+  story_id: string;
+  story_revision_number: number;
+  position: number;
+  section: EditionSection;
+  snapshot_title: string;
+  snapshot_summary: string;
+  snapshot_delta_summary: string | null;
+  snapshot_source_count: number;
+  snapshot_reason: string | null;
+  is_unique_find: boolean;
+  is_consumed: boolean;
+  consumed_at: number | null;
+  representative_article_id: string | null;
+  member_article_ids: string[];
+  member_articles: TodayEditionMemberArticle[];
+}
+
+export interface TodayEditionView {
+  edition: Edition;
+  items: TodayEditionItem[];
+  consumed_count: number;
+  total_count: number;
 }

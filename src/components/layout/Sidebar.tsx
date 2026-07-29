@@ -103,9 +103,9 @@ export function Sidebar() {
           </svg>
         </button>
         <button
-          onClick={() => setShowCatchup(true)}
+          onClick={() => setSidebarView({ type: "today" })}
           className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
-          title="Super-quick catch-up"
+          title="Today — your finite, sectioned daily edition"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
@@ -140,6 +140,29 @@ export function Sidebar() {
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto" style={{ padding: "8px 16px 16px 16px" }}>
+        {/* Today — finite, sectioned daily edition. Above All Articles since
+            it's the primary daily entry point; All Articles stays the
+            complete chronological/searchable archive one click below. */}
+        <div style={{ marginBottom: 32, padding: "0 8px" }}>
+          <div
+            onClick={() => setSidebarView({ type: "today" })}
+            className="flex items-center gap-3 cursor-pointer transition-colors relative z-20 hover:text-text-primary"
+            style={{ padding: "6px 0" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+              className={`flex-shrink-0 ${isActive({ type: "today" }) ? "opacity-100" : "opacity-50"}`}
+            >
+              <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
+            </svg>
+            <span
+              className={isActive({ type: "today" }) ? "text-text-primary" : "text-text-secondary"}
+              style={{ fontSize: 17, fontWeight: 600 }}
+            >
+              Today
+            </span>
+          </div>
+        </div>
+
         {/* All Articles */}
         <div style={{ marginBottom: 32, padding: "0 8px" }}>
           <div

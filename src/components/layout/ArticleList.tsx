@@ -216,6 +216,8 @@ export function ArticleList() {
       case "theme":
         base.theme_id = sidebarView.themeId;
         break;
+      case "today":
+        break; // App.tsx renders TodayEditionPane instead of this list
     }
     if (listFilter === "unread") base.is_read = false;
     if (listFilter === "starred") base.is_starred = true;
@@ -346,6 +348,8 @@ export function ArticleList() {
         const theme = themes?.find((t) => t.id === sidebarView.themeId);
         return theme?.label ?? "Theme";
       }
+      case "today":
+        return "Today";
     }
   }, [sidebarView, themes]);
 

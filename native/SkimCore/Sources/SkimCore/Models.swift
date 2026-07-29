@@ -312,6 +312,307 @@ public struct ArticleContent: Sendable, Equatable {
     }
 }
 
+/// How an article contributes to a durable story cluster.
+///
+/// `duplicate` means the article is interchangeable with another source item,
+/// while `coverage` preserves a distinct source's reporting on the same event.
+public enum StoryMembershipType: String, Codable, CaseIterable, Hashable, Sendable {
+    case duplicate = "duplicate"
+    case coverage = "coverage"
+    case update = "update"
+}
+
+public struct Story: Identifiable, Codable, Hashable, Sendable {
+    public var id: String
+    public var title: String
+    public var summary: String?
+    public var representativeArticleID: String?
+    public var firstSeenAt: Date
+    public var lastActivityAt: Date
+    public var createdAt: Date
+    public var updatedAt: Date
+
+    public init(
+        id: String,
+        title: String,
+        summary: String? = nil,
+        representativeArticleID: String? = nil,
+        firstSeenAt: Date,
+        lastActivityAt: Date,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.title = title
+        self.summary = summary
+        self.representativeArticleID = representativeArticleID
+        self.firstSeenAt = firstSeenAt
+        self.lastActivityAt = lastActivityAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case summary
+        case representativeArticleID = "representative_article_id"
+        case firstSeenAt = "first_seen_at"
+        case lastActivityAt = "last_activity_at"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+public struct StoryArticleMembership: Codable, Hashable, Sendable {
+    public var storyID: String
+    public var articleID: String
+    public var membershipType: StoryMembershipType
+    public var confidence: Double?
+    public var addedAt: Date
+
+    public init(
+        storyID: String,
+        articleID: String,
+        membershipType: StoryMembershipType,
+        confidence: Double? = nil,
+        addedAt: Date = Date()
+    ) {
+        self.storyID = storyID
+        self.articleID = articleID
+        self.membershipType = membershipType
+        self.confidence = confidence
+        self.addedAt = addedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case storyID = "story_id"
+        case articleID = "article_id"
+        case membershipType = "membership_type"
+        case confidence
+        case addedAt = "added_at"
+    }
+}
+
+public struct StoryRevision: Identifiable, Codable, Hashable, Sendable {
+    public var storyID: String
+    public var revisionNumber: Int
+    public var title: String
+    public var summary: String
+    public var deltaSummary: String?
+    public var representativeArticleID: String?
+    public var sourceCount: Int
+    public var contentFingerprint: String?
+    public var isMaterialChange: Bool
+    public var createdAt: Date
+
+    public var id: String {
+        "\(storyID):\(revisionNumber)"
+    }
+
+    public init(
+        storyID: String,
+        revisionNumber: Int,
+        title: String,
+        summary: String,
+        deltaSummary: String? = nil,
+        representativeArticleID: String? = nil,
+        sourceCount: Int,
+        contentFingerprint: String? = nil,
+        isMaterialChange: Bool = true,
+        createdAt: Date = Date()
+    ) {
+        self.storyID = storyID
+        self.revisionNumber = revisionNumber
+        self.title = title
+        self.summary = summary
+        self.deltaSummary = deltaSummary
+        self.representativeArticleID = representativeArticleID
+        self.sourceCount = sourceCount
+        self.contentFingerprint = contentFingerprint
+        self.isMaterialChange = isMaterialChange
+        self.createdAt = createdAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case storyID = "story_id"
+        case revisionNumber = "revision_number"
+        case title
+        case summary
+        case deltaSummary = "delta_summary"
+        case representativeArticleID = "representative_article_id"
+        case sourceCount = "source_count"
+        case contentFingerprint = "content_fingerprint"
+        case isMaterialChange = "is_material_change"
+        case createdAt = "created_at"
+    }
+}
+
+/// Per-story progress is revision based. It intentionally does not mirror or
+/// mutate the read flag of every source article in the cluster.
+public struct StoryUserState: Codable, Hashable, Sendable {
+    public var storyID: String
+    public var lastSeenRevision: Int?
+    public var lastReadRevision: Int?
+    public var isFollowed: Bool
+    public var isHidden: Bool
+    public var caughtUpAt: Date?
+    public var updatedAt: Date
+
+    public init(
+        storyID: String,
+        lastSeenRevision: Int? = nil,
+        lastReadRevision: Int? = nil,
+        isFollowed: Bool = false,
+        isHidden: Bool = false,
+        caughtUpAt: Date? = nil,
+        updatedAt: Date = Date()
+    ) {
+        self.storyID = storyID
+        self.lastSeenRevision = lastSeenRevision
+        self.lastReadRevision = lastReadRevision
+        self.isFollowed = isFollowed
+        self.isHidden = isHidden
+        self.caughtUpAt = caughtUpAt
+        self.updatedAt = updatedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case storyID = "story_id"
+        case lastSeenRevision = "last_seen_revision"
+        case lastReadRevision = "last_read_revision"
+        case isFollowed = "is_followed"
+        case isHidden = "is_hidden"
+        case caughtUpAt = "caught_up_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+public enum EditionStatus: String, Codable, CaseIterable, Hashable, Sendable {
+    case draft = "draft"
+    case ready = "ready"
+    case completed = "completed"
+    case failed = "failed"
+}
+
+public struct Edition: Identifiable, Codable, Hashable, Sendable {
+    public var id: String
+    public var title: String
+    public var scope: String
+    public var storyLimit: Int
+    public var status: EditionStatus
+    public var startsAt: Date
+    public var endsAt: Date
+    public var generatedAt: Date
+    public var completedAt: Date?
+    public var totalSourceCount: Int
+
+    public init(
+        id: String,
+        title: String,
+        scope: String,
+        storyLimit: Int,
+        status: EditionStatus = .draft,
+        startsAt: Date,
+        endsAt: Date,
+        generatedAt: Date = Date(),
+        completedAt: Date? = nil,
+        totalSourceCount: Int
+    ) {
+        self.id = id
+        self.title = title
+        self.scope = scope
+        self.storyLimit = storyLimit
+        self.status = status
+        self.startsAt = startsAt
+        self.endsAt = endsAt
+        self.generatedAt = generatedAt
+        self.completedAt = completedAt
+        self.totalSourceCount = totalSourceCount
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case scope
+        case storyLimit = "story_limit"
+        case status
+        case startsAt = "starts_at"
+        case endsAt = "ends_at"
+        case generatedAt = "generated_at"
+        case completedAt = "completed_at"
+        case totalSourceCount = "total_source_count"
+    }
+}
+
+/// A frozen rendering of a story revision as it appeared in an edition.
+/// Snapshot fields are insert-only in the persistence layer.
+public struct EditionItem: Identifiable, Codable, Hashable, Sendable {
+    public var editionID: String
+    public var storyID: String
+    public var storyRevisionNumber: Int
+    public var position: Int
+    public var section: String
+    public var snapshotTitle: String
+    public var snapshotSummary: String
+    public var snapshotDeltaSummary: String?
+    public var snapshotSourceCount: Int
+    public var snapshotReason: String?
+    public var isUniqueFind: Bool
+    public var isConsumed: Bool
+    public var consumedAt: Date?
+
+    public var id: String {
+        "\(editionID):\(storyID)"
+    }
+
+    public init(
+        editionID: String,
+        storyID: String,
+        storyRevisionNumber: Int,
+        position: Int,
+        section: String,
+        snapshotTitle: String,
+        snapshotSummary: String,
+        snapshotDeltaSummary: String? = nil,
+        snapshotSourceCount: Int,
+        snapshotReason: String? = nil,
+        isUniqueFind: Bool = false,
+        isConsumed: Bool = false,
+        consumedAt: Date? = nil
+    ) {
+        self.editionID = editionID
+        self.storyID = storyID
+        self.storyRevisionNumber = storyRevisionNumber
+        self.position = position
+        self.section = section
+        self.snapshotTitle = snapshotTitle
+        self.snapshotSummary = snapshotSummary
+        self.snapshotDeltaSummary = snapshotDeltaSummary
+        self.snapshotSourceCount = snapshotSourceCount
+        self.snapshotReason = snapshotReason
+        self.isUniqueFind = isUniqueFind
+        self.isConsumed = isConsumed
+        self.consumedAt = consumedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case editionID = "edition_id"
+        case storyID = "story_id"
+        case storyRevisionNumber = "story_revision_number"
+        case position
+        case section
+        case snapshotTitle = "snapshot_title"
+        case snapshotSummary = "snapshot_summary"
+        case snapshotDeltaSummary = "snapshot_delta_summary"
+        case snapshotSourceCount = "snapshot_source_count"
+        case snapshotReason = "snapshot_reason"
+        case isUniqueFind = "is_unique_find"
+        case isConsumed = "is_consumed"
+        case consumedAt = "consumed_at"
+    }
+}
+
 public enum SkimCoreError: Error, LocalizedError, Sendable {
     case invalidOPML
     case invalidFeedURL

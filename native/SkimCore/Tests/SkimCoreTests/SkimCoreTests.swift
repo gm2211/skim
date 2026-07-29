@@ -105,6 +105,960 @@ import Testing
     #expect(try await store.countCachedReaderTexts() == 1)
 }
 
+@Test func persistsStoryEditionDataWithoutChangingRawArticles() async throws {
+    let databaseURL = temporaryStoreURL()
+    let store = try SkimStore(databaseURL: databaseURL)
+    let feed = Feed(id: "feed-1", title: "A Feed", url: URL(string: "https://example.com/rss")!)
+    let newer = Article(
+        id: "article-newer",
+        feedID: feed.id,
+        feedTitle: feed.title,
+        title: "Newer coverage",
+        publishedAt: Date(timeIntervalSince1970: 200),
+        isRead: false,
+        isStarred: true
+    )
+    let older = Article(
+        id: "article-older",
+        feedID: feed.id,
+        feedTitle: feed.title,
+        title: "Older coverage",
+        publishedAt: Date(timeIntervalSince1970: 100),
+        isRead: true,
+        isStarred: false
+    )
+    try await store.upsert(feed: feed, articles: [older, newer])
+    let articlesBefore = try await store.listArticles(filter: ArticleFilter())
+
+    let story = Story(
+        id: "story-stable-1",
+        title: "A durable story",
+        summary: "Two sources cover one event.",
+        representativeArticleID: newer.id,
+        firstSeenAt: Date(timeIntervalSince1970: 100),
+        lastActivityAt: Date(timeIntervalSince1970: 200),
+        createdAt: Date(timeIntervalSince1970: 210),
+        updatedAt: Date(timeIntervalSince1970: 220)
+    )
+    try await store.upsertStory(story)
+    try await store.upsertStoryMembership(StoryArticleMembership(
+        storyID: story.id,
+        articleID: older.id,
+        membershipType: .coverage,
+        confidence: 0.87,
+        addedAt: Date(timeIntervalSince1970: 215)
+    ))
+
+    let revision = StoryRevision(
+        storyID: story.id,
+        revisionNumber: 1,
+        title: story.title,
+        summary: "The edition snapshot summary.",
+        deltaSummary: "A second source confirmed the event.",
+        representativeArticleID: newer.id,
+        sourceCount: 2,
+        contentFingerprint: "sha256:fixture",
+        isMaterialChange: true,
+        createdAt: Date(timeIntervalSince1970: 225)
+    )
+    try await store.insertStoryRevision(revision)
+    try await store.upsertStoryUserState(StoryUserState(
+        storyID: story.id,
+        lastSeenRevision: 1,
+        isFollowed: true,
+        updatedAt: Date(timeIntervalSince1970: 230)
+    ))
+
+    let edition = Edition(
+        id: "edition-2026-07-24",
+        title: "Today",
+        scope: "all",
+        storyLimit: 10,
+        status: .ready,
+        startsAt: Date(timeIntervalSince1970: 0),
+        endsAt: Date(timeIntervalSince1970: 86_400),
+        generatedAt: Date(timeIntervalSince1970: 240),
+        totalSourceCount: 2
+    )
+    let item = EditionItem(
+        editionID: edition.id,
+        storyID: story.id,
+        storyRevisionNumber: revision.revisionNumber,
+        position: 0,
+        section: "Top Stories",
+        snapshotTitle: revision.title,
+        snapshotSummary: revision.summary,
+        snapshotDeltaSummary: revision.deltaSummary,
+        snapshotSourceCount: revision.sourceCount,
+        snapshotReason: "Two independent sources",
+        isUniqueFind: false
+    )
+    try await store.persistEdition(edition, items: [item])
+
+    #expect(try await store.story(id: story.id) == story)
+    #expect(try await store.listStoryMemberships(storyID: story.id) == [
+        StoryArticleMembership(
+            storyID: story.id,
+            articleID: older.id,
+            membershipType: .coverage,
+            confidence: 0.87,
+            addedAt: Date(timeIntervalSince1970: 215)
+        )
+    ])
+    #expect(try await store.latestStoryRevision(storyID: story.id) == revision)
+    #expect(try await store.hasUnseenStoryRevision(storyID: story.id) == false)
+
+    try await store.markStoryCaughtUp(
+        storyID: story.id,
+        throughRevision: revision.revisionNumber,
+        at: Date(timeIntervalSince1970: 250)
+    )
+    let caughtUp = try #require(try await store.storyUserState(storyID: story.id))
+    #expect(caughtUp.lastSeenRevision == 1)
+    #expect(caughtUp.lastReadRevision == 1)
+    #expect(caughtUp.isFollowed == true)
+
+    try await store.setEditionItemConsumed(
+        editionID: edition.id,
+        storyID: story.id,
+        isConsumed: true,
+        at: Date(timeIntervalSince1970: 260)
+    )
+    try await store.updateEditionProgress(
+        id: edition.id,
+        status: .completed,
+        completedAt: Date(timeIntervalSince1970: 270),
+        totalSourceCount: 2
+    )
+
+    let persistedItem = try #require(try await store.listEditionItems(editionID: edition.id).first)
+    #expect(persistedItem.snapshotTitle == item.snapshotTitle)
+    #expect(persistedItem.snapshotSummary == item.snapshotSummary)
+    #expect(persistedItem.isConsumed == true)
+    #expect(persistedItem.consumedAt == Date(timeIntervalSince1970: 260))
+
+    let persistedEdition = try #require(try await store.edition(id: edition.id))
+    #expect(persistedEdition.status == .completed)
+    #expect(persistedEdition.completedAt == Date(timeIntervalSince1970: 270))
+
+    let articlesAfter = try await store.listArticles(filter: ArticleFilter())
+    #expect(articlesAfter == articlesBefore)
+    #expect(try await store.countUnread(feedID: nil) == 1)
+
+    // Reopening runs every CREATE TABLE/INDEX migration again.
+    let reopened = try SkimStore(databaseURL: databaseURL)
+    #expect(try await reopened.story(id: story.id) == story)
+    #expect(try await reopened.listArticles(filter: ArticleFilter()) == articlesBefore)
+}
+
+@Test func storyUpsertPreservesActivityBounds() async throws {
+    let store = try temporaryStore()
+    let initial = Story(
+        id: "story-bounds",
+        title: "Initial",
+        firstSeenAt: Date(timeIntervalSince1970: 100),
+        lastActivityAt: Date(timeIntervalSince1970: 200),
+        createdAt: Date(timeIntervalSince1970: 210),
+        updatedAt: Date(timeIntervalSince1970: 220)
+    )
+    try await store.upsertStory(initial)
+
+    var update = initial
+    update.title = "Updated"
+    update.firstSeenAt = Date(timeIntervalSince1970: 150)
+    update.lastActivityAt = Date(timeIntervalSince1970: 190)
+    update.updatedAt = Date(timeIntervalSince1970: 230)
+    try await store.upsertStory(update)
+
+    var stored = try #require(try await store.story(id: initial.id))
+    #expect(stored.firstSeenAt == initial.firstSeenAt)
+    #expect(stored.lastActivityAt == initial.lastActivityAt)
+    #expect(stored.createdAt == initial.createdAt)
+
+    update.firstSeenAt = Date(timeIntervalSince1970: 50)
+    update.lastActivityAt = Date(timeIntervalSince1970: 300)
+    try await store.upsertStory(update)
+
+    stored = try #require(try await store.story(id: initial.id))
+    #expect(stored.firstSeenAt == Date(timeIntervalSince1970: 50))
+    #expect(stored.lastActivityAt == Date(timeIntervalSince1970: 300))
+}
+
+@Test func immutablePersistenceRetriesRequireIdenticalContent() async throws {
+    let store = try temporaryStore()
+    let feed = Feed(id: "feed-immutable", title: "Feed", url: URL(string: "https://example.com/feed")!)
+    let article = Article(
+        id: "article-immutable",
+        feedID: feed.id,
+        feedTitle: feed.title,
+        title: "Article"
+    )
+    try await store.upsert(feed: feed, articles: [article])
+
+    let story = Story(
+        id: "story-immutable",
+        title: "Story",
+        representativeArticleID: article.id,
+        firstSeenAt: Date(timeIntervalSince1970: 100),
+        lastActivityAt: Date(timeIntervalSince1970: 100)
+    )
+    try await store.upsertStory(story)
+    let revision = StoryRevision(
+        storyID: story.id,
+        revisionNumber: 1,
+        title: "Revision",
+        summary: "Frozen revision",
+        representativeArticleID: article.id,
+        sourceCount: 1,
+        createdAt: Date(timeIntervalSince1970: 110)
+    )
+    try await store.insertStoryRevision(revision)
+    try await store.insertStoryRevision(revision)
+
+    let edition = Edition(
+        id: "edition-immutable",
+        title: "Today",
+        scope: "all",
+        storyLimit: 5,
+        status: .ready,
+        startsAt: Date(timeIntervalSince1970: 1_000),
+        endsAt: Date(timeIntervalSince1970: 2_000),
+        generatedAt: Date(timeIntervalSince1970: 1_100),
+        totalSourceCount: 1
+    )
+    let item = EditionItem(
+        editionID: edition.id,
+        storyID: story.id,
+        storyRevisionNumber: revision.revisionNumber,
+        position: 0,
+        section: "top_stories",
+        snapshotTitle: revision.title,
+        snapshotSummary: revision.summary,
+        snapshotSourceCount: 1
+    )
+    try await store.persistEdition(edition, items: [item])
+    try await store.persistEdition(edition, items: [item])
+
+    var conflictingRevision = revision
+    conflictingRevision.summary = "Rewritten revision"
+    #expect(await operationThrows {
+        try await store.insertStoryRevision(conflictingRevision)
+    })
+
+    var conflictingEdition = edition
+    conflictingEdition.title = "Rewritten edition"
+    #expect(await operationThrows {
+        try await store.persistEdition(conflictingEdition, items: [item])
+    })
+
+    var conflictingItem = item
+    conflictingItem.snapshotSummary = "Rewritten snapshot"
+    #expect(await operationThrows {
+        try await store.persistEdition(edition, items: [conflictingItem])
+    })
+
+    #expect(try await store.storyRevision(storyID: story.id, revisionNumber: 1) == revision)
+    #expect(try await store.edition(id: edition.id) == edition)
+    #expect(try await store.listEditionItems(editionID: edition.id) == [item])
+}
+
+@Test func storyAndEditionModelsMatchSnakeCaseJSONContract() throws {
+    let goldenJSON = """
+    {
+      "story": {
+        "id": "story-1",
+        "title": "Story",
+        "summary": "Story summary",
+        "representative_article_id": "article-1",
+        "first_seen_at": 100,
+        "last_activity_at": 200,
+        "created_at": 210,
+        "updated_at": 220
+      },
+      "membership": {
+        "story_id": "story-1",
+        "article_id": "article-2",
+        "membership_type": "coverage",
+        "confidence": 0.85,
+        "added_at": 230
+      },
+      "revision": {
+        "story_id": "story-1",
+        "revision_number": 3,
+        "title": "Revision",
+        "summary": "Revision summary",
+        "delta_summary": "New facts",
+        "representative_article_id": "article-1",
+        "source_count": 4,
+        "content_fingerprint": "sha256:contract",
+        "is_material_change": true,
+        "created_at": 240
+      },
+      "user_state": {
+        "story_id": "story-1",
+        "last_seen_revision": 3,
+        "last_read_revision": 2,
+        "is_followed": true,
+        "is_hidden": false,
+        "caught_up_at": 250,
+        "updated_at": 260
+      },
+      "edition": {
+        "id": "edition-1",
+        "title": "Today",
+        "scope": "folder:technology",
+        "story_limit": 5,
+        "status": "completed",
+        "starts_at": 1000,
+        "ends_at": 2000,
+        "generated_at": 1100,
+        "completed_at": 1200,
+        "total_source_count": 9
+      },
+      "item": {
+        "edition_id": "edition-1",
+        "story_id": "story-1",
+        "story_revision_number": 3,
+        "position": 0,
+        "section": "top_stories",
+        "snapshot_title": "Frozen title",
+        "snapshot_summary": "Frozen summary",
+        "snapshot_delta_summary": "Frozen delta",
+        "snapshot_source_count": 4,
+        "snapshot_reason": "Widely covered",
+        "is_unique_find": false,
+        "is_consumed": true,
+        "consumed_at": 1300
+      }
+    }
+    """
+
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .secondsSince1970
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .secondsSince1970
+
+    let goldenData = Data(goldenJSON.utf8)
+    let fixture = try decoder.decode(StoryContractFixture.self, from: goldenData)
+    #expect(fixture.membership.membershipType == .coverage)
+    #expect(fixture.revision.createdAt == Date(timeIntervalSince1970: 240))
+    #expect(fixture.edition.status == .completed)
+    #expect(fixture.item.isConsumed == true)
+
+    let encodedObject = try JSONSerialization.jsonObject(with: encoder.encode(fixture)) as? NSDictionary
+    let goldenObject = try JSONSerialization.jsonObject(with: goldenData) as? NSDictionary
+    #expect(encodedObject == goldenObject)
+    #expect(StoryMembershipType.allCases.map(\.rawValue) == ["duplicate", "coverage", "update"])
+    #expect(EditionStatus.allCases.map(\.rawValue) == ["draft", "ready", "completed", "failed"])
+}
+
+@Test func clusteringNormalizationAndStableIDMatchGoldenContract() throws {
+    let article = Article(
+        id: "article-golden",
+        feedID: "feed-golden",
+        feedTitle: "Golden",
+        title: "Acme launches solar battery | Example News",
+        url: URL(string: "https://Example.com:443/news/?b=2&utm_source=mail&a=1&source=rss#fragment"),
+        contentText: "Battery storage arrives today.",
+        publishedAt: Date(timeIntervalSince1970: 100),
+        fetchedAt: Date(timeIntervalSince1970: 200)
+    )
+    let clusterer = StoryClusterer()
+    let feature = clusterer.feature(for: article)
+
+    #expect(feature.canonicalURL == "https://example.com/news?a=1&b=2")
+    #expect(feature.normalizedTitle == "acme launches solar battery")
+    #expect(feature.normalizedLead == "battery storage arrives today")
+    #expect(feature.contentFingerprint == "58c49b19daae04bfbb6c0c09feb86ddc7dfaf7e798692cd4f092f442422257eb")
+    #expect(clusterer.stableStoryID(for: article, feature: feature) == "story-492ee725ea8735b8")
+    #expect(StoryClusterer.fnv1a64("https://example.com/news?a=1&b=2\n0") == "492ee725ea8735b8")
+
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .secondsSince1970
+    let object = try #require(
+        JSONSerialization.jsonObject(with: encoder.encode(feature)) as? [String: Any]
+    )
+    #expect(object["article_id"] as? String == article.id)
+    #expect(object["canonical_url"] as? String == feature.canonicalURL)
+    #expect(object["normalized_title"] as? String == feature.normalizedTitle)
+    #expect(object["content_fingerprint"] as? String == feature.contentFingerprint)
+    #expect(object["feature_version"] as? Int == StoryArticleFeature.currentVersion)
+    #expect(object["computed_at"] as? Double == 200)
+
+    let configurationObject = try #require(
+        JSONSerialization.jsonObject(
+            with: encoder.encode(StoryClusteringConfiguration())
+        ) as? [String: Any]
+    )
+    #expect(configurationObject["rolling_window"] as? Double == 345_600)
+    #expect(configurationObject["duplicate_threshold"] as? Double == 0.88)
+    #expect(configurationObject["coverage_threshold"] as? Double == 0.68)
+    #expect(configurationObject["borderline_threshold"] as? Double == 0.58)
+
+    let rankedObject = try #require(
+        JSONSerialization.jsonObject(with: encoder.encode(RankedStory(
+            storyID: "story-golden",
+            score: 7.5,
+            distinctFeedCount: 3,
+            rawArticleCount: 4,
+            isUniqueFind: false,
+            reason: "3_independent_sources"
+        ))) as? [String: Any]
+    )
+    #expect(rankedObject["story_id"] as? String == "story-golden")
+    #expect(rankedObject["distinct_feed_count"] as? Int == 3)
+    #expect(rankedObject["raw_article_count"] as? Int == 4)
+    #expect(rankedObject["is_unique_find"] as? Bool == false)
+}
+
+@Test func aggregatorClusteringPrefersExternalArticleTarget() {
+    let article = Article(
+        id: "aggregator-article",
+        feedID: "feed-hn",
+        feedTitle: "Hacker News",
+        title: "Acme launches solar battery",
+        url: URL(string: "https://news.ycombinator.com/item?id=123"),
+        fetchedAt: Date(timeIntervalSince1970: 300),
+        aggregatorKind: .hackerNews,
+        externalURL: URL(string: "https://acme.example/launch?utm_source=hn"),
+        commentsURL: URL(string: "https://news.ycombinator.com/item?id=123")
+    )
+
+    let feature = StoryClusterer().feature(for: article)
+
+    #expect(feature.canonicalURL == "https://acme.example/launch")
+}
+
+@Test func repeatedCoverageClassifiesWithoutDuplicateCollapse() {
+    let clusterer = StoryClusterer()
+    let first = clusteringArticle(
+        id: "article-first",
+        feedID: "feed-a",
+        title: "Acme launches solar battery for homes",
+        content: "The product starts shipping this month in cities.",
+        timestamp: 1_000
+    )
+    let second = clusteringArticle(
+        id: "article-second",
+        feedID: "feed-b",
+        title: "Acme launches home solar battery nationwide",
+        content: "The product begins shipping this month in cities.",
+        timestamp: 1_100
+    )
+    let firstFeature = clusterer.feature(for: first)
+    let decision = clusterer.decide(
+        article: second,
+        feature: clusterer.feature(for: second),
+        candidates: [StoryClusterCandidate(
+            storyID: "story-acme",
+            article: first,
+            feature: firstFeature
+        )]
+    )
+
+    #expect(decision.match?.storyID == "story-acme")
+    #expect(decision.match?.membershipType == .coverage)
+    #expect((decision.match?.confidence ?? 0) >= 0.68)
+    #expect((decision.match?.confidence ?? 1) < 0.88)
+
+    let update = clusteringArticle(
+        id: "article-update",
+        feedID: "feed-c",
+        title: "Acme launches solar battery update for homes after recall",
+        content: "The product starts shipping this month in cities.",
+        timestamp: 1_200
+    )
+    let updateDecision = clusterer.decide(
+        article: update,
+        feature: clusterer.feature(for: update),
+        candidates: [StoryClusterCandidate(
+            storyID: "story-acme",
+            article: first,
+            feature: firstFeature
+        )]
+    )
+    #expect(updateDecision.match?.membershipType == .update)
+}
+
+@Test func exactDuplicateCollapsesStoryButNeverLeaksFromRawFeed() async throws {
+    let store = try temporaryStore()
+    let feedA = Feed(id: "feed-a", title: "Feed A", url: URL(string: "https://a.example/rss")!)
+    let feedB = Feed(id: "feed-b", title: "Feed B", url: URL(string: "https://b.example/rss")!)
+    let first = clusteringArticle(
+        id: "article-a",
+        feedID: feedA.id,
+        feedTitle: feedA.title,
+        title: "Acme launches a solar battery",
+        url: "https://news.example/acme?utm_source=a",
+        timestamp: 2_000,
+        isRead: true
+    )
+    let duplicate = clusteringArticle(
+        id: "article-b",
+        feedID: feedB.id,
+        feedTitle: feedB.title,
+        title: "Acme launches a solar battery | Feed B",
+        url: "https://NEWS.example:443/acme?fbclid=tracking",
+        timestamp: 2_100,
+        isStarred: true
+    )
+
+    try await store.upsert(feed: feedA, articles: [first])
+    try await store.upsert(feed: feedB, articles: [duplicate])
+
+    let rawArticles = try await store.listArticles(filter: ArticleFilter())
+    #expect(Set(rawArticles.map(\.id)) == Set([first.id, duplicate.id]))
+    #expect(rawArticles.first(where: { $0.id == first.id })?.isRead == true)
+    #expect(rawArticles.first(where: { $0.id == duplicate.id })?.isStarred == true)
+
+    let stories = try await store.listStories()
+    let story = try #require(stories.first)
+    #expect(stories.count == 1)
+    let memberships = try await store.listStoryMemberships(storyID: story.id)
+    #expect(memberships.map(\.membershipType) == [.coverage, .duplicate])
+    #expect(try await store.listStoryRevisions(storyID: story.id).last?.sourceCount == 1)
+    let firstCanonicalURL = try await store.storyFeature(articleID: first.id)?.canonicalURL
+    let duplicateCanonicalURL = try await store.storyFeature(articleID: duplicate.id)?.canonicalURL
+    #expect(firstCanonicalURL == duplicateCanonicalURL)
+}
+
+@Test func entityGuardPreventsHighOverlapFalseMerge() {
+    let clusterer = StoryClusterer()
+    let apple = clusteringArticle(
+        id: "apple",
+        feedID: "feed-a",
+        title: "Quarterly profit rises sharply at Apple",
+        timestamp: 3_000
+    )
+    let microsoft = clusteringArticle(
+        id: "microsoft",
+        feedID: "feed-b",
+        title: "Quarterly profit rises sharply at Microsoft",
+        timestamp: 3_100
+    )
+    let decision = clusterer.decide(
+        article: microsoft,
+        feature: clusterer.feature(for: microsoft),
+        candidates: [StoryClusterCandidate(
+            storyID: "story-apple",
+            article: apple,
+            feature: clusterer.feature(for: apple)
+        )]
+    )
+
+    #expect(decision.match == nil)
+    #expect(decision.borderline == nil)
+}
+
+@Test func borderlineMatchesAreDeferredAndPersisted() async throws {
+    let store = try temporaryStore()
+    let feedA = Feed(id: "feed-a", title: "Feed A", url: URL(string: "https://a.example/rss")!)
+    let feedB = Feed(id: "feed-b", title: "Feed B", url: URL(string: "https://b.example/rss")!)
+    let first = clusteringArticle(
+        id: "borderline-a",
+        feedID: feedA.id,
+        feedTitle: feedA.title,
+        title: "Acme solar battery production begins nevada",
+        timestamp: 4_000
+    )
+    let second = clusteringArticle(
+        id: "borderline-b",
+        feedID: feedB.id,
+        feedTitle: feedB.title,
+        title: "Acme solar battery production opens texas",
+        timestamp: 4_100
+    )
+
+    try await store.upsert(feed: feedA, articles: [first])
+    try await store.upsert(feed: feedB, articles: [second])
+
+    let matches = try await store.listStoryBorderlineMatches()
+    let match = try #require(matches.first)
+    #expect(matches.count == 1)
+    #expect(match.articleID == second.id)
+    #expect(match.confidence >= 0.58)
+    #expect(match.confidence < 0.68)
+    #expect(try await store.listStories().count == 2)
+}
+
+@Test func rankingUsesDistinctSourcesAndProtectsUniqueFinds() {
+    let clusterer = StoryClusterer()
+    let now = Date(timeIntervalSince1970: 100_000)
+    let repeatedSingleSource = rankingCandidate(
+        id: "story-volume",
+        feedID: "feed-volume",
+        distinctFeedCount: 1,
+        articleCount: 100,
+        lastActivityAt: now
+    )
+    let independentlyCovered = rankingCandidate(
+        id: "story-sources",
+        feedID: "feed-source",
+        distinctFeedCount: 2,
+        articleCount: 2,
+        lastActivityAt: now
+    )
+    let trueSingleton = rankingCandidate(
+        id: "story-singleton",
+        feedID: "feed-singleton",
+        distinctFeedCount: 1,
+        articleCount: 1,
+        lastActivityAt: now
+    )
+    var hidden = rankingCandidate(
+        id: "story-hidden",
+        feedID: "feed-hidden",
+        distinctFeedCount: 10,
+        articleCount: 10,
+        lastActivityAt: now
+    )
+    hidden.preferenceSignal = 100
+    hidden.isHidden = true
+
+    let result = clusterer.rank(
+        [repeatedSingleSource, independentlyCovered, trueSingleton, hidden],
+        asOf: now
+    )
+
+    #expect(result.topStories.map(\.storyID) == ["story-sources", "story-volume"])
+    #expect(result.uniqueFinds.map(\.storyID) == ["story-singleton"])
+    #expect(result.uniqueFinds.first?.isUniqueFind == true)
+    #expect(result.topStories.first!.score > result.topStories.last!.score)
+    #expect(result.topStories.last?.isUniqueFind == false)
+    #expect(!result.topStories.map(\.storyID).contains(hidden.story.id))
+}
+
+@Test func rankingAppliesRepresentativeFeedDiversityWithStableTies() {
+    let clusterer = StoryClusterer()
+    let now = Date(timeIntervalSince1970: 200_000)
+    let candidates = [
+        rankingCandidate(id: "story-a", feedID: "feed-one", distinctFeedCount: 2, articleCount: 2, lastActivityAt: now),
+        rankingCandidate(id: "story-b", feedID: "feed-one", distinctFeedCount: 2, articleCount: 2, lastActivityAt: now),
+        rankingCandidate(id: "story-c", feedID: "feed-one", distinctFeedCount: 2, articleCount: 2, lastActivityAt: now),
+        rankingCandidate(id: "story-d", feedID: "feed-two", distinctFeedCount: 2, articleCount: 2, lastActivityAt: now)
+    ]
+    let result = clusterer.rank(
+        candidates,
+        asOf: now,
+        configuration: StoryRankingConfiguration(
+            topStoryLimit: 4,
+            uniqueFindLimit: 1,
+            maximumStoriesPerRepresentativeFeed: 2
+        )
+    )
+
+    #expect(result.topStories.map(\.storyID) == ["story-a", "story-b", "story-d"])
+}
+
+@Test func incrementalReprocessingIsDeterministicAndRawFeedInvariant() async throws {
+    let store = try temporaryStore()
+    let feedA = Feed(id: "feed-a", title: "Feed A", url: URL(string: "https://a.example/rss")!)
+    let feedB = Feed(id: "feed-b", title: "Feed B", url: URL(string: "https://b.example/rss")!)
+    let first = clusteringArticle(
+        id: "deterministic-a",
+        feedID: feedA.id,
+        feedTitle: feedA.title,
+        title: "Acme launches solar battery for homes",
+        content: "The product starts shipping this month in cities.",
+        timestamp: 5_000
+    )
+    let second = clusteringArticle(
+        id: "deterministic-b",
+        feedID: feedB.id,
+        feedTitle: feedB.title,
+        title: "Acme launches home solar battery nationwide",
+        content: "The product begins shipping this month in cities.",
+        timestamp: 5_100
+    )
+    try await store.upsert(feed: feedA, articles: [first])
+    try await store.upsert(feed: feedB, articles: [second])
+
+    let rawBefore = try await store.listArticles(filter: ArticleFilter())
+    let storiesBefore = try await store.listStories()
+    let story = try #require(storiesBefore.first)
+    let membershipsBefore = try await store.listStoryMemberships(storyID: story.id)
+    let revisionsBefore = try await store.listStoryRevisions(storyID: story.id)
+
+    let borderlines = try await store.clusterArticles([second, first])
+
+    #expect(borderlines.isEmpty)
+    #expect(try await store.listArticles(filter: ArticleFilter()) == rawBefore)
+    #expect(try await store.listStories() == storiesBefore)
+    #expect(try await store.listStoryMemberships(storyID: story.id) == membershipsBefore)
+    #expect(try await store.listStoryRevisions(storyID: story.id) == revisionsBefore)
+}
+
+@Test func recurringHeadlineOutsideWindowCreatesANewStory() async throws {
+    let store = try temporaryStore()
+    let feedA = Feed(id: "feed-a", title: "Feed A", url: URL(string: "https://a.example/rss")!)
+    let feedB = Feed(id: "feed-b", title: "Feed B", url: URL(string: "https://b.example/rss")!)
+    let first = clusteringArticle(
+        id: "wrap-one",
+        feedID: feedA.id,
+        feedTitle: feedA.title,
+        title: "Daily market wrap",
+        timestamp: 10_000
+    )
+    let later = clusteringArticle(
+        id: "wrap-two",
+        feedID: feedB.id,
+        feedTitle: feedB.title,
+        title: "Daily market wrap",
+        timestamp: 10_000 + (10 * 86_400)
+    )
+
+    try await store.upsert(feed: feedA, articles: [first])
+    try await store.upsert(feed: feedB, articles: [later])
+
+    let stories = try await store.listStories()
+    #expect(stories.count == 2)
+    #expect(Set(stories.map(\.id)).count == 2)
+    #expect(try await store.listArticles(filter: ArticleFilter()).count == 2)
+}
+
+@Test func todayEditionCapsAndSectionsFrozenSources() async throws {
+    let store = try temporaryStore()
+    let startsAt = Date(timeIntervalSince1970: 0)
+    let endsAt = Date(timeIntervalSince1970: 86_400)
+    let generatedAt = Date(timeIntervalSince1970: 80_000)
+
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-top-a",
+        sourceCount: 2,
+        timestamp: 10_000
+    )
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-top-b",
+        sourceCount: 2,
+        timestamp: 11_000
+    )
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-wide",
+        sourceCount: 3,
+        timestamp: 12_000
+    )
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-update",
+        sourceCount: 2,
+        timestamp: 13_000,
+        isUpdate: true
+    )
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-unique",
+        sourceCount: 1,
+        timestamp: 14_000
+    )
+    _ = try await seedTodayStory(
+        store: store,
+        storyID: "story-top-c",
+        sourceCount: 2,
+        timestamp: 15_000
+    )
+    let rawBefore = try await store.listArticles(filter: ArticleFilter())
+
+    let today = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt,
+        endsAt: endsAt,
+        storyLimit: 5,
+        generatedAt: generatedAt
+    )
+
+    #expect(today.id == "today-0-86400-5")
+    #expect(today.items.count == 5)
+    #expect(today.edition.storyLimit == 5)
+    #expect(today.edition.status == .ready)
+    #expect(Set(today.items.map(\.snapshot.section)) == Set([
+        EditionSectionRole.topStories.rawValue,
+        EditionSectionRole.widelyCovered.rawValue,
+        EditionSectionRole.uniqueFinds.rawValue,
+        EditionSectionRole.updates.rawValue
+    ]))
+    let sectionOrder: [String: Int] = [
+        EditionSectionRole.topStories.rawValue: 0,
+        EditionSectionRole.widelyCovered.rawValue: 1,
+        EditionSectionRole.updates.rawValue: 2,
+        EditionSectionRole.uniqueFinds.rawValue: 3
+    ]
+    let positions = today.items.map { sectionOrder[$0.snapshot.section]! }
+    #expect(positions == positions.sorted())
+    #expect(today.items.allSatisfy { !$0.memberArticleIDs.isEmpty })
+    #expect(today.items.allSatisfy {
+        $0.sourceArticles.map(\.articleID) == $0.memberArticleIDs
+    })
+    #expect(today.items.allSatisfy {
+        $0.representativeArticleID.map($0.memberArticleIDs.contains) ?? false
+    })
+    #expect(today.items.flatMap(\.sourceArticles).allSatisfy {
+        $0.liveArticle?.id == $0.articleID
+    })
+    let distinctFeeds = Set(
+        today.items
+            .flatMap(\.sourceArticles)
+            .filter { $0.membershipType != .duplicate }
+            .map(\.feedID)
+    )
+    #expect(today.edition.totalSourceCount == distinctFeeds.count)
+    #expect(try await store.listArticles(filter: ArticleFilter()) == rawBefore)
+}
+
+@Test func todayEditionReusesImmutableSnapshotForSameInputs() async throws {
+    let store = try temporaryStore()
+    let startsAt = Date(timeIntervalSince1970: 100_000)
+    let endsAt = Date(timeIntervalSince1970: 186_400)
+    let generatedAt = Date(timeIntervalSince1970: 180_000)
+    for index in 0..<6 {
+        _ = try await seedTodayStory(
+            store: store,
+            storyID: "story-freeze-\(index)",
+            sourceCount: index == 0 ? 3 : 2,
+            timestamp: 110_000 + TimeInterval(index * 1_000)
+        )
+    }
+
+    let first = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt,
+        endsAt: endsAt,
+        storyLimit: 5,
+        generatedAt: generatedAt
+    )
+    let frozenItem = try #require(first.items.first)
+    let frozenSources = frozenItem.memberArticleIDs
+    let frozenTitle = frozenItem.snapshot.snapshotTitle
+
+    let extraFeed = Feed(
+        id: "feed-late",
+        title: "Late Feed",
+        url: URL(string: "https://late.example/rss")!
+    )
+    let extraArticle = clusteringArticle(
+        id: "article-late",
+        feedID: extraFeed.id,
+        feedTitle: extraFeed.title,
+        title: "Late source joins frozen story",
+        url: "https://late.example/article",
+        timestamp: 170_000
+    )
+    try await store.upsert(feed: extraFeed, articles: [extraArticle])
+    try await store.upsertStoryMembership(StoryArticleMembership(
+        storyID: frozenItem.snapshot.storyID,
+        articleID: extraArticle.id,
+        membershipType: .coverage,
+        confidence: 0.9,
+        addedAt: Date(timeIntervalSince1970: 170_000)
+    ))
+
+    let reused = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt,
+        endsAt: endsAt,
+        storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 185_000)
+    )
+    let reusedItem = try #require(
+        reused.items.first(where: { $0.snapshot.storyID == frozenItem.snapshot.storyID })
+    )
+    #expect(reused.id == first.id)
+    #expect(reused.edition.generatedAt == generatedAt)
+    #expect(reusedItem.memberArticleIDs == frozenSources)
+    #expect(reusedItem.snapshot.snapshotTitle == frozenTitle)
+    #expect(!reusedItem.memberArticleIDs.contains(extraArticle.id))
+
+    let expanded = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt,
+        endsAt: endsAt,
+        storyLimit: 10,
+        generatedAt: Date(timeIntervalSince1970: 185_000)
+    )
+    #expect(expanded.id == "today-100000-186400-10")
+    #expect(expanded.id != first.id)
+    #expect(expanded.items.count >= first.items.count)
+}
+
+@Test func todayEditionConsumptionPersistsAndOnlyAdvancesRawReadState() async throws {
+    let databaseURL = temporaryStoreURL()
+    let store = try SkimStore(databaseURL: databaseURL)
+    for index in 0..<5 {
+        _ = try await seedTodayStory(
+            store: store,
+            storyID: "story-progress-\(index)",
+            sourceCount: 2,
+            timestamp: 210_000 + TimeInterval(index * 1_000)
+        )
+    }
+    let today = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 200_000),
+        endsAt: Date(timeIntervalSince1970: 286_400),
+        storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 280_000)
+    )
+    let firstItem = try #require(today.items.first)
+
+    var progress = try await store.setTodayEditionItemConsumed(
+        editionID: today.id,
+        storyID: firstItem.snapshot.storyID,
+        isConsumed: true,
+        at: Date(timeIntervalSince1970: 281_000)
+    )
+    #expect(progress.consumedItemCount == 1)
+    #expect(progress.progress == 0.2)
+    #expect(progress.edition.status == .ready)
+    for articleID in firstItem.memberArticleIDs {
+        #expect(try await store.article(id: articleID).isRead == true)
+    }
+
+    progress = try await store.setTodayEditionItemConsumed(
+        editionID: today.id,
+        storyID: firstItem.snapshot.storyID,
+        isConsumed: false,
+        at: Date(timeIntervalSince1970: 282_000)
+    )
+    #expect(progress.consumedItemCount == 0)
+    #expect(progress.progress == 0)
+    for articleID in firstItem.memberArticleIDs {
+        #expect(try await store.article(id: articleID).isRead == true)
+    }
+
+    for (index, item) in progress.items.enumerated() {
+        progress = try await store.setTodayEditionItemConsumed(
+            editionID: today.id,
+            storyID: item.snapshot.storyID,
+            isConsumed: true,
+            at: Date(timeIntervalSince1970: 283_000 + TimeInterval(index))
+        )
+    }
+    #expect(progress.consumedItemCount == progress.totalItemCount)
+    #expect(progress.progress == 1)
+    #expect(progress.edition.status == .completed)
+    #expect(progress.edition.completedAt == Date(timeIntervalSince1970: 283_004))
+
+    let reopened = try SkimStore(databaseURL: databaseURL)
+    let persisted = try #require(try await reopened.todayEdition(id: today.id))
+    #expect(persisted.progress == 1)
+    #expect(persisted.edition.status == .completed)
+    #expect(persisted.items.allSatisfy { $0.snapshot.isConsumed })
+}
+
+@Test func emptyTodayEditionCompletesDeterministically() async throws {
+    let store = try temporaryStore()
+    let today = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 300_000),
+        endsAt: Date(timeIntervalSince1970: 386_400),
+        storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 380_000)
+    )
+
+    #expect(today.id == "today-300000-386400-5")
+    #expect(today.items.isEmpty)
+    #expect(today.edition.totalSourceCount == 0)
+    #expect(today.edition.status == .completed)
+    #expect(today.edition.completedAt == Date(timeIntervalSince1970: 380_000))
+    #expect(today.progress == 1)
+}
+
 @Test func appSettingsDefaultOfflinePreloadLimit() throws {
     let settings = try JSONDecoder().decode(AppSettings.self, from: Data("{}".utf8))
 
@@ -289,6 +1243,154 @@ import Testing
     #expect(externalURL?.absoluteString == "https://example.com/from-json?one=1&two=2")
 }
 
+private struct StoryContractFixture: Codable, Equatable {
+    var story: Story
+    var membership: StoryArticleMembership
+    var revision: StoryRevision
+    var userState: StoryUserState
+    var edition: Edition
+    var item: EditionItem
+
+    enum CodingKeys: String, CodingKey {
+        case story
+        case membership
+        case revision
+        case userState = "user_state"
+        case edition
+        case item
+    }
+}
+
+private func clusteringArticle(
+    id: String,
+    feedID: String,
+    feedTitle: String = "Feed",
+    title: String,
+    content: String? = nil,
+    url: String? = nil,
+    timestamp: TimeInterval,
+    isRead: Bool = false,
+    isStarred: Bool = false
+) -> Article {
+    Article(
+        id: id,
+        feedID: feedID,
+        feedTitle: feedTitle,
+        title: title,
+        url: url.flatMap(URL.init(string:)),
+        contentText: content,
+        publishedAt: Date(timeIntervalSince1970: timestamp),
+        fetchedAt: Date(timeIntervalSince1970: timestamp),
+        isRead: isRead,
+        isStarred: isStarred
+    )
+}
+
+private func rankingCandidate(
+    id: String,
+    feedID: String,
+    distinctFeedCount: Int,
+    articleCount: Int,
+    lastActivityAt: Date
+) -> StoryRankingCandidate {
+    StoryRankingCandidate(
+        story: Story(
+            id: id,
+            title: id,
+            firstSeenAt: lastActivityAt,
+            lastActivityAt: lastActivityAt,
+            createdAt: lastActivityAt,
+            updatedAt: lastActivityAt
+        ),
+        representativeFeedID: feedID,
+        distinctFeedCount: distinctFeedCount,
+        articleCount: articleCount
+    )
+}
+
+@discardableResult
+private func seedTodayStory(
+    store: SkimStore,
+    storyID: String,
+    sourceCount: Int,
+    timestamp: TimeInterval,
+    isUpdate: Bool = false
+) async throws -> [String] {
+    var articles: [Article] = []
+    for index in 0..<sourceCount {
+        let feed = Feed(
+            id: "\(storyID)-feed-\(index)",
+            title: "\(storyID) Source \(index)",
+            url: URL(string: "https://\(storyID)-\(index).example/rss")!
+        )
+        let article = clusteringArticle(
+            id: "\(storyID)-article-\(index)",
+            feedID: feed.id,
+            feedTitle: feed.title,
+            title: "Development report concerning \(storyID.uppercased()) source \(index)",
+            content: "Source \(index) reports the \(storyID) development.",
+            url: "https://news.example/\(storyID)/\(index)",
+            timestamp: timestamp + TimeInterval(index)
+        )
+        try await store.upsert(feed: feed, articles: [article])
+        articles.append(article)
+    }
+
+    let representative = articles.last!
+    let story = Story(
+        id: storyID,
+        title: "\(storyID) frozen title",
+        summary: "\(storyID) frozen summary",
+        representativeArticleID: representative.id,
+        firstSeenAt: Date(timeIntervalSince1970: timestamp),
+        lastActivityAt: Date(
+            timeIntervalSince1970: timestamp + TimeInterval(sourceCount - 1)
+        ),
+        createdAt: Date(timeIntervalSince1970: timestamp),
+        updatedAt: Date(
+            timeIntervalSince1970: timestamp + TimeInterval(sourceCount - 1)
+        )
+    )
+    try await store.upsertStory(story)
+    for (index, article) in articles.enumerated() {
+        try await store.upsertStoryMembership(StoryArticleMembership(
+            storyID: storyID,
+            articleID: article.id,
+            membershipType: isUpdate && index == articles.count - 1
+                ? .update
+                : .coverage,
+            confidence: 0.9,
+            addedAt: Date(
+                timeIntervalSince1970: timestamp + TimeInterval(index)
+            )
+        ))
+    }
+    try await store.insertStoryRevision(StoryRevision(
+        storyID: storyID,
+        revisionNumber: 1,
+        title: story.title,
+        summary: story.summary!,
+        deltaSummary: isUpdate ? StoryMembershipType.update.rawValue : nil,
+        representativeArticleID: representative.id,
+        sourceCount: sourceCount,
+        contentFingerprint: "fixture:\(storyID)",
+        isMaterialChange: true,
+        createdAt: Date(
+            timeIntervalSince1970: timestamp + TimeInterval(sourceCount)
+        )
+    ))
+    return articles.map(\.id)
+}
+
+private func operationThrows(_ operation: () async throws -> Void) async -> Bool {
+    do {
+        try await operation()
+        return false
+    } catch {
+        return true
+    }
+}
+
 @Test func recoversFromSimulatedIOErrorByReconnectingAndRetrying() async throws {
     let store = try temporaryStore()
     let feed = Feed(id: "feed-1", title: "A Feed", url: URL(string: "https://example.com/rss")!)
@@ -308,9 +1410,12 @@ import Testing
 }
 
 private func temporaryStore() throws -> SkimStore {
+    try SkimStore(databaseURL: temporaryStoreURL())
+}
+
+private func temporaryStoreURL() -> URL {
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-    let url = dir.appendingPathComponent("skim.sqlite")
-    return try SkimStore(databaseURL: url)
+    return dir.appendingPathComponent("skim.sqlite")
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {

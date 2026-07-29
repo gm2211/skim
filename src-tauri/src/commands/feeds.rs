@@ -3,6 +3,7 @@ use crate::ai::provider::{create_provider, ChatMessage, ChatRequest};
 use crate::commands::ai::{default_model, extract_json_object};
 use crate::db::models::{AppSettings, Feed, Folder, SmartRule, SmartRules, MatchMode};
 use crate::db::queries;
+use crate::db::story_clustering;
 use crate::db::Database;
 use crate::feed::fetch_and_parse_feed;
 use crate::feed::feedly;
@@ -137,6 +138,9 @@ pub async fn add_feed(db: State<'_, Database>, url: String) -> Result<Feed, Stri
     for article in &articles {
         queries::insert_article(&conn, article)
             .map_err(|e| format!("Failed to save article: {}", e))?;
+        if let Err(error) = story_clustering::process_article(&conn, article) {
+            log::warn!("Failed to cluster article {}: {}", article.id, error);
+        }
     }
 
     queries::update_feed_fetched(&conn, &feed.id, feed.updated_at)
@@ -230,6 +234,9 @@ pub async fn refresh_feed(
         if queries::insert_article(&conn, article).map_err(|e| e.to_string())? {
             new_count += 1;
         }
+        if let Err(error) = story_clustering::process_article(&conn, article) {
+            log::warn!("Failed to cluster article {}: {}", article.id, error);
+        }
     }
     // Keep local star state in sync with Feedly's saved state for already-imported
     // articles too (insert_article uses INSERT OR IGNORE so it doesn't update).
@@ -289,6 +296,9 @@ pub async fn refresh_all_feeds(db: State<'_, Database>) -> Result<i32, String> {
                 for article in &articles {
                     if queries::insert_article(&conn, article).map_err(|e| e.to_string())? {
                         total_new += 1;
+                    }
+                    if let Err(error) = story_clustering::process_article(&conn, article) {
+                        log::warn!("Failed to cluster article {}: {}", article.id, error);
                     }
                 }
                 queries::update_feed_fetched(&conn, &feed.id, now).map_err(|e| e.to_string())?;
@@ -386,6 +396,9 @@ pub async fn import_feedly(
         }
         for article in &articles {
             let _ = queries::insert_article(&conn, article);
+            if let Err(error) = story_clustering::process_article(&conn, article) {
+                log::warn!("Failed to cluster article {}: {}", article.id, error);
+            }
         }
         let now = chrono::Utc::now().timestamp();
         let _ = queries::update_feed_fetched(&conn, &feed.id, now);

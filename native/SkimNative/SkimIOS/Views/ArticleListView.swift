@@ -1642,7 +1642,9 @@ private enum AutoGroupClassifier {
         case "foundation-models": return "Apple Intelligence"
         case "claude-subscription": return "Claude Pro/Max"
         case "mlx": return "MLX"
-        case "custom", "openai", "openrouter": return "custom provider"
+        case "xai": return "Grok"
+        case "openai": return "OpenAI"
+        case "custom", "openrouter": return "custom provider"
         case "anthropic": return "Claude Pro/Max"
         default: return provider
         }

@@ -194,6 +194,8 @@ enum NativeAI {
             return "Asking Claude..."
         case "openai":
             return "Calling OpenAI..."
+        case "xai":
+            return "Asking Grok..."
         case "openrouter":
             return "Calling OpenRouter..."
         default:
@@ -855,7 +857,7 @@ enum NativeAI {
             throw NativeAIError.unavailable("AI features are disabled in Settings.")
         case "foundation-models":
             return try await completeWithFoundationModels(instructions: instructions, prompt: prompt, maxTokens: maxTokens)
-        case "openai", "openrouter", "custom":
+        case "openai", "xai", "openrouter", "custom":
             return try await completeOpenAICompatible(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
         case "anthropic", "claude-subscription":
             if enableWebSearch {
@@ -1588,6 +1590,8 @@ enum NativeAI {
         switch settings.provider {
         case "openai":
             base = "https://api.openai.com"
+        case "xai":
+            base = "https://api.x.ai"
         case "openrouter":
             base = "https://openrouter.ai/api"
         default:
@@ -1693,6 +1697,8 @@ enum NativeAI {
         switch provider {
         case "anthropic", "claude-subscription":
             return "claude-sonnet-5"
+        case "xai":
+            return "grok-4.3"
         case "openrouter":
             return "openai/gpt-4o-mini"
         default:
@@ -1703,6 +1709,7 @@ enum NativeAI {
     private static func providerDisplayName(_ provider: String) -> String {
         switch provider {
         case "openai": "OpenAI"
+        case "xai": "Grok"
         case "openrouter": "OpenRouter"
         case "anthropic": "Claude API"
         case "claude-subscription": "Claude subscription"

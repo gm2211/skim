@@ -119,8 +119,8 @@ struct SettingsSheet: View {
                 )
             } else if providerNeedsAPIKey {
                 SettingsTextField(
-                    title: "Bearer token or API key",
-                    placeholder: "sk-...",
+                    title: apiKeyFieldTitle,
+                    placeholder: apiKeyFieldPlaceholder,
                     text: aiAPIKeyBinding,
                     isSecure: true
                 )
@@ -341,7 +341,9 @@ struct SettingsSheet: View {
             ("foundation-models", "Apple Intelligence", "Apple's on-device model. Apple exposes use cases, not selectable quality tiers or ChatGPT routing for app prompts."),
             ("mlx", "On-device MLX", "Download and run a small MLX model on this iPhone. Offline after download."),
             ("claude-subscription", "Claude Pro/Max", "Signs in with Claude in-app and saves the bearer token automatically."),
-            ("custom", "Custom", "Any OpenAI-compatible endpoint or API-key provider. ChatGPT subscriptions do not expose an app API token.")
+            ("xai", "Grok (xAI)", "Grok models over the xAI API. Needs an API key from console.x.ai — a SuperGrok or X Premium subscription does not cover app access."),
+            ("openai", "OpenAI", "GPT models over the OpenAI API. Needs a platform API key — a ChatGPT subscription does not cover app access."),
+            ("custom", "Custom", "Any OpenAI-compatible endpoint or API-key provider.")
         ]
     }
 
@@ -350,7 +352,7 @@ struct SettingsSheet: View {
     }
 
     private var providerNeedsAPIKey: Bool {
-        ["claude-subscription", "custom"].contains(draft.ai.provider)
+        ["claude-subscription", "xai", "openai", "custom"].contains(draft.ai.provider)
     }
 
     private var providerIsReady: Bool {
@@ -379,6 +381,10 @@ struct SettingsSheet: View {
             return NativeMLX.isDownloadedSync(mlxSelectedRepoId) ? "On-device MLX ready" : "Download a model"
         case "claude-subscription":
             return providerIsReady ? "Claude configured" : "Claude sign-in needed"
+        case "xai":
+            return providerIsReady ? "Grok configured" : "xAI API key needed"
+        case "openai":
+            return providerIsReady ? "OpenAI configured" : "OpenAI API key needed"
         case "custom":
             return providerIsReady ? "Custom provider configured" : "Provider details needed"
         default:
@@ -401,6 +407,10 @@ struct SettingsSheet: View {
             return "Choose a model, download it once, then Skim can run AI locally on-device."
         case "claude-subscription":
             return providerIsReady ? "Skim will use your Claude Pro/Max token for chat, summaries, catch-up, and AI Inbox." : "Tap 'Sign in with Claude' below to sign in and save your bearer token automatically."
+        case "xai":
+            return providerIsReady ? "Skim will call the xAI API for chat, summaries, catch-up, and AI Inbox." : "Create an API key at console.x.ai and paste it below. Billing runs through your xAI account, separate from a SuperGrok or X Premium plan."
+        case "openai":
+            return providerIsReady ? "Skim will call the OpenAI API for chat, summaries, catch-up, and AI Inbox." : "Create an API key at platform.openai.com and paste it below. Billing runs through your OpenAI account, separate from a ChatGPT subscription."
         case "custom":
             return providerIsReady ? "Skim will call this OpenAI-compatible endpoint for chat, summaries, catch-up, and AI Inbox." : "Add an API key, an endpoint, or both. For OpenAI API, use https://api.openai.com with a platform API key."
         default:
@@ -412,9 +422,25 @@ struct SettingsSheet: View {
         switch draft.ai.provider {
         case "claude-subscription":
             return "claude-sonnet-5"
+        case "xai":
+            return "grok-4.3"
         default:
             return "gpt-4o-mini"
         }
+    }
+
+    /// Label and placeholder for the key field, so each provider names the
+    /// credential the way its own console does.
+    private var apiKeyFieldTitle: String {
+        switch draft.ai.provider {
+        case "xai": return "xAI API key"
+        case "openai": return "OpenAI API key"
+        default: return "Bearer token or API key"
+        }
+    }
+
+    private var apiKeyFieldPlaceholder: String {
+        draft.ai.provider == "xai" ? "xai-..." : "sk-..."
     }
 
     private var mlxSelectedRepoId: String {
@@ -440,6 +466,17 @@ struct SettingsSheet: View {
                     } else if value == "claude-subscription" {
                         $0.endpoint = nil
                         $0.model = $0.model?.nilIfEmpty ?? "claude-sonnet-5"
+                    } else if value == "xai" {
+                        // Fixed base URL, and a model id carried over from another
+                        // provider (claude-*, an MLX repo id) would 404 on xAI.
+                        $0.endpoint = nil
+                        let current = $0.model?.nilIfEmpty
+                        $0.model = current?.hasPrefix("grok") == true ? current : "grok-4.3"
+                    } else if value == "openai" {
+                        $0.endpoint = nil
+                        let current = $0.model?.nilIfEmpty
+                        let isOpenAIModel = current?.hasPrefix("gpt") == true || current?.hasPrefix("o") == true
+                        $0.model = isOpenAIModel ? current : "gpt-4o-mini"
                     } else if value == "custom" {
                         $0.model = $0.model?.nilIfEmpty ?? "gpt-4o-mini"
                     }
@@ -453,9 +490,9 @@ struct SettingsSheet: View {
         switch ai.provider {
         case "foundation-models", "mlx", "claude-subscription", "custom":
             break
+        case "xai":
+            next.model = next.model?.nilIfEmpty ?? "grok-4.3"
         case "openai":
-            next.provider = "custom"
-            next.endpoint = next.endpoint?.nilIfEmpty ?? "https://api.openai.com"
             next.model = next.model?.nilIfEmpty ?? "gpt-4o-mini"
         case "openrouter":
             next.provider = "custom"

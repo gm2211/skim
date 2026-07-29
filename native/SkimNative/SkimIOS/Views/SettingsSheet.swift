@@ -493,11 +493,20 @@ struct SettingsSheet: View {
         )
     }
 
+    /// The old default Claude model id (pre-PR #73). A stored `ai.model` that matches this
+    /// exactly means the user never customized the field — it was auto-filled by the old
+    /// default and should be migrated forward one time. This runs every time settings are
+    /// normalized (each Settings sheet appearance), but is idempotent: once migrated, the
+    /// stored value no longer equals this constant, so the branch becomes a no-op.
+    private let legacyDefaultAnthropicModel = "claude-sonnet-4-5"
+
     private func normalizedAISettings(_ ai: AISettings) -> AISettings {
         var next = ai
         switch ai.provider {
-        case "foundation-models", "mlx", "claude-subscription", "custom":
+        case "foundation-models", "mlx", "custom":
             break
+        case "claude-subscription":
+            if next.model == legacyDefaultAnthropicModel { next.model = "claude-sonnet-5" }
         case "xai":
             next.model = next.model?.nilIfEmpty ?? "grok-4.3"
         case "openai":
@@ -508,7 +517,9 @@ struct SettingsSheet: View {
             next.model = next.model?.nilIfEmpty ?? "openai/gpt-4o-mini"
         case "anthropic":
             next.provider = "claude-subscription"
-            next.model = next.model?.nilIfEmpty ?? "claude-sonnet-5"
+            next.model = next.model == legacyDefaultAnthropicModel
+                ? "claude-sonnet-5"
+                : next.model?.nilIfEmpty ?? "claude-sonnet-5"
         default:
             next.provider = "foundation-models"
             next.endpoint = nil

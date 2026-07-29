@@ -700,6 +700,36 @@ function SyncTab({
           style={{ ...inputStyle, width: 120 }}
         />
       </InputField>
+
+      <InputField
+        label="Today edition size"
+        description="How many stories Today surfaces each day. Changing this starts a brand-new edition for today with its own fresh completion state — it does not resize or reset today's edition you already have."
+      >
+        <div className="inline-flex rounded-lg bg-white/5 border border-white/10" style={{ padding: 2 }}>
+          {([5, 10, 20] as const).map((size) => (
+            <button
+              key={size}
+              onClick={() =>
+                setLocal({
+                  ...local,
+                  sync: {
+                    ...local.sync,
+                    today_story_limit: size,
+                  },
+                })
+              }
+              className={`rounded-md transition-colors ${
+                local.sync.today_story_limit === size
+                  ? "bg-accent text-white"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+              style={{ padding: "6px 18px", fontSize: 13, fontWeight: 500 }}
+            >
+              {size}
+            </button>
+          ))}
+        </div>
+      </InputField>
     </>
   );
 }

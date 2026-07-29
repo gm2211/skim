@@ -5,7 +5,7 @@ type ListFilter = "all" | "unread" | "starred";
 export type AddFeedTab = "url" | "feedly";
 
 type PhonePane = "sidebar" | "list" | "detail";
-type ArticleReturnTarget = "catchup";
+type ArticleReturnTarget = "catchup" | "today";
 
 interface UiState {
   sidebarView: SidebarView;
@@ -28,6 +28,7 @@ interface UiState {
   setSidebarView: (view: SidebarView) => void;
   setSelectedArticleId: (id: string | null) => void;
   openArticleFromCatchup: (id: string) => void;
+  openArticleFromToday: (id: string) => void;
   closeArticleDetail: () => void;
   setShowAddFeed: (show: boolean, tab?: AddFeedTab) => void;
   setShowSettings: (show: boolean) => void;
@@ -82,6 +83,12 @@ export const useUiStore = create<UiState>((set, get) => ({
       selectedArticleId: id,
       articleReturnTarget: "catchup",
       showCatchup: false,
+      phonePane: state.isPhone ? "detail" : state.phonePane,
+    })),
+  openArticleFromToday: (id) =>
+    set((state) => ({
+      selectedArticleId: id,
+      articleReturnTarget: "today",
       phonePane: state.isPhone ? "detail" : state.phonePane,
     })),
   closeArticleDetail: () =>

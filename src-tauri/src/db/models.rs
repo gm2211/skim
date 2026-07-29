@@ -345,9 +345,16 @@ pub struct SyncSettings {
     /// are evicted so the "Recent" list stays bounded.
     #[serde(default = "default_recent_cap")]
     pub recent_cap: i32,
+    /// Today edition story cap. Must be 5, 10, or 20 — enforced by
+    /// `today_edition::validate_window_and_limit`, not here. Changing this
+    /// value changes the edition id (`today-{starts}-{ends}-{limit}`), so it
+    /// starts a fresh edition rather than resizing the current one.
+    #[serde(default = "default_today_story_limit")]
+    pub today_story_limit: i32,
 }
 
 fn default_recent_cap() -> i32 { 3000 }
+fn default_today_story_limit() -> i32 { 10 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArticleTriage {
@@ -449,7 +456,24 @@ impl Default for AppSettings {
                 refresh_interval_minutes: 30,
                 max_articles_per_feed: 200,
                 recent_cap: 3000,
+                today_story_limit: 10,
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod sync_settings_tests {
+    use super::SyncSettings;
+
+    #[test]
+    fn legacy_sync_settings_json_without_today_story_limit_defaults_to_ten() {
+        let legacy = r#"{
+            "refresh_interval_minutes": 30,
+            "max_articles_per_feed": 200
+        }"#;
+        let settings: SyncSettings = serde_json::from_str(legacy).expect("legacy settings parse");
+        assert_eq!(settings.today_story_limit, 10);
+        assert_eq!(settings.recent_cap, 3000);
     }
 }

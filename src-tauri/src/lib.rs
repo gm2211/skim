@@ -252,6 +252,10 @@ pub fn run() {
             commands::articles::toggle_star,
             commands::articles::toggle_read,
             commands::articles::fetch_full_article,
+            // Editions
+            commands::editions::get_or_generate_today_edition,
+            commands::editions::list_today_edition_items,
+            commands::editions::set_today_edition_item_consumed,
             // AI
             commands::ai::summarize_article,
             commands::ai::cancel_summarize,

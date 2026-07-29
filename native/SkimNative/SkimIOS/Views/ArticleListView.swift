@@ -288,8 +288,8 @@ struct ArticleListView: View {
                 guard !context.isEmpty else {
                     throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before chatting.")
                 }
-                let text = try await NativeAI.chat(conversation: conversation, articles: context, settings: model.settings)
-                return AIChatAnswer(text: text, articles: context)
+                let (text, citations) = try await NativeAI.chat(conversation: conversation, articles: context, settings: model.settings)
+                return AIChatAnswer(text: text, articles: context, webCitations: citations)
             }
         }
     }

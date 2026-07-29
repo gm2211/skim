@@ -97,6 +97,20 @@ struct AIChatRequest: Identifiable {
 struct AIChatAnswer {
     var text: String
     var articles: [Article]
+    var webCitations: [WebCitation] = []
+}
+
+/// A citation the model surfaced via the `web_search` tool during a chat
+/// tool-use loop. Mirrors desktop's `WebCitation` (src-tauri/src/commands/chat.rs)
+/// so citation semantics stay consistent across platforms.
+struct WebCitation: Identifiable, Sendable {
+    let id = UUID()
+    var title: String
+    var url: String
+    var snippet: String
+    /// The query the model issued to produce this citation. Useful when
+    /// several searches happen across tool iterations.
+    var query: String
 }
 
 struct NativeAIAvailabilityStatus {
@@ -759,10 +773,12 @@ enum NativeAI {
             conversation: AIChatConversation(latestQuestion: question),
             article: article,
             settings: settings
-        )
+        ).text
     }
 
-    static func chat(conversation: AIChatConversation, article: Article, settings: AppSettings) async throws -> String {
+    static func chat(
+        conversation: AIChatConversation, article: Article, settings: AppSettings
+    ) async throws -> (text: String, citations: [WebCitation]) {
         let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
         let baseInstructions = "You answer questions about a single article using only the provided article text and the conversation context. Answer only the latest user question. Use previous turns only to resolve references like 'that' or 'the second one'. Do not repeat a prior answer unless the latest question explicitly asks you to recap it. If the answer is not in the article, say so."
         let instructions = toolsOK
@@ -772,13 +788,14 @@ enum NativeAI {
         // Local MLX web-search path (skim-7oi1)
         if localWebSearchEnabled(settings.ai) {
             let articleContext = articleDigest([article], limit: 1, wordsPerArticle: 1800)
-            return try await chatLocalWithSearch(
+            let text = try await chatLocalWithSearch(
                 conversation: conversation,
                 articleContext: articleContext,
                 instructions: baseInstructions,
                 answerMaxTokens: 650,
                 settings: settings
             )
+            return (text, [])
         }
 
         // MLX without web search: still use multi-turn messages for better instruct-model behavior
@@ -790,14 +807,15 @@ enum NativeAI {
                 conversation: conversation,
                 webBlock: nil
             )
-            return try await NativeMLX.complete(
+            let text = try await NativeMLX.complete(
                 settings: settings.ai,
                 messages: msgs,
                 maxTokens: 650
             )
+            return (text, [])
         }
 
-        return try await complete(
+        return try await completeWithCitations(
             settings: settings,
             instructions: instructions,
             prompt: """
@@ -816,10 +834,12 @@ enum NativeAI {
             conversation: AIChatConversation(latestQuestion: question),
             articles: articles,
             settings: settings
-        )
+        ).text
     }
 
-    static func chat(conversation: AIChatConversation, articles: [Article], settings: AppSettings) async throws -> String {
+    static func chat(
+        conversation: AIChatConversation, articles: [Article], settings: AppSettings
+    ) async throws -> (text: String, citations: [WebCitation]) {
         let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
         let baseInstructions = """
             You answer questions across a set of RSS articles using the provided article list and conversation context. Answer only the latest user question. Use previous turns only to resolve references like 'that' or 'the second one'. Do not repeat prior answers unless the latest question explicitly asks. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable.
@@ -829,7 +849,7 @@ enum NativeAI {
             : baseInstructions
         // Note (skim-7oi1 v1): local MLX web search is scoped to single-article chat only.
         // Multi-article chat falls through to the plain complete() path.
-        return try await complete(
+        return try await completeWithCitations(
             settings: settings,
             instructions: instructions,
             prompt: """
@@ -861,7 +881,7 @@ enum NativeAI {
             return try await completeOpenAICompatible(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
         case "anthropic", "claude-subscription":
             if enableWebSearch {
-                return try await completeAnthropicWithTools(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+                return try await completeAnthropicWithTools(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens).text
             }
             return try await completeAnthropic(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
         case "mlx":
@@ -875,6 +895,32 @@ enum NativeAI {
         default:
             throw NativeAIError.unavailable("Provider \(ai.provider) is not available in the native iOS app.")
         }
+    }
+
+    /// Like `complete`, but also returns any web-search citations the model
+    /// gathered during the tool-use loop (empty for providers/paths that
+    /// don't support tools). Used by the chat surfaces that render source
+    /// chips; other `complete` callers don't need citations and keep using
+    /// the plain String-returning overload above.
+    static func completeWithCitations(
+        settings: AppSettings,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        enableWebSearch: Bool = false
+    ) async throws -> (text: String, citations: [WebCitation]) {
+        let ai = settings.ai
+        guard enableWebSearch, ["anthropic", "claude-subscription"].contains(ai.provider) else {
+            let text = try await complete(
+                settings: settings,
+                instructions: instructions,
+                prompt: prompt,
+                maxTokens: maxTokens,
+                enableWebSearch: enableWebSearch
+            )
+            return (text, [])
+        }
+        return try await completeAnthropicWithTools(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
     }
 
     static func completeWithFoundationModels(instructions: String, prompt: String, maxTokens: Int) async throws -> String {
@@ -1380,7 +1426,7 @@ enum NativeAI {
     /// (subscription token or API key) is currently configured, for populating
     /// the Model dropdown in Settings. Mirrors the auth-header selection in
     /// `buildAnthropicRequestFull` — keep the two in sync if that logic changes.
-    static func fetchAnthropicModels(settings: AISettings) async throws -> [AnthropicModelInfo] {
+    static func fetchAnthropicModels(settings: AISettings) async throws -> [AIModelInfo] {
         let isSubscription = settings.provider == "claude-subscription"
         let accessToken: String
         if isSubscription {
@@ -1438,8 +1484,46 @@ enum NativeAI {
     /// Parses the `{"data": [{"id": ..., "display_name": ...}, ...]}` envelope
     /// returned by Anthropic's `/v1/models` endpoint, preserving API order.
     /// Not private so unit tests can exercise it directly against fixtures.
-    static func parseAnthropicModelsResponse(_ data: Data) throws -> [AnthropicModelInfo] {
-        try JSONDecoder().decode(AnthropicModelsResponse.self, from: data).data
+    static func parseAnthropicModelsResponse(_ data: Data) throws -> [AIModelInfo] {
+        try JSONDecoder().decode(AIModelsResponse.self, from: data).data
+    }
+
+    /// Fetches the live model list from an OpenAI-compatible `/v1/models`
+    /// endpoint (OpenAI, xAI). Both return `{"data": [{"id": ...}, ...]}` with
+    /// no display name, so the id doubles as the label.
+    ///
+    /// Results are sorted by id: OpenAI in particular returns dozens of models
+    /// in no meaningful order, and an alphabetical list is at least predictable
+    /// to scan.
+    static func fetchOpenAICompatibleModels(settings: AISettings) async throws -> [AIModelInfo] {
+        guard let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty else {
+            throw NativeAIError.unavailable("Add an API key for \(providerDisplayName(settings.provider)) in Settings.")
+        }
+
+        var request = URLRequest(url: modelsURL(for: settings))
+        request.httpMethod = "GET"
+        request.timeoutInterval = 15
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
+        return try parseOpenAICompatibleModelsResponse(data)
+    }
+
+    static func parseOpenAICompatibleModelsResponse(_ data: Data) throws -> [AIModelInfo] {
+        try JSONDecoder().decode(AIModelsResponse.self, from: data).data
+            .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
+    }
+
+    /// Derives the `/v1/models` URL from the same base the completion path uses,
+    /// so a custom endpoint keeps working.
+    private static func modelsURL(for settings: AISettings) -> URL {
+        let completions = openAICompatibleURL(settings).absoluteString
+        guard let range = completions.range(of: "/chat/completions", options: .backwards) else {
+            return URL(string: "https://api.openai.com/v1/models")!
+        }
+        return URL(string: completions.replacingCharacters(in: range, with: "/models"))
+            ?? URL(string: "https://api.openai.com/v1/models")!
     }
 
     // MARK: - web_search tool definition
@@ -1476,7 +1560,7 @@ enum NativeAI {
         instructions: String,
         prompt: String,
         maxTokens: Int
-    ) async throws -> String {
+    ) async throws -> (text: String, citations: [WebCitation]) {
         let isSubscription = settings.provider == "claude-subscription"
 
         // Resolve access token (mirrors completeAnthropic / completeAnthropicSubscription)
@@ -1506,6 +1590,11 @@ enum NativeAI {
 
         let maxIterations = 3
         var currentToken = accessToken
+
+        // Web-search citations gathered across tool iterations, deduped by
+        // URL (mirrors the Rust reference's `!citations.iter().any(|c| c.url == r.url)`).
+        var citations: [WebCitation] = []
+        var seenCitationURLs: Set<String> = []
 
         for iteration in 0...maxIterations {
             let request = try buildAnthropicRequestFull(
@@ -1542,7 +1631,7 @@ enum NativeAI {
                 )
                 let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
                 try validate(response: retryResponse, data: retryData, provider: providerDisplayName(settings.provider))
-                return try decodeAnthropicContent(data: retryData)
+                return (try decodeAnthropicContent(data: retryData), citations)
             }
 
             try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
@@ -1559,13 +1648,13 @@ enum NativeAI {
                 guard !trimmed.isEmpty else {
                     throw NativeAIError.unavailable("The Claude response was empty.")
                 }
-                return trimmed
+                return (trimmed, citations)
             }
 
             if iteration == maxIterations {
                 // Hit iteration cap; return whatever text we have.
                 let trimmed = joinedText.trimmingCharacters(in: .whitespacesAndNewlines)
-                return trimmed.isEmpty ? "(No response)" : trimmed
+                return (trimmed.isEmpty ? "(No response)" : trimmed, citations)
             }
 
             // --- Build assistant turn (text block + tool_use blocks) ---
@@ -1617,6 +1706,11 @@ enum NativeAI {
                                 "content": "web_search returned no results for: \(query)"
                             ])
                         } else {
+                            // Capture citations for the UI, deduped by URL across iterations.
+                            for r in results where seenCitationURLs.insert(r.url).inserted {
+                                citations.append(WebCitation(title: r.title, url: r.url, snippet: r.snippet, query: query))
+                            }
+
                             let payload: [String: Any] = [
                                 "query": query,
                                 "results": results.map { ["title": $0.title, "url": $0.url, "snippet": $0.snippet] }
@@ -2112,7 +2206,7 @@ private struct OpenAIResponse: Decodable {
 /// One entry from Anthropic's `/v1/models` list, used to populate the Model
 /// dropdown in Settings > AI. Not private so `SettingsSheet` and unit tests
 /// can reference it directly.
-struct AnthropicModelInfo: Decodable, Equatable, Sendable {
+struct AIModelInfo: Decodable, Equatable, Sendable {
     var id: String
     var displayName: String
 
@@ -2120,10 +2214,24 @@ struct AnthropicModelInfo: Decodable, Equatable, Sendable {
         case id
         case displayName = "display_name"
     }
+
+    init(id: String, displayName: String) {
+        self.id = id
+        self.displayName = displayName
+    }
+
+    /// OpenAI-compatible `/v1/models` responses (OpenAI, xAI) carry only an
+    /// `id`, so fall back to it when `display_name` is absent.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let id = try container.decode(String.self, forKey: .id)
+        self.id = id
+        self.displayName = (try? container.decode(String.self, forKey: .displayName)) ?? id
+    }
 }
 
-private struct AnthropicModelsResponse: Decodable {
-    var data: [AnthropicModelInfo]
+private struct AIModelsResponse: Decodable {
+    var data: [AIModelInfo]
 }
 
 // MARK: - JSONValue: lightweight dynamic JSON for tool_use input payloads
@@ -2500,7 +2608,8 @@ struct AIChatSheet: View {
                 AIChatMessage(
                     role: .assistant,
                     text: answer.text,
-                    referencedArticles: ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles)
+                    referencedArticles: ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles),
+                    webCitations: answer.webCitations
                 )
             )
         } catch {
@@ -2524,6 +2633,7 @@ struct AIChatMessage: Identifiable, Sendable {
     var role: Role
     var text: String
     var referencedArticles: [Article] = []
+    var webCitations: [WebCitation] = []
     var isError = false
     var needsReauth = false
 }
@@ -2531,6 +2641,8 @@ struct AIChatMessage: Identifiable, Sendable {
 private struct AIChatBubble: View {
     var message: AIChatMessage
     var onReauth: (() -> Void)? = nil
+
+    @State private var activeCitation: WebCitation?
 
     var body: some View {
         HStack {
@@ -2568,6 +2680,19 @@ private struct AIChatBubble: View {
                         }
                     }
                 }
+
+                if !message.webCitations.isEmpty {
+                    ChatFlowLayout(spacing: 8) {
+                        ForEach(message.webCitations) { citation in
+                            Button {
+                                activeCitation = citation
+                            } label: {
+                                WebCitationChip(citation: citation)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 15)
             .padding(.vertical, 12)
@@ -2580,6 +2705,138 @@ private struct AIChatBubble: View {
                 Spacer(minLength: 42)
             }
         }
+        .sheet(item: $activeCitation) { citation in
+            CitationBrowserSheet(citation: citation)
+        }
+    }
+}
+
+/// A tappable source chip for a single web-search citation. Shows the
+/// citation's title (falling back to its domain when the title is empty)
+/// behind a globe glyph, matching desktop's "web" source treatment.
+private struct WebCitationChip: View {
+    var citation: WebCitation
+
+    private var label: String {
+        let trimmedTitle = citation.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedTitle.isEmpty { return trimmedTitle }
+        return URL(string: citation.url)?.host(percentEncoded: false) ?? citation.url
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "globe")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(SkimStyle.accent)
+
+            Text(label)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(SkimStyle.text)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(SkimStyle.chrome.opacity(0.72), in: Capsule())
+        .overlay {
+            Capsule()
+                .stroke(SkimStyle.separator.opacity(0.7), lineWidth: 1)
+        }
+        .accessibilityLabel("Open source \(label)")
+    }
+}
+
+/// Simple left-to-right, top-to-bottom wrapping layout for chip rows.
+private struct ChatFlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        var rowWidth: CGFloat = 0
+        var totalWidth: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if rowWidth + size.width > maxWidth, rowWidth > 0 {
+                totalHeight += rowHeight + spacing
+                totalWidth = max(totalWidth, rowWidth)
+                rowWidth = 0
+                rowHeight = 0
+            }
+            rowWidth += size.width + (rowWidth > 0 ? spacing : 0)
+            rowHeight = max(rowHeight, size.height)
+        }
+        totalHeight += rowHeight
+        totalWidth = max(totalWidth, rowWidth)
+        return CGSize(width: totalWidth, height: totalHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let maxWidth = bounds.width
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth, x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(
+                at: CGPoint(x: bounds.minX + x, y: bounds.minY + y),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(size)
+            )
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
+/// In-app browser sheet for opening a web-search citation, mirroring the
+/// WKWebView-based reader used for the article "Web" page.
+private struct CitationBrowserSheet: View {
+    var citation: WebCitation
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+    @State private var snapshot = WebViewSnapshot()
+
+    private var url: URL? { URL(string: citation.url) }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let url {
+                    WebView(url: url, snapshot: $snapshot)
+                        .ignoresSafeArea(edges: .bottom)
+                } else {
+                    ContentUnavailableView("Link unavailable", systemImage: "globe.badge.chevron.backward")
+                        .foregroundStyle(SkimStyle.text)
+                }
+            }
+            .navigationTitle(url?.host(percentEncoded: false) ?? citation.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") { dismiss() }
+                }
+                if let url {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            openURL(url)
+                        } label: {
+                            Image(systemName: "safari")
+                        }
+                        .accessibilityLabel("Open in Safari")
+                    }
+                }
+            }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
     }
 }
 

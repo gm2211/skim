@@ -128,10 +128,18 @@ struct SettingsSheet: View {
 
             if draft.ai.provider != "foundation-models" && draft.ai.provider != "none" && draft.ai.provider != "mlx" {
                 if draft.ai.provider == "claude-subscription" && providerIsReady {
-                    ClaudeModelPicker(
+                    RemoteModelPicker(
                         modelID: aiModelBinding,
                         settings: draft.ai,
-                        placeholder: defaultModelPlaceholder
+                        placeholder: defaultModelPlaceholder,
+                        fetch: { try await NativeAI.fetchAnthropicModels(settings: $0) }
+                    )
+                } else if ["xai", "openai"].contains(draft.ai.provider) && providerIsReady {
+                    RemoteModelPicker(
+                        modelID: aiModelBinding,
+                        settings: draft.ai,
+                        placeholder: defaultModelPlaceholder,
+                        fetch: { try await NativeAI.fetchOpenAICompatibleModels(settings: $0) }
                     )
                 } else {
                     SettingsTextField(
@@ -613,12 +621,15 @@ struct SettingsSheet: View {
 /// (never a dead control) whenever the list can't be loaded, and always
 /// keeps the currently stored model id visible/selectable even if the
 /// API didn't return it.
-private struct ClaudeModelPicker: View {
+private struct RemoteModelPicker: View {
     @Binding var modelID: String
     var settings: AISettings
     var placeholder: String
+    /// Provider-specific fetch — Anthropic's `/v1/models` carries display names,
+    /// the OpenAI-compatible one does not.
+    var fetch: @Sendable (AISettings) async throws -> [AIModelInfo]
 
-    @State private var models: [AnthropicModelInfo] = []
+    @State private var models: [AIModelInfo] = []
     @State private var isLoading = true
     @State private var loadFailed = false
 
@@ -640,11 +651,11 @@ private struct ClaudeModelPicker: View {
     /// The fetched models, plus the currently stored id appended as a
     /// synthetic entry (labeled with its raw id) when the API list doesn't
     /// already contain it — so the current value is always visible/selected.
-    private var displayEntries: [AnthropicModelInfo] {
+    private var displayEntries: [AIModelInfo] {
         guard let current = modelID.nilIfEmpty, !models.contains(where: { $0.id == current }) else {
             return models
         }
-        return models + [AnthropicModelInfo(id: current, displayName: current)]
+        return models + [AIModelInfo(id: current, displayName: current)]
     }
 
     private var selectedLabel: String {
@@ -704,7 +715,6 @@ private struct ClaudeModelPicker: View {
         Text("Model")
             .font(.system(size: 13, weight: .bold))
             .foregroundStyle(SkimStyle.secondary)
-            .textCase(.uppercase)
             .tracking(0.7)
     }
 
@@ -713,7 +723,7 @@ private struct ClaudeModelPicker: View {
         isLoading = true
         loadFailed = false
         do {
-            models = try await NativeAI.fetchAnthropicModels(settings: settings)
+            models = try await fetch(settings)
         } catch {
             models = []
             loadFailed = true
@@ -1539,7 +1549,6 @@ private struct SettingsTextField: View {
             Text(title)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(SkimStyle.secondary)
-                .textCase(.uppercase)
                 .tracking(0.7)
 
             if isSecure {

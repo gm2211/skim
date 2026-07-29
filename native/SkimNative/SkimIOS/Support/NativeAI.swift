@@ -886,7 +886,7 @@ enum NativeAI {
                 throw NativeAIError.unavailable("Apple Intelligence is not available: \(reasonDescription(reason)).")
             }
 
-            func attempt() async throws -> String {
+            func attempt(instructions: String) async throws -> String {
                 let session = LanguageModelSession(model: model, instructions: instructions)
                 let response = try await session.respond(
                     to: prompt,
@@ -900,12 +900,30 @@ enum NativeAI {
                 return stripEchoedPrompt(raw, prompt: prompt)
             }
 
-            let first = try await attempt()
+            // Retries once with neutralizing instructions when Apple's on-device
+            // safety filter refuses ordinary content; see the guardrail-refusal
+            // guard above `completeWithFoundationModels`.
+            func attemptWithGuardrailRetry() async throws -> String {
+                do {
+                    return try await attempt(instructions: instructions)
+                } catch {
+                    guard isGuardrailRefusal(error) else { throw error }
+                    print("[NativeAI] Foundation Models refused content (guardrail); retrying once with neutralized instructions.")
+                    do {
+                        return try await attempt(instructions: instructions + "\n\n" + guardrailNeutralizingInstructions)
+                    } catch {
+                        guard isGuardrailRefusal(error) else { throw error }
+                        throw NativeAIError.unavailable(guardrailRefusalMessage)
+                    }
+                }
+            }
+
+            let first = try await attemptWithGuardrailRetry()
             let (firstTrimmed, firstDegenerate) = degenerateRepetitionTrim(first)
             guard firstDegenerate else { return first }
 
             print("[NativeAI] Foundation Models output looked degenerate (repetitive); retrying once.")
-            let second = try await attempt()
+            let second = try await attemptWithGuardrailRetry()
             let (secondTrimmed, secondDegenerate) = degenerateRepetitionTrim(second)
             guard secondDegenerate else { return second }
 
@@ -959,6 +977,47 @@ enum NativeAI {
         }
 
         return trimmedResponse
+    }
+
+    // MARK: - Guardrail-refusal guard (Foundation Models only)
+    //
+    // Apple's on-device safety filter occasionally refuses ordinary tech-news
+    // content (a false positive), and without this guard the raw refusal
+    // ("Detected content likely to be unsafe") leaks straight into the UI with
+    // no actionable next step. We retry once with instructions that clarify the
+    // content is journalism being neutrally summarized, and only surface a
+    // friendly error if the retry is refused too.
+
+    /// Instructions appended (once) on a guardrail-triggered retry, nudging the
+    /// model to treat the input as neutral news summarization rather than
+    /// content it should evaluate for safety.
+    static let guardrailNeutralizingInstructions =
+        "You are summarizing published news journalism for a news-reader app. Report facts neutrally and briefly; omit graphic or sensational detail."
+
+    /// User-facing message shown when Foundation Models refuses content twice
+    /// in a row (original attempt + neutralized retry).
+    static let guardrailRefusalMessage =
+        "Apple's on-device model declined to process this content. Try the Claude provider, or a smaller selection of articles."
+
+    /// Detects a Foundation Models "guardrail" refusal — Apple's on-device
+    /// safety filter declining to process content it judged unsafe. On iOS 26+
+    /// this pattern-matches the typed `LanguageModelSession.GenerationError
+    /// .guardrailViolation` case; as a fallback (and the only path exercised
+    /// when FoundationModels isn't available, e.g. in unit tests) it also
+    /// matches any error whose `localizedDescription` mentions "unsafe" or
+    /// "guardrail", which covers the raw NSError shape Foundation Models
+    /// actually surfaces in practice.
+    static func isGuardrailRefusal(_ error: Error) -> Bool {
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            if let generationError = error as? LanguageModelSession.GenerationError,
+               case .guardrailViolation = generationError {
+                return true
+            }
+        }
+#endif
+        let description = error.localizedDescription.lowercased()
+        return description.contains("unsafe") || description.contains("guardrail")
     }
 
     // MARK: - Degenerate-output guard (Foundation Models only)
@@ -1785,14 +1844,12 @@ enum NativeAI {
             throw NativeAIError.unavailable("Apple Intelligence is not available.")
         }
         let digest = articleDigest(articles, limit: 45)
+        let baseInstructions = """
+            You triage RSS articles for a smart inbox. Rank the most interesting articles and provide a short reason for each pick.
+            """
 
-        func attempt() async throws -> String {
-            let session = LanguageModelSession(
-                model: model,
-                instructions: """
-                You triage RSS articles for a smart inbox. Rank the most interesting articles and provide a short reason for each pick.
-                """
-            )
+        func attempt(instructions: String) async throws -> String {
+            let session = LanguageModelSession(model: model, instructions: instructions)
             let response = try await session.respond(
                 to: """
                 Rank 8–12 articles from this list. Favor novelty, depth, and things a curious technical reader would not want to miss.
@@ -1816,12 +1873,30 @@ enum NativeAI {
             return lines.joined(separator: "\n")
         }
 
-        let first = try await attempt()
+        // Retries once with neutralizing instructions when Apple's on-device
+        // safety filter refuses ordinary content; see the guardrail-refusal
+        // guard near `completeWithFoundationModels`.
+        func attemptWithGuardrailRetry() async throws -> String {
+            do {
+                return try await attempt(instructions: baseInstructions)
+            } catch {
+                guard isGuardrailRefusal(error) else { throw error }
+                print("[NativeAI] AI Inbox (Foundation Models) refused content (guardrail); retrying once with neutralized instructions.")
+                do {
+                    return try await attempt(instructions: baseInstructions + "\n\n" + guardrailNeutralizingInstructions)
+                } catch {
+                    guard isGuardrailRefusal(error) else { throw error }
+                    throw NativeAIError.unavailable(guardrailRefusalMessage)
+                }
+            }
+        }
+
+        let first = try await attemptWithGuardrailRetry()
         let (firstTrimmed, firstDegenerate) = degenerateRepetitionTrim(first)
         guard firstDegenerate else { return first }
 
         print("[NativeAI] AI Inbox (Foundation Models) output looked degenerate; retrying once.")
-        let second = try await attempt()
+        let second = try await attemptWithGuardrailRetry()
         let (secondTrimmed, secondDegenerate) = degenerateRepetitionTrim(second)
         guard secondDegenerate else { return second }
 
@@ -1838,11 +1913,10 @@ enum NativeAI {
             throw NativeAIError.unavailable("Apple Intelligence is not available.")
         }
 
-        func attempt() async throws -> [CatchUpItem] {
-            let session = LanguageModelSession(
-                model: model,
-                instructions: "You write crisp catch-up summaries for a news/RSS reader."
-            )
+        let baseInstructions = "You write crisp catch-up summaries for a news/RSS reader."
+
+        func attempt(instructions: String) async throws -> [CatchUpItem] {
+            let session = LanguageModelSession(model: model, instructions: instructions)
             let response = try await session.respond(
                 to: """
                 Create a Quick Catch-up from these articles. Cover the 5–12 most important stories.
@@ -1860,6 +1934,24 @@ enum NativeAI {
                     // Convert sentinel -1 back to nil (no specific article)
                     articleIndex: entry.articleIndex < 1 ? nil : entry.articleIndex
                 )
+            }
+        }
+
+        // Retries once with neutralizing instructions when Apple's on-device
+        // safety filter refuses ordinary content; see the guardrail-refusal
+        // guard near `completeWithFoundationModels`.
+        func attemptWithGuardrailRetry() async throws -> [CatchUpItem] {
+            do {
+                return try await attempt(instructions: baseInstructions)
+            } catch {
+                guard isGuardrailRefusal(error) else { throw error }
+                print("[NativeAI] Quick catch-up (Foundation Models) refused content (guardrail); retrying once with neutralized instructions.")
+                do {
+                    return try await attempt(instructions: baseInstructions + "\n\n" + guardrailNeutralizingInstructions)
+                } catch {
+                    guard isGuardrailRefusal(error) else { throw error }
+                    throw NativeAIError.unavailable(guardrailRefusalMessage)
+                }
             }
         }
 
@@ -1884,12 +1976,12 @@ enum NativeAI {
             return result.isEmpty ? items : result
         }
 
-        let first = try await attempt()
+        let first = try await attemptWithGuardrailRetry()
         let (_, firstDegenerate) = degenerateRepetitionTrim(digestText(first))
         guard firstDegenerate else { return first }
 
         print("[NativeAI] Quick catch-up (Foundation Models) output looked degenerate; retrying once.")
-        let second = try await attempt()
+        let second = try await attemptWithGuardrailRetry()
         let (_, secondDegenerate) = degenerateRepetitionTrim(digestText(second))
         guard secondDegenerate else { return second }
 

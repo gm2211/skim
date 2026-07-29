@@ -34,7 +34,7 @@ struct ArticleListView: View {
 
             VStack(spacing: 0) {
                 topBar
-                if showSearch || !model.searchQuery.isEmpty {
+                if isSearchActive {
                     searchBar
                 }
                 content
@@ -333,6 +333,12 @@ struct ArticleListView: View {
                         Text("Syncing...")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(SkimStyle.secondary)
+                    } else if isSearchActive {
+                        if !model.articles.isEmpty {
+                            Text("\(model.articles.count.formatted()) results")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(SkimStyle.secondary.opacity(0.78))
+                        }
                     } else if model.listMode == .starred && model.selectedFeedID == nil && model.selectedFolderID == nil {
                         if !model.articles.isEmpty {
                             Text("\(model.articles.count.formatted()) starred")
@@ -578,7 +584,7 @@ struct ArticleListView: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(showSearch || !model.searchQuery.isEmpty ? SkimStyle.accent : SkimStyle.secondary)
+            .foregroundStyle(isSearchActive ? SkimStyle.accent : SkimStyle.secondary)
         }
         .padding(.horizontal, 24)
         .frame(height: 36)
@@ -593,7 +599,15 @@ struct ArticleListView: View {
         .ignoresSafeArea(.all, edges: .bottom)
     }
 
+    /// The magnifier-tab search box is showing and/or has a query — global search mode.
+    private var isSearchActive: Bool {
+        showSearch || !model.searchQuery.isEmpty
+    }
+
     private var compactTitle: String {
+        if isSearchActive {
+            return "Search"
+        }
         if let selectedFeedID = model.selectedFeedID,
            let feed = model.feeds.first(where: { $0.id == selectedFeedID }) {
             return feed.title

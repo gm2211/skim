@@ -68,9 +68,20 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             }
         }
         // Story clustering is an additive index. A clustering defect must
-        // never roll back or block the complete All Articles feed.
-        try? db.transaction {
-            _ = try db.clusterArticles(articles)
+        // never roll back or block the complete All Articles feed, so we
+        // still isolate failures here rather than propagating them — but a
+        // failure must never again be silent. Swallowing this with a bare
+        // `try?` previously meant a whole batch's clustering could be
+        // discarded with zero diagnostics, causing the Today edition to
+        // silently under-report articles (skim-5y5t).
+        do {
+            try db.transaction {
+                _ = try db.clusterArticles(articles)
+            }
+        } catch {
+            skimStoreLogger.error(
+                "Story clustering failed for feed \(feed.id, privacy: .public); All Articles is unaffected but the Today edition may under-report: \(String(describing: error), privacy: .public)"
+            )
         }
     }
 
@@ -1257,9 +1268,14 @@ private final class SQLiteDatabase: @unchecked Sendable {
 
             let stats = try storyArticleStats(storyID: storyID)
             let latestRevision = try latestStoryRevision(storyID: storyID)
-            try insertStoryRevision(StoryRevision(
+            // Number allocation is intentionally NOT computed here in Swift
+            // (`latestRevision.revisionNumber + 1`) and handed to a
+            // fixed-number insert: two articles clustered into the same
+            // story within this single pass can otherwise compute the same
+            // "next" number. `insertNextStoryRevision` derives the number
+            // atomically inside the INSERT itself.
+            try insertNextStoryRevision(
                 storyID: storyID,
-                revisionNumber: (latestRevision?.revisionNumber ?? 0) + 1,
                 title: storyTitle,
                 summary: storySummary ?? articleSummary,
                 deltaSummary: latestRevision == nil
@@ -1272,7 +1288,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 ),
                 isMaterialChange: membershipType != .duplicate,
                 createdAt: eventDate
-            ))
+            )
             candidates.append(StoryClusterCandidate(
                 storyID: storyID,
                 article: article,
@@ -1408,6 +1424,17 @@ private final class SQLiteDatabase: @unchecked Sendable {
     }
 
     func insertStoryRevision(_ revision: StoryRevision) throws {
+        // Normalize the timestamp *before* insert and comparison so the
+        // post-insert equality check below is comparing values that are
+        // known to round-trip exactly through SQLite's storage
+        // (`timeIntervalSince1970` as a REAL). Without this, `stored` and
+        // `revision` can differ by sub-microsecond floating-point noise on
+        // `createdAt` alone (see `normalizedTimestamp(_:)`), which used to
+        // make this guard throw on a perfectly legitimate, non-conflicting
+        // insert.
+        var revision = revision
+        revision.createdAt = normalizedTimestamp(revision.createdAt)
+
         try execute(
             """
             INSERT INTO story_revisions (
@@ -1444,6 +1471,69 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 "Conflicting story revision \(revision.storyID):\(revision.revisionNumber)"
             )
         }
+    }
+
+    /// Appends the next revision for a story without pre-computing its
+    /// number in Swift.
+    ///
+    /// `clusterArticles` used to read `latestStoryRevision(storyID:)` and
+    /// pass `latest.revisionNumber + 1` into `insertStoryRevision`. When two
+    /// articles processed in the same clustering pass land on the same
+    /// story, that pattern can compute the identical "next" number for both
+    /// (the two are for genuinely different content, so the second one's
+    /// `ON CONFLICT DO NOTHING` insert silently kept the first row, and the
+    /// read-back equality guard then threw "Conflicting story revision" even
+    /// though nothing was actually conflicting — the number was just stale).
+    ///
+    /// This method instead derives `revision_number` as
+    /// `COALESCE(MAX(revision_number), 0) + 1` inside the INSERT statement
+    /// itself, so the number is always computed from whatever is actually
+    /// persisted for the story at the moment of the call. There is no
+    /// separate "read, then insert with a fixed number" step for a second
+    /// concurrent-in-the-same-batch call to become stale against.
+    @discardableResult
+    func insertNextStoryRevision(
+        storyID: String,
+        title: String,
+        summary: String,
+        deltaSummary: String?,
+        representativeArticleID: String?,
+        sourceCount: Int,
+        contentFingerprint: String?,
+        isMaterialChange: Bool,
+        createdAt: Date
+    ) throws -> StoryRevision {
+        let normalizedCreatedAt = normalizedTimestamp(createdAt)
+        try execute(
+            """
+            INSERT INTO story_revisions (
+                story_id, revision_number, title, summary, delta_summary,
+                representative_article_id, source_count, content_fingerprint,
+                is_material_change, created_at
+            )
+            SELECT ?, COALESCE(MAX(revision_number), 0) + 1, ?, ?, ?, ?, ?, ?, ?, ?
+            FROM story_revisions
+            WHERE story_id = ?
+            """,
+            [
+                .text(storyID),
+                .text(title),
+                .text(summary),
+                .optionalText(deltaSummary),
+                .optionalText(representativeArticleID),
+                .int(sourceCount),
+                .optionalText(contentFingerprint),
+                .bool(isMaterialChange),
+                .date(normalizedCreatedAt),
+                .text(storyID)
+            ]
+        )
+        guard let stored = try latestStoryRevision(storyID: storyID) else {
+            throw SkimCoreError.database(
+                "Story revision for \(storyID) was not persisted"
+            )
+        }
+        return stored
     }
 
     func editionItem(editionID: String, storyID: String) throws -> EditionItem? {
@@ -1990,7 +2080,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 sqlite3_bind_int(statement, i, bool ? 1 : 0)
             case .date(let date):
                 if let date {
-                    sqlite3_bind_double(statement, i, date.timeIntervalSince1970)
+                    sqlite3_bind_double(statement, i, normalizedTimestamp(date).timeIntervalSince1970)
                 } else {
                     sqlite3_bind_null(statement, i)
                 }
@@ -2161,6 +2251,26 @@ private func columnURL(_ statement: OpaquePointer, _ index: Int32) -> URL? {
 private func columnDate(_ statement: OpaquePointer, _ index: Int32) -> Date? {
     guard sqlite3_column_type(statement, index) != SQLITE_NULL else { return nil }
     return Date(timeIntervalSince1970: sqlite3_column_double(statement, index))
+}
+
+/// Rounds a `Date` to whole-millisecond precision so that persisting it to
+/// SQLite and reading it back is exact.
+///
+/// `Date` stores `timeIntervalSinceReferenceDate` (seconds since 2001), but
+/// rows are persisted as `timeIntervalSince1970`. Converting between the two
+/// adds/subtracts a large fixed offset (~978,307,200), and that floating
+/// point addition and its later inverse subtraction can each round to a
+/// different double at the sub-microsecond level. Left unrounded, a `Date`
+/// read back from the database can therefore differ from the `Date` that was
+/// written by a few hundred nanoseconds, which is enough to make exact struct
+/// equality (`stored == original`) fail on a perfectly healthy round-trip.
+/// Rounding every timestamp to millisecond precision before it is bound keeps
+/// values many orders of magnitude above that noise floor, so a value that
+/// has gone through this rounding once compares equal after any number of
+/// store/reload round-trips.
+func normalizedTimestamp(_ date: Date) -> Date {
+    let milliseconds = (date.timeIntervalSince1970 * 1000).rounded()
+    return Date(timeIntervalSince1970: milliseconds / 1000)
 }
 
 private func columnOptionalDouble(_ statement: OpaquePointer, _ index: Int32) -> Double? {

@@ -362,6 +362,107 @@ import Testing
     #expect(try await store.listEditionItems(editionID: edition.id) == [item])
 }
 
+// Regression coverage for skim-5y5t: `insertStoryRevision`'s post-insert
+// `guard stored == revision` used to throw "Conflicting story revision" on
+// two unrelated, non-conflicting conditions, and the caller in
+// `upsert(feed:articles:)` swallowed that with a bare `try?`, silently
+// discarding an entire batch's clustering. Both causes are exercised here.
+
+@Test func storyRevisionWithFractionalCreatedAtRoundTripsIdempotently() async throws {
+    let store = try temporaryStore()
+    let feed = Feed(id: "feed-fractional", title: "Feed", url: URL(string: "https://example.com/feed")!)
+    let article = Article(id: "article-fractional", feedID: feed.id, feedTitle: feed.title, title: "Article")
+    try await store.upsert(feed: feed, articles: [article])
+
+    let story = Story(
+        id: "story-fractional",
+        title: "Story",
+        representativeArticleID: article.id,
+        firstSeenAt: Date(timeIntervalSince1970: 100),
+        lastActivityAt: Date(timeIntervalSince1970: 100)
+    )
+    try await store.upsertStory(story)
+
+    // Built from `timeIntervalSinceReferenceDate` (how `Date()` actually
+    // produces its value) rather than a clean literal, so it carries a
+    // fractional-second component that exercises the lossy
+    // `timeIntervalSince1970` write/read round-trip (skim-5y5t root cause a).
+    // Confirmed empirically to round-trip to a different `Date` (by ~1.2e-7s)
+    // when persisted unrounded, which is exactly what made the old
+    // `stored == revision` guard throw spuriously.
+    let fractionalCreatedAt = Date(timeIntervalSinceReferenceDate: 775_000_000.0000037)
+    let revision = StoryRevision(
+        storyID: story.id,
+        revisionNumber: 1,
+        title: "Revision",
+        summary: "Frozen revision",
+        representativeArticleID: article.id,
+        sourceCount: 1,
+        createdAt: fractionalCreatedAt
+    )
+
+    // Neither call should throw: the first persists the revision, and the
+    // second is a content-identical idempotent retry (e.g. a network retry
+    // re-attempting the same clustering write) -- not a real conflict.
+    try await store.insertStoryRevision(revision)
+    try await store.insertStoryRevision(revision)
+
+    let stored = try #require(try await store.storyRevision(storyID: story.id, revisionNumber: 1))
+    #expect(stored.title == revision.title)
+    #expect(stored.summary == revision.summary)
+    #expect(stored.sourceCount == revision.sourceCount)
+}
+
+@Test func clusteringTwoArticlesIntoOneStoryInASinglePassProducesCoherentRevisions() async throws {
+    let store = try temporaryStore()
+    let feedA = Feed(id: "feed-a", title: "Feed A", url: URL(string: "https://a.example/rss")!)
+    let feedB = Feed(id: "feed-b", title: "Feed B", url: URL(string: "https://b.example/rss")!)
+    try await store.upsert(feed: feedA, articles: [])
+    try await store.upsert(feed: feedB, articles: [])
+
+    let first = clusteringArticle(
+        id: "collision-a",
+        feedID: feedA.id,
+        feedTitle: feedA.title,
+        title: "Acme launches a solar battery",
+        url: "https://news.example/acme?utm_source=a",
+        timestamp: 9_000
+    )
+    // Same canonical URL as `first` (tracking params differ), so the
+    // clusterer treats it as a duplicate of the same story -- both land in
+    // the SAME story within a single `clusterArticles` pass. Before the fix,
+    // the two revisions were numbered by pre-reading
+    // `latestStoryRevision(storyID:)` and adding 1 in Swift, which could
+    // compute the same "next" number for both instead of allocating it
+    // atomically (skim-5y5t root cause b).
+    let duplicate = clusteringArticle(
+        id: "collision-b",
+        feedID: feedB.id,
+        feedTitle: feedB.title,
+        title: "Acme launches a solar battery",
+        url: "https://news.example/acme?utm_source=b",
+        timestamp: 9_010
+    )
+
+    // Both articles are clustered in a single pass, not one upsert per
+    // article -- this is what actually exercises the in-batch collision.
+    try await store.upsert(feed: feedA, articles: [first, duplicate])
+
+    let stories = try await store.listStories()
+    #expect(stories.count == 1)
+    let story = try #require(stories.first)
+
+    let memberships = try await store.listStoryMemberships(storyID: story.id)
+    #expect(memberships.count == 2)
+
+    let revisions = try await store.listStoryRevisions(storyID: story.id)
+    #expect(revisions.count == 2)
+    // Numbers must be distinct and contiguous -- a real collision would
+    // either throw before reaching here, or (if masked) leave duplicate or
+    // gapped revision numbers.
+    #expect(Set(revisions.map(\.revisionNumber)) == Set([1, 2]))
+}
+
 @Test func storyAndEditionModelsMatchSnakeCaseJSONContract() throws {
     let goldenJSON = """
     {

@@ -16,7 +16,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 
-const FEEDLY_OPML_URL = "https://feedly.com/i/opml";
+// Feedly's /back route carries nextUri through login; /opml is relative to
+// Feedly's /i router base. Direct /i/opml sends signed-out users to the home page.
+const FEEDLY_OPML_URL = "https://feedly.com/i/back?nextUri=%2Fopml";
 
 type OpmlEntry = { title: string; url: string; category: string | null; already_exists: boolean };
 
@@ -426,11 +428,8 @@ function FeedlyTab() {
               </button>
             </div>
             <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
-              Auto-downloads an <code>.opml</code> file if you're already signed in.
-              <br />
-              <strong>If Feedly asks you to sign in:</strong> sign in, stay in that same tab,
-              then paste the copied export link into that tab's address bar. In private windows,
-              a new tab may ask you to sign in again.
+              Sign in if asked, then click <strong>Download your Feedly OPML</strong> on Feedly.
+              Bring the downloaded <code>.opml</code> file back here.
             </p>
           </Step>
 

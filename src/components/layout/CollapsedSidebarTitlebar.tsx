@@ -3,14 +3,14 @@ import { useUiStore } from "../../stores/uiStore";
 import { SkimTitle } from "./SkimTitle";
 
 /** Branding remains visible when navigation is hidden, clear of window controls. */
-export function CollapsedSidebarTitlebar() {
+export function CollapsedSidebarTitlebar({ showTitle = true }: { showTitle?: boolean }) {
   return (
     <div
       className="sidebar-header-desktop flex flex-shrink-0 items-center relative z-20"
       data-tauri-drag-region
       style={{ height: 40, paddingLeft: 80, paddingRight: 8, WebkitAppRegion: "drag" } as CSSProperties}
     >
-      <SkimTitle />
+      {showTitle && <SkimTitle />}
       <div className="flex-1" style={{ minWidth: 48 }} />
       <button
         onClick={() => useUiStore.getState().toggleSidebar()}

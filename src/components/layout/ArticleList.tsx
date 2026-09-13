@@ -1,3 +1,4 @@
+import { SkimTitle } from "./SkimTitle";
 import { CollapsedSidebarTitlebar } from "./CollapsedSidebarTitlebar";
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useArticles, useArticleCount, useMarkAllRead, useMarkRead, useMarkUnread, useToggleRead, useToggleStar } from "../../hooks/useArticles";
@@ -562,9 +563,9 @@ export function ArticleList() {
         minWidth: isPhone ? "100%" : (listCollapsed ? 0 : 320),
       }}
     >
-      {sidebarCollapsed && !isPhone && <CollapsedSidebarTitlebar />}
+      {sidebarCollapsed && !isPhone && <CollapsedSidebarTitlebar showTitle={false} />}
       {/* Top bar with mark-all-read, search, close */}
-      <div className="flex flex-shrink-0 items-center gap-2 relative z-20" style={{ height: isPhone ? 52 : 44, paddingLeft: isPhone ? 8 : 8, paddingRight: isPhone ? 8 : 16 }}>
+      <div className={`flex flex-shrink-0 items-center relative z-20 ${sidebarCollapsed && !isPhone ? "article-toolbar-branded gap-1" : "gap-2"}`} style={{ height: isPhone ? 52 : 44, paddingLeft: 8, paddingRight: isPhone ? 8 : 16 }}>
         {isPhone && (
           <button
             onClick={() => setPhonePane("sidebar")}
@@ -579,6 +580,7 @@ export function ArticleList() {
           </button>
         )}
         <div className="flex-1" />
+        {sidebarCollapsed && !isPhone && <SkimTitle />}
         {!isPhone && (
           <button
             onClick={() => setShowAddFeed(true)}

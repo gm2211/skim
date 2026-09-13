@@ -72,10 +72,10 @@ describe("Sidebar — All Articles regression guard", () => {
 
     const titlebar = screen.getByRole("heading", { name: "SKIM" }).parentElement;
     expect(titlebar).toHaveAttribute("data-tauri-drag-region");
-    expect(titlebar).toHaveStyle({ height: "52px", paddingLeft: "80px" });
+    expect(titlebar).toHaveStyle({ height: "40px", paddingLeft: "80px" });
 
-    const actions = screen.getByLabelText("Sidebar actions");
-    expect(actions).toHaveStyle({ minHeight: "44px" });
+    expect(screen.queryByLabelText("Sidebar actions")).not.toBeInTheDocument();
+    expect(screen.getByTitle("Refresh all feeds").parentElement).toBe(titlebar);
     expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
   });
 });

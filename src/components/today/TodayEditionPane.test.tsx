@@ -190,7 +190,7 @@ describe("TodayEditionPane", () => {
     const expand = await screen.findByRole("button", { name: "Expand sidebar" });
     const titlebar = expand.parentElement;
     expect(titlebar).toHaveAttribute("data-tauri-drag-region");
-    expect(titlebar).toHaveStyle({ height: "52px", paddingLeft: "80px" });
+    expect(titlebar).toHaveStyle({ height: "40px", paddingLeft: "80px" });
   });
 
   it("shows a completed banner once every item is consumed", async () => {

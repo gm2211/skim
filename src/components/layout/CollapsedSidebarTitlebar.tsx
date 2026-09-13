@@ -6,15 +6,15 @@ import { SkimTitle } from "./SkimTitle";
 export function CollapsedSidebarTitlebar() {
   return (
     <div
-      className="flex flex-shrink-0 items-center relative z-20"
+      className="sidebar-header-desktop flex flex-shrink-0 items-center relative z-20"
       data-tauri-drag-region
-      style={{ height: 52, paddingLeft: 80, paddingRight: 8, WebkitAppRegion: "drag" } as CSSProperties}
+      style={{ height: 40, paddingLeft: 80, paddingRight: 8, WebkitAppRegion: "drag" } as CSSProperties}
     >
       <SkimTitle />
       <div className="flex-1" style={{ minWidth: 48 }} />
       <button
         onClick={() => useUiStore.getState().toggleSidebar()}
-        className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
+        className="sidebar-header-action tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
         title="Expand sidebar"
         aria-label="Expand sidebar"
       >

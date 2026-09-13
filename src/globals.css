@@ -436,3 +436,17 @@ button, a, input, select, textarea, [role="button"] {
 .dialog-fade-in {
   animation: dialog-fade-in 180ms ease-out;
 }
+
+/* Pointer-sized native Mac toolbar; mobile keeps the shared touch targets. */
+.sidebar-header-desktop .sidebar-header-action {
+  width: 26px;
+  min-width: 26px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  flex-shrink: 0;
+}
+.sidebar-header-desktop .sidebar-header-action > svg {
+  width: 16px;
+  height: 16px;
+}

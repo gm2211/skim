@@ -58,23 +58,22 @@ export function Sidebar() {
         minWidth: isPhone ? "100%" : (sidebarCollapsed ? 0 : 320),
       }}
     >
-      {/* Phone keeps a compact app bar. Desktop reserves the native macOS
-          traffic-light area, then gives actions their own usable toolbar. */}
       <div
-        className="flex flex-shrink-0 items-center relative z-20"
+        className={`sidebar-header flex flex-shrink-0 items-center relative z-20 ${isPhone ? "" : "sidebar-header-desktop"}`}
         data-tauri-drag-region={!isPhone ? true : undefined}
         style={{
-          height: isPhone ? 60 : 52,
+          height: isPhone ? 60 : 40,
           paddingLeft: isPhone ? 16 : 80,
           paddingRight: isPhone ? 10 : 8,
+          gap: isPhone ? 0 : 2,
           WebkitAppRegion: !isPhone ? "drag" : undefined,
         } as React.CSSProperties}
       >
         <SkimTitle isPhone={isPhone} />
         <div className="flex-1" />
-        <button
+        {!isPhone && <button
           onClick={() => useUiStore.getState().toggleSidebar()}
-          className={`tap-target rounded-lg text-text-muted hover:text-text-primary hover:bg-white/10 transition-colors ${isPhone ? "hidden" : ""}`}
+          className="sidebar-header-action tap-target rounded-lg text-text-muted hover:text-text-primary hover:bg-white/10 transition-colors"
           title="Collapse sidebar"
           aria-label="Collapse sidebar"
         >
@@ -82,14 +81,13 @@ export function Sidebar() {
             <rect x="3" y="3" width="18" height="18" rx="2" />
             <path d="M9 3v18" />
           </svg>
-        </button>
-        {isPhone && (
-          <>
+        </button>}
         <button
           onClick={() => refreshAll.mutate()}
           disabled={refreshAll.isPending}
-          className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
+          className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
           title="Refresh all feeds"
+          aria-label="Refresh all feeds"
         >
           <svg className={refreshAll.isPending ? "smooth-spin" : undefined} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
@@ -97,8 +95,9 @@ export function Sidebar() {
         </button>
         <button
           onClick={() => setAskOpen(true)}
-          className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
+          className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
           title="Ask Skim — search your feed with AI"
+          aria-label="Ask Skim"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -106,8 +105,9 @@ export function Sidebar() {
         </button>
         <button
           onClick={() => setSidebarView({ type: "today" })}
-          className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
+          className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
           title="Today — your finite, sectioned daily edition"
+          aria-label="Today"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
@@ -115,65 +115,15 @@ export function Sidebar() {
         </button>
         <button
           onClick={() => setShowAddFeed(true)}
-          className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
+          className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
           title="Add feed"
+          aria-label="Add feed"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 5v14M5 12h14" />
           </svg>
         </button>
-          </>
-        )}
       </div>
-      {!isPhone && (
-        <div
-          className="flex flex-shrink-0 items-center justify-end border-b border-white/5 relative z-20"
-          style={{ minHeight: 44, padding: "0 8px" }}
-          aria-label="Sidebar actions"
-        >
-          <button
-            onClick={() => refreshAll.mutate()}
-            disabled={refreshAll.isPending}
-            className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
-            title="Refresh all feeds"
-            aria-label="Refresh all feeds"
-          >
-            <svg className={refreshAll.isPending ? "smooth-spin" : undefined} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setAskOpen(true)}
-            className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
-            title="Ask Skim — search your feed with AI"
-            aria-label="Ask Skim"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setSidebarView({ type: "today" })}
-            className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
-            title="Today — your finite, sectioned daily edition"
-            aria-label="Today"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setShowAddFeed(true)}
-            className="tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
-            title="Add feed"
-            aria-label="Add feed"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
-        </div>
-      )}
       {askOpen && (
         <AskSkimDialog
           onClose={() => setAskOpen(false)}

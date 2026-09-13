@@ -111,7 +111,7 @@ describe("TodayStoryCard", () => {
     expect(primaryRow?.className).not.toMatch(/opacity-50/);
   });
 
-  it("invokes onToggleConsumed with the item's story_id when Mark done is clicked", async () => {
+  it("invokes onToggleConsumed with the item's story_id when Mark as read is clicked", async () => {
     const user = userEvent.setup();
     const onToggleConsumed = vi.fn();
     const item = makeItem({ story_id: "story-xyz", is_consumed: false });
@@ -119,7 +119,7 @@ describe("TodayStoryCard", () => {
       <TodayStoryCard item={item} onToggleConsumed={onToggleConsumed} onOpenArticle={() => {}} />,
     );
 
-    await user.click(screen.getByText("Mark done"));
+    await user.click(screen.getByText("Mark as read"));
 
     expect(onToggleConsumed).toHaveBeenCalledTimes(1);
     expect(onToggleConsumed).toHaveBeenCalledWith("story-xyz", true);

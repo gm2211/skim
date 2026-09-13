@@ -57,6 +57,16 @@ html, body, #root {
   background: var(--color-bg-primary);
 }
 
+html.macos #root {
+  background: transparent;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html.macos #root {
+    background: var(--color-bg-primary);
+  }
+}
+
 /* iOS WKWebView auto-zooms inputs whose computed font-size is < 16px.
    Force 16px on phone-class viewports for every text input so focusing
    never triggers the zoom. */

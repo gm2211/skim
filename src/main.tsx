@@ -2,7 +2,12 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
+import { isMacOS } from "./utils/platform";
 import "./globals.css";
+
+// The native Mac window supplies the glass material behind our translucent panes.
+// Keep the opaque mobile canvas from covering it, including at narrow widths.
+document.documentElement.classList.toggle("macos", isMacOS);
 
 // Probe iOS safe-area-inset values once at boot and expose as CSS vars,
 // because env(safe-area-inset-*) sometimes returns 0 inside dialogs that

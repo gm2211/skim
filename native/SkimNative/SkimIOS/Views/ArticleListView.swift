@@ -110,7 +110,7 @@ struct ArticleListView: View {
                     presentImporter()
                 }
             )
-            .presentationDetents([.height(320)])
+            .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
             .presentationBackground(SkimStyle.chrome)
         }
@@ -2168,78 +2168,131 @@ private enum FoundationModelFeedOrganizer {
 #endif
 
 private struct AddFeedSheet: View {
+    private enum AddSource: String {
+        case feedURL
+        case feedly
+    }
+
     @Binding var isPresented: Bool
     @State private var feedURL = ""
+    @State private var addSource: AddSource = .feedURL
     @FocusState private var isFocused: Bool
 
     var onAdd: (String) -> Void
     var onImportOPML: () -> Void
 
+    private let feedlyExportURL = URL(string: "https://feedly.com/i/back?nextUri=%2Fopml")!
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            HStack {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Add RSS Feed")
-                        .font(.system(size: 26, weight: .heavy))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Add Feed")
+                            .font(.system(size: 26, weight: .heavy))
+                            .foregroundStyle(SkimStyle.text)
+                        Text("Add one feed or import your Feedly subscriptions.")
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        isPresented = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
+                }
+
+                Picker("Add source", selection: $addSource) {
+                    Text("Feed URL").tag(AddSource.feedURL)
+                    Text("Feedly").tag(AddSource.feedly)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("Add source")
+
+                if addSource == .feedURL {
+                    TextField("https://example.com/feed.xml", text: $feedURL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                        .textContentType(.URL)
+                        .font(.system(size: 19, weight: .regular))
                         .foregroundStyle(SkimStyle.text)
-                    Text("Paste a feed URL. Skim will fetch the first articles now.")
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundStyle(SkimStyle.secondary)
-                }
+                        .focused($isFocused)
+                        .padding(.horizontal, 16)
+                        .frame(height: 56)
+                        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(SkimStyle.separator, lineWidth: 1)
+                        }
 
-                Spacer()
+                    HStack(spacing: 14) {
+                        Button("Import OPML") {
+                            close()
+                            onImportOPML()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(SkimStyle.accent)
+                        .frame(minHeight: 44)
 
-                Button {
-                    isPresented = false
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(SkimStyle.secondary)
-                        .frame(width: 44, height: 44)
+                        Spacer()
+
+                        Button("Add Feed") {
+                            let value = feedURL
+                            close()
+                            onAdd(value)
+                        }
+                        .buttonStyle(.glassProminent)
+                        .disabled(feedURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Import from Feedly")
+                            .font(.system(size: 19, weight: .bold))
+                            .foregroundStyle(SkimStyle.text)
+
+                        Text("Sign in to Feedly, download your Feedly OPML, then choose the file here.")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Link(destination: feedlyExportURL) {
+                            Label("Open Feedly export", systemImage: "arrow.up.right.square")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(SkimStyle.accent)
+                        .accessibilityHint("Opens Feedly's export page")
+
+                        Button("Choose OPML file") {
+                            close()
+                            onImportOPML()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(SkimStyle.accent)
+                        .frame(minHeight: 44, alignment: .leading)
+                    }
                 }
-                .buttonStyle(.plain)
             }
-
-            TextField("https://example.com/feed.xml", text: $feedURL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .keyboardType(.URL)
-                .textContentType(.URL)
-                .font(.system(size: 19, weight: .regular))
-                .foregroundStyle(SkimStyle.text)
-                .focused($isFocused)
-                .padding(.horizontal, 16)
-                .frame(height: 56)
-                .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(SkimStyle.separator, lineWidth: 1)
-                }
-
-            HStack(spacing: 14) {
-                Button("Import OPML") {
-                    close()
-                    onImportOPML()
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(SkimStyle.accent)
-
-                Spacer()
-
-                Button("Add Feed") {
-                    let value = feedURL
-                    close()
-                    onAdd(value)
-                }
-                .buttonStyle(.glassProminent)
-                .disabled(feedURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
+            .padding(.horizontal, 24)
+            .padding(.top, 26)
+            .padding(.bottom, 24)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 26)
-        .onAppear {
-            isFocused = true
+        .onChange(of: addSource) { _, source in
+            if source == .feedly {
+                isFocused = false
+                dismissUIKitKeyboard()
+            }
         }
         .onDisappear {
             isFocused = false

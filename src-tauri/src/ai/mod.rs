@@ -1,4 +1,5 @@
 pub mod provider;
+pub mod native_provider;
 pub mod prompts;
 pub mod model_manager;
 pub mod claude_oauth;

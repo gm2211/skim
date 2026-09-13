@@ -69,6 +69,8 @@ pub struct Article {
     pub is_read: bool,
     pub is_starred: bool,
     pub feedly_entry_id: Option<String>,
+    #[serde(default)]
+    pub comments_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -320,6 +322,9 @@ pub struct AiSettings {
     pub chat_api_key: Option<String>,
     #[serde(default)]
     pub chat_endpoint: Option<String>,
+    /// Whether local MLX article chat may run its conservative web-search router.
+    #[serde(default)]
+    pub local_chat_web_search: Option<bool>,
     /// Free-form, user-authored prompt describing topics/interests they care
     /// about. Feeds into triage (and theme) system prompts alongside the
     /// engagement-based preference profile built from interactions.
@@ -452,6 +457,7 @@ impl Default for AppSettings {
                 chat_model: None,
                 chat_api_key: None,
                 chat_endpoint: None,
+                local_chat_web_search: None,
                 triage_user_prompt: None,
                 oauth_access_token: None,
             },

@@ -11,6 +11,7 @@ links = "tauri-plugin-skim-ai"
 [dependencies]
 tauri = { version = "2.10.3" }
 serde = "1.0"
+serde_json = "1.0"
 thiserror = "2"
 
 [build-dependencies]

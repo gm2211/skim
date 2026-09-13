@@ -27,7 +27,7 @@ import { RemoteModelPicker } from "./RemoteModelPicker";
 import { OfflineReaderSettings } from "./OfflineReaderSettings";
 import { NumberInput } from "../ui/NumberInput";
 import { AIDisclaimer } from "../common/AIDisclaimer";
-import { isIOS } from "../../utils/platform";
+import { isIOS, isMacOS } from "../../utils/platform";
 import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 
@@ -35,12 +35,13 @@ const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
   { value: "local", label: "Local (Embedded)", description: "Run AI locally with llama.cpp — no server needed" },
   { value: "mlx", label: "On-device (MLX)", description: "Run a downloaded MLX model on-device. Offline. iOS/macOS only." },
-  { value: "foundation-models", label: "Apple Intelligence", description: "Apple's on-device model. No download. Requires iOS 26+ on Apple Intelligence hardware." },
+  { value: "foundation-models", label: "Apple Intelligence", description: "Apple's on-device model. Requires macOS 26+ or iOS 26+ on Apple Intelligence hardware." },
   { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
   { value: "claude-subscription", label: "Claude Pro/Max (OAuth)", description: "Sign in with your Claude.ai account — no API key, no CLI. Works on desktop and iOS." },
   { value: "claude-cli", label: "Claude via CLI (legacy)", description: "Uses the local 'claude' CLI binary. Legacy path — prefer 'Claude Pro/Max (OAuth)'." },
   { value: "anthropic", label: "Claude (API Key)", description: "api.anthropic.com — requires API key with usage-based billing" },
   { value: "openai", label: "OpenAI", description: "api.openai.com" },
+  { value: "xai", label: "Grok (xAI)", description: "api.x.ai — requires an xAI API key" },
   { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
   { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
 ];
@@ -60,7 +61,7 @@ const MLX_MODELS: MlxModel[] = [
 ];
 
 const needsApiKey = (provider: string) =>
-  ["openai", "openrouter", "anthropic", "custom", "claude-cli"].includes(provider);
+  ["openai", "xai", "openrouter", "anthropic", "custom", "claude-cli"].includes(provider);
 
 const needsEndpoint = (provider: string) =>
   ["ollama", "custom"].includes(provider);
@@ -136,6 +137,7 @@ export function SettingsDialog() {
   const [local, setLocal] = useState<AppSettings | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("ai");
   const dialogRef = useRef<HTMLDivElement>(null);
+  const providerDrafts = useRef<Record<string, Partial<AppSettings["ai"]>>>({});
   useDialogFocus(dialogRef, () => setShowSettings(false));
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(
     isPhone,
@@ -176,10 +178,14 @@ export function SettingsDialog() {
   const updateAi = (patch: Partial<AppSettings["ai"]>) =>
     setLocal({ ...local, ai: { ...local.ai, ...patch } });
 
-  const persistAi = async (patch: Partial<AppSettings["ai"]>) => {
-    const next = { ...local, ai: { ...local.ai, ...patch } };
-    setLocal(next);
-    await updateSettings.mutateAsync(next);
+  const selectProvider = (provider: string) => {
+    if (provider === local.ai.provider) return;
+    const { api_key, endpoint, model, local_model_path } = local.ai;
+    providerDrafts.current[local.ai.provider] = { api_key, endpoint, model, local_model_path };
+    // Keep each provider's credentials in its own draft; changing provider must
+    // never send the previous provider's key to a different service.
+    updateAi({ provider, api_key: null, endpoint: null, model: null, local_model_path: null,
+      ...providerDrafts.current[provider] });
   };
 
   const inputStyle = {
@@ -286,15 +292,14 @@ export function SettingsDialog() {
 
                 <InputField label="Provider">
                   <select
+                    aria-label="Provider"
                     value={local.ai.provider}
-                    onChange={(e) => updateAi({ provider: e.target.value })}
+                    onChange={(e) => selectProvider(e.target.value)}
                     className={inputClass}
                     style={inputStyle}
                   >
                     {AI_PROVIDERS.filter((p) => {
-                      // mlx + Apple Intelligence are only wired on the iOS
-                      // bundle (Skim Swift plugin); hide on macOS/desktop.
-                      if (!isIOS && ["mlx", "foundation-models"].includes(p.value)) return false;
+                      if (!isIOS && !isMacOS && ["mlx", "foundation-models"].includes(p.value)) return false;
                       // Phone: hide providers that need a desktop runtime
                       // (llama.cpp embedded, Ollama localhost, Claude CLI).
                       if (!isPhone) return true;
@@ -308,22 +313,6 @@ export function SettingsDialog() {
                   <p className="text-text-muted" style={{ fontSize: 12, marginTop: 6 }}>
                     {AI_PROVIDERS.find((p) => p.value === local.ai.provider)?.description}
                   </p>
-                  <details
-                    className="text-text-muted"
-                    style={{ fontSize: 12, marginTop: 8 }}
-                  >
-                    <summary
-                      className="cursor-pointer hover:text-text-primary"
-                      style={{ userSelect: "none" }}
-                    >
-                      How are on-device and cloud providers combined?
-                    </summary>
-                    <p style={{ marginTop: 6, lineHeight: 1.5 }}>
-                      On-device tiers handle triage and summaries;
-                      quality-sensitive tasks (chat, themes, auto-organize)
-                      fall back to your cloud provider if both are configured.
-                    </p>
-                  </details>
                 </InputField>
 
                 {local.ai.provider === "local" && (
@@ -331,7 +320,15 @@ export function SettingsDialog() {
                 )}
 
                 {local.ai.provider === "mlx" && (
-                  <OnDeviceTierSection ai={local.ai} updateAi={updateAi} persistAi={persistAi} />
+                  <>
+                    <OnDeviceTierSection ai={local.ai} updateAi={updateAi} />
+                    <label className="flex items-start gap-3 text-text-primary" style={{ minHeight: 44, marginBottom: 16, fontSize: 14 }}>
+                      <input type="checkbox" checked={local.ai.local_chat_web_search ?? true}
+                        onChange={(event) => updateAi({ local_chat_web_search: event.target.checked })}
+                        className="accent-accent" style={{ marginTop: 4 }} />
+                      <span>Web search in chat<span className="block text-text-secondary" style={{ fontSize: 12, marginTop: 4 }}>Look up current information when the article cannot answer.</span></span>
+                    </label>
+                  </>
                 )}
 
                 {local.ai.provider === "foundation-models" && (
@@ -399,12 +396,12 @@ export function SettingsDialog() {
                   </InputField>
                 )}
 
-                {local.ai.provider !== "none" && local.ai.provider !== "local" && (
+                {!["none", "local", "mlx", "foundation-models"].includes(local.ai.provider) && (
                   <InputField
                     label="Model"
                     description="Leave blank for default model"
                   >
-                    {["openai", "openrouter", "anthropic", "custom"].includes(local.ai.provider) ? <RemoteModelPicker
+                    {["openai", "xai", "openrouter", "anthropic", "custom"].includes(local.ai.provider) ? <RemoteModelPicker
                       provider={local.ai.provider}
                       apiKey={local.ai.api_key}
                       endpoint={local.ai.endpoint}
@@ -937,11 +934,9 @@ function ClaudeOAuthSection() {
 function OnDeviceTierSection({
   ai,
   updateAi,
-  persistAi,
 }: {
   ai: AppSettings["ai"];
   updateAi: (patch: Partial<AppSettings["ai"]>) => void;
-  persistAi: (patch: Partial<AppSettings["ai"]>) => Promise<void>;
 }) {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [downloaded, setDownloaded] = useState(false);
@@ -959,14 +954,9 @@ function OnDeviceTierSection({
   const selectedModel =
     availableModels.find((m) => m.repoId === savedRepoId) ?? defaultModel;
   const selectedRepoId = selectedModel.repoId;
-  const commitSelectedModel = async (repoId: string) => {
+  const commitSelectedModel = (repoId: string) => {
     const patch = { provider: "mlx", model: repoId, local_model_path: repoId };
     updateAi(patch);
-    try {
-      await persistAi(patch);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
   };
 
   useEffect(() => {
@@ -1032,7 +1022,7 @@ function OnDeviceTierSection({
     setProgress({ repoId: selectedRepoId, downloaded: 0, total: 0, percent: 0 });
     try {
       await mlxDownloadModel(selectedRepoId);
-      await persistAi({ provider: "mlx", model: selectedRepoId, local_model_path: selectedRepoId });
+      updateAi({ provider: "mlx", model: selectedRepoId, local_model_path: selectedRepoId });
       setDownloaded(true);
       setProgress(null);
     } catch (e: unknown) {
@@ -1061,7 +1051,7 @@ function OnDeviceTierSection({
       ? "Checking availability…"
       : available
         ? "On-device MLX runtime detected"
-        : "Not available — MLX needs a real iPhone (Metal GPU). For the iOS Simulator, pick a cloud provider above (OpenAI / Claude / OpenRouter).";
+        : "MLX requires an Apple silicon Mac or a supported iPhone with a Metal GPU. Choose another provider on this device.";
 
   return (
     <div
@@ -1093,6 +1083,7 @@ function OnDeviceTierSection({
           Model
         </label>
         <select
+          aria-label="On-device model"
           value={selectedRepoId}
           onChange={(e) => void commitSelectedModel(e.target.value)}
           className="w-full border border-white/10 rounded text-text-primary focus:outline-none focus:border-accent/50"
@@ -1228,9 +1219,9 @@ function FoundationModelsSection() {
           : availability.status === "model-not-ready"
             ? "Model is still preparing"
             : availability.status === "device-not-eligible"
-              ? "This iPhone is not eligible"
+              ? "This device is not eligible"
               : availability.status === "unsupported-os"
-                ? "iOS 26 is required"
+                ? "macOS 26 or iOS 26 is required"
                 : "Apple Intelligence unavailable";
     return (
       <div

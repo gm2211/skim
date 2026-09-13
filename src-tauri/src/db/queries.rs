@@ -293,8 +293,8 @@ pub fn count_starred_in_feed(conn: &Connection, feed_id: &str) -> Result<i64, ru
 
 pub fn insert_article(conn: &Connection, article: &Article) -> Result<bool, rusqlite::Error> {
     let result = conn.execute(
-        "INSERT OR IGNORE INTO articles (id, feed_id, title, url, author, content_html, content_text, published_at, fetched_at, is_read, is_starred, feedly_entry_id)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        "INSERT OR IGNORE INTO articles (id, feed_id, title, url, author, content_html, content_text, published_at, fetched_at, is_read, is_starred, feedly_entry_id, comments_url)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             article.id,
             article.feed_id,
@@ -308,6 +308,7 @@ pub fn insert_article(conn: &Connection, article: &Article) -> Result<bool, rusq
             article.is_read as i32,
             article.is_starred as i32,
             article.feedly_entry_id,
+            article.comments_url,
         ],
     )?;
     Ok(result > 0)
@@ -381,7 +382,7 @@ pub fn get_articles(
 ) -> Result<Vec<ArticleWithFeed>, rusqlite::Error> {
     let mut sql = String::from(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
-                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id, a.comments_url,
                 f.title as feed_title, f.icon_url as feed_icon_url
          FROM articles a
          JOIN feeds f ON a.feed_id = f.id",
@@ -474,9 +475,10 @@ pub fn get_articles(
                     is_read: row.get::<_, i32>(9)? != 0,
                     is_starred: row.get::<_, i32>(10)? != 0,
                     feedly_entry_id: row.get(11)?,
+                    comments_url: row.get(12)?,
                 },
-                feed_title: row.get(12)?,
-                feed_icon_url: row.get(13)?,
+                feed_title: row.get(13)?,
+                feed_icon_url: row.get(14)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -489,7 +491,7 @@ pub fn get_article_by_id(
 ) -> Result<Option<ArticleWithFeed>, rusqlite::Error> {
     let mut stmt = conn.prepare(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
-                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id, a.comments_url,
                 f.title as feed_title, f.icon_url as feed_icon_url
          FROM articles a
          JOIN feeds f ON a.feed_id = f.id
@@ -510,9 +512,10 @@ pub fn get_article_by_id(
                 is_read: row.get::<_, i32>(9)? != 0,
                 is_starred: row.get::<_, i32>(10)? != 0,
                 feedly_entry_id: row.get(11)?,
+                comments_url: row.get(12)?,
             },
-            feed_title: row.get(12)?,
-            feed_icon_url: row.get(13)?,
+            feed_title: row.get(13)?,
+            feed_icon_url: row.get(14)?,
         })
     })?;
     match rows.next() {
@@ -1343,7 +1346,7 @@ pub fn get_inbox_articles(
 ) -> Result<Vec<ArticleWithTriage>, rusqlite::Error> {
     let mut sql = String::from(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
-                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id, a.comments_url,
                 f.title as feed_title, f.icon_url as feed_icon_url,
                 t.priority, t.reason
          FROM articles a
@@ -1389,11 +1392,12 @@ pub fn get_inbox_articles(
                     is_read: row.get::<_, i32>(9)? != 0,
                     is_starred: row.get::<_, i32>(10)? != 0,
                     feedly_entry_id: row.get(11)?,
+                    comments_url: row.get(12)?,
                 },
-                feed_title: row.get(12)?,
-                feed_icon_url: row.get(13)?,
-                priority: row.get(14)?,
-                reason: row.get(15)?,
+                feed_title: row.get(13)?,
+                feed_icon_url: row.get(14)?,
+                priority: row.get(15)?,
+                reason: row.get(16)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -1406,7 +1410,7 @@ pub fn get_untriaged_article_ids(
 ) -> Result<Vec<ArticleWithFeed>, rusqlite::Error> {
     let mut stmt = conn.prepare(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
-                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id, a.comments_url,
                 f.title as feed_title, f.icon_url as feed_icon_url
          FROM articles a
          JOIN feeds f ON a.feed_id = f.id
@@ -1431,9 +1435,10 @@ pub fn get_untriaged_article_ids(
                     is_read: row.get::<_, i32>(9)? != 0,
                     is_starred: row.get::<_, i32>(10)? != 0,
                     feedly_entry_id: row.get(11)?,
+                    comments_url: row.get(12)?,
                 },
-                feed_title: row.get(12)?,
-                feed_icon_url: row.get(13)?,
+                feed_title: row.get(13)?,
+                feed_icon_url: row.get(14)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -1665,7 +1670,7 @@ pub fn list_recent_articles(
     };
     let sql = format!(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
-                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id,
+                a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id, a.comments_url,
                 f.title, f.icon_url,
                 i.reading_time_sec, i.chat_messages, i.updated_at
          FROM article_interactions i
@@ -1685,8 +1690,8 @@ pub fn list_recent_articles(
     let pull_limit = (limit * 3).min(10_000);
     let rows: Vec<ArticleWithInteraction> = stmt
         .query_map(params![pull_limit], |row| {
-            let reading_time_sec: i64 = row.get(14)?;
-            let chat_messages: i64 = row.get(15)?;
+            let reading_time_sec: i64 = row.get(15)?;
+            let chat_messages: i64 = row.get(16)?;
             let engagement_score = (reading_time_sec as f64) + (chat_messages as f64) * 60.0;
             Ok(ArticleWithInteraction {
                 article: Article {
@@ -1702,12 +1707,13 @@ pub fn list_recent_articles(
                     is_read: row.get::<_, i32>(9)? != 0,
                     is_starred: row.get::<_, i32>(10)? != 0,
                     feedly_entry_id: row.get(11)?,
+                    comments_url: row.get(12)?,
                 },
-                feed_title: row.get(12)?,
-                feed_icon_url: row.get(13)?,
+                feed_title: row.get(13)?,
+                feed_icon_url: row.get(14)?,
                 reading_time_sec,
                 chat_messages,
-                interaction_at: row.get(16)?,
+                interaction_at: row.get(17)?,
                 engagement_score,
             })
         })?
@@ -2042,6 +2048,7 @@ mod story_persistence_tests {
                     is_read,
                     is_starred,
                     feedly_entry_id: None,
+                    comments_url: None,
                 },
             )
             .expect("insert article");
@@ -2105,6 +2112,7 @@ mod story_persistence_tests {
                 is_read: false,
                 is_starred: false,
                 feedly_entry_id: None,
+                comments_url: None,
             },
         )
         .expect("insert second article");
@@ -2143,6 +2151,18 @@ mod story_persistence_tests {
         assert!(multiple.iter().all(|article| {
             article.article.feed_id == "feed-1" || article.article.feed_id == "feed-2"
         }));
+    }
+
+    #[test]
+    fn article_comments_url_survives_migration_and_roundtrip() {
+        let conn = setup();
+        let mut article = get_article_by_id(&conn, "article-1").unwrap().unwrap().article;
+        article.comments_url = Some("https://news.ycombinator.com/item?id=123".into());
+        conn.execute("DELETE FROM articles WHERE id = ?1", [&article.id]).unwrap();
+        insert_article(&conn, &article).expect("insert article with discussion URL");
+        let loaded = get_article_by_id(&conn, &article.id).unwrap().unwrap();
+        assert_eq!(loaded.article.url.as_deref(), Some("https://example.com/article-1"));
+        assert_eq!(loaded.article.comments_url.as_deref(), Some("https://news.ycombinator.com/item?id=123"));
     }
 
     #[test]

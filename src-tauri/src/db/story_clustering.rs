@@ -897,6 +897,7 @@ mod tests {
             is_read: false,
             is_starred: false,
             feedly_entry_id: None,
+            comments_url: None,
         }
     }
 

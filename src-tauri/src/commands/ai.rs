@@ -1,6 +1,6 @@
 use crate::ai::local_provider::SharedModelState;
 use crate::ai::prompts;
-use crate::ai::provider::{create_provider, ChatMessage, ChatRequest};
+use crate::ai::provider::{create_provider_with_app, ChatMessage, ChatRequest};
 use crate::db::models::{AiSettings, ArticleFilter, ArticleSummary, Theme};
 use crate::db::queries;
 use crate::db::Database;
@@ -26,6 +26,9 @@ pub fn default_model(provider: &str) -> String {
         "claude-cli" => "sonnet".to_string(),
         "anthropic" | "claude-subscription" => "claude-sonnet-4-5".to_string(),
         "ollama" => "llama3".to_string(),
+        "xai" => "grok-4.3".to_string(),
+        "mlx" => "mlx-community/gemma-3-1b-it-4bit".to_string(),
+        "foundation-models" => "foundation-model".to_string(),
         _ => "gpt-4o-mini".to_string(),
     }
 }
@@ -537,7 +540,7 @@ pub async fn summarize_article(
 
     settings.ai.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
 
-    let provider = create_provider(&settings.ai, Some(model_state.inner().clone()))?;
+    let provider = create_provider_with_app(&settings.ai, Some(model_state.inner().clone()), &app)?;
 
     let model = settings
         .ai
@@ -798,7 +801,7 @@ pub async fn generate_themes(
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
-    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
 
     let model = ai_settings
         .model
@@ -1128,7 +1131,7 @@ pub async fn triage_articles(
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
-    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
         .model
         .clone()
@@ -1514,6 +1517,7 @@ fn resolve_handles(
 
 #[tauri::command]
 pub async fn generate_catchup_report(
+    app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     scope: Option<String>,
@@ -1572,7 +1576,7 @@ pub async fn generate_catchup_report(
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
-    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
         .model
         .clone()

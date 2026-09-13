@@ -1441,7 +1441,7 @@ export function ArticleDetail() {
                       <span className="text-text-muted">{formatDate(article.published_at)}</span>
                     </div>
                   </div>
-                  {article.url && <AggregatorDetails url={article.url} />}
+                  {(article.comments_url || article.url) && <AggregatorDetails url={article.comments_url || article.url!} />}
                   {fullContent ? (
                     <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
                   ) : loadingFull ? (

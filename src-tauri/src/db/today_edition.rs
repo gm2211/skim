@@ -594,6 +594,7 @@ mod tests {
                     is_read: false,
                     is_starred: false,
                     feedly_entry_id: None,
+                    comments_url: None,
                 },
             )
             .expect("article");
@@ -755,7 +756,8 @@ mod tests {
                 fetched_at: GENERATED_AT,
                 is_read: false,
                 is_starred: false,
-                feedly_entry_id: None,
+                    feedly_entry_id: None,
+                    comments_url: None,
             },
         )
         .expect("late article");

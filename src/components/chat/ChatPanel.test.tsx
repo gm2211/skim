@@ -37,6 +37,20 @@ async function openAndType(text: string) {
 }
 
 describe("ChatDrawer", () => {
+  it("opens by keyboard, focuses the composer, and sends without scrolling the document", async () => {
+    vi.mocked(chatWithArticle).mockResolvedValue({ content: "Answer", web_citations: [], provider: "openai", model: "test" });
+    const user = userEvent.setup();
+    render(<ChatDrawer articleId="article-1" articleTitle="Article" />);
+    screen.getByRole("button", { name: "Chat with article" }).focus();
+    await user.keyboard("{Enter}");
+    const input = screen.getByPlaceholderText("Ask about this article...");
+    expect(input).toHaveFocus();
+    await user.type(input, "Explain this{Enter}");
+    expect(await screen.findByText("Answer")).toBeInTheDocument();
+    expect(chatWithArticle).toHaveBeenCalledWith("article-1", [{ role: "user", content: "Explain this" }]);
+    expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
   it("preserves a failed draft and keeps provider errors out of chat history", async () => {
     vi.mocked(chatWithArticle).mockRejectedValueOnce(new Error("Provider unavailable"));
     render(<ChatDrawer articleId="article-1" articleTitle="Article" />);

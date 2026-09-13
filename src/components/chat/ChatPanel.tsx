@@ -17,9 +17,11 @@ interface ChatMessage {
 interface Props {
   articleId: string;
   articleTitle: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-const COLLAPSED_HEIGHT = 36;
+const COLLAPSED_HEIGHT = 44;
 const PHONE_COLLAPSED_HEIGHT = 52;
 const DEFAULT_HEIGHT = 280;
 const MIN_HEIGHT = 140;
@@ -45,13 +47,18 @@ function renderAssistantContent(content: string) {
   ));
 }
 
-export function ChatDrawer({ articleId }: Props) {
+export function ChatDrawer({ articleId, open: controlledOpen, onOpenChange }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
   const { data: settings } = useSettings();
   const chatProvider = settings?.ai.chat_provider;
   const provider = chatProvider && chatProvider !== "same" ? chatProvider : settings?.ai.provider;
   const needsSetup = provider === "none";
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = (value: boolean) => {
+    setLocalOpen(value);
+    onOpenChange?.(value);
+  };
   // Phone: cap to half of viewport so article remains visible above. Desktop: keep 280px.
   const [height, setHeight] = useState(() =>
     isPhone ? Math.min(DEFAULT_HEIGHT, Math.round(window.innerHeight * 0.5)) : DEFAULT_HEIGHT
@@ -62,7 +69,7 @@ export function ChatDrawer({ articleId }: Props) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestSeqRef = useRef(0);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dragging = useRef(false);
   const dragStartY = useRef(0);
@@ -80,12 +87,13 @@ export function ChatDrawer({ articleId }: Props) {
 
   // Auto-scroll
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+    const pane = messagesRef.current;
+    if (pane) pane.scrollTop = pane.scrollHeight;
+  }, [messages, loading, searchLoading, open]);
 
   // Focus input when opened
   useEffect(() => {
-    if (open) inputRef.current?.focus();
+    if (open) inputRef.current?.focus({ preventScroll: true });
   }, [open]);
 
   // Drag to resize
@@ -216,8 +224,11 @@ export function ChatDrawer({ articleId }: Props) {
   // Collapsed: just a thin bar with a chat button
   if (!open) {
     return (
-      <div
-        className="flex-shrink-0 border-t border-white/10 flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors select-none"
+      <button
+        type="button"
+        aria-label="Chat with article"
+        aria-expanded={false}
+        className="w-full flex-shrink-0 border-t border-white/10 flex items-center justify-center cursor-pointer hover:bg-white/5 transition-colors select-none"
         style={{ height: isPhone ? PHONE_COLLAPSED_HEIGHT : COLLAPSED_HEIGHT }}
         onClick={() => setOpen(true)}
       >
@@ -230,17 +241,19 @@ export function ChatDrawer({ articleId }: Props) {
             <span className="text-accent" style={{ fontSize: 10 }}>({messages.filter(m => m.role !== "search").length})</span>
           )}
         </div>
-      </div>
+      </button>
     );
   }
 
   return (
     <div
+      role="region"
+      aria-label="Article chat"
       className="flex-shrink-0 flex flex-col border-t border-white/10 min-w-0 overflow-hidden"
       style={{
         height,
-        // Phone: never exceed half of viewport so the article stays visible.
-        maxHeight: isPhone ? "50vh" : undefined,
+        // Bound to the actual reader pane, including after window resizing.
+        maxHeight: isPhone ? "50%" : "60%",
       }}
     >
       {/* Resize handle */}
@@ -291,9 +304,9 @@ export function ChatDrawer({ articleId }: Props) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0" style={{ padding: "4px 16px" }}>
+      <div ref={messagesRef} className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0" style={{ padding: "4px 16px" }}>
         {messages.length === 0 && (
-          <div className="flex items-center gap-3 justify-center" style={{ paddingTop: 8 }}>
+          <div className="flex flex-wrap items-center gap-2 justify-center" style={{ paddingTop: 8 }}>
             {[
               "What are the key arguments?",
               "Who is mentioned?",
@@ -437,7 +450,7 @@ export function ChatDrawer({ articleId }: Props) {
           </div>
         )}
 
-        <div ref={messagesEndRef} />
+
       </div>
 
       {/* Input */}

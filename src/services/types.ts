@@ -185,6 +185,13 @@ export interface SystemInfo {
   max_model_size_gb: number;
 }
 
+export interface Ds4Status {
+  runtime_available: boolean;
+  running: boolean;
+  model_path: string | null;
+  error: string | null;
+}
+
 export interface DownloadProgress {
   filename: string;
   downloaded: number;

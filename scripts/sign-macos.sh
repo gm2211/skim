@@ -10,5 +10,7 @@ ln -sfn ../Resources/mlx.metallib "$APP_PATH/Contents/MacOS/mlx.metallib"
 ln -sfn ../Resources/swift-transformers_Hub.bundle "$APP_PATH/Contents/MacOS/swift-transformers_Hub.bundle"
 codesign --force --sign "$IDENTITY" --entitlements "$PROJECT_DIR/src-tauri/HelperEntitlements.plist" \
   "$APP_PATH/Contents/MacOS/skim-ai-macos-bridge"
+codesign --force --sign "$IDENTITY" --entitlements "$PROJECT_DIR/src-tauri/HelperEntitlements.plist" \
+  "$APP_PATH/Contents/MacOS/ds4-server"
 codesign --force --sign "$IDENTITY" --entitlements "$PROJECT_DIR/src-tauri/Entitlements.plist" "$APP_PATH"
 codesign --verify --deep --strict "$APP_PATH"

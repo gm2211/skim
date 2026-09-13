@@ -45,6 +45,10 @@ pub async fn download_model(
     repo_id: String,
     filename: String,
 ) -> Result<String, String> {
+    // A single download owns the shared progress stream and pause flag.
+    static DOWNLOAD_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _download_guard = DOWNLOAD_LOCK.try_lock()
+        .map_err(|_| "Another model is downloading. Pause it before starting a new download.".to_string())?;
     let models_dir = resolve_models_dir(&db)?;
     let cancel = cancel_flag.0.clone();
     let path =

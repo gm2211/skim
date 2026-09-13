@@ -131,6 +131,10 @@ fn format_chat_messages(model: &LlamaModel, messages: &[ChatMessage]) -> Result<
 }
 
 pub fn load_model(path: &Path, gpu_layers: i32) -> Result<LoadedModel, String> {
+    if path.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.to_ascii_lowercase().contains("deepseek-v4")) {
+        return Err("[configure-ai] DeepSeek V4 requires the DeepSeek (DS4) provider. Select it in AI settings.".into());
+    }
+
     let backend = get_backend()?;
 
     // -1 means "all layers on GPU"

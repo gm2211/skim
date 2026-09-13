@@ -246,7 +246,7 @@ pub struct AnthropicProvider {
 impl AnthropicProvider {
     pub fn new(api_key: &str) -> Self {
         let key = api_key.trim().to_string();
-        log::debug!("AnthropicProvider: key length={}, prefix={}", key.len(), &key[..key.len().min(10)]);
+        log::debug!("AnthropicProvider configured");
         Self {
             client: reqwest::Client::new(),
             api_key: key,
@@ -368,7 +368,7 @@ impl AiProvider for AnthropicProvider {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            log::error!("Anthropic API error: status={}, key_len={}, key_prefix={}", status, self.api_key.len(), &self.api_key[..self.api_key.len().min(10)]);
+            log::error!("Anthropic API error: status={}", status);
             return Err(format!("Anthropic API error ({}): {}", status, body));
         }
 
@@ -789,6 +789,16 @@ pub fn create_provider_with_app<R: tauri::Runtime>(
     model_state: Option<SharedModelState>,
     app: &tauri::AppHandle<R>,
 ) -> Result<Box<dyn AiProvider>, String> {
+    if settings.provider == "ds4" {
+        let model_path = settings
+            .local_model_path
+            .as_deref()
+            .ok_or("[configure-ai] Select a DS4 GGUF model in Settings.")?;
+        return Ok(Box::new(super::ds4_provider::Ds4Provider::new(
+            super::ds4_provider::runtime(),
+            model_path,
+        )));
+    }
     if settings.provider == "mlx" || settings.provider == "foundation-models" {
         return Ok(Box::new(super::native_provider::NativePluginProvider::new(
             app.clone(),

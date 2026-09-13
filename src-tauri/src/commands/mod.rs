@@ -4,6 +4,7 @@ pub mod articles;
 pub mod chat;
 pub mod claude_oauth;
 pub mod editions;
+pub mod ds4;
 pub mod feeds;
 pub mod models;
 pub mod offline;

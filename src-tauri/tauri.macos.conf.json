@@ -1,12 +1,13 @@
 {
   "build": {
-    "beforeDevCommand": "sh plugins/tauri-plugin-skim-ai/build-macos-bridge.sh && npm run dev",
-    "beforeBuildCommand": "sh plugins/tauri-plugin-skim-ai/build-macos-bridge.sh && npm run build"
+    "beforeDevCommand": "sh scripts/build-ds4-macos.sh && sh plugins/tauri-plugin-skim-ai/build-macos-bridge.sh && npm run dev",
+    "beforeBuildCommand": "sh scripts/build-ds4-macos.sh && sh plugins/tauri-plugin-skim-ai/build-macos-bridge.sh && npm run build"
   },
   "bundle": {
-    "externalBin": ["../plugins/tauri-plugin-skim-ai/bin/skim-ai-macos-bridge"],
+    "externalBin": ["../plugins/tauri-plugin-skim-ai/bin/skim-ai-macos-bridge", "../.build/ds4-bundle/ds4-server"],
     "macOS": {
       "files": {
+        "Resources/ds4": "../.build/ds4-bundle/resources",
         "Resources/mlx.metallib": "../plugins/tauri-plugin-skim-ai/bin/mlx.metallib",
         "Resources/swift-transformers_Hub.bundle": "../plugins/tauri-plugin-skim-ai/resources/swift-transformers_Hub.bundle"
       }

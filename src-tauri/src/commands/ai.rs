@@ -29,6 +29,7 @@ pub fn default_model(provider: &str) -> String {
         "xai" => "grok-4.3".to_string(),
         "mlx" => "mlx-community/gemma-3-1b-it-4bit".to_string(),
         "foundation-models" => "foundation-model".to_string(),
+        "ds4" => "deepseek-v4-flash".to_string(),
         _ => "gpt-4o-mini".to_string(),
     }
 }

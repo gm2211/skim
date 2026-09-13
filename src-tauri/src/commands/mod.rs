@@ -1,8 +1,10 @@
-pub mod feeds;
-pub mod articles;
 pub mod ai;
+pub mod aggregator;
+pub mod articles;
 pub mod chat;
-pub mod settings;
-pub mod models;
 pub mod claude_oauth;
 pub mod editions;
+pub mod feeds;
+pub mod models;
+pub mod offline;
+pub mod settings;

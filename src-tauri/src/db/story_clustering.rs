@@ -951,6 +951,8 @@ mod tests {
         );
         let filter = ArticleFilter {
             feed_id: None,
+            feed_ids: None,
+            search: None,
             theme_id: None,
             is_read: None,
             is_starred: None,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
@@ -23,10 +23,13 @@ import {
   type MlxDownloadProgress,
 } from "../../services/commands";
 import { ModelBrowser } from "./ModelBrowser";
+import { RemoteModelPicker } from "./RemoteModelPicker";
+import { OfflineReaderSettings } from "./OfflineReaderSettings";
 import { NumberInput } from "../ui/NumberInput";
 import { AIDisclaimer } from "../common/AIDisclaimer";
 import { isIOS } from "../../utils/platform";
 import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
+import { useDialogFocus } from "../../hooks/useDialogFocus";
 
 const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
@@ -62,9 +65,13 @@ const needsApiKey = (provider: string) =>
 const needsEndpoint = (provider: string) =>
   ["ollama", "custom"].includes(provider);
 
-type SettingsTab = "ai" | "sync" | "appearance";
+type SettingsTab = "ai" | "sync" | "appearance" | "reading";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
+  {
+    id: "reading", label: "Reading",
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 4h6l2 2 2-2h6v16h-6l-2 2-2-2H4V4Zm8 2v16" /></svg>,
+  },
   {
     id: "ai",
     label: "AI Provider",
@@ -121,13 +128,15 @@ function InputField({
 }
 
 export function SettingsDialog() {
-  const { data: settings } = useSettings();
+  const { data: settings, error: loadError, refetch } = useSettings();
   const updateSettings = useUpdateSettings();
   const setShowSettings = useUiStore((s) => s.setShowSettings);
   const isPhone = useUiStore((s) => s.isPhone);
 
   const [local, setLocal] = useState<AppSettings | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("ai");
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogRef, () => setShowSettings(false));
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(
     isPhone,
     () => setShowSettings(false),
@@ -139,11 +148,29 @@ export function SettingsDialog() {
     }
   }, [settings]);
 
-  if (!local) return null;
+  if (!local) return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Settings" tabIndex={-1}
+        className="rounded-2xl border border-border bg-bg-secondary text-text-primary" style={{ padding: 24, width: "min(480px, 92vw)" }}>
+        <h2 style={{ fontSize: 20, fontWeight: 600 }}>Settings</h2>
+        <p role={loadError ? "alert" : "status"} className="text-text-secondary" style={{ margin: "16px 0" }}>
+          {loadError ? "Could not load settings. Try again." : "Loading settings…"}
+        </p>
+        <div className="flex gap-3">
+          {loadError && <button className="tap-target text-accent" onClick={() => void refetch()}>Try again</button>}
+          <button className="tap-target" onClick={() => setShowSettings(false)}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
 
   const handleSave = async () => {
-    await updateSettings.mutateAsync(local);
-    setShowSettings(false);
+    try {
+      await updateSettings.mutateAsync(local);
+      setShowSettings(false);
+    } catch {
+      // The mutation error is shown beside Save; retain the user's edits.
+    }
   };
 
   const updateAi = (patch: Partial<AppSettings["ai"]>) =>
@@ -183,6 +210,11 @@ export function SettingsDialog() {
       }
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-title"
+        tabIndex={-1}
         className={
           isPhone
             ? "flex flex-col flex-1 min-h-0 overflow-hidden"
@@ -191,7 +223,7 @@ export function SettingsDialog() {
         style={
           isPhone
             ? swipeToDismissStyle
-            : { background: "rgba(22, 27, 34, 0.75)", height: local.ai.provider === "local" ? 640 : 520 }
+            : { background: "var(--color-bg-secondary)", height: local.ai.provider === "local" ? 640 : 560, maxHeight: "90vh" }
         }
       >
         {/* Header */}
@@ -200,7 +232,7 @@ export function SettingsDialog() {
           style={{ padding: isPhone ? "8px 12px" : "16px 24px", touchAction: isPhone ? "pan-y" : undefined }}
           {...swipeToDismissHandlers}
         >
-          <h2 style={{ fontSize: 18, fontWeight: 600 }} className="text-text-primary">Settings</h2>
+          <h2 id="settings-title" style={{ fontSize: 20, fontWeight: 600 }} className="text-text-primary">Settings</h2>
           <button
             onClick={() => setShowSettings(false)}
             className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
@@ -218,7 +250,7 @@ export function SettingsDialog() {
           <div
             className={
               isPhone
-                ? "grid grid-cols-3 gap-1 border-b border-white/5 overflow-hidden"
+                ? "grid grid-cols-2 gap-1 border-b border-white/5 overflow-hidden"
                 : "border-r border-white/5 flex flex-col"
             }
             style={isPhone ? { padding: "8px 10px" } : { width: 180, padding: "12px 8px" }}
@@ -372,7 +404,13 @@ export function SettingsDialog() {
                     label="Model"
                     description="Leave blank for default model"
                   >
-                    <input
+                    {["openai", "openrouter", "anthropic", "custom"].includes(local.ai.provider) ? <RemoteModelPicker
+                      provider={local.ai.provider}
+                      apiKey={local.ai.api_key}
+                      endpoint={local.ai.endpoint}
+                      value={local.ai.model ?? ""}
+                      onChange={(value) => updateAi({ model: value || null })}
+                    /> : <input
                       type="text"
                       value={local.ai.model ?? ""}
                       onChange={(e) => updateAi({ model: e.target.value || null })}
@@ -389,7 +427,7 @@ export function SettingsDialog() {
                       }
                       className={inputClass}
                       style={inputStyle}
-                    />
+                    />}
                   </InputField>
                 )}
 
@@ -483,6 +521,8 @@ export function SettingsDialog() {
               <SyncTab local={local} setLocal={setLocal} inputClass={inputClass} inputStyle={inputStyle} />
             )}
 
+            {activeTab === "reading" && <OfflineReaderSettings />}
+
             {activeTab === "appearance" && (
               <>
                 <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
@@ -523,6 +563,7 @@ export function SettingsDialog() {
         </div>
 
         {/* Footer */}
+        {updateSettings.error && <p role="alert" className="text-danger" style={{ padding: "8px 24px", fontSize: 13 }}>Could not save settings. Your edits are still here; try Save again.</p>}
         <div className="flex justify-end gap-3 border-t border-white/5" style={{ padding: "14px 24px" }}>
           <button
             onClick={() => setShowSettings(false)}

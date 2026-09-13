@@ -1,4 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+
+export type RemoteModel = { id: string; display_name: string };
+export const listRemoteModels = (provider: string, apiKey: string | null, endpoint: string | null) =>
+  invoke<RemoteModel[]>("list_remote_models", { provider, apiKey, endpoint });
 import type {
   Feed,
   Article,
@@ -27,6 +31,7 @@ import type {
   SmartRules,
   TodayEditionView,
   TodayEditionItem,
+  AggregatorDetails,
 } from "./types";
 
 // Feeds
@@ -49,6 +54,8 @@ export const renameFolder = (folderId: string, name: string) =>
   invoke<void>("rename_folder", { folderId, name });
 export const updateSmartFolderRules = (folderId: string, rules: SmartRules) =>
   invoke<void>("update_smart_folder_rules", { folderId, rules });
+export const convertFolder = (folderId: string, toSmart: boolean, rules?: SmartRules, name?: string) =>
+  invoke<void>("convert_folder", { folderId, toSmart, rules, name });
 export const deleteFolder = (folderId: string) =>
   invoke<void>("delete_folder", { folderId });
 export const reorderFolders = (folderIds: string[]) =>
@@ -270,6 +277,26 @@ export const toggleRead = (articleId: string) =>
   invoke<boolean>("toggle_read", { articleId });
 export const fetchFullArticle = (url: string) =>
   invoke<{ html: string; raw_html: string }>("fetch_full_article", { url });
+export const fetchAggregatorDetails = (url: string, limit = 10) =>
+  invoke<AggregatorDetails | null>("fetch_aggregator_details", { url, limit });
+export const getCachedReaderContent = (articleId: string) =>
+  invoke<{ html: string; raw_html: string } | null>("get_cached_reader_content", { articleId });
+export const getOrFetchReaderContent = (articleId: string, url: string, forceRefresh = false) =>
+  invoke<{ html: string; raw_html: string }>("get_or_fetch_reader_content", { articleId, url, forceRefresh });
+
+export interface OfflineCacheStats { extracted_articles: number }
+export interface OfflinePreloadProgress {
+  completed: number;
+  total: number;
+  cached: number;
+  already_ready: number;
+  failed: number;
+  current_title: string | null;
+}
+export const OFFLINE_PRELOAD_PROGRESS_EVENT = "skim-reader://offline-preload-progress";
+export const getOfflineCacheStats = () => invoke<OfflineCacheStats>("get_offline_cache_stats");
+export const preloadArticlesForOffline = (limit: number) =>
+  invoke<OfflinePreloadProgress>("preload_articles_for_offline", { limit });
 
 // AI
 export const summarizeArticle = (

@@ -8,6 +8,9 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
 import { useVisualViewportSync } from "../../hooks/useVisualViewport";
 import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
+import { useSettings } from "../../hooks/useSettings";
+import { useDialogFocus } from "../../hooks/useDialogFocus";
+import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 
 type Scope = "inbox" | "unread" | "all";
 
@@ -24,9 +27,15 @@ interface Props {
 
 export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
-  useLockBodyScroll(isPhone);
+  const showSettings = useUiStore((s) => s.showSettings);
+  const { data: settings } = useSettings();
+  const chatProvider = settings?.ai.chat_provider;
+  const provider = chatProvider && chatProvider !== "same" ? chatProvider : settings?.ai.provider;
+  const needsSetup = provider === "none";
+  useLockBodyScroll(isPhone && !showSettings);
   const dialogRef = useRef<HTMLDivElement>(null);
-  useVisualViewportSync(dialogRef, isPhone);
+  useVisualViewportSync(dialogRef, isPhone && !showSettings);
+  useDialogFocus(dialogRef, onClose, !showSettings);
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(isPhone, onClose);
   const [scope, setScope] = useState<Scope>("unread");
   const [input, setInput] = useState("");
@@ -37,9 +46,13 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (isPhone) return;
+    if (isPhone || needsSetup || showSettings) return;
     inputRef.current?.focus();
-  }, [isPhone]);
+  }, [isPhone, needsSetup, showSettings]);
+
+  useEffect(() => {
+    setError((previous) => isAiSetupError(previous) ? null : previous);
+  }, [settings]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -47,7 +60,7 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
 
   const send = async () => {
     const query = input.trim();
-    if (!query || loading) return;
+    if (!query || loading || needsSetup) return;
     setError(null);
 
     const userMsg: Message = { role: "user", content: query };
@@ -73,16 +86,20 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
     }
   };
 
-  return createPortal(
+  return showSettings ? null : createPortal(
     <div
       className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 dialog-fade-in ${isPhone ? "" : "flex items-center justify-center"}`}
       onClick={onClose}
     >
       <div
         ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ask-skim-title"
+        tabIndex={-1}
         className={`${isPhone ? "fixed left-0 right-0 overflow-hidden" : "border border-white/10 rounded-2xl shadow-2xl"} flex flex-col`}
         style={{
-          background: "rgba(22, 27, 34, 0.98)",
+          background: "var(--color-bg-secondary)",
           width: isPhone ? undefined : "min(720px, 92vw)",
           height: isPhone ? "100dvh" : "min(720px, 85vh)",
           top: isPhone ? 0 : undefined,
@@ -96,22 +113,23 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
       >
         {/* Header */}
         <div
-          className="flex items-center gap-2 border-b border-white/5 flex-nowrap"
-          style={{ padding: isPhone ? "8px 12px" : "12px 16px", touchAction: isPhone ? "pan-y" : undefined }}
+          className="flex items-center gap-3 border-b border-border flex-wrap"
+          style={{ padding: isPhone ? "12px 16px" : "20px 24px", touchAction: isPhone ? "pan-y" : undefined }}
           {...swipeToDismissHandlers}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent flex-shrink-0">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
           </svg>
-          <h3 className="text-text-primary flex-shrink-0" style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap" }}>
+          <h3 id="ask-skim-title" className="text-text-primary flex-1" style={{ fontSize: 20, fontWeight: 600 }}>
             Ask Skim
           </h3>
           <select
+            aria-label="Articles to search"
             value={scope}
             onChange={(e) => setScope(e.target.value as Scope)}
             className="border border-white/10 rounded-lg text-text-primary flex-1 min-w-0"
-            style={{ background: "rgba(255, 255, 255, 0.05)", padding: "5px 10px", fontSize: 12, width: 0, maxWidth: 200 }}
+            style={{ background: "var(--color-bg-tertiary)", padding: "8px 12px", fontSize: 14, minHeight: 40, maxWidth: 160 }}
           >
             <option value="inbox">Inbox</option>
             <option value="unread">Unread</option>
@@ -131,7 +149,8 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
 
         {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden min-w-0" style={{ padding: "18px" }}>
-          {messages.length === 0 && !loading && (
+          {(needsSetup || isAiSetupError(error)) && <AiSetupNotice error={error} />}
+          {messages.length === 0 && !loading && !needsSetup && !isAiSetupError(error) && (
             <div className="text-center text-text-muted" style={{ padding: "40px 20px" }}>
               <p style={{ fontSize: 13, marginBottom: 10 }}>
                 Ask anything about articles in your feed.
@@ -262,8 +281,8 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
             </div>
           )}
 
-          {error && (
-            <p className="text-danger" style={{ fontSize: 12 }}>
+          {error && !isAiSetupError(error) && (
+            <p role="alert" className="text-danger" style={{ fontSize: 14 }}>
               {error}
             </p>
           )}
@@ -274,6 +293,7 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
           <div className="flex items-center gap-2 min-w-0">
             <textarea
               ref={inputRef}
+              aria-label="Question about your articles"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -281,7 +301,6 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
                   e.preventDefault();
                   send();
                 }
-                if (e.key === "Escape") onClose();
               }}
               placeholder="Ask about your articles…"
               rows={2}
@@ -290,7 +309,7 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
             />
             <button
               onClick={send}
-              disabled={loading || !input.trim()}
+              disabled={loading || needsSetup || !input.trim()}
               className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors flex-shrink-0"
               style={{ padding: "10px 16px", fontSize: 13 }}
             >

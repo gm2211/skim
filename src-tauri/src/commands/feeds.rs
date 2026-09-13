@@ -753,6 +753,58 @@ pub async fn update_smart_folder_rules(
     queries::update_folder_rules(&conn, &folder_id, &rules_json).map_err(|e| e.to_string())
 }
 
+/// Convert a folder in place so its identity, name, order, and selection state
+/// survive the change. The membership snapshot is written in one transaction.
+#[tauri::command]
+pub async fn convert_folder(
+    db: State<'_, Database>,
+    folder_id: String,
+    to_smart: bool,
+    rules: Option<SmartRules>,
+    name: Option<String>,
+) -> Result<(), String> {
+    let name = name.map(|value| value.trim().to_string());
+    if let Some(ref name) = name {
+        if name.is_empty() {
+            return Err("Folder name cannot be empty".to_string());
+        }
+    }
+    let rules_json = if to_smart {
+        let rules = rules.ok_or_else(|| "Smart folder rules are required".to_string())?;
+        validate_smart_rules(&rules)?;
+        Some(serde_json::to_string(&rules).map_err(|e| e.to_string())?)
+    } else {
+        None
+    };
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let folder = queries::list_folders(&conn)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .find(|folder| folder.id == folder_id)
+        .ok_or_else(|| "Folder not found".to_string())?;
+    if folder.is_smart == to_smart {
+        return Err("Folder is already in the requested mode".to_string());
+    }
+    let feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
+    let matching_ids: Vec<String> = if folder.is_smart {
+        eval_smart_folder(&folder, &feeds).into_iter().map(|feed| feed.id.clone()).collect()
+    } else {
+        feeds
+            .iter()
+            .filter(|feed| feed.folder_id.as_deref() == Some(folder.id.as_str()))
+            .map(|feed| feed.id.clone())
+            .collect()
+    };
+    queries::convert_folder_in_place(
+        &conn,
+        &folder_id,
+        to_smart,
+        rules_json.as_deref(),
+        name.as_deref(),
+        &matching_ids,
+    ).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn delete_folder(
     db: State<'_, Database>,
@@ -844,6 +896,23 @@ fn validate_smart_rules(rules: &SmartRules) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod smart_folder_validation_tests {
+    use super::*;
+
+    #[test]
+    fn invalid_rules_are_rejected_before_conversion_writes() {
+        let rules = SmartRules {
+            mode: MatchMode::Any,
+            rules: vec![SmartRule::RegexTitle {
+                pattern: "[unterminated".to_string(),
+            }],
+        };
+        let error = validate_smart_rules(&rules).expect_err("invalid regex must be rejected");
+        assert!(error.contains("Invalid regex"));
+    }
 }
 
 fn eval_smart_folder<'a>(folder: &Folder, feeds: &'a [Feed]) -> Vec<&'a Feed> {

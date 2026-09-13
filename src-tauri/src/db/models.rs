@@ -257,7 +257,11 @@ pub struct EditionItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArticleFilter {
     pub feed_id: Option<String>,
+    #[serde(default)]
+    pub feed_ids: Option<Vec<String>>,
     pub theme_id: Option<String>,
+    #[serde(default)]
+    pub search: Option<String>,
     pub is_read: Option<bool>,
     pub is_starred: Option<bool>,
     pub limit: Option<i64>,
@@ -299,17 +303,17 @@ pub struct AiSettings {
     #[serde(default)]
     pub models_directory: Option<String>,
     #[serde(default)]
-    pub summary_length: Option<String>,       // "short", "medium", "long"
+    pub summary_length: Option<String>, // "short", "medium", "long"
     #[serde(default)]
-    pub summary_tone: Option<String>,         // "concise", "detailed", "casual", "technical"
+    pub summary_tone: Option<String>, // "concise", "detailed", "casual", "technical"
     #[serde(default)]
-    pub summary_format: Option<String>,       // "bullets", "paragraph", "both"
+    pub summary_format: Option<String>, // "bullets", "paragraph", "both"
     #[serde(default)]
     pub summary_custom_prompt: Option<String>, // advanced: override system prompt
     #[serde(default)]
     pub summary_custom_word_count: Option<i32>,
     #[serde(default)]
-    pub chat_provider: Option<String>,      // "same" or provider name; None = same as main
+    pub chat_provider: Option<String>, // "same" or provider name; None = same as main
     #[serde(default)]
     pub chat_model: Option<String>,
     #[serde(default)]
@@ -353,8 +357,12 @@ pub struct SyncSettings {
     pub today_story_limit: i32,
 }
 
-fn default_recent_cap() -> i32 { 3000 }
-fn default_today_story_limit() -> i32 { 10 }
+fn default_recent_cap() -> i32 {
+    3000
+}
+fn default_today_story_limit() -> i32 {
+    10
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArticleTriage {
@@ -414,8 +422,8 @@ pub struct ArticleInteraction {
 /// A learned preference signal derived from user interactions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserPreferenceProfile {
-    pub top_feeds: Vec<String>,           // feeds the user engages with most
-    pub preferred_topics: Vec<String>,    // topics from highly-engaged articles
+    pub top_feeds: Vec<String>,            // feeds the user engages with most
+    pub preferred_topics: Vec<String>,     // topics from highly-engaged articles
     pub deprioritized_topics: Vec<String>, // topics user gave "less" feedback on
     pub avg_reading_time_sec: f64,
     pub total_interactions: i64,

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as commands from "../services/commands";
 
 /**
@@ -51,9 +51,21 @@ export function useSetArticleFeedback() {
 }
 
 export function useSetPriorityOverride() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ articleId, priority }: { articleId: string; priority: number }) =>
       commands.setPriorityOverride(articleId, priority),
+    onSuccess: (_data, { articleId }) => {
+      qc.invalidateQueries({ queryKey: ["interaction", articleId] });
+      qc.invalidateQueries({ queryKey: ["article", articleId] });
+      qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["articleCount"] });
+      qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["feeds"] });
+      qc.invalidateQueries({ queryKey: ["recent"] });
+      qc.invalidateQueries({ queryKey: ["preferenceProfile"] });
+      qc.invalidateQueries({ queryKey: ["triageStats"] });
+    },
   });
 }
 

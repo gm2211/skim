@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TodayEditionPane } from "./TodayEditionPane";
 import type { AppSettings, TodayEditionItem, TodayEditionView } from "../../services/types";
+import { useUiStore } from "../../stores/uiStore";
 
 vi.mock("../../services/commands", () => ({
   getOrGenerateTodayEdition: vi.fn(),
@@ -111,6 +112,7 @@ function renderPane() {
 }
 
 beforeEach(() => {
+  useUiStore.setState({ isPhone: false, sidebarCollapsed: false });
   vi.mocked(commands.getSettings).mockResolvedValue(DEFAULT_SETTINGS);
 });
 
@@ -167,6 +169,18 @@ describe("TodayEditionPane", () => {
     renderPane();
 
     await screen.findByText("1 of 3 done");
+  });
+
+  it("reserves a draggable macOS titlebar when the sidebar is collapsed", async () => {
+    useUiStore.setState({ isPhone: false, sidebarCollapsed: true });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([]));
+
+    renderPane();
+
+    const expand = await screen.findByRole("button", { name: "Expand sidebar" });
+    const titlebar = expand.parentElement;
+    expect(titlebar).toHaveAttribute("data-tauri-drag-region");
+    expect(titlebar).toHaveStyle({ height: "52px", paddingLeft: "80px" });
   });
 
   it("shows a completed banner once every item is consumed", async () => {

@@ -1,7 +1,7 @@
 use crate::ai::local_provider::SharedModelState;
 use crate::ai::provider::{
-    AiProvider, ChatMessage, ChatRequest, ChatResponse as ProviderChatResponse, ToolDef, ToolUse,
-    create_provider,
+    create_provider, AiProvider, ChatMessage, ChatRequest, ChatResponse as ProviderChatResponse,
+    ToolDef, ToolUse,
 };
 use crate::db::models::AiSettings;
 use crate::db::{queries, Database};
@@ -37,8 +37,8 @@ pub async fn chat_with_article(
         let article = queries::get_article_by_id(&conn, &article_id)
             .map_err(|e| e.to_string())?
             .ok_or("Article not found")?;
-        let settings_json = queries::get_setting(&conn, "app_settings")
-            .map_err(|e| e.to_string())?;
+        let settings_json =
+            queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
         (article, settings_json)
     };
 
@@ -51,20 +51,32 @@ pub async fn chat_with_article(
     let mut ai_settings = resolve_chat_settings(&settings.ai);
 
     if ai_settings.provider == "none" {
-        return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
+        return Err(
+            "No AI provider configured. Go to Settings to set up an AI provider.".to_string(),
+        );
     }
 
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
     let provider_kind = ai_settings.provider.clone();
     let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
-    let model = ai_settings.model.clone().unwrap_or_else(|| crate::commands::ai::default_model(&ai_settings.provider));
+    let model = ai_settings
+        .model
+        .clone()
+        .unwrap_or_else(|| crate::commands::ai::default_model(&ai_settings.provider));
 
     // Build article context
     let content_text = article.article.content_text.as_deref().unwrap_or("");
-    let html_as_text = article.article.content_html.as_deref()
+    let html_as_text = article
+        .article
+        .content_html
+        .as_deref()
         .map(|h| html2text::from_read(h.as_bytes(), 10000))
         .unwrap_or_default();
-    let text = if html_as_text.len() > content_text.len() { &html_as_text } else { content_text };
+    let text = if html_as_text.len() > content_text.len() {
+        &html_as_text
+    } else {
+        content_text
+    };
 
     // Truncate for context window (char-safe)
     let article_text: String = text.chars().take(12000).collect();
@@ -198,7 +210,8 @@ pub async fn chat_with_articles(
 
     let (pool, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
+        let settings_json =
+            queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
         let pool: Vec<crate::db::models::ArticleWithFeed> = match scope.as_str() {
             "inbox" => {
                 let inbox = queries::get_inbox_articles(&conn, Some(3), None, 500, 0)
@@ -216,6 +229,8 @@ pub async fn chat_with_articles(
                 &conn,
                 &crate::db::models::ArticleFilter {
                     feed_id: None,
+                    feed_ids: None,
+                    search: None,
                     theme_id: None,
                     is_read: Some(false),
                     is_starred: None,
@@ -228,6 +243,8 @@ pub async fn chat_with_articles(
                 &conn,
                 &crate::db::models::ArticleFilter {
                     feed_id: None,
+                    feed_ids: None,
+                    search: None,
                     theme_id: None,
                     is_read: None,
                     is_starred: None,
@@ -247,7 +264,9 @@ pub async fn chat_with_articles(
 
     let mut ai_settings = resolve_chat_settings(&settings.ai);
     if ai_settings.provider == "none" {
-        return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
+        return Err(
+            "No AI provider configured. Go to Settings to set up an AI provider.".to_string(),
+        );
     }
 
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
@@ -273,7 +292,11 @@ pub async fn chat_with_articles(
                 "{} {} {}",
                 a.article.title.to_lowercase(),
                 a.feed_title.to_lowercase(),
-                a.article.content_text.as_deref().unwrap_or("").to_lowercase(),
+                a.article
+                    .content_text
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_lowercase(),
             );
             let score: i64 = kws.iter().filter(|k| hay.contains(k.as_str())).count() as i64;
             (score, a)
@@ -392,11 +415,10 @@ fn provider_supports_tools(provider_kind: &str) -> bool {
 fn web_search_tool_def() -> ToolDef {
     ToolDef {
         name: "web_search".to_string(),
-        description:
-            "Search the public web (DuckDuckGo) for fresh information not present in the \
+        description: "Search the public web (DuckDuckGo) for fresh information not present in the \
              user's article context. Returns up to `max_results` title/url/snippet tuples. \
              Call this when the provided articles don't cover the user's question."
-                .to_string(),
+            .to_string(),
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
@@ -704,7 +726,11 @@ fn extract_inner_text(html: &str) -> Option<String> {
     let close = rest.find("</")?;
     let inner = &rest[..close];
     let text = strip_html_tags(inner).trim().to_string();
-    if text.is_empty() { None } else { Some(text) }
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
+    }
 }
 
 fn strip_html_tags(s: &str) -> String {

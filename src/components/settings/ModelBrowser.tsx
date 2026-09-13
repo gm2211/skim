@@ -51,6 +51,28 @@ const ALL_QUANTS: { pattern: string; label: string; recommended?: boolean; defau
 
 const DEFAULT_QUANTS = new Set(ALL_QUANTS.filter((q) => q.defaultOn).map((q) => q.pattern));
 
+// Larger Q4 presets are offered on Macs with enough unified memory to leave
+// room for the reader and OS. These are pinned files from the model cards,
+// rather than arbitrary search results.
+const STRONG_PRESETS = [
+  {
+    repo: "bartowski/Qwen_Qwen3-30B-A3B-GGUF",
+    file: "Qwen_Qwen3-30B-A3B-Q4_K_M.gguf",
+    name: "Qwen3 30B A3B",
+    size: "17.4 GiB",
+    minMemoryGb: 32,
+    desc: "Sparse 30B model with a larger memory footprint.",
+  },
+  {
+    repo: "bartowski/Qwen_Qwen3-32B-GGUF",
+    file: "Qwen_Qwen3-32B-Q4_K_M.gguf",
+    name: "Qwen3 32B",
+    size: "18.4 GiB",
+    minMemoryGb: 32,
+    desc: "Higher-capacity local model; plan for a larger download.",
+  },
+] as const;
+
 function filterAndSortFiles(files: HfModelFile[], enabledQuants: Set<string>) {
   const results: (HfModelFile & { tier: typeof ALL_QUANTS[0] })[] = [];
   for (const tier of ALL_QUANTS) {
@@ -362,7 +384,7 @@ export function ModelBrowser({
             className="rounded-xl border border-white/10 overflow-hidden"
             style={{ background: "rgba(255,255,255,0.02)" }}
           >
-            {localModels.data.map((m) => (
+            {localModels.data.filter((m) => !m.filename.toLowerCase().includes("deepseek-v4")).map((m) => (
               <div
                 key={m.path}
                 className={`flex items-center gap-3 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors ${m.is_partial ? "opacity-60" : "cursor-pointer"}`}
@@ -507,10 +529,10 @@ export function ModelBrowser({
         </label>
         <div className="flex flex-col gap-2">
           {[
-            { repo: "bartowski/Llama-3.2-1B-Instruct-GGUF", file: "Llama-3.2-1B-Instruct-Q4_K_M.gguf", name: "Llama 3.2 1B", size: "0.8 GB", desc: "Cool & tiny - runs on any laptop, good summaries, minimal heat" },
-            { repo: "bartowski/google_gemma-4-E2B-it-GGUF", file: "google_gemma-4-E2B-it-Q4_K_M.gguf", name: "Gemma 4 E2B", size: "3.5 GB", desc: "Current small Gemma - strong reasoning, 128K context, moderate heat" },
-            { repo: "bartowski/google_gemma-4-E4B-it-GGUF", file: "google_gemma-4-E4B-it-Q4_K_M.gguf", name: "Gemma 4 E4B", size: "5.4 GB", desc: "Best Gemma quality for most Macs - larger download, warmer laptop" },
-            { repo: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", file: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", name: "Llama 3.1 8B", size: "4.9 GB", desc: "Highest Llama quality - warm laptop, slowest on battery" },
+            { repo: "bartowski/Llama-3.2-1B-Instruct-GGUF", file: "Llama-3.2-1B-Instruct-Q4_K_M.gguf", name: "Llama 3.2 1B", size: "0.8 GB", desc: "Lightweight option for smaller Macs and lower power use." },
+            { repo: "bartowski/google_gemma-4-E2B-it-GGUF", file: "google_gemma-4-E2B-it-Q4_K_M.gguf", name: "Gemma 4 E2B", size: "3.5 GB", desc: "Balanced small model with a moderate memory footprint." },
+            { repo: "bartowski/google_gemma-4-E4B-it-GGUF", file: "google_gemma-4-E4B-it-Q4_K_M.gguf", name: "Gemma 4 E4B", size: "5.4 GB", desc: "Balanced mid-size model for Macs with more memory." },
+            { repo: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", file: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", name: "Llama 3.1 8B", size: "4.9 GB", desc: "Larger general-purpose model with a higher memory footprint." },
           ].map((preset) => {
             const installed = localModels.data?.some((m) => m.filename === preset.file);
             const isDownloading = downloadModel.isPending;
@@ -542,6 +564,43 @@ export function ModelBrowser({
           })}
         </div>
       </div>
+
+      {sysInfo.data && sysInfo.data.total_memory_gb >= 32 && (
+        <div style={{ marginBottom: 16 }}>
+          <label className="block text-text-primary" style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>
+            Higher-capacity models
+          </label>
+          <p className="text-text-muted" style={{ fontSize: 11, marginBottom: 8 }}>
+            Shown for Macs with 32 GB+ unified memory. Larger models leave less room for other apps.
+          </p>
+          <div className="flex flex-col gap-2">
+            {STRONG_PRESETS.filter((preset) => sysInfo.data!.total_memory_gb >= preset.minMemoryGb).map((preset) => {
+              const installed = localModels.data?.some((m) => m.filename === preset.file);
+              return (
+                <div key={preset.file} className="flex items-center justify-between rounded-lg border border-white/10" style={{ padding: "8px 12px" }}>
+                  <div>
+                    <span className="text-text-primary" style={{ fontSize: 13 }}>{preset.name}</span>
+                    <span className="text-text-muted" style={{ fontSize: 11, marginLeft: 8 }}>{preset.size}</span>
+                    <p className="text-text-muted" style={{ fontSize: 11 }}>{preset.desc}</p>
+                  </div>
+                  {installed ? (
+                    <span className="text-accent" style={{ fontSize: 11 }}>Installed</span>
+                  ) : (
+                    <button
+                      onClick={() => downloadModel.mutate({ repoId: preset.repo, filename: preset.file })}
+                      disabled={downloadModel.isPending}
+                      className="text-accent border border-accent/20 hover:bg-accent/10 rounded-lg transition-colors disabled:opacity-40"
+                      style={{ padding: "4px 12px", fontSize: 11 }}
+                    >
+                      Download
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Browse Models — hidden by default */}
       <div>
@@ -679,6 +738,7 @@ export function ModelBrowser({
         )}
 
         {searchResults.data && searchResults.data
+          .filter((m) => !m.id.toLowerCase().includes("deepseek-v4"))
           .filter((m) => !isSingleQuantRepo(m.id))
           .filter((m) => m.recommended_file_size != null)
           .filter((m) => {
@@ -699,6 +759,7 @@ export function ModelBrowser({
             }}
           >
             {searchResults.data
+              .filter((m) => !m.id.toLowerCase().includes("deepseek-v4"))
               .filter((m) => !isSingleQuantRepo(m.id))
               .filter((m) => m.recommended_file_size != null)
               .filter((m) => {
@@ -809,6 +870,7 @@ export function ModelBrowser({
         )}
 
         {searchResults.data && searchResults.data
+          .filter((m) => !m.id.toLowerCase().includes("deepseek-v4"))
           .filter((m) => !isSingleQuantRepo(m.id))
           .filter((m) => m.recommended_file_size != null)
           .filter((m) => {

@@ -22,6 +22,43 @@ const SUPPORT_URL: &str = "https://gm2211.github.io/skim/";
 #[cfg(desktop)]
 const ISSUES_URL: &str = "https://github.com/gm2211/skim/issues";
 
+/// Synthetic release check for the bundled DS4 server. It intentionally avoids
+/// the database and UI so the signed app can validate its helper/runtime pair.
+#[cfg(target_os = "macos")]
+pub fn run_ds4_check(model_path: String) -> Result<(), String> {
+    use ai::provider::AiProvider;
+    let runtime = ai::ds4_provider::runtime();
+    tauri::async_runtime::block_on(async move {
+        let started_at = std::time::Instant::now();
+        runtime.start(std::path::Path::new(&model_path)).await?;
+        let provider = ai::ds4_provider::Ds4Provider::new(runtime.clone(), model_path);
+        let response = provider
+            .chat(ai::provider::ChatRequest {
+                model: "deepseek-v4-flash".to_string(),
+                messages: vec![ai::provider::ChatMessage::text(
+                    "user",
+                    "What is 2 + 2? Reply with the number only.",
+                )],
+                temperature: Some(0.0),
+                max_tokens: Some(8),
+                json_mode: false,
+                tools: None,
+            })
+            .await;
+        let _ = runtime.stop().await;
+        let response = response?;
+        if response.content.trim() == "4" {
+            println!("DS4 smoke passed in {:?}: 4", started_at.elapsed());
+            Ok(())
+        } else {
+            Err(format!(
+                "DS4 returned unexpected smoke response: {}",
+                response.content.trim()
+            ))
+        }
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let _ = env_logger::try_init();
@@ -254,6 +291,9 @@ pub fn run() {
             commands::articles::toggle_read,
             commands::articles::fetch_full_article,
             commands::aggregator::fetch_aggregator_details,
+            commands::ds4::ds4_status,
+            commands::ds4::ds4_start,
+            commands::ds4::ds4_stop,
             commands::offline::get_offline_cache_stats,
             commands::offline::get_cached_reader_content,
             commands::offline::get_or_fetch_reader_content,
@@ -313,6 +353,8 @@ pub fn run() {
                 if let Ok(mut guard) = state.try_lock() {
                     guard.take();
                 };
+                // The DS4 child is independent of the force-exited host process.
+                tauri::async_runtime::block_on(ai::ds4_provider::runtime().stop());
                 // Force-exit to skip C++ static destructors (llama.cpp Metal
                 // cleanup asserts on shutdown and crashes the process).
                 std::process::exit(0);

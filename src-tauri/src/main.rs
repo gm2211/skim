@@ -11,6 +11,19 @@ fn main() {
         }
         return;
     }
+    #[cfg(target_os = "macos")]
+    if let Some(index) = std::env::args().position(|arg| arg == "--check-ds4-model") {
+        let model_path = std::env::args().nth(index + 1).unwrap_or_default();
+        if model_path.is_empty() {
+            eprintln!("DS4 check failed: --check-ds4-model requires a GGUF path");
+            std::process::exit(2);
+        }
+        if let Err(error) = skim_lib::run_ds4_check(model_path) {
+            eprintln!("DS4 check failed: {error}");
+            std::process::exit(1);
+        }
+        return;
+    }
     skim_lib::run()
 }
 

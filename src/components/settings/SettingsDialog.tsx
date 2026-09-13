@@ -23,6 +23,7 @@ import {
   type MlxDownloadProgress,
 } from "../../services/commands";
 import { ModelBrowser } from "./ModelBrowser";
+import { Ds4Settings } from "./Ds4Settings";
 import { RemoteModelPicker } from "./RemoteModelPicker";
 import { OfflineReaderSettings } from "./OfflineReaderSettings";
 import { NumberInput } from "../ui/NumberInput";
@@ -42,6 +43,7 @@ const AI_PROVIDERS = [
   { value: "anthropic", label: "Claude (API Key)", description: "api.anthropic.com — requires API key with usage-based billing" },
   { value: "openai", label: "OpenAI", description: "api.openai.com" },
   { value: "xai", label: "Grok (xAI)", description: "api.x.ai — requires an xAI API key" },
+  { value: "ds4", label: "DeepSeek (DS4)", description: "Dedicated local DeepSeek V4 Flash runtime — Mac with 96 GB+ recommended" },
   { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
   { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
 ];
@@ -299,7 +301,8 @@ export function SettingsDialog() {
                     style={inputStyle}
                   >
                     {AI_PROVIDERS.filter((p) => {
-                      if (!isIOS && !isMacOS && ["mlx", "foundation-models"].includes(p.value)) return false;
+                      if (p.value === "ds4" && !isMacOS) return false;
+                      if (!isIOS && !isMacOS && ["mlx", "foundation-models", "ds4"].includes(p.value)) return false;
                       // Phone: hide providers that need a desktop runtime
                       // (llama.cpp embedded, Ollama localhost, Claude CLI).
                       if (!isPhone) return true;
@@ -317,6 +320,10 @@ export function SettingsDialog() {
 
                 {local.ai.provider === "local" && (
                   <ModelBrowser ai={local.ai} updateAi={updateAi} />
+                )}
+
+                {local.ai.provider === "ds4" && isMacOS && (
+                  <Ds4Settings ai={local.ai} updateAi={updateAi} />
                 )}
 
                 {local.ai.provider === "mlx" && (
@@ -396,7 +403,7 @@ export function SettingsDialog() {
                   </InputField>
                 )}
 
-                {!["none", "local", "mlx", "foundation-models"].includes(local.ai.provider) && (
+                {!["none", "local", "mlx", "foundation-models", "ds4"].includes(local.ai.provider) && (
                   <InputField
                     label="Model"
                     description="Leave blank for default model"

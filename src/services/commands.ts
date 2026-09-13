@@ -32,6 +32,7 @@ import type {
   TodayEditionView,
   TodayEditionItem,
   AggregatorDetails,
+  Ds4Status,
 } from "./types";
 
 // Feeds
@@ -450,3 +451,6 @@ export const listLocalModels = () => invoke<LocalModel[]>("list_local_models");
 export const deleteLocalModel = (path: string) =>
   invoke<void>("delete_local_model", { path });
 export const getSystemInfo = () => invoke<SystemInfo>("get_system_info");
+export const ds4Status = () => invoke<Ds4Status>("ds4_status");
+export const ds4Start = (modelPath: string) => invoke<Ds4Status>("ds4_start", { modelPath });
+export const ds4Stop = () => invoke<Ds4Status>("ds4_stop");

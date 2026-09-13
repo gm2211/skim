@@ -452,6 +452,46 @@ pub async fn get_hf_model_files(repo_id: &str) -> Result<Vec<HfModelFile>, Strin
     Ok(files)
 }
 
+const DS4_REPO: &str = "antirez/deepseek-v4-gguf";
+const DS4_FILE: &str = "DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf";
+const DS4_REVISION: &str = "f71f23d552d664e523b422157b2befbf74040380";
+const DS4_SIZE: u64 = 86_720_111_488;
+const DS4_SHA256: &str = "ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0";
+
+fn model_download_revision(repo_id: &str, filename: &str) -> &'static str {
+    if repo_id == DS4_REPO && filename == DS4_FILE { DS4_REVISION } else { "main" }
+}
+
+fn valid_resume_range(range: &str, offset: u64, expected_total: Option<u64>) -> bool {
+    let Some(value) = range.strip_prefix("bytes ") else { return false; };
+    let Some((span, total)) = value.split_once('/') else { return false; };
+    let Some((start, end)) = span.split_once('-') else { return false; };
+    let (Ok(start), Ok(end)) = (start.parse::<u64>(), end.parse::<u64>()) else { return false; };
+    start == offset && end >= start && expected_total.map_or(true, |expected| total.parse::<u64>() == Ok(expected) && end < expected)
+}
+
+async fn verify_ds4_download(path: &Path, cancel_flag: &AtomicBool) -> Result<(), String> {
+    use sha2::{Digest, Sha256};
+    use tokio::io::AsyncReadExt;
+    let mut file = tokio::fs::File::open(path).await.map_err(|e| e.to_string())?;
+    if file.metadata().await.map_err(|e| e.to_string())?.len() != DS4_SIZE {
+        return Err("DeepSeek download incomplete. Resume the download.".into());
+    }
+    let mut hash = Sha256::new();
+    let mut buffer = vec![0; 8 * 1024 * 1024];
+    loop {
+        if cancel_flag.load(Ordering::SeqCst) { return Err("Verification paused. Resume to verify the model.".into()); }
+        let read = file.read(&mut buffer).await.map_err(|e| e.to_string())?;
+        if read == 0 { break; }
+        hash.update(&buffer[..read]);
+    }
+    if format!("{:x}", hash.finalize()) != DS4_SHA256 {
+        tokio::fs::remove_file(path).await.map_err(|e| e.to_string())?;
+        return Err("DeepSeek checksum mismatch. Download the model again.".into());
+    }
+    Ok(())
+}
+
 pub async fn download_model(
     app_handle: &tauri::AppHandle,
     repo_id: &str,
@@ -471,8 +511,8 @@ pub async fn download_model(
     let part_path = target_dir.join(format!("{}.part", filename));
     let meta_path = target_dir.join(format!("{}.part.meta", filename));
     let url = format!(
-        "https://huggingface.co/{}/resolve/main/{}",
-        repo_id, filename
+        "https://huggingface.co/{}/resolve/{}/{}",
+        repo_id, model_download_revision(repo_id, filename), filename
     );
 
     // Save download metadata for resume
@@ -502,6 +542,13 @@ pub async fn download_model(
         0
     };
 
+    let is_ds4 = repo_id == DS4_REPO && filename == DS4_FILE;
+    if is_ds4 && existing_size == DS4_SIZE {
+        verify_ds4_download(&part_path, &cancel_flag).await?;
+        tokio::fs::rename(&part_path, &target_path).await.map_err(|e| e.to_string())?;
+        let _ = tokio::fs::remove_file(&meta_path).await;
+        return Ok(target_path);
+    }
     let client = reqwest::Client::new();
     let mut request = client.get(&url);
 
@@ -528,6 +575,13 @@ pub async fn download_model(
 
     // Calculate total size
     let resumed = status.as_u16() == 206;
+    if resumed {
+        let range = response.headers().get(reqwest::header::CONTENT_RANGE)
+            .and_then(|value| value.to_str().ok()).unwrap_or("");
+        if !valid_resume_range(range, existing_size, if is_ds4 { Some(DS4_SIZE) } else { None }) {
+            return Err("Server returned an invalid resume range. Download paused; retry to resume.".into());
+        }
+    }
     let content_length = response.content_length().unwrap_or(0);
     let total = if resumed {
         existing_size + content_length
@@ -558,7 +612,16 @@ pub async fn download_model(
     let mut stream = response.bytes_stream();
     let mut last_emit = std::time::Instant::now();
 
-    while let Some(chunk) = stream.next().await {
+    loop {
+        let chunk = tokio::select! {
+            next = stream.next() => match next { Some(chunk) => chunk, None => break },
+            _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {
+                if cancel_flag.load(Ordering::SeqCst) {
+                    return Err("Download paused — will resume next time".to_string());
+                }
+                continue;
+            }
+        };
         if cancel_flag.load(Ordering::SeqCst) {
             // Keep the .part file for resume — don't delete it
             return Err("Download paused — will resume next time".to_string());
@@ -579,7 +642,7 @@ pub async fn download_model(
                     downloaded,
                     total,
                     percent: if total > 0 {
-                        (downloaded as f64 / total as f64) * 100.0
+                        ((downloaded as f64 / total as f64) * 100.0).min(if is_ds4 { 99.0 } else { 100.0 })
                     } else {
                         0.0
                     },
@@ -592,6 +655,17 @@ pub async fn download_model(
     file.flush()
         .await
         .map_err(|e| format!("Failed to flush file: {}", e))?;
+
+    drop(file);
+    if total > 0 && downloaded != total {
+        return Err("Download incomplete. Resume the download.".into());
+    }
+    if is_ds4 {
+        let _ = app_handle.emit("model-download-progress", DownloadProgress {
+            filename: filename.to_string(), downloaded, total: DS4_SIZE, percent: 99.0,
+        });
+        verify_ds4_download(&part_path, &cancel_flag).await?;
+    }
 
     // Rename .part → final filename and clean up meta
     tokio::fs::rename(&part_path, &target_path)
@@ -847,7 +921,11 @@ pub fn list_local_models(model_dir: &Path) -> Result<Vec<LocalModel>, String> {
             };
 
             // Check if this is a truncated .gguf file
-            let is_truncated = if is_gguf {
+            let is_truncated = if is_gguf && gguf_name == DS4_FILE {
+                // DS4 uses dedicated tensor encodings; its pinned byte size is
+                // authoritative instead of the generic llama.cpp estimate.
+                file_size != DS4_SIZE
+            } else if is_gguf {
                 // First check .size sidecar
                 let size_path = model_dir.join(format!("{}.size", gguf_name));
                 if let Ok(expected_str) = std::fs::read_to_string(&size_path) {
@@ -900,4 +978,22 @@ pub fn delete_local_model(model_path: &Path) -> Result<(), String> {
         let _ = std::fs::remove_file(dir.join(format!("{}.size", gguf_name)));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod pinned_download_tests {
+    use super::*;
+    #[test]
+    fn resume_rejects_mismatched_or_malformed_ranges() {
+        assert!(valid_resume_range("bytes 100-199/200", 100, Some(200)));
+        assert!(!valid_resume_range("bytes 0-99/200", 100, Some(200)));
+        assert!(!valid_resume_range("bytes 100-199/300", 100, Some(200)));
+        assert!(!valid_resume_range("bytes 100-200/200", 100, Some(200)));
+        assert!(!valid_resume_range("", 100, None));
+    }
+    #[test]
+    fn only_supported_ds4_file_uses_pinned_revision() {
+        assert_eq!(model_download_revision(DS4_REPO, DS4_FILE), DS4_REVISION);
+        assert_eq!(model_download_revision(DS4_REPO, "another.gguf"), "main");
+    }
 }

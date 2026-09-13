@@ -148,6 +148,11 @@ pub async fn update_settings(
         changed
     }; // conn dropped here
 
+    // Release the large DS4 model when neither summaries nor chat use it.
+    if settings.ai.provider != "ds4" && settings.ai.chat_provider.as_deref() != Some("ds4") {
+        crate::ai::ds4_provider::runtime().stop().await;
+    }
+
     if ai_changed {
         let mut cache = summary_cache.lock().await;
         cache.clear();

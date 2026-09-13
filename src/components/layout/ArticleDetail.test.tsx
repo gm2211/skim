@@ -7,6 +7,8 @@ import { getOrFetchReaderContent } from "../../services/commands";
 
 vi.mock("../../services/commands", () => ({
   getOrFetchReaderContent: vi.fn(),
+  chatWithArticle: vi.fn(),
+  webSearch: vi.fn(),
   cancelSummarize: vi.fn().mockResolvedValue(undefined),
   recordReadingTime: vi.fn().mockResolvedValue(undefined),
 }));
@@ -14,7 +16,8 @@ vi.mock("../../services/commands", () => ({
 let selectedArticleId: string | null = "a";
 const setShowSettings = vi.fn();
 vi.mock("../../stores/uiStore", () => ({
-  useUiStore: () => ({
+  useUiStore: (selector?: (state: any) => unknown) => {
+    const state = {
     selectedArticleId,
     closeArticleDetail: vi.fn(),
     listCollapsed: false,
@@ -23,7 +26,9 @@ vi.mock("../../stores/uiStore", () => ({
     isPhone: false,
     phoneBack: vi.fn(),
     setShowSettings,
-  }),
+  };
+    return selector ? selector(state) : state;
+  },
 }));
 
 const articles: Record<string, Article> = {};
@@ -42,7 +47,6 @@ vi.mock("../../hooks/usePullToRefresh", () => ({
   usePullToRefresh: () => ({ pullToRefreshHandlers: {}, pullToRefreshIndicator: null, pullToRefreshContentStyle: {}, beginPull: vi.fn(), movePull: vi.fn(), endPull: vi.fn() }),
 }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
-vi.mock("../chat/ChatPanel", () => ({ ChatDrawer: () => null }));
 vi.mock("../article/ArticleLearningActions", () => ({ ArticleLearningActions: () => null }));
 vi.mock("../article/AggregatorDetails", () => ({ AggregatorDetails: () => null }));
 vi.mock("../common/AIDisclaimer", () => ({ AIDisclaimer: () => null }));
@@ -68,6 +72,20 @@ beforeEach(() => {
 });
 
 describe("ArticleDetail reader loading", () => {
+  it("opens the same article chat from the toolbar and bottom toggle", async () => {
+    vi.mocked(getOrFetchReaderContent).mockResolvedValue({ html: "<p>Article</p>", raw_html: "" });
+    const user = userEvent.setup();
+    render(<ArticleDetail />);
+    const toolbarChat = screen.getAllByRole("button", { name: "Chat with article" })[0];
+    await user.click(toolbarChat);
+    expect(screen.getByRole("region", { name: "Article chat" })).toBeInTheDocument();
+    expect(toolbarChat).toHaveAttribute("aria-expanded", "true");
+    await user.click(screen.getByRole("button", { name: "Collapse chat" }));
+    expect(toolbarChat).toHaveAttribute("aria-expanded", "false");
+    await user.click(screen.getAllByRole("button", { name: "Chat with article" })[1]);
+    expect(toolbarChat).toHaveAttribute("aria-expanded", "true");
+  });
+
   it("keeps hook order stable while article data loads and clears", async () => {
     selectedArticleId = null;
     const view = render(<ArticleDetail />);

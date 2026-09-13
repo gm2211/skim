@@ -335,6 +335,7 @@ export function ArticleDetail() {
   // reflects past engagement and would otherwise self-reinforce.
   useReadingTimeTracker(selectedArticleId, sidebarView.type === "recent");
   const [showSummarizeMenu, setShowSummarizeMenu] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [perArticleLength, setPerArticleLength] = useState<string | undefined>();
   const [perArticleTone, setPerArticleTone] = useState<string | undefined>();
   const [perArticlePrompt, setPerArticlePrompt] = useState<string | undefined>();
@@ -1069,11 +1070,11 @@ export function ArticleDetail() {
         : `transform ${SLIDE_MS}ms ${PHONE_SLIDE_EASING}`;
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
+    <div className="flex-1 min-w-0 min-h-0 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
       {/* Toolbar */}
       <div
         className="flex items-center justify-between relative z-20 flex-shrink-0"
-        style={{ height: 52, padding: isPhone ? "0 8px" : "0 24px", gap: isPhone ? 8 : undefined }}
+        style={{ minHeight: 52, height: isPhone ? 52 : undefined, padding: isPhone ? "0 8px" : "4px 12px", gap: 8 }}
       >
         {(isPhone || !(sidebarCollapsed && listCollapsed)) && (
           <button
@@ -1096,9 +1097,23 @@ export function ArticleDetail() {
           </button>
         )}
 
+        {!isPhone && (
+          <button
+            type="button"
+            onClick={() => setChatOpen((value) => !value)}
+            aria-label="Chat with article"
+            aria-expanded={chatOpen}
+            title="Chat with article"
+            className="tap-target flex-shrink-0 text-accent rounded-lg hover:bg-accent/10"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </button>
+        )}
         <div
-          className="flex items-center gap-2 min-w-0"
-          style={isPhone ? { gap: 8, flex: "1 1 auto", flexWrap: "nowrap" } : undefined}
+          className="flex flex-1 items-center justify-end gap-2 min-w-0"
+          style={{ gap: 8, flexWrap: isPhone ? "nowrap" : "wrap" }}
         >
           {article.url && (
             <>
@@ -1562,7 +1577,7 @@ export function ArticleDetail() {
       </div>
 
       {/* Chat drawer — collapsible bottom pane */}
-      <ChatDrawer articleId={article.id} articleTitle={article.title} />
+      <ChatDrawer articleId={article.id} articleTitle={article.title} open={chatOpen} onOpenChange={setChatOpen} />
     </div>
   );
 }

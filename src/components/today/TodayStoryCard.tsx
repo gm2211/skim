@@ -126,7 +126,7 @@ export function TodayStoryCard({ item, onToggleConsumed, onOpenArticle }: Props)
           }`}
           style={{ padding: "6px 12px", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap" }}
         >
-          {item.is_consumed ? "Undo" : "Mark done"}
+          {item.is_consumed ? "Mark as unread" : "Mark as read"}
         </button>
       </div>
 

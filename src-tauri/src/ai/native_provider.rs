@@ -62,10 +62,10 @@ fn format_message(message: &ChatMessage) -> String {
 
 fn native_error(provider: &str, error: impl ToString) -> String {
     let message = error.to_string();
-    if message.contains("unavailable")
-        || message.contains("not downloaded")
-        || message.contains("No model")
-        || message.contains("model")
+    let lower = message.to_lowercase();
+    if lower.contains("unavailable")
+        || lower.contains("not downloaded")
+        || lower.contains("no model")
     {
         format!("[configure-ai] {provider} on-device model unavailable: {message}")
     } else {
@@ -157,5 +157,6 @@ mod tests {
             native_error("MLX", "request timed out"),
             "request timed out"
         );
+        assert_eq!(native_error("MLX", "model inference timed out"), "model inference timed out");
     }
 }

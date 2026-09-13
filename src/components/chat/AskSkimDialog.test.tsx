@@ -19,6 +19,20 @@ beforeEach(() => {
 });
 
 describe("AskSkimDialog setup recovery", () => {
+  it("explains missing MLX weights without claiming the provider is unconfigured", async () => {
+    settings = { ai: { provider: "mlx", chat_provider: "same" } };
+    vi.mocked(chatWithArticles).mockRejectedValueOnce(new Error("[configure-ai] MLX on-device model unavailable: Model mlx-community/Qwen2.5-3B-Instruct-4bit is not downloaded."));
+    const user = userEvent.setup();
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(screen.queryByText("Set up AI to continue")).not.toBeInTheDocument();
+    await user.type(screen.getByRole("textbox"), "Find iPhone articles");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("Download your selected model")).toBeInTheDocument();
+    expect(screen.getByText(/Model mlx-community\/Qwen2.5-3B-Instruct-4bit is not downloaded/)).toBeInTheDocument();
+    expect(screen.queryByText("Set up AI to continue")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue("Find iPhone articles");
+  });
+
   it("preserves draft through settings and enables sending after provider setup", async () => {
     const user = userEvent.setup();
     render(<AskSkimDialog onClose={vi.fn()} />);

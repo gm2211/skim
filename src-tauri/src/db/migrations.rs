@@ -35,6 +35,17 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles(published_at);
         CREATE INDEX IF NOT EXISTS idx_articles_is_read ON articles(is_read);
 
+        CREATE TABLE IF NOT EXISTS article_reader_cache (
+            article_id TEXT PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
+            url        TEXT,
+            html       TEXT NOT NULL,
+            raw_html   TEXT NOT NULL,
+            cached_at  INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_article_reader_cache_cached_at
+            ON article_reader_cache(cached_at DESC);
+
         CREATE TABLE IF NOT EXISTS themes (
             id          TEXT PRIMARY KEY,
             label       TEXT NOT NULL,

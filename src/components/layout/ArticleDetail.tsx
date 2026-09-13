@@ -4,13 +4,15 @@ import { useArticle, useMarkRead, useToggleStar, useToggleRead } from "../../hoo
 import { useSummarizeArticle } from "../../hooks/useAi";
 import { useSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
-import { fetchFullArticle, cancelSummarize } from "../../services/commands";
+import { getOrFetchReaderContent, cancelSummarize } from "../../services/commands";
 import { ChatDrawer } from "../chat/ChatPanel";
 import { useReadingTimeTracker } from "../../hooks/useLearning";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { NumberInput } from "../ui/NumberInput";
 import { AIDisclaimer } from "../common/AIDisclaimer";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
+import { ArticleLearningActions } from "../article/ArticleLearningActions";
+import { AggregatorDetails } from "../article/AggregatorDetails";
 
 type ViewMode = "reader" | "web";
 type SwipeTarget = "web" | "reader" | "list";
@@ -436,7 +438,7 @@ export function ArticleDetail() {
     setFullError(null);
     (async () => {
       try {
-        const result = await fetchFullArticle(url);
+        const result = await getOrFetchReaderContent(articleId, url);
         if (cancelled || seq !== fullFetchSeqRef.current) return;
         const prepared = prepareFetchedArticle(result);
         setRawHtml(prepared.rawHtml);
@@ -503,7 +505,7 @@ export function ArticleDetail() {
     setLoadingFull(true);
     setFullError(null);
     try {
-      const result = await fetchFullArticle(url);
+      const result = await getOrFetchReaderContent(articleId, url, force);
       if (seq !== fullFetchSeqRef.current || useUiStore.getState().selectedArticleId !== articleId) return;
       const prepared = prepareFetchedArticle(result);
       setFullContent(prepared.fullContent);
@@ -1216,6 +1218,8 @@ export function ArticleDetail() {
             </svg>
           </button>
 
+          <ArticleLearningActions articleId={article.id} />
+
           {!isPhone && (
             <button
               onClick={() => toggleRead.mutate(article.id)}
@@ -1437,6 +1441,7 @@ export function ArticleDetail() {
                       <span className="text-text-muted">{formatDate(article.published_at)}</span>
                     </div>
                   </div>
+                  {article.url && <AggregatorDetails url={article.url} />}
                   {fullContent ? (
                     <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
                   ) : loadingFull ? (

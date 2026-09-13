@@ -65,4 +65,17 @@ describe("Sidebar — All Articles regression guard", () => {
     expect(useUiStore.getState().sidebarView).toEqual({ type: "today" });
     expect(useUiStore.getState().showCatchup).toBe(false);
   });
+
+  it("reserves the desktop titlebar for macOS window controls", () => {
+    useUiStore.setState({ ...INITIAL_STATE, isPhone: false, sidebarCollapsed: false }, true);
+    render(<Sidebar />);
+
+    const titlebar = screen.getByRole("heading", { name: "SKIM" }).parentElement;
+    expect(titlebar).toHaveAttribute("data-tauri-drag-region");
+    expect(titlebar).toHaveStyle({ height: "52px", paddingLeft: "80px" });
+
+    const actions = screen.getByLabelText("Sidebar actions");
+    expect(actions).toHaveStyle({ minHeight: "44px" });
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+  });
 });

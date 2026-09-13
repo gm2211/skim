@@ -188,6 +188,44 @@ pub fn update_folder_rules(
     Ok(())
 }
 
+/// Atomically changes a folder's mode and snapshots membership when converting
+/// a smart folder to a regular one. Validation and membership evaluation happen
+/// before this helper is called by the command layer.
+pub fn convert_folder_in_place(
+    conn: &Connection,
+    folder_id: &str,
+    to_smart: bool,
+    rules_json: Option<&str>,
+    name: Option<&str>,
+    matching_ids: &[String],
+) -> Result<(), rusqlite::Error> {
+    let tx = conn.unchecked_transaction()?;
+    if to_smart {
+        tx.execute(
+            "UPDATE folders SET name = COALESCE(?1, name), is_smart = 1, rules_json = ?2 WHERE id = ?3",
+            params![name, rules_json, folder_id],
+        )?;
+    } else {
+        tx.execute(
+            "UPDATE folders SET name = COALESCE(?1, name), is_smart = 0, rules_json = NULL WHERE id = ?2",
+            params![name, folder_id],
+        )?;
+    }
+    tx.execute(
+        "UPDATE feeds SET folder_id = NULL, updated_at = ?1 WHERE folder_id = ?2",
+        params![chrono::Utc::now().timestamp(), folder_id],
+    )?;
+    if !to_smart {
+        for feed_id in matching_ids {
+            tx.execute(
+                "UPDATE feeds SET folder_id = ?1, updated_at = ?2 WHERE id = ?3",
+                params![folder_id, chrono::Utc::now().timestamp(), feed_id],
+            )?;
+        }
+    }
+    tx.commit()
+}
+
 pub fn delete_folder(conn: &Connection, folder_id: &str) -> Result<(), rusqlite::Error> {
     // ON DELETE SET NULL on feeds.folder_id handles orphan feeds
     conn.execute("DELETE FROM folders WHERE id = ?1", params![folder_id])?;
@@ -276,13 +314,27 @@ pub fn insert_article(conn: &Connection, article: &Article) -> Result<bool, rusq
 }
 
 pub fn count_articles(conn: &Connection, filter: &ArticleFilter) -> Result<i64, rusqlite::Error> {
-    let mut sql = String::from("SELECT COUNT(*) FROM articles a");
+    let mut sql = String::from("SELECT COUNT(*) FROM articles a JOIN feeds f ON a.feed_id = f.id");
     let mut conditions = Vec::new();
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
 
     if let Some(ref feed_id) = filter.feed_id {
         conditions.push(format!("a.feed_id = ?{}", param_values.len() + 1));
         param_values.push(Box::new(feed_id.clone()));
+    }
+
+    if let Some(ref feed_ids) = filter.feed_ids {
+        if feed_ids.is_empty() {
+            conditions.push("1 = 0".to_string());
+        } else {
+            let placeholders = (0..feed_ids.len())
+                .map(|i| format!("?{}", param_values.len() + i + 1))
+                .collect::<Vec<_>>();
+            conditions.push(format!("a.feed_id IN ({})", placeholders.join(", ")));
+            for feed_id in feed_ids {
+                param_values.push(Box::new(feed_id.clone()));
+            }
+        }
     }
 
     if let Some(ref theme_id) = filter.theme_id {
@@ -299,6 +351,18 @@ pub fn count_articles(conn: &Connection, filter: &ArticleFilter) -> Result<i64, 
     if let Some(is_starred) = filter.is_starred {
         conditions.push(format!("a.is_starred = ?{}", param_values.len() + 1));
         param_values.push(Box::new(is_starred as i32));
+    }
+
+    if let Some(ref search) = filter.search {
+        let pattern = format!("%{}%", search.to_lowercase());
+        conditions.push(format!(
+            "(LOWER(a.title) LIKE ?{} OR LOWER(COALESCE(a.content_text, '')) LIKE ?{} OR LOWER(COALESCE(a.url, '')) LIKE ?{} OR LOWER(f.title) LIKE ?{})",
+            param_values.len() + 1,
+            param_values.len() + 1,
+            param_values.len() + 1,
+            param_values.len() + 1,
+        ));
+        param_values.push(Box::new(pattern));
     }
 
     if !conditions.is_empty() {
@@ -331,6 +395,20 @@ pub fn get_articles(
         param_values.push(Box::new(feed_id.clone()));
     }
 
+    if let Some(ref feed_ids) = filter.feed_ids {
+        if feed_ids.is_empty() {
+            conditions.push("1 = 0".to_string());
+        } else {
+            let placeholders = (0..feed_ids.len())
+                .map(|i| format!("?{}", param_values.len() + i + 1))
+                .collect::<Vec<_>>();
+            conditions.push(format!("a.feed_id IN ({})", placeholders.join(", ")));
+            for feed_id in feed_ids {
+                param_values.push(Box::new(feed_id.clone()));
+            }
+        }
+    }
+
     if let Some(ref theme_id) = filter.theme_id {
         sql.push_str(" JOIN theme_articles ta ON a.id = ta.article_id");
         conditions.push(format!("ta.theme_id = ?{}", param_values.len() + 1));
@@ -345,6 +423,18 @@ pub fn get_articles(
     if let Some(is_starred) = filter.is_starred {
         conditions.push(format!("a.is_starred = ?{}", param_values.len() + 1));
         param_values.push(Box::new(is_starred as i32));
+    }
+
+    if let Some(ref search) = filter.search {
+        let pattern = format!("%{}%", search.to_lowercase());
+        conditions.push(format!(
+            "(LOWER(a.title) LIKE ?{} OR LOWER(a.content_text) LIKE ?{} OR LOWER(a.url) LIKE ?{} OR LOWER(f.title) LIKE ?{})",
+            param_values.len() + 1,
+            param_values.len() + 1,
+            param_values.len() + 1,
+            param_values.len() + 1,
+        ));
+        param_values.push(Box::new(pattern));
     }
 
     if !conditions.is_empty() {
@@ -676,10 +766,7 @@ pub fn upsert_story(conn: &Connection, story: &Story) -> Result<(), rusqlite::Er
 }
 
 #[allow(dead_code)]
-pub fn get_story(
-    conn: &Connection,
-    story_id: &str,
-) -> Result<Option<Story>, rusqlite::Error> {
+pub fn get_story(conn: &Connection, story_id: &str) -> Result<Option<Story>, rusqlite::Error> {
     conn.query_row(
         "SELECT id, title, summary, representative_article_id,
                 first_seen_at, last_activity_at, created_at, updated_at
@@ -1128,12 +1215,7 @@ pub fn set_edition_item_consumed(
         "UPDATE edition_items
          SET is_consumed = ?1, consumed_at = ?2
          WHERE edition_id = ?3 AND story_id = ?4",
-        params![
-            is_consumed as i32,
-            consumed_at,
-            edition_id,
-            story_id
-        ],
+        params![is_consumed as i32, consumed_at, edition_id, story_id],
     )? > 0)
 }
 
@@ -1859,6 +1941,55 @@ pub fn set_setting(conn: &Connection, key: &str, value: &str) -> Result<(), rusq
     Ok(())
 }
 
+pub fn get_reader_cache(
+    conn: &Connection,
+    article_id: &str,
+) -> Result<Option<(String, String)>, rusqlite::Error> {
+    let mut stmt =
+        conn.prepare("SELECT html, raw_html FROM article_reader_cache WHERE article_id = ?1")?;
+    let mut rows = stmt.query([article_id])?;
+    rows.next()?
+        .map(|row| Ok((row.get(0)?, row.get(1)?)))
+        .transpose()
+}
+
+pub fn put_reader_cache(
+    conn: &Connection,
+    article_id: &str,
+    url: Option<&str>,
+    html: &str,
+    raw_html: &str,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO article_reader_cache (article_id, url, html, raw_html, cached_at)
+         VALUES (?1, ?2, ?3, ?4, strftime('%s','now'))
+         ON CONFLICT(article_id) DO UPDATE SET url=excluded.url, html=excluded.html,
+           raw_html=excluded.raw_html, cached_at=excluded.cached_at",
+        params![article_id, url, html, raw_html],
+    )?;
+    Ok(())
+}
+
+pub fn count_reader_cache(conn: &Connection) -> Result<i64, rusqlite::Error> {
+    conn.query_row("SELECT COUNT(*) FROM article_reader_cache", [], |row| {
+        row.get(0)
+    })
+}
+
+pub fn offline_preload_candidates(
+    conn: &Connection,
+    limit: i64,
+) -> Result<Vec<(String, String, Option<String>, Option<String>)>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT id, title, url, content_text FROM articles
+         ORDER BY COALESCE(published_at, fetched_at) DESC LIMIT ?1",
+    )?;
+    let rows = stmt.query_map([limit], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+    })?;
+    rows.collect()
+}
+
 #[cfg(test)]
 mod story_persistence_tests {
     use super::*;
@@ -1923,6 +2054,8 @@ mod story_persistence_tests {
             conn,
             &ArticleFilter {
                 feed_id: None,
+                feed_ids: None,
+                search: None,
                 theme_id: None,
                 is_read: None,
                 is_starred: None,
@@ -1932,14 +2065,128 @@ mod story_persistence_tests {
         )
         .expect("list raw articles")
         .into_iter()
-        .map(|row| {
-            (
-                row.article.id,
-                row.article.is_read,
-                row.article.is_starred,
-            )
-        })
+        .map(|row| (row.article.id, row.article.is_read, row.article.is_starred))
         .collect()
+    }
+
+    #[test]
+    fn article_filter_feed_ids_supports_empty_and_multiple_feeds() {
+        let conn = setup();
+        insert_feed(
+            &conn,
+            &Feed {
+                id: "feed-2".into(),
+                title: "Second".into(),
+                url: "https://second.example/feed".into(),
+                site_url: None,
+                description: None,
+                icon_url: None,
+                feedly_id: None,
+                created_at: 11,
+                updated_at: 11,
+                last_fetched_at: None,
+                folder_id: None,
+                opml_category: None,
+            },
+        )
+        .expect("insert second feed");
+        insert_article(
+            &conn,
+            &Article {
+                id: "article-4".into(),
+                feed_id: "feed-2".into(),
+                title: "Second feed article".into(),
+                url: Some("https://second.example/article".into()),
+                author: None,
+                content_html: None,
+                content_text: Some("Second content".into()),
+                published_at: Some(400),
+                fetched_at: 400,
+                is_read: false,
+                is_starred: false,
+                feedly_entry_id: None,
+            },
+        )
+        .expect("insert second article");
+
+        let empty = get_articles(
+            &conn,
+            &ArticleFilter {
+                feed_id: None,
+                feed_ids: Some(vec![]),
+                search: None,
+                theme_id: None,
+                is_read: None,
+                is_starred: None,
+                limit: Some(100),
+                offset: None,
+            },
+        )
+        .expect("query empty folder");
+        assert!(empty.is_empty());
+
+        let multiple = get_articles(
+            &conn,
+            &ArticleFilter {
+                feed_id: None,
+                feed_ids: Some(vec!["feed-1".into(), "feed-2".into()]),
+                search: None,
+                theme_id: None,
+                is_read: None,
+                is_starred: None,
+                limit: Some(100),
+                offset: None,
+            },
+        )
+        .expect("query multiple folder feeds");
+        assert_eq!(multiple.len(), 4);
+        assert!(multiple.iter().all(|article| {
+            article.article.feed_id == "feed-1" || article.article.feed_id == "feed-2"
+        }));
+    }
+
+    #[test]
+    fn convert_folder_in_place_roundtrips_identity_and_membership_atomically() {
+        let conn = setup();
+        let folder = Folder {
+            id: "folder-1".into(),
+            name: "Saved feeds".into(),
+            sort_order: 7,
+            is_smart: false,
+            rules_json: None,
+            created_at: 42,
+        };
+        insert_folder(&conn, &folder).expect("insert folder");
+        assign_feed_to_folder(&conn, "feed-1", Some(&folder.id)).expect("assign feed");
+        let rules_json = r#"{"mode":"any","rules":[{"type":"regex_title","pattern":"Example"}]}"#;
+
+        convert_folder_in_place(
+            &conn,
+            &folder.id,
+            true,
+            Some(rules_json),
+            Some("Smart saved feeds"),
+            &[],
+        )
+        .expect("convert to smart");
+        let smart = list_folders(&conn).expect("list smart folder").remove(0);
+        assert_eq!((smart.id.as_str(), smart.name.as_str(), smart.sort_order), ("folder-1", "Smart saved feeds", 7));
+        assert!(smart.is_smart);
+        assert_eq!(get_feed_by_id(&conn, "feed-1").unwrap().unwrap().folder_id, None);
+
+        convert_folder_in_place(
+            &conn,
+            &folder.id,
+            false,
+            None,
+            Some("Regular saved feeds"),
+            &["feed-1".into()],
+        )
+        .expect("convert to regular");
+        let regular = list_folders(&conn).expect("list regular folder").remove(0);
+        assert_eq!((regular.id.as_str(), regular.name.as_str(), regular.sort_order), ("folder-1", "Regular saved feeds", 7));
+        assert!(!regular.is_smart);
+        assert_eq!(get_feed_by_id(&conn, "feed-1").unwrap().unwrap().folder_id.as_deref(), Some("folder-1"));
     }
 
     fn story_fixture() -> Story {
@@ -2128,14 +2375,10 @@ mod story_persistence_tests {
             .expect("current edition")
             .expect("edition exists");
         assert_eq!(current.id, edition.id);
-        assert!(set_edition_item_consumed(
-            &conn,
-            &edition.id,
-            &story.id,
-            true,
-            Some(550)
-        )
-        .expect("mark item consumed"));
+        assert!(
+            set_edition_item_consumed(&conn, &edition.id, &story.id, true, Some(550))
+                .expect("mark item consumed")
+        );
         let consumed = list_edition_items(&conn, &edition.id)
             .expect("list edition items")
             .remove(0);
@@ -2157,13 +2400,15 @@ mod story_persistence_tests {
         assert_eq!(completed.status, EditionStatus::Completed);
         assert_eq!(completed.completed_at, Some(600));
 
-        assert!(delete_story_article(&conn, &story.id, "article-1")
-            .expect("delete story membership"));
+        assert!(
+            delete_story_article(&conn, &story.id, "article-1").expect("delete story membership")
+        );
         assert!(delete_edition(&conn, &edition.id).expect("delete edition"));
         assert!(delete_story(&conn, &story.id).expect("delete story"));
         assert_eq!(raw_article_state(&conn), raw_before);
         assert_eq!(
-            conn.query_row("SELECT COUNT(*) FROM articles", [], |row| row.get::<_, i64>(0))
+            conn.query_row("SELECT COUNT(*) FROM articles", [], |row| row
+                .get::<_, i64>(0))
                 .expect("count articles"),
             3
         );
@@ -2179,7 +2424,8 @@ mod story_persistence_tests {
         delete_feed(&conn, "feed-1").expect("delete representative feed");
 
         assert_eq!(
-            conn.query_row("SELECT COUNT(*) FROM articles", [], |row| row.get::<_, i64>(0))
+            conn.query_row("SELECT COUNT(*) FROM articles", [], |row| row
+                .get::<_, i64>(0))
                 .expect("count remaining articles"),
             0
         );

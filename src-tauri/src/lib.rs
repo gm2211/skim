@@ -1,7 +1,7 @@
+mod ai;
 mod commands;
 mod db;
 mod feed;
-mod ai;
 
 use ai::local_provider::SharedModelState;
 #[cfg(not(target_os = "ios"))]
@@ -32,7 +32,9 @@ pub fn run() {
         .setup(|app| {
             #[cfg(desktop)]
             {
-                use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+                use tauri::menu::{
+                    AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder,
+                };
 
                 let about_meta = AboutMetadataBuilder::new()
                     .name(Some("Skim"))
@@ -61,9 +63,7 @@ pub fn run() {
                     .select_all()
                     .build()?;
 
-                let view_submenu = SubmenuBuilder::new(app, "View")
-                    .fullscreen()
-                    .build()?;
+                let view_submenu = SubmenuBuilder::new(app, "View").fullscreen().build()?;
 
                 let window_submenu = SubmenuBuilder::new(app, "Window")
                     .minimize()
@@ -71,10 +71,10 @@ pub fn run() {
                     .close_window()
                     .build()?;
 
-                let support_item = MenuItemBuilder::with_id("help-support", "Skim Support")
-                    .build(app)?;
-                let issues_item = MenuItemBuilder::with_id("help-issues", "Report an Issue")
-                    .build(app)?;
+                let support_item =
+                    MenuItemBuilder::with_id("help-support", "Skim Support").build(app)?;
+                let issues_item =
+                    MenuItemBuilder::with_id("help-issues", "Report an Issue").build(app)?;
                 let help_submenu = SubmenuBuilder::new(app, "Help")
                     .item(&support_item)
                     .item(&issues_item)
@@ -111,9 +111,9 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("Failed to get app data directory");
-            let database =
-                Database::new(app_dir).expect("Failed to initialize database");
-            let model_state = Arc::new(Mutex::new(None::<ai::local_provider::LoadedModel>)) as SharedModelState;
+            let database = Database::new(app_dir).expect("Failed to initialize database");
+            let model_state =
+                Arc::new(Mutex::new(None::<ai::local_provider::LoadedModel>)) as SharedModelState;
 
             // llama.cpp preload + idle-eviction are desktop-only — iOS doesn't
             // ship llama.cpp and uses MLX via the Swift Tauri plugin instead.
@@ -232,6 +232,7 @@ pub fn run() {
             commands::feeds::create_smart_folder,
             commands::feeds::rename_folder,
             commands::feeds::update_smart_folder_rules,
+            commands::feeds::convert_folder,
             commands::feeds::delete_folder,
             commands::feeds::reorder_folders,
             commands::feeds::assign_feed_to_folder,
@@ -252,6 +253,11 @@ pub fn run() {
             commands::articles::toggle_star,
             commands::articles::toggle_read,
             commands::articles::fetch_full_article,
+            commands::aggregator::fetch_aggregator_details,
+            commands::offline::get_offline_cache_stats,
+            commands::offline::get_cached_reader_content,
+            commands::offline::get_or_fetch_reader_content,
+            commands::offline::preload_articles_for_offline,
             // Editions
             commands::editions::get_or_generate_today_edition,
             commands::editions::list_today_edition_items,
@@ -281,6 +287,7 @@ pub fn run() {
             // Settings
             commands::settings::get_settings,
             commands::settings::update_settings,
+            commands::settings::list_remote_models,
             // Models
             commands::models::search_hf_models,
             commands::models::get_hf_model_files,

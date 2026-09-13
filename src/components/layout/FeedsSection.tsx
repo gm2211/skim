@@ -4,21 +4,25 @@ import { useFeeds, useRemoveFeed, useRenameFeed } from "../../hooks/useFeeds";
 import {
   useAssignFeedToFolder,
   useCreateFolder,
+  useCreateSmartFolder,
   useDeleteFolder,
   useFolders,
   useRenameFolder,
+  useUpdateSmartFolderRules,
 } from "../../hooks/useFolders";
 import {
   aiAutoOrganizeFeeds,
   aiMatchFeedsForTopic,
   applyFolderOrganization,
+  convertFolder,
   countStarredInFeed,
   listDuplicateFeeds,
   mergeDuplicateFeeds,
   type FolderProposal,
 } from "../../services/commands";
-import type { Feed, Folder, SidebarView } from "../../services/types";
+import type { Feed, Folder, SidebarView, SmartRules } from "../../services/types";
 import { feedsForFolder } from "../../lib/smartFolder";
+import { SmartFolderEditor } from "./SmartFolderEditor";
 
 type FeedContextMenu = { feedId: string; x: number; y: number } | null;
 type FolderContextMenu = { folderId: string; x: number; y: number } | null;
@@ -40,6 +44,8 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
   const deleteFolderMut = useDeleteFolder();
   const assignMut = useAssignFeedToFolder();
   const createFolderMut = useCreateFolder();
+  const createSmartFolderMut = useCreateSmartFolder();
+  const updateSmartFolderMut = useUpdateSmartFolderRules();
   const qc = useQueryClient();
 
   const [dupeCount, setDupeCount] = useState(0);
@@ -83,6 +89,7 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
   const [renameValue, setRenameValue] = useState("");
   const [removeConfirm, setRemoveConfirm] = useState<{ feed: Feed; starredCount: number } | null>(null);
   const [newFolderMode, setNewFolderMode] = useState<"regular" | "smart" | null>(null);
+  const [smartFolderEditor, setSmartFolderEditor] = useState<{ mode: "edit" | "convert"; folder: Folder } | null>(null);
   const [showAddMenu, setShowAddMenu] = useState<{ x: number; y: number } | null>(null);
   const [autoOrganizeOpen, setAutoOrganizeOpen] = useState(false);
 
@@ -201,6 +208,28 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
     await deleteFolderMut.mutateAsync(folder.id);
   };
 
+  const [folderActionError, setFolderActionError] = useState<string | null>(null);
+
+  const handleConvertToRegular = async (folder: Folder) => {
+    closeAllMenus();
+    setFolderActionError(null);
+    try {
+      await convertFolder(folder.id, false);
+      qc.invalidateQueries({ queryKey: ["feeds"] });
+      qc.invalidateQueries({ queryKey: ["folders"] });
+    } catch (error) {
+      setFolderActionError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const handleConvertToSmart = async (folder: Folder, rules: SmartRules, name: string) => {
+    setFolderActionError(null);
+    await convertFolder(folder.id, true, rules, name);
+    setSmartFolderEditor(null);
+    qc.invalidateQueries({ queryKey: ["feeds"] });
+    qc.invalidateQueries({ queryKey: ["folders"] });
+  };
+
   return (
     <div>
       {/* Duplicate banner */}
@@ -220,6 +249,11 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
           >
             {merging ? "Merging…" : "Merge"}
           </button>
+        </div>
+      )}
+      {folderActionError && (
+        <div className="text-danger" role="alert" style={{ margin: "0 8px 10px", fontSize: 12 }}>
+          {folderActionError}
         </div>
       )}
 
@@ -254,6 +288,7 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
           <div key={folder.id} style={{ marginBottom: 4 }}>
             <FolderRow
               folder={folder}
+              active={isActive({ type: "folder", folderId: folder.id })}
               expanded={isExpanded(folder.id)}
               renaming={renamingFolderId === folder.id}
               renameValue={renameValue}
@@ -262,6 +297,7 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
               onCancelRename={() => setRenamingFolderId(null)}
               unreadCount={unread}
               onToggle={() => toggle(folder.id)}
+              onSelect={() => setSidebarView({ type: "folder", folderId: folder.id })}
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -460,6 +496,14 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
             onClick={(e) => e.stopPropagation()}
           >
             <MenuButton onClick={() => startRenameFolder(folder)} label="Rename" />
+            {folder.is_smart ? (
+              <>
+                <MenuButton onClick={() => { closeAllMenus(); setSmartFolderEditor({ mode: "edit", folder }); }} label="Edit rules" />
+                <MenuButton onClick={() => void handleConvertToRegular(folder)} label="Convert to regular folder" />
+              </>
+            ) : (
+              <MenuButton onClick={() => { closeAllMenus(); setSmartFolderEditor({ mode: "convert", folder }); }} label="Convert to smart folder" />
+            )}
             <div className="border-t border-white/5 my-1" />
             <MenuButton onClick={() => handleDeleteFolder(folder)} label="Delete folder" danger />
           </div>
@@ -528,15 +572,31 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
         />
       )}
       {newFolderMode === "smart" && (
-        <AiSmartFolderDialog
+        <SmartFolderEditor
           feeds={feeds ?? []}
+          mode="create"
           onCancel={() => setNewFolderMode(null)}
-          onApply={async (name, feedIds) => {
-            await applyFolderOrganization([{ name, feed_ids: feedIds }]);
-            qc.invalidateQueries({ queryKey: ["folders"] });
-            qc.invalidateQueries({ queryKey: ["feeds"] });
+          onCreate={async (name, rules) => {
+            await createSmartFolderMut.mutateAsync({ name, rules });
             setNewFolderMode(null);
           }}
+          onUpdate={async () => undefined}
+        />
+      )}
+      {smartFolderEditor && (
+        <SmartFolderEditor
+          feeds={feeds ?? []}
+          folder={smartFolderEditor.folder}
+          mode={smartFolderEditor.mode}
+          onCancel={() => setSmartFolderEditor(null)}
+          onCreate={async () => undefined}
+          onUpdate={async (folderId, rules) => {
+            await updateSmartFolderMut.mutateAsync({ folderId, rules });
+            setSmartFolderEditor(null);
+          }}
+          onConvert={smartFolderEditor.mode === "convert" ? async (folder, rules, name) => {
+            await handleConvertToSmart(folder, rules, name);
+          } : undefined}
         />
       )}
       {autoOrganizeOpen && (
@@ -580,6 +640,7 @@ function MenuButton({
 
 function FolderRow({
   folder,
+  active,
   expanded,
   renaming,
   renameValue,
@@ -588,9 +649,11 @@ function FolderRow({
   onCancelRename,
   unreadCount,
   onToggle,
+  onSelect,
   onContextMenu,
 }: {
   folder: Folder;
+  active: boolean;
   expanded: boolean;
   renaming: boolean;
   renameValue: string;
@@ -599,6 +662,7 @@ function FolderRow({
   onCancelRename: () => void;
   unreadCount: number;
   onToggle: () => void;
+  onSelect: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -611,26 +675,34 @@ function FolderRow({
 
   return (
     <div
-      onClick={renaming ? undefined : onToggle}
+      onClick={renaming ? undefined : onSelect}
+      onKeyDown={(event) => {
+        if (!renaming && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
       onContextMenu={onContextMenu}
+      role="button"
+      tabIndex={renaming ? -1 : 0}
+      aria-label={`Select folder ${folder.name}`}
       className={`flex items-center justify-between rounded-lg transition-colors relative z-20 text-text-secondary hover:bg-white/5 hover:text-text-primary ${
-        renaming ? "" : "cursor-pointer"
+        active ? "bg-white/10 text-text-primary" : ""}
+        ${renaming ? "" : "cursor-pointer"
       }`}
       style={{ padding: "6px 8px" }}
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          className="flex-shrink-0 text-text-muted"
-          style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}
+        <button
+          type="button"
+          aria-label={`${expanded ? "Collapse" : "Expand"} ${folder.name}`}
+          onClick={(event) => { event.stopPropagation(); onToggle(); }}
+          className="tap-target flex items-center justify-center text-text-muted"
         >
-          <polyline points="9 18 15 12 9 6" />
-        </svg>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
         {folder.is_smart ? (
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-accent flex-shrink-0">
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -838,7 +910,7 @@ function NewFolderDialog({
   );
 }
 
-function AiSmartFolderDialog({
+export function AiSmartFolderDialog({
   feeds,
   onCancel,
   onApply,

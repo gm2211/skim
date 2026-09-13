@@ -4,11 +4,13 @@ import { useInboxArticles } from "../../hooks/useInbox";
 import { useThemes, useArticleThemeTags } from "../../hooks/useThemes";
 import { useRecentArticles, useReadMatchCount, useRemoveRecent } from "../../hooks/useRecent";
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
+import { useFolders } from "../../hooks/useFolders";
+import { feedsForFolder } from "../../lib/smartFolder";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
-import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction } from "../../services/types";
+import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction, SidebarView } from "../../services/types";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 
 const PRIORITY_GROUP_LABELS: Record<number, string> = {
@@ -20,6 +22,48 @@ const PRIORITY_GROUP_LABELS: Record<number, string> = {
 };
 
 const STICKY_READ_TTL_MS = 2 * 60 * 1000;
+
+export function buildArticleFilter({
+  sidebarView,
+  listFilter,
+  pageLimit,
+  searchQuery,
+  folderFeedIds,
+}: {
+  sidebarView: SidebarView;
+  listFilter: "all" | "unread" | "starred";
+  pageLimit: number;
+  searchQuery: string;
+  folderFeedIds: string[] | null;
+}): ArticleFilter {
+  const normalizedSearch = searchQuery.trim();
+  const base: ArticleFilter = { limit: pageLimit };
+  if (normalizedSearch) {
+    return { ...base, search: normalizedSearch };
+  }
+  switch (sidebarView.type) {
+    case "starred":
+      base.is_starred = true;
+      break;
+    case "feed":
+      base.feed_id = sidebarView.feedId;
+      break;
+    case "theme":
+      base.theme_id = sidebarView.themeId;
+      break;
+    case "folder":
+      base.feed_ids = folderFeedIds ?? [];
+      break;
+    case "all":
+    case "inbox":
+    case "recent":
+    case "today":
+      break;
+  }
+  if (listFilter === "unread") base.is_read = false;
+  if (listFilter === "starred") base.is_starred = true;
+  return base;
+}
 
 type StickyArticleEntry = {
   article: any;
@@ -166,6 +210,7 @@ export function ArticleList() {
   const removeRecent = useRemoveRecent();
   const refreshAllFeeds = useRefreshAllFeeds();
   const { data: feeds } = useFeeds();
+  const { data: folders } = useFolders();
   const [searchQuery, setSearchQuery] = useState("");
   const [askOpen, setAskOpen] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
@@ -176,6 +221,13 @@ export function ArticleList() {
 
   const isInbox = sidebarView.type === "inbox";
   const isRecent = sidebarView.type === "recent";
+  const normalizedSearch = searchQuery.trim();
+  const isSearchActive = normalizedSearch.length > 0;
+  const selectedFolderFeedIds = useMemo(() => {
+    if (sidebarView.type !== "folder") return null;
+    const folder = folders?.find((candidate) => candidate.id === sidebarView.folderId);
+    return folder ? feedsForFolder(folder, feeds ?? []).map((feed) => feed.id) : [];
+  }, [sidebarView, folders, feeds]);
   const [recentOrder, setRecentOrder] = useState<"engagement" | "recency">("engagement");
   const { data: themes } = useThemes();
   const { data: themeTags } = useArticleThemeTags();
@@ -198,31 +250,17 @@ export function ArticleList() {
   const [pageLimit, setPageLimit] = useState(PAGE_SIZE);
   useEffect(() => {
     setPageLimit(PAGE_SIZE);
-  }, [sidebarView, listFilter]);
+  }, [sidebarView, listFilter, normalizedSearch]);
 
   const filter: ArticleFilter = useMemo(() => {
-    const base: ArticleFilter = { limit: pageLimit };
-    switch (sidebarView.type) {
-      case "all":
-        break;
-      case "starred":
-        base.is_starred = true;
-        break;
-      case "feed":
-        base.feed_id = sidebarView.feedId;
-        break;
-      case "inbox":
-        break; // handled by separate query
-      case "theme":
-        base.theme_id = sidebarView.themeId;
-        break;
-      case "today":
-        break; // App.tsx renders TodayEditionPane instead of this list
-    }
-    if (listFilter === "unread") base.is_read = false;
-    if (listFilter === "starred") base.is_starred = true;
-    return base;
-  }, [sidebarView, listFilter, pageLimit]);
+    return buildArticleFilter({
+      sidebarView,
+      listFilter,
+      pageLimit,
+      searchQuery,
+      folderFeedIds: selectedFolderFeedIds,
+    });
+  }, [sidebarView, listFilter, pageLimit, searchQuery, selectedFolderFeedIds]);
 
   const { data: regularArticles, isLoading: regularLoading } = useArticles(filter);
   // AI Inbox is unread-only by design — ignore listFilter entirely.
@@ -348,10 +386,14 @@ export function ArticleList() {
         const theme = themes?.find((t) => t.id === sidebarView.themeId);
         return theme?.label ?? "Theme";
       }
+      case "folder": {
+        const folder = folders?.find((candidate) => candidate.id === sidebarView.folderId);
+        return folder?.name ?? "Folder";
+      }
       case "today":
         return "Today";
     }
-  }, [sidebarView, themes]);
+  }, [sidebarView, themes, folders]);
 
   const feedTitle = useMemo(() => {
     if (sidebarView.type === "feed" && articles && articles.length > 0) {
@@ -369,8 +411,8 @@ export function ArticleList() {
         (themeTagsByArticle.get(a.id) ?? []).some((t) => t.themeId === activeThemeId),
       );
     }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+    if (isSearchActive) {
+      const q = normalizedSearch.toLowerCase();
       result = result.filter((a) => {
         const hay =
           a.title.toLowerCase() +
@@ -381,12 +423,12 @@ export function ArticleList() {
         if (!hay.includes(q)) return false;
         // If searching in a filter that normally hides read articles,
         // require includeRead toggle before surfacing read matches.
-        if (!includeRead && listFilter === "unread" && a.is_read) return false;
+        if (!isSearchActive && !includeRead && listFilter === "unread" && a.is_read) return false;
         return true;
       });
     }
     return result;
-  }, [articles, searchQuery, isInbox, listFilter, activeThemeId, themeTagsByArticle, includeRead]);
+  }, [articles, isSearchActive, normalizedSearch, isInbox, listFilter, activeThemeId, themeTagsByArticle, includeRead]);
 
   // True unread total for the active filter — the paged articles array is
   // capped at 200 so counting locally understates everything above that.
@@ -519,8 +561,28 @@ export function ArticleList() {
         minWidth: isPhone ? "100%" : (listCollapsed ? 0 : 320),
       }}
     >
+      {sidebarCollapsed && !isPhone && (
+        <div
+          className="flex flex-shrink-0 items-center relative z-20"
+          data-tauri-drag-region
+          style={{ height: 52, paddingLeft: 80, paddingRight: 8, WebkitAppRegion: "drag" } as React.CSSProperties}
+        >
+          <button
+            onClick={() => useUiStore.getState().toggleSidebar()}
+            className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M9 3v18" />
+            </svg>
+          </button>
+          <div className="flex-1" />
+        </div>
+      )}
       {/* Top bar with mark-all-read, search, close */}
-      <div className="flex items-center gap-2 relative z-20" style={{ height: isPhone ? 52 : 40, paddingLeft: isPhone ? 8 : (sidebarCollapsed ? 78 : undefined), paddingRight: isPhone ? 8 : 16 }}>
+      <div className="flex flex-shrink-0 items-center gap-2 relative z-20" style={{ height: isPhone ? 52 : 44, paddingLeft: isPhone ? 8 : 8, paddingRight: isPhone ? 8 : 16 }}>
         {isPhone && (
           <button
             onClick={() => setPhonePane("sidebar")}
@@ -531,18 +593,6 @@ export function ArticleList() {
               <line x1="3" y1="6" x2="21" y2="6" />
               <line x1="3" y1="12" x2="21" y2="12" />
               <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-        )}
-        {sidebarCollapsed && !isPhone && (
-          <button
-            onClick={() => useUiStore.getState().toggleSidebar()}
-            className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
-            title="Expand sidebar"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="M9 3v18" />
             </svg>
           </button>
         )}

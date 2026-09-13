@@ -765,6 +765,8 @@ pub async fn generate_themes(
         } else {
             let filter = ArticleFilter {
                 feed_id: None,
+                feed_ids: None,
+                search: None,
                 theme_id: None,
                 is_read: Some(false),
                 is_starred: None,
@@ -1086,6 +1088,8 @@ pub async fn triage_articles(
             queries::clear_triage(&conn).map_err(|e| e.to_string())?;
             let filter = ArticleFilter {
                 feed_id: None,
+                feed_ids: None,
+                search: None,
                 theme_id: None,
                 is_read: Some(false),
                 is_starred: None,
@@ -1535,6 +1539,8 @@ pub async fn generate_catchup_report(
                 &conn,
                 &crate::db::models::ArticleFilter {
                     feed_id: None,
+                    feed_ids: None,
+                    search: None,
                     theme_id: None,
                     is_read: Some(false),
                     is_starred: None,

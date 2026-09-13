@@ -158,7 +158,7 @@ pub async fn toggle_read(db: State<'_, Database>, article_id: String) -> Result<
     Ok(new_is_read)
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct FullArticleContent {
     pub html: String,
     pub raw_html: String,
@@ -360,15 +360,19 @@ async fn resolve_aggregator_target(client: &reqwest::Client, url: &str) -> Optio
 
 #[tauri::command]
 pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, String> {
+    fetch_article_content(&url).await
+}
+
+pub(crate) async fn fetch_article_content(url: &str) -> Result<FullArticleContent, String> {
     let client = reqwest::Client::builder()
         // Use a real browser UA — some sites serve blank shells to unknown UAs
         .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-    let target_url = resolve_aggregator_target(&client, &url)
+    let target_url = resolve_aggregator_target(&client, url)
         .await
-        .unwrap_or(url);
+        .unwrap_or_else(|| url.to_string());
     let effective_url = rewrite_for_static(&target_url);
 
     let response = client

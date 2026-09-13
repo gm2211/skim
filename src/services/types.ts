@@ -51,6 +51,21 @@ export interface Article {
   feed_icon_url: string | null;
 }
 
+export interface AggregatorComment {
+  id: string;
+  author: string;
+  score: number | null;
+  body: string;
+  depth: number;
+}
+
+export interface AggregatorDetails {
+  kind: "hacker_news" | "reddit" | "lobsters";
+  selftext: string | null;
+  external_url: string | null;
+  comments: AggregatorComment[];
+}
+
 export interface ArticleSummary {
   article_id: string;
   bullet_summary: string | null;
@@ -71,7 +86,9 @@ export interface Theme {
 
 export interface ArticleFilter {
   feed_id?: string | null;
+  feed_ids?: string[] | null;
   theme_id?: string | null;
+  search?: string | null;
   is_read?: boolean | null;
   is_starred?: boolean | null;
   limit?: number | null;
@@ -254,6 +271,7 @@ export type SidebarView =
   | { type: "inbox" }
   | { type: "recent" }
   | { type: "theme"; themeId: string }
+  | { type: "folder"; folderId: string }
   | { type: "today" };
 
 export interface ArticleWithInteraction extends Article {

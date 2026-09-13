@@ -450,3 +450,10 @@ button, a, input, select, textarea, [role="button"] {
   width: 16px;
   height: 16px;
 }
+
+/* Keep the wordmark beside Add feed even at the article pane's 320px minimum. */
+.article-toolbar-branded > .tap-target {
+  width: 36px;
+  min-width: 36px;
+  flex-shrink: 0;
+}

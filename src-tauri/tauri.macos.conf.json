@@ -1,0 +1,15 @@
+{
+  "build": {
+    "beforeDevCommand": "sh plugins/tauri-plugin-skim-ai/build-macos-bridge.sh && npm run dev",
+    "beforeBuildCommand": "sh plugins/tauri-plugin-skim-ai/build-macos-bridge.sh && npm run build"
+  },
+  "bundle": {
+    "externalBin": ["../plugins/tauri-plugin-skim-ai/bin/skim-ai-macos-bridge"],
+    "macOS": {
+      "files": {
+        "Resources/mlx.metallib": "../plugins/tauri-plugin-skim-ai/bin/mlx.metallib",
+        "Resources/swift-transformers_Hub.bundle": "../plugins/tauri-plugin-skim-ai/resources/swift-transformers_Hub.bundle"
+      }
+    }
+  }
+}

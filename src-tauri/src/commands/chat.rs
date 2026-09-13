@@ -1,12 +1,12 @@
 use crate::ai::local_provider::SharedModelState;
 use crate::ai::provider::{
-    create_provider, AiProvider, ChatMessage, ChatRequest, ChatResponse as ProviderChatResponse,
+    create_provider_with_app, AiProvider, ChatMessage, ChatRequest, ChatResponse as ProviderChatResponse,
     ToolDef, ToolUse,
 };
 use crate::db::models::AiSettings;
 use crate::db::{queries, Database};
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessageInput {
@@ -27,6 +27,7 @@ pub struct ChatResponse {
 
 #[tauri::command]
 pub async fn chat_with_article(
+    app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     article_id: String,
@@ -58,7 +59,7 @@ pub async fn chat_with_article(
 
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
     let provider_kind = ai_settings.provider.clone();
-    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
         .model
         .clone()
@@ -87,7 +88,7 @@ pub async fn chat_with_article(
     } else {
         ""
     };
-    let system_prompt = format!(
+    let mut system_prompt = format!(
         "You are a helpful assistant discussing a news article. Answer questions about the article, \
          provide context, and help the user understand the topic better. Be concise and direct. \
          No emoji.\n\n{tool_hint}\
@@ -102,13 +103,30 @@ pub async fn chat_with_article(
         body = article_text,
     );
 
+    let mut local_citations = Vec::new();
+    if ai_settings.provider == "mlx" && ai_settings.local_chat_web_search.unwrap_or(true) {
+        if let Some(results) = local_chat_search(provider.as_ref(), &model, &article_text, &messages).await {
+            system_prompt.push_str("\n\n");
+            system_prompt.push_str(&format_web_results_block(&results));
+            local_citations = results
+                .iter()
+                .map(|result| WebCitation {
+                    title: result.title.clone(),
+                    url: result.url.clone(),
+                    snippet: result.snippet.clone(),
+                    query: latest_user_question(&messages).unwrap_or_default(),
+                })
+                .collect();
+        }
+    }
+
     let mut chat_messages = vec![ChatMessage::text("system", system_prompt)];
 
     for msg in &messages {
         chat_messages.push(ChatMessage::text(msg.role.clone(), msg.content.clone()));
     }
 
-    let (content, web_citations) = invoke_chat_with_tools(
+    let (content, mut web_citations) = invoke_chat_with_tools(
         provider.as_ref(),
         &provider_kind,
         chat_messages,
@@ -117,6 +135,7 @@ pub async fn chat_with_article(
         Some(2048),
     )
     .await?;
+    web_citations.extend(local_citations);
 
     // Track chat interaction for learning system
     {
@@ -197,6 +216,7 @@ fn article_excerpt(a: &crate::db::models::ArticleWithFeed, max_chars: usize) -> 
 /// prompt stays within a reasonable context budget.
 #[tauri::command]
 pub async fn chat_with_articles(
+    app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     scope: String,
@@ -271,7 +291,7 @@ pub async fn chat_with_articles(
 
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
     let provider_kind = ai_settings.provider.clone();
-    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
         .model
         .clone()
@@ -408,6 +428,77 @@ fn provider_supports_tools(provider_kind: &str) -> bool {
     // with no result text. Until the CLI gets a tool-loop bridge, it's
     // text-only.
     matches!(provider_kind, "anthropic" | "claude-subscription")
+}
+
+fn latest_user_question(messages: &[ChatMessageInput]) -> Option<String> {
+    messages
+        .iter()
+        .rev()
+        .find(|message| message.role == "user")
+        .map(|message| message.content.trim().to_string())
+        .filter(|question| !question.is_empty())
+}
+
+fn can_skip_local_search(question: &str) -> bool {
+    let lower = question.to_lowercase();
+    if lower.split_whitespace().count() > 8 {
+        return false;
+    }
+    ![
+        "latest", "current", "today", "now", "recent", "price", "weather", "who won",
+        "look up", "search", "google",
+    ]
+    .iter()
+    .any(|token| lower.contains(token))
+}
+
+fn parse_local_search_query(response: &str) -> Option<String> {
+    let line = response.lines().next()?.trim();
+    let query = line.strip_prefix("SEARCH:")?.trim();
+    (!query.is_empty()).then(|| query.chars().take(240).collect())
+}
+
+fn format_web_results_block(results: &[SearchResult]) -> String {
+    let body = results
+        .iter()
+        .enumerate()
+        .map(|(index, result)| {
+            format!("(W{}) {}\n    {}\n    {}", index + 1, result.title, result.snippet, result.url)
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("Web search results (use for facts not in the article; answer in prose):\n{body}")
+}
+
+async fn local_chat_search(
+    provider: &dyn AiProvider,
+    model: &str,
+    article_context: &str,
+    messages: &[ChatMessageInput],
+) -> Option<Vec<SearchResult>> {
+    let question = latest_user_question(messages)?;
+    if can_skip_local_search(&question) {
+        return None;
+    }
+    let route = provider
+        .chat(ChatRequest {
+            model: model.to_string(),
+            messages: vec![
+                ChatMessage::text(
+                    "system",
+                    "Decide whether to answer from the article or search the web. Reply with exactly ANSWER or SEARCH: <concise query>. If unsure, reply ANSWER.",
+                ),
+                ChatMessage::text("user", format!("Article:\n{article_context}\n\nQuestion: {question}")),
+            ],
+            temperature: None,
+            max_tokens: Some(24),
+            json_mode: false,
+            tools: None,
+        })
+        .await
+        .ok()?;
+    let query = parse_local_search_query(&route.content)?;
+    run_web_search(&query, 5).await.ok().filter(|results| !results.is_empty())
 }
 
 /// Web-search tool definition shared between per-article and multi-article
@@ -776,4 +867,35 @@ fn resolve_chat_settings(ai: &AiSettings) -> AiSettings {
     }
 
     settings
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn local_router_skips_short_article_questions_without_freshness_terms() {
+        assert!(can_skip_local_search("What is the main argument?"));
+        assert!(!can_skip_local_search("What is the latest price today?"));
+        assert!(!can_skip_local_search("Explain the article and compare it with other recent work"));
+    }
+
+    #[test]
+    fn local_router_accepts_only_explicit_search_lines() {
+        assert_eq!(parse_local_search_query("SEARCH: Rust async runtime"), Some("Rust async runtime".into()));
+        assert_eq!(parse_local_search_query("ANSWER"), None);
+        assert_eq!(parse_local_search_query("SEARCH:"), None);
+    }
+
+    #[test]
+    fn web_context_is_numbered_and_keeps_source_urls() {
+        let results = vec![SearchResult {
+            title: "A result".into(),
+            url: "https://example.com/a".into(),
+            snippet: "A snippet".into(),
+        }];
+        let block = format_web_results_block(&results);
+        assert!(block.contains("(W1) A result"));
+        assert!(block.contains("https://example.com/a"));
+    }
 }

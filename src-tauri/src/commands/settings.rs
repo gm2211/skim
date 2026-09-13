@@ -14,6 +14,7 @@ pub struct RemoteModel {
 fn models_url(provider: &str, endpoint: Option<&str>) -> Result<String, String> {
     let base = match provider {
         "openai" => "https://api.openai.com",
+        "xai" => "https://api.x.ai",
         "anthropic" => "https://api.anthropic.com",
         "openrouter" => "https://openrouter.ai/api",
         "custom" => endpoint

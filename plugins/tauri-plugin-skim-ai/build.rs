@@ -31,9 +31,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=IPHONEOS_DEPLOYMENT_TARGET");
     println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
 
-    tauri_plugin::Builder::new(COMMANDS)
-        .ios_path("ios")
-        .build();
+    tauri_plugin::Builder::new(COMMANDS).ios_path("ios").build();
 
     // MLX's CPU backend pulls in LAPACK SVD symbols (sgesdd/dgesdd) provided
     // by Apple's Accelerate framework. Link it for the iOS plugin target.

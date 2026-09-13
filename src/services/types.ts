@@ -47,6 +47,7 @@ export interface Article {
   is_read: boolean;
   is_starred: boolean;
   feedly_entry_id: string | null;
+  comments_url: string | null;
   feed_title: string;
   feed_icon_url: string | null;
 }
@@ -121,6 +122,7 @@ export interface AiSettings {
   chat_model: string | null;
   chat_api_key: string | null;
   chat_endpoint: string | null;
+  local_chat_web_search?: boolean | null;
   triage_user_prompt?: string | null;
 }
 

@@ -1,5 +1,5 @@
 use crate::ai::local_provider::SharedModelState;
-use crate::ai::provider::{create_provider, ChatMessage, ChatRequest};
+use crate::ai::provider::{create_provider_with_app, ChatMessage, ChatRequest};
 use crate::commands::ai::{default_model, extract_json_object};
 use crate::db::models::{AppSettings, Feed, Folder, SmartRule, SmartRules, MatchMode};
 use crate::db::queries;
@@ -9,7 +9,7 @@ use crate::feed::fetch_and_parse_feed;
 use crate::feed::feedly;
 use crate::feed::feedly_oauth;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, State};
 
 #[derive(Debug, Serialize)]
 pub struct FeedWithCount {
@@ -1141,6 +1141,7 @@ fn parse_handles(v: &serde_json::Value) -> Vec<usize> {
 /// does NOT modify the DB.
 #[tauri::command]
 pub async fn ai_auto_organize_feeds(
+    app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     scope: Option<String>,
@@ -1174,7 +1175,7 @@ pub async fn ai_auto_organize_feeds(
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
-    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
 
     let listing = feeds_listing_for_llm(&feeds);
@@ -1233,6 +1234,7 @@ Output JSON:
 /// Given a natural-language description, return feed IDs that match.
 #[tauri::command]
 pub async fn ai_match_feeds_for_topic(
+    app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     description: String,
@@ -1264,7 +1266,7 @@ pub async fn ai_match_feeds_for_topic(
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
-    let provider = create_provider(&ai_settings, Some(model_state.inner().clone()))?;
+    let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
 
     let listing = feeds_listing_for_llm(&feeds);

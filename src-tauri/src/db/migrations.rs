@@ -318,6 +318,15 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         )?;
     }
 
+    let has_comments_url: bool = conn
+        .prepare("PRAGMA table_info(articles)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .filter_map(|r| r.ok())
+        .any(|name| name == "comments_url");
+    if !has_comments_url {
+        conn.execute_batch("ALTER TABLE articles ADD COLUMN comments_url TEXT;")?;
+    }
+
     // Folders (manual + smart)
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS folders (

@@ -264,6 +264,9 @@ pub fn feedly_entries_to_articles(entries: &[FeedlyEntry], feed_id: &str) -> Vec
                 .alternate
                 .as_ref()
                 .and_then(|links| links.first().map(|l| l.href.clone()));
+            let comments_url = entry.alternate.as_ref().and_then(|links| {
+                crate::feed::fetcher::aggregator_comments_url(links.iter().map(|link| link.href.as_str()))
+            });
 
             // Feedly timestamps are in milliseconds
             let published_at = entry.published.map(|ms| ms / 1000);
@@ -297,6 +300,7 @@ pub fn feedly_entries_to_articles(entries: &[FeedlyEntry], feed_id: &str) -> Vec
                 is_read: !entry.unread,
                 is_starred,
                 feedly_entry_id: Some(entry.id.clone()),
+                comments_url,
             }
         })
         .collect()

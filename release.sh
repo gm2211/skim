@@ -5,13 +5,13 @@ set -euo pipefail
 # release.sh — Build a distributable macOS .app for Skim
 # ───────────────────────────────────────────────────────
 
-# llama.cpp uses std::filesystem which requires macOS 10.15+
+# The native AI bridge and current app bundle require macOS 14+.
 # Must be set before any build tool runs
-export MACOSX_DEPLOYMENT_TARGET="10.15"
-export CMAKE_OSX_DEPLOYMENT_TARGET="10.15"
-# Force C++ compiler to target 10.15 (cmake may ignore env vars with cached builds)
-export CXXFLAGS="${CXXFLAGS:-} -mmacosx-version-min=10.15"
-export CFLAGS="${CFLAGS:-} -mmacosx-version-min=10.15"
+export MACOSX_DEPLOYMENT_TARGET="14.0"
+export CMAKE_OSX_DEPLOYMENT_TARGET="14.0"
+# Keep the C++ deployment target aligned with the app and Swift helper.
+export CXXFLAGS="${CXXFLAGS:-} -mmacosx-version-min=14.0"
+export CFLAGS="${CFLAGS:-} -mmacosx-version-min=14.0"
 
 SIGN=false
 UNIVERSAL=false
@@ -122,18 +122,21 @@ echo ""
 find src-tauri/target -name "llama-cpp-sys-2-*" -type d -exec rm -rf {} + 2>/dev/null || true
 
 # Install frontend dependencies
-pnpm install
+npx --yes pnpm@10 install --frozen-lockfile
 
 # Assemble build command
-BUILD_CMD=(pnpm tauri build --target "$TARGET")
-
-if [[ "$SIGN" != true ]]; then
-  BUILD_CMD+=(--no-sign)
-fi
+BUILD_CMD=(./node_modules/.bin/tauri build --target "$TARGET" --no-sign)
 
 echo "Running: ${BUILD_CMD[*]}"
 echo ""
 "${BUILD_CMD[@]}"
+
+APP_PATH="src-tauri/target/$TARGET/release/bundle/macos/Skim.app"
+if [[ "$SIGN" == true ]]; then
+  sh scripts/sign-macos.sh "$APP_PATH"
+else
+  APPLE_SIGNING_IDENTITY=- sh scripts/sign-macos.sh "$APP_PATH"
+fi
 
 # ── Report output ────────────────────────────────────────
 
@@ -142,9 +145,7 @@ echo "Build complete!"
 echo ""
 
 # Find the .app bundle
-APP_PATH="$(find src-tauri/target -path '*/bundle/macos/Skim.app' -maxdepth 5 2>/dev/null | head -n 1)"
-
-if [[ -n "$APP_PATH" ]]; then
+if [[ -d "$APP_PATH" ]]; then
   echo "App bundle: $APP_PATH"
   echo ""
   echo "To install, copy to /Applications:"

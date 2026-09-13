@@ -1,8 +1,10 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { Fragment, useState, useRef, useEffect, useCallback } from "react";
 import { chatWithArticle, webSearch } from "../../services/commands";
 import type { SearchResult, WebCitation } from "../../services/types";
 import { useUiStore } from "../../stores/uiStore";
 import { AIDisclaimer } from "../common/AIDisclaimer";
+import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
+import { useSettings } from "../../hooks/useSettings";
 
 interface ChatMessage {
   role: "user" | "assistant" | "search";
@@ -22,8 +24,33 @@ const PHONE_COLLAPSED_HEIGHT = 52;
 const DEFAULT_HEIGHT = 280;
 const MIN_HEIGHT = 140;
 
+function renderAssistantContent(content: string) {
+  return content.split(/\n\n+/).map((paragraph, paragraphIndex) => (
+    <p key={paragraphIndex} style={{ marginTop: paragraphIndex > 0 ? 6 : 0 }}>
+      {paragraph.split("\n").map((line, lineIndex) => (
+        <Fragment key={lineIndex}>
+          {lineIndex > 0 && <br />}
+          {line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, partIndex) => {
+            if (part.startsWith("**") && part.endsWith("**")) {
+              return <strong key={partIndex}>{part.slice(2, -2)}</strong>;
+            }
+            if (part.startsWith("*") && part.endsWith("*")) {
+              return <em key={partIndex}>{part.slice(1, -1)}</em>;
+            }
+            return <Fragment key={partIndex}>{part}</Fragment>;
+          })}
+        </Fragment>
+      ))}
+    </p>
+  ));
+}
+
 export function ChatDrawer({ articleId }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
+  const { data: settings } = useSettings();
+  const chatProvider = settings?.ai.chat_provider;
+  const provider = chatProvider && chatProvider !== "same" ? chatProvider : settings?.ai.provider;
+  const needsSetup = provider === "none";
   const [open, setOpen] = useState(false);
   // Phone: cap to half of viewport so article remains visible above. Desktop: keep 280px.
   const [height, setHeight] = useState(() =>
@@ -33,6 +60,8 @@ export function ChatDrawer({ articleId }: Props) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestSeqRef = useRef(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dragging = useRef(false);
@@ -41,10 +70,12 @@ export function ChatDrawer({ articleId }: Props) {
 
   // Reset on article change
   useEffect(() => {
+    requestSeqRef.current += 1;
     setMessages([]);
     setInput("");
     setLoading(false);
     setSearchLoading(false);
+    setError(null);
   }, [articleId]);
 
   // Auto-scroll
@@ -75,8 +106,10 @@ export function ChatDrawer({ articleId }: Props) {
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || loading || needsSetup) return;
 
+    const requestSeq = ++requestSeqRef.current;
+    setError(null);
     const userMsg: ChatMessage = { role: "user", content: text };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -89,6 +122,7 @@ export function ChatDrawer({ articleId }: Props) {
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
       const response = await chatWithArticle(articleId, history);
+      if (requestSeqRef.current !== requestSeq) return;
       setMessages((prev) => [
         ...prev,
         {
@@ -98,19 +132,23 @@ export function ChatDrawer({ articleId }: Props) {
         },
       ]);
     } catch (e) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Error: ${e instanceof Error ? e.message : String(e)}` },
-      ]);
+      if (requestSeqRef.current !== requestSeq) return;
+      setMessages((prev) => prev.slice(0, -1));
+      setInput(text);
+      setError(String(e instanceof Error ? e.message : e));
     } finally {
-      setLoading(false);
+      if (requestSeqRef.current === requestSeq) setLoading(false);
     }
-  }, [input, messages, loading, articleId]);
+  }, [input, messages, loading, needsSetup, articleId]);
 
   const doSearch = useCallback(async (query: string) => {
+    if (needsSetup || loading || searchLoading) return;
+    const requestSeq = ++requestSeqRef.current;
+    setError(null);
     setSearchLoading(true);
     try {
       const results = await webSearch(query);
+      if (requestSeqRef.current !== requestSeq) return;
       const searchMsg: ChatMessage = {
         role: "search",
         content: query,
@@ -131,6 +169,7 @@ export function ChatDrawer({ articleId }: Props) {
 
       setLoading(true);
       const response = await chatWithArticle(articleId, history);
+      if (requestSeqRef.current !== requestSeq) return;
       setMessages((prev) => [
         ...prev,
         {
@@ -140,15 +179,16 @@ export function ChatDrawer({ articleId }: Props) {
         },
       ]);
     } catch (e) {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Search failed: ${e instanceof Error ? e.message : String(e)}` },
-      ]);
+      if (requestSeqRef.current !== requestSeq) return;
+      setInput(`/search ${query}`);
+      setError(String(e instanceof Error ? e.message : e));
     } finally {
-      setSearchLoading(false);
-      setLoading(false);
+      if (requestSeqRef.current === requestSeq) {
+        setSearchLoading(false);
+        setLoading(false);
+      }
     }
-  }, [messages, articleId]);
+  }, [messages, articleId, loading, needsSetup, searchLoading]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -301,17 +341,7 @@ export function ChatDrawer({ articleId }: Props) {
                     lineHeight: 1.4,
                   }}
                 >
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: msg.content
-                        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-                        .replace(/\*(.+?)\*/g, "<em>$1</em>")
-                        .replace(/\n\n/g, "</p><p style='margin-top:6px'>")
-                        .replace(/\n/g, "<br>")
-                        .replace(/^/, "<p>")
-                        .replace(/$/, "</p>"),
-                    }}
-                  />
+                  {renderAssistantContent(msg.content)}
                 </div>
                 {msg.webCitations && msg.webCitations.length > 0 && (
                   <div
@@ -412,6 +442,12 @@ export function ChatDrawer({ articleId }: Props) {
 
       {/* Input */}
       <div className="flex-shrink-0 min-w-0" style={{ padding: "6px 16px 8px" }}>
+        {(needsSetup || isAiSetupError(error)) && <AiSetupNotice error={error} />}
+        {error && !isAiSetupError(error) && (
+          <div role="alert" className="text-danger" style={{ fontSize: 12, marginBottom: 6 }}>
+            {error}
+          </div>
+        )}
         <div className="flex items-end gap-2 min-w-0">
           <textarea
             ref={inputRef}
@@ -422,11 +458,11 @@ export function ChatDrawer({ articleId }: Props) {
             className="flex-1 min-w-0 border border-white/10 rounded-lg text-text-primary bg-white/5 placeholder-text-muted resize-none focus:outline-none focus:border-accent/40"
             style={{ padding: isPhone ? "10px 12px" : "6px 10px", fontSize: isPhone ? 16 : 12, maxHeight: 80, lineHeight: 1.4, width: 0, minHeight: isPhone ? 44 : undefined }}
             rows={1}
-            disabled={loading}
+            disabled={loading || needsSetup}
           />
           <button
             onClick={handleSubmit}
-            disabled={loading || !input.trim()}
+            disabled={loading || needsSetup || !input.trim()}
             className="tap-target text-accent hover:bg-accent/10 disabled:opacity-30 rounded-lg transition-colors flex-shrink-0"
             style={{ padding: isPhone ? 0 : "6px 10px" }}
             aria-label="Send message"

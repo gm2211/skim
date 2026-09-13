@@ -104,12 +104,38 @@ pub struct OpenAiCompatibleProvider {
 
 impl OpenAiCompatibleProvider {
     pub fn new(base_url: &str, api_key: Option<&str>, provider_name: &str) -> Self {
+        let base = base_url.trim().trim_end_matches('/');
+        let base = base.strip_suffix("/chat/completions").unwrap_or(base);
+        let base = base.strip_suffix("/v1").unwrap_or(base);
         Self {
             client: reqwest::Client::new(),
-            base_url: base_url.trim_end_matches('/').to_string(),
+            base_url: base.to_string(),
             api_key: api_key.map(|s| s.to_string()),
             provider_name: provider_name.to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod endpoint_tests {
+    use super::*;
+
+    #[test]
+    fn custom_endpoint_accepts_api_root_version_or_completion_url() {
+        for endpoint in ["https://example.com/api", "https://example.com/api/v1/", "https://example.com/api/v1/chat/completions"] {
+            let provider = OpenAiCompatibleProvider::new(endpoint, None, "custom");
+            assert_eq!(format!("{}/v1/chat/completions", provider.base_url), "https://example.com/api/v1/chat/completions");
+        }
+    }
+
+    #[test]
+    fn xai_requires_its_own_key_and_uses_native_default() {
+        let mut settings = crate::db::models::AppSettings::default().ai;
+        settings.provider = "xai".into();
+        assert!(create_provider(&settings, None).is_err());
+        settings.api_key = Some("test-xai-key".into());
+        assert_eq!(create_provider(&settings, None).unwrap().name(), "xai");
+        assert_eq!(crate::commands::ai::default_model("xai"), "grok-4.3");
     }
 }
 
@@ -711,6 +737,11 @@ pub fn create_provider(
             api_key,
             "openai",
         ))),
+        "xai" => {
+            let key = api_key.filter(|key| !key.trim().is_empty())
+                .ok_or("[configure-ai] xAI API key not set.")?;
+            Ok(Box::new(OpenAiCompatibleProvider::new("https://api.x.ai", Some(key), "xai")))
+        }
         "openrouter" => Ok(Box::new(OpenAiCompatibleProvider::new(
             endpoint.unwrap_or("https://openrouter.ai/api"),
             api_key,
@@ -748,4 +779,21 @@ pub fn create_provider(
         }
         _ => Err(format!("Unknown AI provider: {}", settings.provider)),
     }
+}
+
+/// Create a provider with access to the native plugin when the selected tier
+/// is MLX or Apple Foundation Models. Other providers retain the existing
+/// factory behavior.
+pub fn create_provider_with_app<R: tauri::Runtime>(
+    settings: &AiSettings,
+    model_state: Option<SharedModelState>,
+    app: &tauri::AppHandle<R>,
+) -> Result<Box<dyn AiProvider>, String> {
+    if settings.provider == "mlx" || settings.provider == "foundation-models" {
+        return Ok(Box::new(super::native_provider::NativePluginProvider::new(
+            app.clone(),
+            settings.provider.clone(),
+        )));
+    }
+    create_provider(settings, model_state)
 }

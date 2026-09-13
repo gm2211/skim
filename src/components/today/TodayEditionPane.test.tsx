@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TodayEditionPane } from "./TodayEditionPane";
 import type { AppSettings, TodayEditionItem, TodayEditionView } from "../../services/types";
@@ -123,6 +123,16 @@ afterEach(() => {
 });
 
 describe("TodayEditionPane", () => {
+  it("keeps Skim branding visible while the sidebar is collapsed", async () => {
+    useUiStore.setState({ isPhone: false, sidebarCollapsed: true });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([]));
+    renderPane();
+    expect(screen.getByRole("heading", { name: "SKIM" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+    expect(useUiStore.getState().sidebarCollapsed).toBe(false);
+    expect(screen.queryByRole("button", { name: "Expand sidebar" })).not.toBeInTheDocument();
+  });
+
   it("renders sections in backend order regardless of item input order", async () => {
     const items = [
       makeItem({ story_id: "u1", section: "unique_finds", snapshot_title: "Unique story" }),

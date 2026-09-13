@@ -1,3 +1,4 @@
+import { CollapsedSidebarTitlebar } from "./components/layout/CollapsedSidebarTitlebar";
 import { Sidebar } from "./components/layout/Sidebar";
 import { ArticleList } from "./components/layout/ArticleList";
 import { ArticleDetail } from "./components/layout/ArticleDetail";
@@ -29,7 +30,7 @@ const PHONE_SETTLE_EASING = "cubic-bezier(0.2, 0.9, 0.2, 1)";
 const ACTIVE_FEED_TOAST_MAX_MS = 35000;
 
 function App() {
-  const { showAddFeed, showSettings, selectedArticleId, listCollapsed, isPhone, phonePane, sidebarView } = useUiStore();
+  const { showAddFeed, showSettings, selectedArticleId, listCollapsed, sidebarCollapsed, isPhone, phonePane, sidebarView } = useUiStore();
   const isToday = sidebarView.type === "today";
   const qc = useQueryClient();
   const [showBootDisclaimer, setShowBootDisclaimer] = useState(true);
@@ -489,6 +490,7 @@ function App() {
         data-tauri-drag-region
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
+      {sidebarCollapsed && listCollapsed && !isToday && <CollapsedSidebarTitlebar />}
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <div className="flex flex-1 min-w-0">

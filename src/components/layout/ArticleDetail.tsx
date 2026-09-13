@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useLayoutEffect } from "react";
+import { useEffect, useState, useCallback, useRef, useLayoutEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useArticle, useMarkRead, useToggleStar, useToggleRead } from "../../hooks/useArticles";
 import { useSummarizeArticle } from "../../hooks/useAi";
@@ -354,6 +354,8 @@ export function ArticleDetail() {
   const dismissToListRef = useRef(false);
   const [fullContent, setFullContent] = useState<string | null>(null);
   const [rawHtml, setRawHtml] = useState<string | null>(null);
+  const [contentArticleId, setContentArticleId] = useState<string | null>(null);
+  const [webRequestedForArticleId, setWebRequestedForArticleId] = useState<string | null>(null);
   const [loadingFull, setLoadingFull] = useState(false);
   const [fullError, setFullError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -409,6 +411,8 @@ export function ArticleDetail() {
     if (dismissTransitionTimerRef.current) window.clearTimeout(dismissTransitionTimerRef.current);
     setFullContent(null);
     setRawHtml(null);
+    setContentArticleId(null);
+    setWebRequestedForArticleId(null);
     setLoadingFull(false);
     setFullError(null);
     viewModeRef.current = "reader";
@@ -443,6 +447,7 @@ export function ArticleDetail() {
         const prepared = prepareFetchedArticle(result);
         setRawHtml(prepared.rawHtml);
         setFullContent(prepared.fullContent);
+        setContentArticleId(articleId);
         setFullError(prepared.error);
       } catch (e) {
         if (!cancelled && seq === fullFetchSeqRef.current) setFullError(String(e));
@@ -510,6 +515,7 @@ export function ArticleDetail() {
       const prepared = prepareFetchedArticle(result);
       setFullContent(prepared.fullContent);
       setRawHtml(prepared.rawHtml);
+      setContentArticleId(articleId);
       setFullError(prepared.error);
     } catch (e) {
       if (seq === fullFetchSeqRef.current) setFullError(String(e));
@@ -665,14 +671,17 @@ export function ArticleDetail() {
   }, [clearDismissTransitionTimer, finishDismissTransition]);
 
   const animateToMode = useCallback((mode: ViewMode) => {
-    if (mode === "web") void fetchFull();
+    if (mode === "web") {
+      if (article?.id) setWebRequestedForArticleId(article.id);
+      void fetchFull();
+    }
     clearModeTransitionTimer();
     setDismissOffset(0);
     if (viewModeRef.current !== mode && isPhone) settleMode("slide");
     setModeDragOffset(0);
     viewModeRef.current = mode;
     setViewMode(mode);
-  }, [clearModeTransitionTimer, fetchFull, isPhone, settleMode]);
+  }, [article?.id, clearModeTransitionTimer, fetchFull, isPhone, settleMode]);
 
   const handleReader = useCallback(async () => {
     animateToMode("reader");
@@ -922,6 +931,25 @@ export function ArticleDetail() {
     return () => window.removeEventListener("keydown", handler);
   }, [animateToMode, article?.url]);
 
+  const rssHtml = useMemo(() => {
+    if (!article?.content_html) return null;
+    try {
+      return stripRssJunk(article.content_html);
+    } catch (error) {
+      console.error("Failed to strip RSS junk:", error);
+      return article.content_html;
+    }
+  }, [article?.content_html]);
+  const hasCurrentContent = !!article && contentArticleId === article.id;
+  const webRequested = !!article && (
+    webRequestedForArticleId === article.id ||
+    (isPhone && viewMode === "reader" && modeDragOffset < 0)
+  );
+  const embeddedWebSrcDoc = useMemo(
+    () => (webRequested && rawHtml && hasCurrentContent ? buildEmbeddedWebSrcDoc(rawHtml) : ""),
+    [hasCurrentContent, rawHtml, webRequested]
+  );
+
   if (!article) {
     return (
       <div
@@ -936,18 +964,9 @@ export function ArticleDetail() {
     );
   }
 
-  let rssHtml: string | null = null;
-  try {
-    rssHtml = article.content_html ? stripRssJunk(article.content_html) : null;
-  } catch (e) {
-    console.error("Failed to strip RSS junk:", e);
-    rssHtml = article.content_html;
-  }
-
   const modeBtn = (mode: ViewMode, label: string, icon: React.ReactNode) => (
     <button
       onClick={mode === "reader" ? handleReader : handleWebView}
-      disabled={loadingFull}
       className={`${isPhone ? "tap-target" : "flex items-center gap-1.5 rounded-lg border"} transition-colors disabled:opacity-40 ${
         viewMode === mode
           ? isPhone ? "text-accent" : "border-accent/30 text-accent bg-accent/10"
@@ -1442,8 +1461,18 @@ export function ArticleDetail() {
                     </div>
                   </div>
                   {(article.comments_url || article.url) && <AggregatorDetails url={article.comments_url || article.url!} />}
-                  {fullContent ? (
+                  {hasCurrentContent && fullContent ? (
                     <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
+                  ) : rssHtml ? (
+                    <div className="article-content text-text-primary">
+                      <div className="text-text-muted uppercase tracking-wider" style={{ fontSize: 10, marginBottom: 10 }}>Feed preview</div>
+                      <div dangerouslySetInnerHTML={{ __html: rssHtml }} />
+                    </div>
+                  ) : article.content_text ? (
+                    <div className="article-content text-text-primary whitespace-pre-wrap">
+                      <div className="text-text-muted uppercase tracking-wider" style={{ fontSize: 10, marginBottom: 10 }}>Feed preview</div>
+                      {article.content_text}
+                    </div>
                   ) : loadingFull ? (
                     <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 14 }}>
                       <svg className="smooth-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1451,10 +1480,6 @@ export function ArticleDetail() {
                       </svg>
                       Loading article…
                     </div>
-                  ) : rssHtml ? (
-                    <div className="article-content text-text-primary" dangerouslySetInnerHTML={{ __html: rssHtml }} />
-                  ) : article.content_text ? (
-                    <div className="article-content text-text-primary whitespace-pre-wrap">{article.content_text}</div>
                   ) : (
                     <p className="text-text-muted" style={{ fontSize: 14 }}>No preview available.</p>
                   )}
@@ -1483,7 +1508,7 @@ export function ArticleDetail() {
                       </svg>
                     </button>
                   )}
-                  {loadingFull && !rawHtml && (
+                  {viewMode === "web" && loadingFull && !rawHtml && (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center" style={{ padding: "0 24px" }}>
                       <svg className="smooth-spin text-text-muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: 12 }}>
                         <path d="M21 12a9 9 0 1 1-6.219-8.56" />
@@ -1493,7 +1518,7 @@ export function ArticleDetail() {
                       </p>
                     </div>
                   )}
-                  {!rawHtml && !loadingFull && (
+                  {viewMode === "web" && !rawHtml && !loadingFull && (
                     <div className="flex flex-col items-center justify-center h-full text-center" style={{ padding: "0 24px" }}>
                       <p className="text-text-muted" style={{ fontSize: 14, marginBottom: 8 }}>
                         {fullError ? "Couldn't load page in the embedded view." : "No embedded page preview is available."}
@@ -1503,11 +1528,11 @@ export function ArticleDetail() {
                       </p>
                     </div>
                   )}
-                  {rawHtml && (
+                  {webRequested && hasCurrentContent && rawHtml && (
                     <iframe
                       key={`${article.id}:${article.url}`}
                       ref={iframeRef}
-                      srcDoc={buildEmbeddedWebSrcDoc(rawHtml)}
+                      srcDoc={embeddedWebSrcDoc}
                       sandbox="allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock allow-presentation"
                       style={{ width: "100%", height: "100%", border: "none", background: "#fff", overflow: "hidden" }}
                       title="Article web view"

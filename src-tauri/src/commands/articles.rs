@@ -7,6 +7,8 @@ use serde::Serialize;
 use serde_json::Value;
 use tauri::State;
 use url::Url;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 /// Read the Feedly token and user ID from settings, if configured.
 fn get_feedly_context(db: &Database) -> Option<(String, String)> {
@@ -363,13 +365,42 @@ pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, Strin
     fetch_article_content(&url).await
 }
 
-pub(crate) async fn fetch_article_content(url: &str) -> Result<FullArticleContent, String> {
-    let client = reqwest::Client::builder()
-        // Use a real browser UA — some sites serve blank shells to unknown UAs
+type ReaderResult = Result<FullArticleContent, String>;
+type PendingReader = tokio::sync::OnceCell<ReaderResult>;
+
+fn reader_http_client() -> Result<&'static reqwest::Client, String> {
+    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
+    CLIENT.get_or_init(|| reqwest::Client::builder()
+        // Preserve the existing browser identity and complete fetch timeout.
         .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
         .timeout(std::time::Duration::from_secs(30))
         .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        .map_err(|e| format!("Failed to create HTTP client: {}", e)))
+        .as_ref().map_err(Clone::clone)
+}
+
+pub(crate) async fn fetch_article_content(url: &str) -> ReaderResult {
+    // Share concurrent work only. Completed/failed responses are not retained;
+    // the existing persistent reader cache owns reuse and explicit refresh.
+    static PENDING: OnceLock<Mutex<HashMap<String, Weak<PendingReader>>>> = OnceLock::new();
+    let pending = {
+        let mut requests = PENDING.get_or_init(|| Mutex::new(HashMap::new()))
+            .lock().map_err(|_| "Reader request registry unavailable".to_string())?;
+        requests.retain(|_, request| request.strong_count() > 0);
+        if let Some(request) = requests.get(url).and_then(Weak::upgrade) {
+            request
+        } else {
+            let request = Arc::new(PendingReader::new());
+            requests.insert(url.to_string(), Arc::downgrade(&request));
+            request
+        }
+    };
+    pending.get_or_init(|| fetch_article_content_uncached(url)).await.clone()
+}
+
+async fn fetch_article_content_uncached(url: &str) -> ReaderResult {
+    let started = std::time::Instant::now();
+    let client = reader_http_client()?;
     let target_url = resolve_aggregator_target(&client, url)
         .await
         .unwrap_or_else(|| url.to_string());
@@ -386,6 +417,16 @@ pub(crate) async fn fetch_article_content(url: &str) -> Result<FullArticleConten
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
+    let network_ms = started.elapsed().as_millis();
+    let parsed = tokio::task::spawn_blocking(move || extract_reader_html(&html, &effective_url))
+        .await.map_err(|e| format!("Article extraction failed: {}", e))?;
+    log::debug!("Reader timing: network={}ms extraction={}ms", network_ms,
+        started.elapsed().as_millis().saturating_sub(network_ms));
+    parsed
+}
+
+// Keep the exact extraction order and thresholds; only its scheduling changes.
+fn extract_reader_html(html: &str, effective_url: &str) -> ReaderResult {
     // Inject <base href="..."> so relative URLs (images, stylesheets) resolve
     // against the original site if anything ends up consuming raw_html.
     let base_tag = format!("<base href=\"{}\">", effective_url.replace('"', "&quot;"));
@@ -394,10 +435,10 @@ pub(crate) async fn fetch_article_content(url: &str) -> Result<FullArticleConten
             let insert_at = head_end + tag_close + 1;
             format!("{}{}{}", &html[..insert_at], base_tag, &html[insert_at..])
         } else {
-            html.clone()
+            html.to_string()
         }
     } else {
-        html.clone()
+        html.to_string()
     };
 
     // Many SPAs (Next.js, etc.) ship a <script id="__NEXT_DATA__"> JSON blob
@@ -410,7 +451,7 @@ pub(crate) async fn fetch_article_content(url: &str) -> Result<FullArticleConten
         plain_to_html(&body)
     } else {
         match dom_smoothie::Readability::new(
-            html.as_str(),
+            html,
             Some(&effective_url),
             Some(dom_smoothie::Config::default()),
         ) {
@@ -627,4 +668,96 @@ pub async fn toggle_star(db: State<'_, Database>, article_id: String) -> Result<
     }
 
     Ok(new_is_starred)
+}
+
+#[cfg(test)]
+mod reader_performance_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    fn fixture() -> String {
+        format!("<html><head><title>Reader fixture</title></head><body><nav>Menu</nav><article><h1>Reader fixture</h1><p>{}</p><p><a href=\"/reference\">Original reference</a></p></article></body></html>",
+            "This is the complete article, including its evidence and qualifications. ".repeat(30))
+    }
+
+    async fn server(fail_first: bool) -> (String, Arc<AtomicUsize>, Arc<AtomicUsize>, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/article", listener.local_addr().unwrap());
+        let requests = Arc::new(AtomicUsize::new(0));
+        let connections = Arc::new(AtomicUsize::new(0));
+        let request_count = requests.clone();
+        let connection_count = connections.clone();
+        let handle = tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                connection_count.fetch_add(1, Ordering::SeqCst);
+                let count = request_count.clone();
+                tokio::spawn(async move {
+                    let mut stream = BufReader::new(stream);
+                    loop {
+                        let mut line = String::new();
+                        loop {
+                            line.clear();
+                            if stream.read_line(&mut line).await.unwrap_or(0) == 0 { return; }
+                            if line == "\r\n" { break; }
+                        }
+                        let n = count.fetch_add(1, Ordering::SeqCst);
+                        if fail_first && n == 0 {
+                            let _ = stream.get_mut().write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 999\r\nConnection: close\r\n\r\nshort").await;
+                            return;
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+                        let body = fixture();
+                        let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: keep-alive\r\n\r\n{}", body.len(), body);
+                        if stream.get_mut().write_all(response.as_bytes()).await.is_err() { return; }
+                    }
+                });
+            }
+        });
+        (url, requests, connections, handle)
+    }
+
+    #[tokio::test]
+    async fn simultaneous_opens_share_fetch_and_reload_reuses_connection() {
+        let (url, requests, connections, server) = server(false).await;
+        let opened = futures_util::future::join_all((0..3).map(|_| fetch_article_content(&url))).await;
+        let expected = extract_reader_html(&fixture(), &url).unwrap();
+        for result in opened {
+            let result = result.unwrap();
+            assert_eq!(result.html, expected.html);
+            assert_eq!(result.raw_html, expected.raw_html);
+            assert!(result.html.contains("complete article"));
+            assert!(result.html.contains("Original reference"));
+        }
+        assert_eq!(requests.load(Ordering::SeqCst), 1);
+        // Explicit new fetch remains fresh; only concurrent calls share results.
+        assert_eq!(fetch_article_content(&url).await.unwrap().html, expected.html);
+        assert_eq!(requests.load(Ordering::SeqCst), 2);
+        assert_eq!(connections.load(Ordering::SeqCst), 1);
+        println!("3 simultaneous opens: 1 download; subsequent fresh fetch: same TCP connection; extracted HTML identical");
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn failed_fetch_does_not_poison_retry() {
+        let (url, requests, _, server) = server(true).await;
+        assert!(fetch_article_content(&url).await.is_err());
+        assert!(!fetch_article_content(&url).await.unwrap().html.is_empty());
+        assert_eq!(requests.load(Ordering::SeqCst), 2);
+        server.abort();
+    }
+
+    #[test]
+    fn nextjs_body_and_static_article_keep_complete_text_and_links() {
+        let body = format!("<p>{}</p><p><a href=\"https://example.org/evidence\">Evidence</a></p>", "Accurate complete body with qualifications. ".repeat(30));
+        let data = serde_json::json!({"props":{"pageProps":{"articleBody":body}}});
+        let html = format!("<html><head></head><body><script id=\"__NEXT_DATA__\">{data}</script><p>Short teaser</p></body></html>");
+        let result = extract_reader_html(&html, "https://example.org/story").unwrap();
+        assert_eq!(result.html, body);
+        assert!(result.raw_html.contains("<base href=\"https://example.org/story\">"));
+        assert!(result.raw_html.contains("Short teaser"));
+        let static_result = extract_reader_html(&fixture(), "https://example.org/story").unwrap();
+        assert!(static_result.html.contains("complete article, including its evidence and qualifications"));
+        assert!(static_result.html.contains("https://example.org/reference"));
+    }
 }

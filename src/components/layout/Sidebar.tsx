@@ -7,6 +7,7 @@ import type { SidebarView } from "../../services/types";
 import { FeedsSection } from "./FeedsSection";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
 import { CatchupDialog } from "../chat/CatchupDialog";
+import { SkimTitle } from "./SkimTitle";
 
 export function Sidebar() {
   const [askOpen, setAskOpen] = useState(false);
@@ -69,18 +70,7 @@ export function Sidebar() {
           WebkitAppRegion: !isPhone ? "drag" : undefined,
         } as React.CSSProperties}
       >
-        <h1 style={{
-          fontFamily: "'Aquire', sans-serif",
-          fontSize: isPhone ? 22 : 18,
-          fontWeight: 700,
-          letterSpacing: "0.15em",
-          transform: "scaleX(1.6)",
-          transformOrigin: "left center",
-          color: "#e6edf3",
-          textShadow: "0 0 14px rgba(136, 200, 255, 0.35)",
-          lineHeight: 1,
-          whiteSpace: "nowrap",
-        }}>SKIM</h1>
+        <SkimTitle isPhone={isPhone} />
         <div className="flex-1" />
         <button
           onClick={() => useUiStore.getState().toggleSidebar()}

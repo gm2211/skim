@@ -1,3 +1,4 @@
+import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
 import { useMemo } from "react";
 import { useTodayEdition } from "../../hooks/useTodayEdition";
 import { useUiStore } from "../../stores/uiStore";
@@ -35,26 +36,7 @@ export function TodayEditionPane() {
         minWidth: isPhone ? "100%" : 360,
       }}
     >
-      {sidebarCollapsed && !isPhone && (
-        <div
-          className="flex flex-shrink-0 items-center relative z-20"
-          data-tauri-drag-region
-          style={{ height: 52, paddingLeft: 80, paddingRight: 8, WebkitAppRegion: "drag" } as React.CSSProperties}
-        >
-          <button
-            onClick={() => useUiStore.getState().toggleSidebar()}
-            className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
-            title="Expand sidebar"
-            aria-label="Expand sidebar"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <rect x="3" y="3" width="18" height="18" rx="2" />
-              <path d="M9 3v18" />
-            </svg>
-          </button>
-          <div className="flex-1" />
-        </div>
-      )}
+      {sidebarCollapsed && !isPhone && <CollapsedSidebarTitlebar />}
       {/* Top bar */}
       <div
         className="flex flex-shrink-0 items-center gap-2 relative z-20"

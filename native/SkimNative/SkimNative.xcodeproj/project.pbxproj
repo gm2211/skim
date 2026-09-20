@@ -16,7 +16,6 @@
 		2A601923CBA16F4DD268D2C9 /* NativeKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B69429F0218849C4A4E655 /* NativeKeychain.swift */; };
 		31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89737FFF993802E562860605 /* AIDisclaimerLabel.swift */; };
 		436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */; };
-		44E488CC2CF6C6BF80417FB1 /* SmartFolderEval.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3442125155D4E58EF8001611 /* SmartFolderEval.swift */; };
 		568EFC6280529AB7F91222BD /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8734D4E26C300D1AD49D4262 /* SkimCore */; };
 		6048C096F85B46DFAF8590AF /* Style.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038284DEE00F91A360324653 /* Style.swift */; };
 		61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */; };
@@ -68,7 +67,6 @@
 		13F4F0168DBE15FBFB319E12 /* NativeAIModelsResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIModelsResponseTests.swift; sourceTree = "<group>"; };
 		1474BA38A4E522DB5D3ECB21 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
 		1D15E5B261AE4E05EEAE52DC /* NativeAIGuardrailRefusalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIGuardrailRefusalTests.swift; sourceTree = "<group>"; };
-		3442125155D4E58EF8001611 /* SmartFolderEval.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderEval.swift; sourceTree = "<group>"; };
 		3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleExtractorTests.swift; sourceTree = "<group>"; };
 		4B61709B52E5986EFC1C3ECB /* AIErrorBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIErrorBox.swift; sourceTree = "<group>"; };
 		4FA32ECFFFAF834236FDF04E /* TasteModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteModel.swift; sourceTree = "<group>"; };
@@ -202,7 +200,6 @@
 				B1B69429F0218849C4A4E655 /* NativeKeychain.swift */,
 				F6BA45434D97C1ACA953B839 /* NativeMLX.swift */,
 				8A1B88832F456973EA297F0F /* NativeWebSearch.swift */,
-				3442125155D4E58EF8001611 /* SmartFolderEval.swift */,
 				038284DEE00F91A360324653 /* Style.swift */,
 				1474BA38A4E522DB5D3ECB21 /* WebView.swift */,
 			);
@@ -440,7 +437,6 @@
 				014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */,
 				D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */,
 				1DC5A4B057212FB263947314 /* SmartFolderEditor.swift in Sources */,
-				44E488CC2CF6C6BF80417FB1 /* SmartFolderEval.swift in Sources */,
 				6048C096F85B46DFAF8590AF /* Style.swift in Sources */,
 				7C87C81EDE030A9459473E8D /* TasteModel.swift in Sources */,
 				8ED4B358481AC4273C225054 /* WebView.swift in Sources */,

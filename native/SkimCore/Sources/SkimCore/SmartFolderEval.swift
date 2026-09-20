@@ -1,5 +1,4 @@
 import Foundation
-import SkimCore
 
 // MARK: - Smart Folder Rule Types
 

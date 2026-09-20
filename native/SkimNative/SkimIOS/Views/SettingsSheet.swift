@@ -762,6 +762,25 @@ private struct MLXSettingsPanel: View {
         NativeMLX.option(for: selectedRepoId)
     }
 
+    // The catalog options, plus a synthesized "(legacy)" entry when the currently
+    // selected repo id has been removed from the catalog — otherwise the Picker
+    // would show a blank selection for users who picked a since-removed model.
+    private var pickerOptions: [MLXModelOption] {
+        var options = NativeMLX.modelOptions
+        if !options.contains(where: { $0.repoId == selectedRepoId }) {
+            let legacy = NativeMLX.option(for: selectedRepoId)
+            options.append(
+                MLXModelOption(
+                    repoId: legacy.repoId,
+                    label: "\(legacy.repoId) (legacy)",
+                    sizeGB: legacy.sizeGB,
+                    isPhoneFriendly: legacy.isPhoneFriendly
+                )
+            )
+        }
+        return options
+    }
+
     private var selectedRepoBinding: Binding<String> {
         Binding(
             get: { selectedRepoId },
@@ -782,7 +801,7 @@ private struct MLXSettingsPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Picker("Model", selection: selectedRepoBinding) {
-                ForEach(NativeMLX.modelOptions) { option in
+                ForEach(pickerOptions) { option in
                     Text(option.label).tag(option.repoId)
                 }
             }

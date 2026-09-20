@@ -184,7 +184,7 @@ Configurable in Settings → AI Provider. Each provider can be used for summary 
 | Ollama | LAN (default `http://localhost:11434`) | No key. |
 | Custom | URL + optional key | Any OpenAI-compatible endpoint. |
 | Local (embedded, desktop only) | — | `llama-cpp-2` with Metal. Power mode (cool/balanced/performance) drives GPU layers + thread count. Optional preload on app start. Idle-evict timer (default 10 min) drops the model from VRAM. |
-| **On-device MLX (iOS)** | — | Qwen 2.5 3B Instruct 4-bit default (`mlx-community/Qwen2.5-3B-Instruct-4bit`), Llama 3.2 3B, Phi-3.5 Mini selectable. Via `plugins/tauri-plugin-skim-ai/` Swift plugin. Downloaded to HuggingFace cache in `Documents/huggingface/models/<repo>`. Evicted on app background + thermal `.serious`/`.critical`. |
+| **On-device MLX (iOS)** | — | Gemma 3 1B Instruct 4-bit default (`mlx-community/gemma-3-1b-it-4bit`); Qwen3 1.7B/4B, Llama 3.2 1B/3B, SmolLM3 3B, Phi-4 Mini, Gemma 3 4B, Gemma 3n E2B selectable. Via `plugins/tauri-plugin-skim-ai/` Swift plugin. Downloaded to HuggingFace cache in `Documents/huggingface/models/<repo>`. Evicted on app background + thermal `.serious`/`.critical`. |
 | **Apple Foundation Models (iOS 26+)** | — | `SystemLanguageModel.default`. Apple-managed, no download. Typed guided generation via `@Generable` structs (used for triage JSON). |
 
 Tool-use (web search, future tools): supported on `anthropic`, `claude-subscription`, `claude-cli`. Other providers receive a log-and-drop fallback so calls still succeed without tools.

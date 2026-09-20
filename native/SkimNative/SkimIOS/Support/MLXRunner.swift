@@ -14,6 +14,7 @@ enum MLXModelFamily {
     case llama
     case qwen
     case phi
+    case smol
     case unknown
 
     /// Stop strings that mark end-of-turn for this model family.
@@ -27,13 +28,27 @@ enum MLXModelFamily {
             return ["<|im_end|>", "<|endoftext|>"]
         case .phi:
             return ["<|end|>", "<|endoftext|>"]
+        case .smol:
+            return ["<|im_end|>", "<|endoftext|>"]
         case .unknown:
             return []
         }
     }
 
+    /// Whether this family's chat template supports toggling "thinking"/reasoning
+    /// output via the `enable_thinking` additionalContext flag.
+    var supportsThinkingToggle: Bool {
+        switch self {
+        case .qwen, .smol:
+            return true
+        default:
+            return false
+        }
+    }
+
     static func detect(from repoId: String) -> MLXModelFamily {
         let lower = repoId.lowercased()
+        if lower.contains("smollm") { return .smol }
         if lower.contains("gemma") { return .gemma }
         if lower.contains("llama") { return .llama }
         if lower.contains("qwen") { return .qwen }
@@ -68,13 +83,25 @@ struct MLXSamplingPreset {
         "mlx-community/Llama-3.2-3B-Instruct-4bit": MLXSamplingPreset(
             temperature: 0.3, topP: 0.9, repetitionPenalty: 1.1, repetitionContextSize: 64
         ),
-        // Qwen 2.5 1.5B
-        "mlx-community/Qwen2.5-1.5B-Instruct-4bit": MLXSamplingPreset(
+        // Qwen3 1.7B
+        "mlx-community/Qwen3-1.7B-4bit": MLXSamplingPreset(
             temperature: 0.3, topP: 0.9, repetitionPenalty: 1.1, repetitionContextSize: 64
         ),
-        // Qwen 2.5 3B
-        "mlx-community/Qwen2.5-3B-Instruct-4bit": MLXSamplingPreset(
-            temperature: 0.3, topP: 0.9, repetitionPenalty: 1.1, repetitionContextSize: 64
+        // Qwen3 4B Instruct (2507)
+        "mlx-community/Qwen3-4B-Instruct-2507-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
+        // SmolLM3 3B
+        "mlx-community/SmolLM3-3B-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.95, repetitionPenalty: 1.1, repetitionContextSize: 64
+        ),
+        // Phi-4 Mini
+        "mlx-community/Phi-4-mini-instruct-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.95, repetitionPenalty: 1.1, repetitionContextSize: 64
+        ),
+        // Gemma 3n E2B
+        "mlx-community/gemma-3n-E2B-it-lm-4bit": MLXSamplingPreset(
+            temperature: 0.35, topP: 0.95, repetitionPenalty: 1.1, repetitionContextSize: 64
         ),
     ]
 
@@ -552,7 +579,10 @@ actor MLXRunner {
 
         do {
             let raw = try await container.perform { (context: ModelContext) -> String in
-                let userInput = UserInput(messages: messages)
+                let userInput = UserInput(
+                    messages: messages,
+                    additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
+                )
                 let lmInput = try await context.processor.prepare(input: userInput)
 
                 // Wrap in MLX.withError so C-layer errors (e.g. from MLXArray.eval during
@@ -612,7 +642,10 @@ actor MLXRunner {
 
         do {
             let raw = try await container.perform { (context: ModelContext) -> String in
-                let userInput = UserInput(messages: messages)
+                let userInput = UserInput(
+                    messages: messages,
+                    additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
+                )
                 let lmInput = try await context.processor.prepare(input: userInput)
 
                 // Async withError wraps the streaming loop so any MLX C-layer error
@@ -711,6 +744,23 @@ actor MLXRunner {
     // Strip any leaked stop tokens from the output.
     private func sanitizeOutput(_ text: String, family: MLXModelFamily) -> String {
         var result = text
+
+        // Strip Qwen3 / SmolLM3 <think>...</think> reasoning blocks. We already ask the
+        // chat template to disable thinking via additionalContext, but some checkpoints
+        // still emit a block; the tag-stripping regex below only removes the tags
+        // themselves (bounded to 30 chars), not the (potentially long, multi-line)
+        // reasoning content in between, so this must run first.
+        result = result.replacingOccurrences(
+            of: "(?s)<think>.*?</think>",
+            with: "",
+            options: .regularExpression
+        )
+        // A generation cut short by maxTokens can leave an unterminated <think> block
+        // with no closing tag; drop everything from that point on.
+        if let range = result.range(of: "<think>") {
+            result.removeSubrange(range.lowerBound..<result.endIndex)
+        }
+
         // Strip all known stop strings for this family
         for token in family.extraEOSTokens {
             result = result.replacingOccurrences(of: token, with: "")

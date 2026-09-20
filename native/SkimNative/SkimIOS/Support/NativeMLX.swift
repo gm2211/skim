@@ -61,6 +61,20 @@ enum NativeMLX {
         try await MLXRunner.shared.deleteModel(repoId: repoId)
     }
 
+    static func cancelDownload() async {
+        await MLXRunner.shared.cancelDownload()
+    }
+
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+        if let mlxError = error as? MLXRunner.MLXError, case .cancelled = mlxError {
+            return true
+        }
+        return false
+    }
+
     static func complete(
         settings: AISettings,
         instructions: String,

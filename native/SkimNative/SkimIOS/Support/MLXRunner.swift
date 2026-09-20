@@ -99,6 +99,9 @@ actor MLXRunner {
     private var loadingTask: Task<ModelContainer, Error>?
     private var loadingRepoId: String?
     private var progressSink: (@Sendable (Double) -> Void)?
+    private var downloadTask: Task<Void, Error>?
+    private var downloadingRepoId: String?
+    private var downloadGeneration: Int = 0
 
     enum MLXError: LocalizedError {
         case unavailable(String)
@@ -106,6 +109,7 @@ actor MLXRunner {
         case integrityFailed(String)
         case loadFailed(String)
         case generationFailed(String)
+        case cancelled
 
         var errorDescription: String? {
             switch self {
@@ -114,6 +118,7 @@ actor MLXRunner {
             case .integrityFailed(let message): return "Model files corrupted — tap to re-download. (\(message))"
             case .loadFailed(let message): return "MLX model load failed: \(message)"
             case .generationFailed(let message): return "MLX generation failed: \(message)"
+            case .cancelled: return "Download cancelled."
             }
         }
     }
@@ -337,14 +342,23 @@ actor MLXRunner {
         MLXRunner.isRepoDownloaded(repoId)
     }
 
+    var isDownloading: Bool { downloadTask != nil }
+
     func downloadModel(repoId: String) async throws {
         guard MLXRunner.isAvailableOnThisRuntime else {
             throw MLXError.unavailable("MLX downloads require a real iPhone. The Simulator cannot run the MLX backend.")
         }
 
+        // If a download for this exact repo is already in flight, just await it
+        // rather than starting a second, redundant download.
+        if let existing = downloadTask, downloadingRepoId == repoId {
+            try await existing.value
+            return
+        }
+
         let sink = progressSink
-        let config = ModelConfiguration(id: repoId)
-        do {
+        let task = Task { () throws -> Void in
+            let config = ModelConfiguration(id: repoId)
             // Use a background URLSession so the OS can continue (or restart) the download
             // even when the app is suspended or killed. Incomplete shard files are preserved
             // across launches so the Hub library can resume from where it left off.
@@ -357,11 +371,27 @@ actor MLXRunner {
                 }
             )
 
+            // swift-transformers' HubApi.snapshot() returns normally (rather than
+            // throwing) when the task is cancelled mid-download, so we must check
+            // explicitly here before treating the download as having succeeded.
+            if Task.isCancelled {
+                throw MLXError.cancelled
+            }
+            try Task.checkCancellation()
+
             // Integrity check immediately after download completes
             if let integrityIssue = MLXRunner.integrityError(forRepo: repoId) {
                 MLXRunner.cleanupPartialDownloads(repoId: repoId)
                 throw MLXError.integrityFailed(integrityIssue)
             }
+        }
+        downloadGeneration += 1
+        let myGeneration = downloadGeneration
+        downloadTask = task
+        downloadingRepoId = repoId
+
+        do {
+            try await task.value
 
             loadedContainer = nil
             loadedRepoId = nil
@@ -369,10 +399,44 @@ actor MLXRunner {
             loadingTask = nil
             loadingRepoId = nil
             sink?(1.0)
-        } catch let mlxErr as MLXError {
-            throw mlxErr
+
+            if downloadGeneration == myGeneration {
+                downloadTask = nil
+                downloadingRepoId = nil
+            }
         } catch {
+            if downloadGeneration == myGeneration {
+                downloadTask = nil
+                downloadingRepoId = nil
+            }
+
+            if error is CancellationError {
+                MLXRunner.cleanupPartialDownloads(repoId: repoId)
+                throw MLXError.cancelled
+            }
+            if let mlxErr = error as? MLXError {
+                if case .cancelled = mlxErr {
+                    MLXRunner.cleanupPartialDownloads(repoId: repoId)
+                }
+                throw mlxErr
+            }
             throw MLXError.downloadFailed("\(error)")
+        }
+    }
+
+    /// Cancels the in-flight download for the current repo, if any, and cleans up
+    /// any partially downloaded files. Safe to call when no download is running.
+    func cancelDownload() async {
+        guard let task = downloadTask, let repoId = downloadingRepoId else {
+            return
+        }
+        let myGeneration = downloadGeneration
+        task.cancel()
+        _ = try? await task.value
+        MLXRunner.cleanupPartialDownloads(repoId: repoId)
+        if downloadGeneration == myGeneration {
+            downloadTask = nil
+            downloadingRepoId = nil
         }
     }
 

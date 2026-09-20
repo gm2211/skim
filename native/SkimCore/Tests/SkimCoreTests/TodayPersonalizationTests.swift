@@ -83,3 +83,49 @@ import Testing
     let items = TodayEditionBuilder.buildItems(editionID: "edition", candidates: [candidate], storyLimit: 5, generatedAt: date)
     #expect(items.first?.item.section == EditionSectionRole.updates.rawValue)
 }
+
+@Test func todayEditionWithRealFractionalTimestampsPersistsAndReopens() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = try SkimStore(databaseURL: directory.appendingPathComponent("skim.sqlite"))
+    // Find a current clock value whose epoch conversion loses one floating-point bit.
+    // This is normal for Date(), but integer-epoch fixtures cannot expose it.
+    var reference = Date().timeIntervalSinceReferenceDate
+    var now = Date(timeIntervalSinceReferenceDate: reference)
+    for _ in 0..<16 {
+        now = Date(timeIntervalSinceReferenceDate: reference)
+        if Date(timeIntervalSince1970: now.timeIntervalSince1970) != now { break }
+        reference = reference.nextUp
+    }
+    #expect(Date(timeIntervalSince1970: now.timeIntervalSince1970) != now)
+    for index in 0..<3 {
+        let feed = Feed(id: "feed-\(index)", title: "Feed \(index)", url: URL(string: "https://example.com/feed-\(index)")!, fetchedAt: now)
+        let article = Article(id: "article-\(index)", feedID: feed.id, feedTitle: feed.title,
+            title: index < 2 ? "New telescope reveals distant galaxy in unprecedented detail" : "Community solar brings clean energy to city neighborhoods",
+            url: URL(string: index < 2 ? "https://example.com/telescope" : "https://example.com/solar"),
+            contentText: "Detailed reporting from this source.", publishedAt: now, fetchedAt: now)
+        try await store.upsert(feed: feed, articles: [article])
+    }
+    let start = Calendar.current.startOfDay(for: now)
+    let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
+    let edition = try await store.getOrGenerateTodayEdition(startsAt: start, endsAt: end,
+        storyLimit: 10, generatedAt: now)
+    #expect(edition.items.count == 2)
+    let reopened = try await store.getOrGenerateTodayEdition(startsAt: start, endsAt: end,
+        storyLimit: 10, generatedAt: now.addingTimeInterval(1))
+    #expect(reopened == edition)
+    #expect(edition.edition.generatedAt == normalizedTimestamp(now))
+
+    let consumed = try await store.setTodayEditionItemConsumed(editionID: edition.id,
+        storyID: edition.items[0].snapshot.storyID, isConsumed: true, at: now)
+    var originalPrecisionItem = consumed.items[0].snapshot
+    originalPrecisionItem.consumedAt = now
+    try await store.persistEdition(consumed.edition, items: [originalPrecisionItem])
+
+    let emptyStore = try SkimStore(databaseURL: directory.appendingPathComponent("empty.sqlite"))
+    let empty = try await emptyStore.getOrGenerateTodayEdition(startsAt: start, endsAt: end,
+        storyLimit: 10, generatedAt: now)
+    #expect(empty.edition.completedAt == normalizedTimestamp(now))
+    #expect(empty.items.isEmpty)
+}

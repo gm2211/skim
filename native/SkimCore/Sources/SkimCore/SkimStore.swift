@@ -1675,6 +1675,14 @@ private final class SQLiteDatabase: @unchecked Sendable {
     }
 
     func insertEdition(_ edition: Edition) throws {
+        // Match .date binding's millisecond precision before checking immutable
+        // equality. Comparing full-precision Date() against the rounded stored
+        // value falsely reports a conflict on a brand-new edition.
+        var edition = edition
+        edition.startsAt = normalizedTimestamp(edition.startsAt)
+        edition.endsAt = normalizedTimestamp(edition.endsAt)
+        edition.generatedAt = normalizedTimestamp(edition.generatedAt)
+        edition.completedAt = edition.completedAt.map(normalizedTimestamp)
         try execute(
             """
             INSERT INTO editions (
@@ -1753,6 +1761,8 @@ private final class SQLiteDatabase: @unchecked Sendable {
     }
 
     func insertEditionItem(_ item: EditionItem) throws {
+        var item = item
+        item.consumedAt = item.consumedAt.map(normalizedTimestamp)
         try execute(
             """
             INSERT INTO edition_items (

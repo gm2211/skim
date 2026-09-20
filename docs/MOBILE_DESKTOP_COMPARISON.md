@@ -38,7 +38,7 @@ The Swift package targets iOS 26 and macOS 15 (`native/SkimCore/Package.swift:7-
 | Story clustering and revisions | `db/story_clustering.rs:316`; `db/queries.rs` | `SkimCore/StoryClustering.swift:329`; `SkimCore/SkimStore.swift:163` | No; similar deterministic policy copied across languages. |
 | Today edition | Visible desktop route, `src/App.tsx:461,497`; `commands/editions.rs:6` | New route at `SkimIOS/Views/ArticleListView.swift:100-101,689`, backed by `TodayEditionView.swift` and `SkimCore` snapshots | Both have routes in source; engines remain separate and runtime parity still needs verification. |
 | AI Inbox, summaries, Catch Up, Ask | `commands/ai.rs:334,1067,1520`; `commands/chat.rs:29,218` | `Views/ArticleListView.swift:171-172,255-285`; `Support/NativeAI.swift` | No; provider orchestration, prompts, context and caches duplicated. |
-| Taste and ranking signals | SQLite `article_interactions`; `commands/ai.rs:1421,1711,1723` | UserDefaults taste now supplies feed weights, pins and hidden IDs to Today; core adds stars | No; native integration fixed, but persistence, feedback semantics and weights are not exact desktop parity. |
+| Taste and ranking signals | SQLite `article_interactions`; `commands/ai.rs:1421,1711,1723` | UserDefaults taste now supplies feed weights and pins to Today; core adds stars | No; native integration fixed, but persistence, feedback semantics and weights are not exact desktop parity. |
 | Local AI runtimes | llama.cpp and Mac helpers, including DS4 (`Cargo.toml:47-49`, `docs/MAC_RELEASE.md:32-44`) | Native MLX and Apple framework adapters | Platform-specific adapters are appropriate; shared request and policy layers are still missing. |
 
 In this table, abbreviated `commands/`, `db/` and `Cargo.toml` paths are under `src-tauri/src/` or `src-tauri/`; `SkimCore/` and `SkimIOS/` refer to `native/SkimCore/Sources/SkimCore/` and `native/SkimNative/SkimIOS/` respectively.
@@ -59,9 +59,11 @@ Both evaluators fail closed when persisted rules are invalid, including the form
 
 ### Improved, with remaining differences: Today personalization
 
-The initial audit found native Today receiving only followed/hidden story state, while desktop ranking consumed stars, explicit more/less feedback and priority overrides (`src-tauri/src/db/story_clustering.rs:743-774`). Native now accepts a `TodayRankingPreferences` input with distinct-feed taste weights, pinned article IDs and hidden article IDs. It adds capped stars, a pin bonus and finite, bounded mean feed taste (`native/SkimCore/Sources/SkimCore/TodayEdition.swift:3-29`). The store combines these with followed state and hides stories whose source articles are all hidden (`SkimStore.swift:1045-1059`).
+At the initial audit snapshot, native Today received only followed/hidden story state, while desktop ranking consumed stars, explicit more/less feedback and priority overrides. That historical hidden-state observation predates the integrated upstream removal of hide behavior in PR #113; it does not describe the current native model.
 
-The application passes persisted native taste into this boundary (`native/SkimNative/SkimIOS/App/TasteModel.swift:123-134`; `AppModel.swift:157-160`). Reopening a frozen edition preserves its selection even when preferences change; this behavior is covered by `native/SkimCore/Tests/SkimCoreTests/TodayPersonalizationTests.swift:36`.
+Current native `TodayRankingPreferences` accepts distinct-feed taste weights and pinned article IDs. It adds capped stars, a pin bonus and finite, bounded mean feed taste (`native/SkimCore/Sources/SkimCore/TodayEdition.swift:3-25`). The store combines these with followed state (`SkimStore.swift:1047-1054`). Current native ranking does not hide stories or articles.
+
+The application passes persisted native taste into this boundary (`native/SkimNative/SkimIOS/App/TasteModel.swift:126-133`; `AppModel.swift:157-160`). Reopening a frozen edition preserves its selection even when preferences change; this behavior is covered by `native/SkimCore/Tests/SkimCoreTests/TodayPersonalizationTests.swift:36`.
 
 This fixes missing native preference integration, but does not make rankings identical. Native taste still uses UserDefaults and feed-level weights, while Rust uses SQLite interactions and different feedback/priority semantics. Identical articles do not yet guarantee identical editions across products. A versioned shared preference policy and state migration remain work for the common-engine migration.
 
@@ -73,7 +75,7 @@ The initial audit found Rust testing update markers in the normalized title and 
 
 Initially, native iOS exposed story/edition APIs but no Today screen. It now has a Today entry and navigation destination (`native/SkimNative/SkimIOS/Views/ArticleListView.swift:100-101,689`). `TodayEditionView.swift` renders persisted snapshots, sectioned stories, 5/10/20-story choices, progress, consumed state, loading/error/empty states, and local-day renewal. `AppModel.swift:140-186` handles snapshot loading and consumption through `SkimCore`, including request identity guards.
 
-This is a real application route in source rather than only a package API. Functional and visual parity require the actual native build and rendered interaction checks; source inspection alone does not establish them.
+This is a real application route in source rather than only a package API. A runtime rendering attempt displayed a Today error, which remains under investigation at this report update. Functional and visual acceptance have not passed; neither source inspection nor the existence of the screen establishes successful edition loading.
 
 ### Remaining: Feedly and complete product parity
 
@@ -132,8 +134,10 @@ Release completion requires the existing platform release gates, version/build m
 
 ## Validation and remaining completion boundary
 
-Current verified test results for these changes: **45 Swift package tests** and **77 TypeScript/React tests** passed. The frontend result includes one pre-existing Catchup test expectation updated to match current behavior. Swift coverage includes smart-folder public APIs, canonical/legacy JSON, OPML category persistence, the shared matching corpus, update classification, personalization and frozen edition behavior.
+Final integrated validation: **46 Swift package tests**, **76 TypeScript/React tests**, and **52 Rust library tests** passed. The GGUF-dependent `test_summarize_local_model` requires a separately downloaded model and was excluded after confirming that prerequisite is absent. TypeScript compilation, the Vite production build, and the native iOS Simulator build passed. The frontend suite includes one pre-existing Catchup expectation corrected to match the current error detail plus settings action.
 
-Earlier unsigned Debug builds of the native iOS Simulator and macOS targets passed for the initial extraction-only revision. Those earlier builds do not validate the later Today and compatibility changes. Final Rust tests, native builds, rendered inspection and release/shipping results must be recorded against the final revision separately; no such results are inferred from the package and frontend tests above.
+An isolated simulator harness renders the unchanged Today view against the actual SkimCore store and a synthetic library. Phone and tablet renders first exposed a real `Conflicting edition` failure: SQLite bindings round timestamps to milliseconds, but immutable edition comparisons used the original higher precision. Edition and consumed-item timestamps now normalize to the persistence precision; a real-clock regression covers generation, frozen reopen, empty editions, and consumed-item retries. Corrected populated, completed, and empty states rendered successfully and were visually inspected on a short iPhone and iPad. This proves fixture-based rendering and core integration, not taps/navigation through the shipping app; direct Simulator UI control was unavailable.
+
+Upstream PR #113 (hide removal) and #112 (disclaimer update) are preserved. Release metadata is bumped to **0.1.13 (48)** before archiving. TestFlight upload and Apple processing are verified separately in the PR handoff; no production desktop binary deployment or full feature-parity claim follows from these checks.
 
 The remaining full migration is tracked in Beads epic `skim-62qe`. The shipped desktop/mobile code-sharing objective remains incomplete until both functional products consume one core. Feedly support and data migration also remain differences; the changes documented here do not silently declare those complete.

@@ -500,7 +500,6 @@ import Testing
         "last_seen_revision": 3,
         "last_read_revision": 2,
         "is_followed": true,
-        "is_hidden": false,
         "caught_up_at": 250,
         "updated_at": 260
       },
@@ -806,18 +805,8 @@ import Testing
         articleCount: 1,
         lastActivityAt: now
     )
-    var hidden = rankingCandidate(
-        id: "story-hidden",
-        feedID: "feed-hidden",
-        distinctFeedCount: 10,
-        articleCount: 10,
-        lastActivityAt: now
-    )
-    hidden.preferenceSignal = 100
-    hidden.isHidden = true
-
     let result = clusterer.rank(
-        [repeatedSingleSource, independentlyCovered, trueSingleton, hidden],
+        [repeatedSingleSource, independentlyCovered, trueSingleton],
         asOf: now
     )
 
@@ -826,7 +815,6 @@ import Testing
     #expect(result.uniqueFinds.first?.isUniqueFind == true)
     #expect(result.topStories.first!.score > result.topStories.last!.score)
     #expect(result.topStories.last?.isUniqueFind == false)
-    #expect(!result.topStories.map(\.storyID).contains(hidden.story.id))
 }
 
 @Test func rankingAppliesRepresentativeFeedDiversityWithStableTies() {

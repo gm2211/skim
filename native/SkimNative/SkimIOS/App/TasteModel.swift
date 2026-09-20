@@ -5,8 +5,13 @@ import SkimCore
 
 enum ArticlePriorityOverride: String, Codable {
     case pin
-    case hide
     case none
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        // Legacy "hide" values (feature removed) decode as .none.
+        self = ArticlePriorityOverride(rawValue: raw) ?? .none
+    }
 }
 
 struct ArticleTasteSignal: Codable {
@@ -95,7 +100,6 @@ final class TasteStore {
             // Priority override
             switch signal.priorityOverride {
             case .pin: score += 2.0
-            case .hide: score -= 2.0
             case .none: break
             }
 

@@ -181,7 +181,6 @@ pub struct StoryUserState {
     pub last_seen_revision: Option<i64>,
     pub last_read_revision: Option<i64>,
     pub is_followed: bool,
-    pub is_hidden: bool,
     pub caught_up_at: Option<i64>,
     pub updated_at: i64,
 }

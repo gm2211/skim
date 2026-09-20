@@ -455,7 +455,6 @@ public struct StoryUserState: Codable, Hashable, Sendable {
     public var lastSeenRevision: Int?
     public var lastReadRevision: Int?
     public var isFollowed: Bool
-    public var isHidden: Bool
     public var caughtUpAt: Date?
     public var updatedAt: Date
 
@@ -464,7 +463,6 @@ public struct StoryUserState: Codable, Hashable, Sendable {
         lastSeenRevision: Int? = nil,
         lastReadRevision: Int? = nil,
         isFollowed: Bool = false,
-        isHidden: Bool = false,
         caughtUpAt: Date? = nil,
         updatedAt: Date = Date()
     ) {
@@ -472,7 +470,6 @@ public struct StoryUserState: Codable, Hashable, Sendable {
         self.lastSeenRevision = lastSeenRevision
         self.lastReadRevision = lastReadRevision
         self.isFollowed = isFollowed
-        self.isHidden = isHidden
         self.caughtUpAt = caughtUpAt
         self.updatedAt = updatedAt
     }
@@ -482,7 +479,6 @@ public struct StoryUserState: Codable, Hashable, Sendable {
         case lastSeenRevision = "last_seen_revision"
         case lastReadRevision = "last_read_revision"
         case isFollowed = "is_followed"
-        case isHidden = "is_hidden"
         case caughtUpAt = "caught_up_at"
         case updatedAt = "updated_at"
     }

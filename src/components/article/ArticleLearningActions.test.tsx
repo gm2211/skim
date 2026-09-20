@@ -19,16 +19,14 @@ beforeEach(() => {
 });
 
 describe("ArticleLearningActions", () => {
-  it("exposes accessible pin and hide actions", async () => {
+  it("exposes an accessible pin action", async () => {
     const user = userEvent.setup();
     render(<ArticleLearningActions articleId="article-1" />);
 
     expect(screen.getByRole("group", { name: "Learning actions" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Pin to top" }));
-    await user.click(screen.getByRole("button", { name: "Hide from inbox" }));
 
-    expect(mutate).toHaveBeenNthCalledWith(1, { articleId: "article-1", priority: 5 });
-    expect(mutate).toHaveBeenNthCalledWith(2, { articleId: "article-1", priority: 1 });
+    expect(mutate).toHaveBeenCalledWith({ articleId: "article-1", priority: 5 });
   });
 
   it("offers the native-style toggle labels and clears to neutral priority", async () => {
@@ -38,17 +36,6 @@ describe("ArticleLearningActions", () => {
 
     expect(screen.getByRole("button", { name: "Unpin" })).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByRole("button", { name: "Unpin" }));
-    expect(mutate).toHaveBeenCalledWith({ articleId: "article-1", priority: 3 });
-  });
-
-  it("marks a hidden article as active and supports unhiding", async () => {
-    priorityOverride = 1;
-    const user = userEvent.setup();
-    render(<ArticleLearningActions articleId="article-1" />);
-
-    const button = screen.getByRole("button", { name: "Unhide from inbox" });
-    expect(button).toHaveAttribute("aria-pressed", "true");
-    await user.click(button);
     expect(mutate).toHaveBeenCalledWith({ articleId: "article-1", priority: 3 });
   });
 

@@ -632,7 +632,6 @@ private final class SQLiteDatabase: @unchecked Sendable {
             last_seen_revision INTEGER CHECK (last_seen_revision IS NULL OR last_seen_revision > 0),
             last_read_revision INTEGER CHECK (last_read_revision IS NULL OR last_read_revision > 0),
             is_followed INTEGER NOT NULL DEFAULT 0 CHECK (is_followed IN (0, 1)),
-            is_hidden INTEGER NOT NULL DEFAULT 0 CHECK (is_hidden IN (0, 1)),
             caught_up_at REAL,
             updated_at REAL NOT NULL,
             FOREIGN KEY (story_id, last_seen_revision)
@@ -1042,8 +1041,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
                     representativeFeedID: representativeFeedID,
                     distinctFeedCount: distinctFeedCount,
                     articleCount: sources.count,
-                    preferenceSignal: state?.isFollowed == true ? 3 : 0,
-                    isHidden: state?.isHidden == true
+                    preferenceSignal: state?.isFollowed == true ? 3 : 0
                 ),
                 revision: revision,
                 sourceArticles: sources
@@ -1599,14 +1597,13 @@ private final class SQLiteDatabase: @unchecked Sendable {
             """
             INSERT INTO story_user_state (
                 story_id, last_seen_revision, last_read_revision, is_followed,
-                is_hidden, caught_up_at, updated_at
+                caught_up_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(story_id) DO UPDATE SET
                 last_seen_revision = excluded.last_seen_revision,
                 last_read_revision = excluded.last_read_revision,
                 is_followed = excluded.is_followed,
-                is_hidden = excluded.is_hidden,
                 caught_up_at = excluded.caught_up_at,
                 updated_at = excluded.updated_at
             """,
@@ -1615,7 +1612,6 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 .optionalInt(state.lastSeenRevision),
                 .optionalInt(state.lastReadRevision),
                 .bool(state.isFollowed),
-                .bool(state.isHidden),
                 .date(state.caughtUpAt),
                 .date(state.updatedAt)
             ]
@@ -1626,7 +1622,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
         try query(
             """
             SELECT story_id, last_seen_revision, last_read_revision, is_followed,
-                   is_hidden, caught_up_at, updated_at
+                   caught_up_at, updated_at
             FROM story_user_state
             WHERE story_id = ?
             LIMIT 1
@@ -1640,9 +1636,9 @@ private final class SQLiteDatabase: @unchecked Sendable {
             """
             INSERT INTO story_user_state (
                 story_id, last_seen_revision, last_read_revision, is_followed,
-                is_hidden, caught_up_at, updated_at
+                caught_up_at, updated_at
             )
-            VALUES (?, ?, ?, 0, 0, ?, ?)
+            VALUES (?, ?, ?, 0, ?, ?)
             ON CONFLICT(story_id) DO UPDATE SET
                 last_seen_revision = CASE
                     WHEN story_user_state.last_seen_revision IS NULL
@@ -2191,9 +2187,8 @@ private func makeStoryUserState(from statement: OpaquePointer) -> StoryUserState
         lastSeenRevision: columnOptionalInt(statement, 1),
         lastReadRevision: columnOptionalInt(statement, 2),
         isFollowed: sqlite3_column_int(statement, 3) != 0,
-        isHidden: sqlite3_column_int(statement, 4) != 0,
-        caughtUpAt: columnDate(statement, 5),
-        updatedAt: columnDate(statement, 6)!
+        caughtUpAt: columnDate(statement, 4),
+        updatedAt: columnDate(statement, 5)!
     )
 }
 

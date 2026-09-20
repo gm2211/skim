@@ -740,7 +740,7 @@ pub fn rank_stories(
                 COUNT(DISTINCT CASE WHEN sa.membership_type <> 'duplicate'
                                     THEN member.feed_id END),
                 COUNT(member.id),
-                COALESCE(state.is_followed, 0), COALESCE(state.is_hidden, 0),
+                COALESCE(state.is_followed, 0),
                 COALESCE(SUM(CASE WHEN member.is_starred = 1 THEN 1 ELSE 0 END), 0),
                 COALESCE(SUM(CASE WHEN interaction.feedback = 'more' THEN 1
                                   WHEN interaction.feedback = 'less' THEN -1 ELSE 0 END), 0),
@@ -752,7 +752,6 @@ pub fn rank_stories(
          LEFT JOIN story_user_state state ON state.story_id = s.id
          LEFT JOIN article_interactions interaction ON interaction.article_id = member.id
          WHERE s.last_activity_at >= ?1
-           AND COALESCE(state.is_hidden, 0) = 0
          GROUP BY s.id
          ORDER BY s.id",
     )?;
@@ -763,12 +762,11 @@ pub fn rank_stories(
             let age = now.saturating_sub(last_activity).max(0) as f64;
             let recency = (1.0 - age / ROLLING_WINDOW_SECONDS as f64).max(0.0) * 4.0;
             let followed: i64 = row.get(5)?;
-            let hidden: i64 = row.get(6)?;
-            let starred: i64 = row.get(7)?;
-            let feedback: i64 = row.get(8)?;
-            let priority: i64 = row.get(9)?;
+            let starred: i64 = row.get(6)?;
+            let feedback: i64 = row.get(7)?;
+            let priority: i64 = row.get(8)?;
             let source_score = (distinct_sources as f64 + 1.0).ln() * 3.0;
-            let preference = followed as f64 * 3.0 - hidden as f64 * 100.0
+            let preference = followed as f64 * 3.0
                 + starred.min(2) as f64 * 0.5
                 + feedback as f64
                 + priority as f64 * 0.25;
@@ -854,7 +852,7 @@ fn ranked(candidate: &RankCandidate, is_unique_find: bool) -> RankedStory {
 mod tests {
     use super::*;
     use crate::db::migrations;
-    use crate::db::models::{ArticleFilter, Feed, StoryUserState};
+    use crate::db::models::{ArticleFilter, Feed};
 
     fn setup() -> Connection {
         let conn = Connection::open_in_memory().expect("open");
@@ -1122,23 +1120,6 @@ mod tests {
         if let Some(volume) = ranked.iter().find(|story| story.raw_article_count == 5) {
             assert!(ranked[0].score > volume.score);
         }
-        queries::upsert_story_user_state(
-            &conn,
-            &StoryUserState {
-                story_id: unique.story_id.clone(),
-                last_seen_revision: None,
-                last_read_revision: None,
-                is_followed: false,
-                is_hidden: true,
-                caught_up_at: None,
-                updated_at: now,
-            },
-        )
-        .unwrap();
-        assert!(!rank_stories(&conn, now, 10)
-            .unwrap()
-            .iter()
-            .any(|story| story.story_id == unique.story_id));
     }
 
     #[test]

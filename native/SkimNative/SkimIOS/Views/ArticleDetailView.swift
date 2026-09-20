@@ -216,13 +216,6 @@ struct ArticleDetailView: View {
                 applyPriorityOverride(.pin)
             }
 
-            Button(
-                currentPriorityOverride == .hide ? "Unhide" : "Hide from Inbox",
-                systemImage: currentPriorityOverride == .hide ? "eye" : "eye.slash"
-            ) {
-                applyPriorityOverride(.hide)
-            }
-
             Divider()
 
             Button("Summarize", systemImage: "doc.text") {

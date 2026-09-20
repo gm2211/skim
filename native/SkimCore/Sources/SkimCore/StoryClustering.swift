@@ -178,22 +178,19 @@ public struct StoryRankingCandidate: Hashable, Sendable {
     public var distinctFeedCount: Int
     public var articleCount: Int
     public var preferenceSignal: Double
-    public var isHidden: Bool
 
     public init(
         story: Story,
         representativeFeedID: String,
         distinctFeedCount: Int,
         articleCount: Int,
-        preferenceSignal: Double = 0,
-        isHidden: Bool = false
+        preferenceSignal: Double = 0
     ) {
         self.story = story
         self.representativeFeedID = representativeFeedID
         self.distinctFeedCount = distinctFeedCount
         self.articleCount = articleCount
         self.preferenceSignal = preferenceSignal
-        self.isHidden = isHidden
     }
 }
 
@@ -430,7 +427,6 @@ public struct StoryClusterer: Sendable {
         configuration: StoryRankingConfiguration = StoryRankingConfiguration()
     ) -> StoryRankingResult {
         let scored = candidates
-            .filter { !$0.isHidden }
             .map { candidate -> (StoryRankingCandidate, RankedStory) in
                 let age = max(0, asOf.timeIntervalSince(candidate.story.lastActivityAt))
                 let recency = max(

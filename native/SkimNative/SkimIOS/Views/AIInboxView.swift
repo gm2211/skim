@@ -239,7 +239,6 @@ struct AIInboxSheet: View {
                 if let signal = model.tasteStore.signal(for: item.article.id) {
                     switch signal.priorityOverride {
                     case .pin: articleBoost += 1.5
-                    case .hide: articleBoost -= 10 // effectively remove
                     case .none: break
                     }
                 }
@@ -247,7 +246,6 @@ struct AIInboxSheet: View {
                 copy.blendedScore = aiNorm * 0.7 + feedWeight * 0.3 + articleBoost
                 return copy
             }
-            .filter { $0.blendedScore > -5 } // remove hard-hidden items
             .sorted { $0.blendedScore > $1.blendedScore }
     }
 }

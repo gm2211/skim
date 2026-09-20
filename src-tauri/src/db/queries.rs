@@ -958,13 +958,12 @@ pub fn upsert_story_user_state(
     conn.execute(
         "INSERT INTO story_user_state (
             story_id, last_seen_revision, last_read_revision,
-            is_followed, is_hidden, caught_up_at, updated_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            is_followed, caught_up_at, updated_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT(story_id) DO UPDATE SET
             last_seen_revision = excluded.last_seen_revision,
             last_read_revision = excluded.last_read_revision,
             is_followed = excluded.is_followed,
-            is_hidden = excluded.is_hidden,
             caught_up_at = excluded.caught_up_at,
             updated_at = excluded.updated_at",
         params![
@@ -972,7 +971,6 @@ pub fn upsert_story_user_state(
             state.last_seen_revision,
             state.last_read_revision,
             state.is_followed as i32,
-            state.is_hidden as i32,
             state.caught_up_at,
             state.updated_at,
         ],
@@ -987,7 +985,7 @@ pub fn get_story_user_state(
 ) -> Result<Option<StoryUserState>, rusqlite::Error> {
     conn.query_row(
         "SELECT story_id, last_seen_revision, last_read_revision,
-                is_followed, is_hidden, caught_up_at, updated_at
+                is_followed, caught_up_at, updated_at
          FROM story_user_state WHERE story_id = ?1",
         params![story_id],
         |row| {
@@ -996,9 +994,8 @@ pub fn get_story_user_state(
                 last_seen_revision: row.get(1)?,
                 last_read_revision: row.get(2)?,
                 is_followed: row.get::<_, i32>(3)? != 0,
-                is_hidden: row.get::<_, i32>(4)? != 0,
-                caught_up_at: row.get(5)?,
-                updated_at: row.get(6)?,
+                caught_up_at: row.get(4)?,
+                updated_at: row.get(5)?,
             })
         },
     )
@@ -1873,12 +1870,12 @@ pub fn build_preference_profile(
         .filter_map(|r| r.ok())
         .collect();
 
-    // Deprioritized: articles with "less" feedback or low priority override
+    // Deprioritized: articles with "less" feedback
     let mut stmt = conn.prepare(
         "SELECT a.title
          FROM article_interactions i
          JOIN articles a ON i.article_id = a.id
-         WHERE i.feedback = 'less' OR i.priority_override <= 1
+         WHERE i.feedback = 'less'
          ORDER BY i.updated_at DESC
          LIMIT 20",
     )?;
@@ -2330,7 +2327,6 @@ mod story_persistence_tests {
                 last_seen_revision: Some(2),
                 last_read_revision: Some(1),
                 is_followed: true,
-                is_hidden: false,
                 caught_up_at: Some(500),
                 updated_at: 500,
             },
@@ -2502,7 +2498,6 @@ mod story_persistence_tests {
                 last_seen_revision: Some(99),
                 last_read_revision: None,
                 is_followed: false,
-                is_hidden: false,
                 caught_up_at: None,
                 updated_at: 1,
             }

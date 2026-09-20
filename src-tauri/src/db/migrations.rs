@@ -187,7 +187,6 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
             last_seen_revision       INTEGER CHECK (last_seen_revision IS NULL OR last_seen_revision > 0),
             last_read_revision       INTEGER CHECK (last_read_revision IS NULL OR last_read_revision > 0),
             is_followed              INTEGER NOT NULL DEFAULT 0 CHECK (is_followed IN (0, 1)),
-            is_hidden                INTEGER NOT NULL DEFAULT 0 CHECK (is_hidden IN (0, 1)),
             caught_up_at             INTEGER,
             updated_at               INTEGER NOT NULL,
             FOREIGN KEY (story_id, last_seen_revision)

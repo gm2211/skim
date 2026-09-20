@@ -15,12 +15,14 @@ enum NativeMLX {
 
     static let modelOptions: [MLXModelOption] = [
         MLXModelOption(repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (recommended for iPhone)", sizeGB: 0.7, isPhoneFriendly: true),
-        MLXModelOption(repoId: "mlx-community/Qwen2.5-1.5B-Instruct-4bit", label: "Qwen 2.5 1.5B", sizeGB: 1.0, isPhoneFriendly: true),
         MLXModelOption(repoId: "mlx-community/Llama-3.2-1B-Instruct-4bit", label: "Llama 3.2 1B", sizeGB: 0.8, isPhoneFriendly: true),
+        MLXModelOption(repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B", sizeGB: 1.0, isPhoneFriendly: true),
+        MLXModelOption(repoId: "mlx-community/SmolLM3-3B-4bit", label: "SmolLM3 3B", sizeGB: 1.8, isPhoneFriendly: false),
+        MLXModelOption(repoId: "mlx-community/Llama-3.2-3B-Instruct-4bit", label: "Llama 3.2 3B", sizeGB: 1.8, isPhoneFriendly: false),
+        MLXModelOption(repoId: "mlx-community/Phi-4-mini-instruct-4bit", label: "Phi-4 Mini", sizeGB: 2.2, isPhoneFriendly: false),
+        MLXModelOption(repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: "Qwen3 4B Instruct (2507)", sizeGB: 2.3, isPhoneFriendly: false),
         MLXModelOption(repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B", sizeGB: 2.4, isPhoneFriendly: false),
-        MLXModelOption(repoId: "mlx-community/Qwen2.5-3B-Instruct-4bit", label: "Qwen 2.5 3B", sizeGB: 2.0, isPhoneFriendly: false),
-        MLXModelOption(repoId: "mlx-community/Llama-3.2-3B-Instruct-4bit", label: "Llama 3.2 3B", sizeGB: 2.0, isPhoneFriendly: false),
-        MLXModelOption(repoId: "mlx-community/Phi-3.5-mini-instruct-4bit", label: "Phi-3.5 Mini", sizeGB: 2.3, isPhoneFriendly: false)
+        MLXModelOption(repoId: "mlx-community/gemma-3n-E2B-it-lm-4bit", label: "Gemma 3n E2B", sizeGB: 2.6, isPhoneFriendly: false)
     ]
 
     static var isAvailable: Bool {
@@ -59,6 +61,20 @@ enum NativeMLX {
 
     static func delete(repoId: String) async throws {
         try await MLXRunner.shared.deleteModel(repoId: repoId)
+    }
+
+    static func cancelDownload() async {
+        await MLXRunner.shared.cancelDownload()
+    }
+
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+        if let mlxError = error as? MLXRunner.MLXError, case .cancelled = mlxError {
+            return true
+        }
+        return false
     }
 
     static func complete(

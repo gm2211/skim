@@ -14,6 +14,7 @@ enum MLXModelFamily {
     case llama
     case qwen
     case phi
+    case smol
     case unknown
 
     /// Stop strings that mark end-of-turn for this model family.
@@ -27,13 +28,27 @@ enum MLXModelFamily {
             return ["<|im_end|>", "<|endoftext|>"]
         case .phi:
             return ["<|end|>", "<|endoftext|>"]
+        case .smol:
+            return ["<|im_end|>", "<|endoftext|>"]
         case .unknown:
             return []
         }
     }
 
+    /// Whether this family's chat template supports toggling "thinking"/reasoning
+    /// output via the `enable_thinking` additionalContext flag.
+    var supportsThinkingToggle: Bool {
+        switch self {
+        case .qwen, .smol:
+            return true
+        default:
+            return false
+        }
+    }
+
     static func detect(from repoId: String) -> MLXModelFamily {
         let lower = repoId.lowercased()
+        if lower.contains("smollm") { return .smol }
         if lower.contains("gemma") { return .gemma }
         if lower.contains("llama") { return .llama }
         if lower.contains("qwen") { return .qwen }
@@ -68,13 +83,25 @@ struct MLXSamplingPreset {
         "mlx-community/Llama-3.2-3B-Instruct-4bit": MLXSamplingPreset(
             temperature: 0.3, topP: 0.9, repetitionPenalty: 1.1, repetitionContextSize: 64
         ),
-        // Qwen 2.5 1.5B
-        "mlx-community/Qwen2.5-1.5B-Instruct-4bit": MLXSamplingPreset(
+        // Qwen3 1.7B
+        "mlx-community/Qwen3-1.7B-4bit": MLXSamplingPreset(
             temperature: 0.3, topP: 0.9, repetitionPenalty: 1.1, repetitionContextSize: 64
         ),
-        // Qwen 2.5 3B
-        "mlx-community/Qwen2.5-3B-Instruct-4bit": MLXSamplingPreset(
-            temperature: 0.3, topP: 0.9, repetitionPenalty: 1.1, repetitionContextSize: 64
+        // Qwen3 4B Instruct (2507)
+        "mlx-community/Qwen3-4B-Instruct-2507-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
+        // SmolLM3 3B
+        "mlx-community/SmolLM3-3B-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.95, repetitionPenalty: 1.1, repetitionContextSize: 64
+        ),
+        // Phi-4 Mini
+        "mlx-community/Phi-4-mini-instruct-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.95, repetitionPenalty: 1.1, repetitionContextSize: 64
+        ),
+        // Gemma 3n E2B
+        "mlx-community/gemma-3n-E2B-it-lm-4bit": MLXSamplingPreset(
+            temperature: 0.35, topP: 0.95, repetitionPenalty: 1.1, repetitionContextSize: 64
         ),
     ]
 
@@ -99,6 +126,9 @@ actor MLXRunner {
     private var loadingTask: Task<ModelContainer, Error>?
     private var loadingRepoId: String?
     private var progressSink: (@Sendable (Double) -> Void)?
+    private var downloadTask: Task<Void, Error>?
+    private var downloadingRepoId: String?
+    private var downloadGeneration: Int = 0
 
     enum MLXError: LocalizedError {
         case unavailable(String)
@@ -106,6 +136,7 @@ actor MLXRunner {
         case integrityFailed(String)
         case loadFailed(String)
         case generationFailed(String)
+        case cancelled
 
         var errorDescription: String? {
             switch self {
@@ -114,6 +145,7 @@ actor MLXRunner {
             case .integrityFailed(let message): return "Model files corrupted — tap to re-download. (\(message))"
             case .loadFailed(let message): return "MLX model load failed: \(message)"
             case .generationFailed(let message): return "MLX generation failed: \(message)"
+            case .cancelled: return "Download cancelled."
             }
         }
     }
@@ -337,14 +369,23 @@ actor MLXRunner {
         MLXRunner.isRepoDownloaded(repoId)
     }
 
+    var isDownloading: Bool { downloadTask != nil }
+
     func downloadModel(repoId: String) async throws {
         guard MLXRunner.isAvailableOnThisRuntime else {
             throw MLXError.unavailable("MLX downloads require a real iPhone. The Simulator cannot run the MLX backend.")
         }
 
+        // If a download for this exact repo is already in flight, just await it
+        // rather than starting a second, redundant download.
+        if let existing = downloadTask, downloadingRepoId == repoId {
+            try await existing.value
+            return
+        }
+
         let sink = progressSink
-        let config = ModelConfiguration(id: repoId)
-        do {
+        let task = Task { () throws -> Void in
+            let config = ModelConfiguration(id: repoId)
             // Use a background URLSession so the OS can continue (or restart) the download
             // even when the app is suspended or killed. Incomplete shard files are preserved
             // across launches so the Hub library can resume from where it left off.
@@ -357,11 +398,35 @@ actor MLXRunner {
                 }
             )
 
+            // MLXLMCommon.downloadModel only fetches *.safetensors and *.json. Newer
+            // repos (Qwen3 2507, SmolLM3, Gemma 3n) ship their chat template as a
+            // standalone chat_template.jinja, which the tokenizer loader reads from the
+            // model folder. Fetch it too so the model still works offline.
+            if !Task.isCancelled {
+                _ = try await hub.snapshot(from: Hub.Repo(id: repoId), matching: ["*.jinja"])
+            }
+
+            // swift-transformers' HubApi.snapshot() returns normally (rather than
+            // throwing) when the task is cancelled mid-download, so we must check
+            // explicitly here before treating the download as having succeeded.
+            if Task.isCancelled {
+                throw MLXError.cancelled
+            }
+            try Task.checkCancellation()
+
             // Integrity check immediately after download completes
             if let integrityIssue = MLXRunner.integrityError(forRepo: repoId) {
                 MLXRunner.cleanupPartialDownloads(repoId: repoId)
                 throw MLXError.integrityFailed(integrityIssue)
             }
+        }
+        downloadGeneration += 1
+        let myGeneration = downloadGeneration
+        downloadTask = task
+        downloadingRepoId = repoId
+
+        do {
+            try await task.value
 
             loadedContainer = nil
             loadedRepoId = nil
@@ -369,10 +434,44 @@ actor MLXRunner {
             loadingTask = nil
             loadingRepoId = nil
             sink?(1.0)
-        } catch let mlxErr as MLXError {
-            throw mlxErr
+
+            if downloadGeneration == myGeneration {
+                downloadTask = nil
+                downloadingRepoId = nil
+            }
         } catch {
+            if downloadGeneration == myGeneration {
+                downloadTask = nil
+                downloadingRepoId = nil
+            }
+
+            if error is CancellationError {
+                MLXRunner.cleanupPartialDownloads(repoId: repoId)
+                throw MLXError.cancelled
+            }
+            if let mlxErr = error as? MLXError {
+                if case .cancelled = mlxErr {
+                    MLXRunner.cleanupPartialDownloads(repoId: repoId)
+                }
+                throw mlxErr
+            }
             throw MLXError.downloadFailed("\(error)")
+        }
+    }
+
+    /// Cancels the in-flight download for the current repo, if any, and cleans up
+    /// any partially downloaded files. Safe to call when no download is running.
+    func cancelDownload() async {
+        guard let task = downloadTask, let repoId = downloadingRepoId else {
+            return
+        }
+        let myGeneration = downloadGeneration
+        task.cancel()
+        _ = try? await task.value
+        MLXRunner.cleanupPartialDownloads(repoId: repoId)
+        if downloadGeneration == myGeneration {
+            downloadTask = nil
+            downloadingRepoId = nil
         }
     }
 
@@ -488,7 +587,10 @@ actor MLXRunner {
 
         do {
             let raw = try await container.perform { (context: ModelContext) -> String in
-                let userInput = UserInput(messages: messages)
+                let userInput = UserInput(
+                    messages: messages,
+                    additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
+                )
                 let lmInput = try await context.processor.prepare(input: userInput)
 
                 // Wrap in MLX.withError so C-layer errors (e.g. from MLXArray.eval during
@@ -548,7 +650,10 @@ actor MLXRunner {
 
         do {
             let raw = try await container.perform { (context: ModelContext) -> String in
-                let userInput = UserInput(messages: messages)
+                let userInput = UserInput(
+                    messages: messages,
+                    additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
+                )
                 let lmInput = try await context.processor.prepare(input: userInput)
 
                 // Async withError wraps the streaming loop so any MLX C-layer error
@@ -647,6 +752,23 @@ actor MLXRunner {
     // Strip any leaked stop tokens from the output.
     private func sanitizeOutput(_ text: String, family: MLXModelFamily) -> String {
         var result = text
+
+        // Strip Qwen3 / SmolLM3 <think>...</think> reasoning blocks. We already ask the
+        // chat template to disable thinking via additionalContext, but some checkpoints
+        // still emit a block; the tag-stripping regex below only removes the tags
+        // themselves (bounded to 30 chars), not the (potentially long, multi-line)
+        // reasoning content in between, so this must run first.
+        result = result.replacingOccurrences(
+            of: "(?s)<think>.*?</think>",
+            with: "",
+            options: .regularExpression
+        )
+        // A generation cut short by maxTokens can leave an unterminated <think> block
+        // with no closing tag; drop everything from that point on.
+        if let range = result.range(of: "<think>") {
+            result.removeSubrange(range.lowerBound..<result.endIndex)
+        }
+
         // Strip all known stop strings for this family
         for token in family.extraEOSTokens {
             result = result.replacingOccurrences(of: token, with: "")

@@ -54,12 +54,14 @@ type MlxModel = { repoId: string; label: string; sizeGb: number; phoneFriendly?:
 // recommended (small) options at the top of the dropdown.
 const MLX_MODELS: MlxModel[] = [
   { repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (recommended for iPhone)", sizeGb: 0.7, phoneFriendly: true },
-  { repoId: "mlx-community/Qwen2.5-1.5B-Instruct-4bit", label: "Qwen 2.5 1.5B", sizeGb: 1.0, phoneFriendly: true },
   { repoId: "mlx-community/Llama-3.2-1B-Instruct-4bit", label: "Llama 3.2 1B", sizeGb: 0.8, phoneFriendly: true },
+  { repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B", sizeGb: 1.0, phoneFriendly: true },
+  { repoId: "mlx-community/SmolLM3-3B-4bit", label: "SmolLM3 3B", sizeGb: 1.8 },
+  { repoId: "mlx-community/Llama-3.2-3B-Instruct-4bit", label: "Llama 3.2 3B", sizeGb: 1.8 },
+  { repoId: "mlx-community/Phi-4-mini-instruct-4bit", label: "Phi-4 Mini", sizeGb: 2.2 },
+  { repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: "Qwen3 4B Instruct (2507)", sizeGb: 2.3 },
   { repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B", sizeGb: 2.4 },
-  { repoId: "mlx-community/Qwen2.5-3B-Instruct-4bit", label: "Qwen 2.5 3B (desktop default)", sizeGb: 2.0 },
-  { repoId: "mlx-community/Llama-3.2-3B-Instruct-4bit", label: "Llama 3.2 3B", sizeGb: 2.0 },
-  { repoId: "mlx-community/Phi-3.5-mini-instruct-4bit", label: "Phi-3.5 Mini", sizeGb: 2.3 },
+  { repoId: "mlx-community/gemma-3n-E2B-it-lm-4bit", label: "Gemma 3n E2B", sizeGb: 2.6 },
 ];
 
 const needsApiKey = (provider: string) =>
@@ -956,7 +958,7 @@ function OnDeviceTierSection({
   const availableModels = MLX_MODELS.filter((m) => !isPhone || m.phoneFriendly);
   const defaultModel = isPhone
     ? MLX_MODELS.find((m) => m.phoneFriendly) ?? MLX_MODELS[0]
-    : MLX_MODELS.find((m) => m.repoId === "mlx-community/Qwen2.5-3B-Instruct-4bit") ?? MLX_MODELS[0];
+    : MLX_MODELS.find((m) => m.repoId === "mlx-community/Qwen3-4B-Instruct-2507-4bit") ?? MLX_MODELS[0];
   const savedRepoId = ai.model ?? ai.local_model_path ?? defaultModel.repoId;
   const selectedModel =
     availableModels.find((m) => m.repoId === savedRepoId) ?? defaultModel;

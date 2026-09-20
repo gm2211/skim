@@ -751,6 +751,7 @@ private struct MLXSettingsPanel: View {
     @State private var isDownloaded = false
     @State private var downloadProgress: Double?
     @State private var isWorking = false
+    @State private var isCancelling = false
     @State private var errorMessage: String?
     @State private var showSamplingParams = false
 
@@ -762,6 +763,25 @@ private struct MLXSettingsPanel: View {
 
     private var selectedOption: MLXModelOption {
         NativeMLX.option(for: selectedRepoId)
+    }
+
+    // The catalog options, plus a synthesized "(legacy)" entry when the currently
+    // selected repo id has been removed from the catalog — otherwise the Picker
+    // would show a blank selection for users who picked a since-removed model.
+    private var pickerOptions: [MLXModelOption] {
+        var options = NativeMLX.modelOptions
+        if !options.contains(where: { $0.repoId == selectedRepoId }) {
+            let legacy = NativeMLX.option(for: selectedRepoId)
+            options.append(
+                MLXModelOption(
+                    repoId: legacy.repoId,
+                    label: "\(legacy.repoId) (legacy)",
+                    sizeGB: legacy.sizeGB,
+                    isPhoneFriendly: legacy.isPhoneFriendly
+                )
+            )
+        }
+        return options
     }
 
     private var selectedRepoBinding: Binding<String> {
@@ -784,14 +804,14 @@ private struct MLXSettingsPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Picker("Model", selection: selectedRepoBinding) {
-                ForEach(NativeMLX.modelOptions) { option in
+                ForEach(pickerOptions) { option in
                     Text(option.label).tag(option.repoId)
                 }
             }
             .pickerStyle(.menu)
             .tint(SkimStyle.accent)
 
-            Text("Storage estimate: ~\(storageText(selectedOption.sizeGB)) on disk. Interrupted downloads are cleaned before the next attempt.")
+            Text("Storage estimate: ~\(storageText(selectedOption.sizeGB)) on disk. Cancelled or interrupted downloads are cleaned up automatically.")
                 .font(.system(size: 14, weight: .regular))
                 .foregroundStyle(SkimStyle.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -812,9 +832,21 @@ private struct MLXSettingsPanel: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ProgressView(value: downloadProgress)
                         .tint(SkimStyle.accent)
-                    Text("Downloading \(Int(downloadProgress * 100))%")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(SkimStyle.secondary)
+                    HStack {
+                        Text("Downloading \(Int(downloadProgress * 100))%")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                        Spacer()
+                        Button {
+                            Task { await cancelDownload() }
+                        } label: {
+                            Text(isCancelling ? "Cancelling…" : "Cancel")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.red)
+                        .disabled(isCancelling)
+                    }
                 }
             }
 
@@ -946,11 +978,24 @@ private struct MLXSettingsPanel: View {
             isDownloaded = true
             downloadProgress = nil
         } catch {
-            errorMessage = error.localizedDescription
+            if NativeMLX.isCancellation(error) {
+                // User-initiated cancellation isn't an error condition — no red error card.
+                errorMessage = nil
+            } else {
+                errorMessage = error.localizedDescription
+            }
             downloadProgress = nil
             isDownloaded = NativeMLX.isDownloadedSync(repoId)
         }
         isWorking = false
+        isCancelling = false
+    }
+
+    @MainActor
+    private func cancelDownload() async {
+        isCancelling = true
+        await NativeMLX.cancelDownload()
+        isCancelling = false
     }
 
     @MainActor

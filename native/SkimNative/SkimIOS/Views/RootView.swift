@@ -15,8 +15,8 @@ struct RootView: View {
             await model.load()
         }
         .fullScreenCover(isPresented: $showAIDisclaimer) {
-            AIBootDisclaimerView {
-                AIBootDisclaimerView.markAccepted()
+            AIBootDisclaimerView { dontShowAgain in
+                AIBootDisclaimerView.markAccepted(dontShowAgain: dontShowAgain)
                 showAIDisclaimer = false
             }
         }

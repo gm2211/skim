@@ -19,7 +19,9 @@ struct ArticleListView: View {
     @State private var activeAIResult: AIResultRequest?
     @State private var activeCatchUp: CatchUpRequest?
     @State private var activeAIChat: AIChatRequest?
-    @State private var visibleArticlesChatMessages: [AIChatMessage] = []
+    @State private var chatMessagesBySession: [String: [AIChatMessage]] = [:]
+    @State private var activeChatInitialMessage: String? = nil
+    @State private var activeSummaryConfiguration: Article?
     @State private var showAIInbox = false
     @State private var aiInboxSourceArticles: [Article] = []
     @State private var showSearch = false
@@ -161,12 +163,25 @@ struct ArticleListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
+        .sheet(item: $activeSummaryConfiguration) { article in
+            SummaryConfigurationSheet(article: article, defaults: model.settings.ai) { summarySettings in
+                runSummary(article: article, summarySettings: summarySettings)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(SkimStyle.chrome)
+        }
         .sheet(item: $activeAIChat) { request in
-            AIChatSheet(request: request, messages: $visibleArticlesChatMessages)
+            AIChatSheet(
+                request: request,
+                messages: chatMessagesBinding(for: request.sessionKey),
+                initialAssistantMessage: activeChatInitialMessage
+            )
                 .environmentObject(model)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
+                .onDisappear { activeChatInitialMessage = nil }
         }
         .sheet(isPresented: $showAIInbox) {
             AIInboxSheet(sourceArticles: aiInboxSourceArticles)
@@ -221,6 +236,11 @@ struct ArticleListView: View {
                 dismissTextEntry()
             }
         }
+        .onChange(of: activeSummaryConfiguration?.id) { _, articleID in
+            if articleID != nil {
+                dismissTextEntry()
+            }
+        }
         .alert("Skim", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -245,6 +265,74 @@ struct ArticleListView: View {
         } else {
             pendingAIAction = action
             showAIDisclaimerGate = true
+        }
+    }
+
+    private func chatMessagesBinding(for sessionKey: String) -> Binding<[AIChatMessage]> {
+        Binding(
+            get: { chatMessagesBySession[sessionKey] ?? [] },
+            set: { chatMessagesBySession[sessionKey] = $0 }
+        )
+    }
+
+    /// Entry point for the article-row context menu "Summarize" action.
+    /// Mirrors the reader-page flow in `ArticleDetailView`: disclaimer gate,
+    /// then the summary configuration sheet, then the streaming result sheet.
+    private func presentSummary(for article: Article) {
+        gatedAI {
+            dismissTextEntry()
+            activeSummaryConfiguration = article
+        }
+    }
+
+    private func runSummary(article: Article, summarySettings: AISettings) {
+        var settings = model.settings
+        settings.ai = summarySettings
+        activeSummaryConfiguration = nil
+        // The list has no web view, so always summarize from the stored article
+        // body (falling back to the external URL for thin aggregator posts).
+        let snapshot = WebViewSnapshot()
+
+        Task {
+            await model.saveSettings(settings)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            activeAIResult = AIResultRequest(
+                title: "AI Summary",
+                subtitle: WebAIContext.subtitle(base: article, preferWeb: false, snapshot: snapshot),
+                statusLabel: NativeAI.loadingStatusLabel(for: settings.ai),
+                action: {
+                    let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot)
+                    let text = try await NativeAI.summarize(article: contextArticle, settings: settings)
+                    return AIResultAnswer(text: text, articles: [contextArticle])
+                },
+                streamAction: { onToken in
+                    let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot)
+                    let text = try await NativeAI.summarizeStreaming(
+                        article: contextArticle, settings: settings, onToken: onToken)
+                    return AIResultAnswer(text: text, articles: [contextArticle])
+                },
+                clearAction: {
+                    NativeAI.clearSummaryCache(
+                        articleID: WebAIContext.articleID(base: article, preferWeb: false, snapshot: snapshot),
+                        ai: settings.ai
+                    )
+                },
+                continueInChat: { summaryText in
+                    activeAIResult = nil
+                    activeChatInitialMessage = summaryText
+                    activeAIChat = AIChatRequest(
+                        sessionKey: WebAIContext.articleID(base: article, preferWeb: false, snapshot: snapshot),
+                        title: "Chat with Article",
+                        placeholder: WebAIContext.subtitle(base: article, preferWeb: false, snapshot: snapshot)
+                    ) { conversation in
+                        let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot)
+                        let (text, citations) = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
+                        return AIChatAnswer(text: text, articles: [contextArticle], webCitations: citations)
+                    }
+                }
+            )
         }
     }
 
@@ -500,7 +588,8 @@ struct ArticleListView: View {
                                 ArticleRow(
                                     article: article,
                                     feed: model.feeds.first(where: { $0.id == article.feedID }),
-                                    visibleArticles: model.articles
+                                    visibleArticles: model.articles,
+                                    onSummarize: { presentSummary(for: $0) }
                                 )
                             }
                             .buttonStyle(.plain)
@@ -2349,6 +2438,7 @@ private struct ArticleRow: View {
     var article: Article
     var feed: Feed?
     var visibleArticles: [Article]
+    var onSummarize: (Article) -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -2469,6 +2559,12 @@ private struct ArticleRow: View {
                 Task { await model.setRead(articlesBelow, isRead: false) }
             }
             .disabled(articlesBelow.isEmpty)
+
+            Divider()
+
+            Button("Summarize", systemImage: "doc.text") {
+                onSummarize(article)
+            }
 
             if let url = article.url {
                 Divider()

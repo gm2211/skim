@@ -27,8 +27,7 @@ struct CatchUpSheet: View {
     @State private var fallbackText: String?
     @State private var articles: [Article] = []
     @State private var errorMessage: String?
-    @State private var needsReauth = false
-    @State private var showReauth = false
+    @State private var errorRemedy: AIErrorRemedy = .none
 
     var body: some View {
         NavigationStack {
@@ -51,28 +50,7 @@ struct CatchUpSheet: View {
                         .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                     } else if let errorMessage {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(errorMessage)
-                                .font(.system(size: 16, weight: .regular))
-                                .foregroundStyle(Color.red.opacity(0.92))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                            if needsReauth {
-                                Button {
-                                    showReauth = true
-                                } label: {
-                                    Label("Sign in again", systemImage: "person.crop.circle")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .frame(maxWidth: .infinity)
-                                        .frame(height: 44)
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(SkimStyle.accent)
-                            }
-                        }
-                        .padding(16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        AIErrorBox(message: errorMessage, remedy: errorRemedy, onResolved: { Task { await run() } })
 
                     } else if !items.isEmpty {
                         CatchUpItemList(items: items, articles: articles)
@@ -106,19 +84,13 @@ struct CatchUpSheet: View {
                 }
             }
             .task { await run() }
-            .sheet(isPresented: $showReauth, onDismiss: {
-                // Retry automatically once the user has signed in again.
-                Task { await run() }
-            }) {
-                ClaudeReauthSheet()
-            }
         }
     }
 
     private func run() async {
         isLoading = true
         errorMessage = nil
-        needsReauth = false
+        errorRemedy = .none
         items = []
         fallbackText = nil
         articles = []
@@ -129,11 +101,7 @@ struct CatchUpSheet: View {
             articles = result.articles
         } catch {
             errorMessage = error.localizedDescription
-            if case NativeAIError.requiresReauthentication = error {
-                needsReauth = true
-            } else {
-                needsReauth = false
-            }
+            errorRemedy = AIErrorRemedy.classify(error)
         }
         isLoading = false
     }

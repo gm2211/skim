@@ -2189,6 +2189,28 @@ enum NativeAIError: LocalizedError {
     }
 }
 
+/// What the UI can offer the user to fix a failed AI request.
+enum AIErrorRemedy: Equatable {
+    case none
+    /// Claude subscription token expired; present `ClaudeReauthSheet`.
+    case reauthenticate
+    /// Provider is missing, disabled, or lacks credentials; open the AI settings.
+    case openAISettings
+
+    static func classify(_ error: Error) -> AIErrorRemedy {
+        guard let aiError = error as? NativeAIError else { return .none }
+        switch aiError {
+        case .requiresReauthentication:
+            return .reauthenticate
+        case .unavailable(let message):
+            let needle = message.lowercased()
+            let mentionsSettings = needle.contains("in settings")
+            let mentionsCredentials = needle.contains("sign in") || needle.contains("api key") || needle.contains("api token")
+            return (mentionsSettings || mentionsCredentials) ? .openAISettings : .none
+        }
+    }
+}
+
 private struct OpenAIResponse: Decodable {
     struct Choice: Decodable {
         struct Message: Decodable {
@@ -2327,6 +2349,7 @@ struct AIResultSheet: View {
     @State private var result = ""
     @State private var referencedArticles: [Article] = []
     @State private var errorMessage: String?
+    @State private var errorRemedy: AIErrorRemedy = .none
 
     var body: some View {
         NavigationStack {
@@ -2348,12 +2371,7 @@ struct AIResultSheet: View {
                         .padding(16)
                         .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     } else if let errorMessage {
-                        Text(errorMessage)
-                            .font(.system(size: 16, weight: .regular))
-                            .foregroundStyle(Color.red.opacity(0.92))
-                            .padding(16)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        AIErrorBox(message: errorMessage, remedy: errorRemedy, onResolved: { Task { await run() } })
                     } else {
                         PrettyAIText(result)
 
@@ -2424,6 +2442,7 @@ struct AIResultSheet: View {
     private func run() async {
         isLoading = true
         errorMessage = nil
+        errorRemedy = .none
         result = ""
         referencedArticles = []
         do {
@@ -2442,6 +2461,7 @@ struct AIResultSheet: View {
             referencedArticles = ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles)
         } catch {
             errorMessage = error.localizedDescription
+            errorRemedy = AIErrorRemedy.classify(error)
         }
         isLoading = false
     }
@@ -2477,6 +2497,7 @@ struct AIChatSheet: View {
     @State private var input = ""
     @State private var isSending = false
     @State private var showReauth = false
+    @State private var showAISettings = false
     @FocusState private var focused: Bool
     private var initialAssistantMessage: String?
     private let bottomAnchorID = "chat-bottom-anchor"
@@ -2499,7 +2520,7 @@ struct AIChatSheet: View {
                                     .padding(.top, 80)
                             } else {
                                 ForEach(messages) { message in
-                                    AIChatBubble(message: message, onReauth: { showReauth = true })
+                                    AIChatBubble(message: message, onReauth: { showReauth = true }, onOpenSettings: { showAISettings = true })
                                         .id(message.id)
                                 }
                                 AIDisclaimerLabel()
@@ -2572,6 +2593,9 @@ struct AIChatSheet: View {
             .sheet(isPresented: $showReauth) {
                 ClaudeReauthSheet()
             }
+            .sheet(isPresented: $showAISettings) {
+                SettingsSheet(isPresented: $showAISettings, aiOnly: true)
+            }
         }
     }
 
@@ -2617,7 +2641,7 @@ struct AIChatSheet: View {
                 if case NativeAIError.requiresReauthentication = error { return true }
                 return false
             }()
-            messages.append(AIChatMessage(role: .assistant, text: error.localizedDescription, isError: true, needsReauth: reauth))
+            messages.append(AIChatMessage(role: .assistant, text: error.localizedDescription, isError: true, needsReauth: reauth, remedy: AIErrorRemedy.classify(error)))
         }
         isSending = false
     }
@@ -2636,11 +2660,13 @@ struct AIChatMessage: Identifiable, Sendable {
     var webCitations: [WebCitation] = []
     var isError = false
     var needsReauth = false
+    var remedy: AIErrorRemedy = .none
 }
 
 private struct AIChatBubble: View {
     var message: AIChatMessage
     var onReauth: (() -> Void)? = nil
+    var onOpenSettings: (() -> Void)? = nil
 
     @State private var activeCitation: WebCitation?
 
@@ -2662,6 +2688,19 @@ private struct AIChatBubble: View {
                         onReauth()
                     } label: {
                         Label("Sign in again", systemImage: "person.crop.circle")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(SkimStyle.accent)
+                }
+
+                if message.remedy == .openAISettings, let onOpenSettings {
+                    Button {
+                        onOpenSettings()
+                    } label: {
+                        Label("Open AI Settings", systemImage: "gearshape")
                             .font(.system(size: 15, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)

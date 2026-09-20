@@ -398,6 +398,14 @@ actor MLXRunner {
                 }
             )
 
+            // MLXLMCommon.downloadModel only fetches *.safetensors and *.json. Newer
+            // repos (Qwen3 2507, SmolLM3, Gemma 3n) ship their chat template as a
+            // standalone chat_template.jinja, which the tokenizer loader reads from the
+            // model folder. Fetch it too so the model still works offline.
+            if !Task.isCancelled {
+                _ = try await hub.snapshot(from: Hub.Repo(id: repoId), matching: ["*.jinja"])
+            }
+
             // swift-transformers' HubApi.snapshot() returns normally (rather than
             // throwing) when the task is cancelled mid-download, so we must check
             // explicitly here before treating the download as having succeeded.

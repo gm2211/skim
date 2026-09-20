@@ -3,11 +3,14 @@ import SwiftUI
 /// Full-screen first-launch AI disclaimer modal.
 /// Text lifted verbatim from src/components/common/AIBootDisclaimer.tsx.
 ///
-/// Acceptance is persisted in UserDefaults under `aiDisclaimerAccepted_v1`.
-/// Re-show if the version key increments (future-proof: bump the key suffix).
+/// Acceptance is in-memory only, for the current launch. The user may opt in to
+/// "Don't show again until the next update", which persists suppression keyed to
+/// the current app version+build (see `AIBootDisclaimerView.suppressedBuildKey`).
 struct AIBootDisclaimerView: View {
-    /// Called once the user taps "Got it".
-    var onAccept: () -> Void
+    /// Called once the user taps "Got it", with whether "Don't show again" was toggled on.
+    var onAccept: (_ dontShowAgain: Bool) -> Void
+
+    @State private var dontShowAgain = false
 
     @Environment(\.openURL) private var openURL
 
@@ -92,17 +95,27 @@ struct AIBootDisclaimerView: View {
                         .overlay(SkimStyle.separator)
                         .padding(.bottom, 14)
 
-                    HStack {
-                        Spacer()
-                        Button(action: onAccept) {
-                            Text("Got it")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 22)
-                                .padding(.vertical, 12)
-                                .background(SkimStyle.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    VStack(alignment: .leading, spacing: 14) {
+                        Toggle(isOn: $dontShowAgain) {
+                            Text("Don't show again until the next update")
+                                .font(.system(size: 13))
+                                .foregroundStyle(SkimStyle.secondary)
                         }
-                        .buttonStyle(.plain)
+                        .toggleStyle(.switch)
+                        .tint(SkimStyle.accent)
+
+                        HStack {
+                            Spacer()
+                            Button(action: { onAccept(dontShowAgain) }) {
+                                Text("Got it")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 22)
+                                    .padding(.vertical, 12)
+                                    .background(SkimStyle.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                   }
                   .padding(22)
@@ -130,16 +143,37 @@ struct AIBootDisclaimerView: View {
 // MARK: - UserDefaults helper
 
 extension AIBootDisclaimerView {
-    /// UserDefaults key for the current version of the disclaimer.
-    static let acceptedKey = "aiDisclaimerAccepted_v1"
+    /// Legacy boolean key from before version-keyed suppression. Read once for migration, then cleared.
+    private static let legacyAcceptedKey = "aiDisclaimerAccepted_v1"
+    /// Stores the "<version>-<build>" string for which the user chose "Don't show again".
+    static let suppressedBuildKey = "aiDisclaimerSuppressedBuild_v2"
 
-    /// Returns true if the user has already accepted the current version of the disclaimer.
-    static var isAccepted: Bool {
-        UserDefaults.standard.bool(forKey: acceptedKey)
+    /// True once the user tapped Got it during this launch.
+    private static var acceptedThisLaunch = false
+
+    static var currentBuildIdentifier: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let version = info["CFBundleShortVersionString"] as? String ?? "0"
+        let build = info["CFBundleVersion"] as? String ?? "0"
+        return "\(version)-\(build)"
     }
 
-    /// Persists acceptance so the modal is not shown again (for this version).
-    static func markAccepted() {
-        UserDefaults.standard.set(true, forKey: acceptedKey)
+    /// True when the disclaimer should NOT be shown right now.
+    static var isAccepted: Bool {
+        if acceptedThisLaunch { return true }
+        let stored = UserDefaults.standard.string(forKey: suppressedBuildKey)
+        return stored == currentBuildIdentifier
+    }
+
+    /// Call when the user taps Got it. Persists suppression for the current build only if requested.
+    static func markAccepted(dontShowAgain: Bool) {
+        acceptedThisLaunch = true
+        let defaults = UserDefaults.standard
+        if dontShowAgain {
+            defaults.set(currentBuildIdentifier, forKey: suppressedBuildKey)
+        } else {
+            defaults.removeObject(forKey: suppressedBuildKey)
+        }
+        defaults.removeObject(forKey: legacyAcceptedKey)
     }
 }

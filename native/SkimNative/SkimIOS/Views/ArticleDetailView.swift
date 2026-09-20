@@ -97,8 +97,8 @@ struct ArticleDetailView: View {
                 .onDisappear { activeChatInitialMessage = nil }
         }
         .fullScreenCover(isPresented: $showAIDisclaimerGate) {
-            AIBootDisclaimerView {
-                AIBootDisclaimerView.markAccepted()
+            AIBootDisclaimerView { dontShowAgain in
+                AIBootDisclaimerView.markAccepted(dontShowAgain: dontShowAgain)
                 showAIDisclaimerGate = false
                 pendingAIAction?()
                 pendingAIAction = nil

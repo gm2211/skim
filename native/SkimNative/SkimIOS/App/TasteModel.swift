@@ -123,6 +123,16 @@ final class TasteStore {
         )
     }
 
+    /// Supply existing local learning to the shared edition builder once, at generation.
+    func todayRankingPreferences() -> TodayRankingPreferences {
+        TodayRankingPreferences(
+            feedWeights: getPreferenceProfile().feedWeights,
+            pinnedArticleIDs: Set(signals.values.filter {
+                $0.priorityOverride == .pin
+            }.map(\.articleID))
+        )
+    }
+
     // MARK: Private
 
     private func load() {

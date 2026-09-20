@@ -615,7 +615,8 @@ public struct StoryClusterer: Sendable {
         let previousTokens = Set(candidate.feature.tokens)
         let novelCount = currentTokens.subtracting(previousTokens).count
         let novelty = Double(novelCount) / Double(max(1, currentTokens.count))
-        return !currentTokens.isDisjoint(with: markers) || novelty >= 0.30
+        let titleTokens = Set(feature.normalizedTitle.split(separator: " ").map(String.init))
+        return !titleTokens.isDisjoint(with: markers) || novelty >= 0.30
     }
 
     private static func entities(in title: String) -> [String] {

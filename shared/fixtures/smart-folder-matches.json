@@ -1,0 +1,83 @@
+[
+  {
+    "name": "canonical sensitive",
+    "rules_json": "{\"mode\":\"any\",\"rules\":[{\"type\":\"regex_title\",\"pattern\":\"science\"}]}",
+    "expected": []
+  },
+  {
+    "name": "explicit insensitive",
+    "rules_json": "{\"mode\":\"any\",\"rules\":[{\"type\":\"regex_title\",\"pattern\":\"(?i:science)\"}]}",
+    "expected": [
+      "title"
+    ]
+  },
+  {
+    "name": "category metadata only",
+    "rules_json": "{\"mode\":\"any\",\"rules\":[{\"type\":\"opml_category\",\"value\":\"science\"}]}",
+    "expected": [
+      "category"
+    ]
+  },
+  {
+    "name": "any",
+    "rules_json": "{\"mode\":\"any\",\"rules\":[{\"type\":\"regex_title\",\"pattern\":\"Science\"},{\"type\":\"opml_category\",\"value\":\"science\"}]}",
+    "expected": [
+      "title",
+      "category"
+    ]
+  },
+  {
+    "name": "all",
+    "rules_json": "{\"mode\":\"all\",\"rules\":[{\"type\":\"regex_url\",\"pattern\":\"example.com\"},{\"type\":\"opml_category\",\"value\":\"science\"}]}",
+    "expected": [
+      "category"
+    ]
+  },
+  {
+    "name": "unknown rule",
+    "rules_json": "{\"mode\":\"any\",\"rules\":[{\"type\":\"unknown\",\"pattern\":\"Science\"}]}",
+    "expected": []
+  },
+  {
+    "name": "malformed",
+    "rules_json": "not json",
+    "expected": []
+  },
+  {
+    "name": "empty rules",
+    "rules_json": "{\"mode\":\"all\",\"rules\":[]}",
+    "expected": []
+  },
+  {
+    "name": "empty pattern",
+    "rules_json": "{\"mode\":\"any\",\"rules\":[{\"type\":\"regex_title\",\"pattern\":\"\"}]}",
+    "expected": []
+  },
+  {
+    "name": "invalid regex",
+    "rules_json": "{\"mode\":\"all\",\"rules\":[{\"type\":\"regex_title\",\"pattern\":\"[\"}]}",
+    "expected": []
+  },
+  {
+    "name": "invalid mixed regex fails closed",
+    "rules_json": "{\"mode\":\"any\",\"rules\":[{\"type\":\"regex_title\",\"pattern\":\"Science\"},{\"type\":\"regex_url\",\"pattern\":\"[\"}]}",
+    "expected": []
+  },
+  {
+    "name": "canonical beats legacy metadata",
+    "rules_json": "{\"rules\": [{\"type\": \"regex_title\", \"pattern\": \"science\", \"pattern_or_value\": \"Science\", \"case_sensitive\": false}]}",
+    "expected": []
+  },
+  {
+    "name": "canonical ignores case extension",
+    "rules_json": "{\"rules\": [{\"type\": \"regex_title\", \"pattern\": \"science\", \"case_sensitive\": false}]}",
+    "expected": []
+  },
+  {
+    "name": "missing mode defaults any",
+    "rules_json": "{\"rules\": [{\"type\": \"regex_title\", \"pattern\": \"Science\"}]}",
+    "expected": [
+      "title"
+    ]
+  }
+]

@@ -21,18 +21,60 @@ public struct SmartFolderRule: Codable, Hashable, Identifiable, Sendable {
     public var id: UUID
     public var type: RuleType
     public var patternOrValue: String
+    public var caseSensitive: Bool
 
-    public init(id: UUID = UUID(), type: RuleType = .regexTitle, patternOrValue: String = "") {
+    public init(id: UUID = UUID(), type: RuleType = .regexTitle, patternOrValue: String = "", caseSensitive: Bool = true) {
         self.id = id
         self.type = type
         self.patternOrValue = patternOrValue
+        self.caseSensitive = caseSensitive
     }
 
     enum CodingKeys: String, CodingKey {
         case id
         case type
         case patternOrValue = "pattern_or_value"
+        case pattern, value
+        case caseSensitive = "case_sensitive"
     }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? container.decode(UUID.self, forKey: .id)) ?? UUID()
+        type = try container.decode(RuleType.self, forKey: .type)
+        let key: CodingKeys = type == .opmlCategory ? .value : .pattern
+        if container.contains(key) {
+            let canonical = try container.decode(String.self, forKey: key)
+            // Canonical fields govern desktop behavior. Restore native editor state
+            // only when its metadata describes exactly the same expression.
+            let legacy = try? container.decode(String.self, forKey: .patternOrValue)
+            let sensitive = (try? container.decode(Bool.self, forKey: .caseSensitive)) ?? false
+            let isRegex = type != .opmlCategory
+            let legacyCanonical = legacy.map { isRegex && !sensitive ? "(?i:\($0))" : $0 }
+            if let legacy, legacyCanonical == canonical {
+                patternOrValue = legacy
+                caseSensitive = sensitive
+            } else {
+                patternOrValue = canonical
+                caseSensitive = true
+            }
+        } else {
+            patternOrValue = try container.decode(String.self, forKey: .patternOrValue)
+            // Stored native rules historically matched without case sensitivity.
+            caseSensitive = try container.decodeIfPresent(Bool.self, forKey: .caseSensitive) ?? false
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(type, forKey: .type)
+        try container.encode(patternOrValue, forKey: .patternOrValue)
+        let canonicalValue = type != .opmlCategory && !caseSensitive ? "(?i:\(patternOrValue))" : patternOrValue
+        try container.encode(canonicalValue, forKey: type == .opmlCategory ? .value : .pattern)
+        try container.encode(caseSensitive, forKey: .caseSensitive)
+    }
+
 }
 
 /// The top-level rules container stored as rules_json in the folders table.
@@ -56,6 +98,14 @@ public struct SmartFolderRules: Codable, Hashable, Sendable {
         self.mode = mode
         self.rules = rules
     }
+
+    enum CodingKeys: String, CodingKey { case mode, rules }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        mode = container.contains(.mode) ? try container.decode(Mode.self, forKey: .mode) : .any
+        rules = try container.decode([SmartFolderRule].self, forKey: .rules)
+    }
 }
 
 // MARK: - Evaluation
@@ -76,7 +126,11 @@ public enum SmartFolderEval {
 
     /// Evaluates a decoded `SmartFolderRules` object against the given feed.
     public static func feedMatches(rules: SmartFolderRules, feed: Feed) -> Bool {
-        guard !rules.rules.isEmpty else { return false }
+        guard !rules.rules.isEmpty, rules.rules.allSatisfy({ rule in
+            guard !rule.patternOrValue.isEmpty else { return false }
+            if rule.type == .opmlCategory { return true }
+            return (try? NSRegularExpression(pattern: rule.patternOrValue, options: rule.caseSensitive ? [] : [.caseInsensitive])) != nil
+        }) else { return false }
 
         switch rules.mode {
         case .any:
@@ -94,20 +148,16 @@ public enum SmartFolderEval {
 
         switch rule.type {
         case .regexTitle:
-            return regexMatches(pattern: pattern, in: feed.title)
+            return regexMatches(pattern: pattern, in: feed.title, caseSensitive: rule.caseSensitive)
         case .regexURL:
-            return regexMatches(pattern: pattern, in: feed.url.absoluteString)
+            return regexMatches(pattern: pattern, in: feed.url.absoluteString, caseSensitive: rule.caseSensitive)
         case .opmlCategory:
-            // opml_category compares against the folderID stored on the feed by OPML import.
-            // Since OPML categories are mapped to folder names, we compare against folder name if available.
-            // In practice, the category value is matched case-insensitively against the feed title prefix.
-            // For now: compare against the category embedded in feed title via OPML conventions.
-            return feed.title.localizedCaseInsensitiveCompare(pattern) == .orderedSame
+            return feed.opmlCategory?.lowercased() == pattern.lowercased()
         }
     }
 
-    private static func regexMatches(pattern: String, in string: String) -> Bool {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+    private static func regexMatches(pattern: String, in string: String, caseSensitive: Bool) -> Bool {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: caseSensitive ? [] : [.caseInsensitive]) else {
             return false
         }
         let range = NSRange(string.startIndex..., in: string)

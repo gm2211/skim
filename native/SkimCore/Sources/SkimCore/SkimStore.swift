@@ -53,7 +53,8 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
                     id: stableID(prefix: "feed", value: imported.xmlURL.absoluteString),
                     title: imported.title,
                     url: imported.xmlURL,
-                    siteURL: imported.htmlURL
+                    siteURL: imported.htmlURL,
+                    opmlCategory: imported.opmlCategory
                 )
                 try db.upsertFeed(feed)
             }
@@ -272,7 +273,8 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         startsAt: Date,
         endsAt: Date,
         storyLimit: Int,
-        generatedAt: Date = Date()
+        generatedAt: Date = Date(),
+        preferences: TodayRankingPreferences = TodayRankingPreferences()
     ) async throws -> TodayEditionSnapshot {
         guard TodayEditionBuilder.supportedStoryLimits.contains(storyLimit) else {
             throw SkimCoreError.database("Today story limit must be 5, 10, or 20")
@@ -296,7 +298,8 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
 
         let candidates = try db.todayEditionCandidates(
             startsAt: startsAt,
-            endsAt: endsAt
+            endsAt: endsAt,
+            preferences: preferences
         )
         let generatedItems = TodayEditionBuilder.buildItems(
             editionID: editionID,
@@ -507,6 +510,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
 
         // Migration: add folder_id column if it doesn't exist (safe no-op if already present)
         try? execute("ALTER TABLE feeds ADD COLUMN folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL")
+        try? execute("ALTER TABLE feeds ADD COLUMN opml_category TEXT")
 
         // Migration: add smart folder columns if they don't exist (safe no-op if already present)
         try? execute("ALTER TABLE folders ADD COLUMN is_smart INTEGER NOT NULL DEFAULT 0")
@@ -753,14 +757,15 @@ private final class SQLiteDatabase: @unchecked Sendable {
     func upsertFeed(_ feed: Feed) throws {
         try execute(
             """
-            INSERT INTO feeds (id, title, url, site_url, icon_url, fetched_at, folder_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO feeds (id, title, url, site_url, icon_url, fetched_at, folder_id, opml_category)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 title = excluded.title,
                 url = excluded.url,
                 site_url = excluded.site_url,
                 icon_url = excluded.icon_url,
-                fetched_at = excluded.fetched_at
+                fetched_at = excluded.fetched_at,
+                opml_category = COALESCE(excluded.opml_category, feeds.opml_category)
             """,
             [
                 .text(feed.id),
@@ -769,7 +774,8 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 .optionalText(feed.siteURL?.absoluteString),
                 .optionalText(feed.iconURL?.absoluteString),
                 .date(feed.fetchedAt),
-                .optionalText(feed.folderID)
+                .optionalText(feed.folderID),
+                .optionalText(feed.opmlCategory)
             ]
         )
     }
@@ -819,7 +825,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
     }
 
     func listFeeds() throws -> [Feed] {
-        try query("SELECT id, title, url, site_url, icon_url, fetched_at, folder_id FROM feeds ORDER BY title COLLATE NOCASE") { statement in
+        try query("SELECT id, title, url, site_url, icon_url, fetched_at, folder_id, opml_category FROM feeds ORDER BY title COLLATE NOCASE") { statement in
             Feed(
                 id: columnText(statement, 0),
                 title: columnText(statement, 1),
@@ -827,7 +833,8 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 siteURL: columnURL(statement, 3),
                 iconURL: columnURL(statement, 4),
                 fetchedAt: columnDate(statement, 5),
-                folderID: columnOptionalText(statement, 6)
+                folderID: columnOptionalText(statement, 6),
+                opmlCategory: columnOptionalText(statement, 7)
             )
         }
     }
@@ -1007,7 +1014,8 @@ private final class SQLiteDatabase: @unchecked Sendable {
 
     func todayEditionCandidates(
         startsAt: Date,
-        endsAt: Date
+        endsAt: Date,
+        preferences: TodayRankingPreferences
     ) throws -> [TodayEditionCandidate] {
         let stories = try query(
             """
@@ -1041,7 +1049,8 @@ private final class SQLiteDatabase: @unchecked Sendable {
                     representativeFeedID: representativeFeedID,
                     distinctFeedCount: distinctFeedCount,
                     articleCount: sources.count,
-                    preferenceSignal: state?.isFollowed == true ? 3 : 0
+                    preferenceSignal: (state?.isFollowed == true ? 3 : 0)
+                        + preferences.signal(for: sources.map(\.article))
                 ),
                 revision: revision,
                 sourceArticles: sources

@@ -8,8 +8,9 @@ public struct Feed: Identifiable, Codable, Hashable, Sendable {
     public var iconURL: URL?
     public var fetchedAt: Date?
     public var folderID: String?
+    public var opmlCategory: String?
 
-    public init(id: String, title: String, url: URL, siteURL: URL? = nil, iconURL: URL? = nil, fetchedAt: Date? = nil, folderID: String? = nil) {
+    public init(id: String, title: String, url: URL, siteURL: URL? = nil, iconURL: URL? = nil, fetchedAt: Date? = nil, folderID: String? = nil, opmlCategory: String? = nil) {
         self.id = id
         self.title = title
         self.url = url
@@ -17,6 +18,7 @@ public struct Feed: Identifiable, Codable, Hashable, Sendable {
         self.iconURL = iconURL
         self.fetchedAt = fetchedAt
         self.folderID = folderID
+        self.opmlCategory = opmlCategory
     }
 }
 
@@ -292,11 +294,13 @@ public struct ImportedFeed: Hashable, Sendable {
     public var title: String
     public var xmlURL: URL
     public var htmlURL: URL?
+    public var opmlCategory: String?
 
-    public init(title: String, xmlURL: URL, htmlURL: URL? = nil) {
+    public init(title: String, xmlURL: URL, htmlURL: URL? = nil, opmlCategory: String? = nil) {
         self.title = title
         self.xmlURL = xmlURL
         self.htmlURL = htmlURL
+        self.opmlCategory = opmlCategory
     }
 }
 

@@ -11,6 +11,7 @@ import FoundationModels
 
 struct ArticleListView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var showToday = false
     @State private var showImporter = false
     @State private var showFeedPicker = false
     @State private var showAddFeed = false
@@ -76,6 +77,11 @@ struct ArticleListView: View {
                         showFeedPicker = false
                         presentQuickCatchUp()
                     },
+                    onToday: {
+                        dismissTextEntry()
+                        showFeedPicker = false
+                        showToday = true
+                    },
                     onAIInbox: {
                         dismissTextEntry()
                         showFeedPicker = false
@@ -93,6 +99,9 @@ struct ArticleListView: View {
         .animation(.smooth(duration: 0.26), value: showFeedPicker)
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(isPresented: $showToday) {
+            TodayEditionView()
+        }
         .fileImporter(
             isPresented: $showImporter,
             allowedContentTypes: [.xml, .data],
@@ -738,6 +747,7 @@ private struct FeedPickerSheet: View {
     var onSettings: () -> Void
     var onChat: () -> Void
     var onCatchUp: () -> Void
+    var onToday: () -> Void
     var onAIInbox: () -> Void
     var onRefresh: () -> Void
 
@@ -765,6 +775,8 @@ private struct FeedPickerSheet: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
+                        pickerRow(iconSystemName: "sun.max", title: "Today", count: nil, isSelected: false, action: onToday)
+
                         pickerRow(iconSystemName: "square.grid.2x2", title: "All Articles", count: model.totalUnreadCount, isSelected: model.selectedFeedID == nil && model.selectedFolderID == nil && model.listMode == .all) {
                             model.selectedFeedID = nil
                             model.selectedFolderID = nil

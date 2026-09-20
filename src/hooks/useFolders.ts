@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as commands from "../services/commands";
+import { useFeeds } from "./useFeeds";
 import type { SmartRules } from "../services/types";
 
 export function useFolders() {
+  const { data: feeds } = useFeeds();
   return useQuery({
-    queryKey: ["folders"],
+    // Feed edits/imports can change dynamic membership without changing rules.
+    queryKey: ["folders", feeds],
     queryFn: commands.listFolders,
     refetchInterval: 60_000,
   });

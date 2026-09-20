@@ -353,7 +353,7 @@ struct ArticleDetailView: View {
     }
 }
 
-private struct SummaryConfigurationSheet: View {
+struct SummaryConfigurationSheet: View {
     var article: Article
     var defaults: AISettings
     var onRun: (AISettings) -> Void
@@ -1084,7 +1084,7 @@ private struct WebPage: View {
     }
 }
 
-private enum WebAIContext {
+enum WebAIContext {
     private static let minimumUsefulTextLength = 200
 
     static func article(base: Article, preferWeb: Bool, snapshot: WebViewSnapshot) async throws -> Article {

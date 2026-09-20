@@ -11,6 +11,7 @@
 		18CED8EE0C6AA5C517B1D143 /* AIInboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE465769D153A0A0D17504 /* AIInboxView.swift */; };
 		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
 		1DC5A4B057212FB263947314 /* SmartFolderEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */; };
+		20D5454E94949C27DBAF38C5 /* AIErrorBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B61709B52E5986EFC1C3ECB /* AIErrorBox.swift */; };
 		214DC26687D7CFE6647B4E3C /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = C72D1637C2C2401209468AAB /* MLXLLM */; };
 		2A601923CBA16F4DD268D2C9 /* NativeKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B69429F0218849C4A4E655 /* NativeKeychain.swift */; };
 		31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89737FFF993802E562860605 /* AIDisclaimerLabel.swift */; };
@@ -69,6 +70,7 @@
 		1D15E5B261AE4E05EEAE52DC /* NativeAIGuardrailRefusalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIGuardrailRefusalTests.swift; sourceTree = "<group>"; };
 		3442125155D4E58EF8001611 /* SmartFolderEval.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderEval.swift; sourceTree = "<group>"; };
 		3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleExtractorTests.swift; sourceTree = "<group>"; };
+		4B61709B52E5986EFC1C3ECB /* AIErrorBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIErrorBox.swift; sourceTree = "<group>"; };
 		4FA32ECFFFAF834236FDF04E /* TasteModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteModel.swift; sourceTree = "<group>"; };
 		4FDE465769D153A0A0D17504 /* AIInboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInboxView.swift; sourceTree = "<group>"; };
 		55C58C12B9B2AB383B4BA89C /* SkimCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimCore; path = ../SkimCore; sourceTree = SOURCE_ROOT; };
@@ -243,6 +245,7 @@
 			children = (
 				959A59B5B27E8C969D084B8F /* AIBootDisclaimerView.swift */,
 				89737FFF993802E562860605 /* AIDisclaimerLabel.swift */,
+				4B61709B52E5986EFC1C3ECB /* AIErrorBox.swift */,
 				4FDE465769D153A0A0D17504 /* AIInboxView.swift */,
 				D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */,
 				6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */,
@@ -417,6 +420,7 @@
 			files = (
 				7487CDA38AA993612EB4880B /* AIBootDisclaimerView.swift in Sources */,
 				31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */,
+				20D5454E94949C27DBAF38C5 /* AIErrorBox.swift in Sources */,
 				18CED8EE0C6AA5C517B1D143 /* AIInboxView.swift in Sources */,
 				61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */,
 				1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */,
@@ -614,7 +618,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 50;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkimIOS/Info.plist;
@@ -632,7 +636,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.12;
+				MARKETING_VERSION = 0.1.13;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gm2211.skim;
 				PRODUCT_NAME = Skim;
 				SDKROOT = iphoneos;
@@ -648,7 +652,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 49;
+				CURRENT_PROJECT_VERSION = 50;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkimIOS/Info.plist;
@@ -666,7 +670,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.12;
+				MARKETING_VERSION = 0.1.13;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gm2211.skim;
 				PRODUCT_NAME = Skim;
 				SDKROOT = iphoneos;

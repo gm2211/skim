@@ -8,10 +8,11 @@ struct SettingsSheet: View {
     @Binding var isPresented: Bool
     @State private var draft = AppSettings()
 
-    var onAddFeed: () -> Void
-    var onImportOPML: () -> Void
-    var onAutoGroup: () -> Void
-    var onRefresh: () -> Void
+    var onAddFeed: () -> Void = {}
+    var onImportOPML: () -> Void = {}
+    var onAutoGroup: () -> Void = {}
+    var onRefresh: () -> Void = {}
+    var aiOnly: Bool = false
 
     private var aiStatus: NativeAIAvailabilityStatus {
         NativeAI.availabilityStatus()
@@ -23,9 +24,11 @@ struct SettingsSheet: View {
                 VStack(alignment: .leading, spacing: 26) {
                     header
                     aiSection
-                    librarySection
-                    legalSection
-                    aboutSection
+                    if !aiOnly {
+                        librarySection
+                        legalSection
+                        aboutSection
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 18)
@@ -61,11 +64,11 @@ struct SettingsSheet: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Settings")
+            Text(aiOnly ? "AI Settings" : "Settings")
                 .font(.system(size: 31, weight: .heavy))
                 .foregroundStyle(SkimStyle.text)
 
-            Text("Local app controls, AI status, and library maintenance.")
+            Text(aiOnly ? "Choose a provider and sign in or add a key." : "Local app controls, AI status, and library maintenance.")
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(SkimStyle.secondary)
                 .fixedSize(horizontal: false, vertical: true)

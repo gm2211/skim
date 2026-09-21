@@ -111,6 +111,24 @@ describe("ArticleDetail reader loading", () => {
     expect(screen.queryByText("Feed preview")).not.toBeInTheDocument();
   });
 
+  it("keeps the web view usable when the reader can't extract the page", async () => {
+    // The page downloads fine; only readability comes back empty. Both panes
+    // used to go blank because the backend threw the raw HTML away with it.
+    vi.mocked(getOrFetchReaderContent).mockResolvedValue({
+      html: "",
+      raw_html: "<html><body><p>Original page markup</p></body></html>",
+    });
+    const user = userEvent.setup();
+    render(<ArticleDetail />);
+
+    expect(await screen.findByText(/Reader couldn't extract this page/)).toBeInTheDocument();
+    expect(screen.getByText("Feed preview")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Web" }));
+    expect(await screen.findByTitle("Article web view")).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load page in the embedded view.")).not.toBeInTheDocument();
+  });
+
   it("ignores a stale response after switching articles", async () => {
     const first = deferred<{ html: string; raw_html: string }>();
     const second = deferred<{ html: string; raw_html: string }>();

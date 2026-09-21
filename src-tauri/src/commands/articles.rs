@@ -250,6 +250,25 @@ fn extract_hacker_news_external_url(html: &str, base: &Url) -> Option<String> {
     None
 }
 
+async fn hacker_news_target_from_api(client: &reqwest::Client, url: &Url) -> Option<String> {
+    let story_id = url
+        .query_pairs()
+        .find(|(name, _)| name == "id")
+        .map(|(_, value)| value.into_owned())?;
+    let value = client
+        .get(format!("https://hn.algolia.com/api/v1/items/{story_id}"))
+        .send()
+        .await
+        .ok()?
+        .json::<Value>()
+        .await
+        .ok()?;
+    let candidate = value.get("url").and_then(Value::as_str)?;
+    let parsed = Url::parse(candidate).ok()?;
+    (matches!(parsed.scheme(), "http" | "https") && is_external_to_host_family(&parsed, url))
+        .then(|| parsed.to_string())
+}
+
 fn reddit_json_url(url: &Url) -> String {
     let mut json_url = url.clone();
     if let Some(host) = json_url.host_str() {
@@ -325,15 +344,16 @@ async fn resolve_aggregator_target(client: &reqwest::Client, url: &str) -> Optio
     let host = parsed.host_str()?.to_lowercase();
 
     if is_hacker_news_host(&host) {
-        let html = client
-            .get(parsed.as_str())
-            .send()
-            .await
-            .ok()?
-            .text()
-            .await
-            .ok()?;
-        return extract_hacker_news_external_url(&html, &parsed);
+        if let Ok(response) = client.get(parsed.as_str()).send().await {
+            if let Ok(html) = response.text().await {
+                if let Some(target) = extract_hacker_news_external_url(&html, &parsed) {
+                    return Some(target);
+                }
+            }
+        }
+        // Scraping the item page fails whenever HN changes its markup or
+        // rate-limits us. The public API carries the same submitted URL.
+        return hacker_news_target_from_api(client, &parsed).await;
     }
 
     if is_reddit_host(&host) {
@@ -412,6 +432,16 @@ async fn fetch_article_content_uncached(url: &str) -> ReaderResult {
         .await
         .map_err(|e| format!("Failed to fetch article: {}", e))?;
 
+    // A 403/404/5xx body is an error page, not the article. Say so plainly
+    // instead of letting extraction fail later with a misleading message.
+    let status = response.status();
+    if !status.is_success() {
+        return Err(format!(
+            "Article site returned HTTP {}.",
+            status.as_u16()
+        ));
+    }
+
     let html = response
         .text()
         .await
@@ -430,7 +460,7 @@ fn extract_reader_html(html: &str, effective_url: &str) -> ReaderResult {
     // Inject <base href="..."> so relative URLs (images, stylesheets) resolve
     // against the original site if anything ends up consuming raw_html.
     let base_tag = format!("<base href=\"{}\">", effective_url.replace('"', "&quot;"));
-    let raw_html = if let Some(head_end) = html.to_lowercase().find("<head") {
+    let raw_html = if let Some(head_end) = html.to_ascii_lowercase().find("<head") {
         if let Some(tag_close) = html[head_end..].find('>') {
             let insert_at = head_end + tag_close + 1;
             format!("{}{}{}", &html[..insert_at], base_tag, &html[insert_at..])
@@ -445,12 +475,12 @@ fn extract_reader_html(html: &str, effective_url: &str) -> ReaderResult {
     // with the article body — readability can't see it because the page DOM
     // hasn't been hydrated. Try to pull a usable body string out of common
     // shapes first; fall back to dom_smoothie for traditional pages.
-    let nextjs_extract = extract_from_next_data(&html);
+    let nextjs_extract = extract_from_next_data(html);
 
     let cleaned = if let Some(body) = nextjs_extract {
         plain_to_html(&body)
     } else {
-        match dom_smoothie::Readability::new(
+        let readable = match dom_smoothie::Readability::new(
             html,
             Some(&effective_url),
             Some(dom_smoothie::Config::default()),
@@ -460,6 +490,18 @@ fn extract_reader_html(html: &str, effective_url: &str) -> ReaderResult {
                 Err(_) => String::new(),
             },
             Err(_) => String::new(),
+        };
+
+        // Readability gives up on plenty of real, server-rendered articles
+        // (unusual wrappers, table layouts, heavy chrome). Rather than hand
+        // back nothing, try the shapes that still carry the body text.
+        if visible_text_len(&readable) >= MIN_EXTRACTED_TEXT {
+            readable
+        } else {
+            extract_from_json_ld(html)
+                .map(|body| plain_to_html(&body))
+                .or_else(|| extract_main_content_block(html))
+                .unwrap_or(readable)
         }
     };
 
@@ -467,6 +509,226 @@ fn extract_reader_html(html: &str, effective_url: &str) -> ReaderResult {
         html: cleaned,
         raw_html,
     })
+}
+
+/// Minimum plain-text length an extraction must reach before we trust it.
+/// Matches dom_smoothie's own `char_threshold` so the fallbacks kick in
+/// exactly where readability bails out.
+const MIN_EXTRACTED_TEXT: usize = 500;
+
+/// Length of the human-visible text in an HTML fragment, ignoring tags and
+/// the contents of script/style blocks.
+fn visible_text_len(html: &str) -> usize {
+    visible_text(html).chars().count()
+}
+
+/// Strip tags (and the bodies of non-content elements) down to visible text.
+fn visible_text(html: &str) -> String {
+    let stripped = strip_elements(html, &["script", "style", "noscript", "svg", "template"]);
+    let mut out = String::with_capacity(stripped.len());
+    let mut in_tag = false;
+    let mut last_was_space = true;
+    for ch in stripped.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => {
+                in_tag = false;
+                if !last_was_space {
+                    out.push(' ');
+                    last_was_space = true;
+                }
+            }
+            _ if in_tag => {}
+            c if c.is_whitespace() => {
+                if !last_was_space {
+                    out.push(' ');
+                    last_was_space = true;
+                }
+            }
+            c => {
+                out.push(c);
+                last_was_space = false;
+            }
+        }
+    }
+    out.trim().to_string()
+}
+
+/// Remove `<tag>…</tag>` spans (including the tags themselves) for each name.
+/// Depth-aware so nested elements of the same name are removed as one span.
+fn strip_elements(html: &str, tags: &[&str]) -> String {
+    let mut out = html.to_string();
+    for tag in tags {
+        let mut result = String::with_capacity(out.len());
+        let mut rest = out.as_str();
+        while let Some(start) = find_open_tag(rest, tag) {
+            result.push_str(&rest[..start]);
+            match element_span(&rest[start..], tag) {
+                Some((_, end)) => rest = &rest[start + end..],
+                None => {
+                    rest = "";
+                    break;
+                }
+            }
+        }
+        result.push_str(rest);
+        out = result;
+    }
+    out
+}
+
+/// Byte offset of the next `<tag` / `<tag ` / `<tag>` occurrence.
+fn find_open_tag(html: &str, tag: &str) -> Option<usize> {
+    let lower = html.to_ascii_lowercase();
+    let needle = format!("<{}", tag);
+    let mut from = 0usize;
+    while let Some(found) = lower[from..].find(&needle) {
+        let at = from + found;
+        let after = lower[at + needle.len()..].chars().next();
+        if matches!(after, None | Some('>') | Some('/')) || after.is_some_and(char::is_whitespace) {
+            return Some(at);
+        }
+        from = at + needle.len();
+    }
+    None
+}
+
+/// Given a slice starting at `<tag`, return (inner-start, span-end) byte
+/// offsets relative to that slice, matching nested elements of the same name.
+fn element_span(html: &str, tag: &str) -> Option<(usize, usize)> {
+    let lower = html.to_ascii_lowercase();
+    let open_end = lower.find('>')? + 1;
+    // Self-closing or void usage has no inner content worth scanning.
+    if lower[..open_end].ends_with("/>") {
+        return Some((open_end, open_end));
+    }
+    let open = format!("<{}", tag);
+    let close = format!("</{}", tag);
+    let mut depth = 1usize;
+    let mut cursor = open_end;
+    while cursor < lower.len() {
+        let next_open = find_open_tag(&lower[cursor..], tag).map(|i| cursor + i);
+        let next_close = lower[cursor..].find(&close).map(|i| cursor + i);
+        match (next_open, next_close) {
+            (Some(o), Some(c)) if o < c => {
+                depth += 1;
+                cursor = o + open.len();
+            }
+            (_, Some(c)) => {
+                depth -= 1;
+                let after = lower[c..].find('>').map(|i| c + i + 1).unwrap_or(lower.len());
+                if depth == 0 {
+                    return Some((open_end, after));
+                }
+                cursor = after;
+            }
+            (Some(o), None) => cursor = o + open.len(),
+            (None, None) => break,
+        }
+    }
+    // Unclosed element: treat the remainder of the document as its content.
+    Some((open_end, lower.len()))
+}
+
+/// Inner HTML of the first `<tag>` element in the document, if any.
+fn first_element_inner(html: &str, tag: &str) -> Option<String> {
+    let start = find_open_tag(html, tag)?;
+    let slice = &html[start..];
+    let (inner_start, span_end) = element_span(slice, tag)?;
+    let close_start = slice[..span_end].rfind('<').unwrap_or(span_end);
+    if close_start <= inner_start {
+        return None;
+    }
+    Some(slice[inner_start..close_start].to_string())
+}
+
+/// Many CMSes ship the full body as JSON-LD `articleBody` even when the
+/// rendered markup defeats readability. Walk every ld+json block for it.
+fn extract_from_json_ld(html: &str) -> Option<String> {
+    let mut rest = html;
+    while let Some(start) = find_open_tag(rest, "script") {
+        let slice = &rest[start..];
+        let Some((inner_start, span_end)) = element_span(slice, "script") else {
+            break;
+        };
+        let open_tag = slice[..inner_start].to_ascii_lowercase();
+        if open_tag.contains("ld+json") {
+            let close_start = slice[..span_end].rfind('<').unwrap_or(span_end);
+            if close_start > inner_start {
+                if let Ok(json) =
+                    serde_json::from_str::<serde_json::Value>(slice[inner_start..close_start].trim())
+                {
+                    if let Some(body) = find_article_body(&json) {
+                        return Some(body);
+                    }
+                }
+            }
+        }
+        rest = &slice[span_end..];
+    }
+    None
+}
+
+fn find_article_body(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::Object(map) => {
+            if let Some(body) = map
+                .get("articleBody")
+                .and_then(serde_json::Value::as_str)
+                .filter(|body| body.len() >= MIN_EXTRACTED_TEXT)
+            {
+                return Some(body.to_string());
+            }
+            map.values().find_map(find_article_body)
+        }
+        serde_json::Value::Array(items) => items.iter().find_map(find_article_body),
+        _ => None,
+    }
+}
+
+/// Last resort: drop page chrome and keep the densest semantic container, or
+/// failing that the document's paragraphs. Only returned when it carries a
+/// believable amount of text, so we never trade a real failure for noise.
+fn extract_main_content_block(html: &str) -> Option<String> {
+    let body = first_element_inner(html, "body").unwrap_or_else(|| html.to_string());
+    let cleaned = strip_elements(
+        &body,
+        &[
+            "script", "style", "noscript", "svg", "template", "nav", "header", "footer", "aside",
+            "form", "iframe",
+        ],
+    );
+
+    for tag in ["article", "main"] {
+        if let Some(inner) = first_element_inner(&cleaned, tag) {
+            if visible_text_len(&inner) >= MIN_EXTRACTED_TEXT {
+                return Some(inner);
+            }
+        }
+    }
+
+    let mut paragraphs = String::new();
+    let mut rest = cleaned.as_str();
+    while let Some(start) = find_open_tag(rest, "p") {
+        let slice = &rest[start..];
+        // Bound each paragraph at its close tag, or at the next <p> when the
+        // markup leaves it unclosed — legal HTML, and common in the wild.
+        let closed = element_span(slice, "p")
+            .map(|(_, end)| end)
+            .unwrap_or(slice.len());
+        let next = find_open_tag(&slice[1..], "p")
+            .map(|at| at + 1)
+            .unwrap_or(slice.len());
+        let end = closed.min(next);
+        let paragraph = &slice[..end];
+        // Skip one-line captions, bylines and link lists.
+        if visible_text_len(paragraph) >= 40 {
+            paragraphs.push_str(paragraph);
+            paragraphs.push('\n');
+        }
+        rest = &slice[end..];
+    }
+    (visible_text_len(&paragraphs) >= MIN_EXTRACTED_TEXT).then_some(paragraphs)
 }
 
 // Walk common Next.js / framework JSON shapes to find a long article-body
@@ -759,5 +1021,175 @@ mod reader_performance_tests {
         let static_result = extract_reader_html(&fixture(), "https://example.org/story").unwrap();
         assert!(static_result.html.contains("complete article, including its evidence and qualifications"));
         assert!(static_result.html.contains("https://example.org/reference"));
+    }
+}
+#[cfg(test)]
+mod reader_fallback_tests {
+    use super::*;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+
+    fn long_body() -> String {
+        "The piece explains the ruling, the objection to it, and the answer. ".repeat(12)
+    }
+
+    // A hydrated shell: nothing readable in the markup, the whole body in JSON-LD.
+    fn json_ld_shell() -> String {
+        let data = serde_json::json!({
+            "@context": "https://schema.org",
+            "@graph": [
+                {"@type": "WebSite", "name": "Example"},
+                {"@type": "Article", "headline": "Shell", "articleBody": long_body()}
+            ]
+        });
+        format!(
+            "<html><head><title>Shell</title>\
+             <script type=\"application/ld+json\">{data}</script></head>\
+             <body><div id=\"root\"></div></body></html>"
+        )
+    }
+
+    #[test]
+    fn json_ld_body_rescues_pages_readability_gives_up_on() {
+        let html = json_ld_shell();
+        // Readability alone finds nothing in this shell.
+        let bare = dom_smoothie::Readability::new(
+            html.as_str(),
+            Some("https://example.org/story"),
+            Some(dom_smoothie::Config::default()),
+        )
+        .unwrap()
+        .parse();
+        assert!(bare.is_err(), "fixture must be one readability rejects");
+
+        let result = extract_reader_html(&html, "https://example.org/story").unwrap();
+        assert!(result.html.contains("The piece explains the ruling"));
+        assert!(result.html.starts_with("<p>"));
+    }
+
+    #[test]
+    fn paragraph_fallback_skips_chrome_and_keeps_the_body() {
+        let html = format!(
+            "<html><body><nav><p>Home About Contact Donate Subscribe Newsletter</p></nav>\
+             <header><p>Site header text that should never reach the reader pane</p></header>\
+             <div class=\"co_body\"><p>{}</p><p>{}</p></div>\
+             <footer><p>Footer boilerplate</p></footer></body></html>",
+            long_body(),
+            long_body()
+        );
+        let extracted = extract_main_content_block(&html).unwrap();
+        assert!(extracted.contains("The piece explains the ruling"));
+        assert!(!extracted.contains("Home About Contact"));
+        assert!(!extracted.contains("Site header text"));
+        assert!(!extracted.contains("Footer boilerplate"));
+    }
+
+    #[test]
+    fn unclosed_paragraphs_do_not_swallow_the_rest_of_the_page() {
+        let html = format!(
+            "<html><body><div><p>{}<p>{}</div><footer><p>Footer boilerplate that is plenty long to survive the length filter</p></footer></body></html>",
+            long_body(),
+            long_body()
+        );
+        let extracted = extract_main_content_block(&html).unwrap();
+        assert!(extracted.contains("The piece explains the ruling"));
+        assert!(!extracted.contains("Footer boilerplate"));
+    }
+
+    #[test]
+    fn main_content_block_prefers_the_article_element() {
+        let html = format!(
+            "<html><body><aside><p>Related reading</p></aside>\
+             <article><p>{}</p></article></body></html>",
+            long_body()
+        );
+        let extracted = extract_main_content_block(&html).unwrap();
+        assert!(extracted.contains("The piece explains the ruling"));
+        assert!(!extracted.contains("Related reading"));
+    }
+
+    #[test]
+    fn thin_pages_are_not_dressed_up_as_articles() {
+        let html = "<html><body><article><p>Too short to be a story.</p></article></body></html>";
+        assert!(extract_main_content_block(html).is_none());
+        assert!(extract_from_json_ld(html).is_none());
+    }
+
+    #[test]
+    fn nested_same_name_elements_close_at_the_right_tag() {
+        let html = "<body><article>outer <article>inner</article> tail</article>after</body>";
+        assert_eq!(
+            first_element_inner(html, "article").as_deref(),
+            Some("outer <article>inner</article> tail")
+        );
+        assert_eq!(strip_elements(html, &["article"]), "<body>after</body>");
+    }
+
+    #[test]
+    fn visible_text_ignores_tags_and_script_bodies() {
+        let html = "<div><script>var junk = 'hidden words here';</script><p>Real&nbsp;words</p></div>";
+        let text = visible_text(html);
+        assert!(!text.contains("hidden words"));
+        assert!(text.contains("Real"));
+    }
+
+    #[test]
+    fn open_tag_match_is_exact() {
+        assert_eq!(find_open_tag("<pre>x</pre><p>y</p>", "p"), Some(12));
+        assert_eq!(find_open_tag("<PARAGRAPH>", "p"), None);
+        assert_eq!(find_open_tag("<P class=\"a\">", "p"), Some(0));
+    }
+
+    #[test]
+    fn non_ascii_pages_do_not_shift_offsets() {
+        let html = format!("<html><body><article><p>İstanbul — {}</p></article></body></html>", long_body());
+        let extracted = extract_main_content_block(&html).unwrap();
+        assert!(extracted.contains("İstanbul"));
+    }
+
+    #[test]
+    fn extraction_miss_still_returns_the_downloaded_page() {
+        let html = "<html><head></head><body><div id=\"root\"></div></body></html>";
+        let result = extract_reader_html(html, "https://example.org/story").unwrap();
+        assert!(result.html.trim().is_empty());
+        // The web view needs this: the page downloaded fine, only the reader failed.
+        assert!(result.raw_html.contains("<base href=\"https://example.org/story\">"));
+        assert!(result.raw_html.contains("id=\"root\""));
+    }
+
+    async fn status_server(status_line: &'static str) -> (String, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/blocked", listener.local_addr().unwrap());
+        let handle = tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut stream = BufReader::new(stream);
+                    let mut line = String::new();
+                    loop {
+                        line.clear();
+                        if stream.read_line(&mut line).await.unwrap_or(0) == 0 {
+                            return;
+                        }
+                        if line == "\r\n" {
+                            break;
+                        }
+                    }
+                    let body = "<html><body>Access denied</body></html>";
+                    let response = format!(
+                        "{status_line}\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                    let _ = stream.get_mut().write_all(response.as_bytes()).await;
+                });
+            }
+        });
+        (url, handle)
+    }
+
+    #[tokio::test]
+    async fn blocked_pages_report_the_http_status() {
+        let (url, server) = status_server("HTTP/1.1 403 Forbidden").await;
+        let error = fetch_article_content(&url).await.unwrap_err();
+        assert!(error.contains("403"), "unexpected error: {error}");
+        server.abort();
     }
 }

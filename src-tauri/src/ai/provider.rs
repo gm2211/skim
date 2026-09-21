@@ -130,7 +130,12 @@ mod endpoint_tests {
 
     #[test]
     fn key_based_providers_ask_for_the_key_before_the_network() {
-        for (provider, label) in [("openai", "OpenAI"), ("openrouter", "OpenRouter"), ("xai", "xAI")] {
+        for (provider, label) in [
+            ("openai", "OpenAI"),
+            ("openrouter", "OpenRouter"),
+            ("xai", "xAI"),
+            ("anthropic", "Anthropic"),
+        ] {
             let mut settings = crate::db::models::AppSettings::default().ai;
             settings.provider = provider.into();
             let error = create_provider(&settings, None).err().expect("missing key must fail");
@@ -142,6 +147,20 @@ mod endpoint_tests {
             settings.api_key = Some("a-key".into());
             assert_eq!(create_provider(&settings, None).unwrap().name(), provider);
         }
+    }
+
+    #[test]
+    fn a_custom_provider_without_an_endpoint_points_at_settings() {
+        let mut settings = crate::db::models::AppSettings::default().ai;
+        settings.provider = "custom".into();
+        let error = create_provider(&settings, None).err().expect("missing endpoint must fail");
+        assert_eq!(error, "[configure-ai] Custom provider needs an endpoint URL.");
+
+        settings.endpoint = Some("  ".into());
+        assert!(create_provider(&settings, None).is_err(), "a blank endpoint is no endpoint");
+
+        settings.endpoint = Some("http://127.0.0.1:4546".into());
+        assert_eq!(create_provider(&settings, None).unwrap().name(), "custom");
     }
 
     #[test]
@@ -778,8 +797,7 @@ pub fn create_provider(
             )))
         }
         "xai" => {
-            let key = api_key.filter(|key| !key.trim().is_empty())
-                .ok_or("[configure-ai] xAI API key not set.")?;
+            let key = require_api_key(api_key, "xAI")?;
             Ok(Box::new(OpenAiCompatibleProvider::new("https://api.x.ai", Some(key), "xai")))
         }
         "openrouter" => {
@@ -804,7 +822,7 @@ pub fn create_provider(
         #[cfg(target_os = "ios")]
         "ollama" => Err("Ollama is not available on iOS. Use Claude (subscription) or Anthropic API key instead.".to_string()),
         "anthropic" => {
-            let key = api_key.ok_or("[configure-ai] Anthropic API key not set.")?;
+            let key = require_api_key(api_key, "Anthropic")?;
             Ok(Box::new(AnthropicProvider::new(key)))
         }
         #[cfg(not(target_os = "ios"))]
@@ -822,7 +840,10 @@ pub fn create_provider(
             Ok(Box::new(ClaudeSubscriptionProvider::new(token)))
         }
         "custom" => {
-            let ep = endpoint.ok_or("Custom provider requires an endpoint URL")?;
+            let ep = endpoint
+                .map(str::trim)
+                .filter(|ep| !ep.is_empty())
+                .ok_or("[configure-ai] Custom provider needs an endpoint URL.")?;
             Ok(Box::new(OpenAiCompatibleProvider::new(ep, api_key, "custom")))
         }
         _ => Err(format!("Unknown AI provider: {}", settings.provider)),

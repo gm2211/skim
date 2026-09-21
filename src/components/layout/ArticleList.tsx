@@ -86,6 +86,10 @@ export function buildMarkAllReadScope({
   });
   filter.is_read = false;
   if (inbox && activeThemeId) filter.theme_id = activeThemeId;
+  // Today is a frozen edition, which ArticleFilter cannot express. An
+  // unscoped filter here would clear every unread article, so fail closed
+  // on the empty feed set instead.
+  if (sidebarView.type === "today" && !searching) filter.feed_ids = [];
   return { filter, recentOnly: recent };
 }
 

@@ -111,6 +111,7 @@ describe("article list scope regressions", () => {
     [{ type: "inbox" }, { theme_id: "active-theme" }, false],
     [{ type: "recent" }, {}, true],
     [{ type: "all" }, {}, false],
+    [{ type: "today" }, { feed_ids: [] }, false],
   ] as const)("builds bounded bulk scope for %s", (sidebarView, expected, recentOnly) => {
     expect(buildMarkAllReadScope({
       sidebarView, listFilter: "all", searchQuery: "", folderFeedIds: [], activeThemeId: "active-theme",

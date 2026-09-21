@@ -353,15 +353,39 @@ export const countReadMatches = (query: string) =>
 export const removeRecentArticle = (articleId: string) =>
   invoke<void>("remove_recent_article", { articleId });
 
-export interface CatchupItem {
+/** A front-page story. `lede` is empty until the second pass writes it. */
+export interface CatchupStory {
+  headline: string;
+  lede: string;
+  article_ids: string[];
+}
+/** A one-line item below the fold. */
+export interface CatchupBrief {
   text: string;
   article_ids: string[];
 }
-export interface CatchupReport {
-  takeaways: CatchupItem[];
-  notable_mentions: CatchupItem[];
-  sources: ChatSource[];
+/** An article cited on the page, named the way it prints under a story. */
+export interface CatchupSource {
+  id: string;
+  title: string;
+  publication: string;
+  url: string | null;
+  published_at: number | null;
 }
+export interface CatchupReport {
+  stories: CatchupStory[];
+  briefs: CatchupBrief[];
+  sources: CatchupSource[];
+}
+/** The page as it stands, pushed after every step of the two passes. */
+export interface CatchupProgress {
+  stage: "reading" | "picking" | "writing" | "done";
+  completed: number;
+  total: number;
+  message: string;
+  report: CatchupReport;
+}
+export const CATCHUP_PROGRESS_EVENT = "catchup_progress";
 export const generateCatchupReport = (scope: "inbox" | "unread" = "inbox") =>
   invoke<CatchupReport>("generate_catchup_report", { scope });
 

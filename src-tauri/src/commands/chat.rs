@@ -6,7 +6,8 @@ use crate::ai::provider::{
 use crate::db::models::AiSettings;
 use crate::db::{queries, Database};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use crate::AppHandle;
+use tauri::State;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessageInput {
@@ -65,19 +66,11 @@ pub async fn chat_with_article(
         .clone()
         .unwrap_or_else(|| crate::commands::ai::default_model(&ai_settings.provider));
 
-    // Build article context
-    let content_text = article.article.content_text.as_deref().unwrap_or("");
-    let html_as_text = article
-        .article
-        .content_html
-        .as_deref()
-        .map(|h| html2text::from_read(h.as_bytes(), 10000))
-        .unwrap_or_default();
-    let text = if html_as_text.len() > content_text.len() {
-        &html_as_text
-    } else {
-        content_text
-    };
+    // Build article context from the same text the reader shows — the feed
+    // body alone is a blurb on summary-only feeds, and answering a question
+    // about a paragraph on screen from two sentences of teaser is worse than
+    // not answering.
+    let text = crate::commands::article_body::resolve_article_text(db.inner(), &article.article).await;
 
     // Truncate for context window (char-safe)
     let article_text: String = text.chars().take(12000).collect();

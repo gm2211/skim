@@ -1,6 +1,8 @@
 mod ai;
 mod commands;
 mod db;
+#[cfg(feature = "devbridge")]
+pub mod devbridge;
 mod feed;
 
 use ai::local_provider::SharedModelState;
@@ -12,14 +14,28 @@ use db::models::AppSettings;
 use db::{queries, Database};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tauri::{Manager, RunEvent};
-#[cfg(desktop)]
+use tauri::Manager;
+#[cfg(not(feature = "devbridge"))]
+use tauri::RunEvent;
+#[cfg(all(desktop, not(feature = "devbridge")))]
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
 
-#[cfg(desktop)]
+/// The Tauri runtime this binary is compiled against. The dev bridge builds
+/// against Tauri's mock runtime so the very same commands can be driven from a
+/// browser over HTTP; release builds are unaffected.
+#[cfg(not(feature = "devbridge"))]
+pub type Rt = tauri::Wry;
+#[cfg(feature = "devbridge")]
+pub type Rt = tauri::test::MockRuntime;
+
+/// [`tauri::AppHandle`] bound to [`Rt`]. Commands take this rather than
+/// `tauri::AppHandle` so they are runtime-agnostic without being generic.
+pub type AppHandle = tauri::AppHandle<Rt>;
+
+#[cfg(all(desktop, not(feature = "devbridge")))]
 const SUPPORT_URL: &str = "https://gm2211.github.io/skim/";
-#[cfg(desktop)]
+#[cfg(all(desktop, not(feature = "devbridge")))]
 const ISSUES_URL: &str = "https://github.com/gm2211/skim/issues";
 
 /// Synthetic release check for the bundled DS4 server. It intentionally avoids
@@ -59,191 +75,109 @@ pub fn run_ds4_check(model_path: String) -> Result<(), String> {
     })
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    let _ = env_logger::try_init();
+/// Registers the shared application state (database, model cache, summary
+/// cache) on `app`. Split out of [`run`] so the dev bridge can stand the same
+/// state up on Tauri's mock runtime.
+pub fn init_state<R: tauri::Runtime>(app: &tauri::AppHandle<R>, app_dir: std::path::PathBuf) {
+    let database = Database::new(app_dir).expect("Failed to initialize database");
+    let model_state =
+        Arc::new(Mutex::new(None::<ai::local_provider::LoadedModel>)) as SharedModelState;
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_skim_ai::init())
-        .setup(|app| {
-            #[cfg(desktop)]
-            {
-                use tauri::menu::{
-                    AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder,
-                };
+    // llama.cpp preload + idle-eviction are desktop-only — iOS doesn't
+    // ship llama.cpp and uses MLX via the Swift Tauri plugin instead.
+    #[cfg(not(target_os = "ios"))]
+    {
+        // Read user's preload / idle-evict / power preferences.
+        let (preload_mode, idle_evict_minutes, model_path, gpu_layers) = {
+            let conn = database.conn.lock().expect("db lock");
+            let settings: AppSettings = queries::get_setting(&conn, "app_settings")
+                .ok()
+                .flatten()
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default();
+            let power_mode = settings
+                .ai
+                .local_power_mode
+                .as_deref()
+                .unwrap_or("balanced")
+                .to_string();
+            let (effective_layers, _) = local_provider::resolve_power_profile(
+                &power_mode,
+                settings.ai.local_gpu_layers,
+            );
+            (
+                settings
+                    .ai
+                    .local_preload
+                    .clone()
+                    .unwrap_or_else(|| "off".to_string()),
+                settings.ai.local_idle_evict_minutes.unwrap_or(10),
+                settings.ai.local_model_path.clone(),
+                effective_layers,
+            )
+        };
 
-                let about_meta = AboutMetadataBuilder::new()
-                    .name(Some("Skim"))
-                    .website(Some("https://github.com/gm2211/skim"))
-                    .build();
-
-                let app_submenu = SubmenuBuilder::new(app, "Skim")
-                    .about(Some(about_meta))
-                    .separator()
-                    .services()
-                    .separator()
-                    .hide()
-                    .hide_others()
-                    .show_all()
-                    .separator()
-                    .quit()
-                    .build()?;
-
-                let edit_submenu = SubmenuBuilder::new(app, "Edit")
-                    .undo()
-                    .redo()
-                    .separator()
-                    .cut()
-                    .copy()
-                    .paste()
-                    .select_all()
-                    .build()?;
-
-                let view_submenu = SubmenuBuilder::new(app, "View").fullscreen().build()?;
-
-                let window_submenu = SubmenuBuilder::new(app, "Window")
-                    .minimize()
-                    .separator()
-                    .close_window()
-                    .build()?;
-
-                let support_item =
-                    MenuItemBuilder::with_id("help-support", "Skim Support").build(app)?;
-                let issues_item =
-                    MenuItemBuilder::with_id("help-issues", "Report an Issue").build(app)?;
-                let help_submenu = SubmenuBuilder::new(app, "Help")
-                    .item(&support_item)
-                    .item(&issues_item)
-                    .build()?;
-
-                let menu = MenuBuilder::new(app)
-                    .items(&[
-                        &app_submenu,
-                        &edit_submenu,
-                        &view_submenu,
-                        &window_submenu,
-                        &help_submenu,
-                    ])
-                    .build()?;
-
-                app.set_menu(menu)?;
-
-                app.on_menu_event(move |app, event| match event.id().as_ref() {
-                    "help-support" => {
-                        if let Err(e) = app.opener().open_url(SUPPORT_URL, None::<&str>) {
-                            log::warn!("failed to open support url: {}", e);
+        // Optional preload.
+        if preload_mode == "on" {
+            if let Some(path_str) = model_path {
+                let path = std::path::PathBuf::from(path_str);
+                let state = model_state.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::task::spawn_blocking(move || {
+                        log::info!("Preloading local model: {}", path.display());
+                        match local_provider::load_model(&path, gpu_layers) {
+                            Ok(loaded) => {
+                                state.blocking_lock().replace(loaded);
+                                local_provider::mark_used();
+                                log::info!("Model preloaded");
+                            }
+                            Err(e) => log::warn!("Preload failed: {}", e),
                         }
-                    }
-                    "help-issues" => {
-                        if let Err(e) = app.opener().open_url(ISSUES_URL, None::<&str>) {
-                            log::warn!("failed to open issues url: {}", e);
-                        }
-                    }
-                    _ => {}
+                    })
+                    .await
+                    .ok();
                 });
             }
+        }
 
-            let app_dir = app
-                .path()
-                .app_data_dir()
-                .expect("Failed to get app data directory");
-            let database = Database::new(app_dir).expect("Failed to initialize database");
-            let model_state =
-                Arc::new(Mutex::new(None::<ai::local_provider::LoadedModel>)) as SharedModelState;
-
-            // llama.cpp preload + idle-eviction are desktop-only — iOS doesn't
-            // ship llama.cpp and uses MLX via the Swift Tauri plugin instead.
-            #[cfg(not(target_os = "ios"))]
-            {
-                // Read user's preload / idle-evict / power preferences.
-                let (preload_mode, idle_evict_minutes, model_path, gpu_layers) = {
-                    let conn = database.conn.lock().expect("db lock");
-                    let settings: AppSettings = queries::get_setting(&conn, "app_settings")
-                        .ok()
-                        .flatten()
-                        .and_then(|s| serde_json::from_str(&s).ok())
-                        .unwrap_or_default();
-                    let power_mode = settings
-                        .ai
-                        .local_power_mode
-                        .as_deref()
-                        .unwrap_or("balanced")
-                        .to_string();
-                    let (effective_layers, _) = local_provider::resolve_power_profile(
-                        &power_mode,
-                        settings.ai.local_gpu_layers,
-                    );
-                    (
-                        settings
-                            .ai
-                            .local_preload
-                            .clone()
-                            .unwrap_or_else(|| "off".to_string()),
-                        settings.ai.local_idle_evict_minutes.unwrap_or(10),
-                        settings.ai.local_model_path.clone(),
-                        effective_layers,
-                    )
-                };
-
-                // Optional preload.
-                if preload_mode == "on" {
-                    if let Some(path_str) = model_path {
-                        let path = std::path::PathBuf::from(path_str);
-                        let state = model_state.clone();
-                        tauri::async_runtime::spawn(async move {
-                            tokio::task::spawn_blocking(move || {
-                                log::info!("Preloading local model: {}", path.display());
-                                match local_provider::load_model(&path, gpu_layers) {
-                                    Ok(loaded) => {
-                                        state.blocking_lock().replace(loaded);
-                                        local_provider::mark_used();
-                                        log::info!("Model preloaded");
-                                    }
-                                    Err(e) => log::warn!("Preload failed: {}", e),
-                                }
-                            })
-                            .await
-                            .ok();
-                        });
+        // Idle-eviction watcher. 0 minutes = never evict.
+        if idle_evict_minutes > 0 {
+            let state = model_state.clone();
+            let idle_secs = (idle_evict_minutes as i64) * 60;
+            tauri::async_runtime::spawn(async move {
+                let mut ticker = tokio::time::interval(std::time::Duration::from_secs(120));
+                ticker.tick().await;
+                loop {
+                    ticker.tick().await;
+                    let now = chrono::Utc::now().timestamp();
+                    let last = LAST_USED_AT.load(Ordering::Relaxed);
+                    if last == 0 {
+                        continue;
+                    }
+                    if now - last >= idle_secs {
+                        let mut guard = state.lock().await;
+                        if guard.is_some() {
+                            log::info!("Evicting idle local model from VRAM");
+                            guard.take();
+                        }
                     }
                 }
+            });
+        }
+    }
 
-                // Idle-eviction watcher. 0 minutes = never evict.
-                if idle_evict_minutes > 0 {
-                    let state = model_state.clone();
-                    let idle_secs = (idle_evict_minutes as i64) * 60;
-                    tauri::async_runtime::spawn(async move {
-                        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(120));
-                        ticker.tick().await;
-                        loop {
-                            ticker.tick().await;
-                            let now = chrono::Utc::now().timestamp();
-                            let last = LAST_USED_AT.load(Ordering::Relaxed);
-                            if last == 0 {
-                                continue;
-                            }
-                            if now - last >= idle_secs {
-                                let mut guard = state.lock().await;
-                                if guard.is_some() {
-                                    log::info!("Evicting idle local model from VRAM");
-                                    guard.take();
-                                }
-                            }
-                        }
-                    });
-                }
-            }
+    app.manage(database);
+    app.manage(model_state);
+    app.manage(DownloadCancelFlag(Arc::new(AtomicBool::new(false))));
+    app.manage(Arc::new(Mutex::new(SummaryCache::new())) as SharedSummaryCache);
+    app.manage(SummaryGeneration(std::sync::atomic::AtomicU64::new(0)));
+    app.manage(commands::claude_oauth::PasteFlowState::default());
+}
 
-            app.manage(database);
-            app.manage(model_state);
-            app.manage(DownloadCancelFlag(Arc::new(AtomicBool::new(false))));
-            app.manage(Arc::new(Mutex::new(SummaryCache::new())) as SharedSummaryCache);
-            app.manage(SummaryGeneration(std::sync::atomic::AtomicU64::new(0)));
-            app.manage(commands::claude_oauth::PasteFlowState::default());
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
+/// The full command surface of the app. Generic over the runtime so both the
+/// real app and the dev bridge register exactly the same handlers.
+pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync + 'static {
+    tauri::generate_handler![
             // Feeds
             commands::feeds::add_feed,
             commands::feeds::list_feeds,
@@ -343,7 +277,103 @@ pub fn run() {
             commands::claude_oauth::claude_oauth_sign_out,
             commands::claude_oauth::claude_oauth_status,
             commands::claude_oauth::claude_oauth_refresh,
-        ])
+    ]
+}
+
+#[cfg(not(feature = "devbridge"))]
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let _ = env_logger::try_init();
+
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_skim_ai::init())
+        .setup(|app| {
+            #[cfg(desktop)]
+            {
+                use tauri::menu::{
+                    AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, SubmenuBuilder,
+                };
+
+                let about_meta = AboutMetadataBuilder::new()
+                    .name(Some("Skim"))
+                    .website(Some("https://github.com/gm2211/skim"))
+                    .build();
+
+                let app_submenu = SubmenuBuilder::new(app, "Skim")
+                    .about(Some(about_meta))
+                    .separator()
+                    .services()
+                    .separator()
+                    .hide()
+                    .hide_others()
+                    .show_all()
+                    .separator()
+                    .quit()
+                    .build()?;
+
+                let edit_submenu = SubmenuBuilder::new(app, "Edit")
+                    .undo()
+                    .redo()
+                    .separator()
+                    .cut()
+                    .copy()
+                    .paste()
+                    .select_all()
+                    .build()?;
+
+                let view_submenu = SubmenuBuilder::new(app, "View").fullscreen().build()?;
+
+                let window_submenu = SubmenuBuilder::new(app, "Window")
+                    .minimize()
+                    .separator()
+                    .close_window()
+                    .build()?;
+
+                let support_item =
+                    MenuItemBuilder::with_id("help-support", "Skim Support").build(app)?;
+                let issues_item =
+                    MenuItemBuilder::with_id("help-issues", "Report an Issue").build(app)?;
+                let help_submenu = SubmenuBuilder::new(app, "Help")
+                    .item(&support_item)
+                    .item(&issues_item)
+                    .build()?;
+
+                let menu = MenuBuilder::new(app)
+                    .items(&[
+                        &app_submenu,
+                        &edit_submenu,
+                        &view_submenu,
+                        &window_submenu,
+                        &help_submenu,
+                    ])
+                    .build()?;
+
+                app.set_menu(menu)?;
+
+                app.on_menu_event(move |app, event| match event.id().as_ref() {
+                    "help-support" => {
+                        if let Err(e) = app.opener().open_url(SUPPORT_URL, None::<&str>) {
+                            log::warn!("failed to open support url: {}", e);
+                        }
+                    }
+                    "help-issues" => {
+                        if let Err(e) = app.opener().open_url(ISSUES_URL, None::<&str>) {
+                            log::warn!("failed to open issues url: {}", e);
+                        }
+                    }
+                    _ => {}
+                });
+            }
+
+            let app_dir = app
+                .path()
+                .app_data_dir()
+                .expect("Failed to get app data directory");
+            init_state(&app.handle().clone(), app_dir);
+            Ok(())
+        })
+        .invoke_handler(invoke_handler())
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {

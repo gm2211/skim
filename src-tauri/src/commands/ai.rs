@@ -10,7 +10,8 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use crate::AppHandle;
+use tauri::{Emitter, State};
 #[cfg(target_os = "ios")]
 use tauri_plugin_skim_ai::{CompleteArgs, SkimAiExt};
 use tokio::sync::Mutex;
@@ -230,7 +231,7 @@ fn extract_field_fuzzy(text: &str, field: &str) -> Option<String> {
 
 /// Fetch the article URL and convert its body to plain text. Used as a fallback
 /// when the RSS entry only contains a title + link (Hacker News, Reddit, etc).
-async fn fetch_article_text(url: &str) -> Result<String, String> {
+pub(super) async fn fetch_article_text(url: &str) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
         .timeout(std::time::Duration::from_secs(20))
@@ -434,35 +435,7 @@ pub async fn summarize_article(
         let provider_name = settings.ai.provider.as_str();
         if provider_name == "mlx" || provider_name == "foundation-models" {
             // Resolve article body the same way the desktop path does below.
-            let content_text = article.article.content_text.as_deref().unwrap_or("");
-            let html_as_text = article
-                .article
-                .content_html
-                .as_deref()
-                .map(|h| html2text::from_read(h.as_bytes(), 10000))
-                .unwrap_or_default();
-            let local_text = if html_as_text.len() > content_text.len() {
-                html_as_text
-            } else {
-                content_text.to_string()
-            };
-            let text = if local_text.trim().chars().count() < 400 {
-                if let Some(ref url) = article.article.url {
-                    match fetch_article_text(url).await {
-                        Ok(fetched)
-                            if fetched.trim().chars().count()
-                                > local_text.trim().chars().count() =>
-                        {
-                            fetched
-                        }
-                        _ => local_text,
-                    }
-                } else {
-                    local_text
-                }
-            } else {
-                local_text
-            };
+            let text = super::article_body::resolve_article_text(db.inner(), &article.article).await;
             if text.trim().is_empty() {
                 return Err("No article content to summarize.".to_string());
             }
@@ -550,38 +523,10 @@ pub async fn summarize_article(
         .unwrap_or_else(|| default_model(&settings.ai.provider));
 
     // Use the longest available content — prefer content_text, fall back to HTML stripped to text
-    let content_text = article.article.content_text.as_deref().unwrap_or("");
-    let html_as_text = article
-        .article
-        .content_html
-        .as_deref()
-        .map(|h| html2text::from_read(h.as_bytes(), 10000))
-        .unwrap_or_default();
-    let local_text = if html_as_text.len() > content_text.len() {
-        html_as_text
-    } else {
-        content_text.to_string()
-    };
-
-    // Many aggregator feeds (Hacker News, Reddit, some newsletters) only
-    // ship a title + link in the RSS body. If we don't have enough text to
-    // summarize, fetch the linked page and extract its body text.
-    let text = if local_text.trim().chars().count() < 400 {
-        if let Some(ref url) = article.article.url {
-            match fetch_article_text(url).await {
-                Ok(fetched)
-                    if fetched.trim().chars().count() > local_text.trim().chars().count() =>
-                {
-                    fetched
-                }
-                _ => local_text,
-            }
-        } else {
-            local_text
-        }
-    } else {
-        local_text
-    };
+    // The reader's extraction first, then the feed body, then the linked page:
+    // many aggregator feeds (Hacker News, Reddit, most newsletters) ship only a
+    // title and a blurb, and summarizing the blurb is summarizing nothing.
+    let text = super::article_body::resolve_article_text(db.inner(), &article.article).await;
 
     if text.trim().is_empty() {
         return Err("No article content to summarize.".to_string());

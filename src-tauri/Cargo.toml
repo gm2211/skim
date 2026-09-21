@@ -12,6 +12,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [lints.rust]
 dead_code = "deny"
 
+[features]
+# Dev-only HTTP bridge that exposes the Tauri command surface to a browser.
+# Never enabled in a release bundle.
+devbridge = ["tauri/test", "dep:tiny_http"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -43,6 +48,7 @@ base64 = "0.22"
 sha2 = "0.10"
 rand = "0.8"
 dom_smoothie = "0.17"
+tiny_http = { version = "0.12", optional = true }
 
 # llama.cpp — desktop only. Not cross-compilable to iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]

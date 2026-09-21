@@ -1,6 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
+    #[cfg(feature = "devbridge")]
+    if std::env::args().any(|arg| arg == "--dev-bridge") {
+        skim_lib::devbridge::run();
+        return;
+    }
     #[cfg(target_os = "macos")]
     if std::env::args().any(|arg| arg == "--check-on-device-ai") {
         // Exercise the bundled helper under this app's real sandbox identity,
@@ -24,7 +29,8 @@ fn main() {
         }
         return;
     }
-    skim_lib::run()
+    #[cfg(not(feature = "devbridge"))]
+    skim_lib::run();
 }
 
 #[cfg(target_os = "macos")]

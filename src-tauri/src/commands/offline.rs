@@ -1,7 +1,8 @@
 use crate::commands::articles::{fetch_article_content, FullArticleContent};
 use crate::db::{queries, Database};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use crate::AppHandle;
+use tauri::{Emitter, State};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub const OFFLINE_PRELOAD_PROGRESS_EVENT: &str = "skim-reader://offline-preload-progress";

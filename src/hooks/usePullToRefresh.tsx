@@ -40,6 +40,7 @@ export function usePullToRefresh({
   onRefresh: () => Promise<void> | void;
 }) {
   const pullRef = useRef<PullState | null>(null);
+  const releaseMoveTargetRef = useRef<() => void>(() => {});
   const timerRef = useRef<number | null>(null);
   const velocityRef = useRef(0);
   const refreshRef = useRef(onRefresh);
@@ -125,6 +126,7 @@ export function usePullToRefresh({
   }, [enabled, phase]);
 
   const endPull = useCallback(() => {
+    releaseMoveTargetRef.current();
     const pull = pullRef.current;
     if (!pull || pull.intent !== "pull") {
       pullRef.current = null;
@@ -144,19 +146,47 @@ export function usePullToRefresh({
     }
   }, [phase, settle, startRefresh]);
 
+  // React registers touchmove on its root as a passive listener, so
+  // preventDefault() inside an onTouchMove prop is ignored: the list keeps
+  // scrolling underneath the pull and the browser logs "Unable to
+  // preventDefault inside passive event listener invocation". Own the move for
+  // the length of the gesture with a listener of our own instead.
+  const moveTargetRef = useRef<HTMLElement | null>(null);
+  const nativeMoveRef = useRef<((event: globalThis.TouchEvent) => void) | null>(null);
+
+  const releaseMoveTarget = useCallback(() => {
+    const node = moveTargetRef.current;
+    const listener = nativeMoveRef.current;
+    if (node && listener) node.removeEventListener("touchmove", listener);
+    moveTargetRef.current = null;
+    nativeMoveRef.current = null;
+  }, []);
+
   const onTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
     const touch = event.touches[0];
     if (!touch) return;
     beginPull(touch.clientX, touch.clientY);
-  }, [beginPull]);
 
-  const onTouchMove = useCallback((event: TouchEvent<HTMLElement>) => {
-    const touch = event.touches[0];
-    if (!touch) return;
-    if (movePull(touch.clientX, touch.clientY)) event.preventDefault();
-  }, [movePull]);
+    releaseMoveTarget();
+    const node = event.currentTarget;
+    const listener = (moveEvent: globalThis.TouchEvent) => {
+      const moved = moveEvent.touches[0];
+      if (!moved) return;
+      if (movePull(moved.clientX, moved.clientY) && moveEvent.cancelable) {
+        moveEvent.preventDefault();
+      }
+    };
+    node.addEventListener("touchmove", listener, { passive: false });
+    moveTargetRef.current = node;
+    nativeMoveRef.current = listener;
+  }, [beginPull, movePull, releaseMoveTarget]);
 
-  useEffect(() => clearTimer, [clearTimer]);
+  useEffect(() => () => {
+    clearTimer();
+    releaseMoveTarget();
+  }, [clearTimer, releaseMoveTarget]);
+
+  releaseMoveTargetRef.current = releaseMoveTarget;
 
   const progress = Math.max(0, Math.min(1, offset / ACTIVATE_PX));
   const activated = offset >= ACTIVATE_PX || phase === "refreshing";
@@ -212,7 +242,6 @@ export function usePullToRefresh({
   return {
     pullToRefreshHandlers: {
       onTouchStart,
-      onTouchMove,
       onTouchEnd: endPull,
       onTouchCancel: endPull,
     },

@@ -63,6 +63,10 @@ pub fn run() {
 
     let app = mock_builder()
         .plugin(tauri_plugin_opener::init())
+        // The same plugin set the real app registers. Without skim-ai, picking
+        // the MLX or Apple Intelligence tier panics on unmanaged state rather
+        // than reporting that the tier needs a native build.
+        .plugin(tauri_plugin_skim_ai::init())
         .invoke_handler(crate::invoke_handler())
         .build(tauri::generate_context!())
         .expect("failed to build bridge app");

@@ -129,6 +129,30 @@ mod endpoint_tests {
     }
 
     #[test]
+    fn key_based_providers_ask_for_the_key_before_the_network() {
+        for (provider, label) in [("openai", "OpenAI"), ("openrouter", "OpenRouter"), ("xai", "xAI")] {
+            let mut settings = crate::db::models::AppSettings::default().ai;
+            settings.provider = provider.into();
+            let error = create_provider(&settings, None).err().expect("missing key must fail");
+            assert_eq!(error, format!("[configure-ai] {label} API key not set."));
+
+            settings.api_key = Some("   ".into());
+            assert!(create_provider(&settings, None).is_err(), "{provider} accepted a blank key");
+
+            settings.api_key = Some("a-key".into());
+            assert_eq!(create_provider(&settings, None).unwrap().name(), provider);
+        }
+    }
+
+    #[test]
+    fn openrouter_allows_an_unauthenticated_custom_endpoint() {
+        let mut settings = crate::db::models::AppSettings::default().ai;
+        settings.provider = "openrouter".into();
+        settings.endpoint = Some("http://127.0.0.1:4546".into());
+        assert_eq!(create_provider(&settings, None).unwrap().name(), "openrouter");
+    }
+
+    #[test]
     fn xai_requires_its_own_key_and_uses_native_default() {
         let mut settings = crate::db::models::AppSettings::default().ai;
         settings.provider = "xai".into();
@@ -703,6 +727,16 @@ impl AiProvider for ClaudeCliProvider {
     }
 }
 
+/// Providers that authenticate with a key fail usefully only if the key is
+/// checked before the request. `[configure-ai]` is the marker the UI keys off
+/// to offer a way into AI settings.
+fn require_api_key<'a>(api_key: Option<&'a str>, label: &str) -> Result<&'a str, String> {
+    api_key
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+        .ok_or_else(|| format!("[configure-ai] {label} API key not set."))
+}
+
 pub fn create_provider(
     settings: &AiSettings,
     model_state: Option<SharedModelState>,
@@ -732,21 +766,35 @@ pub fn create_provider(
         }
         #[cfg(target_os = "ios")]
         "local" => Err("Local llama.cpp provider is not supported on iOS — use the on-device MLX tier instead".to_string()),
-        "openai" => Ok(Box::new(OpenAiCompatibleProvider::new(
-            "https://api.openai.com",
-            api_key,
-            "openai",
-        ))),
+        // Catch a missing key here rather than letting the provider return a
+        // bare 401: the `[configure-ai]` prefix is what turns the failure into
+        // a link to AI settings instead of an HTTP status.
+        "openai" => {
+            let key = require_api_key(api_key, "OpenAI")?;
+            Ok(Box::new(OpenAiCompatibleProvider::new(
+                "https://api.openai.com",
+                Some(key),
+                "openai",
+            )))
+        }
         "xai" => {
             let key = api_key.filter(|key| !key.trim().is_empty())
                 .ok_or("[configure-ai] xAI API key not set.")?;
             Ok(Box::new(OpenAiCompatibleProvider::new("https://api.x.ai", Some(key), "xai")))
         }
-        "openrouter" => Ok(Box::new(OpenAiCompatibleProvider::new(
-            endpoint.unwrap_or("https://openrouter.ai/api"),
-            api_key,
-            "openrouter",
-        ))),
+        "openrouter" => {
+            // A custom endpoint may be an unauthenticated local proxy; the
+            // real openrouter.ai always needs a key.
+            let key = match endpoint {
+                Some(_) => api_key,
+                None => Some(require_api_key(api_key, "OpenRouter")?),
+            };
+            Ok(Box::new(OpenAiCompatibleProvider::new(
+                endpoint.unwrap_or("https://openrouter.ai/api"),
+                key,
+                "openrouter",
+            )))
+        }
         #[cfg(not(target_os = "ios"))]
         "ollama" => Ok(Box::new(OpenAiCompatibleProvider::new(
             endpoint.unwrap_or("http://localhost:11434"),

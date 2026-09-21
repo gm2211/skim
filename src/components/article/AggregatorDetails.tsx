@@ -18,6 +18,20 @@ function isHttpUrl(url: string): boolean {
   }
 }
 
+/** Splits a link into a readable site name plus the rest of the path, so the
+ *  card can show both on single lines instead of wrapping a raw URL. */
+function linkLabel(url: string): { site: string; path: string } {
+  try {
+    const parsed = new URL(url);
+    return {
+      site: parsed.hostname.replace(/^www\./i, ""),
+      path: `${parsed.pathname}${parsed.search}`.replace(/\/+$/, ""),
+    };
+  } catch {
+    return { site: url, path: "" };
+  }
+}
+
 export function isAggregatorUrl(url: string): boolean {
   const host = aggregatorHost(url);
   return !!host && (
@@ -37,10 +51,10 @@ export function AggregatorDetails({ url }: { url: string }) {
   });
 
   if (!supported || (!isLoading && !data && !isError)) return null;
-  if (isLoading) return <p className="text-text-muted text-sm">Loading discussion…</p>;
+  if (isLoading) return <p className="article-reader-aggregator text-text-muted text-sm">Loading discussion…</p>;
   if (isError || !data) {
     return (
-      <div className="flex items-center gap-3 text-text-muted text-sm">
+      <div className="article-reader-aggregator flex items-center gap-3 text-text-muted text-sm">
         <span>Discussion unavailable.</span>
         <button type="button" className="text-accent hover:underline" onClick={() => openUrl(url)}>
           Open discussion
@@ -49,23 +63,26 @@ export function AggregatorDetails({ url }: { url: string }) {
     );
   }
 
+  const linked = data.external_url && isHttpUrl(data.external_url) ? linkLabel(data.external_url) : null;
+
   return (
-    <section className="flex flex-col gap-4" aria-label="Discussion details">
+    <section className="article-reader-aggregator flex flex-col gap-4" aria-label="Discussion details">
       {data.selftext && (
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
           <div className="text-text-muted text-xs font-semibold uppercase tracking-wider mb-2">Post</div>
-          <p className="text-text-primary whitespace-pre-wrap">{data.selftext}</p>
+          <p className="text-text-primary whitespace-pre-wrap break-words">{data.selftext}</p>
         </div>
       )}
-      {data.external_url && isHttpUrl(data.external_url) && (
+      {linked && (
         <button
           type="button"
-          className="text-left rounded-xl border border-white/10 bg-white/[0.03] p-4 hover:bg-white/[0.06] transition-colors"
+          className="w-full min-w-0 overflow-hidden text-left rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 hover:bg-white/[0.06] transition-colors"
           onClick={() => openUrl(data.external_url!)}
           aria-label="Open linked story"
         >
-          <div className="text-accent text-xs font-semibold uppercase tracking-wider mb-1">Linked story</div>
-          <div className="text-text-primary text-sm break-all">{data.external_url}</div>
+          <div className="text-accent text-xs font-semibold uppercase tracking-wider mb-1.5">Linked story</div>
+          <div className="text-text-primary text-sm font-medium truncate">{linked.site}</div>
+          {linked.path && <div className="text-text-muted text-xs truncate mt-0.5">{linked.path}</div>}
         </button>
       )}
       {data.comments.length > 0 && (
@@ -76,7 +93,7 @@ export function AggregatorDetails({ url }: { url: string }) {
               <div className="text-text-secondary text-xs mb-2">
                 {comment.author}{comment.score != null ? ` · ${comment.score} points` : ""}
               </div>
-              <p className="text-text-primary whitespace-pre-wrap">{comment.body}</p>
+              <p className="text-text-primary whitespace-pre-wrap break-words">{comment.body}</p>
             </article>
           ))}
         </div>

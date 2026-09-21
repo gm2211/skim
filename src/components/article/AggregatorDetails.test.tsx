@@ -41,6 +41,32 @@ describe("AggregatorDetails", () => {
     expect(fetchAggregatorDetails).toHaveBeenCalledWith("https://www.reddit.com/r/test/comments/abc/post", 10);
   });
 
+  it("shows the linked story as site name plus path, not a raw URL", async () => {
+    vi.mocked(fetchAggregatorDetails).mockResolvedValue({
+      kind: "hacker_news",
+      selftext: null,
+      external_url: "https://blog.janestreet.com/a-study-of-sequence-weighting-at-scale/",
+      comments: [],
+    });
+    renderDetails("https://news.ycombinator.com/item?id=123");
+
+    expect(await screen.findByText("blog.janestreet.com")).toBeInTheDocument();
+    expect(screen.getByText("/a-study-of-sequence-weighting-at-scale")).toBeInTheDocument();
+    expect(screen.queryByText(/^https:\/\//)).not.toBeInTheDocument();
+  });
+
+  it("drops a www prefix and omits an empty path", async () => {
+    vi.mocked(fetchAggregatorDetails).mockResolvedValue({
+      kind: "hacker_news",
+      selftext: null,
+      external_url: "https://www.example.com/",
+      comments: [],
+    });
+    renderDetails("https://news.ycombinator.com/item?id=456");
+
+    expect(await screen.findByText("example.com")).toBeInTheDocument();
+  });
+
   it("does not query ordinary article URLs", async () => {
     renderDetails("https://example.com/story");
     await waitFor(() => expect(fetchAggregatorDetails).not.toHaveBeenCalled());

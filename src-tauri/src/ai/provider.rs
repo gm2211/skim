@@ -769,7 +769,7 @@ pub fn create_provider(
             let model_path = settings
                 .local_model_path
                 .as_deref()
-                .ok_or("No local model selected. Go to Settings to download one.")?;
+                .ok_or("[configure-ai] No local model selected. Go to Settings to download one.")?;
             let power_mode = settings.local_power_mode.as_deref().unwrap_or("balanced");
             let user_layers = settings.local_gpu_layers;
             let (effective_layers, n_threads) =

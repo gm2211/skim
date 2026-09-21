@@ -15,6 +15,7 @@ import type { FeedlyConnectionStatus, FeedlyImportResult } from "../../services/
 import { useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
+import { useDialogFocus } from "../../hooks/useDialogFocus";
 
 // Feedly's /back route carries nextUri through login; /opml is relative to
 // Feedly's /i router base. Direct /i/opml sends signed-out users to the home page.
@@ -52,6 +53,10 @@ export function AddFeedDialog() {
     isPhone,
     () => setShowAddFeed(false),
   );
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Without this the only way out was the close button: no Escape, no
+  // backdrop click, and Tab walked the list behind the dialog.
+  useDialogFocus(dialogRef, () => setShowAddFeed(false));
 
   useEffect(() => {
     setTab(initialTab);
@@ -60,6 +65,11 @@ export function AddFeedDialog() {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-feed-title"
+        tabIndex={-1}
         className="border border-white/10 rounded-2xl w-full max-w-md mx-4 shadow-2xl overflow-hidden"
         style={{ background: "rgba(22, 27, 34, 0.95)", ...swipeToDismissStyle }}
       >
@@ -68,7 +78,7 @@ export function AddFeedDialog() {
           style={{ padding: "16px 16px 0", touchAction: isPhone ? "pan-y" : undefined }}
           {...swipeToDismissHandlers}
         >
-          <h2 style={{ fontSize: 18, fontWeight: 600 }} className="text-text-primary">Add Feed</h2>
+          <h2 id="add-feed-title" style={{ fontSize: 18, fontWeight: 600 }} className="text-text-primary">Add Feed</h2>
           <button
             onClick={() => setShowAddFeed(false)}
             className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"

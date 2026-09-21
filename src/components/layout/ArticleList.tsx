@@ -62,7 +62,11 @@ export function buildArticleFilter({
     case "today":
       break;
   }
-  if (listFilter === "unread") base.is_read = false;
+  // Starred is a keep-this list, not a queue: you star an article because you
+  // just read it, so applying the unread filter empties the view at exactly
+  // the moment it becomes useful, under an empty state telling you to star
+  // things. Every other view honours the filter.
+  if (listFilter === "unread" && sidebarView.type !== "starred") base.is_read = false;
   if (listFilter === "starred") base.is_starred = true;
   return base;
 }

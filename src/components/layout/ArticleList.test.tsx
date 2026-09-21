@@ -17,6 +17,26 @@ describe("buildArticleFilter", () => {
     })).toEqual({ limit: 200, search: "climate" });
   });
 
+  it("shows read articles in Starred, which is a keep-this list", () => {
+    expect(buildArticleFilter({
+      sidebarView: { type: "starred" },
+      listFilter: "unread",
+      pageLimit: 200,
+      searchQuery: "",
+      folderFeedIds: null,
+    })).toEqual({ limit: 200, is_starred: true });
+  });
+
+  it("still hides read articles everywhere else", () => {
+    expect(buildArticleFilter({
+      sidebarView: { type: "all" },
+      listFilter: "unread",
+      pageLimit: 200,
+      searchQuery: "",
+      folderFeedIds: null,
+    })).toEqual({ limit: 200, is_read: false });
+  });
+
   it("keeps folder feed membership when search is cleared", () => {
     expect(buildArticleFilter({
       sidebarView: { type: "folder", folderId: "folder-1" },

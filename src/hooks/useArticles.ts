@@ -31,6 +31,8 @@ export function useMarkRead() {
     mutationFn: commands.markArticlesRead,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["recent"] });
+      qc.invalidateQueries({ queryKey: ["article"] });
       qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
@@ -44,6 +46,7 @@ export function useMarkUnread() {
     mutationFn: commands.markArticlesUnread,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["recent"] });
       qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["article"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
@@ -55,9 +58,11 @@ export function useMarkUnread() {
 export function useMarkAllRead() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (feedId?: string | null) => commands.markAllRead(feedId),
+    mutationFn: commands.markAllRead,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["recent"] });
+      qc.invalidateQueries({ queryKey: ["article"] });
       qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
@@ -71,6 +76,7 @@ export function useToggleRead() {
     mutationFn: commands.toggleRead,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["recent"] });
       qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["article"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
@@ -85,6 +91,7 @@ export function useToggleStar() {
     mutationFn: commands.toggleStar,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["recent"] });
       qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["article"] });
     },

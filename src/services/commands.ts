@@ -270,8 +270,10 @@ export const markArticlesRead = (articleIds: string[]) =>
   invoke<void>("mark_articles_read", { articleIds });
 export const markArticlesUnread = (articleIds: string[]) =>
   invoke<void>("mark_articles_unread", { articleIds });
-export const markAllRead = (feedId?: string | null) =>
-  invoke<void>("mark_all_read", { feedId: feedId ?? null });
+export const markAllRead = (scope?: string | null | { filter: ArticleFilter; recentOnly: boolean }) =>
+  invoke<void>("mark_all_read", typeof scope === "object" && scope !== null
+    ? { feedId: null, filter: scope.filter, recentOnly: scope.recentOnly }
+    : { feedId: scope ?? null });
 export const toggleStar = (articleId: string) =>
   invoke<boolean>("toggle_star", { articleId });
 export const toggleRead = (articleId: string) =>

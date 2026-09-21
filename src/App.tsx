@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { triageArticles, refreshAllFeeds, importOpml } from "./services/commands";
 import { useQueryClient } from "@tanstack/react-query";
 import { AIBootDisclaimer } from "./components/common/AIBootDisclaimer";
+import { acceptAiDisclaimer, hasAcceptedAiDisclaimer } from "./lib/aiDisclaimer";
 
 type OpmlImportStatus = {
   phase: "importing" | "refreshing" | "done" | "error";
@@ -33,12 +34,17 @@ function App() {
   const { showAddFeed, showSettings, selectedArticleId, listCollapsed, sidebarCollapsed, isPhone, phonePane, sidebarView } = useUiStore();
   const isToday = sidebarView.type === "today";
   const qc = useQueryClient();
-  const [showBootDisclaimer, setShowBootDisclaimer] = useState(true);
+  const [showBootDisclaimer, setShowBootDisclaimer] = useState(() => !hasAcceptedAiDisclaimer());
   const [opmlImportStatus, setOpmlImportStatus] = useState<OpmlImportStatus | null>(null);
   const [phonePaneDragOffset, setPhonePaneDragOffset] = useState(0);
   const [phonePaneTransition, setPhonePaneTransition] = useState<PhonePaneTransition>("slide");
   const [suppressNextPhonePaneTransition, setSuppressNextPhonePaneTransition] = useState(false);
   const lastRefreshRef = useRef<number>(Date.now());
+
+  const dismissBootDisclaimer = () => {
+    acceptAiDisclaimer();
+    setShowBootDisclaimer(false);
+  };
 
   // Auto-load feed articles on startup. OPML import intentionally registers
   // feeds quickly, then this normal refresh path fills articles.
@@ -446,7 +452,10 @@ function App() {
                 pointerEvents: paneIndex === 0 ? "auto" : "none",
                 contain: "layout paint",
               }}
-              aria-hidden={paneIndex !== 0}
+              // inert, not aria-hidden: the off-screen panes keep their
+              // focusable controls, so aria-hidden alone left Tab walking
+              // buttons nobody can see.
+              inert={paneIndex !== 0}
             >
               <Sidebar />
             </div>
@@ -456,7 +465,7 @@ function App() {
                 pointerEvents: paneIndex === 1 ? "auto" : "none",
                 contain: "layout paint",
               }}
-              aria-hidden={paneIndex !== 1}
+              inert={paneIndex !== 1}
             >
               {isToday ? <TodayEditionPane /> : <ArticleList />}
             </div>
@@ -466,7 +475,7 @@ function App() {
                 pointerEvents: paneIndex === 2 ? "auto" : "none",
                 contain: "layout paint",
               }}
-              aria-hidden={paneIndex !== 2}
+              inert={paneIndex !== 2}
             >
               {selectedArticleId ? <ArticleDetail /> : <div className="flex-1" />}
             </div>
@@ -475,7 +484,7 @@ function App() {
         {opmlToast}
         {showAddFeed && <AddFeedDialog />}
         {showSettings && <SettingsDialog />}
-        {showBootDisclaimer && <AIBootDisclaimer onDismiss={() => setShowBootDisclaimer(false)} />}
+        {showBootDisclaimer && <AIBootDisclaimer onDismiss={dismissBootDisclaimer} />}
       </div>
     );
   }
@@ -521,7 +530,7 @@ function App() {
       {opmlToast}
       {showAddFeed && <AddFeedDialog />}
       {showSettings && <SettingsDialog />}
-      {showBootDisclaimer && <AIBootDisclaimer onDismiss={() => setShowBootDisclaimer(false)} />}
+      {showBootDisclaimer && <AIBootDisclaimer onDismiss={dismissBootDisclaimer} />}
     </div>
   );
 }

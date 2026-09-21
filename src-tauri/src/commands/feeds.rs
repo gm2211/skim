@@ -657,6 +657,7 @@ pub struct FolderWithCount {
     #[serde(flatten)]
     pub folder: Folder,
     pub feed_count: i64,
+    pub matching_feed_ids: Vec<String>,
 }
 
 #[tauri::command]
@@ -668,12 +669,14 @@ pub async fn list_folders(db: State<'_, Database>) -> Result<Vec<FolderWithCount
     let out = folders
         .into_iter()
         .map(|folder| {
-            let feed_count = if folder.is_smart {
-                eval_smart_folder(&folder, &feeds).len() as i64
+            let matching_feed_ids: Vec<String> = if folder.is_smart {
+                eval_smart_folder(&folder, &feeds).into_iter().map(|feed| feed.id.clone()).collect()
             } else {
-                feeds.iter().filter(|f| f.folder_id.as_deref() == Some(&folder.id)).count() as i64
+                feeds.iter().filter(|feed| feed.folder_id.as_deref() == Some(&folder.id))
+                    .map(|feed| feed.id.clone()).collect()
             };
-            FolderWithCount { folder, feed_count }
+            let feed_count = matching_feed_ids.len() as i64;
+            FolderWithCount { folder, feed_count, matching_feed_ids }
         })
         .collect();
     Ok(out)
@@ -885,6 +888,9 @@ fn validate_smart_rules(rules: &SmartRules) -> Result<(), String> {
     for r in &rules.rules {
         match r {
             SmartRule::RegexTitle { pattern } | SmartRule::RegexUrl { pattern } => {
+                if pattern.is_empty() {
+                    return Err("Regex rule cannot have empty pattern".to_string());
+                }
                 regex::Regex::new(pattern)
                     .map_err(|e| format!("Invalid regex '{}': {}", pattern, e))?;
             }
@@ -901,6 +907,68 @@ fn validate_smart_rules(rules: &SmartRules) -> Result<(), String> {
 #[cfg(test)]
 mod smart_folder_validation_tests {
     use super::*;
+
+    #[test]
+    fn smart_folders_match_shared_native_corpus() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../shared/fixtures/smart-folder-matches.json"
+        )).unwrap();
+        let feeds: Vec<Feed> = [("title", "Science", None),
+            ("category", "Different publication", Some("Science"))]
+            .into_iter().map(|(id, title, category)| Feed {
+                id: id.into(), title: title.into(),
+                url: format!("https://example.com/{id}"), site_url: None,
+                description: None, icon_url: None, feedly_id: None,
+                created_at: 0, updated_at: 0, last_fetched_at: None,
+                folder_id: None, opml_category: category.map(str::to_owned),
+            }).collect();
+        for case in cases.as_array().unwrap() {
+            let folder = Folder {
+                id: "smart".into(), name: "Smart".into(), sort_order: 0,
+                is_smart: true, created_at: 0,
+                rules_json: Some(case["rules_json"].as_str().unwrap().into()),
+            };
+            let actual: Vec<&str> = eval_smart_folder(&folder, &feeds)
+                .into_iter().map(|feed| feed.id.as_str()).collect();
+            let expected: Vec<&str> = case["expected"].as_array().unwrap()
+                .iter().map(|id| id.as_str().unwrap()).collect();
+            assert_eq!(actual, expected, "{}", case["name"]);
+        }
+    }
+
+    #[test]
+    fn invalid_persisted_all_rule_does_not_match_every_feed() {
+        let feed = Feed {
+            id: "science".into(), title: "Science Daily".into(),
+            url: "https://example.com/rss".into(), site_url: None,
+            description: None, icon_url: None, feedly_id: None,
+            created_at: 0, updated_at: 0, last_fetched_at: None,
+            folder_id: None, opml_category: Some("Technology".into()),
+        };
+        let folder = Folder {
+            id: "smart".into(), name: "Smart".into(), sort_order: 0,
+            is_smart: true, created_at: 0,
+            rules_json: Some(r#"{"mode":"all","rules":[{"type":"regex_title","pattern":"["}]}"#.into()),
+        };
+        assert!(eval_smart_folder(&folder, &[feed]).is_empty());
+    }
+
+    #[test]
+    fn native_legacy_inline_case_flag_matches_in_rust() {
+        let feed = Feed {
+            id: "science".into(), title: "SCIENCE Daily".into(),
+            url: "https://example.com/rss".into(), site_url: None,
+            description: None, icon_url: None, feedly_id: None,
+            created_at: 0, updated_at: 0, last_fetched_at: None,
+            folder_id: None, opml_category: Some("Technology".into()),
+        };
+        let folder = Folder {
+            id: "smart".into(), name: "Smart".into(), sort_order: 0,
+            is_smart: true, created_at: 0,
+            rules_json: Some(r#"{"mode":"all","rules":[{"id":"legacy","type":"regex_title","pattern":"(?i:science)","pattern_or_value":"science","case_sensitive":false}]}"#.into()),
+        };
+        assert_eq!(eval_smart_folder(&folder, &[feed]).len(), 1);
+    }
 
     #[test]
     fn invalid_rules_are_rejected_before_conversion_writes() {
@@ -920,7 +988,7 @@ fn eval_smart_folder<'a>(folder: &Folder, feeds: &'a [Feed]) -> Vec<&'a Feed> {
     let Ok(rules) = serde_json::from_str::<SmartRules>(json) else {
         return Vec::new();
     };
-    if rules.rules.is_empty() {
+    if validate_smart_rules(&rules).is_err() {
         return Vec::new();
     }
 
@@ -937,6 +1005,12 @@ fn eval_smart_folder<'a>(folder: &Folder, feeds: &'a [Feed]) -> Vec<&'a Feed> {
             SmartRule::OpmlCategory { value } => Some(CompiledRule::Category(value.to_lowercase())),
         })
         .collect();
+
+    // Never weaken persisted rules by silently dropping an invalid regex.
+    // In particular, all([]) would otherwise include every feed.
+    if compiled.len() != rules.rules.len() {
+        return Vec::new();
+    }
 
     feeds
         .iter()

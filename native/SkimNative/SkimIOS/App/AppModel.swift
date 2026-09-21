@@ -111,6 +111,12 @@ final class AppModel: ObservableObject {
     @Published var offlineCachedArticleCount = 0
     @Published var offlinePreloadMessage: String?
 
+    @Published var todayEdition: TodayEditionSnapshot?
+    @Published var isLoadingToday = false
+    @Published var isUpdatingToday = false
+    @Published var todayError: String?
+    private var todayLoadID = UUID()
+
     let store: SkimStore
     let tasteStore = TasteStore()
     private let importer = OPMLImportService()
@@ -127,6 +133,57 @@ final class AppModel: ObservableObject {
             self.store = try SkimStore(databaseURL: url)
         } catch {
             fatalError("Could not open Skim database: \(error)")
+        }
+    }
+
+    // Edition generation, ranking, frozen content, and consumption live in SkimCore.
+    func loadTodayEdition(storyLimit: Int) async {
+        let requestID = UUID()
+        todayLoadID = requestID
+        let now = Date()
+        let start = Calendar.current.startOfDay(for: now)
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
+        // Keep navigation links mounted during a same-edition refresh, including
+        // foreground reloads while an article reader is above Today in the stack.
+        if let existing = todayEdition,
+           existing.edition.startsAt != start || existing.edition.endsAt != end
+            || existing.edition.storyLimit != storyLimit {
+            todayEdition = nil
+        }
+        isLoadingToday = todayEdition == nil
+        todayError = nil
+        defer { if todayLoadID == requestID { isLoadingToday = false } }
+        do {
+            let edition = try await store.getOrGenerateTodayEdition(
+                startsAt: start, endsAt: end, storyLimit: storyLimit,
+                generatedAt: now, preferences: tasteStore.todayRankingPreferences()
+            )
+            guard todayLoadID == requestID else { return }
+            todayEdition = edition
+        } catch {
+            guard todayLoadID == requestID else { return }
+            todayError = error.localizedDescription
+        }
+    }
+
+    func setTodayConsumed(_ item: TodayEditionItem) async {
+        guard let edition = todayEdition, !isUpdatingToday else { return }
+        let requestID = todayLoadID
+        isUpdatingToday = true
+        todayError = nil
+        defer { isUpdatingToday = false }
+        do {
+            let updated = try await store.setTodayEditionItemConsumed(
+                editionID: edition.id, storyID: item.snapshot.storyID,
+                isConsumed: !item.snapshot.isConsumed
+            )
+            if todayLoadID == requestID, todayEdition?.id == edition.id {
+                todayEdition = updated
+            }
+            await reloadArticles()
+        } catch {
+            guard todayLoadID == requestID, todayEdition?.id == edition.id else { return }
+            todayError = error.localizedDescription
         }
     }
 

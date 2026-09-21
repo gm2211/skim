@@ -53,7 +53,7 @@ describe("CatchupDialog", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: "Run catch-up" }));
 
     expect(await screen.findByRole("button", { name: "Open AI settings" })).toBeInTheDocument();
-    expect(screen.queryByText("No AI provider configured")).not.toBeInTheDocument();
+    expect(screen.getByText("No AI provider configured")).toBeInTheDocument();
   });
 
   it("shows generic failures with an explicit retry", async () => {

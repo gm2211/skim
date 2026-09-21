@@ -32,6 +32,8 @@ export interface Folder {
   rules_json: string | null;
   created_at: number;
   feed_count: number;
+  /** Authoritative smart-folder membership from the Rust evaluator. */
+  matching_feed_ids?: string[];
 }
 
 export interface Article {

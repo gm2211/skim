@@ -6,7 +6,7 @@ DS4_REVISION=bd66c402070042bf0a79ad6ece8242de4c93680c
 SOURCE_DIR="$PROJECT_DIR/.build/ds4-source"
 OUTPUT_DIR="$PROJECT_DIR/.build/ds4-bundle"
 if [ ! -d "$SOURCE_DIR/.git" ]; then
-  git clone --no-checkout https://github.com/antirez/ds4.git "$SOURCE_DIR"
+  git clone https://github.com/antirez/ds4.git "$SOURCE_DIR"
 fi
 if [ "$(git -C "$SOURCE_DIR" rev-parse HEAD)" != "$DS4_REVISION" ]; then
   test -z "$(git -C "$SOURCE_DIR" status --porcelain --untracked-files=no)"

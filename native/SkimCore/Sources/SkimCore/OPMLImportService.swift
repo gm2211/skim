@@ -26,13 +26,26 @@ public struct OPMLImportService: ImportService {
 
 private final class OPMLParserDelegate: NSObject, XMLParserDelegate {
     var feeds: [ImportedFeed] = []
+    private var categories: [String?] = []
 
-    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String: String] = [:]) {
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes: [String: String] = [:]) {
         guard elementName.lowercased() == "outline" else { return }
-        let xml = attributeDict["xmlUrl"] ?? attributeDict["xmlurl"] ?? attributeDict["url"]
+        let parent = categories.last ?? nil
+        let xml = attributes["xmlUrl"] ?? attributes["xmlurl"] ?? attributes["url"]
+        let text = attributes["text"].flatMap { $0.isEmpty ? nil : $0 } ?? attributes["title"]
+        // Desktop OPML imports use the nearest enclosing category, not a joined path.
+        categories.append(xml == nil ? text : parent)
         guard let xml, let xmlURL = URL(string: xml)?.upgradingHTTPToHTTPS() else { return }
-        let title = attributeDict["title"] ?? attributeDict["text"] ?? xmlURL.host ?? xml
-        let html = attributeDict["htmlUrl"] ?? attributeDict["htmlurl"]
-        feeds.append(ImportedFeed(title: title, xmlURL: xmlURL, htmlURL: html.flatMap { URL(string: $0)?.upgradingHTTPToHTTPS() }))
+        let html = attributes["htmlUrl"] ?? attributes["htmlurl"]
+        feeds.append(ImportedFeed(
+            title: text ?? xmlURL.host ?? xml,
+            xmlURL: xmlURL,
+            htmlURL: html.flatMap { URL(string: $0)?.upgradingHTTPToHTTPS() },
+            opmlCategory: parent
+        ))
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+        if elementName.lowercased() == "outline" { _ = categories.popLast() }
     }
 }

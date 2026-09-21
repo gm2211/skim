@@ -15,7 +15,13 @@ pnpm install
 pnpm tauri dev
 ```
 
-Desktop via [Tauri 2](https://tauri.app). macOS / Windows / Linux. iOS / iPadOS in progress.
+Desktop uses [Tauri 2](https://tauri.app) with React and Rust. The iOS / iPadOS
+release uses the separate SwiftUI app in `native/SkimNative` and the Swift
+`SkimCore` package. The native macOS target is a placeholder; the shipping
+desktop app does not use `SkimCore`.
+
+See the [mobile/desktop comparison](docs/MOBILE_DESKTOP_COMPARISON.md) for core
+ownership, feature differences, and the migration needed for actual code sharing.
 
 Full feature list and architecture in [`docs/SPEC.md`](docs/SPEC.md).
 

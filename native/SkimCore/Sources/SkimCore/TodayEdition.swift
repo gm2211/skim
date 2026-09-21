@@ -1,5 +1,31 @@
 import Foundation
 
+/// Personalization captured when generating an edition. Reopening an existing
+/// edition preserves its frozen selection even if these preferences change.
+public struct TodayRankingPreferences: Sendable {
+    public var feedWeights: [String: Double]
+    public var pinnedArticleIDs: Set<String>
+
+    public init(
+        feedWeights: [String: Double] = [:],
+        pinnedArticleIDs: Set<String> = []
+    ) {
+        self.feedWeights = feedWeights
+        self.pinnedArticleIDs = pinnedArticleIDs
+    }
+
+    func signal(for articles: [Article]) -> Double {
+        let stars = Double(min(2, articles.filter(\.isStarred).count)) * 0.5
+        let pin = articles.contains { pinnedArticleIDs.contains($0.id) } ? 1.25 : 0
+        let feedIDs = Set(articles.map(\.feedID)).sorted()
+        let taste = feedIDs.reduce(0.0) { total, id in
+            let weight = feedWeights[id] ?? 0
+            return total + (weight.isFinite ? max(-1, min(1, weight)) : 0)
+        } / Double(max(1, feedIDs.count))
+        return stars + pin + taste
+    }
+}
+
 public enum EditionSectionRole: String, Codable, CaseIterable, Hashable, Sendable {
     case topStories = "top_stories"
     case widelyCovered = "widely_covered"
@@ -182,7 +208,7 @@ enum TodayEditionBuilder {
             return (
                 rankedStory,
                 candidate,
-                section(for: rankedStory, revision: candidate.revision)
+                section(for: rankedStory, sources: candidate.sourceArticles)
             )
         }
         choices.sort {
@@ -300,9 +326,9 @@ enum TodayEditionBuilder {
 
     private static func section(
         for ranked: RankedStory,
-        revision: StoryRevision
+        sources: [TodayEditionCandidateSource]
     ) -> EditionSectionRole {
-        if revision.deltaSummary == StoryMembershipType.update.rawValue {
+        if sources.contains(where: { $0.membership.membershipType == .update }) {
             return .updates
         }
         if ranked.isUniqueFind {

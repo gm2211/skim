@@ -188,20 +188,19 @@ fn query_keywords(query: &str) -> Vec<String> {
         .collect()
 }
 
-fn article_excerpt(a: &crate::db::models::ArticleWithFeed, max_chars: usize) -> String {
-    let content_text = a.article.content_text.as_deref().unwrap_or("");
-    let html_text = a
-        .article
-        .content_html
-        .as_deref()
-        .map(|h| html2text::from_read(h.as_bytes(), 10000))
-        .unwrap_or_default();
-    let src = if html_text.len() > content_text.len() {
-        html_text
-    } else {
-        content_text.to_string()
-    };
-    src.chars().take(max_chars).collect()
+/// On a summary-only feed the stored body is a one-line teaser, so an excerpt
+/// taken from it says almost nothing. Prefer the reader's cached extraction
+/// where there is one. Stays off the network: this runs once per candidate
+/// article on every question.
+fn article_excerpt(
+    db: &Database,
+    a: &crate::db::models::ArticleWithFeed,
+    max_chars: usize,
+) -> String {
+    crate::commands::article_body::local_article_text(db, &a.article)
+        .chars()
+        .take(max_chars)
+        .collect()
 }
 
 /// Chat across multiple articles. Scope determines which articles form the
@@ -336,7 +335,7 @@ pub async fn chat_with_articles(
                     .unwrap_or_default()
             })
             .unwrap_or_default();
-        let excerpt = article_excerpt(a, 400);
+        let excerpt = article_excerpt(db.inner(), a, 400);
         context.push_str(&format!(
             "[{i}] Title: {title}\nSource: {source}\nAuthor: {author}\nDate: {date}\nURL: {url}\nExcerpt: {excerpt}\n\n",
             i = i + 1,

@@ -10,6 +10,7 @@ import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { useSettings } from "../../hooks/useSettings";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
+import { Select } from "../ui/Select";
 
 interface Props {
   onClose: () => void;
@@ -221,24 +222,22 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
         </div>
 
         <div className="flex items-end gap-3 border-b border-white/5" style={{ padding: isPhone ? "12px 16px" : "12px 24px" }}>
-          <label className="flex min-w-0 flex-1 flex-col gap-1">
+          <label className="flex min-w-0 flex-col gap-1">
             <span className="text-text-muted" style={{ fontSize: 12, fontWeight: 600 }}>Include</span>
-          <select
-            value={scope}
-            onChange={(e) => setScope(e.target.value as "inbox" | "unread")}
-            disabled={loading}
-            className="border border-white/10 rounded-lg text-text-primary min-w-0"
-            style={{ background: "rgba(255,255,255,0.05)", padding: "9px 12px", fontSize: 13, minHeight: 40 }}
-          >
-            <option value="inbox">Priority inbox</option>
-            <option value="unread">All unread articles</option>
-          </select>
+            <Select
+              value={scope}
+              onChange={(e) => setScope(e.target.value as "inbox" | "unread")}
+              disabled={loading}
+            >
+              <option value="inbox">Priority inbox</option>
+              <option value="unread">All unread articles</option>
+            </Select>
           </label>
           <button
             onClick={run}
             disabled={loading || providerUnavailable}
             className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium flex-shrink-0 whitespace-nowrap"
-            style={{ padding: "9px 16px", fontSize: 13, minHeight: 40 }}
+            style={{ padding: "9px 16px", fontSize: 13, minHeight: 40, marginLeft: "auto" }}
           >
             {loading ? "Working…" : report ? "Run again" : "Run catch-up"}
           </button>

@@ -81,6 +81,14 @@ button, a, input, select, textarea, [role="button"] {
   -webkit-app-region: no-drag;
 }
 
+/* The popup list of a <select> is drawn by the platform; on Linux/Windows
+   webviews it inherits the page's transparent background and becomes
+   unreadable, so give the options our own surface colour. */
+select option {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
 .tap-target {
   min-width: 44px;
   min-height: 44px;

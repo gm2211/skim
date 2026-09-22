@@ -4,7 +4,7 @@ import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useArticles, useArticleCount, useMarkAllRead, useMarkRead, useMarkUnread, useToggleRead, useToggleStar } from "../../hooks/useArticles";
 import { useInboxArticles } from "../../hooks/useInbox";
 import { useThemes, useArticleThemeTags } from "../../hooks/useThemes";
-import { useRecentArticles, useReadMatchCount, useRemoveRecent } from "../../hooks/useRecent";
+import { useRecentArticles, useRemoveRecent } from "../../hooks/useRecent";
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useFolders } from "../../hooks/useFolders";
 import { feedsForFolder } from "../../lib/smartFolder";
@@ -65,6 +65,32 @@ export function buildArticleFilter({
   if (listFilter === "unread") base.is_read = false;
   if (listFilter === "starred") base.is_starred = true;
   return base;
+}
+
+/** Resolve the whole visible scope; the backend removes pagination before writing. */
+export function buildMarkAllReadScope({
+  sidebarView, listFilter, searchQuery, folderFeedIds, activeThemeId,
+}: {
+  sidebarView: SidebarView;
+  listFilter: "all" | "unread" | "starred";
+  searchQuery: string;
+  folderFeedIds: string[] | null;
+  activeThemeId: string | null;
+}): { filter: ArticleFilter; recentOnly: boolean } {
+  const searching = searchQuery.trim().length > 0;
+  const inbox = sidebarView.type === "inbox" && !searching;
+  const recent = sidebarView.type === "recent" && !searching;
+  const filter = buildArticleFilter({
+    sidebarView, listFilter: inbox || recent ? "all" : listFilter,
+    searchQuery, folderFeedIds, pageLimit: 200,
+  });
+  filter.is_read = false;
+  if (inbox && activeThemeId) filter.theme_id = activeThemeId;
+  // Today is a frozen edition, which ArticleFilter cannot express. An
+  // unscoped filter here would clear every unread article, so fail closed
+  // on the empty feed set instead.
+  if (sidebarView.type === "today" && !searching) filter.feed_ids = [];
+  return { filter, recentOnly: recent };
 }
 
 type StickyArticleEntry = {
@@ -221,10 +247,10 @@ export function ArticleList() {
     articleIndex: number;
   } | null>(null);
 
-  const isInbox = sidebarView.type === "inbox";
-  const isRecent = sidebarView.type === "recent";
   const normalizedSearch = searchQuery.trim();
   const isSearchActive = normalizedSearch.length > 0;
+  const isInbox = sidebarView.type === "inbox" && !isSearchActive;
+  const isRecent = sidebarView.type === "recent" && !isSearchActive;
   const selectedFolderFeedIds = useMemo(() => {
     if (sidebarView.type !== "folder") return null;
     const folder = folders?.find((candidate) => candidate.id === sidebarView.folderId);
@@ -277,9 +303,6 @@ export function ArticleList() {
     [isRecent, recentArticlesRaw],
   );
 
-  const { data: readMatchCount } = useReadMatchCount(searchQuery);
-  const [includeRead, setIncludeRead] = useState(false);
-
   const rawArticles = isInbox ? inboxArticles : isRecent ? recentArticles : regularArticles;
   const isLoading = isInbox ? inboxLoading : isRecent ? recentLoading : regularLoading;
 
@@ -299,12 +322,12 @@ export function ArticleList() {
 
   useEffect(() => {
     clearStickyArticles();
-  }, [clearStickyArticles, sidebarView, listFilter]);
+  }, [clearStickyArticles, sidebarView, listFilter, normalizedSearch]);
 
   // Only accumulate sticky entries while we are actually in an
   // unread-style view; otherwise the map would carry read items from
   // "all" into a subsequent "unread" toggle.
-  const stickyEnabled = isInbox || listFilter === "unread";
+  const stickyEnabled = !isSearchActive && (isInbox || listFilter === "unread");
   if (rawArticles && stickyEnabled) {
     const expiresAt = Date.now() + STICKY_READ_TTL_MS;
     for (const a of rawArticles) {
@@ -342,7 +365,7 @@ export function ArticleList() {
     // previously-seen article missing from rawArticles, inject the
     // cached copy with is_read:true so it renders in read style but
     // stays in position.
-    const unreadOnly = isInbox || listFilter === "unread";
+    const unreadOnly = stickyEnabled;
     if (unreadOnly) {
       for (const [id, entry] of stickyMapRef.current) {
         if (entry.expiresAt <= now) {
@@ -351,7 +374,7 @@ export function ArticleList() {
           injected.push({ ...entry.article, is_read: true });
         }
       }
-    } else if (selectedArticleId && !have.has(selectedArticleId)) {
+    } else if (!isSearchActive && selectedArticleId && !have.has(selectedArticleId)) {
       const cached = stickyMapRef.current.get(selectedArticleId);
       if (cached && cached.expiresAt > now) injected.push(cached.article);
     }
@@ -370,7 +393,7 @@ export function ArticleList() {
       );
     }
     return combined as typeof rawArticles;
-  }, [rawArticles, isInbox, listFilter, selectedArticleId, stickyEpoch]);
+  }, [rawArticles, isInbox, stickyEnabled, isSearchActive, selectedArticleId, stickyEpoch]);
 
   const title = useMemo(() => {
     switch (sidebarView.type) {
@@ -413,24 +436,9 @@ export function ArticleList() {
         (themeTagsByArticle.get(a.id) ?? []).some((t) => t.themeId === activeThemeId),
       );
     }
-    if (isSearchActive) {
-      const q = normalizedSearch.toLowerCase();
-      result = result.filter((a) => {
-        const hay =
-          a.title.toLowerCase() +
-          " " +
-          (a.feed_title?.toLowerCase() ?? "") +
-          " " +
-          (a.content_text?.toLowerCase() ?? "");
-        if (!hay.includes(q)) return false;
-        // If searching in a filter that normally hides read articles,
-        // require includeRead toggle before surfacing read matches.
-        if (!isSearchActive && !includeRead && listFilter === "unread" && a.is_read) return false;
-        return true;
-      });
-    }
+    // Search results are authoritative from Rust, including URL matches.
     return result;
-  }, [articles, isSearchActive, normalizedSearch, isInbox, listFilter, activeThemeId, themeTagsByArticle, includeRead]);
+  }, [articles, isInbox, activeThemeId, themeTagsByArticle]);
 
   // True unread total for the active filter — the paged articles array is
   // capped at 200 so counting locally understates everything above that.
@@ -456,11 +464,16 @@ export function ArticleList() {
   }, [filteredArticles, isInbox, isRecent, recentOrder]);
 
   const handleMarkAllRead = () => {
-    const feedId = sidebarView.type === "feed" ? sidebarView.feedId : null;
-    markAllRead.mutate(feedId);
+    if (sidebarView.type === "all" && !isSearchActive && listFilter !== "starred") {
+      markAllRead.mutate(null, { onSuccess: clearStickyArticles });
+      return;
+    }
+    markAllRead.mutate(buildMarkAllReadScope({
+      sidebarView, listFilter, searchQuery, folderFeedIds: selectedFolderFeedIds, activeThemeId,
+    }), { onSuccess: clearStickyArticles });
   };
 
-  const displayTitle = title ?? feedTitle ?? "Articles";
+  const displayTitle = isSearchActive ? "Search Results" : title ?? feedTitle ?? "Articles";
 
   const handleArticleContextMenu = useCallback(
     (e: React.MouseEvent, index: number) => {
@@ -486,7 +499,7 @@ export function ArticleList() {
     if (searchQuery.trim()) {
       return {
         title: "No matching articles",
-        body: "Try a different search, or show read articles when unread filtering is active.",
+        body: "Try a different title, source, or article URL. Search includes read articles.",
         showSourceActions: false,
       };
     }
@@ -614,6 +627,7 @@ export function ArticleList() {
           onClick={handleMarkAllRead}
           className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
           title="Mark all as read"
+          disabled={markAllRead.isPending || (sidebarView.type === "folder" && (!folders || !feeds))}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -679,22 +693,7 @@ export function ArticleList() {
             }}
           />
         </div>
-        {searchQuery.trim().length >= 2 &&
-          listFilter === "unread" &&
-          (readMatchCount ?? 0) > 0 && (
-            <div className="flex items-center gap-2" style={{ marginTop: 6 }}>
-              <span className="text-text-muted" style={{ fontSize: 12 }}>
-                {readMatchCount} match{readMatchCount === 1 ? "" : "es"} in already-read articles
-              </span>
-              <button
-                onClick={() => setIncludeRead((v) => !v)}
-                className="text-accent hover:text-accent-hover transition-colors"
-                style={{ fontSize: 12, fontWeight: 500 }}
-              >
-                {includeRead ? "Hide read results" : "Show them"}
-              </button>
-            </div>
-          )}
+
       </div>
 
       {/* Recent sort toggle */}

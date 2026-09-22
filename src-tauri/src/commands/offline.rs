@@ -1,7 +1,8 @@
 use crate::commands::articles::{fetch_article_content, FullArticleContent};
 use crate::db::{queries, Database};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use crate::AppHandle;
+use tauri::{Emitter, State};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub const OFFLINE_PRELOAD_PROGRESS_EVENT: &str = "skim-reader://offline-preload-progress";
@@ -62,8 +63,16 @@ pub async fn get_or_fetch_reader_content(
         }
     }
     let content = fetch_article_content(&url).await?;
+    // The page itself downloaded fine even when readability found no body, so
+    // hand the raw HTML back: the embedded web view can still render it and
+    // the UI shows its own "couldn't extract" notice over the feed preview.
+    // Failing here instead would blank out both panes at once.
     if content.html.trim().is_empty() {
-        return Err("Could not extract readable article content.".to_string());
+        if content.raw_html.trim().is_empty() {
+            return Err("Could not extract readable article content.".to_string());
+        }
+        // Don't cache an empty extraction: a later retry may do better.
+        return Ok(content);
     }
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     queries::put_reader_cache(

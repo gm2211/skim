@@ -14,6 +14,7 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, onClose: () =
     )).filter((el) => !el.closest('[hidden], [aria-hidden="true"]'));
     if (!dialog.contains(document.activeElement)) (controls()[0] ?? dialog).focus();
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
@@ -29,9 +30,15 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, onClose: () =
         }
       }
     };
-    dialog.addEventListener("keydown", onKey);
+    // The listener lives on the document rather than the dialog. Focus
+    // routinely ends up back on <body> — click any non-focusable text inside
+    // the dialog, or let the focused button unmount as the content changes —
+    // and a dialog-scoped listener goes deaf: Escape stopped closing the
+    // dialog and Tab walked the page behind it. `enabled` is what keeps a
+    // stacked dialog from closing its parent too.
+    document.addEventListener("keydown", onKey);
     return () => {
-      dialog.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey);
       if (previous?.isConnected) previous.focus();
     };
   }, [enabled, ref]);

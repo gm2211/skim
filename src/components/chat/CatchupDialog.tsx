@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { generateCatchupReport, type CatchupReport, type ChatSource } from "../../services/commands";
+import {
+  CATCHUP_PROGRESS_EVENT,
+  generateCatchupReport,
+  type CatchupBrief,
+  type CatchupProgress,
+  type CatchupReport,
+  type CatchupSource,
+  type CatchupStory,
+} from "../../services/commands";
+import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useUiStore } from "../../stores/uiStore";
 import { AIDisclaimer } from "../common/AIDisclaimer";
@@ -10,6 +19,7 @@ import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { useSettings } from "../../hooks/useSettings";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
+import { Select } from "../ui/Select";
 
 interface Props {
   onClose: () => void;
@@ -42,6 +52,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
   const [loading, setLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<string | null>(() => catchupErrors.get("unread") ?? null);
+  const [progress, setProgress] = useState<CatchupProgress | null>(null);
   const previousSettings = useRef(settings);
 
   useEffect(() => {
@@ -64,6 +75,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     const runScope = scope;
     setLoading(true);
     setError(null);
+    setProgress(null);
     catchupErrors.delete(runScope);
     setReport(null);
     try {
@@ -86,84 +98,155 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     return () => clearInterval(id);
   }, [loading]);
 
-  const sourcesById = new Map<string, ChatSource>();
+  // The backend pushes the page after every step of its two passes, so stories
+  // appear as they are written instead of all at once at the end.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let cancelled = false;
+    listen<CatchupProgress>(CATCHUP_PROGRESS_EVENT, (event) => {
+      setProgress(event.payload);
+      const partial = event.payload.report;
+      if (partial.stories.length > 0 || partial.briefs.length > 0) setReport(partial);
+    }).then((fn) => {
+      if (cancelled) fn();
+      else unlisten = fn;
+    });
+    return () => {
+      cancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, []);
+
+  const sourcesById = new Map<string, CatchupSource>();
   (report?.sources ?? []).forEach((s) => sourcesById.set(s.id, s));
 
-  const renderItems = (items: CatchupReport["takeaways"] | undefined, emptyMsg: string) => {
-    if (!items || items.length === 0) {
-      return (
-        <p className="text-text-muted" style={{ fontSize: 12 }}>
-          {emptyMsg}
-        </p>
-      );
+  const openArticle = (id: string) => {
+    if (onOpenArticle) {
+      onOpenArticle(id);
+      onClose();
+      return;
     }
+    const source = sourcesById.get(id);
+    if (source?.url) openUrl(source.url);
+  };
+
+  // The articles a story was built from, printed as a byline under it.
+  const renderByline = (articleIds: string[]) => {
+    const cited = articleIds.map((id) => sourcesById.get(id)).filter((s): s is CatchupSource => !!s);
+    if (cited.length === 0) return null;
     return (
-      <ol className="flex flex-col gap-3" style={{ listStyle: "none" }}>
-        {items.map((it, i) => (
-          <li key={i}>
-            <div className="flex items-start gap-2">
-              <span
-                className="text-text-muted tabular-nums flex-shrink-0"
-                style={{ fontSize: 12, fontWeight: 600, marginTop: 2 }}
-              >
-                {i + 1}.
-              </span>
-              <div className="flex-1">
-                {(() => {
-                  const firstId = it.article_ids[0];
-                  const openFirst = () => {
-                    if (!firstId) return;
-                    if (onOpenArticle) {
-                      onOpenArticle(firstId);
-                      onClose();
-                    } else {
-                      const s = sourcesById.get(firstId);
-                      if (s?.url) openUrl(s.url);
-                    }
-                  };
-                  return (
-                    <p
-                      onClick={firstId ? openFirst : undefined}
-                      className={`text-text-primary ${firstId ? "cursor-pointer hover:text-accent transition-colors" : ""}`}
-                      style={{ fontSize: 13, lineHeight: 1.6 }}
-                    >
-                      {it.text}
-                    </p>
-                  );
-                })()}
-                {it.article_ids.length > 0 && (
-                  <div className="flex flex-wrap gap-1" style={{ marginTop: 4 }}>
-                    {it.article_ids.map((id) => {
-                      const s = sourcesById.get(id);
-                      if (!s) return null;
-                      return (
-                        <button
-                          key={id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onOpenArticle) {
-                              onOpenArticle(id);
-                              onClose();
-                            } else if (s.url) {
-                              openUrl(s.url);
-                            }
-                          }}
-                          className="rounded-full bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
-                          style={{ padding: "2px 8px", fontSize: 11 }}
-                          title={s.title}
-                        >
-                          {s.feed_title}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </li>
+      <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
+        {cited.map((source) => (
+          <button
+            key={source.id}
+            onClick={(e) => {
+              e.stopPropagation();
+              openArticle(source.id);
+            }}
+            className="text-left min-w-0 group"
+            style={{ fontSize: 11.5, lineHeight: 1.5 }}
+            title={source.title}
+          >
+            <span className="text-accent" style={{ fontWeight: 600 }}>
+              {source.publication}
+            </span>
+            <span className="text-text-muted group-hover:text-text-primary transition-colors">
+              {"  "}
+              {source.title}
+            </span>
+          </button>
         ))}
-      </ol>
+      </div>
     );
+  };
+
+  // A headline whose lede the second pass has not written yet.
+  const renderLedeSkeleton = (lead: boolean) => (
+    <div
+      className="flex flex-col"
+      style={{ marginTop: lead ? 10 : 8, gap: 7 }}
+      aria-label="Writing this story"
+    >
+      <div className="catchup-skeleton-line" style={{ width: "100%" }} />
+      <div className="catchup-skeleton-line" style={{ width: lead ? "92%" : "84%" }} />
+      <div className="catchup-skeleton-line" style={{ width: lead ? "68%" : "56%" }} />
+    </div>
+  );
+
+  const renderStory = (story: CatchupStory, index: number) => {
+    const lead = index === 0;
+    return (
+      <article
+        key={`${index}-${story.headline}`}
+        className="catchup-story"
+        style={{
+          borderTop: lead ? undefined : "1px solid rgba(255,255,255,0.06)",
+          paddingTop: lead ? 0 : 18,
+          marginTop: lead ? 0 : 18,
+        }}
+      >
+        <h4
+          onClick={story.article_ids[0] ? () => openArticle(story.article_ids[0]) : undefined}
+          className={`text-text-primary ${story.article_ids[0] ? "cursor-pointer hover:text-accent transition-colors" : ""}`}
+          style={{
+            fontSize: lead ? 23 : 16,
+            fontWeight: lead ? 700 : 650,
+            lineHeight: lead ? 1.2 : 1.3,
+            letterSpacing: lead ? -0.4 : -0.2,
+          }}
+        >
+          {story.headline}
+        </h4>
+        {story.lede ? (
+          <p
+            className="text-text-primary"
+            style={{
+              marginTop: lead ? 10 : 6,
+              fontSize: lead ? 14.5 : 13,
+              lineHeight: 1.65,
+              opacity: 0.86,
+            }}
+          >
+            {story.lede}
+          </p>
+        ) : (
+          renderLedeSkeleton(lead)
+        )}
+        {renderByline(story.article_ids)}
+      </article>
+    );
+  };
+
+  const renderBrief = (brief: CatchupBrief, index: number) => {
+    const firstId = brief.article_ids[0];
+    return (
+      <li key={`${index}-${brief.text}`} className="catchup-story flex items-start gap-2">
+        <span
+          className="text-accent flex-shrink-0"
+          style={{ fontSize: 13, lineHeight: 1.6 }}
+          aria-hidden="true"
+        >
+          &#8226;
+        </span>
+        <div className="min-w-0 flex-1">
+          <p
+            onClick={firstId ? () => openArticle(firstId) : undefined}
+            className={`text-text-primary ${firstId ? "cursor-pointer hover:text-accent transition-colors" : ""}`}
+            style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.86 }}
+          >
+            {brief.text}
+          </p>
+          {renderByline(brief.article_ids.slice(0, 2))}
+        </div>
+      </li>
+    );
+  };
+
+  const sectionHeadingStyle = {
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase" as const,
+    letterSpacing: 1.2,
   };
 
   if (showSettings) return null;
@@ -221,24 +304,22 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
         </div>
 
         <div className="flex items-end gap-3 border-b border-white/5" style={{ padding: isPhone ? "12px 16px" : "12px 24px" }}>
-          <label className="flex min-w-0 flex-1 flex-col gap-1">
+          <label className="flex min-w-0 flex-col gap-1">
             <span className="text-text-muted" style={{ fontSize: 12, fontWeight: 600 }}>Include</span>
-          <select
-            value={scope}
-            onChange={(e) => setScope(e.target.value as "inbox" | "unread")}
-            disabled={loading}
-            className="border border-white/10 rounded-lg text-text-primary min-w-0"
-            style={{ background: "rgba(255,255,255,0.05)", padding: "9px 12px", fontSize: 13, minHeight: 40 }}
-          >
-            <option value="inbox">Priority inbox</option>
-            <option value="unread">All unread articles</option>
-          </select>
+            <Select
+              value={scope}
+              onChange={(e) => setScope(e.target.value as "inbox" | "unread")}
+              disabled={loading}
+            >
+              <option value="inbox">Priority inbox</option>
+              <option value="unread">All unread articles</option>
+            </Select>
           </label>
           <button
             onClick={run}
             disabled={loading || providerUnavailable}
             className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium flex-shrink-0 whitespace-nowrap"
-            style={{ padding: "9px 16px", fontSize: 13, minHeight: 40 }}
+            style={{ padding: "9px 16px", fontSize: 13, minHeight: 40, marginLeft: "auto" }}
           >
             {loading ? "Working…" : report ? "Run again" : "Run catch-up"}
           </button>
@@ -251,15 +332,49 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
             <div style={{ padding: "24px 0" }}>
               <h4 className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>Ready when you are</h4>
               <p className="text-text-muted" style={{ marginTop: 6, fontSize: 13, lineHeight: 1.6 }}>
-                Choose which articles to include, then run a catch-up for key takeaways and notable mentions.
+                Choose which articles to include, then run a catch-up. Skim reads them and writes you a
+                front page: the few stories that actually happened, biggest first.
               </p>
             </div>
           )}
 
-          {loading && (
-            <div className="text-center" style={{ padding: "40px 0" }}>
-              <div className="text-text-muted" style={{ fontSize: 13 }}>
-                Reading your feed… <span className="tabular-nums">{elapsed}s</span>
+          {loading && !report && (
+            <div style={{ padding: "36px 0" }}>
+              <div className="flex items-center gap-3">
+                <svg
+                  className="smooth-spin text-accent"
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+                <span className="text-text-primary" style={{ fontSize: 14, fontWeight: 600 }}>
+                  {progress?.message ?? "Reading your feed…"}
+                </span>
+                <span className="text-text-muted tabular-nums" style={{ fontSize: 12 }}>
+                  {elapsed}s
+                </span>
+              </div>
+              <div
+                className="flex flex-col"
+                style={{ marginTop: 26, gap: 22 }}
+                aria-hidden="true"
+              >
+                {[0, 1, 2].map((row) => (
+                  <div key={row} className="flex flex-col" style={{ gap: 8 }}>
+                    <div
+                      className="catchup-skeleton-line"
+                      style={{ height: row === 0 ? 17 : 13, width: row === 0 ? "78%" : "62%" }}
+                    />
+                    <div className="catchup-skeleton-line" style={{ width: "100%" }} />
+                    <div className="catchup-skeleton-line" style={{ width: "84%" }} />
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -277,24 +392,47 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
 
           {report && (
             <>
-              <div style={{ marginBottom: 24 }}>
-                <h4
-                  className="text-text-primary"
-                  style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}
+              {loading && (
+                <div style={{ marginBottom: 18 }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-text-muted" style={{ fontSize: 12 }}>
+                      {progress?.message ?? "Writing the page…"}
+                    </span>
+                    <span className="text-text-muted tabular-nums" style={{ fontSize: 12 }}>
+                      {elapsed}s
+                    </span>
+                  </div>
+                  <div
+                    className="catchup-rule-live"
+                    style={{ height: 2, borderRadius: 999, marginTop: 8 }}
+                  />
+                </div>
+              )}
+
+              {report.stories.length === 0 && report.briefs.length === 0 && !loading && (
+                <p className="text-text-muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
+                  Nothing on the page — there was no real news in these articles.
+                </p>
+              )}
+
+              {report.stories.map((story, index) => renderStory(story, index))}
+
+              {report.briefs.length > 0 && (
+                <div
+                  style={{
+                    marginTop: report.stories.length > 0 ? 28 : 0,
+                    borderTop: report.stories.length > 0 ? "1px solid rgba(255,255,255,0.1)" : undefined,
+                    paddingTop: report.stories.length > 0 ? 20 : 0,
+                  }}
                 >
-                  Top Takeaways
-                </h4>
-                {renderItems(report.takeaways, "No takeaways generated.")}
-              </div>
-              <div>
-                <h4
-                  className="text-text-primary"
-                  style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}
-                >
-                  Notable Mentions
-                </h4>
-                {renderItems(report.notable_mentions, "No notable mentions generated.")}
-              </div>
+                  <h4 className="text-text-muted" style={sectionHeadingStyle}>
+                    Also
+                  </h4>
+                  <ul className="flex flex-col" style={{ listStyle: "none", marginTop: 12, gap: 12 }}>
+                    {report.briefs.map((brief, index) => renderBrief(brief, index))}
+                  </ul>
+                </div>
+              )}
             </>
           )}
         </div>

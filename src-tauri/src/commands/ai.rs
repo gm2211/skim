@@ -10,7 +10,8 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use crate::AppHandle;
+use tauri::{Emitter, State};
 #[cfg(target_os = "ios")]
 use tauri_plugin_skim_ai::{CompleteArgs, SkimAiExt};
 use tokio::sync::Mutex;
@@ -230,7 +231,7 @@ fn extract_field_fuzzy(text: &str, field: &str) -> Option<String> {
 
 /// Fetch the article URL and convert its body to plain text. Used as a fallback
 /// when the RSS entry only contains a title + link (Hacker News, Reddit, etc).
-async fn fetch_article_text(url: &str) -> Result<String, String> {
+pub(super) async fn fetch_article_text(url: &str) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
         .timeout(std::time::Duration::from_secs(20))
@@ -434,35 +435,7 @@ pub async fn summarize_article(
         let provider_name = settings.ai.provider.as_str();
         if provider_name == "mlx" || provider_name == "foundation-models" {
             // Resolve article body the same way the desktop path does below.
-            let content_text = article.article.content_text.as_deref().unwrap_or("");
-            let html_as_text = article
-                .article
-                .content_html
-                .as_deref()
-                .map(|h| html2text::from_read(h.as_bytes(), 10000))
-                .unwrap_or_default();
-            let local_text = if html_as_text.len() > content_text.len() {
-                html_as_text
-            } else {
-                content_text.to_string()
-            };
-            let text = if local_text.trim().chars().count() < 400 {
-                if let Some(ref url) = article.article.url {
-                    match fetch_article_text(url).await {
-                        Ok(fetched)
-                            if fetched.trim().chars().count()
-                                > local_text.trim().chars().count() =>
-                        {
-                            fetched
-                        }
-                        _ => local_text,
-                    }
-                } else {
-                    local_text
-                }
-            } else {
-                local_text
-            };
+            let text = super::article_body::resolve_article_text(db.inner(), &article.article).await;
             if text.trim().is_empty() {
                 return Err("No article content to summarize.".to_string());
             }
@@ -550,38 +523,10 @@ pub async fn summarize_article(
         .unwrap_or_else(|| default_model(&settings.ai.provider));
 
     // Use the longest available content — prefer content_text, fall back to HTML stripped to text
-    let content_text = article.article.content_text.as_deref().unwrap_or("");
-    let html_as_text = article
-        .article
-        .content_html
-        .as_deref()
-        .map(|h| html2text::from_read(h.as_bytes(), 10000))
-        .unwrap_or_default();
-    let local_text = if html_as_text.len() > content_text.len() {
-        html_as_text
-    } else {
-        content_text.to_string()
-    };
-
-    // Many aggregator feeds (Hacker News, Reddit, some newsletters) only
-    // ship a title + link in the RSS body. If we don't have enough text to
-    // summarize, fetch the linked page and extract its body text.
-    let text = if local_text.trim().chars().count() < 400 {
-        if let Some(ref url) = article.article.url {
-            match fetch_article_text(url).await {
-                Ok(fetched)
-                    if fetched.trim().chars().count() > local_text.trim().chars().count() =>
-                {
-                    fetched
-                }
-                _ => local_text,
-            }
-        } else {
-            local_text
-        }
-    } else {
-        local_text
-    };
+    // The reader's extraction first, then the feed body, then the linked page:
+    // many aggregator feeds (Hacker News, Reddit, most newsletters) ship only a
+    // title and a blurb, and summarizing the blurb is summarizing nothing.
+    let text = super::article_body::resolve_article_text(db.inner(), &article.article).await;
 
     if text.trim().is_empty() {
         return Err("No article content to summarize.".to_string());
@@ -1461,32 +1406,108 @@ pub async fn remove_recent_article(
     queries::delete_interaction(&conn, &article_id).map_err(|e| e.to_string())
 }
 
+// --- Quick Catch-up ---------------------------------------------------------
+//
+// The front page is built in two passes so the reader sees it fill in rather
+// than watching a blank panel: the first picks and groups the stories and
+// writes their headlines, the second reads the articles behind each story and
+// writes its lede. Every pass emits the page so far on `catchup_progress`.
+
+/// A story on the front page. `lede` is empty between the two passes.
 #[derive(Serialize, Clone)]
-pub struct CatchupItem {
+pub struct CatchupStory {
+    pub headline: String,
+    pub lede: String,
+    pub article_ids: Vec<String>,
+}
+
+/// A one-line item below the fold.
+#[derive(Serialize, Clone)]
+pub struct CatchupBrief {
     pub text: String,
     pub article_ids: Vec<String>,
 }
 
-#[derive(Serialize)]
+/// An article cited on the page, with a name fit to print under a story.
+#[derive(Serialize, Clone)]
+pub struct CatchupSource {
+    pub id: String,
+    pub title: String,
+    pub publication: String,
+    pub url: Option<String>,
+    pub published_at: Option<i64>,
+}
+
+#[derive(Serialize, Clone, Default)]
 pub struct CatchupReport {
-    pub takeaways: Vec<CatchupItem>,
-    pub notable_mentions: Vec<CatchupItem>,
-    pub sources: Vec<crate::commands::chat::ChatSource>,
+    pub stories: Vec<CatchupStory>,
+    pub briefs: Vec<CatchupBrief>,
+    pub sources: Vec<CatchupSource>,
+}
+
+pub const CATCHUP_PROGRESS_EVENT: &str = "catchup_progress";
+
+/// The page as it stands, pushed to the UI after every step.
+#[derive(Serialize, Clone)]
+struct CatchupProgress {
+    /// "reading", "picking", "writing" or "done".
+    stage: String,
+    completed: u32,
+    total: u32,
+    message: String,
+    report: CatchupReport,
+}
+
+fn emit_catchup(
+    app: &AppHandle,
+    stage: &str,
+    completed: u32,
+    total: u32,
+    message: &str,
+    report: &CatchupReport,
+) {
+    let _ = app.emit(
+        CATCHUP_PROGRESS_EVENT,
+        CatchupProgress {
+            stage: stage.to_string(),
+            completed,
+            total,
+            message: message.to_string(),
+            report: report.clone(),
+        },
+    );
 }
 
 #[derive(Deserialize)]
-struct CatchupRaw {
-    #[serde(default)]
-    takeaways: Vec<CatchupRawItem>,
-    #[serde(default, alias = "notable_mentions", alias = "mentions")]
-    notable_mentions: Vec<CatchupRawItem>,
+struct CatchupPageRaw {
+    #[serde(default, alias = "items", alias = "takeaways")]
+    stories: Vec<CatchupStoryRaw>,
+    #[serde(default, alias = "notable_mentions", alias = "mentions", alias = "also")]
+    briefs: Vec<CatchupBriefRaw>,
 }
 
 #[derive(Deserialize)]
-struct CatchupRawItem {
+struct CatchupStoryRaw {
+    #[serde(default, alias = "title", alias = "text")]
+    headline: String,
+    #[serde(default, alias = "summary")]
+    lede: String,
+    #[serde(default, alias = "article_ids", alias = "articles", alias = "ids")]
+    article_ids: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct CatchupBriefRaw {
+    #[serde(default, alias = "headline", alias = "summary")]
     text: String,
     #[serde(default, alias = "article_ids", alias = "articles", alias = "ids")]
     article_ids: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct CatchupLedeRaw {
+    #[serde(default, alias = "summary", alias = "text")]
+    lede: String,
 }
 
 fn resolve_handles(
@@ -1516,6 +1537,44 @@ fn resolve_handles(
         .collect()
 }
 
+/// Lowercased words only, for spotting the same item written twice.
+fn normalize_for_dedup(text: &str) -> String {
+    text.split_whitespace()
+        .map(|word| {
+            word.chars()
+                .filter(|c| c.is_alphanumeric())
+                .flat_map(|c| c.to_lowercase())
+                .collect::<String>()
+        })
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+const CATCHUP_POOL_LIMIT: usize = 100;
+const CATCHUP_MAX_STORIES: usize = 6;
+const CATCHUP_MAX_BRIEFS: usize = 6;
+/// Articles read in full when writing one story's lede.
+const CATCHUP_ARTICLES_PER_LEDE: usize = 4;
+/// Characters of each of those articles handed to the model.
+const CATCHUP_LEDE_TEXT_CHARS: usize = 3000;
+/// Characters of each article in the first pass, which only picks and groups.
+const CATCHUP_PICK_EXCERPT_CHARS: usize = 400;
+
+/// A short fallback lede for when the second pass fails for one story, so a
+/// story never renders with nothing under it.
+fn excerpt_lede(text: &str) -> String {
+    let cleaned = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if cleaned.chars().count() <= 240 {
+        return cleaned;
+    }
+    let clipped: String = cleaned.chars().take(240).collect();
+    match clipped.rfind(['.', '!', '?']) {
+        Some(end) if end > 80 => clipped[..=end].to_string(),
+        _ => format!("{}…", clipped.trim_end()),
+    }
+}
+
 #[tauri::command]
 pub async fn generate_catchup_report(
     app: AppHandle,
@@ -1529,8 +1588,14 @@ pub async fn generate_catchup_report(
             queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
         let pool: Vec<crate::db::models::ArticleWithFeed> = match scope.as_deref() {
             Some("inbox") => {
-                let inbox = queries::get_inbox_articles(&conn, Some(3), Some(false), 100, 0)
-                    .map_err(|e| e.to_string())?;
+                let inbox = queries::get_inbox_articles(
+                    &conn,
+                    Some(3),
+                    Some(false),
+                    CATCHUP_POOL_LIMIT as i64,
+                    0,
+                )
+                .map_err(|e| e.to_string())?;
                 inbox
                     .into_iter()
                     .map(|a| crate::db::models::ArticleWithFeed {
@@ -1549,7 +1614,7 @@ pub async fn generate_catchup_report(
                     theme_id: None,
                     is_read: Some(false),
                     is_starred: None,
-                    limit: Some(100),
+                    limit: Some(CATCHUP_POOL_LIMIT as i64),
                     offset: None,
                 },
             )
@@ -1558,12 +1623,11 @@ pub async fn generate_catchup_report(
         (pool, settings_json)
     };
 
+    let mut report = CatchupReport::default();
+
     if pool.is_empty() {
-        return Ok(CatchupReport {
-            takeaways: vec![],
-            notable_mentions: vec![],
-            sources: vec![],
-        });
+        emit_catchup(&app, "done", 0, 0, "Nothing unread to catch up on.", &report);
+        return Ok(report);
     }
 
     let settings: crate::db::models::AppSettings = settings_json
@@ -1583,6 +1647,17 @@ pub async fn generate_catchup_report(
         .clone()
         .unwrap_or_else(|| default_model(&ai_settings.provider));
 
+    emit_catchup(
+        &app,
+        "reading",
+        0,
+        pool.len() as u32,
+        &format!("Reading {} articles…", pool.len()),
+        &report,
+    );
+
+    // --- Pass one: pick the stories and write their headlines ---------------
+
     let mut listing = String::new();
     for (i, a) in pool.iter().enumerate() {
         let excerpt: String = a
@@ -1591,54 +1666,48 @@ pub async fn generate_catchup_report(
             .as_deref()
             .unwrap_or("")
             .chars()
-            .take(220)
+            .take(CATCHUP_PICK_EXCERPT_CHARS)
             .collect();
         let clean = excerpt.replace(['\n', '\t'], " ");
+        let publication = crate::ai::publication::publication_name(
+            &a.feed_title,
+            a.article.url.as_deref(),
+        );
         listing.push_str(&format!(
             "{}\t{}\t[{}]\t{}\n",
             i,
             a.article.title.trim(),
-            a.feed_title,
+            publication,
             clean
         ));
     }
 
-    let system =
-        "You write a super-quick catch-up brief over a reader's RSS feed. Output JSON only. \
-                  Extract the 10 most important takeaways and 5-8 notable mentions (smaller items \
-                  worth knowing about). Each item is one tight sentence and cites the numeric \
-                  handles of the supporting articles.";
-    let user = format!(
-        r#"Articles (handle TAB title TAB [source] TAB excerpt):
-{listing}
-Output JSON:
-{{"takeaways":[{{"text":"short sentence","article_ids":[0,3]}}],"notable_mentions":[{{"text":"short sentence","article_ids":[5]}}]}}"#
-    );
-
-    let req = ChatRequest {
-        model,
+    let page_request = ChatRequest {
+        model: model.clone(),
         messages: vec![
             ChatMessage {
                 role: "system".to_string(),
-                content: system.to_string(),
+                content: prompts::catchup_page_system_prompt(
+                    ai_settings.triage_user_prompt.as_deref(),
+                ),
                 content_blocks: None,
             },
             ChatMessage {
                 role: "user".to_string(),
-                content: user,
+                content: prompts::catchup_page_user_prompt(&listing),
                 content_blocks: None,
             },
         ],
         temperature: Some(0.3),
-        max_tokens: Some(2000),
+        max_tokens: Some(1500),
         json_mode: true,
         tools: None,
     };
 
-    let response = provider.chat(req).await?;
+    let response = provider.chat(page_request).await?;
     let content = response.content.trim();
     let json_str = extract_json_object(content).unwrap_or(content);
-    let raw: CatchupRaw = serde_json::from_str(json_str).map_err(|e| {
+    let raw: CatchupPageRaw = serde_json::from_str(json_str).map_err(|e| {
         format!(
             "Failed to parse catchup response: {}. Raw: {}",
             e,
@@ -1646,55 +1715,186 @@ Output JSON:
         )
     })?;
 
-    let takeaways: Vec<CatchupItem> = raw
-        .takeaways
-        .into_iter()
-        .take(10)
-        .map(|r| CatchupItem {
-            text: r.text,
-            article_ids: resolve_handles(&r.article_ids, &pool),
-        })
-        .filter(|i| !i.text.trim().is_empty())
-        .collect();
+    // The model is told each article belongs to one item only; hold it to that
+    // here so nothing appears twice on the page.
+    let mut claimed: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut seen_text: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    let notable_mentions: Vec<CatchupItem> = raw
-        .notable_mentions
-        .into_iter()
-        .take(10)
-        .map(|r| CatchupItem {
-            text: r.text,
-            article_ids: resolve_handles(&r.article_ids, &pool),
-        })
-        .filter(|i| !i.text.trim().is_empty())
-        .collect();
-
-    // Dedup ids and materialize sources
-    use std::collections::HashSet;
-    let mut cited: HashSet<String> = HashSet::new();
-    for i in takeaways.iter().chain(notable_mentions.iter()) {
-        for id in &i.article_ids {
-            cited.insert(id.clone());
+    for story in raw.stories {
+        if report.stories.len() >= CATCHUP_MAX_STORIES {
+            break;
         }
+        let headline = story.headline.trim().to_string();
+        if headline.is_empty() || !seen_text.insert(normalize_for_dedup(&headline)) {
+            continue;
+        }
+        let article_ids: Vec<String> = resolve_handles(&story.article_ids, &pool)
+            .into_iter()
+            .filter(|id| claimed.insert(id.clone()))
+            .collect();
+        if article_ids.is_empty() {
+            // Every article behind it already ran under an earlier story.
+            continue;
+        }
+        report.stories.push(CatchupStory {
+            headline,
+            lede: story.lede.trim().to_string(),
+            article_ids,
+        });
     }
 
-    let sources: Vec<crate::commands::chat::ChatSource> = pool
+    for brief in raw.briefs {
+        if report.briefs.len() >= CATCHUP_MAX_BRIEFS {
+            break;
+        }
+        let text = brief.text.trim().to_string();
+        if text.is_empty() || !seen_text.insert(normalize_for_dedup(&text)) {
+            continue;
+        }
+        let article_ids: Vec<String> = resolve_handles(&brief.article_ids, &pool)
+            .into_iter()
+            .filter(|id| claimed.insert(id.clone()))
+            .collect();
+        if article_ids.is_empty() {
+            continue;
+        }
+        report.briefs.push(CatchupBrief { text, article_ids });
+    }
+
+    report.sources = pool
         .iter()
-        .filter(|a| cited.contains(&a.article.id))
-        .map(|a| crate::commands::chat::ChatSource {
+        .filter(|a| claimed.contains(&a.article.id))
+        .map(|a| CatchupSource {
             id: a.article.id.clone(),
             title: a.article.title.clone(),
-            feed_title: a.feed_title.clone(),
+            publication: crate::ai::publication::publication_name(
+                &a.feed_title,
+                a.article.url.as_deref(),
+            ),
             url: a.article.url.clone(),
             published_at: a.article.published_at,
-            source_type: "article".to_string(),
         })
         .collect();
 
-    Ok(CatchupReport {
-        takeaways,
-        notable_mentions,
-        sources,
-    })
+    let story_count = report.stories.len() as u32;
+    emit_catchup(
+        &app,
+        "picking",
+        0,
+        story_count,
+        &match story_count {
+            0 => "Nothing on the page yet…".to_string(),
+            1 => "Writing the lead story…".to_string(),
+            n => format!("Writing {n} stories…"),
+        },
+        &report,
+    );
+
+    // --- Pass two: write each lede from the articles behind it --------------
+
+    let by_id: HashMap<&str, &crate::db::models::ArticleWithFeed> = pool
+        .iter()
+        .map(|a| (a.article.id.as_str(), a))
+        .collect();
+
+    for index in 0..report.stories.len() {
+        let (headline, article_ids) = {
+            let story = &report.stories[index];
+            (story.headline.clone(), story.article_ids.clone())
+        };
+
+        let mut articles_text = String::new();
+        for id in article_ids.iter().take(CATCHUP_ARTICLES_PER_LEDE) {
+            let Some(a) = by_id.get(id.as_str()) else {
+                continue;
+            };
+            let body: String = a
+                .article
+                .content_text
+                .as_deref()
+                .unwrap_or("")
+                .chars()
+                .take(CATCHUP_LEDE_TEXT_CHARS)
+                .collect();
+            articles_text.push_str(&format!(
+                "--- {} [{}]\n{}\n\n",
+                a.article.title.trim(),
+                crate::ai::publication::publication_name(
+                    &a.feed_title,
+                    a.article.url.as_deref()
+                ),
+                body.trim()
+            ));
+        }
+
+        let lede = if articles_text.trim().is_empty() {
+            String::new()
+        } else {
+            let lede_request = ChatRequest {
+                model: model.clone(),
+                messages: vec![
+                    ChatMessage {
+                        role: "system".to_string(),
+                        content: prompts::catchup_lede_system_prompt(),
+                        content_blocks: None,
+                    },
+                    ChatMessage {
+                        role: "user".to_string(),
+                        content: prompts::catchup_lede_user_prompt(&headline, &articles_text),
+                        content_blocks: None,
+                    },
+                ],
+                temperature: Some(0.3),
+                max_tokens: Some(300),
+                json_mode: true,
+                tools: None,
+            };
+
+            match provider.chat(lede_request).await {
+                Ok(lede_response) => {
+                    let text = lede_response.content.trim().to_string();
+                    let parsed = extract_json_object(&text)
+                        .and_then(|json| serde_json::from_str::<CatchupLedeRaw>(json).ok())
+                        .map(|raw| raw.lede.trim().to_string())
+                        .filter(|lede| !lede.is_empty());
+                    // A provider that ignored json_mode still gave us prose.
+                    parsed.unwrap_or_else(|| {
+                        if text.starts_with('{') {
+                            String::new()
+                        } else {
+                            text
+                        }
+                    })
+                }
+                Err(_) => String::new(),
+            }
+        };
+
+        let fallback = || {
+            article_ids
+                .first()
+                .and_then(|id| by_id.get(id.as_str()))
+                .and_then(|a| a.article.content_text.as_deref())
+                .map(excerpt_lede)
+                .unwrap_or_default()
+        };
+
+        report.stories[index].lede = if lede.is_empty() { fallback() } else { lede };
+
+        let completed = index as u32 + 1;
+        emit_catchup(
+            &app,
+            "writing",
+            completed,
+            story_count,
+            &format!("Writing story {completed} of {story_count}…"),
+            &report,
+        );
+    }
+
+    emit_catchup(&app, "done", story_count, story_count, "", &report);
+
+    Ok(report)
 }
 
 #[tauri::command]

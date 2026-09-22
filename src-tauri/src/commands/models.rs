@@ -39,7 +39,7 @@ fn resolve_models_dir(db: &Database) -> Result<PathBuf, String> {
 
 #[tauri::command]
 pub async fn download_model(
-    app_handle: tauri::AppHandle,
+    app_handle: crate::AppHandle,
     db: State<'_, Database>,
     cancel_flag: State<'_, DownloadCancelFlag>,
     repo_id: String,

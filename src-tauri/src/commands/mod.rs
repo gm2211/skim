@@ -1,5 +1,6 @@
 pub mod ai;
 pub mod aggregator;
+pub mod article_body;
 pub mod articles;
 pub mod chat;
 pub mod claude_oauth;

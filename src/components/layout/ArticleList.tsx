@@ -62,7 +62,11 @@ export function buildArticleFilter({
     case "today":
       break;
   }
-  if (listFilter === "unread") base.is_read = false;
+  // Starred is a keep-this list, not a queue: you star an article because you
+  // just read it, so applying the unread filter empties the view at exactly
+  // the moment it becomes useful, under an empty state telling you to star
+  // things. Every other view honours the filter.
+  if (listFilter === "unread" && sidebarView.type !== "starred") base.is_read = false;
   if (listFilter === "starred") base.is_starred = true;
   return base;
 }
@@ -577,8 +581,10 @@ export function ArticleList() {
       }}
     >
       {sidebarCollapsed && !isPhone && <CollapsedSidebarTitlebar showTitle={false} />}
-      {/* Top bar with mark-all-read, search, close */}
-      <div className={`flex flex-shrink-0 items-center relative z-20 ${sidebarCollapsed && !isPhone ? "article-toolbar-branded gap-1" : "gap-2"}`} style={{ height: isPhone ? 52 : 44, paddingLeft: 8, paddingRight: isPhone ? 8 : 16 }}>
+      {/* Top bar with mark-all-read, search, close. With the sidebar collapsed
+          the wordmark leads this bar, on the same 24px left edge as the list
+          title below it. */}
+      <div className={`flex flex-shrink-0 items-center relative z-20 ${sidebarCollapsed && !isPhone ? "article-toolbar-branded gap-1" : "gap-2"}`} style={{ height: isPhone ? 52 : 44, paddingLeft: sidebarCollapsed && !isPhone ? 24 : 8, paddingRight: isPhone ? 8 : 16 }}>
         {isPhone && (
           <button
             onClick={() => setPhonePane("sidebar")}
@@ -592,8 +598,8 @@ export function ArticleList() {
             </svg>
           </button>
         )}
-        <div className="flex-1" />
         {sidebarCollapsed && !isPhone && <SkimTitle />}
+        <div className="flex-1" />
         {!isPhone && (
           <button
             onClick={() => setShowAddFeed(true)}

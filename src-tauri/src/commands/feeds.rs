@@ -9,7 +9,8 @@ use crate::feed::fetch_and_parse_feed;
 use crate::feed::feedly;
 use crate::feed::feedly_oauth;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use crate::AppHandle;
+use tauri::State;
 
 #[derive(Debug, Serialize)]
 pub struct FeedWithCount {

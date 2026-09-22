@@ -493,7 +493,7 @@ async fn verify_ds4_download(path: &Path, cancel_flag: &AtomicBool) -> Result<()
 }
 
 pub async fn download_model(
-    app_handle: &tauri::AppHandle,
+    app_handle: &crate::AppHandle,
     repo_id: &str,
     filename: &str,
     target_dir: &Path,

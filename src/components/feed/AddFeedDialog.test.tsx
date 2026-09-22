@@ -44,6 +44,15 @@ beforeEach(() => {
   vi.mocked(openUrl).mockResolvedValue(undefined);
 });
 
+describe("closing the dialog", () => {
+  it("closes on Escape, so the keyboard is not a dead end", () => {
+    renderDialog();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(useUiStore.getState().showAddFeed).toBe(false);
+  });
+});
+
 describe("AddFeedDialog Feedly export", () => {
   it("opens and copies the authenticated Feedly OPML export URL", async () => {
     const user = userEvent.setup();

@@ -577,8 +577,10 @@ export function ArticleList() {
       }}
     >
       {sidebarCollapsed && !isPhone && <CollapsedSidebarTitlebar showTitle={false} />}
-      {/* Top bar with mark-all-read, search, close */}
-      <div className={`flex flex-shrink-0 items-center relative z-20 ${sidebarCollapsed && !isPhone ? "article-toolbar-branded gap-1" : "gap-2"}`} style={{ height: isPhone ? 52 : 44, paddingLeft: 8, paddingRight: isPhone ? 8 : 16 }}>
+      {/* Top bar with mark-all-read, search, close. With the sidebar collapsed
+          the wordmark leads this bar, on the same 24px left edge as the list
+          title below it. */}
+      <div className={`flex flex-shrink-0 items-center relative z-20 ${sidebarCollapsed && !isPhone ? "article-toolbar-branded gap-1" : "gap-2"}`} style={{ height: isPhone ? 52 : 44, paddingLeft: sidebarCollapsed && !isPhone ? 24 : 8, paddingRight: isPhone ? 8 : 16 }}>
         {isPhone && (
           <button
             onClick={() => setPhonePane("sidebar")}
@@ -592,8 +594,8 @@ export function ArticleList() {
             </svg>
           </button>
         )}
-        <div className="flex-1" />
         {sidebarCollapsed && !isPhone && <SkimTitle />}
+        <div className="flex-1" />
         {!isPhone && (
           <button
             onClick={() => setShowAddFeed(true)}

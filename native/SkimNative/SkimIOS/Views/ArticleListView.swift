@@ -354,21 +354,20 @@ struct ArticleListView: View {
             let subtitle = articles.isEmpty
                 ? "Latest articles (up to \(articleLimit))"
                 : "\(catchUpCount) \(catchUpCount == 1 ? "article" : "articles")"
+            // The sheet drives the two passes itself, so it only needs the
+            // articles and the settings to run them under.
             activeCatchUp = CatchUpRequest(
                 subtitle: subtitle,
-                statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai)
-            ) {
-                let context = try await model.articlesForAIContext(preferred: articles, limit: articleLimit)
-                guard !context.isEmpty else {
-                    throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before running Quick Catch-up.")
-                }
-                // Try structured JSON output; fall back to plain text on parse failure
-                if let structuredItems = try? await NativeAI.quickCatchUpStructured(articles: context, settings: model.settings) {
-                    return CatchUpResult(items: structuredItems, fallbackText: nil, articles: context)
-                }
-                let text = try await NativeAI.quickCatchUp(articles: context, settings: model.settings)
-                return CatchUpResult(items: [], fallbackText: text, articles: context)
-            }
+                statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai),
+                loadArticles: {
+                    let context = try await model.articlesForAIContext(preferred: articles, limit: articleLimit)
+                    guard !context.isEmpty else {
+                        throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before running Quick Catch-up.")
+                    }
+                    return context
+                },
+                settings: model.settings
+            )
         }
     }
 

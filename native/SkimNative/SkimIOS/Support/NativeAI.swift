@@ -263,48 +263,13 @@ enum NativeAI {
         )
     }
 
-    /// Structured catch-up items returned by the AI.
+    /// Structured catch-up items, still produced by the Foundation Models
+    /// guided-generation path and by the legacy JSON shape.
     struct CatchUpItem {
         var title: String
         var summary: String
-        /// 1-based index into the articles array passed to `quickCatchUpStructured`.
+        /// 1-based index into the articles array the catch-up was built from.
         var articleIndex: Int?
-    }
-
-    /// Returns structured catch-up items. On JSON parse failure returns `nil` so the
-    /// caller can fall back to the plain-text path.
-    ///
-    /// When the provider is "foundation-models" on iOS 26+, uses `@Generable`
-    /// guided generation to bypass the JSON parse / repair path entirely.
-    static func quickCatchUpStructured(articles: [Article], settings: AppSettings) async throws -> [CatchUpItem]? {
-        // FM guided-generation fast path — no JSON parsing required.
-#if canImport(FoundationModels)
-        if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
-            return try await quickCatchUpStructuredFM(articles: articles)
-        }
-#endif
-
-        let raw = try await complete(
-            settings: settings,
-            instructions: """
-            You write crisp catch-up items for a news/RSS reader. Output ONLY valid JSON. No prose. No markdown fences. The format is exactly:
-            {"items":[{"title":"...","summary":"...","articleIndex":3},{"title":"...","summary":"...","articleIndex":null}]}
-            Rules:
-            - "title": short headline (≤10 words).
-            - "summary": 1–2 sentence plain-text summary, no markdown.
-            - "articleIndex": 1-based integer matching the [N] tag in the article list, or null if the item covers multiple articles.
-            - Return 5–12 items covering the most important stories.
-            - Output ONLY the JSON object above. No text before or after. No code block.
-            """,
-            prompt: """
-            Create a Quick Catch-up from these articles.
-
-            \(articleDigest(articles, limit: catchUpArticleLimit))
-            """,
-            maxTokens: 1200
-        )
-
-        return parseCatchUpItems(raw)
     }
 
     private static func parseCatchUpItems(_ raw: String) -> [CatchUpItem]? {
@@ -324,6 +289,274 @@ enum NativeAI {
             return CatchUpItem(title: title, summary: summary, articleIndex: index)
         }
         return items.isEmpty ? nil : items
+    }
+
+
+    // MARK: - Front page
+    //
+    // The old catch-up asked one model call for 5–12 "items" over titles and
+    // short excerpts, which could only produce category labels ("Self-hosted
+    // analytics become more accessible."). The front page runs in two passes
+    // instead: pick and group the stories, then read the articles behind each
+    // one and write its lede. The sheet drives the passes so the page fills in
+    // as it is written rather than appearing all at once.
+
+    /// A story on the front page. `lede` is empty until the second pass writes it.
+    struct CatchUpStory: Identifiable, Sendable {
+        let id = UUID()
+        var headline: String
+        var lede: String
+        /// 1-based indexes into the articles the page was built from.
+        var articleIndexes: [Int]
+    }
+
+    /// A one-line item below the fold.
+    struct CatchUpBrief: Identifiable, Sendable {
+        let id = UUID()
+        var text: String
+        var articleIndexes: [Int]
+    }
+
+    struct CatchUpPage: Sendable {
+        var stories: [CatchUpStory] = []
+        var briefs: [CatchUpBrief] = []
+        var isEmpty: Bool { stories.isEmpty && briefs.isEmpty }
+    }
+
+    static let catchUpMaxStories = 6
+    static let catchUpMaxBriefs = 6
+    /// Articles read in full when writing one story's lede.
+    static let catchUpArticlesPerLede = 4
+
+    /// What counts as a story, and what a headline is allowed to be. Shared by
+    /// both passes so they cannot disagree.
+    private static let frontPageStandard = """
+        A story is something that happened. "ByteDance open-sourced its RL training stack" is a story. "Open-source RL gains traction" is not — it is a category. If you cannot say what happened, there is no story.
+
+        Headlines:
+        - 4-10 words, present tense, naming the specific actor, product, project, company or number involved.
+        - Never a trend statement ("... gains traction", "... are improving", "... are emerging", "... becomes more accessible").
+        - Never a description of a source or its readership ("Hacker News is active and diverse").
+        - Never the name of a feed or a subject area on its own.
+        """
+
+    /// Pass one: pick the stories, group the articles under them, and write the
+    /// headlines. Returns nil when the model's answer cannot be read, so the
+    /// caller can fall back to the plain-text catch-up.
+    static func catchUpPicks(articles: [Article], settings: AppSettings) async throws -> CatchUpPage? {
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
+            // Guided generation already returns a clean list; keep its
+            // headlines and let the second pass write the ledes.
+            let items = try await quickCatchUpStructuredFM(articles: articles)
+            return frontPage(fromLegacy: items, articleCount: articles.count)
+        }
+#endif
+
+        let raw = try await complete(
+            settings: settings,
+            instructions: """
+            You are the editor of a one-page newspaper built from a reader's RSS feed. Output ONLY valid JSON. No prose. No markdown fences. The format is exactly:
+            {"stories":[{"headline":"...","articleIndexes":[1,4]}],"briefs":[{"text":"...","articleIndexes":[7]}]}
+
+            Choose what goes on the front page and write each story's headline. Another pass writes the ledes, so you write no summaries here.
+
+            \(frontPageStandard)
+
+            Grouping:
+            - "articleIndexes" are the 1-based [N] tags from the article list.
+            - Group articles only when they cover the same event or the same running story. Never group by source, by feed, or by broad subject area.
+            - Every article belongs to at most one story or one brief. Nothing appears twice on the page.
+            - Order the stories so the most consequential comes first.
+
+            Picking:
+            - Aim for 4-6 stories, and prefer fewer real ones over more filler. If only two things actually happened, return two stories.
+            - Anything else worth a glance goes in "briefs": one concrete sentence saying what happened, at most 6 of them.
+            - Leave out items with nothing to report. An empty briefs list is a perfectly good answer.
+            - Output ONLY the JSON object above. No text before or after. No code block.
+            """,
+            prompt: """
+            Build the front page from these articles.
+
+            \(frontPageDigest(articles, limit: catchUpArticleLimit))
+            """,
+            maxTokens: 1400
+        )
+
+        if let page = parseFrontPage(raw, articleCount: articles.count), !page.isEmpty {
+            return page
+        }
+        // The model may have answered in the shape catch-up used to ask for.
+        if let items = parseCatchUpItems(raw) {
+            return frontPage(fromLegacy: items, articleCount: articles.count)
+        }
+        return nil
+    }
+
+    /// Pass two: write the lede under one headline, from the full text of the
+    /// articles behind it. Plain prose — there is nothing here worth risking a
+    /// JSON parse on.
+    static func catchUpLede(
+        headline: String,
+        articles: [Article],
+        settings: AppSettings
+    ) async throws -> String {
+        guard !articles.isEmpty else { return "" }
+
+        let text = articles.prefix(catchUpArticlesPerLede).map { article in
+            let body = article.plainBody.trimmingCharacters(in: .whitespacesAndNewlines)
+            return """
+            --- \(article.title) [\(PublicationName.of(article: article))]
+            \(body.isEmpty ? "No reader text available." : body.prefixWords(420))
+            """
+        }
+        .joined(separator: "\n\n")
+
+        let raw = try await complete(
+            settings: settings,
+            instructions: """
+            You write the lede that runs under a newspaper headline. Output ONLY the lede itself: plain text, no markdown, no heading, no quotation marks, no preamble.
+
+            \(frontPageStandard)
+
+            The lede:
+            - 2-3 sentences.
+            - The first sentence says what happened, concretely, using the specifics in the article text: names, numbers, versions, dates, who did it.
+            - A later sentence says why it matters to this reader, and only where that is genuinely not obvious from the first.
+            - Never restate the headline, never say "the article discusses" or "this piece covers", never hedge.
+            - Use only what the supplied text supports. Where it is thin, say the little that is known and stop. A short honest lede beats a padded one.
+            """,
+            prompt: """
+            Headline: \(headline)
+
+            Article text behind it:
+            \(text)
+            """,
+            maxTokens: 300
+        )
+
+        return cleanLede(raw)
+    }
+
+    /// Strip the wrappers models put around a bare paragraph.
+    private static func cleanLede(_ raw: String) -> String {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("```") {
+            text = text
+                .split(separator: "\n")
+                .drop { $0.hasPrefix("```") }
+                .prefix { !$0.hasPrefix("```") }
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        for prefix in ["Lede:", "lede:", "Summary:"] where text.hasPrefix(prefix) {
+            text = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if text.count > 1, text.hasPrefix("\""), text.hasSuffix("\"") {
+            text = String(text.dropFirst().dropLast())
+        }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The article list handed to the first pass: enough to pick and group by,
+    /// no more. The ledes get the full text later.
+    private static func frontPageDigest(_ articles: [Article], limit: Int) -> String {
+        let selected = articles.prefix(limit)
+        if selected.isEmpty {
+            return "No articles are available."
+        }
+        return selected.enumerated().map { index, article in
+            let text = article.plainBody.trimmingCharacters(in: .whitespacesAndNewlines)
+            let excerpt = text.isEmpty ? "No reader text available." : text.prefixWords(60)
+            return """
+            [\(index + 1)] \(article.title)
+            Publication: \(PublicationName.of(article: article))
+            Excerpt: \(excerpt)
+            """
+        }
+        .joined(separator: "\n\n")
+    }
+
+    private static func parseFrontPage(_ raw: String, articleCount: Int) -> CatchUpPage? {
+        let cleaned = repairTriageJSON(raw)
+        guard let data = cleaned.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+
+        let rawStories = (json["stories"] ?? json["items"]) as? [[String: Any]] ?? []
+        let rawBriefs = (json["briefs"] ?? json["notable_mentions"] ?? json["also"]) as? [[String: Any]] ?? []
+
+        // The model is told each article belongs to one item only; hold it to
+        // that here so nothing appears twice on the page.
+        var claimed = Set<Int>()
+        var seenText = Set<String>()
+        var page = CatchUpPage()
+
+        for entry in rawStories where page.stories.count < catchUpMaxStories {
+            let headline = ((entry["headline"] ?? entry["title"] ?? entry["text"]) as? String ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !headline.isEmpty, seenText.insert(normalizeSentence(headline)).inserted else { continue }
+            let indexes = articleIndexes(from: entry, articleCount: articleCount, claimed: &claimed)
+            guard !indexes.isEmpty else { continue }
+            let lede = ((entry["lede"] ?? entry["summary"]) as? String ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            page.stories.append(CatchUpStory(headline: headline, lede: lede, articleIndexes: indexes))
+        }
+
+        for entry in rawBriefs where page.briefs.count < catchUpMaxBriefs {
+            let text = ((entry["text"] ?? entry["headline"] ?? entry["summary"]) as? String ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty, seenText.insert(normalizeSentence(text)).inserted else { continue }
+            let indexes = articleIndexes(from: entry, articleCount: articleCount, claimed: &claimed)
+            guard !indexes.isEmpty else { continue }
+            page.briefs.append(CatchUpBrief(text: text, articleIndexes: indexes))
+        }
+
+        return page.isEmpty ? nil : page
+    }
+
+    /// The 1-based article handles on one entry, dropping any an earlier item
+    /// already took.
+    private static func articleIndexes(
+        from entry: [String: Any],
+        articleCount: Int,
+        claimed: inout Set<Int>
+    ) -> [Int] {
+        let value = entry["articleIndexes"] ?? entry["article_ids"] ?? entry["articles"]
+            ?? entry["ids"] ?? entry["articleIndex"]
+        var candidates: [Int] = []
+        if let numbers = value as? [Int] {
+            candidates = numbers
+        } else if let single = value as? Int {
+            candidates = [single]
+        } else if let mixed = value as? [Any] {
+            candidates = mixed.compactMap { element in
+                if let number = element as? Int { return number }
+                if let text = element as? String { return Int(text.trimmingCharacters(in: .whitespaces)) }
+                return nil
+            }
+        } else if let text = value as? String {
+            candidates = [Int(text.trimmingCharacters(in: .whitespaces))].compactMap { $0 }
+        }
+        return candidates.filter { index in
+            index >= 1 && index <= articleCount && claimed.insert(index).inserted
+        }
+    }
+
+    /// Reshape the older item list into a front page, keeping its headlines.
+    private static func frontPage(fromLegacy items: [CatchUpItem], articleCount: Int) -> CatchUpPage {
+        var claimed = Set<Int>()
+        var page = CatchUpPage()
+        for item in items where page.stories.count < catchUpMaxStories {
+            let headline = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !headline.isEmpty else { continue }
+            var indexes: [Int] = []
+            if let index = item.articleIndex, index >= 1, index <= articleCount, claimed.insert(index).inserted {
+                indexes = [index]
+            }
+            page.stories.append(CatchUpStory(headline: headline, lede: "", articleIndexes: indexes))
+        }
+        return page
     }
 
     static func aiInbox(articles: [Article], settings: AppSettings) async throws -> String {

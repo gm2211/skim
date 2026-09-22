@@ -2,6 +2,7 @@ pub mod provider;
 pub mod native_provider;
 pub mod ds4_provider;
 pub mod prompts;
+pub mod publication;
 pub mod model_manager;
 pub mod claude_oauth;
 

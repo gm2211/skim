@@ -471,3 +471,62 @@ select option {
   min-width: 36px;
   flex-shrink: 0;
 }
+
+/* --- Quick Catch-up front page --------------------------------------------
+   The page is written in two passes, so stories arrive one at a time: each
+   rises in as it lands, and a headline waiting for its lede shows shimmering
+   rules where the text will be. */
+@keyframes catchup-rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.catchup-story {
+  animation: catchup-rise-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes catchup-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.catchup-skeleton-line {
+  height: 9px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+  background-size: 200% 100%;
+  animation: catchup-shimmer 1.4s linear infinite;
+}
+
+/* The masthead rule sweeps while the page is still being written. */
+@keyframes catchup-rule-sweep {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.catchup-rule-live {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    var(--color-accent, #4c8dff) 50%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: catchup-rule-sweep 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catchup-story,
+  .catchup-skeleton-line,
+  .catchup-rule-live {
+    animation: none;
+  }
+  .catchup-skeleton-line {
+    background: rgba(255, 255, 255, 0.09);
+  }
+  .catchup-rule-live {
+    background: rgba(255, 255, 255, 0.14);
+  }
+}

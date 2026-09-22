@@ -196,3 +196,88 @@ pub fn bullet_max_tokens(settings: &AiSettings) -> i64 {
 pub fn full_max_tokens(settings: &AiSettings) -> i64 {
     length_params(settings).3
 }
+
+// --- Quick Catch-up: the front page -----------------------------------------
+//
+// The old catch-up asked one model call for "the 10 most important takeaways,
+// one tight sentence each" over titles and 220-character excerpts. That shape
+// can only produce category labels ("Self-hosted analytics become more
+// accessible."), so the page read as a bag of headlines with nothing under
+// them. It now runs in two passes: pick and group the stories, then read the
+// articles behind each one and write its lede.
+
+/// Rules shared by both passes: what counts as a story, and what a headline
+/// and a lede are allowed to be.
+const FRONT_PAGE_STANDARD: &str = "A story is something that happened. \"ByteDance open-sourced its RL training stack\" is a story. \"Open-source RL gains traction\" is not — it is a category. If you cannot say what happened, there is no story.\n\n\
+     Headlines:\n\
+     - 4-10 words, present tense, naming the specific actor, product, project, company or number involved.\n\
+     - Never a trend statement (\"... gains traction\", \"... are improving\", \"... are emerging\", \"... becomes more accessible\").\n\
+     - Never a description of a source or its readership (\"Hacker News is active and diverse\").\n\
+     - Never the name of a feed or a subject area on its own.";
+
+/// Pass one: choose the stories, group the articles under them, and write the
+/// short items that run below the fold.
+pub fn catchup_page_system_prompt(user_prompt: Option<&str>) -> String {
+    let base = format!(
+        "You are the editor of a one-page newspaper built from a reader's RSS feed. Output JSON only.\n\n\
+     Choose what goes on the front page and write each story's headline. Another pass writes the ledes, so you write no summaries here.\n\n\
+     {FRONT_PAGE_STANDARD}\n\n\
+     Grouping:\n\
+     - Group articles only when they cover the same event or the same running story. Never group by source, by feed, or by broad subject area.\n\
+     - Every article belongs to at most one story or one brief. Nothing appears twice on the page.\n\
+     - Order the stories so the most consequential comes first.\n\n\
+     Picking:\n\
+     - Aim for 4-6 stories, and prefer fewer real ones over more filler. If only two things actually happened, return two stories.\n\
+     - Anything else worth a glance goes in \"briefs\": one concrete sentence saying what happened, at most 6 of them. A brief that does not say what happened does not belong on the page.\n\
+     - Leave out items with nothing to report. An empty briefs list is a perfectly good answer."
+    );
+
+    match user_prompt {
+        Some(p) if !p.trim().is_empty() => format!(
+            "{base}\n\n--- Reader's interests (explicit) ---\n{}\n\
+             Let this nudge which stories lead the page. It never relaxes the rules above: headlines still say what happened.",
+            p.trim()
+        ),
+        _ => base,
+    }
+}
+
+/// Pass one's user turn.
+pub fn catchup_page_user_prompt(articles_listing: &str) -> String {
+    format!(
+        r#"Articles (handle TAB title TAB [publication] TAB excerpt):
+{articles_listing}
+Refer to articles by their numeric handle.
+
+Output JSON:
+{{"stories":[{{"headline":"Actor does specific thing","article_ids":[0,3]}}],"briefs":[{{"text":"One concrete sentence about what happened.","article_ids":[5]}}]}}"#
+    )
+}
+
+/// Pass two: write the lede under one headline, from the full text of the
+/// articles behind it.
+pub fn catchup_lede_system_prompt() -> String {
+    format!(
+        "You write the lede that runs under a newspaper headline. Output JSON only.\n\n\
+     {FRONT_PAGE_STANDARD}\n\n\
+     The lede:\n\
+     - 2-3 sentences, plain text, no markdown.\n\
+     - The first sentence says what happened, concretely, using the specifics in the article text: names, numbers, versions, dates, who did it.\n\
+     - A later sentence says why it matters to this reader, and only where that is genuinely not obvious from the first.\n\
+     - Never restate the headline, never say \"the article discusses\" or \"this piece covers\", never hedge.\n\
+     - Use only what the supplied text supports. Where it is thin, say the little that is known and stop. A short honest lede beats a padded one."
+    )
+}
+
+/// Pass two's user turn, for one story.
+pub fn catchup_lede_user_prompt(headline: &str, articles_text: &str) -> String {
+    format!(
+        r#"Headline: {headline}
+
+Article text behind it:
+{articles_text}
+
+Output JSON:
+{{"lede":"What happened, with the specifics. Why it matters."}}"#
+    )
+}

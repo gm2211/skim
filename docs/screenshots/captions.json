@@ -1,0 +1,15 @@
+{
+  "viewport": {
+    "width": 1440,
+    "height": 900
+  },
+  "scale": 2,
+  "captions": {
+    "00-reading.png": "Read your feeds — sidebar, list, and article in one window",
+    "01-summarize.png": "Summarize any article without leaving the reader",
+    "02-triage.png": "AI Inbox — every unread article scored 1 to 5",
+    "03-catchup.png": "Super-quick catch-up — the week in ten takeaways",
+    "04-ask.png": "Ask Skim — chat across every feed, with citations",
+    "05-organize.png": "Auto-organize — the model files your feeds into folders"
+  }
+}

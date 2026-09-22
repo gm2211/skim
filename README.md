@@ -3,7 +3,7 @@
 **RSS reader for the age of AI.** Ingest feeds. Let a model triage the noise. Skim the rest.
 
 <p align="center">
-  <img src="docs/skim-demo.gif" alt="Skim — feature highlights" width="820" />
+  <img src="docs/skim-demo.gif" alt="Skim — reading, summarizing, triage, catch-up, Ask Skim, and auto-organize" width="800" />
 </p>
 
 ---

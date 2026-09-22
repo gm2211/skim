@@ -36,6 +36,7 @@ export function useMarkRead() {
       qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["triageStats"] });
     },
   });
 }
@@ -51,6 +52,7 @@ export function useMarkUnread() {
       qc.invalidateQueries({ queryKey: ["article"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["triageStats"] });
     },
   });
 }
@@ -66,6 +68,7 @@ export function useMarkAllRead() {
       qc.invalidateQueries({ queryKey: ["articleCount"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["triageStats"] });
     },
   });
 }
@@ -81,6 +84,7 @@ export function useToggleRead() {
       qc.invalidateQueries({ queryKey: ["article"] });
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
+      qc.invalidateQueries({ queryKey: ["triageStats"] });
     },
   });
 }

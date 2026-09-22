@@ -44,6 +44,53 @@ export function useSwipeToDismiss(enabled: boolean, onDismiss: () => void) {
     }, SETTLE_MS + 40);
   }, [clearTimer]);
 
+  // React registers touchmove on its root as a passive listener, so
+  // preventDefault() inside an onTouchMove prop is ignored: the sheet's content
+  // keeps scrolling underneath the drag and the browser logs "Unable to
+  // preventDefault inside passive event listener invocation". Own the move for
+  // the length of the gesture with a listener of our own instead.
+  const moveTargetRef = useRef<HTMLElement | null>(null);
+  const nativeMoveRef = useRef<((event: globalThis.TouchEvent) => void) | null>(null);
+
+  const releaseMoveTarget = useCallback(() => {
+    const node = moveTargetRef.current;
+    const listener = nativeMoveRef.current;
+    if (node && listener) node.removeEventListener("touchmove", listener);
+    moveTargetRef.current = null;
+    nativeMoveRef.current = null;
+  }, []);
+
+  // Returns true when the drag owns the gesture and the browser must not scroll.
+  const movePull = useCallback((x: number, y: number) => {
+    const swipe = swipeRef.current;
+    if (!enabled || !swipe) return false;
+
+    const now = performance.now();
+    const dt = Math.max(1, now - swipe.lastAt);
+    velocityRef.current = (y - swipe.lastY) / dt;
+    swipe.lastY = y;
+    swipe.lastAt = now;
+
+    const dx = x - swipe.startX;
+    const dy = y - swipe.startY;
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+
+    if (swipe.intent === "pending") {
+      if (absDx > INTENT_PX && absDx > absDy) {
+        swipe.intent = "horizontal";
+      } else if (absDy > INTENT_PX && absDy > absDx) {
+        swipe.intent = "vertical";
+      }
+    }
+
+    if (swipe.intent !== "vertical" || dy <= 0) return false;
+
+    const eased = dy <= MAX_DRAG_PX ? dy : MAX_DRAG_PX + (dy - MAX_DRAG_PX) * 0.18;
+    setOffset(eased);
+    return true;
+  }, [enabled]);
+
   const onTouchStart = useCallback((event: TouchEvent<HTMLElement>) => {
     if (!enabled) return;
     const touch = event.touches[0];
@@ -58,41 +105,23 @@ export function useSwipeToDismiss(enabled: boolean, onDismiss: () => void) {
       intent: "pending",
     };
     setPhase("dragging");
-  }, [clearTimer, enabled]);
 
-  const onTouchMove = useCallback((event: TouchEvent<HTMLElement>) => {
-    const swipe = swipeRef.current;
-    if (!enabled || !swipe) return;
-    const touch = event.touches[0];
-    if (!touch) return;
-
-    const now = performance.now();
-    const dt = Math.max(1, now - swipe.lastAt);
-    velocityRef.current = (touch.clientY - swipe.lastY) / dt;
-    swipe.lastY = touch.clientY;
-    swipe.lastAt = now;
-
-    const dx = touch.clientX - swipe.startX;
-    const dy = touch.clientY - swipe.startY;
-    const absDx = Math.abs(dx);
-    const absDy = Math.abs(dy);
-
-    if (swipe.intent === "pending") {
-      if (absDx > INTENT_PX && absDx > absDy) {
-        swipe.intent = "horizontal";
-      } else if (absDy > INTENT_PX && absDy > absDx) {
-        swipe.intent = "vertical";
+    releaseMoveTarget();
+    const node = event.currentTarget;
+    const listener = (moveEvent: globalThis.TouchEvent) => {
+      const moved = moveEvent.touches[0];
+      if (!moved) return;
+      if (movePull(moved.clientX, moved.clientY) && moveEvent.cancelable) {
+        moveEvent.preventDefault();
       }
-    }
-
-    if (swipe.intent !== "vertical" || dy <= 0) return;
-    event.preventDefault();
-
-    const eased = dy <= MAX_DRAG_PX ? dy : MAX_DRAG_PX + (dy - MAX_DRAG_PX) * 0.18;
-    setOffset(eased);
-  }, [enabled]);
+    };
+    node.addEventListener("touchmove", listener, { passive: false });
+    moveTargetRef.current = node;
+    nativeMoveRef.current = listener;
+  }, [clearTimer, enabled, movePull, releaseMoveTarget]);
 
   const onTouchEnd = useCallback(() => {
+    releaseMoveTarget();
     const swipe = swipeRef.current;
     swipeRef.current = null;
     if (!enabled || !swipe || swipe.intent !== "vertical") {
@@ -114,7 +143,7 @@ export function useSwipeToDismiss(enabled: boolean, onDismiss: () => void) {
     }
 
     reset();
-  }, [clearTimer, enabled, offset, reset]);
+  }, [clearTimer, enabled, offset, releaseMoveTarget, reset]);
 
   const style: CSSProperties = enabled
     ? {
@@ -124,12 +153,14 @@ export function useSwipeToDismiss(enabled: boolean, onDismiss: () => void) {
       }
     : {};
 
-  useEffect(() => clearTimer, [clearTimer]);
+  useEffect(() => () => {
+    clearTimer();
+    releaseMoveTarget();
+  }, [clearTimer, releaseMoveTarget]);
 
   return {
     swipeToDismissHandlers: {
       onTouchStart,
-      onTouchMove,
       onTouchEnd,
       onTouchCancel: onTouchEnd,
     },

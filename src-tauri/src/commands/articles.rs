@@ -51,7 +51,10 @@ pub async fn mark_articles_read(
 ) -> Result<(), String> {
     let feedly_entry_ids = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        queries::mark_articles_read(&conn, &article_ids).map_err(|e| e.to_string())?;
+        // Bulk operations must commit once, rather than fsync each article.
+        let transaction = conn.unchecked_transaction().map_err(|e| e.to_string())?;
+        queries::mark_articles_read(&transaction, &article_ids).map_err(|e| e.to_string())?;
+        transaction.commit().map_err(|e| e.to_string())?;
         queries::get_feedly_entry_ids(&conn, &article_ids).unwrap_or_default()
     };
 
@@ -94,8 +97,45 @@ pub async fn mark_articles_unread(
     Ok(())
 }
 
+/// Enumerate the full scope, never just the list's current page.
+fn scoped_read_ids(
+    conn: &rusqlite::Connection,
+    mut filter: ArticleFilter,
+    recent_only: bool,
+) -> Result<Vec<String>, rusqlite::Error> {
+    filter.limit = Some(-1);
+    filter.offset = None;
+    filter.is_read = Some(false);
+    let recent_ids = if recent_only {
+        let mut statement = conn.prepare(
+            "SELECT article_id FROM article_interactions WHERE reading_time_sec >= 10
+             OR chat_messages > 0 OR feedback IS NOT NULL OR priority_override IS NOT NULL",
+        )?;
+        let ids = statement.query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<std::collections::HashSet<_>, _>>()?;
+        Some(ids)
+    } else { None };
+    Ok(queries::get_articles(conn, &filter)?.into_iter()
+        .filter(|article| recent_ids.as_ref().map_or(true, |ids| ids.contains(&article.article.id)))
+        .map(|article| article.article.id).collect())
+}
+
 #[tauri::command]
-pub async fn mark_all_read(db: State<'_, Database>, feed_id: Option<String>) -> Result<(), String> {
+pub async fn mark_all_read(
+    db: State<'_, Database>,
+    feed_id: Option<String>,
+    filter: Option<ArticleFilter>,
+    recent_only: Option<bool>,
+) -> Result<(), String> {
+    if let Some(filter) = filter {
+        let ids = {
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            scoped_read_ids(&conn, filter, recent_only.unwrap_or(false))
+                .map_err(|e| e.to_string())?
+        };
+        return mark_articles_read(db, ids).await;
+    }
+
     // Gather Feedly context before applying local changes
     let feedly_sync_info = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -1191,5 +1231,60 @@ mod reader_fallback_tests {
         let error = fetch_article_content(&url).await.unwrap_err();
         assert!(error.contains("403"), "unexpected error: {error}");
         server.abort();
+    }
+}
+
+
+#[cfg(test)]
+mod scoped_read_tests {
+    use super::*;
+
+    fn fixture() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrations::run_migrations(&conn).unwrap();
+        conn.execute_batch("INSERT INTO feeds (id,title,url,created_at,updated_at) VALUES
+            ('inside','Inside','https://inside.test',0,0), ('outside','Outside','https://outside.test',0,0);
+            INSERT INTO articles (id,feed_id,title,fetched_at,is_starred) VALUES
+            ('outside','outside','Outside',1,1);").unwrap();
+        for index in 0..205 {
+            conn.execute("INSERT INTO articles (id,feed_id,title,fetched_at,is_starred) VALUES (?1,'inside',?1,1,?2)",
+                rusqlite::params![format!("a{index}"), i32::from(index == 0)]).unwrap();
+        }
+        conn
+    }
+
+    fn filter(value: serde_json::Value) -> ArticleFilter {
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn scoped_read_updates_entire_folder_without_touching_other_feeds() {
+        let conn = fixture();
+        let ids = scoped_read_ids(&conn, filter(serde_json::json!({
+            "feed_ids": ["inside"], "limit": 2, "offset": 100
+        })), false).unwrap();
+        assert_eq!(ids.len(), 205);
+        queries::mark_articles_read(&conn, &ids).unwrap();
+        assert_eq!(queries::count_articles(&conn, &filter(serde_json::json!({"is_read": false}))).unwrap(), 1);
+        assert_eq!(conn.query_row("SELECT is_read FROM articles WHERE id='outside'", [], |r| r.get::<_, i32>(0)).unwrap(), 0);
+    }
+
+    #[test]
+    fn scoped_read_matches_theme_and_url_search_without_other_articles() {
+        let conn = fixture();
+        conn.execute_batch("INSERT INTO themes(id,label,created_at,expires_at) VALUES ('theme','Theme',0,999);
+            INSERT INTO theme_articles(theme_id,article_id) VALUES ('theme','a3');
+            UPDATE articles SET url='https://unique-domain.test/story' WHERE id='a4';").unwrap();
+        assert_eq!(scoped_read_ids(&conn, filter(serde_json::json!({"theme_id": "theme"})), false).unwrap(), vec!["a3"]);
+        assert_eq!(scoped_read_ids(&conn, filter(serde_json::json!({"search": "unique-domain"})), false).unwrap(), vec!["a4"]);
+    }
+
+    #[test]
+    fn scoped_read_preserves_starred_empty_folder_and_recent_membership() {
+        let conn = fixture();
+        assert!(scoped_read_ids(&conn, filter(serde_json::json!({"feed_ids": []})), false).unwrap().is_empty());
+        assert_eq!(scoped_read_ids(&conn, filter(serde_json::json!({"is_starred": true})), false).unwrap().len(), 2);
+        conn.execute_batch("INSERT INTO article_interactions(article_id,reading_time_sec,updated_at) VALUES ('a0',15,1),('a1',2,1)").unwrap();
+        assert_eq!(scoped_read_ids(&conn, filter(serde_json::json!({})), true).unwrap(), vec!["a0"]);
     }
 }

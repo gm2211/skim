@@ -27,6 +27,7 @@ struct CatchUpSheet: View {
     @State private var articles: [Article] = []
     @State private var errorMessage: String?
     @State private var errorRemedy: AIErrorRemedy = .none
+    @State private var range: CatchUpRange = .anything
 
     var body: some View {
         NavigationStack {
@@ -35,6 +36,15 @@ struct CatchUpSheet: View {
                     Text(request.subtitle)
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
+
+                    Picker("Going back", selection: $range) {
+                        ForEach(CatchUpRange.allCases) { option in
+                            Text(option.label).tag(option)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .disabled(isLoading)
+                    .onChange(of: range) { _, _ in Task { await run() } }
 
                     if let errorMessage {
                         AIErrorBox(message: errorMessage, remedy: errorRemedy, onResolved: { Task { await run() } })
@@ -94,8 +104,15 @@ struct CatchUpSheet: View {
         statusMessage = request.statusLabel
 
         do {
-            let context = try await request.loadArticles()
+            let loaded = try await request.loadArticles()
+            let context = range.filter(loaded)
             articles = context
+            guard !context.isEmpty else {
+                errorMessage = "Nothing published in the \(range.label.lowercased()). Pick a wider range."
+                errorRemedy = .none
+                isLoading = false
+                return
+            }
             statusMessage = "Reading \(context.count) \(context.count == 1 ? "article" : "articles")…"
 
             guard let picks = try await NativeAI.catchUpPicks(articles: context, settings: request.settings) else {

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { CatchupDialog } from "./CatchupDialog";
+import { CatchupDialog, catchupScopeSummary, catchupSelection } from "./CatchupDialog";
 import { useUiStore } from "../../stores/uiStore";
 import { generateCatchupReport, type CatchupProgress, type CatchupReport } from "../../services/commands";
 
@@ -52,6 +52,7 @@ const report: CatchupReport = {
   ],
   briefs: [{ text: "Grafana ships a self-hosted analytics bundle.", article_ids: ["a1"] }],
   sources: [source],
+  article_count: 12,
 };
 
 beforeEach(() => {
@@ -60,6 +61,10 @@ beforeEach(() => {
   provider = "openai";
   settings = { ai: { provider } };
   useUiStore.setState({ isPhone: false, showSettings: false });
+  // The dialog remembers the reader's last choice across opens; put it back so
+  // one test's selection does not leak into the next.
+  catchupSelection.scope = "unread";
+  catchupSelection.sinceHours = null;
   vi.mocked(generateCatchupReport).mockResolvedValue(report);
 });
 
@@ -102,11 +107,71 @@ describe("CatchupDialog", () => {
 
     expect(generateCatchupReport).not.toHaveBeenCalled();
     await userEvent.setup().click(screen.getByRole("button", { name: "Run catch-up" }));
-    await waitFor(() => expect(generateCatchupReport).toHaveBeenCalledWith("unread"));
+    await waitFor(() => expect(generateCatchupReport).toHaveBeenCalledWith("unread", null));
 
     await userEvent.setup().selectOptions(screen.getByLabelText("Include"), "inbox");
     await waitFor(() => expect(screen.getByRole("button", { name: "Run catch-up" })).toBeInTheDocument());
     expect(generateCatchupReport).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the chosen scope and time range to the backend", async () => {
+    render(<CatchupDialog onClose={vi.fn()} />);
+    const user = userEvent.setup();
+
+    await user.selectOptions(screen.getByLabelText("Include"), "inbox");
+    await user.selectOptions(screen.getByLabelText("Going back"), "24");
+    await user.click(screen.getByRole("button", { name: "Run catch-up" }));
+
+    await waitFor(() => expect(generateCatchupReport).toHaveBeenCalledWith("inbox", 24));
+  });
+
+  it("keeps the reader's scope and range when the dialog is reopened", async () => {
+    const first = render(<CatchupDialog onClose={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Include"), "inbox");
+    await user.selectOptions(screen.getByLabelText("Going back"), "72");
+    first.unmount();
+
+    render(<CatchupDialog onClose={vi.fn()} />);
+    expect(screen.getByLabelText("Include")).toHaveValue("inbox");
+    expect(screen.getByLabelText("Going back")).toHaveValue("72");
+  });
+
+  it("names how many articles the run actually read", async () => {
+    render(<CatchupDialog onClose={vi.fn()} />);
+
+    await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+
+    expect(
+      await screen.findByText("Read 12 articles from everything unread."),
+    ).toBeInTheDocument();
+  });
+
+  it("explains an empty priority inbox rather than blaming the news", async () => {
+    vi.mocked(generateCatchupReport).mockResolvedValueOnce({
+      stories: [],
+      briefs: [],
+      sources: [],
+      article_count: 0,
+    });
+    render(<CatchupDialog onClose={vi.fn()} />);
+    const user = userEvent.setup();
+
+    await user.selectOptions(screen.getByLabelText("Include"), "inbox");
+    await user.click(screen.getByRole("button", { name: "Run catch-up" }));
+
+    expect(await screen.findByText(/only 4s and 5s reach this scope/)).toBeInTheDocument();
+  });
+
+  describe("catchupScopeSummary", () => {
+    it("names the scope and the window", () => {
+      expect(catchupScopeSummary("inbox", 24, 7)).toBe(
+        "Read 7 articles from your priority inbox from the last 24 hours.",
+      );
+      expect(catchupScopeSummary("unread", null, 1)).toBe(
+        "Read 1 article from everything unread.",
+      );
+    });
   });
 
   it("closes with Escape and exposes modal semantics", () => {
@@ -187,7 +252,7 @@ describe("CatchupDialog", () => {
   });
 
   it("says so plainly when nothing on the page was real news", async () => {
-    vi.mocked(generateCatchupReport).mockResolvedValueOnce({ stories: [], briefs: [], sources: [] });
+    vi.mocked(generateCatchupReport).mockResolvedValueOnce({ stories: [], briefs: [], sources: [], article_count: 4 });
     render(<CatchupDialog onClose={vi.fn()} />);
 
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));

@@ -720,6 +720,7 @@ pub async fn generate_themes(
                 is_read: Some(false),
                 is_starred: None,
                 limit: Some(200),
+                published_after: None,
                 offset: None,
             };
             queries::get_articles(&conn, &filter).map_err(|e| e.to_string())?
@@ -1043,6 +1044,7 @@ pub async fn triage_articles(
                 is_read: Some(false),
                 is_starred: None,
                 limit: Some(MAX_PER_RUN),
+                published_after: None,
                 offset: None,
             };
             queries::get_articles(&conn, &filter).map_err(|e| e.to_string())?
@@ -1443,6 +1445,10 @@ pub struct CatchupReport {
     pub stories: Vec<CatchupStory>,
     pub briefs: Vec<CatchupBrief>,
     pub sources: Vec<CatchupSource>,
+    /// How many articles the chosen scope and time range actually selected.
+    /// Rendered in the dialog so the reader can see the scope doing something
+    /// — without it, "Priority inbox" and "All unread" look identical.
+    pub article_count: u32,
 }
 
 pub const CATCHUP_PROGRESS_EVENT: &str = "catchup_progress";
@@ -1554,12 +1560,85 @@ fn normalize_for_dedup(text: &str) -> String {
 const CATCHUP_POOL_LIMIT: usize = 100;
 const CATCHUP_MAX_STORIES: usize = 6;
 const CATCHUP_MAX_BRIEFS: usize = 6;
+/// Triage priority a story must reach to count as "priority inbox" for a
+/// briefing. Triage is told most articles should land at 2-3, so the old bar of
+/// 3 let the whole middle of the scale through and catch-up on "Priority inbox"
+/// read exactly like catch-up on everything.
+const CATCHUP_INBOX_MIN_PRIORITY: i32 = 4;
+/// Articles cited under one story. The model occasionally hands a single item
+/// every handle it was given; the byline is a citation, not a manifest.
+const CATCHUP_MAX_CITATIONS_PER_STORY: usize = 4;
+const CATCHUP_MAX_CITATIONS_PER_BRIEF: usize = 2;
 /// Articles read in full when writing one story's lede.
 const CATCHUP_ARTICLES_PER_LEDE: usize = 4;
 /// Characters of each of those articles handed to the model.
 const CATCHUP_LEDE_TEXT_CHARS: usize = 3000;
 /// Characters of each article in the first pass, which only picks and groups.
 const CATCHUP_PICK_EXCERPT_CHARS: usize = 400;
+
+/// Text the model copied out of the prompt instead of writing.
+///
+/// Weaker models answer a JSON request by returning the example unchanged, or
+/// by filling its placeholder with the feed's name ("Short sentence about the
+/// Hacker News article"). That parses cleanly, so nothing downstream rejects
+/// it and the page renders a column of template strings. Catch it here, at the
+/// only point where prompt text and model output meet.
+fn is_placeholder_text(text: &str) -> bool {
+    let normalized = normalize_for_dedup(text);
+    if normalized.is_empty() {
+        return true;
+    }
+    // Stems lifted from the examples in `prompts::catchup_*`, plus the shapes
+    // the older one-pass prompt produced.
+    const STEMS: &[&str] = &[
+        "short sentence",
+        "one concrete sentence",
+        "one tight sentence",
+        "actor does specific thing",
+        "what happened with the specifics",
+        "a short sentence",
+        "brief summary of the article",
+        "summary of the article",
+        "headline here",
+        "your headline",
+        "lorem ipsum",
+    ];
+    if STEMS.iter().any(|stem| normalized.starts_with(stem)) {
+        return true;
+    }
+    // "... about the Hacker News article", "... about the Finance & economics
+    // article" — the placeholder with a feed name dropped into it.
+    if normalized.contains("about the") && normalized.ends_with("article") {
+        return true;
+    }
+    false
+}
+
+/// The articles one item may cite: unclaimed ones in the order the model gave
+/// them, capped at `max`.
+///
+/// Only the ones kept are marked claimed. Marking the overflow too would take
+/// those articles off the page entirely — they would belong to an item that
+/// does not cite them and be unavailable to any later one.
+fn claim_citations(
+    handles: &serde_json::Value,
+    pool: &[crate::db::models::ArticleWithFeed],
+    claimed: &mut std::collections::HashSet<String>,
+    max: usize,
+) -> Vec<String> {
+    let mut kept = Vec::new();
+    for id in resolve_handles(handles, pool) {
+        if kept.len() >= max {
+            break;
+        }
+        if claimed.contains(&id) {
+            continue;
+        }
+        claimed.insert(id.clone());
+        kept.push(id);
+    }
+    kept
+}
 
 /// A short fallback lede for when the second pass fails for one story, so a
 /// story never renders with nothing under it.
@@ -1575,58 +1654,78 @@ fn excerpt_lede(text: &str) -> String {
     }
 }
 
+/// The cutoff, in unix seconds, for a "catch up on the last N hours" request.
+/// `None` (or a non-positive value) means the whole unread backlog, which is
+/// what catch-up did before the reader could choose.
+fn catchup_cutoff(since_hours: Option<i64>, now: i64) -> Option<i64> {
+    match since_hours {
+        Some(hours) if hours > 0 => Some(now - hours * 3600),
+        _ => None,
+    }
+}
+
 #[tauri::command]
 pub async fn generate_catchup_report(
     app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     scope: Option<String>,
+    since_hours: Option<i64>,
 ) -> Result<CatchupReport, String> {
+    let now = chrono::Utc::now().timestamp();
+    let published_after = catchup_cutoff(since_hours, now);
+    let scoped_to_inbox = scope.as_deref() == Some("inbox");
+
     let (pool, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let settings_json =
             queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
-        let pool: Vec<crate::db::models::ArticleWithFeed> = match scope.as_deref() {
-            Some("inbox") => {
-                let inbox = queries::get_inbox_articles(
-                    &conn,
-                    Some(3),
-                    Some(false),
-                    CATCHUP_POOL_LIMIT as i64,
-                    0,
-                )
-                .map_err(|e| e.to_string())?;
-                inbox
-                    .into_iter()
-                    .map(|a| crate::db::models::ArticleWithFeed {
-                        article: a.article,
-                        feed_title: a.feed_title,
-                        feed_icon_url: a.feed_icon_url,
-                    })
-                    .collect()
-            }
-            _ => queries::get_articles(
+        let pool: Vec<crate::db::models::ArticleWithFeed> = if scoped_to_inbox {
+            let inbox = queries::get_inbox_articles_since(
+                &conn,
+                Some(CATCHUP_INBOX_MIN_PRIORITY),
+                Some(false),
+                published_after,
+                CATCHUP_POOL_LIMIT as i64,
+                0,
+            )
+            .map_err(|e| e.to_string())?;
+            inbox
+                .into_iter()
+                .map(|a| crate::db::models::ArticleWithFeed {
+                    article: a.article,
+                    feed_title: a.feed_title,
+                    feed_icon_url: a.feed_icon_url,
+                })
+                .collect()
+        } else {
+            queries::get_articles(
                 &conn,
                 &crate::db::models::ArticleFilter {
-                    feed_id: None,
-                    feed_ids: None,
-                    search: None,
-                    theme_id: None,
                     is_read: Some(false),
-                    is_starred: None,
                     limit: Some(CATCHUP_POOL_LIMIT as i64),
-                    offset: None,
+                    published_after,
+                    ..Default::default()
                 },
             )
-            .map_err(|e| e.to_string())?,
+            .map_err(|e| e.to_string())?
         };
         (pool, settings_json)
     };
 
-    let mut report = CatchupReport::default();
+    let mut report = CatchupReport {
+        article_count: pool.len() as u32,
+        ..Default::default()
+    };
 
     if pool.is_empty() {
-        emit_catchup(&app, "done", 0, 0, "Nothing unread to catch up on.", &report);
+        let message = match (scoped_to_inbox, published_after.is_some()) {
+            (true, true) => "No high-priority articles in that time range.",
+            (true, false) => "No high-priority articles to catch up on.",
+            (false, true) => "Nothing unread in that time range.",
+            (false, false) => "Nothing unread to catch up on.",
+        };
+        emit_catchup(&app, "done", 0, 0, message, &report);
         return Ok(report);
     }
 
@@ -1725,20 +1824,30 @@ pub async fn generate_catchup_report(
             break;
         }
         let headline = story.headline.trim().to_string();
-        if headline.is_empty() || !seen_text.insert(normalize_for_dedup(&headline)) {
+        if headline.is_empty()
+            || is_placeholder_text(&headline)
+            || !seen_text.insert(normalize_for_dedup(&headline))
+        {
             continue;
         }
-        let article_ids: Vec<String> = resolve_handles(&story.article_ids, &pool)
-            .into_iter()
-            .filter(|id| claimed.insert(id.clone()))
-            .collect();
+        let article_ids = claim_citations(
+            &story.article_ids,
+            &pool,
+            &mut claimed,
+            CATCHUP_MAX_CITATIONS_PER_STORY,
+        );
         if article_ids.is_empty() {
             // Every article behind it already ran under an earlier story.
             continue;
         }
+        let lede = story.lede.trim();
         report.stories.push(CatchupStory {
             headline,
-            lede: story.lede.trim().to_string(),
+            lede: if is_placeholder_text(lede) {
+                String::new()
+            } else {
+                lede.to_string()
+            },
             article_ids,
         });
     }
@@ -1748,13 +1857,18 @@ pub async fn generate_catchup_report(
             break;
         }
         let text = brief.text.trim().to_string();
-        if text.is_empty() || !seen_text.insert(normalize_for_dedup(&text)) {
+        if text.is_empty()
+            || is_placeholder_text(&text)
+            || !seen_text.insert(normalize_for_dedup(&text))
+        {
             continue;
         }
-        let article_ids: Vec<String> = resolve_handles(&brief.article_ids, &pool)
-            .into_iter()
-            .filter(|id| claimed.insert(id.clone()))
-            .collect();
+        let article_ids = claim_citations(
+            &brief.article_ids,
+            &pool,
+            &mut claimed,
+            CATCHUP_MAX_CITATIONS_PER_BRIEF,
+        );
         if article_ids.is_empty() {
             continue;
         }
@@ -1856,10 +1970,10 @@ pub async fn generate_catchup_report(
                     let parsed = extract_json_object(&text)
                         .and_then(|json| serde_json::from_str::<CatchupLedeRaw>(json).ok())
                         .map(|raw| raw.lede.trim().to_string())
-                        .filter(|lede| !lede.is_empty());
+                        .filter(|lede| !lede.is_empty() && !is_placeholder_text(lede));
                     // A provider that ignored json_mode still gave us prose.
                     parsed.unwrap_or_else(|| {
-                        if text.starts_with('{') {
+                        if text.starts_with('{') || is_placeholder_text(&text) {
                             String::new()
                         } else {
                             text
@@ -1946,4 +2060,85 @@ pub async fn get_article_interaction(
 ) -> Result<Option<crate::db::models::ArticleInteraction>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     queries::get_article_interaction(&conn, &article_id).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod catchup_tests {
+    use super::*;
+
+    #[test]
+    fn placeholder_text_catches_prompt_examples_the_model_echoed() {
+        // Exactly what the dialog rendered when a weak model returned the
+        // prompt's own example instead of writing anything.
+        assert!(is_placeholder_text("Short sentence"));
+        assert!(is_placeholder_text("Short sentence about the Hacker News article"));
+        assert!(is_placeholder_text(
+            "Short sentence about the Finance & economics article"
+        ));
+        assert!(is_placeholder_text("Actor does specific thing"));
+        assert!(is_placeholder_text(
+            "One concrete sentence about what happened."
+        ));
+        assert!(is_placeholder_text("   "));
+    }
+
+    #[test]
+    fn placeholder_text_leaves_real_writing_alone() {
+        assert!(!is_placeholder_text(
+            "ByteDance open-sources its RL training stack"
+        ));
+        assert!(!is_placeholder_text(
+            "Apple delayed the rebuilt Siri to spring 2026, its second slip this year."
+        ));
+        // A real sentence that happens to mention an article.
+        assert!(!is_placeholder_text(
+            "Stripe's engineering blog walks through the outage in a detailed article."
+        ));
+    }
+
+    #[test]
+    fn cutoff_is_relative_to_now_and_absent_without_a_range() {
+        let now = 1_700_000_000;
+        assert_eq!(catchup_cutoff(Some(24), now), Some(now - 86_400));
+        assert_eq!(catchup_cutoff(Some(6), now), Some(now - 21_600));
+        assert_eq!(catchup_cutoff(None, now), None);
+        // A nonsense range means the whole backlog, not an empty page.
+        assert_eq!(catchup_cutoff(Some(0), now), None);
+        assert_eq!(catchup_cutoff(Some(-5), now), None);
+    }
+
+    #[test]
+    fn citations_are_capped_and_only_the_kept_ones_are_claimed() {
+        let pool: Vec<crate::db::models::ArticleWithFeed> = (0..6)
+            .map(|i| crate::db::models::ArticleWithFeed {
+                article: crate::db::models::Article {
+                    id: format!("a{i}"),
+                    feed_id: "f".into(),
+                    title: format!("Title {i}"),
+                    url: None,
+                    author: None,
+                    content_html: None,
+                    content_text: None,
+                    published_at: None,
+                    fetched_at: 0,
+                    is_read: false,
+                    is_starred: false,
+                    feedly_entry_id: None,
+                    comments_url: None,
+                },
+                feed_title: "Feed".into(),
+                feed_icon_url: None,
+            })
+            .collect();
+
+        let mut claimed = std::collections::HashSet::new();
+        let handles = serde_json::json!([0, 1, 2, 3, 4, 5]);
+        let kept = claim_citations(&handles, &pool, &mut claimed, 2);
+
+        assert_eq!(kept, vec!["a0".to_string(), "a1".to_string()]);
+        // The overflow stays available to a later story rather than vanishing.
+        assert_eq!(claimed.len(), 2);
+        let next = claim_citations(&serde_json::json!([2, 3]), &pool, &mut claimed, 2);
+        assert_eq!(next, vec!["a2".to_string(), "a3".to_string()]);
+    }
 }

@@ -655,6 +655,7 @@ mod tests {
                 is_read: None,
                 is_starred: None,
                 limit: Some(1_000),
+                published_after: None,
                 offset: None,
             },
         )

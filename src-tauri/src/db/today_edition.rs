@@ -22,6 +22,8 @@ pub struct TodayEditionMemberArticle {
     pub article_id: String,
     pub feed_id: String,
     pub feed_title: String,
+    /// The feed title reduced to something printable as a byline.
+    pub publication: String,
     pub feed_icon_url: Option<String>,
     pub title: String,
     pub url: Option<String>,
@@ -157,16 +159,16 @@ fn generate(
     }
 
     let mut selected = select_candidates(&candidates, story_limit as usize);
+    // A front page runs in order of importance. Ordering by section put every
+    // story that no second outlet happened to cover — in practice almost all
+    // of them — into one undifferentiated block at the bottom of the page.
+    // Section stays on each item as metadata; it no longer decides position.
     selected.sort_by(|left, right| {
-        section_order(section_for(left))
-            .cmp(&section_order(section_for(right)))
-            .then_with(|| {
-                right
-                    .rank
-                    .score
-                    .partial_cmp(&left.rank.score)
-                    .unwrap_or(Ordering::Equal)
-            })
+        right
+            .rank
+            .score
+            .partial_cmp(&left.rank.score)
+            .unwrap_or(Ordering::Equal)
             .then_with(|| left.rank.story_id.cmp(&right.rank.story_id))
     });
     let selected_with_members = selected
@@ -308,16 +310,6 @@ fn section_for(candidate: &Candidate) -> &'static str {
     }
 }
 
-fn section_order(section: &str) -> u8 {
-    match section {
-        SECTION_TOP_STORIES => 0,
-        SECTION_WIDELY_COVERED => 1,
-        SECTION_UPDATES => 2,
-        SECTION_UNIQUE_FINDS => 3,
-        _ => 4,
-    }
-}
-
 fn reason_for(section: &str, source_count: i64) -> String {
     match section {
         SECTION_UPDATES => "updated_story".into(),
@@ -447,13 +439,16 @@ fn list_snapshot_member_articles(
     )?;
     let members = statement
         .query_map(params![edition_id, story_id], |row| {
+            let feed_title: String = row.get(2)?;
+            let url: Option<String> = row.get(5)?;
             Ok(TodayEditionMemberArticle {
                 article_id: row.get(0)?,
                 feed_id: row.get(1)?,
-                feed_title: row.get(2)?,
+                publication: crate::ai::publication::publication_name(&feed_title, url.as_deref()),
+                feed_title,
                 feed_icon_url: row.get(3)?,
                 title: row.get(4)?,
-                url: row.get(5)?,
+                url,
                 author: row.get(6)?,
                 published_at: row.get(7)?,
                 membership_type: membership_type_from_raw(row.get(8)?, 8)?,
@@ -670,7 +665,7 @@ mod tests {
     }
 
     #[test]
-    fn edition_is_capped_sectioned_and_keeps_member_sources() {
+    fn edition_is_capped_ranked_and_keeps_member_sources() {
         let conn = setup();
         let raw_before = raw_articles(&conn);
         let edition = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 5).expect("edition");
@@ -690,12 +685,28 @@ mod tests {
         assert!(sections.contains(SECTION_UPDATES));
         assert!(sections.contains(SECTION_UNIQUE_FINDS));
         assert!(sections.contains(SECTION_WIDELY_COVERED));
-        let section_positions: Vec<u8> = edition
+        // The page runs in order of importance. Section is metadata on each
+        // item; it no longer decides where the item sits.
+        let mut ranked =
+            story_clustering::rank_stories(&conn, GENERATED_AT, MAX_RANK_CANDIDATES).expect("ranked");
+        ranked.sort_by(|left, right| {
+            right
+                .score
+                .partial_cmp(&left.score)
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| left.story_id.cmp(&right.story_id))
+        });
+        let on_page: Vec<&str> = edition
             .items
             .iter()
-            .map(|item| section_order(&item.snapshot.section))
+            .map(|item| item.snapshot.story_id.as_str())
             .collect();
-        assert!(section_positions.windows(2).all(|pair| pair[0] <= pair[1]));
+        let by_score: Vec<&str> = ranked
+            .iter()
+            .map(|rank| rank.story_id.as_str())
+            .filter(|id| on_page.contains(id))
+            .collect();
+        assert_eq!(on_page, by_score);
         for item in &edition.items {
             let reason = item.snapshot.snapshot_reason.as_deref().unwrap_or_default();
             match item.snapshot.section.as_str() {

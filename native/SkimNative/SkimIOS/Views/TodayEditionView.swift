@@ -8,7 +8,9 @@ struct TodayEditionView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("todayStoryLimit") private var storyLimit = 10
 
-    private let sections: [EditionSectionRole] = [.topStories, .widelyCovered, .updates, .uniqueFinds]
+    /// Stories that get a written lede and full-size setting; the rest of the
+    /// page runs as one-line briefs.
+    private static let leadCount = 6
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,16 +57,29 @@ struct TodayEditionView: View {
                             if edition.items.isEmpty {
                                 emptyEdition
                             } else {
-                                ForEach(sections, id: \.self) { section in
-                                    let items = edition.items.filter { $0.snapshot.section == section.rawValue }
-                                    if !items.isEmpty {
-                                        VStack(alignment: .leading, spacing: 16) {
-                                            Text(sectionTitle(section)).font(.title3.bold())
-                                            ForEach(items) { item in
-                                                story(item)
-                                            }
-                                        }
+                                if let status = model.todayLedeStatus {
+                                    TodayWritingRule(status: status)
+                                }
+                                // The edition is already ordered by importance,
+                                // so position is all the page needs: the first
+                                // story leads, the next few run as stories, the
+                                // tail becomes briefs.
+                                ForEach(Array(edition.items.enumerated()), id: \.element.id) { position, item in
+                                    if position == Self.leadCount {
+                                        Text("ALSO")
+                                            .font(.system(size: 11, weight: .bold))
+                                            .kerning(1.2)
+                                            .foregroundStyle(SkimStyle.secondary.opacity(0.8))
+                                            .padding(.top, 8)
                                     }
+                                    TodayStoryView(
+                                        item: item,
+                                        rank: Self.rank(for: position),
+                                        isWritingLede: model.todayLedeStatus != nil
+                                            && position < Self.leadCount,
+                                        isUpdating: model.isUpdatingToday,
+                                        onToggleConsumed: { Task { await model.setTodayConsumed(item) } }
+                                    )
                                 }
                                 if edition.consumedItemCount == edition.totalItemCount {
                                     Label("You’re all caught up for today.", systemImage: "checkmark.circle.fill")
@@ -89,6 +104,7 @@ struct TodayEditionView: View {
         .task(id: storyLimit) {
             if ![5, 10, 20].contains(storyLimit) { storyLimit = 10; return }
             await load()
+            await model.writeTodayLedes(limit: Self.leadCount)
             // Renew the local-day window even if Today stays open across midnight.
             while !Task.isCancelled {
                 let start = Calendar.current.startOfDay(for: Date())
@@ -138,77 +154,206 @@ struct TodayEditionView: View {
         .padding(.vertical, 28)
     }
 
-    private func story(_ item: TodayEditionItem) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let source = item.sourceArticles.first(where: { $0.isRepresentative && $0.liveArticle != nil })
-                ?? item.sourceArticles.first(where: { $0.liveArticle != nil }) {
-                NavigationLink {
-                    ArticleDetailView(articleID: source.articleID)
-                } label: {
-                    Text(item.snapshot.snapshotTitle).font(.headline)
-                        .foregroundStyle(SkimStyle.text)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                }
-            } else {
-                Text(item.snapshot.snapshotTitle).font(.headline)
+    /// Where a story sits on the page, from its position in the edition.
+    static func rank(for position: Int) -> TodayStoryRank {
+        if position == 0 { return .lead }
+        if position < leadCount { return .story }
+        return .brief
+    }
+}
+
+enum TodayStoryRank {
+    case lead, story, brief
+}
+
+// MARK: - One story on the page
+
+private struct TodayStoryView: View {
+    var item: TodayEditionItem
+    var rank: TodayStoryRank
+    var isWritingLede: Bool
+    var isUpdating: Bool
+    var onToggleConsumed: () -> Void
+
+    private var lead: Bool { rank == .lead }
+    private var brief: Bool { rank == .brief }
+
+    /// A written lede is the story; the mechanical excerpt is the stand-in
+    /// until one arrives, and briefs never get one.
+    private var ledeOrExcerpt: String {
+        if let lede = item.snapshot.lede?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !lede.isEmpty {
+            return lede
+        }
+        return brief ? "" : item.snapshot.snapshotSummary
+    }
+
+    private var awaitingLede: Bool {
+        !brief && (item.snapshot.lede ?? "").isEmpty && isWritingLede
+    }
+
+    private var behind: [TodayEditionSourceArticle] {
+        let real = item.sourceArticles.filter { $0.membershipType != .duplicate }
+        return brief ? Array(real.prefix(1)) : Array(real.prefix(4))
+    }
+
+    private var openable: TodayEditionSourceArticle? {
+        item.sourceArticles.first(where: { $0.isRepresentative && $0.liveArticle != nil })
+            ?? item.sourceArticles.first(where: { $0.liveArticle != nil })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: lead ? 10 : 7) {
+            Divider().overlay(SkimStyle.separator.opacity(0.6))
+                .padding(.bottom, lead ? 6 : 4)
+
+            headline
+
+            if awaitingLede {
+                TodayLedeSkeleton(lead: lead)
+            } else if !ledeOrExcerpt.isEmpty {
+                Text(ledeOrExcerpt)
+                    .font(.system(size: lead ? 17 : 15, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if !item.snapshot.snapshotSummary.isEmpty {
-                Text(item.snapshot.snapshotSummary).font(.body).foregroundStyle(SkimStyle.secondary)
+
+            if let delta = item.snapshot.snapshotDeltaSummary, !brief {
+                Text("What's new: \(delta)")
+                    .font(.system(size: 14))
+                    .foregroundStyle(SkimStyle.accent)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            DisclosureGroup("\(item.sourceArticles.count) source \(item.sourceArticles.count == 1 ? "article" : "articles")") {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(item.sourceArticles, id: \.articleID) { source in
-                        if source.liveArticle != nil {
-                            NavigationLink {
-                                ArticleDetailView(articleID: source.articleID)
-                            } label: {
-                                sourceLabel(source)
-                            }
-                        } else if let url = source.url {
-                            Link(destination: url) { sourceLabel(source) }
-                        } else {
-                            sourceLabel(source)
-                            Text("Article no longer available").font(.caption).foregroundStyle(SkimStyle.secondary)
-                        }
-                    }
-                }
-                .padding(.top, 12)
+
+            ForEach(behind, id: \.articleID) { source in
+                TodayByline(source: source)
             }
-            .font(.subheadline)
-            Button {
-                Task { await model.setTodayConsumed(item) }
+
+            Button(action: onToggleConsumed) {
+                Text(item.snapshot.isConsumed ? "Mark unread" : "Mark read")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .frame(minHeight: 44, alignment: .leading)
+            }
+            .disabled(isUpdating)
+        }
+        .opacity(item.snapshot.isConsumed ? 0.55 : 1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var headlineText: some View {
+        Text(item.snapshot.snapshotTitle)
+            .font(.system(
+                size: lead ? 26 : brief ? 16 : 19,
+                weight: brief ? .semibold : .bold
+            ))
+            .foregroundStyle(SkimStyle.text)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var headline: some View {
+        if let source = openable {
+            NavigationLink {
+                ArticleDetailView(articleID: source.articleID)
             } label: {
-                Label(item.snapshot.isConsumed ? "Read · Mark unread" : "Mark read",
-                      systemImage: item.snapshot.isConsumed ? "checkmark.circle.fill" : "circle")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(minHeight: 44)
+                headlineText
             }
-            .disabled(model.isUpdatingToday)
-            Divider().overlay(SkimStyle.separator)
+            .buttonStyle(.plain)
+        } else {
+            headlineText
+        }
+    }
+}
+
+/// The articles a story was built from, printed the way a byline is.
+private struct TodayByline: View {
+    var source: TodayEditionSourceArticle
+
+    var body: some View {
+        Group {
+            if source.liveArticle != nil {
+                NavigationLink {
+                    ArticleDetailView(articleID: source.articleID)
+                } label: { label }
+                .buttonStyle(.plain)
+            } else if let url = source.url {
+                Link(destination: url) { label }
+            } else {
+                label
+            }
         }
     }
 
-    private func sourceLabel(_ source: TodayEditionSourceArticle) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(source.feedTitle).font(.caption.weight(.semibold)).foregroundStyle(SkimStyle.secondary)
-            Text(source.articleTitle).multilineTextAlignment(.leading)
-            if let article = source.liveArticle, article.isRead {
-                Text("Read").font(.caption).foregroundStyle(SkimStyle.secondary)
-            }
+    private var label: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(PublicationName.of(feedTitle: source.feedTitle, url: source.url))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(SkimStyle.accent)
+                .fixedSize()
+
+            Text(source.articleTitle)
+                .font(.system(size: 13))
+                .foregroundStyle(SkimStyle.secondary.opacity(0.9))
+                .lineLimit(1)
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .contentShape(Rectangle())
+        .accessibilityLabel("\(source.articleTitle), \(PublicationName.of(feedTitle: source.feedTitle, url: source.url))")
+    }
+}
+
+// MARK: - Waiting
+
+/// Shimmering rules where a lede is about to land.
+private struct TodayLedeSkeleton: View {
+    var lead: Bool
+    @State private var pulse = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ForEach(Array(widths.enumerated()), id: \.offset) { _, width in
+                Capsule()
+                    .fill(SkimStyle.separator)
+                    .frame(height: 9)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .scaleEffect(x: width, y: 1, anchor: .leading)
+            }
+        }
+        .opacity(pulse ? 0.95 : 0.4)
+        .animation(.easeInOut(duration: 0.85).repeatForever(autoreverses: true), value: pulse)
+        .onAppear { pulse = true }
+        .accessibilityElement()
+        .accessibilityLabel("Writing this story")
     }
 
-    private func sectionTitle(_ section: EditionSectionRole) -> String {
-        switch section {
-        case .topStories: "Top stories"
-        case .widelyCovered: "Widely covered"
-        case .uniqueFinds: "Unique finds"
-        case .updates: "Updates"
+    private var widths: [CGFloat] {
+        lead ? [1.0, 0.92, 0.68] : [1.0, 0.78]
+    }
+}
+
+/// A live rule under the status line while the page is still being written.
+private struct TodayWritingRule: View {
+    var status: String
+    @State private var pulse = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(status)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(SkimStyle.secondary.opacity(0.9))
+
+            Capsule()
+                .fill(SkimStyle.accent)
+                .frame(height: 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .opacity(pulse ? 0.85 : 0.25)
+                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: pulse)
+                .onAppear { pulse = true }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

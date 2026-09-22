@@ -9,8 +9,14 @@ vi.mock("../../services/commands", () => ({
   getOrGenerateTodayEdition: vi.fn(),
   listTodayEditionItems: vi.fn(),
   setTodayEditionItemConsumed: vi.fn(),
+  generateTodayLedes: vi.fn(),
+  TODAY_LEDE_PROGRESS_EVENT: "today_lede_progress",
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async () => () => {}),
 }));
 
 import * as commands from "../../services/commands";
@@ -54,6 +60,7 @@ function makeItem(overrides: Partial<TodayEditionItem>): TodayEditionItem {
     snapshot_source_count: 1,
     snapshot_reason: "high_rank_recent",
     is_unique_find: false,
+    lede: null,
     is_consumed: false,
     consumed_at: null,
     representative_article_id: "article-default",
@@ -63,6 +70,7 @@ function makeItem(overrides: Partial<TodayEditionItem>): TodayEditionItem {
         article_id: "article-default",
         feed_id: "feed-1",
         feed_title: "Feed One",
+        publication: "example.com",
         feed_icon_url: null,
         // Deliberately different from snapshot_title/snapshot_summary — the
         // card must never fall back to a live/member field for its headline.
@@ -114,12 +122,14 @@ function renderPane() {
 beforeEach(() => {
   useUiStore.setState({ isPhone: false, sidebarCollapsed: false });
   vi.mocked(commands.getSettings).mockResolvedValue(DEFAULT_SETTINGS);
+  vi.mocked(commands.generateTodayLedes).mockImplementation((_id: string) => new Promise(() => {}));
 });
 
 afterEach(() => {
   vi.mocked(commands.getOrGenerateTodayEdition).mockReset();
   vi.mocked(commands.setTodayEditionItemConsumed).mockReset();
   vi.mocked(commands.getSettings).mockReset();
+  vi.mocked(commands.generateTodayLedes).mockReset();
 });
 
 describe("TodayEditionPane", () => {
@@ -133,25 +143,49 @@ describe("TodayEditionPane", () => {
     expect(screen.queryByRole("button", { name: "Expand sidebar" })).not.toBeInTheDocument();
   });
 
-  it("renders sections in backend order regardless of item input order", async () => {
+  it("runs the page in the order the backend ranked it, with no section headers", async () => {
     const items = [
-      makeItem({ story_id: "u1", section: "unique_finds", snapshot_title: "Unique story" }),
-      makeItem({ story_id: "t1", section: "top_stories", snapshot_title: "Top story" }),
-      makeItem({ story_id: "w1", section: "widely_covered", snapshot_title: "Widely covered story" }),
-      makeItem({ story_id: "up1", section: "updates", snapshot_title: "Update story" }),
+      makeItem({ story_id: "a", snapshot_title: "The lead story" }),
+      makeItem({ story_id: "b", snapshot_title: "The second story" }),
+      makeItem({ story_id: "c", snapshot_title: "The third story" }),
     ];
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView(items));
 
     renderPane();
 
-    await screen.findByText("Top story");
-    const headings = screen.getAllByText(/Top Stories|Widely Covered|Updates|Unique Finds/);
-    expect(headings.map((h) => h.textContent)).toEqual([
-      "Top Stories",
-      "Widely Covered",
-      "Updates",
-      "Unique Finds",
+    await screen.findByText("The lead story");
+    const headlines = screen.getAllByRole("heading", { level: 3 });
+    expect(headlines.map((h) => h.textContent)).toEqual([
+      "The lead story",
+      "The second story",
+      "The third story",
     ]);
+    expect(screen.queryByText("Unique Finds")).not.toBeInTheDocument();
+    expect(screen.queryByText("Top Stories")).not.toBeInTheDocument();
+  });
+
+  it("prints a written lede in place of the mechanical excerpt", async () => {
+    const item = makeItem({
+      snapshot_summary: "[Comments][1] [1]: https://news.ycombinator.com/item?id=1",
+      lede: "Congress passed the bill on Friday after a four-hour debate.",
+    });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([item]));
+
+    renderPane();
+
+    expect(
+      await screen.findByText("Congress passed the bill on Friday after a four-hour debate."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/news\.ycombinator\.com/)).not.toBeInTheDocument();
+  });
+
+  it("names the publication under a story rather than the feed's own title", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+
+    renderPane();
+
+    expect(await screen.findByText("example.com")).toBeInTheDocument();
+    expect(screen.queryByText("Feed One")).not.toBeInTheDocument();
   });
 
   it("renders the immutable snapshot title/summary and never a differing live field", async () => {
@@ -165,7 +199,14 @@ describe("TodayEditionPane", () => {
 
     await screen.findByText("The real snapshot headline");
     expect(screen.getByText("The real snapshot summary.")).toBeInTheDocument();
-    expect(screen.queryByText("A differing live-looking title")).not.toBeInTheDocument();
+    // The member article's own title is printed in the byline, but the
+    // headline itself must come from the frozen snapshot.
+    expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent(
+      "The real snapshot headline",
+    );
+    expect(screen.getByRole("heading", { level: 3 })).not.toHaveTextContent(
+      "A differing live-looking title",
+    );
   });
 
   it("shows completion progress across the edition's items", async () => {

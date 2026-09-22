@@ -303,6 +303,18 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         ",
     )?;
 
+    // Written ledes for Today's stories. Deliberately not named `snapshot_*`:
+    // the snapshot fields are frozen by the trigger above, this one is filled
+    // in after the edition exists and may be rewritten on a re-run.
+    let has_lede: bool = conn
+        .prepare("PRAGMA table_info(edition_items)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .filter_map(|r| r.ok())
+        .any(|name| name == "lede");
+    if !has_lede {
+        conn.execute_batch("ALTER TABLE edition_items ADD COLUMN lede TEXT;")?;
+    }
+
     // Add feedly_entry_id column to articles (idempotent)
     let has_feedly_entry_id: bool = conn
         .prepare("PRAGMA table_info(articles)")?

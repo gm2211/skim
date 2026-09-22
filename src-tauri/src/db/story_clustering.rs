@@ -495,12 +495,19 @@ fn new_story_id(features: &ArticleFeatures, event_time: i64) -> String {
 }
 
 fn summary_for(article: &Article) -> String {
-    article
+    // The body is whatever the feed shipped — markdown, HTML, sometimes just a
+    // link. Print what survives cleaning, and the headline when nothing does.
+    let cleaned = article
         .content_text
         .as_deref()
-        .filter(|text| !text.trim().is_empty())
-        .map(|text| text.chars().take(280).collect())
-        .unwrap_or_else(|| article.title.clone())
+        .or(article.content_html.as_deref())
+        .map(crate::db::story_text::excerpt)
+        .unwrap_or_default();
+    if cleaned.is_empty() {
+        article.title.clone()
+    } else {
+        cleaned
+    }
 }
 
 fn fingerprint(conn: &Connection, story_id: &str) -> Result<String, rusqlite::Error> {

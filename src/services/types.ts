@@ -297,19 +297,15 @@ export interface ArticleWithInteraction extends Article {
 
 export type EditionStatus = "draft" | "ready" | "completed" | "failed";
 
-/** Display order: top_stories, widely_covered, updates, unique_finds. */
+/**
+ * Why the backend picked a story. Metadata only — the page runs in order of
+ * importance, so this no longer groups or positions anything.
+ */
 export type EditionSection =
   | "top_stories"
   | "widely_covered"
   | "updates"
   | "unique_finds";
-
-export const EDITION_SECTION_ORDER: EditionSection[] = [
-  "top_stories",
-  "widely_covered",
-  "updates",
-  "unique_finds",
-];
 
 export type StoryMembershipType = "duplicate" | "coverage" | "update";
 
@@ -330,6 +326,8 @@ export interface TodayEditionMemberArticle {
   article_id: string;
   feed_id: string;
   feed_title: string;
+  /** The feed title reduced to something printable as a byline. */
+  publication: string;
   feed_icon_url: string | null;
   title: string;
   url: string | null;
@@ -360,6 +358,9 @@ export interface TodayEditionItem {
   snapshot_source_count: number;
   snapshot_reason: string | null;
   is_unique_find: boolean;
+  /** Written after the edition is generated, so it fills in rather than being
+   *  part of the frozen snapshot. Null until the lede pass reaches this story. */
+  lede: string | null;
   is_consumed: boolean;
   consumed_at: number | null;
   representative_article_id: string | null;

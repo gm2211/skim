@@ -967,14 +967,10 @@ import Testing
         EditionSectionRole.uniqueFinds.rawValue,
         EditionSectionRole.updates.rawValue
     ]))
-    let sectionOrder: [String: Int] = [
-        EditionSectionRole.topStories.rawValue: 0,
-        EditionSectionRole.widelyCovered.rawValue: 1,
-        EditionSectionRole.updates.rawValue: 2,
-        EditionSectionRole.uniqueFinds.rawValue: 3
-    ]
-    let positions = today.items.map { sectionOrder[$0.snapshot.section]! }
-    #expect(positions == positions.sorted())
+    // The page runs in order of importance now, so section no longer decides
+    // position — it stays on each item as metadata. What the page still
+    // guarantees is one story per slot, in a continuous run from the top.
+    #expect(today.items.map(\.snapshot.position) == Array(0..<today.items.count))
     #expect(today.items.allSatisfy { !$0.memberArticleIDs.isEmpty })
     #expect(today.items.allSatisfy {
         $0.sourceArticles.map(\.articleID) == $0.memberArticleIDs

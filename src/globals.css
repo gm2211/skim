@@ -472,23 +472,23 @@ select option {
   flex-shrink: 0;
 }
 
-/* --- Quick Catch-up front page --------------------------------------------
-   The page is written in two passes, so stories arrive one at a time: each
-   rises in as it lands, and a headline waiting for its lede shows shimmering
-   rules where the text will be. */
-@keyframes catchup-rise-in {
+/* --- Front pages: Quick Catch-up and Today --------------------------------
+   Both pages write their ledes one story at a time, so stories arrive one at
+   a time: each rises in as it lands, and a headline waiting for its lede
+   shows shimmering rules where the text will be. */
+@keyframes story-rise-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
-.catchup-story {
-  animation: catchup-rise-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.story-rise-in {
+  animation: story-rise-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-@keyframes catchup-shimmer {
+@keyframes story-shimmer {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
 }
-.catchup-skeleton-line {
+.story-skeleton-line {
   height: 9px;
   border-radius: 999px;
   background: linear-gradient(
@@ -498,15 +498,15 @@ select option {
     rgba(255, 255, 255, 0.05) 100%
   );
   background-size: 200% 100%;
-  animation: catchup-shimmer 1.4s linear infinite;
+  animation: story-shimmer 1.4s linear infinite;
 }
 
 /* The masthead rule sweeps while the page is still being written. */
-@keyframes catchup-rule-sweep {
+@keyframes story-rule-sweep {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
 }
-.catchup-rule-live {
+.story-rule-live {
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0.06) 0%,
@@ -514,19 +514,19 @@ select option {
     rgba(255, 255, 255, 0.06) 100%
   );
   background-size: 200% 100%;
-  animation: catchup-rule-sweep 1.6s linear infinite;
+  animation: story-rule-sweep 1.6s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .catchup-story,
-  .catchup-skeleton-line,
-  .catchup-rule-live {
+  .story-rise-in,
+  .story-skeleton-line,
+  .story-rule-live {
     animation: none;
   }
-  .catchup-skeleton-line {
+  .story-skeleton-line {
     background: rgba(255, 255, 255, 0.09);
   }
-  .catchup-rule-live {
+  .story-rule-live {
     background: rgba(255, 255, 255, 0.14);
   }
 }

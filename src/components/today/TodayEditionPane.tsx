@@ -1,9 +1,8 @@
 import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
-import { useMemo } from "react";
 import { useTodayEdition } from "../../hooks/useTodayEdition";
 import { useUiStore } from "../../stores/uiStore";
-import { groupItemsBySection, SECTION_LABELS } from "../../lib/todayEdition";
-import { TodayStoryCard } from "./TodayStoryCard";
+import { rankFor, LEAD_COUNT } from "../../lib/todayEdition";
+import { TodayStory } from "./TodayStory";
 
 function formatWindowDate(startsAtSeconds: number): string {
   return new Date(startsAtSeconds * 1000).toLocaleDateString("en-US", {
@@ -15,9 +14,11 @@ function formatWindowDate(startsAtSeconds: number): string {
 
 export function TodayEditionPane() {
   const { isPhone, sidebarCollapsed, openArticleFromToday, setPhonePane } = useUiStore();
-  const { data, isLoading, isError, error, window: todayWin, setConsumed } = useTodayEdition();
+  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress } =
+    useTodayEdition();
 
-  const sections = useMemo(() => groupItemsBySection(data?.items ?? []), [data]);
+  const items = data?.items ?? [];
+  const briefsStart = items.findIndex((_, index) => rankFor(index) === "brief");
 
   const handleOpenArticle = (articleId: string) => {
     openArticleFromToday(articleId);
@@ -126,24 +127,34 @@ export function TodayEditionPane() {
           </div>
         )}
 
+        {!isLoading && !isError && ledeProgress && (
+          <div style={{ marginTop: 14 }}>
+            <span className="text-text-muted" style={{ fontSize: 11.5 }}>
+              {ledeProgress.message}
+            </span>
+            <div className="story-rule-live" style={{ height: 2, borderRadius: 999, marginTop: 6 }} />
+          </div>
+        )}
+
         {!isLoading &&
           !isError &&
-          sections.map((group) => (
-            <div key={group.section} style={{ marginTop: 18 }}>
-              <div
-                className="text-text-muted uppercase tracking-wider font-semibold"
-                style={{ fontSize: 11, marginBottom: 8 }}
-              >
-                {SECTION_LABELS[group.section]}
-              </div>
-              {group.items.map((item) => (
-                <TodayStoryCard
-                  key={item.story_id}
-                  item={item}
-                  onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
-                  onOpenArticle={handleOpenArticle}
-                />
-              ))}
+          items.map((item, index) => (
+            <div key={item.story_id}>
+              {index === briefsStart && (
+                <div
+                  className="text-text-muted uppercase font-bold"
+                  style={{ fontSize: 10.5, letterSpacing: 1.2, marginTop: 24 }}
+                >
+                  Also
+                </div>
+              )}
+              <TodayStory
+                item={item}
+                rank={rankFor(index)}
+                isWritingLede={!!ledeProgress && index < LEAD_COUNT}
+                onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
+                onOpenArticle={handleOpenArticle}
+              />
             </div>
           ))}
 

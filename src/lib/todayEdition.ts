@@ -1,8 +1,3 @@
-import {
-  EDITION_SECTION_ORDER,
-  type EditionSection,
-  type TodayEditionItem,
-} from "../services/types";
 
 export interface TodayWindow {
   /** Local midnight, inclusive. Epoch seconds — matches the Rust `i64` contract. */
@@ -38,36 +33,19 @@ export function msUntilWindowRollover(window: TodayWindow, now: Date = new Date(
   return Math.max(0, window.endsAt * 1000 - now.getTime());
 }
 
-export interface TodayEditionSectionGroup {
-  section: EditionSection;
-  items: TodayEditionItem[];
-}
+/** Stories that get a written lede and full-size setting. */
+export const LEAD_COUNT = 6;
+
+export type StoryRank = "lead" | "story" | "brief";
 
 /**
- * Groups edition items by section in the backend's fixed display order
- * (top_stories, widely_covered, updates, unique_finds), regardless of the
- * order items arrive in. Sections with no items are omitted so the UI never
- * renders an empty section header.
+ * Where a story sits on the page, from its position in the edition. The
+ * edition is already ordered by importance, so position is the only input:
+ * the first story leads, the next few run as stories, and the tail becomes
+ * one-line briefs.
  */
-export function groupItemsBySection(items: TodayEditionItem[]): TodayEditionSectionGroup[] {
-  const bySection = new Map<EditionSection, TodayEditionItem[]>();
-  for (const item of items) {
-    const list = bySection.get(item.section);
-    if (list) {
-      list.push(item);
-    } else {
-      bySection.set(item.section, [item]);
-    }
-  }
-  return EDITION_SECTION_ORDER.filter((section) => bySection.has(section)).map((section) => ({
-    section,
-    items: bySection.get(section)!,
-  }));
+export function rankFor(position: number): StoryRank {
+  if (position === 0) return "lead";
+  if (position < LEAD_COUNT) return "story";
+  return "brief";
 }
-
-export const SECTION_LABELS: Record<EditionSection, string> = {
-  top_stories: "Top Stories",
-  widely_covered: "Widely Covered",
-  updates: "Updates",
-  unique_finds: "Unique Finds",
-};

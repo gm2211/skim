@@ -353,6 +353,26 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         try db.todayEditionSnapshot(id: editionID).items
     }
 
+    /// Record the written lede for one story on a Today page, and hand back
+    /// the page with it in place. The snapshot fields stay frozen; only this
+    /// one is filled in after the edition is generated.
+    @discardableResult
+    public func setTodayEditionItemLede(
+        editionID: String,
+        storyID: String,
+        lede: String
+    ) async throws -> TodayEditionSnapshot {
+        guard try db.edition(id: editionID) != nil,
+              try db.editionItem(editionID: editionID, storyID: storyID) != nil
+        else {
+            throw SkimCoreError.database(
+                "Today edition item \(editionID):\(storyID) does not exist"
+            )
+        }
+        try db.setEditionItemLede(editionID: editionID, storyID: storyID, lede: lede)
+        return try db.todayEditionSnapshot(id: editionID)
+    }
+
     @discardableResult
     public func setTodayEditionItemConsumed(
         editionID: String,
@@ -537,6 +557,9 @@ private final class SQLiteDatabase: @unchecked Sendable {
         try? execute("ALTER TABLE articles ADD COLUMN aggregator_kind TEXT")
         try? execute("ALTER TABLE articles ADD COLUMN external_url TEXT")
         try? execute("ALTER TABLE articles ADD COLUMN comments_url TEXT")
+        // Ledes are written after the edition exists, so they live outside the
+        // frozen snapshot columns.
+        try? execute("ALTER TABLE edition_items ADD COLUMN lede TEXT")
 
         try execute("CREATE INDEX IF NOT EXISTS idx_articles_feed ON articles(feed_id)")
         try execute("CREATE INDEX IF NOT EXISTS idx_articles_read ON articles(is_read)")
@@ -1246,11 +1269,11 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 ? article.id
                 : existingStory!.representativeArticleID
             let articleSummary: String = {
-                let text = article.contentText?
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                return String(
-                    (text?.isEmpty == false ? text! : article.title).prefix(280)
-                )
+                // The body is whatever the feed shipped — markdown, HTML,
+                // sometimes just a link. Print what survives cleaning, and the
+                // headline when nothing does.
+                let cleaned = StoryText.excerpt(article.contentText ?? article.contentHTML ?? "")
+                return cleaned.isEmpty ? article.title : cleaned
             }()
             let storySummary = shouldReplaceRepresentative
                 ? articleSummary
@@ -1549,7 +1572,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
             SELECT edition_id, story_id, story_revision_number, position, section,
                    snapshot_title, snapshot_summary, snapshot_delta_summary,
                    snapshot_source_count, snapshot_reason, is_unique_find,
-                   is_consumed, consumed_at
+                   lede, is_consumed, consumed_at
             FROM edition_items
             WHERE edition_id = ? AND story_id = ?
             LIMIT 1
@@ -1769,9 +1792,9 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 edition_id, story_id, story_revision_number, position, section,
                 snapshot_title, snapshot_summary, snapshot_delta_summary,
                 snapshot_source_count, snapshot_reason, is_unique_find,
-                is_consumed, consumed_at
+                lede, is_consumed, consumed_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(edition_id, story_id) DO NOTHING
             """,
             [
@@ -1786,6 +1809,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 .int(item.snapshotSourceCount),
                 .optionalText(item.snapshotReason),
                 .bool(item.isUniqueFind),
+                .optionalText(item.lede),
                 .bool(item.isConsumed),
                 .date(item.consumedAt)
             ]
@@ -1808,7 +1832,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
             SELECT edition_id, story_id, story_revision_number, position, section,
                    snapshot_title, snapshot_summary, snapshot_delta_summary,
                    snapshot_source_count, snapshot_reason, is_unique_find,
-                   is_consumed, consumed_at
+                   lede, is_consumed, consumed_at
             FROM edition_items
             WHERE edition_id = ?
             ORDER BY position ASC, story_id ASC
@@ -1975,6 +1999,23 @@ private final class SQLiteDatabase: @unchecked Sendable {
             )
             """,
             [.text(editionID), .text(storyID)]
+        )
+    }
+
+    /// Store the written lede for one story on the page. Kept apart from the
+    /// snapshot columns, which stay frozen for the life of the edition.
+    func setEditionItemLede(
+        editionID: String,
+        storyID: String,
+        lede: String
+    ) throws {
+        try execute(
+            """
+            UPDATE edition_items
+            SET lede = ?
+            WHERE edition_id = ? AND story_id = ?
+            """,
+            [.text(lede), .text(editionID), .text(storyID)]
         )
     }
 
@@ -2243,8 +2284,9 @@ private func makeEditionItem(from statement: OpaquePointer) -> EditionItem {
         snapshotSourceCount: Int(sqlite3_column_int64(statement, 8)),
         snapshotReason: columnOptionalText(statement, 9),
         isUniqueFind: sqlite3_column_int(statement, 10) != 0,
-        isConsumed: sqlite3_column_int(statement, 11) != 0,
-        consumedAt: columnDate(statement, 12)
+        lede: columnOptionalText(statement, 11),
+        isConsumed: sqlite3_column_int(statement, 12) != 0,
+        consumedAt: columnDate(statement, 13)
     )
 }
 

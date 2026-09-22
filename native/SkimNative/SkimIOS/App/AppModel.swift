@@ -115,6 +115,8 @@ final class AppModel: ObservableObject {
     @Published var isLoadingToday = false
     @Published var isUpdatingToday = false
     @Published var todayError: String?
+    /// Non-nil while the lede pass is still working down the page.
+    @Published var todayLedeStatus: String?
     private var todayLoadID = UUID()
 
     let store: SkimStore
@@ -163,6 +165,54 @@ final class AppModel: ObservableObject {
         } catch {
             guard todayLoadID == requestID else { return }
             todayError = error.localizedDescription
+        }
+    }
+
+    /// An edition is assembled from the story index without a model in the
+    /// loop, so every story arrives with a mechanical excerpt under it. This
+    /// writes a real lede for the stories at the top of the page, one at a
+    /// time, republishing the page after each so they appear as they land.
+    /// Cheap to call on every load: stories that already have one are skipped.
+    func writeTodayLedes(limit: Int = 6) async {
+        guard settings.ai.provider != "none",
+              let edition = todayEdition,
+              !edition.items.isEmpty
+        else { return }
+
+        let editionID = edition.id
+        let requestID = todayLoadID
+        let pending = edition.items.prefix(limit).filter {
+            ($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        guard !pending.isEmpty else { return }
+        defer { if todayLoadID == requestID { todayLedeStatus = nil } }
+
+        for (index, item) in pending.enumerated() {
+            // A reload, a different day or a different story limit ends the pass.
+            guard todayLoadID == requestID, todayEdition?.id == editionID else { return }
+
+            todayLedeStatus = pending.count == 1
+                ? "Writing the lead story…"
+                : "Writing story \(index + 1) of \(pending.count)…"
+
+            let articles = item.sourceArticles.compactMap(\.liveArticle)
+            guard !articles.isEmpty else { continue }
+
+            // One story failing to write is not worth losing the page over.
+            guard let lede = try? await NativeAI.catchUpLede(
+                headline: item.snapshot.snapshotTitle,
+                articles: articles,
+                settings: settings
+            ), !lede.isEmpty else { continue }
+
+            guard todayLoadID == requestID, todayEdition?.id == editionID else { return }
+            if let updated = try? await store.setTodayEditionItemLede(
+                editionID: editionID,
+                storyID: item.snapshot.storyID,
+                lede: lede
+            ) {
+                todayEdition = updated
+            }
         }
     }
 

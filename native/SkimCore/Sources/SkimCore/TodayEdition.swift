@@ -261,16 +261,11 @@ enum TodayEditionBuilder {
             }
         }
 
-        let sectionOrder: [EditionSectionRole: Int] = [
-            .topStories: 0,
-            .widelyCovered: 1,
-            .updates: 2,
-            .uniqueFinds: 3
-        ]
+        // A front page runs in order of importance. Ordering by section put
+        // every story that no second outlet happened to cover — in practice
+        // almost all of them — into one undifferentiated block at the bottom.
+        // Section stays on each item as metadata; it no longer sets position.
         selected.sort {
-            let leftSection = sectionOrder[$0.2]!
-            let rightSection = sectionOrder[$1.2]!
-            if leftSection != rightSection { return leftSection < rightSection }
             if $0.0.score != $1.0.score { return $0.0.score > $1.0.score }
             return $0.0.storyID < $1.0.storyID
         }

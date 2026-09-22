@@ -1,10 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import {
-  groupItemsBySection,
-  msUntilWindowRollover,
-  todayWindow,
-} from "./todayEdition";
-import type { TodayEditionItem } from "../services/types";
+import { LEAD_COUNT, msUntilWindowRollover, rankFor, todayWindow } from "./todayEdition";
 
 // Pin the timezone so local-midnight math (and the DST case below) is
 // deterministic regardless of the machine/CI runner's own TZ.
@@ -12,28 +7,6 @@ beforeAll(() => {
   // @ts-expect-error process is a nodejs global (vitest runs under node)
   process.env.TZ = "America/New_York";
 });
-
-function makeItem(overrides: Partial<TodayEditionItem>): TodayEditionItem {
-  return {
-    edition_id: "today-1-2-5",
-    story_id: "story-1",
-    story_revision_number: 1,
-    position: 0,
-    section: "top_stories",
-    snapshot_title: "Title",
-    snapshot_summary: "Summary",
-    snapshot_delta_summary: null,
-    snapshot_source_count: 1,
-    snapshot_reason: "high_rank_recent",
-    is_unique_find: false,
-    is_consumed: false,
-    consumed_at: null,
-    representative_article_id: "article-1",
-    member_article_ids: ["article-1"],
-    member_articles: [],
-    ...overrides,
-  };
-}
 
 describe("todayWindow", () => {
   it("returns exact local midnight-to-midnight bounds on an ordinary day", () => {
@@ -82,35 +55,12 @@ describe("msUntilWindowRollover", () => {
   });
 });
 
-describe("groupItemsBySection", () => {
-  it("orders sections top_stories, widely_covered, updates, unique_finds regardless of input order", () => {
-    const items = [
-      makeItem({ story_id: "u1", section: "unique_finds" }),
-      makeItem({ story_id: "up1", section: "updates" }),
-      makeItem({ story_id: "w1", section: "widely_covered" }),
-      makeItem({ story_id: "t1", section: "top_stories" }),
-      makeItem({ story_id: "t2", section: "top_stories" }),
-    ];
-    const groups = groupItemsBySection(items);
-    expect(groups.map((g) => g.section)).toEqual([
-      "top_stories",
-      "widely_covered",
-      "updates",
-      "unique_finds",
-    ]);
-    expect(groups.find((g) => g.section === "top_stories")?.items.map((i) => i.story_id)).toEqual([
-      "t1",
-      "t2",
-    ]);
-  });
-
-  it("omits sections with no items", () => {
-    const items = [makeItem({ story_id: "t1", section: "top_stories" })];
-    const groups = groupItemsBySection(items);
-    expect(groups).toEqual([{ section: "top_stories", items: [items[0]] }]);
-  });
-
-  it("returns an empty array for an empty edition", () => {
-    expect(groupItemsBySection([])).toEqual([]);
+describe("rankFor", () => {
+  it("leads with the first story, then runs stories, then briefs", () => {
+    expect(rankFor(0)).toBe("lead");
+    expect(rankFor(1)).toBe("story");
+    expect(rankFor(LEAD_COUNT - 1)).toBe("story");
+    expect(rankFor(LEAD_COUNT)).toBe("brief");
+    expect(rankFor(LEAD_COUNT + 9)).toBe("brief");
   });
 });

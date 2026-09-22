@@ -1134,8 +1134,8 @@ pub fn insert_edition_items(
                 edition_id, story_id, story_revision_number, position, section,
                 snapshot_title, snapshot_summary, snapshot_delta_summary,
                 snapshot_source_count, snapshot_reason, is_unique_find,
-                is_consumed, consumed_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+                lede, is_consumed, consumed_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
         )?;
         for item in items {
             if item.edition_id != edition_id {
@@ -1156,12 +1156,28 @@ pub fn insert_edition_items(
                 item.snapshot_source_count,
                 item.snapshot_reason,
                 item.is_unique_find as i32,
+                item.lede,
                 item.is_consumed as i32,
                 item.consumed_at,
             ])?;
         }
     }
     tx.commit()?;
+    Ok(())
+}
+
+/// Store the written lede for one story on the page. Separate from the
+/// snapshot fields, which the immutability trigger freezes.
+pub fn set_edition_item_lede(
+    conn: &Connection,
+    edition_id: &str,
+    story_id: &str,
+    lede: &str,
+) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "UPDATE edition_items SET lede = ?3 WHERE edition_id = ?1 AND story_id = ?2",
+        params![edition_id, story_id, lede],
+    )?;
     Ok(())
 }
 
@@ -1174,7 +1190,7 @@ pub fn list_edition_items(
         "SELECT edition_id, story_id, story_revision_number, position, section,
                 snapshot_title, snapshot_summary, snapshot_delta_summary,
                 snapshot_source_count, snapshot_reason, is_unique_find,
-                is_consumed, consumed_at
+                lede, is_consumed, consumed_at
          FROM edition_items
          WHERE edition_id = ?1
          ORDER BY position",
@@ -1193,8 +1209,9 @@ pub fn list_edition_items(
                 snapshot_source_count: row.get(8)?,
                 snapshot_reason: row.get(9)?,
                 is_unique_find: row.get::<_, i32>(10)? != 0,
-                is_consumed: row.get::<_, i32>(11)? != 0,
-                consumed_at: row.get(12)?,
+                lede: row.get(11)?,
+                is_consumed: row.get::<_, i32>(12)? != 0,
+                consumed_at: row.get(13)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -2364,6 +2381,7 @@ mod story_persistence_tests {
             snapshot_source_count: 3,
             snapshot_reason: Some("Widely covered".into()),
             is_unique_find: false,
+            lede: None,
             is_consumed: false,
             consumed_at: None,
         };

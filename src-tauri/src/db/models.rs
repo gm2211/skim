@@ -251,6 +251,9 @@ pub struct EditionItem {
     pub snapshot_source_count: i64,
     pub snapshot_reason: Option<String>,
     pub is_unique_find: bool,
+    /// Written after the edition is generated, so unlike the snapshot fields
+    /// it can be absent and can be rewritten.
+    pub lede: Option<String>,
     pub is_consumed: bool,
     pub consumed_at: Option<i64>,
 }

@@ -1,6 +1,7 @@
 pub mod migrations;
 pub mod models;
 pub mod queries;
+pub mod story_text;
 pub mod story_clustering;
 pub mod today_edition;
 

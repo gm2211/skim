@@ -167,9 +167,9 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
       style={{ marginTop: lead ? 10 : 8, gap: 7 }}
       aria-label="Writing this story"
     >
-      <div className="catchup-skeleton-line" style={{ width: "100%" }} />
-      <div className="catchup-skeleton-line" style={{ width: lead ? "92%" : "84%" }} />
-      <div className="catchup-skeleton-line" style={{ width: lead ? "68%" : "56%" }} />
+      <div className="story-skeleton-line" style={{ width: "100%" }} />
+      <div className="story-skeleton-line" style={{ width: lead ? "92%" : "84%" }} />
+      <div className="story-skeleton-line" style={{ width: lead ? "68%" : "56%" }} />
     </div>
   );
 
@@ -178,7 +178,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     return (
       <article
         key={`${index}-${story.headline}`}
-        className="catchup-story"
+        className="story-rise-in"
         style={{
           borderTop: lead ? undefined : "1px solid rgba(255,255,255,0.06)",
           paddingTop: lead ? 0 : 18,
@@ -220,7 +220,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
   const renderBrief = (brief: CatchupBrief, index: number) => {
     const firstId = brief.article_ids[0];
     return (
-      <li key={`${index}-${brief.text}`} className="catchup-story flex items-start gap-2">
+      <li key={`${index}-${brief.text}`} className="story-rise-in flex items-start gap-2">
         <span
           className="text-accent flex-shrink-0"
           style={{ fontSize: 13, lineHeight: 1.6 }}
@@ -368,11 +368,11 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 {[0, 1, 2].map((row) => (
                   <div key={row} className="flex flex-col" style={{ gap: 8 }}>
                     <div
-                      className="catchup-skeleton-line"
+                      className="story-skeleton-line"
                       style={{ height: row === 0 ? 17 : 13, width: row === 0 ? "78%" : "62%" }}
                     />
-                    <div className="catchup-skeleton-line" style={{ width: "100%" }} />
-                    <div className="catchup-skeleton-line" style={{ width: "84%" }} />
+                    <div className="story-skeleton-line" style={{ width: "100%" }} />
+                    <div className="story-skeleton-line" style={{ width: "84%" }} />
                   </div>
                 ))}
               </div>
@@ -403,7 +403,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                     </span>
                   </div>
                   <div
-                    className="catchup-rule-live"
+                    className="story-rule-live"
                     style={{ height: 2, borderRadius: 999, marginTop: 8 }}
                   />
                 </div>

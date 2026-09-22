@@ -247,6 +247,7 @@ pub async fn chat_with_articles(
                     is_read: Some(false),
                     is_starred: None,
                     limit: Some(500),
+                    published_after: None,
                     offset: None,
                 },
             )
@@ -261,6 +262,7 @@ pub async fn chat_with_articles(
                     is_read: None,
                     is_starred: None,
                     limit: Some(1000),
+                    published_after: None,
                     offset: None,
                 },
             )

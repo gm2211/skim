@@ -258,7 +258,7 @@ pub struct EditionItem {
     pub consumed_at: Option<i64>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ArticleFilter {
     pub feed_id: Option<String>,
     #[serde(default)]
@@ -270,6 +270,11 @@ pub struct ArticleFilter {
     pub is_starred: Option<bool>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    /// Unix seconds. Keeps only articles published (or, lacking a publish
+    /// date, fetched) at or after this instant. Quick Catch-up uses it to
+    /// honour the reader's chosen time range.
+    #[serde(default)]
+    pub published_after: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

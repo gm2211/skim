@@ -438,6 +438,14 @@ pub fn get_articles(
         param_values.push(Box::new(pattern));
     }
 
+    if let Some(cutoff) = filter.published_after {
+        conditions.push(format!(
+            "COALESCE(a.published_at, a.fetched_at) >= ?{}",
+            param_values.len() + 1
+        ));
+        param_values.push(Box::new(cutoff));
+    }
+
     if !conditions.is_empty() {
         sql.push_str(" WHERE ");
         sql.push_str(&conditions.join(" AND "));
@@ -1358,6 +1366,19 @@ pub fn get_inbox_articles(
     limit: i64,
     offset: i64,
 ) -> Result<Vec<ArticleWithTriage>, rusqlite::Error> {
+    get_inbox_articles_since(conn, min_priority, is_read, None, limit, offset)
+}
+
+/// `get_inbox_articles`, additionally bounded to articles published (or, lacking
+/// a publish date, fetched) at or after `published_after` — unix seconds.
+pub fn get_inbox_articles_since(
+    conn: &Connection,
+    min_priority: Option<i32>,
+    is_read: Option<bool>,
+    published_after: Option<i64>,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<ArticleWithTriage>, rusqlite::Error> {
     let mut sql = String::from(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
                 a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id, a.comments_url,
@@ -1377,6 +1398,13 @@ pub fn get_inbox_articles(
     if let Some(read) = is_read {
         param_values.push(Box::new(read as i32));
         sql.push_str(&format!(" AND a.is_read = ?{}", param_values.len()));
+    }
+    if let Some(cutoff) = published_after {
+        param_values.push(Box::new(cutoff));
+        sql.push_str(&format!(
+            " AND COALESCE(a.published_at, a.fetched_at) >= ?{}",
+            param_values.len()
+        ));
     }
 
     // Triaged articles first (sorted by priority desc), untriaged below (by date).
@@ -2081,6 +2109,7 @@ mod story_persistence_tests {
                 is_read: None,
                 is_starred: None,
                 limit: Some(100),
+                published_after: None,
                 offset: None,
             },
         )
@@ -2088,6 +2117,52 @@ mod story_persistence_tests {
         .into_iter()
         .map(|row| (row.article.id, row.article.is_read, row.article.is_starred))
         .collect()
+    }
+
+    #[test]
+    fn published_after_keeps_only_articles_at_or_after_the_cutoff() {
+        let conn = setup();
+
+        let recent = get_articles(
+            &conn,
+            &ArticleFilter {
+                published_after: Some(200),
+                limit: Some(100),
+                ..Default::default()
+            },
+        )
+        .expect("filter by cutoff");
+
+        let mut ids: Vec<String> = recent.into_iter().map(|r| r.article.id).collect();
+        ids.sort();
+        assert_eq!(ids, vec!["article-2", "article-3"]);
+    }
+
+    #[test]
+    fn inbox_cutoff_and_priority_narrow_independently() {
+        let conn = setup();
+        let now = 1_000;
+        for (article_id, priority) in [("article-1", 5), ("article-3", 2)] {
+            conn.execute(
+                "INSERT INTO article_triage (article_id, priority, reason, created_at)
+                 VALUES (?1, ?2, 'because', ?3)",
+                rusqlite::params![article_id, priority, now],
+            )
+            .expect("insert triage");
+        }
+
+        // article-1 is unread and priority 5, but published at 100.
+        let high = get_inbox_articles_since(&conn, Some(4), Some(false), None, 100, 0)
+            .expect("high priority");
+        assert_eq!(
+            high.iter().map(|a| a.article.id.as_str()).collect::<Vec<_>>(),
+            vec!["article-1"]
+        );
+
+        // The same scope, bounded to articles from 150 onwards, drops it.
+        let high_and_recent = get_inbox_articles_since(&conn, Some(4), Some(false), Some(150), 100, 0)
+            .expect("high priority, recent");
+        assert!(high_and_recent.is_empty());
     }
 
     #[test]
@@ -2141,6 +2216,7 @@ mod story_persistence_tests {
                 is_read: None,
                 is_starred: None,
                 limit: Some(100),
+                published_after: None,
                 offset: None,
             },
         )
@@ -2157,6 +2233,7 @@ mod story_persistence_tests {
                 is_read: None,
                 is_starred: None,
                 limit: Some(100),
+                published_after: None,
                 offset: None,
             },
         )

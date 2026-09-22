@@ -6,6 +6,8 @@ import {
   type CatchupBrief,
   type CatchupProgress,
   type CatchupReport,
+  type CatchupScope,
+  type CatchupSinceHours,
   type CatchupSource,
   type CatchupStory,
 } from "../../services/commands";
@@ -28,10 +30,52 @@ interface Props {
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
 type CacheEntry = { report: CatchupReport; ts: number };
-// Module-scope cache keyed by scope. Persists across dialog open/close in the
-// same session, expires after 30m.
+// Module-scope cache keyed by scope + time range. Persists across dialog
+// open/close in the same session, expires after 30m.
 const catchupCache = new Map<string, CacheEntry>();
 const catchupErrors = new Map<string, string>();
+
+/** The one height every control on the dialog's toolbar row shares. */
+const CONTROL_HEIGHT = 40;
+const CONTROL_LABEL_STYLE = { fontSize: 12, fontWeight: 600 } as const;
+
+/** How far back to catch up. `null` is the whole unread backlog. */
+export const CATCHUP_RANGES: { value: CatchupSinceHours; label: string }[] = [
+  { value: 6, label: "Last 6 hours" },
+  { value: 24, label: "Last 24 hours" },
+  { value: 72, label: "Last 3 days" },
+  { value: 168, label: "Last week" },
+  { value: null, label: "Anything unread" },
+];
+
+export const catchupCacheKey = (scope: CatchupScope, sinceHours: CatchupSinceHours) =>
+  `${scope}:${sinceHours ?? "all"}`;
+
+/**
+ * The last scope and range the reader chose, kept outside the component so
+ * reopening the dialog does not silently snap back to the defaults. Exported
+ * so tests can put it back where it started.
+ */
+export const catchupSelection: { scope: CatchupScope; sinceHours: CatchupSinceHours } = {
+  scope: "unread",
+  sinceHours: null,
+};
+
+/**
+ * One line naming what the run actually read. Without it the two scopes look
+ * identical from the outside, which is exactly the complaint that produced it.
+ */
+export function catchupScopeSummary(
+  scope: CatchupScope,
+  sinceHours: CatchupSinceHours,
+  articleCount: number
+): string {
+  const articles = `${articleCount} ${articleCount === 1 ? "article" : "articles"}`;
+  const label = CATCHUP_RANGES.find((r) => r.value === sinceHours)?.label;
+  const window = sinceHours == null || !label ? "" : ` from the ${label.toLowerCase()}`;
+  const source = scope === "inbox" ? "your priority inbox" : "everything unread";
+  return `Read ${articles} from ${source}${window}.`;
+}
 
 export function CatchupDialog({ onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
@@ -42,16 +86,21 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
   useDialogFocus(dialogRef, onClose, !showSettings);
   useVisualViewportSync(dialogRef, isPhone && !showSettings);
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(isPhone, onClose);
-  // Catch-up over all unread — inbox would filter to priority>=3 and miss
-  // whatever the triage hasn't rated yet.
-  const [scope, setScope] = useState<"inbox" | "unread">("unread");
+  // Defaults to everything unread: the priority scope only holds articles
+  // triage has rated 4 or 5, so it is a deliberate narrowing, not a starting
+  // point. Both survive closing the dialog.
+  const [scope, setScope] = useState<CatchupScope>(catchupSelection.scope);
+  const [sinceHours, setSinceHours] = useState<CatchupSinceHours>(catchupSelection.sinceHours);
+  const cacheKey = catchupCacheKey(scope, sinceHours);
   const [report, setReport] = useState<CatchupReport | null>(() => {
-    const c = catchupCache.get("unread");
+    const c = catchupCache.get(catchupCacheKey(catchupSelection.scope, catchupSelection.sinceHours));
     return c && Date.now() - c.ts < CACHE_TTL_MS ? c.report : null;
   });
   const [loading, setLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [error, setError] = useState<string | null>(() => catchupErrors.get("unread") ?? null);
+  const [error, setError] = useState<string | null>(
+    () => catchupErrors.get(catchupCacheKey(catchupSelection.scope, catchupSelection.sinceHours)) ?? null
+  );
   const [progress, setProgress] = useState<CatchupProgress | null>(null);
   const previousSettings = useRef(settings);
 
@@ -64,28 +113,33 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     setError((previous) => isAiSetupError(previous) ? null : previous);
   }, [settings]);
 
-  // When scope changes (without explicit re-run), surface cached entry if any.
+  // When either control changes (without an explicit re-run), surface the
+  // cached page for that combination if there is one.
   useEffect(() => {
-    const c = catchupCache.get(scope);
+    catchupSelection.scope = scope;
+    catchupSelection.sinceHours = sinceHours;
+    const c = catchupCache.get(cacheKey);
     setReport(c && Date.now() - c.ts < CACHE_TTL_MS ? c.report : null);
-    setError(catchupErrors.get(scope) ?? null);
-  }, [scope]);
+    setError(catchupErrors.get(cacheKey) ?? null);
+  }, [cacheKey, scope, sinceHours]);
 
   const run = async () => {
+    const runKey = cacheKey;
     const runScope = scope;
+    const runSinceHours = sinceHours;
     setLoading(true);
     setError(null);
     setProgress(null);
-    catchupErrors.delete(runScope);
+    catchupErrors.delete(runKey);
     setReport(null);
     try {
-      const nextReport = await generateCatchupReport(runScope);
+      const nextReport = await generateCatchupReport(runScope, runSinceHours);
       setReport(nextReport);
-      catchupCache.set(runScope, { report: nextReport, ts: Date.now() });
+      catchupCache.set(runKey, { report: nextReport, ts: Date.now() });
     } catch (caught) {
       const message = String(caught instanceof Error ? caught.message : caught);
       setError(message);
-      catchupErrors.set(runScope, message);
+      catchupErrors.set(runKey, message);
     } finally {
       setLoading(false);
     }
@@ -303,26 +357,61 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
           </button>
         </div>
 
-        <div className="flex items-end gap-3 border-b border-white/5" style={{ padding: isPhone ? "12px 16px" : "12px 24px" }}>
-          <label className="flex min-w-0 flex-col gap-1">
-            <span className="text-text-muted" style={{ fontSize: 12, fontWeight: 600 }}>Include</span>
-            <Select
-              value={scope}
-              onChange={(e) => setScope(e.target.value as "inbox" | "unread")}
-              disabled={loading}
+        <div className="border-b border-white/5" style={{ padding: isPhone ? "12px 16px" : "12px 24px" }}>
+          {/* Every control on this row carries the same explicit height and the
+              row aligns on its end, so the button cannot drift against the
+              selects the way it did when only the selects were sized. */}
+          <div className="flex flex-wrap items-end" style={{ gap: 12 }}>
+            <label className="flex min-w-0 flex-1 flex-col" style={{ gap: 6, minWidth: 150 }}>
+              <span className="text-text-muted" style={CONTROL_LABEL_STYLE}>Include</span>
+              <Select
+                aria-label="Include"
+                fullWidth
+                value={scope}
+                onChange={(e) => setScope(e.target.value as CatchupScope)}
+                disabled={loading}
+                style={{ height: CONTROL_HEIGHT, minHeight: CONTROL_HEIGHT }}
+              >
+                <option value="inbox">Priority inbox</option>
+                <option value="unread">All unread articles</option>
+              </Select>
+            </label>
+            <label className="flex min-w-0 flex-1 flex-col" style={{ gap: 6, minWidth: 140 }}>
+              <span className="text-text-muted" style={CONTROL_LABEL_STYLE}>Going back</span>
+              <Select
+                aria-label="Going back"
+                fullWidth
+                value={sinceHours === null ? "all" : String(sinceHours)}
+                onChange={(e) =>
+                  setSinceHours(e.target.value === "all" ? null : Number(e.target.value))
+                }
+                disabled={loading}
+                style={{ height: CONTROL_HEIGHT, minHeight: CONTROL_HEIGHT }}
+              >
+                {CATCHUP_RANGES.map((range) => (
+                  <option
+                    key={range.label}
+                    value={range.value === null ? "all" : String(range.value)}
+                  >
+                    {range.label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <button
+              onClick={run}
+              disabled={loading || providerUnavailable}
+              className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium flex-shrink-0 whitespace-nowrap"
+              style={{
+                padding: "0 16px",
+                fontSize: 13,
+                height: CONTROL_HEIGHT,
+                minHeight: CONTROL_HEIGHT,
+              }}
             >
-              <option value="inbox">Priority inbox</option>
-              <option value="unread">All unread articles</option>
-            </Select>
-          </label>
-          <button
-            onClick={run}
-            disabled={loading || providerUnavailable}
-            className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium flex-shrink-0 whitespace-nowrap"
-            style={{ padding: "9px 16px", fontSize: 13, minHeight: 40, marginLeft: "auto" }}
-          >
-            {loading ? "Working…" : report ? "Run again" : "Run catch-up"}
-          </button>
+              {loading ? "Working…" : report ? "Run again" : "Run catch-up"}
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0" style={{ padding: isPhone ? "20px 16px" : "24px", minHeight: isPhone ? 0 : 260 }}>
@@ -332,8 +421,9 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
             <div style={{ padding: "24px 0" }}>
               <h4 className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>Ready when you are</h4>
               <p className="text-text-muted" style={{ marginTop: 6, fontSize: 13, lineHeight: 1.6 }}>
-                Choose which articles to include, then run a catch-up. Skim reads them and writes you a
-                front page: the few stories that actually happened, biggest first.
+                Choose which articles to include and how far back to go, then run a catch-up. Skim
+                reads them and writes you a front page: the few stories that actually happened,
+                biggest first.
               </p>
             </div>
           )}
@@ -409,9 +499,22 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 </div>
               )}
 
+              {!loading && report.article_count > 0 && (
+                <p
+                  className="text-text-muted"
+                  style={{ fontSize: 11.5, marginBottom: 18, letterSpacing: 0.1 }}
+                >
+                  {catchupScopeSummary(scope, sinceHours, report.article_count)}
+                </p>
+              )}
+
               {report.stories.length === 0 && report.briefs.length === 0 && !loading && (
                 <p className="text-text-muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
-                  Nothing on the page — there was no real news in these articles.
+                  {report.article_count === 0
+                    ? scope === "inbox"
+                      ? "Nothing in your priority inbox for that time range. Triage rates most articles 2 or 3; only 4s and 5s reach this scope."
+                      : "Nothing unread in that time range."
+                    : "Nothing on the page — there was no real news in these articles."}
                 </p>
               )}
 

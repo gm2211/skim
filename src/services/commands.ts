@@ -378,6 +378,8 @@ export interface CatchupReport {
   stories: CatchupStory[];
   briefs: CatchupBrief[];
   sources: CatchupSource[];
+  /** How many articles the chosen scope and time range actually selected. */
+  article_count: number;
 }
 /** The page as it stands, pushed after every step of the two passes. */
 export interface CatchupProgress {
@@ -388,8 +390,13 @@ export interface CatchupProgress {
   report: CatchupReport;
 }
 export const CATCHUP_PROGRESS_EVENT = "catchup_progress";
-export const generateCatchupReport = (scope: "inbox" | "unread" = "inbox") =>
-  invoke<CatchupReport>("generate_catchup_report", { scope });
+export type CatchupScope = "inbox" | "unread";
+/** Hours back to catch up on. `null` is the whole unread backlog. */
+export type CatchupSinceHours = number | null;
+export const generateCatchupReport = (
+  scope: CatchupScope = "inbox",
+  sinceHours: CatchupSinceHours = null
+) => invoke<CatchupReport>("generate_catchup_report", { scope, sinceHours });
 
 // Today edition
 /** The page as it stands while the lede pass runs. */

@@ -963,6 +963,7 @@ mod tests {
             is_read: None,
             is_starred: None,
             limit: Some(100),
+            published_after: None,
             offset: None,
         };
         assert_eq!(queries::count_articles(&conn, &filter).unwrap(), 2);

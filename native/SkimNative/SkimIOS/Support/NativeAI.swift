@@ -325,6 +325,9 @@ enum NativeAI {
 
     static let catchUpMaxStories = 6
     static let catchUpMaxBriefs = 6
+    /// Articles cited under one item. The byline is a citation, not a manifest.
+    static let catchUpMaxCitationsPerStory = 4
+    static let catchUpMaxCitationsPerBrief = 2
     /// Articles read in full when writing one story's lede.
     static let catchUpArticlesPerLede = 4
 
@@ -435,7 +438,10 @@ enum NativeAI {
             maxTokens: 300
         )
 
-        return cleanLede(raw)
+        let lede = cleanLede(raw)
+        // A model that answered with the prompt's own example leaves the story
+        // with a template string under it; better to show nothing.
+        return CatchUpText.isPlaceholder(lede) ? "" : lede
     }
 
     /// Strip the wrappers models put around a bare paragraph.
@@ -495,19 +501,41 @@ enum NativeAI {
         for entry in rawStories where page.stories.count < catchUpMaxStories {
             let headline = ((entry["headline"] ?? entry["title"] ?? entry["text"]) as? String ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !headline.isEmpty, seenText.insert(normalizeSentence(headline)).inserted else { continue }
-            let indexes = articleIndexes(from: entry, articleCount: articleCount, claimed: &claimed)
+            guard !headline.isEmpty,
+                  !CatchUpText.isPlaceholder(headline),
+                  seenText.insert(normalizeSentence(headline)).inserted
+            else { continue }
+            let indexes = articleIndexes(
+                from: entry,
+                articleCount: articleCount,
+                limit: catchUpMaxCitationsPerStory,
+                claimed: &claimed
+            )
             guard !indexes.isEmpty else { continue }
             let lede = ((entry["lede"] ?? entry["summary"]) as? String ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            page.stories.append(CatchUpStory(headline: headline, lede: lede, articleIndexes: indexes))
+            page.stories.append(
+                CatchUpStory(
+                    headline: headline,
+                    lede: CatchUpText.isPlaceholder(lede) ? "" : lede,
+                    articleIndexes: indexes
+                )
+            )
         }
 
         for entry in rawBriefs where page.briefs.count < catchUpMaxBriefs {
             let text = ((entry["text"] ?? entry["headline"] ?? entry["summary"]) as? String ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty, seenText.insert(normalizeSentence(text)).inserted else { continue }
-            let indexes = articleIndexes(from: entry, articleCount: articleCount, claimed: &claimed)
+            guard !text.isEmpty,
+                  !CatchUpText.isPlaceholder(text),
+                  seenText.insert(normalizeSentence(text)).inserted
+            else { continue }
+            let indexes = articleIndexes(
+                from: entry,
+                articleCount: articleCount,
+                limit: catchUpMaxCitationsPerBrief,
+                claimed: &claimed
+            )
             guard !indexes.isEmpty else { continue }
             page.briefs.append(CatchUpBrief(text: text, articleIndexes: indexes))
         }
@@ -516,10 +544,15 @@ enum NativeAI {
     }
 
     /// The 1-based article handles on one entry, dropping any an earlier item
-    /// already took.
+    /// already took and capping the rest at `limit`.
+    ///
+    /// The cap matters: a model that hands one item every handle it was given
+    /// turns the byline into a wall of source chips. Only the handles kept are
+    /// marked claimed, so the overflow stays available to a later item.
     private static func articleIndexes(
         from entry: [String: Any],
         articleCount: Int,
+        limit: Int,
         claimed: inout Set<Int>
     ) -> [Int] {
         let value = entry["articleIndexes"] ?? entry["article_ids"] ?? entry["articles"]
@@ -538,9 +571,13 @@ enum NativeAI {
         } else if let text = value as? String {
             candidates = [Int(text.trimmingCharacters(in: .whitespaces))].compactMap { $0 }
         }
-        return candidates.filter { index in
-            index >= 1 && index <= articleCount && claimed.insert(index).inserted
+        var kept: [Int] = []
+        for index in candidates where kept.count < limit {
+            guard index >= 1, index <= articleCount, !claimed.contains(index) else { continue }
+            claimed.insert(index)
+            kept.append(index)
         }
+        return kept
     }
 
     /// Reshape the older item list into a front page, keeping its headlines.

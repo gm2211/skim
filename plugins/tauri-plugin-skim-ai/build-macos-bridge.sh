@@ -13,6 +13,7 @@ RESOURCE_PATH=$(find "$(dirname "$BIN_PATH")" -maxdepth 1 -name 'swift-transform
 test -n "$RESOURCE_PATH"
 rm -rf "$PLUGIN_DIR/resources/swift-transformers_Hub.bundle"
 cp -R "$RESOURCE_PATH" "$PLUGIN_DIR/resources/swift-transformers_Hub.bundle"
+chmod -R u+w "$PLUGIN_DIR/resources/swift-transformers_Hub.bundle"
 MLX_METAL_DIR=$(find "$SCRATCH_DIR/checkouts/mlx-swift" -path '*/mlx-generated/metal' -type d | head -1)
 test -n "$MLX_METAL_DIR"
 AIR_DIR="$SCRATCH_DIR/skim-mlx-air"

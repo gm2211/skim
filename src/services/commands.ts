@@ -452,8 +452,8 @@ export const getArticleInteraction = (articleId: string) =>
   invoke<ArticleInteraction | null>("get_article_interaction", { articleId });
 
 // Chat
-export const chatWithArticle = (articleId: string, messages: ChatMessageInput[]) =>
-  invoke<ChatResponse>("chat_with_article", { articleId, messages });
+export const chatWithArticle = (articleId: string, messages: ChatMessageInput[], summaryContext?: string) =>
+  invoke<ChatResponse>("chat_with_article", { articleId, messages, summaryContext: summaryContext ?? null });
 
 export interface ChatSource {
   id: string;
@@ -475,8 +475,9 @@ export const chatWithArticles = (
   scope: "inbox" | "unread" | "all",
   query: string,
   messages: ChatMessageInput[],
+  priorArticleIds?: string[],
 ) =>
-  invoke<ArticleChatResponse>("chat_with_articles", { scope, query, messages });
+  invoke<ArticleChatResponse>("chat_with_articles", { scope, query, messages, priorArticleIds: priorArticleIds ?? null });
 export const webSearch = (query: string) =>
   invoke<SearchResult[]>("web_search", { query });
 

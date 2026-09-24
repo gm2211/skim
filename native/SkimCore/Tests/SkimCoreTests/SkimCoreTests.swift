@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import Testing
 @testable import SkimCore
 
@@ -697,7 +698,7 @@ import Testing
         id: "article-b",
         feedID: feedB.id,
         feedTitle: feedB.title,
-        title: "Acme launches a solar battery | Feed B",
+        title: "Acme launches a solar battery | Reuters",
         url: "https://NEWS.example:443/acme?fbclid=tracking",
         timestamp: 2_100,
         isStarred: true
@@ -810,11 +811,11 @@ import Testing
         asOf: now
     )
 
-    #expect(result.topStories.map(\.storyID) == ["story-sources", "story-volume"])
-    #expect(result.uniqueFinds.map(\.storyID) == ["story-singleton"])
-    #expect(result.uniqueFinds.first?.isUniqueFind == true)
-    #expect(result.topStories.first!.score > result.topStories.last!.score)
-    #expect(result.topStories.last?.isUniqueFind == false)
+    #expect(result.topStories.map(\.storyID) == ["story-sources"])
+    #expect(result.uniqueFinds.map(\.storyID) == ["story-singleton", "story-volume"])
+    #expect(result.uniqueFinds.allSatisfy { $0.isUniqueFind })
+    #expect(result.topStories.first!.score > result.uniqueFinds.first!.score)
+    #expect(result.uniqueFinds.first?.score == result.uniqueFinds.last?.score)
 }
 
 @Test func rankingAppliesRepresentativeFeedDiversityWithStableTies() {
@@ -1534,4 +1535,68 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     override func stopLoading() {}
+}
+
+
+@Test func meaningfulSuffixesDoNotMergeDistinctDeals() {
+    let clusterer = StoryClusterer()
+    let beta = clusteringArticle(id: "beta", feedID: "one", title: "Acme announces deal — buys Beta", content: "Acme acquires Beta software company.", url: "https://one.test/beta", timestamp: 1000)
+    let gamma = clusteringArticle(id: "gamma", feedID: "two", title: "Acme announces deal — buys Gamma", content: "Acme acquires Gamma shipping company.", url: "https://two.test/gamma", timestamp: 1001)
+    #expect(StoryClusterer.normalizeTitle(beta.title) != StoryClusterer.normalizeTitle(gamma.title))
+    #expect(StoryClusterer.normalizeTitle("Acme launches rocket — Example News") == "acme launches rocket")
+    #expect(StoryClusterer.normalizeTitle("Acme reports earnings — bad news") == "acme reports earnings bad news")
+    #expect(StoryClusterer.normalizeTitle("Acme launches rocket — three times") == "acme launches rocket three times")
+    let decision = clusterer.decide(article: gamma, feature: clusterer.feature(for: gamma), candidates: [
+        StoryClusterCandidate(storyID: "beta-story", article: beta, feature: clusterer.feature(for: beta))
+    ])
+    #expect(decision.match == nil)
+}
+
+@Test func firstWordNamesAreCorroboratedWithoutConflictingEntityMerge() {
+    let clusterer = StoryClusterer()
+    let first = clusteringArticle(id: "first", feedID: "one", title: "SpaceX launches Falcon rocket", content: "The rocket launched successfully.", url: "https://one.test/rocket", timestamp: 1000)
+    let second = clusteringArticle(id: "second", feedID: "two", title: "Falcon rocket launches with SpaceX", content: "The rocket launched successfully.", url: "https://two.test/rocket", timestamp: 1001)
+    let candidate = StoryClusterCandidate(storyID: "rocket-story", article: first, feature: clusterer.feature(for: first))
+    #expect(clusterer.decide(article: second, feature: clusterer.feature(for: second), candidates: [candidate]).match?.storyID == "rocket-story")
+    let conflict = clusteringArticle(id: "other", feedID: "three", title: "Rocket launches with BlueOrigin", content: "The rocket launched successfully.", url: "https://three.test/rocket", timestamp: 1002)
+    #expect(clusterer.decide(article: conflict, feature: clusterer.feature(for: conflict), candidates: [candidate]).match == nil)
+}
+
+@Test func syndicatedCopiesKeepUniqueRankingReservation() {
+    let clusterer = StoryClusterer()
+    let now = Date(timeIntervalSince1970: 1000)
+    let original = rankingCandidate(id: "comet", feedID: "one", distinctFeedCount: 1, articleCount: 1, lastActivityAt: now)
+    let withCopy = rankingCandidate(id: "comet", feedID: "one", distinctFeedCount: 1, articleCount: 2, lastActivityAt: now)
+    let before = clusterer.rank([original], asOf: now)
+    let after = clusterer.rank([withCopy], asOf: now)
+    #expect(before.uniqueFinds.map(\.storyID) == ["comet"])
+    #expect(after.uniqueFinds.map(\.storyID) == ["comet"])
+    #expect(after.topStories.isEmpty)
+    #expect(after.uniqueFinds.first?.score == before.uniqueFinds.first?.score)
+}
+
+@Test func staleFeaturesUpgradeWithoutChangingFrozenHistory() async throws {
+    let databaseURL = temporaryStoreURL()
+    let store = try SkimStore(databaseURL: databaseURL)
+    let feedA = Feed(id: "feed-a", title: "Feed A", url: URL(string: "https://a.example/rss")!)
+    let feedB = Feed(id: "feed-b", title: "Feed B", url: URL(string: "https://b.example/rss")!)
+    let beta = clusteringArticle(id: "old-beta", feedID: feedA.id, title: "Acme announces deal — buys Beta", content: "Acme acquires Beta software company.", url: "https://one.test/beta", timestamp: 1000)
+    try await store.upsert(feed: feedA, articles: [beta])
+    let original = try #require(try await store.storyMembership(articleID: beta.id))
+    let revisions = try await store.listStoryRevisions(storyID: original.storyID)
+    let frozen = try await store.getOrGenerateTodayEdition(startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 1100))
+    var database: OpaquePointer?
+    #expect(sqlite3_open(databaseURL.path, &database) == SQLITE_OK)
+    defer { sqlite3_close(database) }
+    #expect(sqlite3_exec(database, "UPDATE article_story_features SET normalized_title = 'acme announces deal', feature_version = 1 WHERE article_id = 'old-beta'", nil, nil, nil) == SQLITE_OK)
+    let gamma = clusteringArticle(id: "new-gamma", feedID: feedB.id, title: "Acme announces deal", content: "Gamma shipping merger wins approval.", url: "https://two.test/gamma", timestamp: 1200)
+    try await store.upsert(feed: feedB, articles: [gamma])
+    let next = try #require(try await store.storyMembership(articleID: gamma.id))
+    #expect(next.storyID != original.storyID)
+    let upgraded = try #require(try await store.storyFeature(articleID: beta.id))
+    #expect(upgraded.featureVersion == 2)
+    #expect(upgraded.normalizedTitle == "acme announces deal buys beta")
+    #expect(try await store.storyMembership(articleID: beta.id) == original)
+    #expect(try await store.listStoryRevisions(storyID: original.storyID) == revisions)
+    #expect(try await store.todayEdition(id: frozen.id) == frozen)
 }

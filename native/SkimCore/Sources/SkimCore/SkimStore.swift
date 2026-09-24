@@ -1232,6 +1232,13 @@ private final class SQLiteDatabase: @unchecked Sendable {
             since: earliestDate.addingTimeInterval(-clusterer.configuration.rollingWindow),
             through: latestDate.addingTimeInterval(clusterer.configuration.rollingWindow)
         )
+        // Only derived candidate features are upgraded. Existing membership,
+        // revision, and frozen edition rows retain their original identities.
+        for index in candidates.indices where candidates[index].feature.featureVersion < StoryArticleFeature.currentVersion {
+            let feature = clusterer.feature(for: candidates[index].article)
+            try upsertStoryFeature(feature)
+            candidates[index].feature = feature
+        }
         var borderlineMatches: [StoryBorderlineMatch] = []
 
         for article in sortedArticles {

@@ -19,6 +19,32 @@ beforeEach(() => {
 });
 
 describe("AskSkimDialog setup recovery", () => {
+  it("keeps conversation, scope and draft when hidden for reading a citation", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    const onClose = vi.fn();
+    const onOpenArticle = vi.fn();
+    vi.mocked(chatWithArticles).mockResolvedValueOnce({ content: "Evidence [1]", sources: [{ id: "a", title: "Quasar report", feed_title: "Science", url: null, published_at: null, source_type: "article" }], provider: "openai", model: "test", article_ids: ["a"] });
+    const view = render(<AskSkimDialog onClose={onClose} onOpenArticle={onOpenArticle} />);
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByRole("combobox"), "all");
+    await user.type(screen.getByRole("textbox"), "Find quasar");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Evidence [1]");
+    await user.type(screen.getByRole("textbox"), "Summarize that");
+    await user.click(screen.getByRole("button", { name: /Quasar report/ }));
+    expect(onOpenArticle).toHaveBeenCalledWith("a");
+    expect(onClose).toHaveBeenCalled();
+    view.rerender(<AskSkimDialog open={false} onClose={onClose} onOpenArticle={onOpenArticle} />);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    view.rerender(<AskSkimDialog open onClose={onClose} onOpenArticle={onOpenArticle} />);
+    expect(screen.getByRole("combobox")).toHaveValue("all");
+    expect(screen.getByRole("textbox")).toHaveValue("Summarize that");
+    expect(screen.getByText("Evidence [1]")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Answer");
+    expect(chatWithArticles).toHaveBeenLastCalledWith("all", "Summarize that", [{ role: "user", content: "Find quasar" }, { role: "assistant", content: "Evidence [1]" }], ["a"]);
+  });
+
   it("explains missing MLX weights without claiming the provider is unconfigured", async () => {
     settings = { ai: { provider: "mlx", chat_provider: "same" } };
     vi.mocked(chatWithArticles).mockRejectedValueOnce(new Error("[configure-ai] MLX on-device model unavailable: Model mlx-community/Qwen2.5-3B-Instruct-4bit is not downloaded."));
@@ -46,7 +72,7 @@ describe("AskSkimDialog setup recovery", () => {
     expect(screen.getByRole("textbox")).toHaveValue("What changed today?");
     await user.click(screen.getByRole("button", { name: "Send" }));
     expect(await screen.findByText("Answer")).toBeInTheDocument();
-    expect(chatWithArticles).toHaveBeenCalledWith("unread", "What changed today?", []);
+    expect(chatWithArticles).toHaveBeenCalledWith("unread", "What changed today?", [], undefined);
   });
 
   it("uses separate chat provider even when main AI is disabled", () => {

@@ -1,10 +1,10 @@
 # Mobile and desktop architecture comparison
 
-Audit date: 2026-09-20. Evidence describes this repository's build paths and source, not an inspection of installed binaries or an assertion of production feature parity. The feature matrix describes the final source changes below; the findings distinguish the initial audit from resolved and remaining issues. Paths and line numbers identify the audited source and may move with subsequent edits.
+Initial audit: 2026-09-20; shared story-policy update: 2026-09-24. Evidence describes this repository's build paths and source, not an inspection of installed binaries or an assertion of production feature parity. The feature matrix distinguishes resolved and remaining issues. Historical validation below refers to the initial audit; current checks and releases are recorded in `docs/CATCHUP_REVIEW.md`. Paths and line numbers may move with subsequent edits.
 
 ## Main finding
 
-The functional desktop app and the native iOS app do **not** run the same core implementation. Desktop uses React, Tauri and Rust. Native iOS uses SwiftUI and the Swift `SkimCore` package, with substantial additional business logic in its application target. Similar models, SQLite tables, algorithms and golden expectations constitute parallel implementations, not shared executable code.
+The functional desktop app and native iOS app still have separate domain engines, with a bounded shared story-policy module added on 2026-09-24. Desktop uses React, Tauri and Rust. Native iOS uses SwiftUI and the Swift `SkimCore` package, with substantial additional business logic in its application target. Both now compile and execute `shared/SkimStoryPolicy` for matching thresholds/classification, confidence, base ranking, single-source protection and stable identity hashing. Similar models, SQLite tables and remaining algorithms are still parallel implementations.
 
 There is also a native macOS target that depends on `SkimCore`. It currently renders a placeholder rather than the reader application. Counting that package dependency as desktop/mobile sharing would conceal the actual production architecture.
 
@@ -35,7 +35,7 @@ The Swift package targets iOS 26 and macOS 15 (`native/SkimCore/Package.swift:7-
 | Read/unread, favorites and recent history | `commands/articles.rs:48-135,645`; `commands/ai.rs:1444` | `AppModel.swift:393-421`; `Views/ArticleListView.swift:687-698` | No; storage and ordering policies differ. |
 | Article extraction and offline cache | `commands/articles.rs:364`; `commands/offline.rs:31-81` | `ArticleReaderContentLoader.swift:21-159`; `AppModel.swift:430-451` | No across shipping apps; native extraction can live in `SkimCore`. |
 | Aggregator discussions | `commands/aggregator.rs:27` | `SkimCore/AggregatorService.swift:25` | No; independently implemented services. |
-| Story clustering and revisions | `db/story_clustering.rs:316`; `db/queries.rs` | `SkimCore/StoryClustering.swift:329`; `SkimCore/SkimStore.swift:163` | No; similar deterministic policy copied across languages. |
+| Story clustering and revisions | `db/story_clustering.rs`; `db/story_policy.rs`; `db/queries.rs` | `SkimCore/StoryClustering.swift`; `SkimCore/SkimStore.swift` | Shared executable classification/ranking/hash policy; feature extraction, selection and persistence remain separate. |
 | Today edition | Visible desktop route, `src/App.tsx:461,497`; `commands/editions.rs:6` | New route at `SkimIOS/Views/ArticleListView.swift:100-101,689`, backed by `TodayEditionView.swift` and `SkimCore` snapshots | Both have routes in source; engines remain separate and runtime parity still needs verification. |
 | AI Inbox, summaries, Catch Up, Ask | `commands/ai.rs:334,1067,1520`; `commands/chat.rs:29,218` | `Views/ArticleListView.swift:171-172,255-285`; `Support/NativeAI.swift` | No; provider orchestration, prompts, context and caches duplicated. |
 | Taste and ranking signals | SQLite `article_interactions`; `commands/ai.rs:1421,1711,1723` | UserDefaults taste now supplies feed weights and pins to Today; core adds stars | No; native integration fixed, but persistence, feedback semantics and weights are not exact desktop parity. |
@@ -90,6 +90,8 @@ Desktop opens `skim.db` and runs Rust migrations (`src-tauri/src/db/mod.rs:17-22
 Desktop has persistent themes, triage, summaries and article interactions (`src-tauri/src/db/migrations.rs:49-103`). Native also retains state outside SQLite, including taste in UserDefaults. A database-only move would miss such state. Settings have some legacy decoding support (`native/SkimCore/Sources/SkimCore/Models.swift:255-271`), but field-level compatibility is not a complete migration contract.
 
 ## What is shared today
+
+`shared/SkimStoryPolicy` is compiled from the same C source by desktop Cargo and native SwiftPM. Both production callers use it; duplicate authoritative threshold, confidence, base score, unique-source and hash implementations were removed. `shared/fixtures/story-policy.json` checks both ABI adapters against one contract. This establishes code sharing for those capabilities, not a shared end-to-end clustering engine: feature extraction, exact-match checks, tie-breaking, selection, preferences and storage remain separate. See `shared/SkimStoryPolicy/README.md` for the build paths and boundary.
 
 `SkimCore` is a real reusable Swift library. It owns native feed parsing/refresh, OPML, aggregator retrieval, domain records, SQLite operations, stories and editions. iOS constructs and calls these services (`native/SkimNative/SkimIOS/App/AppModel.swift:116-127`). The native macOS target links the same package but does not yet exercise those services in a functioning reader.
 

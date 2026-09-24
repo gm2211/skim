@@ -1,0 +1,17 @@
+{
+  "matches": [
+    {"name":"same wording","lexical":1,"title":1,"entities":true,"update":false,"kind":1},
+    {"name":"independent coverage","lexical":0.8,"title":0.6,"entities":true,"update":false,"kind":2},
+    {"name":"material update","lexical":0.8,"title":0.6,"entities":true,"update":true,"kind":3},
+    {"name":"different entities","lexical":1,"title":1,"entities":false,"update":false,"kind":0},
+    {"name":"needs arbitration","lexical":0.65,"title":0.55,"entities":true,"update":false,"kind":4},
+    {"name":"unrelated","lexical":0.3,"title":0.2,"entities":true,"update":false,"kind":0},
+    {"name":"high body overlap with weak title","lexical":1,"title":0.2,"entities":true,"update":false,"kind":4}
+  ],
+  "ranks": [
+    {"name":"fresh unique source","sources":1,"age":0,"window":345600,"preference":0,"score":6.079441541679836,"unique":true},
+    {"name":"two sources halfway through window","sources":2,"age":172800,"window":345600,"preference":1,"score":6.295836866004329,"unique":false},
+    {"name":"old story retains preference","sources":1,"age":691200,"window":345600,"preference":2,"score":4.079441541679836,"unique":true},
+    {"name":"future timestamp is bounded","sources":0,"age":-10,"window":345600,"preference":0,"score":4,"unique":false}
+  ]
+}

@@ -17,6 +17,7 @@ interface ChatMessage {
 interface Props {
   articleId: string;
   articleTitle: string;
+  summaryContext?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
@@ -47,7 +48,7 @@ function renderAssistantContent(content: string) {
   ));
 }
 
-export function ChatDrawer({ articleId, open: controlledOpen, onOpenChange }: Props) {
+export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, onOpenChange }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
   const { data: settings } = useSettings();
   const chatProvider = settings?.ai.chat_provider;
@@ -129,7 +130,7 @@ export function ChatDrawer({ articleId, open: controlledOpen, onOpenChange }: Pr
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-      const response = await chatWithArticle(articleId, history);
+      const response = await chatWithArticle(articleId, history, summaryContext);
       if (requestSeqRef.current !== requestSeq) return;
       setMessages((prev) => [
         ...prev,
@@ -147,7 +148,7 @@ export function ChatDrawer({ articleId, open: controlledOpen, onOpenChange }: Pr
     } finally {
       if (requestSeqRef.current === requestSeq) setLoading(false);
     }
-  }, [input, messages, loading, needsSetup, articleId]);
+  }, [input, messages, loading, needsSetup, articleId, summaryContext]);
 
   const doSearch = useCallback(async (query: string) => {
     if (needsSetup || loading || searchLoading) return;
@@ -176,7 +177,7 @@ export function ChatDrawer({ articleId, open: controlledOpen, onOpenChange }: Pr
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
       setLoading(true);
-      const response = await chatWithArticle(articleId, history);
+      const response = await chatWithArticle(articleId, history, summaryContext);
       if (requestSeqRef.current !== requestSeq) return;
       setMessages((prev) => [
         ...prev,
@@ -196,7 +197,7 @@ export function ChatDrawer({ articleId, open: controlledOpen, onOpenChange }: Pr
         setLoading(false);
       }
     }
-  }, [messages, articleId, loading, needsSetup, searchLoading]);
+  }, [messages, articleId, loading, needsSetup, searchLoading, summaryContext]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {

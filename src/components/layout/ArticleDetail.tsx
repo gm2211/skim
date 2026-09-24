@@ -1578,7 +1578,7 @@ export function ArticleDetail() {
       </div>
 
       {/* Chat drawer — collapsible bottom pane */}
-      <ChatDrawer articleId={article.id} articleTitle={article.title} open={chatOpen} onOpenChange={setChatOpen} />
+      <ChatDrawer articleId={article.id} articleTitle={article.title} summaryContext={summarize.data?.article_id === article.id ? ([summarize.data.bullet_summary, summarize.data.full_summary].filter(Boolean).join("\n\n") || undefined) : undefined} open={chatOpen} onOpenChange={setChatOpen} />
     </div>
   );
 }

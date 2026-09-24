@@ -11,9 +11,11 @@ let package = Package(
     products: [
         .library(name: "SkimCore", targets: ["SkimCore"])
     ],
+    dependencies: [.package(path: "../../shared/SkimStoryPolicy")],
     targets: [
         .target(
             name: "SkimCore",
+            dependencies: [.product(name: "SkimStoryPolicy", package: "SkimStoryPolicy")],
             linkerSettings: [
                 .linkedLibrary("sqlite3")
             ]

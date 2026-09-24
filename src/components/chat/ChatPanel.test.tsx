@@ -47,8 +47,20 @@ describe("ChatDrawer", () => {
     expect(input).toHaveFocus();
     await user.type(input, "Explain this{Enter}");
     expect(await screen.findByText("Answer")).toBeInTheDocument();
-    expect(chatWithArticle).toHaveBeenCalledWith("article-1", [{ role: "user", content: "Explain this" }]);
+    expect(chatWithArticle).toHaveBeenCalledWith("article-1", [{ role: "user", content: "Explain this" }], undefined);
     expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("sends the current generated summary and drops it when the article changes", async () => {
+    vi.mocked(chatWithArticle).mockResolvedValue({ content: "Answer", web_citations: [], provider: "openai", model: "test" });
+    const view = render(<ChatDrawer articleId="article-1" articleTitle="Article" summaryContext="The summary concludes X." open />);
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText("Ask about this article..."), "Explain your summary{Enter}");
+    await screen.findByText("Answer");
+    expect(chatWithArticle).toHaveBeenLastCalledWith("article-1", [{ role: "user", content: "Explain your summary" }], "The summary concludes X.");
+    view.rerender(<ChatDrawer articleId="article-2" articleTitle="Other" open />);
+    await user.type(screen.getByPlaceholderText("Ask about this article..."), "Explain this article{Enter}");
+    await waitFor(() => expect(chatWithArticle).toHaveBeenLastCalledWith("article-2", [{ role: "user", content: "Explain this article" }], undefined));
   });
 
   it("preserves a failed draft and keeps provider errors out of chat history", async () => {

@@ -34,15 +34,10 @@ pub fn article_summary_system_prompt(settings: &AiSettings) -> String {
         }
     }
 
-    let tone = match settings.summary_tone.as_deref().unwrap_or("concise") {
-        "detailed" => "You provide thorough, detailed summaries that capture nuance and context.",
-        "casual" => "You write in a casual, accessible tone. Keep it conversational and easy to read.",
-        "technical" => "You write precise, technical summaries. Use domain-specific terminology where appropriate.",
-        _ => "You write concisely and precisely. No filler, no hedging.",
-    };
+    let style = crate::db::story_policy::summary_style_prompt(settings.summary_tone.as_deref());
 
     format!(
-        "{tone} Lead with the single most important takeaway. \
+        "{style} \
          Always respond with a JSON object using exactly the keys and value types requested in the user message. \
          Do not add other keys or text outside the JSON object."
     )
@@ -276,6 +271,22 @@ pub fn catchup_lede_retry_user_prompt(headline: &str, articles_text: &str) -> St
 #[cfg(test)]
 mod summary_prompt_tests {
     use super::*;
+
+    #[test]
+    fn every_summary_tone_uses_shared_fidelity_policy_before_json_adapter() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../shared/fixtures/summary-style.json")).unwrap();
+        for case in fixture["cases"].as_array().unwrap() {
+            let mut settings = crate::db::models::AppSettings::default().ai;
+            settings.summary_tone = case["tone"].as_str().map(str::to_string);
+            let prompt = article_summary_system_prompt(&settings);
+            let expected = format!("{} {}", case["style"].as_str().unwrap(),
+                fixture["common"].as_str().unwrap());
+            assert!(prompt.starts_with(&expected));
+            assert!(prompt.contains("keys and value types requested in the user message"));
+            assert!(!prompt.contains("no hedging"));
+        }
+    }
 
     #[test]
     fn paragraph_bullet_and_both_requests_have_compatible_shapes() {

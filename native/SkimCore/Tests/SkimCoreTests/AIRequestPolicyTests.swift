@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SkimCore
 
@@ -48,4 +49,31 @@ import Testing
     let removed = AIRequestPolicy.summaryCacheKeys(for: "a", among: keys)
     #expect(removed == Array(keys.prefix(3)))
     #expect(keys.filter { !removed.contains($0) } == Array(keys.suffix(2)))
+}
+
+@Test func summaryStyleMatchesSharedCorpusIncludingAliasesAndDefaults() throws {
+    struct Fixture: Decodable {
+        struct Entry: Decodable { var tone: String?; var style: String }
+        var common: String
+        var cases: [Entry]
+    }
+    var root = URL(fileURLWithPath: #filePath)
+    for _ in 0..<5 { root.deleteLastPathComponent() }
+    let fixture = try JSONDecoder().decode(Fixture.self, from: Data(
+        contentsOf: root.appendingPathComponent("shared/fixtures/summary-style.json")))
+    for entry in fixture.cases {
+        #expect(AIRequestPolicy.summaryInstructions(AISettings(summaryTone: entry.tone)) == entry.style + " " + fixture.common)
+    }
+    #expect(AIRequestPolicy.summaryInstructions(AISettings(summaryTone: "descriptive")) == AIRequestPolicy.summaryInstructions(AISettings(summaryTone: "detailed")))
+    #expect(AIRequestPolicy.summaryInstructions(AISettings(summaryTone: "unknown")) == AIRequestPolicy.summaryInstructions(AISettings(summaryTone: "concise")))
+}
+
+@Test func nativeSummaryCompositionPreservesPlainTextWordCountAndAppendedCustomInstructions() {
+    let settings = AISettings(summaryTone: "technical", summaryCustomPrompt: "  Focus on dates.\n  ")
+    let style = AIRequestPolicy.summaryInstructions(AISettings(summaryTone: "technical"))
+    #expect(AIRequestPolicy.summaryInstructions(settings, wordCount: 87) == style
+        + " Write approximately 87 words. Output only the summary — no preamble, no restating the title, no metadata."
+        + "\n\nUser summary instructions:\nFocus on dates.")
+    #expect(AIRequestPolicy.summaryInstructions(settings) == style + "\n\nUser summary instructions:\nFocus on dates.")
+    #expect(AIRequestPolicy.summaryInstructions(AISettings(summaryTone: "technical", summaryCustomPrompt: " \n ")) == style)
 }

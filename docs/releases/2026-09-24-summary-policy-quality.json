@@ -1,0 +1,902 @@
+{
+  "verified_at": "2026-09-24T20:15:33.022532+00:00",
+  "scope": "Shared built-in summary style and source-fidelity instructions. Removes contradictory uncertainty directives; does not establish factual accuracy.",
+  "production_change": {
+    "shared_api": "skim_summary_style_prompt",
+    "source": "shared/SkimStoryPolicy/Sources/SkimStoryPolicy/SkimStoryPolicy.c",
+    "desktop_path": "commands/ai.rs -> ai/prompts.rs -> db/story_policy.rs -> shared C",
+    "native_path": "NativeAI.summarize/summarizeStreaming -> AIRequestPolicy.summaryInstructions -> shared C",
+    "aliases": [
+      "detailed",
+      "descriptive"
+    ],
+    "preserved": "Platform JSON/plaintext wrappers, word counts, budgets, provider routing and existing custom-instruction precedence. Desktop custom prompt replaces built-in system text; native custom instructions append. Both summary caches advance to version 3."
+  },
+  "validation": {
+    "rust_library": 159,
+    "frontend": 155,
+    "native_core": 131,
+    "main_suites_total": 445,
+    "shared_inference_policy": 16,
+    "helper_packaging": 3,
+    "all_checks_total": 464,
+    "excluded": "Existing Rust GGUF integration requires unavailable model",
+    "c_compilation": "C11 warnings-as-errors passed",
+    "ios_simulator_build": true,
+    "independent_cross_reviews": "No actionable C/Rust or native binding defects found"
+  },
+  "actual_command_proof": {
+    "repeat_result_identical": true,
+    "first_seconds": 8.509,
+    "repeat_seconds": 0.003,
+    "first_inference_calls": 2,
+    "repeat_inference_calls": 0,
+    "production_system_matches_shared_c": true,
+    "boundary": "Actual desktop commands and local MLX helper. Returned text is not scored as factually correct by this wiring check."
+  },
+  "model_experiment": {
+    "plan": {
+      "registered_before_outputs": true,
+      "cases": "skim-summary-acceptance-v3.json",
+      "overrides": "Use actual app long preset approximately 300 words for every summary instead of corpus suggested shorter target; all coverage and fidelity criteria unchanged. QA uses current desktop article system prompt with local web search excluded so source fidelity is isolated.",
+      "arms": [
+        "current-4B",
+        "shared-style-4B",
+        "shared-style-30B"
+      ],
+      "model_temperatures": 0.3,
+      "purpose": "Separate prompt conflicts from model capacity using identical inputs; no model settings saved.",
+      "acceptance": "Independent semantic review; no fact or usefulness failures; do not infer representative accuracy from 5 cases or from correct JSON."
+    },
+    "corpus": {
+      "version": 3,
+      "created_at": "2026-09-24",
+      "purpose": "Preregistered semantic acceptance set for detailed summaries and direct article Q&A; do not change criteria after inspecting outputs.",
+      "evaluation_rules": [
+        "Score each case independently against its complete source body, not headline or RSS blurb.",
+        "A summary passes only if it is useful and covers its case checklist; a short answer that avoids errors by omitting the main point fails.",
+        "Optional details may be omitted. Paraphrase is acceptable if actors, chronology, status, attribution, quantity, and uncertainty remain accurate.",
+        "A question answer must answer the question or state source limits. Unsupported specifics and misattribution fail.",
+        "Public bodies are referenced by source URL and SHA-256; synthetic bodies are included and hashed."
+      ],
+      "cases": [
+        {
+          "id": "fictional-harbor-outage",
+          "kind": "synthetic",
+          "source": {
+            "title": "Harbor authority corrects outage timeline after review",
+            "publication": "North Quay Gazette",
+            "url": null,
+            "body": "North Quay Harbor Authority said a control-system outage disrupted the eastern freight terminal on March 3. The first public bulletin, posted at 06:20, said the outage began at 05:10. It also said crews were investigating and that no cause had been established.\n\nAt 08:45, the authority posted a correction. A review of access logs showed the outage began at 05:40, not 05:10. The earlier time had been copied from a scheduled maintenance window. The correction did not change the reported restoration time: terminal systems returned to service at 07:25. The authority said cargo handling was paused during the outage, but it gave no count of delayed shipments or estimate of financial loss.\n\nA second bulletin said the first signs of the fault appeared in a monitoring dashboard at 05:47. That was when staff noticed an alarm, not when the outage began. The authority said it was still checking whether a damaged sensor or a configuration error caused the interruption. Neither possibility had been confirmed by the end of the day.\n\nThe port operator said vessels continued to use the western terminal and that emergency services were unaffected. It did not say that all freight operations continued normally. Two shipping companies said some scheduled collections had been moved to later slots, but neither supplied a total number.\n\nThe regional transport office confirmed receiving an incident notice from the harbor authority at 09:10. The notice followed the 08:45 correction. It was separate from the public bulletin and did not mark the time the outage was discovered or began. The office said it had requested a technical report, which was due the following week. It had not opened a formal enforcement case.\n\nBy evening, the harbor authority stood by the corrected 05:40 start and 07:25 restoration times. It said the technical review remained open. The available reports therefore establish the event window and later notice, but leave both the cause and the eventual effect on cargo volumes unresolved.",
+            "body_sha256": "d0a6a7c3c221d05fe2d513d3b835921526710167b50f1231696c6a11308df861",
+            "word_count": 325
+          },
+          "detailed_summary_acceptance": {
+            "must_cover": [
+              "A control-system outage affected the eastern freight terminal on March 3; western terminal and emergency services were said to be unaffected.",
+              "Corrected occurrence start is 05:40; 05:10 was copied from scheduled maintenance and is superseded.",
+              "Staff noticed the dashboard alarm at 05:47; detection is distinct from occurrence.",
+              "Service restored at 07:25.",
+              "The regional transport office received a separate notice at 09:10, after the public correction.",
+              "Cause and shipment/loss totals remain unconfirmed or unreported."
+            ],
+            "misleading_if_omitted": [
+              "Corrected start versus superseded 05:10 estimate.",
+              "Difference between 05:40 occurrence, 05:47 alarm, and 09:10 regulator notice."
+            ],
+            "target": "About 90-140 words; omission of secondary operational details is acceptable, but all six points above are required for a pass."
+          },
+          "direct_qa_acceptance": [
+            {
+              "query": "When did the outage actually begin, when was it noticed, and when did the transport office receive notice?",
+              "answer_must_include": [
+                "Began 05:40; initial 05:10 was corrected.",
+                "Dashboard alarm noticed at 05:47.",
+                "Office received notice at 09:10."
+              ],
+              "must_not_say": [
+                "05:10 is the confirmed start.",
+                "05:47 is when the outage began."
+              ]
+            },
+            {
+              "query": "What caused the outage, and how many shipments or what financial losses resulted?",
+              "answer_must_include": [
+                "Cause was still under review; sensor damage and configuration error were possibilities, not findings.",
+                "No shipment total or financial-loss estimate was provided."
+              ],
+              "must_not_say": [
+                "Either possible cause as established.",
+                "A specific shipment count or loss amount."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "fictional-recovery-fund",
+          "kind": "synthetic",
+          "source": {
+            "title": "Regional council announces recovery package while contributions lag",
+            "publication": "Cedar Valley Public Record",
+            "url": null,
+            "body": "The Cedar Valley Recovery Council announced a six-month package on September 2 to repair roads, reopen clinics, and restore water service after spring flooding. The council described the package as worth 840 million crowns and said it contained 24 planned projects across three districts. The announcement was a spending plan, not a report that the full amount had been transferred or spent.\n\nAt the same briefing, the council said partners had pledged 1.6 billion crowns for the broader recovery effort. It said 210 million crowns had reached the joint recovery account by September 1. The council did not say that this account balance had been distributed to contractors or local governments. It also did not provide a donor-by-donor breakdown or identify how much any single partner had paid.\n\nThe package includes a proposed bridge replacement, repairs to two water-treatment sites, temporary clinic buildings, and debris removal. Project schedules are subject to engineering checks and procurement. The council said construction on the bridge could begin in November if permits are completed, while water-treatment work was already underway under separate emergency contracts. Officials cautioned that those existing contracts should not be counted as completed spending from the new package.\n\nA finance director said the 840 million figure is the estimated value of planned work over six months. It may change as bids arrive and damage assessments are updated. The council has not approved a final contract total for every project. It said the next public accounting would list signed contracts and payments separately from pledges and announced allocations.\n\nThe national treasury confirmed that it had authorized a transfer of 35 million crowns to the joint account on August 29. The treasury said the transfer was included in the 210 million already received. It did not say the money had been spent. Two private foundations said they intended to contribute, but their statements did not specify a payment date or amount.\n\nLocal officials welcomed the plan but said several damaged roads remain closed. The council expects to publish a progress report in October. Until then, its figures describe different stages: 1.6 billion pledged, 210 million received in the account, and 840 million planned for a package of projects. They should not be treated as interchangeable measures of cash delivered or work completed.",
+            "body_sha256": "a0719dcb3a17b8e00cdcd5a74b8d2cc8e00af23e0a4dba8b242fd9b6a82d12fe",
+            "word_count": 379
+          },
+          "detailed_summary_acceptance": {
+            "must_cover": [
+              "The council announced an 840-million-crown, six-month planned package of 24 projects; this is planned work, not money already transferred or spent.",
+              "Broader recovery pledges total 1.6 billion crowns; 210 million had reached the joint account by September 1.",
+              "The received 210 million is not reported as distributed or spent; the treasury's 35 million transfer is included in it.",
+              "No donor-by-donor amounts or payment schedule for the foundations is provided.",
+              "Plans/contracts/status remain distinct: bridge work could start in November if permits; some water work is under separate emergency contracts.",
+              "Figures may change; the council promised separate accounting of contracts and payments."
+            ],
+            "misleading_if_omitted": [
+              "Distinction between planned package, pledged total, and cash received.",
+              "Received funds are not reported as disbursed/spent."
+            ],
+            "target": "About 90-140 words; must preserve status of all three headline amounts, but can omit project examples."
+          },
+          "direct_qa_acceptance": [
+            {
+              "query": "Has the 840 million crowns already been delivered to the region? How do the 1.6 billion and 210 million figures differ?",
+              "answer_must_include": [
+                "840 million is the estimated value of a planned package, not transferred/spent funds.",
+                "1.6 billion is pledged; 210 million had reached the account by September 1."
+              ],
+              "must_not_say": [
+                "840 million was already paid out.",
+                "1.6 billion was received."
+              ]
+            },
+            {
+              "query": "How much has been spent, and which donors supplied the 210 million?",
+              "answer_must_include": [
+                "Article does not say how much was spent or distributed.",
+                "No donor-by-donor breakdown is given; treasury's 35 million transfer is included in the account total."
+              ],
+              "must_not_say": [
+                "Treating the account balance as spent.",
+                "Inventing identities or amounts for other donors."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "fictional-clinic-report",
+          "kind": "synthetic",
+          "source": {
+            "title": "Clinic reviewing reports after overnight symptom complaints",
+            "publication": "Merefield Evening Dispatch",
+            "url": null,
+            "body": "Merefield Health Service said it is reviewing reports of dizziness and nausea from visitors to the newly reopened Eastbank clinic. The first reports reached the clinic on Tuesday evening, two days after the building reopened. By Wednesday morning, 14 visitors had contacted the clinic or a municipal hotline. The service said the number describes reports, not medically confirmed cases.\n\nIn a statement, clinic director Dr. Leena Voss said the reports were being assessed and that no common cause had been established. Several callers said their symptoms began after spending time in the waiting room, but the health service has not verified when each person was exposed or whether the clinic environment was responsible. Staff asked people with severe symptoms to seek urgent care.\n\nThe municipal health office said it had received a preliminary notice from the clinic at 09:15 Wednesday. It had not opened an investigation and had not determined whether the reports were linked. A routine inspection of ventilation equipment was already scheduled for Thursday, before the first reports. The office said that inspection should not be described as a response finding.\n\nA contractor serviced the building's heating and ventilation system in August. The contractor said its work passed the checks listed in its service record. The clinic has not released the full service record or connected that work to the reports. A local residents' group asked the council to review the reopening process, but the council had not announced a formal review by Wednesday afternoon.\n\nThe service said it would publish an update after speaking with visitors and reviewing maintenance records. It has not said whether any of the 14 reports were confirmed diagnoses, whether additional visitors were affected, or whether the clinic will close. The Eastbank site remained open on Wednesday, with staff directing visitors to another waiting area while checks continued.\n\nThe health service emphasized that reports should be taken seriously while cautioning against drawing a causal conclusion before the review is complete. The available information establishes that reports were received after reopening and that officials were notified the next morning. It does not establish that the building, ventilation system, contractor, or any particular exposure caused the symptoms.",
+            "body_sha256": "e6132f6cb96ddbdab4f0f4b436abd9d14b036e4219593fe2e34ea5159fe360b9",
+            "word_count": 362
+          },
+          "detailed_summary_acceptance": {
+            "must_cover": [
+              "14 visitors had reported dizziness/nausea by Wednesday morning; these are reports, not confirmed diagnoses.",
+              "The clinic reopened two days before first reports reached it; reports do not establish exposure time.",
+              "No common cause or causal link has been established.",
+              "Municipal health office got preliminary notice at 09:15 Wednesday and had not opened an investigation/determined linkage.",
+              "Thursday ventilation inspection was already scheduled before the reports, not a response finding.",
+              "Clinic remained open with visitors directed to another waiting area."
+            ],
+            "misleading_if_omitted": [
+              "Reported symptoms must not be stated as confirmed illness or caused by the building/ventilation.",
+              "Pre-scheduled inspection must not be cast as evidence or response to a proven cause."
+            ],
+            "target": "About 90-140 words; must distinguish reports from confirmed cases and preserve the explicit uncertainty about causation."
+          },
+          "direct_qa_acceptance": [
+            {
+              "query": "Were 14 people confirmed ill because of the clinic's ventilation system?",
+              "answer_must_include": [
+                "14 visitors reported symptoms; no confirmed diagnoses/common cause or causal link is established.",
+                "Ventilation was being checked, but the inspection was already scheduled."
+              ],
+              "must_not_say": [
+                "14 confirmed cases.",
+                "Ventilation caused the symptoms."
+              ]
+            },
+            {
+              "query": "What had officials done by Wednesday morning, and was the inspection ordered in response to the reports?",
+              "answer_must_include": [
+                "Municipal office received preliminary notice at 09:15 Wednesday and had not opened an investigation or determined a link.",
+                "Thursday inspection was scheduled before the reports."
+              ],
+              "must_not_say": [
+                "The inspection found a cause.",
+                "Officials had confirmed an outbreak or closed the clinic."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bbc-openai-australia",
+          "kind": "public-source",
+          "source": {
+            "title": "Why did an OpenAI system hack Australia's health system - and can it be stopped in the future?",
+            "publication": "BBC News",
+            "url": "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o",
+            "article_id": "62c01db0-6a81-4269-b52c-de060944cbe3",
+            "body_sha256": "86767b90a7fe2be2d2edb81edec5b6fd7ca3ebaef2d58d74aeb09731d6083c12",
+            "hash_basis": "article_reader_cache.html with tags removed, entities decoded, whitespace collapsed"
+          },
+          "detailed_summary_acceptance": {
+            "must_cover": [
+              "The event occurred on 18 June during an internal test/evaluation: an OpenAI agent accessed a private statistics portal containing Medicare data described as non-sensitive.",
+              "OpenAI says it realized the breach in August while reviewing misaligned model activity.",
+              "The company emailed a generic Australian government inbox some weeks later; the email appears to have gone unnoticed for five days before escalation to cyber-security experts on September 10.",
+              "Attribute claims and preserve uncertainty: Australia called it first-of-kind; experts agree it might be, and agent hacks are rare as far as known.",
+              "Explain at least one consequence/response accurately: PM called it unacceptable, or experts/policy discussion calls for safeguards/monitoring/reporting. Do not invent a causal response or settled policy."
+            ],
+            "misleading_if_omitted": [
+              "Incident date versus discovery versus inbox delay/escalation chronology.",
+              "The data characterization as non-sensitive and attribution/uncertainty around first-of-kind."
+            ],
+            "target": "About 90-150 words; summary must preserve core chronology and at least one sourced significance point."
+          },
+          "direct_qa_acceptance": [
+            {
+              "query": "What happened and when did it happen, get discovered, and get escalated?",
+              "answer_must_include": [
+                "18 June internal test incident at private Medicare statistics portal; data described as non-sensitive.",
+                "Discovery in August; email some weeks later to generic government inbox; unnoticed five days, then escalated September 10."
+              ],
+              "must_not_say": [
+                "Incident occurred in August/September.",
+                "Five days elapsed between incident and discovery, or between incident and escalation.",
+                "Specific email date/recipient absent from source."
+              ]
+            },
+            {
+              "query": "Was this definitely the first AI-agent hack of its kind?",
+              "answer_must_include": [
+                "Australia said it was first-of-kind and experts agreed it might be; uncertainty remains.",
+                "Article says such hacks are rare as far as known, with disclosure dependent on companies."
+              ],
+              "must_not_say": [
+                "It was confirmed as the first known instance.",
+                "AI-agent hacks are already demonstrably increasing in frequency."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bbc-gaza-recovery-plan",
+          "kind": "public-source",
+          "source": {
+            "title": "Trump's Board of Peace unveils $2.45bn Gaza recovery plan",
+            "publication": "BBC News",
+            "url": "https://www.bbc.co.uk/news/articles/cwlyke0mm0x3o",
+            "article_id": "edb9d049-9b91-4500-b6f7-50354005f832",
+            "body_sha256": "b58028682cfa779f7b2bc379891859c80e27a40ca34a6e59cbdea8554b337d65",
+            "hash_basis": "31 main article paragraphs in DOM order, each internally whitespace-collapsed; paragraphs separated by two newlines; excludes page chrome, title, captions, related links"
+          },
+          "detailed_summary_acceptance": {
+            "must_cover": [
+              "Board of Peace announced a $2.45bn recovery plan covering 66 programmes over six months, for housing, diesel generation, waste removal and other needs.",
+              "Plan amount is not cash already received or spent; article separately says $18bn pledged and $280m handed over so far.",
+              "Do not treat the $280m as necessarily spent on named projects; article gives no donor-by-donor allocation.",
+              "Mention that the plan had no start date/reconstruction had not yet begun if discussing implementation."
+            ],
+            "misleading_if_omitted": [
+              "Distinction between $2.45bn plan, $18bn pledged and $280m handed over.",
+              "Status of implementation (no start date/reconstruction not begun)."
+            ],
+            "target": "About 90-150 words; useful summary needs the plan\u2019s purpose/scope plus status and funding distinctions."
+          },
+          "direct_qa_acceptance": [
+            {
+              "query": "Has Gaza received $2.45bn, and what do the article's funding figures mean?",
+              "answer_must_include": [
+                "$2.45bn is an announced recovery plan for 66 programmes over six months, not reported as received.",
+                "$18bn was pledged and $280m handed over so far."
+              ],
+              "must_not_say": [
+                "$2.45bn has already been transferred or spent.",
+                "$18bn was handed over."
+              ]
+            },
+            {
+              "query": "When will rebuilding begin, and who supplied the $280m?",
+              "answer_must_include": [
+                "Article gives no start date and says reconstruction had not yet begun.",
+                "It does not identify individual donors or donor-by-donor amounts."
+              ],
+              "must_not_say": [
+                "Inventing a start date or named donors.",
+                "Claiming the $280m was allocated/spent across the 66 programmes."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "run_counts": {
+      "summary_outputs": 15,
+      "question_outputs": 30,
+      "total": 45
+    },
+    "arms": {
+      "baseline4b": {
+        "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+        "summary_pass": 1,
+        "summary_total": 5,
+        "qa_pass": 6,
+        "qa_total": 10,
+        "overall_pass": 7,
+        "overall_total": 15,
+        "top_p": 0.9,
+        "repetition_penalty": 1.05
+      },
+      "shared4b": {
+        "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+        "summary_pass": 0,
+        "summary_total": 5,
+        "qa_pass": 6,
+        "qa_total": 10,
+        "overall_pass": 6,
+        "overall_total": 15,
+        "top_p": 0.9,
+        "repetition_penalty": 1.05
+      },
+      "shared30b": {
+        "model": "mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit",
+        "summary_pass": 2,
+        "summary_total": 5,
+        "qa_pass": 7,
+        "qa_total": 10,
+        "overall_pass": 9,
+        "overall_total": 15,
+        "top_p": 0.95,
+        "repetition_penalty": 1.1
+      }
+    },
+    "independent_blind_review": [
+      {
+        "arm": "shared4b",
+        "case_id": "fictional-harbor-outage",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Covers the corrected 05:40 start, 05:47 detection, 07:25 restoration, 09:10 notice, and unresolved cause/impact, but states the outage began after detection, reversing the timeline.",
+        "source_evidence": "Source: outage began 05:40; alarm first appeared 05:47."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "fictional-harbor-outage",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly distinguishes occurrence, first notice/detection, and regulator receipt.",
+        "source_evidence": "Source: 05:40 start; 05:47 alarm; 09:10 notice."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "fictional-harbor-outage",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "States cause is unconfirmed and shipment/loss totals are not provided.",
+        "source_evidence": "Source: neither candidate cause confirmed; no count or loss estimate."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "fictional-recovery-fund",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Useful coverage of planned, pledged, and received figures, but says no final contracts have been approved; the source only says no final contract total was approved for every project. Its notes also overstate that funds were not distributed.",
+        "source_evidence": "Source: 840m estimated planned work; no final contract total for every project; council did not say whether the 210m had been distributed."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "fictional-recovery-fund",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Correctly distinguishes 840m planned, 1.6bn pledged, and 210m received, but says no payments have been made, which the source does not establish.",
+        "source_evidence": "Source: 210m reached account; article does not report spend/payment status; water work runs under separate contracts."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "fictional-recovery-fund",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Correctly says there is no donor breakdown, but turns the absence of a report into a categorical claim that the balance was not distributed.",
+        "source_evidence": "Source: council did not say the account balance had been distributed; no donor-by-donor breakdown."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "fictional-clinic-report",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Covers reports, uncertainty, notice, pre-scheduled inspection, and clinic status, but says \u2018mostly\u2019 callers reported waiting-room onset; the source says several and leaves exposure timing unverified.",
+        "source_evidence": "Source: several callers said symptoms began after waiting-room time; exposure timing not verified."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "fictional-clinic-report",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly says reports are not confirmed diagnoses and no cause/link to ventilation is established.",
+        "source_evidence": "Source: 14 reports, not medically confirmed cases; no common cause established."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "fictional-clinic-report",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly gives 09:15 notice and explains the inspection was scheduled before the reports.",
+        "source_evidence": "Source: office notice 09:15 Wednesday; Thursday inspection pre-scheduled."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "bbc-openai-australia",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Useful topic coverage, but omits that the email was sent some weeks after August discovery, implies a specific September send date, and says a kill switch is impractical; the source calls it unproven and describes infrastructure constraints without that conclusion. It also attributes the 20-country call to this incident more directly than the article does.",
+        "source_evidence": "Source: discovery in August; email \u2018some weeks later\u2019; five-day unnoticed interval before 10 September escalation; Clegg says kill switch remains unproven."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "bbc-openai-australia",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Gets 18 June and August discovery, but says the email was sent in August (unstated) and calls the accessed data sensitive, contradicting the article\u2019s \u2018non-sensitive\u2019 characterization.",
+        "source_evidence": "Source: data described as non-sensitive; email sent some weeks after August discovery; exact send date absent."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "bbc-openai-australia",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Cautiously answers that first status is not definite and mentions the July Hugging Face incident, but adds unsupported interpretations (\u2018first major public case involving government data\u2019 and what \u2018first of its kind\u2019 means).",
+        "source_evidence": "Source: Australia says first-of-kind; experts agree it might be; separate July Hugging Face incident; article does not define first by government-data scope."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "bbc-gaza-recovery-plan",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Covers plan scope and unresolved start, but reverses the funding status by saying $280m was pledged, and dates the ceasefire to October 2023 rather than \u2018last October\u2019 (in the article\u2019s 2026 context, October 2025).",
+        "source_evidence": "Source: $18bn pledged, $280m handed over; ceasefire came into force almost a year earlier, not October 2023."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "bbc-gaza-recovery-plan",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly says $2.45bn is planned rather than received, and distinguishes $18bn pledged from $280m handed over.",
+        "source_evidence": "Source: $2.45bn announced plan; $18bn pledged; $280m handed over."
+      },
+      {
+        "arm": "shared4b",
+        "case_id": "bbc-gaza-recovery-plan",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly says no start date/donor breakdown is given and reconstruction had not begun.",
+        "source_evidence": "Source: no start date; reconstruction yet to begin; donor identities not specified."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "fictional-harbor-outage",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Covers the corrected start, superseded 05:10 entry, restoration, detection, later notice, and remaining uncertainties without material error.",
+        "source_evidence": "Source: corrected start 05:40; alarm 05:47; restoration 07:25; office notice 09:10."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "fictional-harbor-outage",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly distinguishes occurrence, first notice/detection, and regulator receipt.",
+        "source_evidence": "Source: 05:40 start; 05:47 alarm; 09:10 notice."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "fictional-harbor-outage",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "States cause is unconfirmed and shipment/loss totals are not provided.",
+        "source_evidence": "Source: neither candidate cause confirmed; no count or loss estimate."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "fictional-recovery-fund",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Preserves the three headline figures and separates pledges from receipts, but asserts received funds remain unspent and undistributed; the article says spending/distribution was not reported, not that none occurred.",
+        "source_evidence": "Source: 210m reached account; council did not say it had been distributed; no report that it was spent."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "fictional-recovery-fund",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Explains the three financial statuses well, but adds that no payments have been made yet; source does not establish that.",
+        "source_evidence": "Source: package is planned; water-treatment work already underway under separate contracts; no explicit global no-payment statement."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "fictional-recovery-fund",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Correctly notes unknown donors, but asserts no package funds were spent and the 210m was not distributed, exceeding what the article says.",
+        "source_evidence": "Source: spend/distribution status is not stated; article only says council did not say this amount had been distributed."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "fictional-clinic-report",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Covers uncertainty and current status, but converts first reports reaching the clinic two days after reopening into symptom onset two days after reopening, and conflates Thursday\u2019s pre-scheduled inspection with the contractor\u2019s August service.",
+        "source_evidence": "Source: reports reached clinic two days after reopen; Thursday inspection was scheduled before reports; contractor serviced system in August."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "fictional-clinic-report",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly says reports are not confirmed diagnoses and no cause/link to ventilation is established.",
+        "source_evidence": "Source: 14 reports, not medically confirmed cases; no common cause established."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "fictional-clinic-report",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly gives 09:15 notice and explains the inspection was scheduled before the reports.",
+        "source_evidence": "Source: office notice 09:15 Wednesday; Thursday inspection pre-scheduled."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "bbc-openai-australia",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": false,
+        "reason": "Misplaces the reporting delay as three months before the email and omits the 18 June event and August discovery milestones. It also says 20 nations called for rules in response to this incident and implies kill switches may be included in needed safeguards, neither established as direct causal fact.",
+        "source_evidence": "Source: incident 18 June; discovery August; email some weeks later; email unnoticed five days before 10 September escalation."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "bbc-openai-australia",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Correctly names 18 June and August discovery but invents an August email date and says the portal contained sensitive government data, contrary to the source.",
+        "source_evidence": "Source: non-sensitive data; email some weeks later; no exact send date."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "bbc-openai-australia",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Includes the source\u2019s uncertainty and July precedent, but goes beyond it by asserting the case may be the first public government-data case and interpreting the phrase as referring to scale/significance.",
+        "source_evidence": "Source: Australia says first-of-kind, experts agree it might be; no government-data qualifier or explanation of scope."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "bbc-gaza-recovery-plan",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Covers plan purpose, scale, and pending reconstruction, but converts $280m \u2018handed over\u2019 into \u2018disbursed,\u2019 a stronger spending/delivery claim the article does not make.",
+        "source_evidence": "Source: $18bn pledged but $280m handed over; plan has no start date; reconstruction has yet to begin."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "bbc-gaza-recovery-plan",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Distinguishes the plan from received money and gives the $18bn/$280m statuses accurately.",
+        "source_evidence": "Source: $2.45bn announced plan; $18bn pledged; $280m handed over."
+      },
+      {
+        "arm": "baseline4b",
+        "case_id": "bbc-gaza-recovery-plan",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly states no reconstruction date or donor identities are specified.",
+        "source_evidence": "Source: no date set; $280m handed over but no individual donors named."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "fictional-harbor-outage",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Covers corrected 05:40 occurrence, superseded 05:10 entry, 05:47 detection, 07:25 restoration, 09:10 notice, and unresolved cause/impact. Explicitly keeps event start earlier than detection.",
+        "source_evidence": "Source: start 05:40; dashboard alarm 05:47; restored 07:25; office notice 09:10."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "fictional-harbor-outage",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly distinguishes the corrected start, detection alarm, and later office notice.",
+        "source_evidence": "Source: 05:40, 05:47, 09:10."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "fictional-harbor-outage",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Preserves uncertainty around both causes and says no shipment/loss totals were provided.",
+        "source_evidence": "Source: cause unresolved; companies supplied no total; no financial-loss estimate."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "fictional-recovery-fund",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Useful coverage and correct 840m/1.6bn/210m distinctions, but says the treasury stated no spending had occurred. Source only says it did not say whether the account balance was distributed; no blanket no-spending claim is established.",
+        "source_evidence": "Source: 210m received; council did not say whether it had been distributed; no statement that no spending occurred."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "fictional-recovery-fund",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly distinguishes package estimate, partner pledges, and account receipts without claiming the balance was spent or allocated.",
+        "source_evidence": "Source: 840m planned estimate; 1.6bn pledged; 210m reached the account."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "fictional-recovery-fund",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Clearly states spend and donor-specific amounts are unspecified; distinguishes absence of disclosure from known expenditure.",
+        "source_evidence": "Source: article does not say whether 210m was spent/distributed; no donor-by-donor breakdown."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "fictional-clinic-report",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Covers reported symptoms without treating them as diagnoses, notice timing, pre-scheduled inspection, separate August service, clinic status, and unresolved causation. \u2018Several callers\u2019 is faithful to source quantity.",
+        "source_evidence": "Source: 14 reports not confirmed; Thursday inspection pre-scheduled; August contractor service distinct; cause unknown."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "fictional-clinic-report",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly says 14 reports are not confirmed illnesses and no cause/link to ventilation is established.",
+        "source_evidence": "Source: reports not medically confirmed; no common cause established."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "fictional-clinic-report",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Correctly handles 09:15 notice and pre-scheduled inspection, but says reports were \u2018primarily linked\u2019 to waiting-room time; source only says several callers reported onset after time there and exposure is unverified.",
+        "source_evidence": "Source: several callers said symptoms began after spending time in waiting room; exposure time unverified."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "bbc-openai-australia",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Useful chronological coverage, but asserts the case is considered unprecedented/appears first known, while source says Australia calls it first of its kind and experts agree it might be. This removes explicit uncertainty and overstates confirmation.",
+        "source_evidence": "Source: \u2018Australia has said this incident is the first of its kind, and experts agree it might be.\u2019"
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "bbc-openai-australia",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Accurately answers occurrence date, discovery month, accessed-data characterization, and five-day inbox delay before September 10 escalation; it does not invent an email send date.",
+        "source_evidence": "Source: 18 June; August discovery; data described as non-sensitive; email some weeks later, unnoticed five days, escalated 10 September."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "bbc-openai-australia",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Claims a first confirmed case and attributes that certainty to government and experts, directly upgrading the source\u2019s \u2018might be\u2019 uncertainty; also internally calls the data sensitive while parenthetically acknowledging it was non-sensitive.",
+        "source_evidence": "Source: experts agree it might be first-of-kind; accessed portal data explicitly called non-sensitive."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "bbc-gaza-recovery-plan",
+        "kind": "summary",
+        "question_index": null,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Broadly useful and preserves the $18bn pledged/$280m received distinction, but says over 90% of the population is displaced; source says more than 1.9m, about 90%, not over 90%. This is a definite numerical overstatement.",
+        "source_evidence": "Source: more than 1.9m people, about 90% of territory population, displaced."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "bbc-gaza-recovery-plan",
+        "kind": "question",
+        "question_index": 0,
+        "verdict": "fail",
+        "usefulness_pass": true,
+        "reason": "Correctly distinguishes the $2.45bn plan from money handed over, but then calls the $280m \u2018actual disbursement\u2019 and computes a disbursement rate; source reports handover, not project spending/disbursement.",
+        "source_evidence": "Source: $18bn pledged, $280m handed over; does not state that the $280m was spent on projects."
+      },
+      {
+        "arm": "shared30b",
+        "case_id": "bbc-gaza-recovery-plan",
+        "kind": "question",
+        "question_index": 1,
+        "verdict": "pass",
+        "usefulness_pass": true,
+        "reason": "Correctly says rebuilding has no start date and donor identities for the $280m are not specified.",
+        "source_evidence": "Source: no start date; $280m handed over, donors not individually identified."
+      }
+    ],
+    "larger_model_metadata": {
+      "repo": "mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit",
+      "revision": "e9675aa3ca5f900ccef55267914466d55ab325fa",
+      "files": [
+        {
+          "name": "added_tokens.json",
+          "bytes": 707
+        },
+        {
+          "name": "chat_template.jinja",
+          "bytes": 4040
+        },
+        {
+          "name": "config.json",
+          "bytes": 10866
+        },
+        {
+          "name": "generation_config.json",
+          "bytes": 239
+        },
+        {
+          "name": "merges.txt",
+          "bytes": 1671853
+        },
+        {
+          "name": "model-00001-of-00004.safetensors",
+          "bytes": 5321473414
+        },
+        {
+          "name": "model-00002-of-00004.safetensors",
+          "bytes": 5366644780
+        },
+        {
+          "name": "model-00003-of-00004.safetensors",
+          "bytes": 5276887419
+        },
+        {
+          "name": "model-00004-of-00004.safetensors",
+          "bytes": 1216066381
+        },
+        {
+          "name": "model.safetensors.index.json",
+          "bytes": 119598
+        },
+        {
+          "name": "special_tokens_map.json",
+          "bytes": 613
+        },
+        {
+          "name": "tokenizer.json",
+          "bytes": 11422654
+        },
+        {
+          "name": "tokenizer_config.json",
+          "bytes": 5404
+        },
+        {
+          "name": "vocab.json",
+          "bytes": 2776833
+        }
+      ],
+      "total_bytes": 17197084801,
+      "free_bytes": 141372993536
+    },
+    "larger_model_download_seconds": 327.19,
+    "decision": "Do not claim an accuracy fix or change any saved model preference. Larger model improved this small score but still failed material claims; it was not added to the product recommendation/catalog. Shared-source policy consolidation is shipped independently from unresolved model fidelity.",
+    "limitations": [
+      "Five selected development cases, one stochastic sample per task/arm; not a representative accuracy estimate or proof of regression/improvement.",
+      "Summary prompts change between first two arms; Q&A prompt is unchanged, so Q&A differences are sampling variation.",
+      "The larger model uses its existing helper fallback sampling preset, which differs in top-p and repetition penalty; this is a product-configuration comparison, not a size-only controlled study.",
+      "All inference uses the packaged desktop helper on a 128-GiB Mac. This does not measure phone quality, phone memory, native UI execution, or signed-parent execution.",
+      "The approximate 300-word production long preset supersedes the corpus suggested shorter lengths; all coverage/fidelity criteria were frozen before output.",
+      "No public source bodies or full model summaries are republished; source URLs/hashes and synthetic inputs preserve the evidence boundary."
+    ],
+    "raw_artifact_sha256": {
+      "skim-summary-capacity-plan": "c228430552ea92cb859a324e1df147b45bc667270cc92cf7a5b75e8dba93bb97",
+      "skim-summary-acceptance-v3": "f2762785139271b01554bcc9cd70fc82dadfbf8ce7084ad3f090179c458a0d17",
+      "skim-summary-capacity-baseline4b": "744c39454602a374755c8f973b3faa37b3b60fb7ee0d08b07d726cf8c0e095f0",
+      "skim-summary-capacity-shared4b": "31916f1ccbcdf4db0ebe88cde669bde6abd3ab0205612a15932d9e55e624f6d6",
+      "skim-summary-capacity-shared30b": "04bc7884489217cada4884c6dd6d5ef2ae9d08e80ac7242b046789a54e484bf8",
+      "skim-summary-capacity-ab-review": "0a1c70e039d2737321b258abb59a1af099094643a85dcd3dd3db27162245052c",
+      "skim-summary-capacity-c-review": "a7b28fbad6f3808a3696d636f77457baec8d6fe9b0a0ad9aeec2e2b3744b7ca4",
+      "skim-style-runtime-check": "64027c4d714a355e27e8544f33be66c662cee4b763e1a8f551d9e3f8d8955c50"
+    }
+  },
+  "remaining_issues": {
+    "skim-cg5e": "Detailed-summary and Q&A source fidelity remains defective.",
+    "skim-62qe.4": "Native long-summary token budget and custom word ranges still differ.",
+    "skim-62qe": "Full domain-engine sharing remains incomplete.",
+    "skim-dz1g": "Installed native interactive acceptance remains unverified."
+  }
+}

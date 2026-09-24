@@ -941,7 +941,7 @@ enum NativeAI {
         let wordCount = summaryTargetWordCount(ai)
         return [
             article.id,
-            "summary-v2",
+            "summary-v3",
             AIRequestPolicy.summarySourceFingerprint(articleDigest([article], limit: 1, wordsPerArticle: 2200)),
             ai.provider,
             model,
@@ -2313,15 +2313,7 @@ enum NativeAI {
     }
 
     private static func summaryInstructions(_ settings: AISettings, wordCount: Int? = nil) -> String {
-        let tone = settings.summaryTone?.nilIfEmpty ?? "concise"
-        var instructions = "You summarize articles accurately in a \(tone) style. Preserve nuance, avoid hype, and mention uncertainty when the source is thin."
-        if let wordCount {
-            instructions += " Write approximately \(wordCount) words. Output only the summary — no preamble, no restating the title, no metadata."
-        }
-        if let custom = settings.summaryCustomPrompt?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
-            instructions += "\n\nUser summary instructions:\n\(custom)"
-        }
-        return instructions
+        AIRequestPolicy.summaryInstructions(settings, wordCount: wordCount)
     }
 
     private static func summaryTargetWordCount(_ settings: AISettings) -> Int {

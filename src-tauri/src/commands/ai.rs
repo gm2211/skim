@@ -161,7 +161,7 @@ fn summary_cache_key(article_id: &str, title: &str, evidence: &str, ai: &AiSetti
     }
 
     let key = SummaryKey {
-        prompt_version: 2, // Compatible JSON schemas; no fictional summary examples.
+        prompt_version: 3, // Shared style preserves source uncertainty and event timing.
         article_id,
         article_title: title,
         source_fingerprint: format!("{:x}", Sha256::digest(evidence.as_bytes())),

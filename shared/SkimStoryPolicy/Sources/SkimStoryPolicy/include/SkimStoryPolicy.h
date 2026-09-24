@@ -14,6 +14,24 @@ extern "C" {
 int32_t skim_chat_rank(uint32_t title_terms, uint32_t url_terms,
                        uint32_t source_terms, uint32_t body_terms);
 
+/* A selected evidence passage is an exact span of the original UTF-8 source.
+ * Offsets and lengths are bytes; scalar_count is the Unicode-scalar length. */
+typedef struct {
+    size_t byte_offset;
+    size_t byte_length;
+    size_t scalar_count;
+} SkimEvidenceSpan;
+/* Selects at most four original source passages, in source order. Source and
+ * query are length-delimited UTF-8. Invalid UTF-8, null required pointers, or a zero
+ * budget yield no spans. The scalar budget includes three scalars per gap for
+ * the exact adapter join "\n…\n". No allocation or ownership transfer crosses
+ * the ABI. Full source is scanned without a byte cutoff; at most 32 distinct
+ * query terms participate in selection. */
+size_t skim_chat_evidence_spans(const uint8_t *source, size_t source_len,
+                                const uint8_t *query, size_t query_len,
+                                size_t max_scalars, SkimEvidenceSpan *out,
+                                size_t capacity);
+
 typedef struct {
     double duplicate;
     double coverage;

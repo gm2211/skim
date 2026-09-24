@@ -186,32 +186,9 @@ public enum LibraryChatPolicy {
         return mask
     }
 
-    /// Returns a bounded source excerpt around the earliest whole-word query
-    /// match while preserving the source's original text and spelling.
+    /// Uses the shared source-span selector without discarding distant evidence.
     public static func queryExcerpt(text: String, query: String, maxCharacters: Int) -> String {
-        guard maxCharacters > 0 else { return "" }
-        let terms = queryKeywords(query)
-        var matchIndex: Int?
-        for term in terms {
-            var searchStart = text.startIndex
-            while searchStart < text.endIndex,
-                  let range = text.range(of: term, options: [.caseInsensitive], range: searchStart..<text.endIndex) {
-                let before = range.lowerBound > text.startIndex ? text[text.index(before: range.lowerBound)] : nil
-                let after = range.upperBound < text.endIndex ? text[range.upperBound] : nil
-                if before.map({ !$0.isLetter && !$0.isNumber }) ?? true,
-                   after.map({ !$0.isLetter && !$0.isNumber }) ?? true {
-                    let index = text.distance(from: text.startIndex, to: range.lowerBound)
-                    if matchIndex == nil || index < matchIndex! { matchIndex = index }
-                    break
-                }
-                searchStart = range.upperBound
-            }
-        }
-
-        let startOffset = max(0, (matchIndex ?? 0) - min(160, maxCharacters / 3))
-        let start = text.index(text.startIndex, offsetBy: startOffset)
-        let end = text.index(start, offsetBy: maxCharacters, limitedBy: text.endIndex) ?? text.endIndex
-        return "\(start > text.startIndex ? "…" : "")\(text[start..<end])\(end < text.endIndex ? "…" : "")"
+        ChatEvidencePolicy.excerpt(text: text, query: query, maxCharacters: maxCharacters)
     }
 
     private static func queryKeywords(_ query: String) -> [String] {

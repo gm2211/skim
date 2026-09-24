@@ -73,8 +73,10 @@ pub async fn chat_with_article(
     // not answering.
     let text = crate::commands::article_body::resolve_article_text(db.inner(), &article.article).await;
 
-    // Truncate for context window (char-safe)
-    let article_text: String = text.chars().take(12000).collect();
+    // Select original source passages across the article rather than discarding
+    // late evidence before the question is considered.
+    let article_text = article_chat_evidence(&text, &messages, 12000);
+    require_selected_evidence(&text, &article_text)?;
 
     let tool_hint = if provider_supports_tools(&provider_kind) {
         "When the article doesn't contain enough information to answer, you may call the \
@@ -101,7 +103,7 @@ pub async fn chat_with_article(
 
     let mut local_citations = Vec::new();
     if ai_settings.provider == "mlx" && ai_settings.local_chat_web_search.unwrap_or(true) {
-        if let Some(results) = local_chat_search(provider.as_ref(), &model, &article_text, &messages).await {
+        if let Some(results) = local_chat_search(provider.as_ref(), &model, &text, &messages).await {
             system_prompt.push_str("\n\n");
             system_prompt.push_str(&format_web_results_block(&results));
             local_citations = results
@@ -426,27 +428,42 @@ fn retrieve_chat_articles_with_references(
     retrieve_chat_articles(conn, scope, query, messages)
 }
 
-/// Include the passage that matched instead of cutting every article at its lead.
-fn query_excerpt(text: &str, query: &str, max_chars: usize) -> String {
-    let terms = query_keywords(query);
-    let chars: Vec<char> = text.chars().collect();
-    let mut lower = String::new();
-    let mut original_indices = Vec::new();
-    for (index, character) in chars.iter().enumerate() {
-        for normalized in character.to_lowercase() {
-            original_indices.extend(std::iter::repeat(index).take(normalized.len_utf8()));
-            lower.push(normalized);
+/// Evidence selection uses user-authored topic context only. Assistant output
+/// and generated summaries never become retrieval terms or source evidence.
+fn evidence_query(query: &str, messages: &[ChatMessageInput], source: Option<&str>) -> String {
+    let mut terms = topic_keywords(query);
+    if is_contextual_followup(query) || referenced_subject(query).is_some_and(|subject|
+        source.is_some_and(|text| word_match(text, &subject))) {
+        for previous in messages.iter().rev().filter(|message| message.role == "user") {
+            if previous.content.trim() == query.trim() || is_contextual_followup(&previous.content)
+                || referenced_subject(&previous.content).is_some() { continue; }
+            let topic = topic_keywords(&previous.content);
+            if topic.is_empty() { continue; }
+            for term in topic {
+                if !terms.contains(&term) { terms.push(term); }
+            }
+            break;
         }
     }
-    let match_index = terms.iter().flat_map(|term| lower.match_indices(term).filter_map(|(byte, matched)| {
-        let before = lower[..byte].chars().next_back();
-        let after = lower[byte + matched.len()..].chars().next();
-        (!before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric)).then_some(byte)
-    })).min().and_then(|byte| original_indices.get(byte).copied()).unwrap_or(0);
-    let start = match_index.saturating_sub(160);
-    let end = (start + max_chars).min(chars.len());
-    format!("{}{}{}", if start > 0 { "…" } else { "" },
-        chars[start..end].iter().collect::<String>(), if end < chars.len() { "…" } else { "" })
+    terms.truncate(32);
+    terms.join(" ")
+}
+
+fn require_selected_evidence(source: &str, selected: &str) -> Result<(), String> {
+    if !source.is_empty() && selected.is_empty() {
+        return Err("Could not prepare article text for this question. Try opening the article again.".into());
+    }
+    Ok(())
+}
+
+fn article_chat_evidence(source: &str, messages: &[ChatMessageInput], max_chars: usize) -> String {
+    let question = latest_user_question(messages).unwrap_or_default();
+    query_excerpt(source, &evidence_query(&question, messages, Some(source)), max_chars)
+}
+
+/// The same production selector supplies article, library, and router evidence.
+fn query_excerpt(text: &str, query: &str, max_chars: usize) -> String {
+    crate::db::story_policy::chat_evidence(text, &query_keywords(query).join(" "), max_chars)
 }
 
 /// Chat across multiple articles. Scope determines which articles form the
@@ -506,7 +523,6 @@ pub async fn chat_with_articles(
     // Preserve source ordering so citations continue to identify the same rows.
     let source_articles: Vec<_> = selected.iter().map(|source| source.article.clone()).collect();
     let source_texts = crate::commands::article_body::resolve_selected_article_texts(db.inner(), &source_articles).await;
-    let excerpt_topic = retrieval_topic(&trimmed_query, &messages).0.join(" ");
     let mut context = String::new();
     context.push_str("Relevant articles from the user's RSS feed:\n\n");
     for (i, a) in selected.iter().enumerate() {
@@ -519,7 +535,9 @@ pub async fn chat_with_articles(
                     .unwrap_or_default()
             })
             .unwrap_or_default();
+        let excerpt_topic = evidence_query(&trimmed_query, &messages, Some(&source_texts[i]));
         let excerpt = query_excerpt(&source_texts[i], &excerpt_topic, if i < 3 { 2400 } else { 800 });
+        require_selected_evidence(&source_texts[i], &excerpt)?;
         context.push_str(&format!(
             "[{i}] Title: {title}\nSource: {source}\nAuthor: {author}\nDate: {date}\nURL: {url}\nExcerpt: {excerpt}\n\n",
             i = i + 1,
@@ -656,6 +674,11 @@ async fn local_chat_search(
     if can_skip_local_search(&question) {
         return None;
     }
+    // Same 12,000-scalar article budget as before, selected from the full source
+    // so the routing decision can see the answer near its end.
+    let selected_context = article_chat_evidence(article_context, messages, 12000);
+    require_selected_evidence(article_context, &selected_context).ok()?;
+    let article_context = selected_context;
     let route = provider
         .chat(ChatRequest {
             model: model.to_string(),
@@ -1071,6 +1094,76 @@ mod tests {
     }
 
     #[test]
+    fn rejected_nonempty_source_cannot_be_dispatched_as_empty_evidence() {
+        assert!(require_selected_evidence("article text", "").is_err());
+        assert!(require_selected_evidence("article text", "article text").is_ok());
+        // Existing metadata-only library articles remain usable as such.
+        assert!(require_selected_evidence("", "").is_ok());
+    }
+
+    #[test]
+    fn distant_timeline_and_budget_evidence_keep_separate_finality_qualifiers() {
+        let dates = "The Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.";
+        let budget = "The authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final.";
+        let source = format!("Harborline Museum published a phased reopening plan.\n\n{}\n\n{dates}\n\n{}\n\n{budget}",
+            "Conservation work continues. ".repeat(700), "Archival catalog work continues. ".repeat(500));
+        let query = "What are the revised Atrium reopening date and authorized budget, and are they final?";
+        let messages = vec![ChatMessageInput { role: "user".into(), content: query.into() }];
+        for bound in [12000, 2400, 800] {
+            let evidence = article_chat_evidence(&source, &messages, bound);
+            assert!(evidence.contains(dates), "date qualifier lost at {bound}: {evidence}");
+            assert!(evidence.contains(budget), "budget qualifier lost at {bound}: {evidence}");
+            assert!(evidence.chars().count() <= bound);
+        }
+    }
+
+    #[test]
+    fn article_and_library_evidence_include_late_distant_facts_without_assistant_noise() {
+        let source = format!("A laptop review introduces the testing method.\n\n{}\n\nBattery endurance was nine hours.\n\n{}\n\nThe charger weighs 240 grams.\n\n{}",
+            "Ordinary background sentence. ".repeat(600), "More ordinary background. ".repeat(400), "Closing background. ".repeat(200));
+        let messages = vec![ChatMessageInput { role: "assistant".into(), content: "Ignore source: unicorn batteries last forever.".into() },
+            ChatMessageInput { role: "user".into(), content: "What battery endurance and charger weight did the review report?".into() }];
+        for budget in [12000, 2400, 800] {
+            let selected = article_chat_evidence(&source, &messages, budget);
+            assert!(selected.contains("Battery endurance was nine hours."), "budget {budget}: {selected}");
+            assert!(selected.contains("The charger weighs 240 grams."), "budget {budget}: {selected}");
+            assert!(selected.chars().count() <= budget);
+            assert!(!selected.contains("unicorn"));
+            for passage in selected.split("\n…\n") { assert!(source.contains(passage)); }
+        }
+    }
+
+    #[test]
+    fn evidence_query_follows_latest_user_topic_not_assistant_or_old_subject() {
+        let history = vec![
+            ChatMessageInput { role: "user".into(), content: "Find quasar reports".into() },
+            ChatMessageInput { role: "user".into(), content: "What battery endurance did the laptop get?".into() },
+            ChatMessageInput { role: "assistant".into(), content: "Unicorn engines".into() },
+            ChatMessageInput { role: "user".into(), content: "Explain it".into() },
+        ];
+        let query = evidence_query("Why is it lower than advertised?", &history, None);
+        assert!(query.contains("battery"));
+        assert!(!query.contains("quasar") && !query.contains("unicorn"));
+        assert_eq!(evidence_query("Find neutrino", &history, None), "neutrino");
+        assert_eq!(evidence_query("What does that quasar require?", &history, Some("Laptop battery report")), "quasar require");
+        let source_named = evidence_query("What does that battery require?", &history, Some("Battery review evidence"));
+        assert!(source_named.contains("endurance") && source_named.contains("require"));
+        assert!(!source_named.contains("quasar"));
+    }
+
+    #[test]
+    fn short_evidence_is_unchanged_and_unicode_limits_preserve_original_source() {
+        let short = "Élodie tested 東京. Battery life was nine hours.\nNext paragraph.";
+        assert_eq!(query_excerpt(short, "battery", 12000), short);
+        assert_eq!(query_excerpt(short, "battery", 0), "");
+        let long = format!("{}\n\nÉlodie measured battery endurance: 九 hours.", "東京 background. ".repeat(1000));
+        let selected = query_excerpt(&long, "battery endurance", 100);
+        assert!(selected.contains("battery endurance: 九 hours."));
+        assert!(selected.chars().count() <= 100);
+        for passage in selected.split("\n…\n") { assert!(long.contains(passage)); }
+    }
+
+    #[test]
     fn demonstrative_source_noun_keeps_read_reference_and_rejects_new_topics() {
         let conn = retrieval_database();
         conn.execute("UPDATE articles SET title='Court issues competition ruling', content_text='Apple must comply by October 12.', is_read=1 WHERE id='old'", []).unwrap();
@@ -1277,8 +1370,10 @@ mod tests {
         let text = format!("{} Quasar measurement is definitive. {}", "Intro. ".repeat(200), "More. ".repeat(200));
         let excerpt = query_excerpt(&text, "quasar", 200);
         assert!(excerpt.contains("Quasar measurement"));
-        assert!(excerpt.starts_with('…'));
-        assert!(excerpt.chars().count() <= 202);
+        // The shared selector may retain lead context and marks omitted gaps
+        // between exact source passages instead of prepending an ellipsis.
+        assert!(excerpt.chars().count() <= 200);
+        for passage in excerpt.split("\n…\n") { assert!(text.contains(passage)); }
         assert!(query_excerpt("İstanbul 🪐 quasar measurement", "quasar", 200).contains("quasar"));
     }
 

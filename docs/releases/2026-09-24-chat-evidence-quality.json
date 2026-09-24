@@ -1,0 +1,503 @@
+{
+  "date": "2026-09-24",
+  "scope": "Question-aware, verbatim chat evidence across production desktop and native iOS. This record does not pass general factual-answer acceptance.",
+  "bead": "skim-gqs7",
+  "baseline": {
+    "source_commit": "c4c8e9f483bb687a69161a7923a4d215a7514f40",
+    "baseline_debug_sha256": "fd83f6155d029543589a1af20dabf0b59dfadce4d8801fd04df01dee253127e7",
+    "baseline_responses": [
+      {
+        "case": "single_distant_facts",
+        "query": "What are the revised Atrium reopening date and authorized budget, and are they final?",
+        "response": {
+          "content": "The article does not mention a revised Atrium reopening date or an authorized budget. It only describes ongoing conservation work, routine record-keeping, and staff review of inventory sheets, noting that the document contains no schedule or financial decisions.\n\nTherefore, neither the reopening date nor the budget is provided or cannot be determined as final.",
+          "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "provider": "mlx",
+          "web_citations": []
+        },
+        "seconds": 2.765
+      },
+      {
+        "case": "library_distant_facts",
+        "query": "Find Harborline Atrium reopening articles and tell me the revised date and authorized budget. Are they final?",
+        "response": {
+          "article_ids": [
+            "antitrust-ruling"
+          ],
+          "content": "The provided article [1] discusses a phased reopening plan for the Harborline Museum, including conservation work and routine staff procedures. However, it does not mention a specific revised reopening date or an authorized budget. Additionally, the article states that \"some dates remain provisional,\" indicating the plan is not yet final. Therefore, no revised date or authorized budget is confirmed, and the information is not final.",
+          "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "provider": "mlx",
+          "sources": [
+            {
+              "feed_title": "Technology desk",
+              "id": "antitrust-ruling",
+              "published_at": 1,
+              "source_type": "article",
+              "title": "Harborline Museum reopening plan",
+              "url": null
+            }
+          ]
+        },
+        "seconds": 0.908
+      }
+    ],
+    "baseline_prompt_evidence": [
+      {
+        "contains_date": false,
+        "contains_final_budget": false,
+        "request_sha256": "69c46982be4322ba0b6b4f6f4e9852e2bf332dd82c9cd77bc55390aa104d91c7"
+      },
+      {
+        "contains_date": false,
+        "contains_final_budget": false,
+        "request_sha256": "cbf98f96c794202f35099b060423c361f1b802e04dc1b594fbd99e70c61ab06f"
+      }
+    ]
+  },
+  "fixture": {
+    "id": "antitrust-ruling",
+    "title": "Harborline Museum reopening plan",
+    "expected": {
+      "date": "March 17, 2028",
+      "date_status": "provisional; occupancy permit not issued",
+      "budget": "$5.8 million",
+      "previous_budget": "$4.2 million",
+      "budget_status": "final authorization"
+    },
+    "source_paragraph_runs": [
+      {
+        "paragraph": "Harborline Museum published a phased reopening plan. Conservation work is ongoing, and some dates remain provisional.",
+        "repeat": 1
+      },
+      {
+        "paragraph": "The conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures and contains no schedule or financial decision.",
+        "repeat": 80
+      },
+      {
+        "paragraph": "The Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.",
+        "repeat": 1
+      },
+      {
+        "paragraph": "The conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures and contains no schedule or financial decision.",
+        "repeat": 60
+      },
+      {
+        "paragraph": "The authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final.",
+        "repeat": 1
+      }
+    ],
+    "source_characters": 33080,
+    "source_sha256": "fcc091ebf71bad4ca50ee6d60f16dc20607422ea49b0ae6d0ca5f5950e065d5e",
+    "date_fact_offset": 18759,
+    "budget_fact_offset": 32912
+  },
+  "runtime": {
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "provider": "local MLX",
+    "fixture_library_articles": 526,
+    "network_article_fetch": false,
+    "web_search_enabled": false,
+    "user_library_modified": false,
+    "final_debug_sha256": "fb0cdef6406088de57a6ae435eaf004d3c8e9cfb265d3af5480513090ff7327d",
+    "candidate_debug_sha256": "d13e477ba4afcd4db4852982a6b2e6d3759329d8991126b88375414e7c0d0e50",
+    "candidate_responses": [
+      {
+        "case": "single_distant_facts",
+        "query": "What are the revised Atrium reopening date and authorized budget, and are they final?",
+        "response": {
+          "content": "The revised Atrium reopening date is **March 17, 2028**, which is **provisional** because the city has not yet issued the occupancy permit.  \n\nThe authorized budget increased to **$5.8 million**, which is **final** in amount but does not make the reopening date final.  \n\nSo:  \n- Reopening date: March 17, 2028 (provisional)  \n- Budget: $5.8 million (final)",
+          "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "provider": "mlx",
+          "web_citations": []
+        },
+        "seconds": 1.663
+      },
+      {
+        "case": "library_distant_facts",
+        "query": "Find Harborline Atrium reopening articles and tell me the revised date and authorized budget. Are they final?",
+        "response": {
+          "article_ids": [
+            "antitrust-ruling"
+          ],
+          "content": "The revised reopening date for the Harborline Atrium is March 17, 2028, though this date is provisional because the city has not issued the occupancy permit [1]. The authorized project budget increased to $5.8 million, but this funding authorization is final; however, it does not make the reopening date final [1].",
+          "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "provider": "mlx",
+          "sources": [
+            {
+              "feed_title": "Technology desk",
+              "id": "antitrust-ruling",
+              "published_at": 1,
+              "source_type": "article",
+              "title": "Harborline Museum reopening plan",
+              "url": null
+            }
+          ]
+        },
+        "seconds": 0.67
+      }
+    ],
+    "final_responses": [
+      {
+        "case": "single_distant_facts",
+        "query": "What are the revised Atrium reopening date and authorized budget, and are they final?",
+        "response": {
+          "content": "The revised Atrium reopening date is **March 17, 2028**, and this date is **provisional** because the city has not yet issued the occupancy permit.\n\nThe authorized project budget is **$5.8 million**, and while this funding authorization is final, it does **not** make the reopening date final.",
+          "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "provider": "mlx",
+          "web_citations": []
+        },
+        "seconds": 1.461
+      },
+      {
+        "case": "library_distant_facts",
+        "query": "Find Harborline Atrium reopening articles and tell me the revised date and authorized budget. Are they final?",
+        "response": {
+          "article_ids": [
+            "antitrust-ruling"
+          ],
+          "content": "The revised reopening date for the Harborline Atrium is March 17, 2028, though this date is provisional because the city has not issued the occupancy permit [1]. The authorized project budget increased to $5.8 million [1]. Neither the date nor the budget is final; both remain provisional [1].",
+          "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "provider": "mlx",
+          "sources": [
+            {
+              "feed_title": "Technology desk",
+              "id": "antitrust-ruling",
+              "published_at": 1,
+              "source_type": "article",
+              "title": "Harborline Museum reopening plan",
+              "url": null
+            }
+          ]
+        },
+        "seconds": 0.655
+      }
+    ],
+    "final_protocol": [
+      {
+        "direction": "request",
+        "packet": {
+          "command": "mlx_complete",
+          "jsonMode": false,
+          "maxTokens": 2048,
+          "messages": [
+            {
+              "content": "You are a helpful assistant discussing a news article. Answer questions about the article, provide context, and help the user understand the topic better. Be concise and direct. No emoji.\n\nArticle Title: Harborline Museum reopening plan\nSource: Technology desk\nAuthor: Unknown\n\nArticle Content:\nHarborline Museum published a phased reopening plan. Conservation work is ongoing, and some dates remain provisional.\n…\nThe Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.\n…\nThe authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final.",
+              "role": "system"
+            },
+            {
+              "content": "What are the revised Atrium reopening date and authorized budget, and are they final?",
+              "role": "user"
+            }
+          ],
+          "repoId": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "system": "You are a helpful assistant discussing a news article. Answer questions about the article, provide context, and help the user understand the topic better. Be concise and direct. No emoji.\n\nArticle Title: Harborline Museum reopening plan\nSource: Technology desk\nAuthor: Unknown\n\nArticle Content:\nHarborline Museum published a phased reopening plan. Conservation work is ongoing, and some dates remain provisional.\n…\nThe Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.\n…\nThe authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final.",
+          "temperature": 0.5,
+          "user": "user: What are the revised Atrium reopening date and authorized budget, and are they final?"
+        }
+      },
+      {
+        "direction": "response",
+        "packet": {
+          "value": "The revised Atrium reopening date is **March 17, 2028**, and this date is **provisional** because the city has not yet issued the occupancy permit.\n\nThe authorized project budget is **$5.8 million**, and while this funding authorization is final, it does **not** make the reopening date final.",
+          "ok": true
+        }
+      },
+      {
+        "direction": "request",
+        "packet": {
+          "command": "mlx_complete",
+          "jsonMode": false,
+          "maxTokens": 2048,
+          "messages": [
+            {
+              "content": "You answer the user's questions about articles from their RSS feed. Prefer the articles below as evidence and cite them with their bracket number like [2]. Be concise. No emoji.\n\nRelevant articles from the user's RSS feed:\n\n[1] Title: Harborline Museum reopening plan\nSource: Technology desk\nAuthor: \nDate: 1970-01-01\nURL: \nExcerpt: Harborline Museum published a phased reopening plan. Conservation work is ongoing, and some dates remain provisional.\n…\nThe Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.\n…\nThe authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final.\n\n",
+              "role": "system"
+            },
+            {
+              "content": "Find Harborline Atrium reopening articles and tell me the revised date and authorized budget. Are they final?",
+              "role": "user"
+            }
+          ],
+          "repoId": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "system": "You answer the user's questions about articles from their RSS feed. Prefer the articles below as evidence and cite them with their bracket number like [2]. Be concise. No emoji.\n\nRelevant articles from the user's RSS feed:\n\n[1] Title: Harborline Museum reopening plan\nSource: Technology desk\nAuthor: \nDate: 1970-01-01\nURL: \nExcerpt: Harborline Museum published a phased reopening plan. Conservation work is ongoing, and some dates remain provisional.\n…\nThe Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.\n…\nThe authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final.\n\n",
+          "temperature": 0.4,
+          "user": "user: Find Harborline Atrium reopening articles and tell me the revised date and authorized budget. Are they final?"
+        }
+      },
+      {
+        "direction": "response",
+        "packet": {
+          "value": "The revised reopening date for the Harborline Atrium is March 17, 2028, though this date is provisional because the city has not issued the occupancy permit [1]. The authorized project budget increased to $5.8 million [1]. Neither the date nor the budget is final; both remain provisional [1].",
+          "ok": true
+        }
+      }
+    ]
+  },
+  "assessment": {
+    "baseline": "Neither request contained either late fact; both answers reported those facts absent.",
+    "candidate": "Both answers stated the date, final funding and provisional opening correctly. Candidate preceded final Unicode/context regressions and is not final-build acceptance.",
+    "final_source_selection": "Both final requests contain the same original date, missing-permit, budget and finality passages. Source cutoff defect is resolved.",
+    "final_single_answer": "Correct date, provisional status, missing occupancy permit and final funding.",
+    "final_library_answer": "Correct date, amount and citation; incorrect claim that funding is provisional. Explicit final funding sentence was in its input.",
+    "factual_quality_pass": false,
+    "remaining_issue": "skim-cg5e",
+    "limits": "One synthetic long article and two production commands are development evidence, not representative news accuracy. Existing nonzero provider sampling is unchanged; a successful candidate answer cannot erase final failure."
+  },
+  "checks": {
+    "rust": 172,
+    "swift_core": 146,
+    "native_app_simulator": 37,
+    "frontend": 156,
+    "shared_inference": 16,
+    "packaging": 3,
+    "total": 530,
+    "excluded": [
+      "Rust GGUF local-model integration fixture unavailable"
+    ]
+  },
+  "shared_fixture_cases": 12,
+  "standalone_selector_audit": [
+    {
+      "name": "distant_qualifiers_800",
+      "budget": 800,
+      "source_chars": 33080,
+      "selected_chars": 462,
+      "seconds": 0.0038,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Harborline Museum published a phased reopening plan. Conservation work is ongoing, and some dates remain provisional.\n…\nThe Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.\n…\nThe authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final."
+    },
+    {
+      "name": "distant_qualifiers_2400",
+      "budget": 2400,
+      "source_chars": 33080,
+      "selected_chars": 462,
+      "seconds": 0.0032,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Harborline Museum published a phased reopening plan. Conservation work is ongoing, and some dates remain provisional.\n…\nThe Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.\n…\nThe authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final."
+    },
+    {
+      "name": "distant_qualifiers_4200",
+      "budget": 4200,
+      "source_chars": 33080,
+      "selected_chars": 462,
+      "seconds": 0.0032,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Harborline Museum published a phased reopening plan. Conservation work is ongoing, and some dates remain provisional.\n…\nThe Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.\n…\nThe authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final."
+    },
+    {
+      "name": "distant_qualifiers_12000",
+      "budget": 12000,
+      "source_chars": 33080,
+      "selected_chars": 462,
+      "seconds": 0.0028,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Harborline Museum published a phased reopening plan. Conservation work is ongoing, and some dates remain provisional.\n…\nThe Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.\n…\nThe authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final."
+    },
+    {
+      "name": "unicode_space",
+      "budget": 800,
+      "source_chars": 42955,
+      "selected_chars": 95,
+      "seconds": 0.0007,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Ordinary inventory notes repeat here.\n…\nBattery voltage is 43 volts. This value is preliminary."
+    },
+    {
+      "name": "cjk_punctuation",
+      "budget": 800,
+      "source_chars": 42915,
+      "selected_chars": 55,
+      "seconds": 0.0007,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Ordinary inventory notes repeat here.\n…\n東京。展示予算は九百万円です。"
+    },
+    {
+      "name": "unpunctuated",
+      "budget": 800,
+      "source_chars": 70052,
+      "selected_chars": 194,
+      "seconds": 0.0012,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "archive notes archive notes archive notes archive notes archive\n…\nnotes archive notes archive notes archive notes archive notes archive notes  battery voltage is 43 volts and remains provisional"
+    },
+    {
+      "name": "summary_lead",
+      "budget": 2400,
+      "source_chars": 33080,
+      "selected_chars": 2400,
+      "seconds": 0.0007,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true,
+        "uses_lead_budget": true
+      },
+      "pass": true,
+      "text": "Harborline Museum published a phased reopening plan. Conservation work is ongoing, and some dates remain provisional.\n\nThe conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures and contains no schedule or financial decision.\n\nThe conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures and contains no schedule or financial decision.\n\nThe conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures and contains no schedule or financial decision.\n\nThe conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures and contains no schedule or financial decision.\n\nThe conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures and contains no schedule or financial decision.\n\nThe conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures and contains no schedule or financial decision.\n\nThe conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures and contains no schedule or financial decision.\n\nThe conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures and contains no schedule or financial decision.\n\nThe conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures and contains no schedule or financial decision.\n\nThe conservation team records storage conditions and checks display mounts. Staff review the same inventory sheets during each shift. This routine record describes handling procedures "
+    },
+    {
+      "name": "large_source",
+      "budget": 800,
+      "source_chars": 1501557,
+      "selected_chars": 95,
+      "seconds": 0.0331,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Ordinary inventory notes repeat here.\n…\nBattery voltage is 43 volts. This value is preliminary."
+    },
+    {
+      "name": "lead_coverage",
+      "budget": 2400,
+      "source_chars": 42980,
+      "selected_chars": 81,
+      "seconds": 0.001,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "The deadline for the lawsuit was announced.\n…\nThe lawsuit deadline is October 12."
+    },
+    {
+      "name": "smart_quotes",
+      "budget": 800,
+      "source_chars": 42945,
+      "selected_chars": 85,
+      "seconds": 0.0007,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Ordinary inventory notes repeat here.\n…\nThe “lawsuit” requires filings on October 12."
+    },
+    {
+      "name": "em_dash",
+      "budget": 800,
+      "source_chars": 42943,
+      "selected_chars": 83,
+      "seconds": 0.0007,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Ordinary inventory notes repeat here.\n…\nThe lawsuit—requires filings on October 12."
+    },
+    {
+      "name": "accent_fold",
+      "budget": 800,
+      "source_chars": 42948,
+      "selected_chars": 88,
+      "seconds": 0.0008,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Ordinary inventory notes repeat here.\n…\nÉLODIE confirmed the gallery reopens in October."
+    },
+    {
+      "name": "expanding_fold",
+      "budget": 800,
+      "source_chars": 42936,
+      "selected_chars": 76,
+      "seconds": 0.0007,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Ordinary inventory notes repeat here.\n…\nStraße remains closed until October."
+    },
+    {
+      "name": "cyrillic_fold",
+      "budget": 800,
+      "source_chars": 42935,
+      "selected_chars": 75,
+      "seconds": 0.0008,
+      "checks": {
+        "has_required": true,
+        "within_budget": true,
+        "original_spans": true,
+        "nonempty": true
+      },
+      "pass": true,
+      "text": "Ordinary inventory notes repeat here.\n…\nМОСКВА объявила открытие в октябре."
+    }
+  ],
+  "sanitizers": {
+    "iterations": 3000,
+    "tools": [
+      "AddressSanitizer",
+      "UndefinedBehaviorSanitizer"
+    ],
+    "result": "passed",
+    "scope": "Deterministic UTF-8, span boundaries, budgets and FFI arguments; separate from unit-test count."
+  },
+  "source_sha256": {
+    "shared/SkimStoryPolicy/Sources/SkimStoryPolicy/SkimStoryPolicy.c": "cdf18e8dbafcb8ed5963ff79fab9b78202c6496f1923a9cfa901c637ba00e1d0",
+    "shared/SkimStoryPolicy/Sources/SkimStoryPolicy/SkimUnicodeCaseFold.h": "c5931989516a8c466922cd90b9daabeabd2d2836a3cf892882a472d35ba6c27e",
+    "shared/fixtures/chat-evidence.json": "34574d4713749e050bc444e1bce3bc9bed71a8460237c80328d750f705d38513",
+    "scripts/generate-chat-casefold.py": "c1b49ea8bd571212b3070d03d1ea230b30a434960687986237f5e2d1b217d1a4"
+  },
+  "installed_native_acceptance": "Still blocked: native computer control reports locked Mac. No Terms accepted or bypassed; browser/backend tests do not prove installed native behavior."
+}

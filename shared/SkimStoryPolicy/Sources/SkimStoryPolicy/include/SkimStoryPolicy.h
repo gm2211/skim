@@ -9,6 +9,11 @@ extern "C" {
 #endif
 
 /* Plain scalar ABI: no allocation or ownership transfer crosses the ABI. */
+/* Each bit represents one of at most 32 distinct query terms. Coverage of
+ * another term outweighs every possible secondary field-weight difference. */
+int32_t skim_chat_rank(uint32_t title_terms, uint32_t url_terms,
+                       uint32_t source_terms, uint32_t body_terms);
+
 typedef struct {
     double duplicate;
     double coverage;

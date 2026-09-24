@@ -40,6 +40,10 @@ A successful but invalid JSON response receives at most one plaintext retry usin
 
 This shared instruction source removes duplication and conflicting directives; it does not make generated claims reliable. The [summary quality record](../../docs/releases/2026-09-24-summary-policy-quality.json) records remaining factual failures on small, independently reviewed local-model samples. Full-source evidence, compatible prompts and correct bindings are necessary but insufficient for output accuracy.
 
+## Library-chat relevance
+
+`skim_chat_rank` takes four UInt32 term masks (title, URL, source and body). It rewards distinct term coverage by 512 before field weights (6/4/2/1), so even the largest 32-term field bonus cannot let fewer matched terms outrank more. Both production retrieval adapters call it before limiting context to 15 articles; the nine-case `chat-ranking.json` fixture crosses both bindings. Tokenization, scope filtering, cache evidence selection and follow-up classification remain separate adapters. Native retrieval scans scoped rows without the previous 500-row visibility cutoff and retains only its best 15 rows.
+
 ## Release-path proof and remaining limits
 
 Desktop **0.1.30** and iOS **0.1.13 (67)** artifacts contain **26 shared C symbols**, including summary style, length plan and bounds. The separate `SkimInferencePolicy` package contributes **71 shared Swift policy symbols each** to the desktop helper and iOS evidence. The bundled desktop helper's code section matches the freshly compiled helper; signing changes its whole-file digest. Exact hashes, the matching iOS executable/dSYM UUID, and Apple's processing/beta state are in the [release record](../../docs/releases/2026-09-24-summary-limits-release.json).

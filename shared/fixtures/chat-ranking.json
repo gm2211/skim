@@ -1,0 +1,74 @@
+[
+  {
+    "name": "none",
+    "title_terms": 0,
+    "url_terms": 0,
+    "source_terms": 0,
+    "body_terms": 0,
+    "rank": 0
+  },
+  {
+    "name": "title partial",
+    "title_terms": 1,
+    "url_terms": 0,
+    "source_terms": 0,
+    "body_terms": 0,
+    "rank": 518
+  },
+  {
+    "name": "two body terms",
+    "title_terms": 0,
+    "url_terms": 0,
+    "source_terms": 0,
+    "body_terms": 3,
+    "rank": 1026
+  },
+  {
+    "name": "same term all fields",
+    "title_terms": 1,
+    "url_terms": 1,
+    "source_terms": 1,
+    "body_terms": 1,
+    "rank": 525
+  },
+  {
+    "name": "four distinct fields",
+    "title_terms": 1,
+    "url_terms": 2,
+    "source_terms": 4,
+    "body_terms": 8,
+    "rank": 2061
+  },
+  {
+    "name": "highest bit",
+    "title_terms": 2147483648,
+    "url_terms": 0,
+    "source_terms": 0,
+    "body_terms": 0,
+    "rank": 518
+  },
+  {
+    "name": "all32",
+    "title_terms": 4294967295,
+    "url_terms": 4294967295,
+    "source_terms": 4294967295,
+    "body_terms": 4294967295,
+    "rank": 16800
+  },
+  {
+    "name": "31 richest terms",
+    "title_terms": 2147483647,
+    "url_terms": 2147483647,
+    "source_terms": 2147483647,
+    "body_terms": 2147483647,
+    "rank": 16275
+  },
+  {
+    "name": "32 body only",
+    "title_terms": 0,
+    "url_terms": 0,
+    "source_terms": 0,
+    "body_terms": 4294967295,
+    "rank": 16416
+  }
+]

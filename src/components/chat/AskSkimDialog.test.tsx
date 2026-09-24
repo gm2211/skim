@@ -20,6 +20,27 @@ beforeEach(() => {
 });
 
 describe("AskSkimDialog setup recovery", () => {
+  it("keeps uncited candidates collapsed and preserves their original citation numbers when opened", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    const onOpenArticle = vi.fn();
+    vi.mocked(chatWithArticles).mockResolvedValueOnce({
+      content: "Court evidence [2]",
+      sources: ["Wallpaper", "Court ruling", "Phone colors"].map((title, index) => ({
+        id: `source-${index}`, title, feed_title: "Desk", url: null, published_at: null, source_type: "article" as const,
+      })),
+      provider: "openai", model: "test", article_ids: ["source-0", "source-1", "source-2"],
+    });
+    const user = userEvent.setup();
+    render(<AskSkimDialog onClose={vi.fn()} onOpenArticle={onOpenArticle} />);
+    await user.type(screen.getByRole("textbox"), "Find court ruling");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByRole("button", { name: /\[2\] Court ruling/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Wallpaper/ })).not.toBeVisible();
+    await user.click(screen.getByText("Also searched (2)"));
+    await user.click(screen.getByRole("button", { name: /\[3\] Phone colors/ }));
+    expect(onOpenArticle).toHaveBeenCalledWith("source-2");
+  });
+
   it("restores composer focus after a fast response and restores opener only on ordinary close", async () => {
     settings = { ai: { provider: "openai", chat_provider: "same" } };
     const opener = document.createElement("button");

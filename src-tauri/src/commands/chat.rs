@@ -264,6 +264,38 @@ fn is_contextual_followup(query: &str) -> bool {
     }
 }
 
+/// A demonstrative noun is contextual only when the cited source actually
+/// contains it. This does not broaden arbitrary pronouns or explicit searches.
+fn referenced_subject(query: &str) -> Option<String> {
+    if is_find_request(query) { return None; }
+    let words: Vec<String> = query.split(|ch: char| !ch.is_alphanumeric())
+        .filter(|word| !word.is_empty()).map(str::to_lowercase).collect();
+    if words.len() < 4 || !["how", "why", "what"].contains(&words[0].as_str())
+        || !["does", "do", "did", "is", "are", "was", "were", "would", "will", "can", "could", "should"].contains(&words[1].as_str())
+        || !["this", "that", "these", "those"].contains(&words[2].as_str()) {
+        return None;
+    }
+    Some(words[3].clone())
+}
+
+fn subject_matches_references(
+    conn: &rusqlite::Connection, query: &str,
+    references: &[crate::db::models::ArticleWithFeed],
+) -> Result<bool, rusqlite::Error> {
+    let Some(subject) = referenced_subject(query) else { return Ok(false); };
+    for reference in references {
+        if word_match(&reference.article.title, &subject)
+            || word_match(&reference.feed_title, &subject)
+            || word_match(&super::article_body::feed_body_text(&reference.article), &subject) {
+            return Ok(true);
+        }
+        if let Some((html, _)) = queries::get_reader_cache(conn, &reference.article.id)? {
+            if word_match(&html2text::from_read(html.as_bytes(), 10000), &subject) { return Ok(true); }
+        }
+    }
+    Ok(false)
+}
+
 fn retrieval_topic(query: &str, messages: &[ChatMessageInput]) -> (Vec<String>, bool) {
     let terms = topic_keywords(query);
     if is_contextual_followup(query) {
@@ -311,21 +343,32 @@ fn retrieve_chat_articles_for_terms(
         "inbox" => "COALESCE(t.priority, 0) >= 3",
         _ => "1 = 1",
     };
+    conn.create_scalar_function("skim_chat_rank", 4,
+        rusqlite::functions::FunctionFlags::SQLITE_UTF8 | rusqlite::functions::FunctionFlags::SQLITE_DETERMINISTIC,
+        |context| {
+            Ok(crate::db::story_policy::chat_rank(context.get::<u32>(0)?, context.get::<u32>(1)?,
+                context.get::<u32>(2)?, context.get::<u32>(3)?))
+        })?;
     let mut parameters: Vec<String> = Vec::new();
-    let score = terms.iter().map(|term| {
+    let mut masks: [Vec<String>; 4] = Default::default();
+    for (index, term) in terms.iter().take(32).enumerate() {
         parameters.push(term.clone());
         let n = parameters.len();
-        // Short acronyms must not match "daily" or "mail", even inside a URL.
-        // Longer URL fragments still support domain/path discovery.
+        // SQLite integers are signed 64-bit, so bit31 remains a positive value.
+        let bit = 1i64 << index;
+        // Preserve acronym boundaries and longer URL/domain substring matching.
         let url_match = if term.chars().count() < 3 {
             format!("skim_chat_word(COALESCE(a.url, ''), ?{n})")
         } else { format!("instr(lower(COALESCE(a.url, '')), ?{n}) > 0") };
-        format!("(CASE WHEN skim_chat_word(a.title, ?{n}) THEN 6 ELSE 0 END
-            + CASE WHEN {url_match} THEN 4 ELSE 0 END
-            + CASE WHEN skim_chat_word(f.title, ?{n}) THEN 2 ELSE 0 END
-            + CASE WHEN skim_chat_word(COALESCE(a.content_text, '') || ' ' || COALESCE(a.content_html, '') || ' ' || COALESCE(c.html, ''), ?{n}) THEN 1 ELSE 0 END)")
-    }).collect::<Vec<_>>().join(" + ");
-    let score = if score.is_empty() { "0".to_string() } else { score };
+        let matches = [format!("skim_chat_word(a.title, ?{n})"), url_match,
+            format!("skim_chat_word(f.title, ?{n})"),
+            format!("skim_chat_word(COALESCE(a.content_text, '') || ' ' || COALESCE(a.content_html, '') || ' ' || COALESCE(c.html, ''), ?{n})")];
+        for (mask, predicate) in masks.iter_mut().zip(matches) {
+            mask.push(format!("CASE WHEN {predicate} THEN {bit} ELSE 0 END"));
+        }
+    }
+    let masks = masks.map(|mask| if mask.is_empty() { "0".to_string() } else { mask.join(" | ") });
+    let score = format!("skim_chat_rank(({}), ({}), ({}), ({}))", masks[0], masks[1], masks[2], masks[3]);
     let sql = format!("SELECT a.id, ({score}) AS relevance FROM articles a
         JOIN feeds f ON f.id = a.feed_id
         LEFT JOIN article_reader_cache c ON c.article_id = a.id
@@ -359,12 +402,12 @@ fn retrieve_chat_articles_with_references(
     messages: &[ChatMessageInput],
     prior_article_ids: &[String],
 ) -> Result<Vec<crate::db::models::ArticleWithFeed>, rusqlite::Error> {
-    if is_contextual_followup(query) {
-        let mut references = Vec::new();
-        for id in prior_article_ids.iter().take(15) {
-            if references.iter().any(|article: &crate::db::models::ArticleWithFeed| article.article.id == *id) { continue; }
-            if let Some(article) = queries::get_article_by_id(conn, id)? { references.push(article); }
-        }
+    let mut references = Vec::new();
+    for id in prior_article_ids.iter().take(15) {
+        if references.iter().any(|article: &crate::db::models::ArticleWithFeed| article.article.id == *id) { continue; }
+        if let Some(article) = queries::get_article_by_id(conn, id)? { references.push(article); }
+    }
+    if is_contextual_followup(query) || subject_matches_references(conn, query, &references)? {
         if !references.is_empty() {
             let current_terms = topic_keywords(query);
             if !current_terms.is_empty() && references.len() < 15 {
@@ -1028,6 +1071,58 @@ mod tests {
     }
 
     #[test]
+    fn demonstrative_source_noun_keeps_read_reference_and_rejects_new_topics() {
+        let conn = retrieval_database();
+        conn.execute("UPDATE articles SET title='Court issues competition ruling', content_text='Apple must comply by October 12.', is_read=1 WHERE id='old'", []).unwrap();
+        conn.execute("UPDATE articles SET title='Wallpaper for October 12', content_text='Download wallpaper' WHERE id='url'", []).unwrap();
+        let history = vec![ChatMessageInput { role: "user".into(), content: "Find Apple antitrust articles.".into() }];
+        let prior = vec!["old".into()];
+        let result = ids(retrieve_chat_articles_with_references(&conn, "unread",
+            "What does that ruling require by October 12?", &history, &prior).unwrap());
+        assert_eq!(result[0], "old");
+        assert!(result.contains(&"url".to_string()));
+        let new_topic = ids(retrieve_chat_articles_with_references(&conn, "unread",
+            "What does that quasar measurement mean?", &history, &prior).unwrap());
+        assert_eq!(new_topic, vec!["cached"]);
+        for query in ["Find that ruling", "Search for that ruling", "What does that ruling require? Find articles."] {
+            assert!(!ids(retrieve_chat_articles_with_references(&conn, "unread", query, &history, &prior).unwrap()).contains(&"old".to_string()));
+        }
+        // Cached extracted prose and source names also establish the subject.
+        conn.execute("UPDATE articles SET is_read=1 WHERE id='cached'", []).unwrap();
+        for query in ["What does that measurement mean?", "What does that publication say?"] {
+            assert_eq!(ids(retrieve_chat_articles_with_references(&conn, "unread", query, &history, &["cached".into()]).unwrap())[0], "cached");
+        }
+    }
+
+    #[test]
+    fn complete_topic_body_beats_more_than_fifteen_partial_titles_before_limit() {
+        let conn = retrieval_database();
+        conn.execute("UPDATE articles SET title='Court issues competition ruling', content_text='Apple faces a new antitrust ruling.', is_read=0 WHERE id='old'", []).unwrap();
+        for index in 0..20 {
+            conn.execute("INSERT INTO articles(id,feed_id,title,content_text,fetched_at) VALUES (?1,'f','Apple releases a new phone wallpaper','Wallpaper colors',?2)",
+                rusqlite::params![format!("wallpaper-{index}"), 5000 + index]).unwrap();
+        }
+        let result = ids(retrieve_chat_articles(&conn, "unread", "find Apple antitrust articles", &[]).unwrap());
+        assert_eq!(result.len(), 15);
+        assert_eq!(result[0], "old");
+        conn.execute("UPDATE articles SET is_read=1 WHERE id='old'", []).unwrap();
+        assert!(!ids(retrieve_chat_articles(&conn, "unread", "find Apple antitrust articles", &[]).unwrap()).contains(&"old".to_string()));
+        assert_eq!(ids(retrieve_chat_articles(&conn, "all", "find Apple antitrust articles", &[]).unwrap())[0], "old");
+    }
+
+    #[test]
+    fn ranking_supports_all_32_sql_mask_bits_and_preserves_date_id_ties() {
+        let conn = retrieval_database();
+        let terms: Vec<String> = (0..32).map(|n| format!("term{n}")).collect();
+        conn.execute("UPDATE articles SET content_text=?1, title='Match', fetched_at=1 WHERE id='old'", [terms.join(" ")]).unwrap();
+        for id in ["tie-b", "tie-a"] {
+            conn.execute("INSERT INTO articles(id,feed_id,title,content_text,fetched_at) VALUES (?1,'f','Match',?2,99)", rusqlite::params![id, terms.join(" ")]).unwrap();
+        }
+        assert_eq!(ids(retrieve_chat_articles_for_terms(&conn, "all", &terms, false).unwrap()), vec!["tie-a", "tie-b", "old"]);
+        assert_eq!(ids(retrieve_chat_articles_for_terms(&conn, "all", &terms[31..], false).unwrap()), vec!["tie-a", "tie-b", "old"]);
+    }
+
+    #[test]
     fn library_retrieval_finds_old_titles_urls_and_reader_cache_without_fillers() {
         let conn = retrieval_database();
         for (query, expected) in [("find neutrino", "old"), ("find singular-domain", "url"), ("find quasar", "cached")] {
@@ -1100,6 +1195,9 @@ mod tests {
     fn anaphoric_questions_keep_opened_laptop_reference_without_broadening_new_searches() {
         let conn = retrieval_database();
         conn.execute("UPDATE articles SET title='Laptop review', content_text='Battery lasted nine hours; advertised battery life was twelve hours', is_read=1 WHERE id='cached'", []).unwrap();
+        // This fixture now represents a laptop, including its reader evidence;
+        // the unrelated seeded quasar cache would make "that quasar" contextual.
+        conn.execute("UPDATE article_reader_cache SET html='<p>Battery lasted nine hours.</p>' WHERE article_id='cached'", []).unwrap();
         let mut history = vec![ChatMessageInput { role: "user".into(), content: "Find the laptop review. What battery life did the reviewer get?".into() },
             ChatMessageInput { role: "assistant".into(), content: "Nine hours [1].".into() }];
         let prior = vec!["cached".into()];

@@ -36,6 +36,28 @@ final class ExtractedContentCache: @unchecked Sendable {
     }
 }
 
+/// Immutable scope captured when library chat opens. An empty folder remains empty.
+struct LibraryChatScope: Sendable {
+    var filter: ArticleFilter
+    var feedIDs: [String]?
+    var sessionKey: String
+
+    init(filter: ArticleFilter, feedIDs: [String]?, folderID: String?, listMode: String) {
+        self.filter = filter
+        self.feedIDs = feedIDs?.sorted()
+        let fields: [String: Any] = [
+            "feed": filter.feedID as Any? ?? NSNull(),
+            "folder": folderID as Any? ?? NSNull(),
+            "feeds": self.feedIDs as Any? ?? NSNull(),
+            "read": String(describing: filter.readState), "starred": filter.starredOnly,
+            "search": filter.searchQuery?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            "mode": listMode,
+        ]
+        let data = try! JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys])
+        self.sessionKey = "library:" + String(decoding: data, as: UTF8.self)
+    }
+}
+
 enum ArticleListMode: String, CaseIterable, Identifiable {
     case unread
     case all
@@ -747,6 +769,55 @@ final class AppModel: ObservableObject {
 
     func updatedArticle(id: String) async -> Article? {
         try? await store.article(id: id)
+    }
+
+    func captureLibraryChatScope() -> LibraryChatScope {
+        LibraryChatScope(filter: filter,
+                         feedIDs: isSearchActive ? nil : selectedFolderFeedIDs.map { Array($0) },
+                         folderID: isSearchActive ? nil : selectedFolderID,
+                         listMode: isSearchActive ? "search" : listMode.rawValue)
+    }
+
+    func articlesForLibraryChat(scope: LibraryChatScope, conversation: AIChatConversation) async throws -> [Article] {
+        try await Self.libraryChatArticles(store: store, scope: scope, conversation: conversation)
+    }
+
+    static func libraryChatArticles(store: SkimStore, scope: LibraryChatScope, conversation: AIChatConversation) async throws -> [Article] {
+        // Opening a cited source can add reader evidence and mark it read. Refresh its
+        // bounded offline evidence before deciding whether a source-named question refers back.
+        let snapshots = conversation.priorArticleReferences.isEmpty
+            ? conversation.priorArticleContext : conversation.priorArticleReferences
+        var previous: [Article] = []
+        for prior in snapshots.prefix(15) {
+            try Task.checkCancellation()
+            var article = (try? await store.article(id: prior.id)) ?? prior
+            let cached = try? await store.cachedReaderText(articleID: prior.id)
+            var htmlOnly = article
+            htmlOnly.contentText = nil
+            let feedBody = ArticleReaderContentLoader.displayBody(for: article)
+            let htmlBody = ArticleReaderContentLoader.displayBody(for: htmlOnly)
+            let memory = ExtractedContentCache.shared.get(prior.id)
+            if let fullest = [feedBody, htmlBody, prior.contentText, cached, memory].compactMap({ $0 }).max(by: { $0.count < $1.count }) {
+                article.contentText = fullest
+            }
+            if !previous.contains(where: { $0.id == article.id }) { previous.append(article) }
+        }
+        let referenceTexts = previous.map { "\($0.title)\n\($0.feedTitle)\n\($0.contentText ?? "")" }
+        let topic = LibraryChatPolicy.retrievalTopic(query: conversation.latestQuestion,
+            priorUserQueries: conversation.priorTurns.filter { $0.role == .user }.map(\.text), referenceTexts: referenceTexts)
+        let isFollowup = LibraryChatPolicy.isContextualFollowup(conversation.latestQuestion, referenceTexts: referenceTexts)
+        let retainsReferences = isFollowup && !previous.isEmpty
+        let terms = retainsReferences ? LibraryChatPolicy.topicKeywords(conversation.latestQuestion) : topic.terms
+        let matches = try await store.searchArticlesForChat(filter: scope.filter, feedIDs: scope.feedIDs,
+            terms: terms, allowRecentFallback: !retainsReferences && topic.allowRecentFallback, limit: 15)
+        try Task.checkCancellation()
+        guard retainsReferences else { return matches }
+        var selected = previous
+        for article in matches where !selected.contains(where: { $0.id == article.id }) {
+            if selected.count == 15 { break }
+            selected.append(article)
+        }
+        return selected
     }
 
     func articlesForAIContext(preferred: [Article], limit: Int = 45) async throws -> [Article] {

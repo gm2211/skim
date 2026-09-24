@@ -284,7 +284,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
  * The answer cites articles by bracket number, but every candidate the search
  * ranked was listed under "Sources" regardless — up to fifteen of them, most of
  * which the answer never used. The ones it cited come first under Sources; the
- * rest are still reachable, under the heading that says what they actually are.
+ * rest stay reachable in a collapsed disclosure so they cannot bury the answer.
  */
 function SourceGroups({
   sources,
@@ -298,87 +298,96 @@ function SourceGroups({
   onClose: () => void;
 }) {
   const { cited, searched } = partitionSources(sources, content);
-  const groups: { label: string; items: NumberedSource[] }[] = [];
-  if (cited.length > 0) groups.push({ label: "Sources", items: cited });
-  if (searched.length > 0) {
-    groups.push({ label: cited.length > 0 ? "Also searched" : "Searched", items: searched });
-  }
+  const renderSources = (items: NumberedSource[]) => (
+    <div className="flex flex-col gap-1">
+      {items.map(({ source: s, number }) => {
+        const isWeb = s.source_type === "web";
+        return (
+          <button
+            key={s.id}
+            onClick={() => {
+              if (isWeb && s.url) {
+                openUrl(s.url);
+              } else if (onOpenArticle) {
+                onOpenArticle(s.id);
+                onClose();
+              } else if (s.url) {
+                openUrl(s.url);
+              }
+            }}
+            className="text-left rounded-lg border border-white/5 hover:border-accent/30 hover:bg-white/5 transition-colors"
+            style={{ padding: "6px 10px" }}
+          >
+            <div className="flex items-start gap-2">
+              <span
+                className="text-text-muted tabular-nums flex-shrink-0 flex items-center gap-1"
+                style={{ fontSize: 11, fontWeight: 600, marginTop: 1 }}
+              >
+                {isWeb ? (
+                  <svg
+                    width="11"
+                    height="11"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-label="Web source"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M2 12h20" />
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                  </svg>
+                ) : null}
+                {number === null ? "Web" : `[${number}]`}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div
+                  className="text-text-primary truncate"
+                  style={{ fontSize: 12, fontWeight: 500 }}
+                >
+                  {s.title}
+                </div>
+                <div className="text-text-muted truncate" style={{ fontSize: 11 }}>
+                  {s.feed_title}
+                  {s.published_at && (
+                    <>
+                      {" · "}
+                      {new Date(s.published_at * 1000).toLocaleDateString()}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div style={{ marginTop: 8, paddingLeft: 4 }}>
-      {groups.map((group) => (
-        <div key={group.label} style={{ marginBottom: 6 }}>
+      {cited.length > 0 && (
+        <div style={{ marginBottom: 6 }}>
           <div
             className="text-text-muted uppercase tracking-wider"
             style={{ fontSize: 10, fontWeight: 600, marginBottom: 4 }}
           >
-            {group.label}
+            Sources
           </div>
-          <div className="flex flex-col gap-1">
-            {group.items.map(({ source: s, number }) => {
-              const isWeb = s.source_type === "web";
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => {
-                    if (isWeb && s.url) {
-                      openUrl(s.url);
-                    } else if (onOpenArticle) {
-                      onOpenArticle(s.id);
-                      onClose();
-                    } else if (s.url) {
-                      openUrl(s.url);
-                    }
-                  }}
-                  className="text-left rounded-lg border border-white/5 hover:border-accent/30 hover:bg-white/5 transition-colors"
-                  style={{ padding: "6px 10px" }}
-                >
-                  <div className="flex items-start gap-2">
-                    <span
-                      className="text-text-muted tabular-nums flex-shrink-0 flex items-center gap-1"
-                      style={{ fontSize: 11, fontWeight: 600, marginTop: 1 }}
-                    >
-                      {isWeb ? (
-                        <svg
-                          width="11"
-                          height="11"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          aria-label="Web source"
-                        >
-                          <circle cx="12" cy="12" r="10" />
-                          <path d="M2 12h20" />
-                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                        </svg>
-                      ) : null}
-                      {number === null ? "Web" : `[${number}]`}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div
-                        className="text-text-primary truncate"
-                        style={{ fontSize: 12, fontWeight: 500 }}
-                      >
-                        {s.title}
-                      </div>
-                      <div className="text-text-muted truncate" style={{ fontSize: 11 }}>
-                        {s.feed_title}
-                        {s.published_at && (
-                          <>
-                            {" · "}
-                            {new Date(s.published_at * 1000).toLocaleDateString()}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+          {renderSources(cited)}
         </div>
-      ))}
+      )}
+      {searched.length > 0 && (
+        <details>
+          <summary
+            className="text-text-muted cursor-pointer rounded-lg hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            style={{ padding: "12px 10px", minHeight: 44, fontSize: 12 }}
+          >
+            {cited.length > 0 ? "Also searched" : "Searched"} ({searched.length})
+          </summary>
+          {renderSources(searched)}
+        </details>
+      )}
     </div>
   );
 }

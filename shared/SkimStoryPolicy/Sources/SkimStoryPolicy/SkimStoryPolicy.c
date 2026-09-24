@@ -3,6 +3,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+static int32_t chat_term_count(uint32_t terms) {
+    int32_t count = 0;
+    while (terms) { terms &= terms - 1; ++count; }
+    return count;
+}
+int32_t skim_chat_rank(uint32_t title_terms, uint32_t url_terms,
+                       uint32_t source_terms, uint32_t body_terms) {
+    return 512 * chat_term_count(title_terms | url_terms | source_terms | body_terms)
+        + 6 * chat_term_count(title_terms) + 4 * chat_term_count(url_terms)
+        + 2 * chat_term_count(source_terms) + chat_term_count(body_terms);
+}
+
 int32_t skim_summary_min_words(void) { return 20; }
 int32_t skim_summary_max_words(void) { return 1000; }
 int32_t skim_summary_custom_words_valid(int64_t words) {

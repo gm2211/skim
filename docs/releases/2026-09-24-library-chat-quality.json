@@ -1,0 +1,884 @@
+{
+  "date": "2026-09-24",
+  "scope": "Shared library-chat relevance and scoped native retrieval; optional desktop result disclosure",
+  "fixture": {
+    "kind": "controlled synthetic local SQLite library, no external fetching",
+    "articles": 526,
+    "target": "antitrust-ruling",
+    "target_published_at": 1,
+    "target_age_note": "Deliberately oldest; epoch date is synthetic ordering evidence, not journalism.",
+    "target_text": "Apple faces a new antitrust ruling. The court ordered the company to submit its revised compliance plan by October 12, 2026. The order sets a filing deadline; it does not say that the plan has been approved.",
+    "distractors": {
+      "partial_title_matches": 15,
+      "unrelated_garden_articles": 510
+    }
+  },
+  "runtime": {
+    "path": "actual Tauri chat_with_articles via isolated devbridge and current standalone MLX helper",
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "web_search": false,
+    "user_preferences_changed": false
+  },
+  "observations": {
+    "baseline": "Fifteen partial Apple headlines crowded the full Apple antitrust body match out of the model context.",
+    "ranking_only": "Shared distinct-term rank fixes initial search; a source-named follow-up still dropped the now-read source and reused [1] for an unrelated result.",
+    "final": "Source-aware follow-up keeps the original article after it becomes read. Novel subjects and explicit find requests still search the active scope. No-match remains empty.",
+    "specific_query_control": "An earlier more specific query mentioning the ruling deadline passed before the ranking fix; retained as a positive control, not substituted for the failing short query."
+  },
+  "checks": {
+    "rust": {
+      "passed": 166,
+      "excluded": 1,
+      "excluded_reason": "Separate GGUF local-model integration fixture unavailable"
+    },
+    "web": {
+      "passed": 156
+    },
+    "swift_core": {
+      "passed": 140
+    },
+    "native_app_simulator": {
+      "passed": 35,
+      "library_chat_tests": 7
+    }
+  },
+  "limits": [
+    "Small synthetic development fixture, not representative retrieval or factual accuracy.",
+    "Installed signed desktop acceptance remains separate from devbridge/browser checks.",
+    "Native app tests and archive do not prove interactive iOS acceptance.",
+    "Query excerpts still can omit a later relevant passage; skim-gqs7 remains open.",
+    "General chronology accuracy skim-cg5e and full domain core migration skim-62qe remain open."
+  ],
+  "responses": {
+    "before": [
+      {
+        "case": "multiterm_find",
+        "query": "Find Apple antitrust articles.",
+        "response": {
+          "article_ids": [
+            "wallpaper-14",
+            "wallpaper-13",
+            "wallpaper-12",
+            "wallpaper-11",
+            "wallpaper-10",
+            "wallpaper-9",
+            "wallpaper-8",
+            "wallpaper-7",
+            "wallpaper-6",
+            "wallpaper-5",
+            "wallpaper-4",
+            "wallpaper-3",
+            "wallpaper-2",
+            "wallpaper-1",
+            "wallpaper-0"
+          ],
+          "content": "None of the provided articles discuss Apple antitrust issues. All articles relate to the release of new phone wallpaper designs featuring landscape images from parks in blue and green.",
+          "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "provider": "mlx",
+          "sources": [
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-14",
+              "published_at": 1790282933,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 14",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-13",
+              "published_at": 1790282932,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 13",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-12",
+              "published_at": 1790282931,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 12",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-11",
+              "published_at": 1790282930,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 11",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-10",
+              "published_at": 1790282929,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 10",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-9",
+              "published_at": 1790282928,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 9",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-8",
+              "published_at": 1790282927,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 8",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-7",
+              "published_at": 1790282926,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 7",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-6",
+              "published_at": 1790282925,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 6",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-5",
+              "published_at": 1790282924,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 5",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-4",
+              "published_at": 1790282923,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 4",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-3",
+              "published_at": 1790282922,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 3",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-2",
+              "published_at": 1790282921,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 2",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-1",
+              "published_at": 1790282920,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 1",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-0",
+              "published_at": 1790282919,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 0",
+              "url": null
+            }
+          ]
+        },
+        "seconds": 1.593
+      }
+    ],
+    "rank-only": [
+      {
+        "case": "multiterm_find",
+        "query": "Find Apple antitrust articles.",
+        "response": {
+          "article_ids": [
+            "antitrust-ruling",
+            "wallpaper-14",
+            "wallpaper-13",
+            "wallpaper-12",
+            "wallpaper-11",
+            "wallpaper-10",
+            "wallpaper-9",
+            "wallpaper-8",
+            "wallpaper-7",
+            "wallpaper-6",
+            "wallpaper-5",
+            "wallpaper-4",
+            "wallpaper-3",
+            "wallpaper-2",
+            "wallpaper-1"
+          ],
+          "content": "[1] discusses a court-ordered antitrust ruling against Apple, requiring the company to submit a revised compliance plan by October 12, 2026. The ruling is part of a civil competition case and sets procedural filing requirements but does not indicate approval of the plan.",
+          "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "provider": "mlx",
+          "sources": [
+            {
+              "feed_title": "Technology desk",
+              "id": "antitrust-ruling",
+              "published_at": 1,
+              "source_type": "article",
+              "title": "Court issues competition ruling",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-14",
+              "published_at": 1790282933,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 14",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-13",
+              "published_at": 1790282932,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 13",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-12",
+              "published_at": 1790282931,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 12",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-11",
+              "published_at": 1790282930,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 11",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-10",
+              "published_at": 1790282929,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 10",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-9",
+              "published_at": 1790282928,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 9",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-8",
+              "published_at": 1790282927,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 8",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-7",
+              "published_at": 1790282926,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 7",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-6",
+              "published_at": 1790282925,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 6",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-5",
+              "published_at": 1790282924,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 5",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-4",
+              "published_at": 1790282923,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 4",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-3",
+              "published_at": 1790282922,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 3",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-2",
+              "published_at": 1790282921,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 2",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-1",
+              "published_at": 1790282920,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 1",
+              "url": null
+            }
+          ]
+        },
+        "seconds": 2.629
+      },
+      {
+        "case": "followup_after_read",
+        "query": "What does that ruling require by October 12?",
+        "response": {
+          "article_ids": [
+            "filler-12",
+            "wallpaper-12"
+          ],
+          "content": "The ruling requires Apple to submit a revised compliance plan by October 12, 2026, as part of a civil antitrust case. Specific details of the plan's content are not provided in the article. [1]",
+          "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "provider": "mlx",
+          "sources": [
+            {
+              "feed_title": "Technology desk",
+              "id": "filler-12",
+              "published_at": 1790283031,
+              "source_type": "article",
+              "title": "Garden diary 12",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-12",
+              "published_at": 1790282931,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 12",
+              "url": null
+            }
+          ]
+        }
+      },
+      {
+        "case": "no_match",
+        "response": {
+          "article_ids": [],
+          "content": "No matching articles found in this scope. Try another title, topic, source, or URL. The All scope includes read articles too.",
+          "model": "library-search",
+          "provider": "local",
+          "sources": []
+        }
+      }
+    ],
+    "final": [
+      {
+        "case": "multiterm_find",
+        "query": "Find Apple antitrust articles.",
+        "response": {
+          "article_ids": [
+            "antitrust-ruling",
+            "wallpaper-14",
+            "wallpaper-13",
+            "wallpaper-12",
+            "wallpaper-11",
+            "wallpaper-10",
+            "wallpaper-9",
+            "wallpaper-8",
+            "wallpaper-7",
+            "wallpaper-6",
+            "wallpaper-5",
+            "wallpaper-4",
+            "wallpaper-3",
+            "wallpaper-2",
+            "wallpaper-1"
+          ],
+          "content": "[1] mentions a court-ordered antitrust ruling against Apple, requiring the company to submit a revised compliance plan by October 12, 2026. The ruling is part of a civil competition case and sets procedural filing requirements but does not indicate approval of the plan.",
+          "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "provider": "mlx",
+          "sources": [
+            {
+              "feed_title": "Technology desk",
+              "id": "antitrust-ruling",
+              "published_at": 1,
+              "source_type": "article",
+              "title": "Court issues competition ruling",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-14",
+              "published_at": 1790282933,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 14",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-13",
+              "published_at": 1790282932,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 13",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-12",
+              "published_at": 1790282931,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 12",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-11",
+              "published_at": 1790282930,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 11",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-10",
+              "published_at": 1790282929,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 10",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-9",
+              "published_at": 1790282928,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 9",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-8",
+              "published_at": 1790282927,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 8",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-7",
+              "published_at": 1790282926,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 7",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-6",
+              "published_at": 1790282925,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 6",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-5",
+              "published_at": 1790282924,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 5",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-4",
+              "published_at": 1790282923,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 4",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-3",
+              "published_at": 1790282922,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 3",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-2",
+              "published_at": 1790282921,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 2",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-1",
+              "published_at": 1790282920,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 1",
+              "url": null
+            }
+          ]
+        },
+        "seconds": 2.749
+      },
+      {
+        "case": "followup_after_read",
+        "query": "What does that ruling require by October 12?",
+        "response": {
+          "article_ids": [
+            "antitrust-ruling",
+            "wallpaper-14",
+            "wallpaper-13",
+            "wallpaper-12",
+            "wallpaper-11",
+            "wallpaper-10",
+            "wallpaper-9",
+            "wallpaper-8",
+            "wallpaper-7",
+            "wallpaper-6",
+            "wallpaper-5",
+            "wallpaper-4",
+            "wallpaper-3",
+            "wallpaper-2",
+            "wallpaper-1"
+          ],
+          "content": "The ruling requires Apple to submit a revised compliance plan by October 12, 2026. It does not indicate that the plan has been approved.",
+          "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "provider": "mlx",
+          "sources": [
+            {
+              "feed_title": "Technology desk",
+              "id": "antitrust-ruling",
+              "published_at": 1,
+              "source_type": "article",
+              "title": "Court issues competition ruling",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-14",
+              "published_at": 1790282933,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 14",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-13",
+              "published_at": 1790282932,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 13",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-12",
+              "published_at": 1790282931,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 12",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-11",
+              "published_at": 1790282930,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 11",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-10",
+              "published_at": 1790282929,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 10",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-9",
+              "published_at": 1790282928,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 9",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-8",
+              "published_at": 1790282927,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 8",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-7",
+              "published_at": 1790282926,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 7",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-6",
+              "published_at": 1790282925,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 6",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-5",
+              "published_at": 1790282924,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 5",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-4",
+              "published_at": 1790282923,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 4",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-3",
+              "published_at": 1790282922,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 3",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-2",
+              "published_at": 1790282921,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 2",
+              "url": null
+            },
+            {
+              "feed_title": "Technology desk",
+              "id": "wallpaper-1",
+              "published_at": 1790282920,
+              "source_type": "article",
+              "title": "Apple releases a new phone wallpaper 1",
+              "url": null
+            }
+          ]
+        }
+      },
+      {
+        "case": "no_match",
+        "response": {
+          "article_ids": [],
+          "content": "No matching articles found in this scope. Try another title, topic, source, or URL. The All scope includes read articles too.",
+          "model": "library-search",
+          "provider": "local",
+          "sources": []
+        }
+      }
+    ]
+  },
+  "specific_query_control": [
+    {
+      "case": "multiterm_find",
+      "query": "Find Apple antitrust articles. What deadline did the ruling set?",
+      "response": {
+        "article_ids": [
+          "antitrust-ruling",
+          "wallpaper-14",
+          "wallpaper-13",
+          "wallpaper-12",
+          "wallpaper-11",
+          "wallpaper-10",
+          "wallpaper-9",
+          "wallpaper-8",
+          "wallpaper-7",
+          "wallpaper-6",
+          "wallpaper-5",
+          "wallpaper-4",
+          "wallpaper-3",
+          "wallpaper-2",
+          "wallpaper-1"
+        ],
+        "content": "The antitrust ruling ordered Apple to submit its revised compliance plan by October 12, 2026. [1]",
+        "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+        "provider": "mlx",
+        "sources": [
+          {
+            "feed_title": "Technology desk",
+            "id": "antitrust-ruling",
+            "published_at": 1,
+            "source_type": "article",
+            "title": "Court issues competition ruling",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-14",
+            "published_at": 1790282933,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 14",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-13",
+            "published_at": 1790282932,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 13",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-12",
+            "published_at": 1790282931,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 12",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-11",
+            "published_at": 1790282930,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 11",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-10",
+            "published_at": 1790282929,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 10",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-9",
+            "published_at": 1790282928,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 9",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-8",
+            "published_at": 1790282927,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 8",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-7",
+            "published_at": 1790282926,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 7",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-6",
+            "published_at": 1790282925,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 6",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-5",
+            "published_at": 1790282924,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 5",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-4",
+            "published_at": 1790282923,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 4",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-3",
+            "published_at": 1790282922,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 3",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-2",
+            "published_at": 1790282921,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 2",
+            "url": null
+          },
+          {
+            "feed_title": "Technology desk",
+            "id": "wallpaper-1",
+            "published_at": 1790282920,
+            "source_type": "article",
+            "title": "Apple releases a new phone wallpaper 1",
+            "url": null
+          }
+        ]
+      },
+      "seconds": 2.763
+    }
+  ],
+  "source_sha256": {
+    "shared/SkimStoryPolicy/Sources/SkimStoryPolicy/SkimStoryPolicy.c": "e448c789a463ed24c7894bec794134f0819dc604b8db80b074089d65574fb9d3",
+    "native/SkimCore/Sources/SkimCore/LibraryChatPolicy.swift": "440068111524cd3fa11bda5e10c83edabf1f0d83503a759234b7de1407ee53af",
+    "src-tauri/src/commands/chat.rs": "ddad345e41fe98e2148a11107b0f38cab056f177c0d3e957140477b76279e8ca"
+  },
+  "browser_review": {
+    "surface": "actual Sidebar, AskSkimDialog and ArticleDetail in isolated harness connected to actual devbridge and MLX helper",
+    "desktop_viewport": [
+      1280,
+      720
+    ],
+    "short_phone_frame": [
+      390,
+      568
+    ],
+    "passed": [
+      "pending and success layout",
+      "full initial answer and cited source visible",
+      "uncited result list collapsed by default",
+      "keyboard Enter expands and collapses result disclosure",
+      "citation opens correct actual article reader",
+      "return preserves history and scope",
+      "Unread follow-up retains read source",
+      "no-match response does not reuse stale source"
+    ],
+    "visual_review": "Aligned liquid-glass surfaces, readable hierarchy, consistent controls; short phone keeps full answer/source and composer visible. No native-compositor claim."
+  }
+}

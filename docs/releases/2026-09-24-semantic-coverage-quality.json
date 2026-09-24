@@ -1,0 +1,697 @@
+{
+  "recorded_at_utc": "2026-09-24T23:06:46.595715+00:00",
+  "verdict": "REJECTED: full-pool experiment not adopted",
+  "source_commit": "256803505f21ed31bfb8c45cac22824000e9179c",
+  "shipped_scope": "Shared verification request batching only; the 64-candidate whole-pool cutoff remains open in skim-do2h.1.",
+  "baseline": {
+    "counts": {
+      "stories": 233,
+      "eligible_today": 107,
+      "existing_editions": 0
+    },
+    "request": {
+      "cmd": "get_or_generate_today_edition",
+      "payload": {
+        "startsAt": 1790222400,
+        "endsAt": 1790308800,
+        "generatedAt": 1790289693,
+        "storyLimit": 10
+      }
+    },
+    "seconds": 0.038,
+    "snapshot_reasons": [
+      "unique_singleton",
+      "unique_singleton",
+      "unique_singleton",
+      "unique_singleton",
+      "unique_singleton",
+      "unique_singleton",
+      "unique_singleton",
+      "unique_singleton",
+      "unique_singleton",
+      "unique_singleton"
+    ],
+    "evidence_sha256": "fe7e47825bbcfaa1ae2f58be78a317eb5d43c691eca2be6c74f0878aa363a54d"
+  },
+  "experiment": {
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "candidate_count": 108,
+    "assessment_coverage": 84,
+    "unassessed_candidates": 24,
+    "proposal_pair_opportunities": 5778,
+    "total_pair_opportunities": 5778,
+    "requested_verification_pairs": 1137,
+    "total_seconds": 627.276,
+    "validation_failed_stages": [
+      "verify-128",
+      "verify-320",
+      "verify-384",
+      "verify-768",
+      "verify-896",
+      "verify-960",
+      "verify-1024"
+    ],
+    "requests": [
+      {
+        "stage": "within-0",
+        "candidate_count": 32,
+        "seconds": 10.142,
+        "transport_ok": true,
+        "response_sha256": "6248d8222a7371a603b90ddbb0b3c2f7d3de3571c51c7a7728e27e660b53dea8"
+      },
+      {
+        "stage": "within-1",
+        "candidate_count": 32,
+        "seconds": 10.548,
+        "transport_ok": true,
+        "response_sha256": "d8d2d06fa8186303ab697fd395373485758a03fbefe5f2fc355535a55e6f6a95"
+      },
+      {
+        "stage": "within-2",
+        "candidate_count": 32,
+        "seconds": 9.369,
+        "transport_ok": true,
+        "response_sha256": "dc2bc77f2bfb870356a4f6ee911391e726fad9fccbac8af43fa7940ca114f791"
+      },
+      {
+        "stage": "within-3",
+        "candidate_count": 12,
+        "seconds": 4.92,
+        "transport_ok": true,
+        "response_sha256": "8492ec7b6ab606883aef19647e841dee7e47787a4990439773a64a56456e91b7"
+      },
+      {
+        "stage": "cross-4",
+        "candidate_count": 64,
+        "seconds": 10.994,
+        "transport_ok": true,
+        "response_sha256": "c4d25c5d060f243dff062cae42643a8300f9bb02d1ee6c0ab895142e117d5789"
+      },
+      {
+        "stage": "cross-5",
+        "candidate_count": 64,
+        "seconds": 22.578,
+        "transport_ok": true,
+        "response_sha256": "0424a647918d5d18c52c74d1d6fdd637a7815235ceb54353498d8e09a0651f85"
+      },
+      {
+        "stage": "cross-6",
+        "candidate_count": 44,
+        "seconds": 13.57,
+        "transport_ok": true,
+        "response_sha256": "a78c1052978a80de3ef501117378760a56a3c29dea77ad7751013366285b093f"
+      },
+      {
+        "stage": "cross-7",
+        "candidate_count": 64,
+        "seconds": 9.339,
+        "transport_ok": true,
+        "response_sha256": "12a43c7dcec890ec98310d44e364ca0810a9d5c34a12678533890fed277aca66"
+      },
+      {
+        "stage": "cross-8",
+        "candidate_count": 44,
+        "seconds": 8.997,
+        "transport_ok": true,
+        "response_sha256": "c9ed73584ce5e3161bb8deec726ab7fe403632874cfe2fbbc1d7d24d19cbc3dc"
+      },
+      {
+        "stage": "cross-9",
+        "candidate_count": 44,
+        "seconds": 21.773,
+        "transport_ok": true,
+        "response_sha256": "b880ea919af39cf5b1a263266e4810bfbfe607b6fbe88290b5dde2704ae21299"
+      },
+      {
+        "stage": "verify-0",
+        "candidate_count": 54,
+        "seconds": 33.645,
+        "transport_ok": true,
+        "response_sha256": "2df250a66a393d22c6f0be34f3552aff4733ce59b044d281475565010861f83c",
+        "requested_pairs": 64,
+        "returned_rows": 64,
+        "missing_pairs": [],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-64",
+        "candidate_count": 40,
+        "seconds": 27.145,
+        "transport_ok": true,
+        "response_sha256": "4e1097a1e76342c653a9a98ca286c3ebbe51e674b1cdfd8d3b813351498c7c74",
+        "requested_pairs": 64,
+        "returned_rows": 64,
+        "missing_pairs": [],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-128",
+        "candidate_count": 39,
+        "seconds": 25.608,
+        "transport_ok": true,
+        "response_sha256": "42264e6f739122fea96406359dc8b35c974a774703b0a7d3f1a6e11d5a981c36",
+        "requested_pairs": 64,
+        "returned_rows": 63,
+        "missing_pairs": [
+          [
+            7,
+            15
+          ]
+        ],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-192",
+        "candidate_count": 36,
+        "seconds": 24.608,
+        "transport_ok": true,
+        "response_sha256": "73fedc6de77867420d5b7fd02bb5c25295940567164fd314e54e2b876dd3183d",
+        "requested_pairs": 64,
+        "returned_rows": 64,
+        "missing_pairs": [],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-256",
+        "candidate_count": 36,
+        "seconds": 27.314,
+        "transport_ok": true,
+        "response_sha256": "0872066560cab573979666f3dc076b0a05c2e46a2374dce5ec0b55956aca950a",
+        "requested_pairs": 64,
+        "returned_rows": 64,
+        "missing_pairs": [],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-320",
+        "candidate_count": 32,
+        "seconds": 25.035,
+        "transport_ok": true,
+        "response_sha256": "1597a3174e834d15fb926146fb7567806ebbc396be2e2f748f34f2ef57971ccd",
+        "requested_pairs": 64,
+        "returned_rows": 63,
+        "missing_pairs": [
+          [
+            13,
+            16
+          ]
+        ],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-384",
+        "candidate_count": 32,
+        "seconds": 25.465,
+        "transport_ok": true,
+        "response_sha256": "3e5607de5a83f020218b62205d650b9e2808449cbfa5c3f7c51a31b917ba6232",
+        "requested_pairs": 64,
+        "returned_rows": 63,
+        "missing_pairs": [
+          [
+            15,
+            24
+          ]
+        ],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-448",
+        "candidate_count": 29,
+        "seconds": 25.286,
+        "transport_ok": true,
+        "response_sha256": "6b78c0af9cd3ce05e6381e7e43775aa7220a6f5b0e2e5f5979395efdd7453c6e",
+        "requested_pairs": 64,
+        "returned_rows": 64,
+        "missing_pairs": [],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-512",
+        "candidate_count": 45,
+        "seconds": 29.134,
+        "transport_ok": true,
+        "response_sha256": "36fc3de58042ebeb26a5f6f6580e2cce05e77ccfd93c7c0c5677cea189a58dba",
+        "requested_pairs": 64,
+        "returned_rows": 64,
+        "missing_pairs": [],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-576",
+        "candidate_count": 42,
+        "seconds": 36.06,
+        "transport_ok": true,
+        "response_sha256": "d24e90a60344e8187667b53661a365251a3336eea3e9ccb1d4bbd00542d9f63e",
+        "requested_pairs": 64,
+        "returned_rows": 64,
+        "missing_pairs": [],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-640",
+        "candidate_count": 43,
+        "seconds": 38.745,
+        "transport_ok": true,
+        "response_sha256": "c3857e0fae5ad2e43b23e6580150fa339a0c36676bebc8fdaf98b5a8e48014a0",
+        "requested_pairs": 64,
+        "returned_rows": 64,
+        "missing_pairs": [],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-704",
+        "candidate_count": 39,
+        "seconds": 33.853,
+        "transport_ok": true,
+        "response_sha256": "9a5297597ba3f21223a0b6cbfda6e69d9fb6e6aba2306bec66cd73f71b280547",
+        "requested_pairs": 64,
+        "returned_rows": 64,
+        "missing_pairs": [],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-768",
+        "candidate_count": 36,
+        "seconds": 33.225,
+        "transport_ok": true,
+        "response_sha256": "99480404f5e6cbef48ecb99707ad7ea95dd300031158206c1c4ca3fc99ff6c78",
+        "requested_pairs": 64,
+        "returned_rows": 63,
+        "missing_pairs": [
+          [
+            27,
+            107
+          ]
+        ],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-832",
+        "candidate_count": 35,
+        "seconds": 27.94,
+        "transport_ok": true,
+        "response_sha256": "6deba14822b84c9d4fd4d3e24745186534a0bf7d38c102037d65dc117dee3b66",
+        "requested_pairs": 64,
+        "returned_rows": 64,
+        "missing_pairs": [],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-896",
+        "candidate_count": 28,
+        "seconds": 25.537,
+        "transport_ok": true,
+        "response_sha256": "4aed9ee40b4f2f73cfdbd5fb06ff32cb1d2bb942abcd8ebcd960709c5eae802c",
+        "requested_pairs": 64,
+        "returned_rows": 62,
+        "missing_pairs": [
+          [
+            49,
+            53
+          ],
+          [
+            49,
+            54
+          ]
+        ],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-960",
+        "candidate_count": 15,
+        "seconds": 22.862,
+        "transport_ok": true,
+        "response_sha256": "4ed678d73a286a661f997949fb5a19c0e2b3e743aa0bbe7718ba4c4e711fb0f1",
+        "requested_pairs": 64,
+        "returned_rows": 63,
+        "missing_pairs": [
+          [
+            53,
+            63
+          ]
+        ],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-1024",
+        "candidate_count": 35,
+        "seconds": 25.689,
+        "transport_ok": true,
+        "response_sha256": "7075aa316a758f6d631174166584474aa5683e755d451b7d4db01df92e8cc41b",
+        "requested_pairs": 64,
+        "returned_rows": 62,
+        "missing_pairs": [
+          [
+            64,
+            72
+          ],
+          [
+            97,
+            103
+          ]
+        ],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      },
+      {
+        "stage": "verify-1088",
+        "candidate_count": 11,
+        "seconds": 17.621,
+        "transport_ok": true,
+        "response_sha256": "eb82adc2a2de64213677ec40b250cb8b818409cfcd12a468c25d65cc32005dab",
+        "requested_pairs": 49,
+        "returned_rows": 49,
+        "missing_pairs": [],
+        "foreign_pairs": [],
+        "duplicate_pair_count": 0
+      }
+    ],
+    "diagnostic_group_count": 107,
+    "diagnostic_multi_member_groups": [
+      [
+        0,
+        16
+      ]
+    ]
+  },
+  "evidence": {
+    "skim-newspaper71-block-plan.json": {
+      "local_path": "/tmp/skim-newspaper71-block-plan.json",
+      "sha256": "3aff66300cd94499ed5fc0942f414169453bd98aa893a28c9ca88c2dbf406d8a"
+    },
+    "skim-newspaper71-block-probe.py": {
+      "local_path": "/tmp/skim-newspaper71-block-probe.py",
+      "sha256": "2c524552a142ae9e9e54aee51f09d43ff62f46a95021c9d7dc4c1e18bdd311dd"
+    },
+    "skim-newspaper71-block-probe.json": {
+      "local_path": "/tmp/skim-newspaper71-block-probe.json",
+      "sha256": "09806bb7fa932c11daca5cc6ae0d8aac20b390e7ed6402daddf6f40d3a2d604a"
+    },
+    "skim-newspaper71-candidates.json": {
+      "local_path": "/tmp/skim-newspaper71-candidates.json",
+      "sha256": "370d5a42dcd35b10d8fde9fc174b1464135e7bd7d692f30abdc2fbab5790e70e"
+    },
+    "editorial-labels.json": {
+      "local_path": "/tmp/skim-fresh-newspaper-20260924/editorial-labels.json",
+      "sha256": "573e074760f9f795cf50602593096777123e64aefe48d708cd350da5538cacff"
+    },
+    "candidate-source-mapping.json": {
+      "local_path": "/tmp/skim-fresh-newspaper-20260924/candidate-source-mapping.json",
+      "sha256": "aa8c9cc5a672401a8ceacaeebe31d87be3cbcdb3705ae892446eb3d42691a80f"
+    },
+    "unique-items.json": {
+      "local_path": "/tmp/skim-fresh-newspaper-20260924/unique-items.json",
+      "sha256": "615e6f727240dd7bae035a1c5f6fa78408b403dcb1ea8cfdc1cdf3cf1d7ae516"
+    },
+    "feed-metadata.json": {
+      "local_path": "/tmp/skim-fresh-newspaper-20260924/feed-metadata.json",
+      "sha256": "553c3bb94aa0bd01c63d19933a952efa4df1d5ea4e0706da5e1f7c1a91f45b62"
+    }
+  },
+  "limits": [
+    "The live library gained one story between the 107-candidate baseline and the frozen 108-candidate experiment; they are distinct inputs.",
+    "This is a small selected development sample, not representative model accuracy or source truth.",
+    "A proposal opportunity means two original reports appeared together in an input, not that the model assessed or correctly related them.",
+    "The diagnostic continued after invalid batches to characterize failure. Production verification rejects the entire plan at the first failed batch; diagnostic partial groups are not publishable results.",
+    "Importance aggregation across blocks was not implemented or accepted.",
+    "The local helper exercise does not establish installed desktop UI behavior or native iOS inference.",
+    "The only diagnostic multi-report group is a clear false merge. Passing structural validation does not establish correct model judgments."
+  ],
+  "independent_editorial_evaluation": {
+    "counts": {
+      "candidates": 108,
+      "requests": 28,
+      "proposal_rows": 142,
+      "proposal_pair_opportunities": 5778,
+      "total_pair_opportunities": 5778,
+      "assessment_coverage": 84,
+      "requested_verification_pairs": 1137,
+      "verify_batches": 18,
+      "valid_verify_batches": 11,
+      "invalid_verify_batches": 7,
+      "accepted_verification_rows": 689,
+      "requested_pairs_in_valid_batches": 689,
+      "final_groups": 107,
+      "final_nonsingleton_groups": [
+        [
+          0,
+          16
+        ]
+      ],
+      "elapsed_seconds": 627.276
+    },
+    "label_pair_reviews": [
+      {
+        "type": "must_group",
+        "items": [
+          "item-055",
+          "item-064"
+        ],
+        "indexes": [
+          55,
+          64
+        ],
+        "titles": [
+          "Rogue OpenAI agent 'infiltrated' Australian government website in world first",
+          "AI hack of Medicare exposes Australia\u2019s vulnerabilities and experts warn \u2018there is more of this to come\u2019"
+        ],
+        "proposed_together": false,
+        "verification": null,
+        "in_invalid_batch": null,
+        "final_group_together": false,
+        "judgment": "miss"
+      },
+      {
+        "type": "must_group",
+        "items": [
+          "item-072",
+          "item-064"
+        ],
+        "indexes": [
+          72,
+          64
+        ],
+        "titles": [
+          "Why did an OpenAI system hack Australia's health system - and can it be stopped in the future?",
+          "AI hack of Medicare exposes Australia\u2019s vulnerabilities and experts warn \u2018there is more of this to come\u2019"
+        ],
+        "proposed_together": true,
+        "verification": null,
+        "in_invalid_batch": "verify-1024",
+        "final_group_together": false,
+        "judgment": "miss"
+      },
+      {
+        "type": "must_group",
+        "items": [
+          "item-070",
+          "item-068"
+        ],
+        "indexes": [
+          70,
+          68
+        ],
+        "titles": [
+          "German prosecutors investigate 105-year-old for crimes at Nazi PoW camp",
+          "Germany investigates 105-year-old suspected former Nazi prison camp guard"
+        ],
+        "proposed_together": true,
+        "verification": null,
+        "in_invalid_batch": null,
+        "final_group_together": false,
+        "judgment": "miss"
+      },
+      {
+        "type": "must_group",
+        "items": [
+          "item-004",
+          "item-016"
+        ],
+        "indexes": [
+          4,
+          16
+        ],
+        "titles": [
+          "Anti-migrant activist charged after dinghy slashed in Channel",
+          "Far-right activist Daniel Thomas charged over alleged dinghy slashing in Channel"
+        ],
+        "proposed_together": true,
+        "verification": {
+          "pair": [
+            4,
+            16
+          ],
+          "same_event": false,
+          "confidence": 0.87,
+          "stage": "verify-64"
+        },
+        "in_invalid_batch": null,
+        "final_group_together": false,
+        "judgment": "miss"
+      },
+      {
+        "type": "must_separate",
+        "items": [
+          "item-055",
+          "item-077"
+        ],
+        "indexes": [
+          55,
+          77
+        ],
+        "titles": [
+          "Rogue OpenAI agent 'infiltrated' Australian government website in world first",
+          "FBI investigating claim hackers have stolen details of all its agents"
+        ],
+        "proposed_together": false,
+        "verification": null,
+        "in_invalid_batch": null,
+        "final_group_together": false,
+        "judgment": "separate_without_pair_verification"
+      },
+      {
+        "type": "must_separate",
+        "items": [
+          "item-087",
+          "item-105"
+        ],
+        "indexes": [
+          87,
+          105
+        ],
+        "titles": [
+          "Trump's Board of Peace unveils $2.45bn Gaza recovery plan",
+          "Israel facing water shortages caused by destruction of Gaza\u2019s treatment plants"
+        ],
+        "proposed_together": false,
+        "verification": null,
+        "in_invalid_batch": null,
+        "final_group_together": false,
+        "judgment": "separate_without_pair_verification"
+      },
+      {
+        "type": "must_separate",
+        "items": [
+          "item-075",
+          "item-018"
+        ],
+        "indexes": [
+          75,
+          18
+        ],
+        "titles": [
+          "NHS trust to review 4,500 breast cancer cases after unnecessary surgeries found",
+          "NHS bodies in England impose two-year minimum wait for ADHD and autism assessments"
+        ],
+        "proposed_together": false,
+        "verification": null,
+        "in_invalid_batch": null,
+        "final_group_together": false,
+        "judgment": "separate_without_pair_verification"
+      },
+      {
+        "type": "must_separate",
+        "items": [
+          "item-049",
+          "item-048"
+        ],
+        "indexes": [
+          49,
+          48
+        ],
+        "titles": [
+          "Poland says fire at Starlink station is sabotage as Denmark warns of rising Russian threat",
+          "Russia could attack a Nato country within months, Danish intelligence says"
+        ],
+        "proposed_together": true,
+        "verification": null,
+        "in_invalid_batch": null,
+        "final_group_together": false,
+        "judgment": "separate_without_pair_verification"
+      },
+      {
+        "type": "must_separate",
+        "items": [
+          "item-055",
+          "item-118"
+        ],
+        "status": "inapplicable_unmapped",
+        "mapped_indexes": [
+          55,
+          null
+        ],
+        "note": "At least one frozen RSS item was not present in the candidate pool."
+      }
+    ],
+    "importance_reviews": [
+      {
+        "items": [
+          "item-026",
+          "item-045"
+        ],
+        "indexes": [
+          26,
+          45
+        ],
+        "titles": [
+          "Four civilians killed in Pakistani strikes in Afghanistan, Taliban says",
+          "NASA\u2019s Machines for Mars Make Beer Bubbly"
+        ],
+        "expected": "higher > lower",
+        "observed_ratings": [
+          2,
+          1
+        ],
+        "judgment": "pass"
+      },
+      {
+        "items": [
+          "item-075",
+          "item-034"
+        ],
+        "indexes": [
+          75,
+          34
+        ],
+        "titles": [
+          "NHS trust to review 4,500 breast cancer cases after unnecessary surgeries found",
+          "NASA Unveils Winning Designs for Mars Space Food Systems Challenge"
+        ],
+        "expected": "higher > lower",
+        "observed_ratings": [
+          null,
+          null
+        ],
+        "judgment": "not_assessed_missing_within_rating"
+      }
+    ],
+    "interpretation": [
+      "Any malformed verification batch invalidates the full proposed grouping plan; final groups and accepted rows are diagnostic only.",
+      "No malformed schema, duplicate pair IDs, or foreign pair IDs were observed; seven verification responses omitted requested pairs.",
+      "Assessment coverage was incomplete: 84 of 108 candidate indexes were assessed in within-block proposals. Unassessed labels are not passes.",
+      "Importance comparisons are editorial constraints, not a representative or held-out quality estimate."
+    ],
+    "verdict": {
+      "must_group": "0 of 4 mapped constraints grouped in diagnostic output",
+      "must_separate": "4 mapped pairs remain separate without accepted direct verification; 1 pair inapplicable because item-118 is absent",
+      "importance": "1 preference supported by within-block ratings; 1 not assessed",
+      "false_merge": "Diagnostic group [0,16] combines an assassination-attempt victim death report with an unrelated Channel dinghy-slashing charge report."
+    }
+  }
+}

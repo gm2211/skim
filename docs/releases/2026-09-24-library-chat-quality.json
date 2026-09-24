@@ -40,6 +40,12 @@
     "native_app_simulator": {
       "passed": 35,
       "library_chat_tests": 7
+    },
+    "shared_inference": {
+      "passed": 16
+    },
+    "packaging": {
+      "passed": 3
     }
   },
   "limits": [

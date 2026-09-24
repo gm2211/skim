@@ -2,6 +2,16 @@
 
 The acceptance target is a fast, attractive newspaper that groups related coverage, supports deeper summaries and article/library questions, and lets chat find relevant articles. This review does not claim that the full target or shared-core migration is complete.
 
+## Cancellation and summary instruction fixes
+
+A delayed-provider command reproducer showed that cancelling a summary could still return success and leave a cached result. Desktop cancellation now serializes with SQLite and memory-cache publication, including cancellation while waiting for the cache lock. The same reproducer now returns `Summary cancelled` with zero cached rows. Normal completion and repeated cache reuse still work with one provider call. Native streaming and nonstreaming requests guard late cache writes; dismissed/replaced result sheets and already-completed streams reject queued tokens. Independent cross-reviews found no blocking lock-order or publication defect.
+
+The desktop summary system prompt previously forbade arrays while the bullet request required one. Each request now owns a consistent JSON schema, and fictional particle-discovery examples have been removed. Detail lengths, tone, token budgets and explicit custom system prompts remain unchanged. Three actual Qwen 4B summary commands returned usable output, including both bullets and prose, but some claims still overstated the source. This is a schema fix, not factual-accuracy acceptance.
+
+Generic repair and evidence-linked generation experiments were rejected. One proposed sentence checker accepted an unsupported upgrade from a possible first incident to a confirmed first incident. A revised twelve-item verifier corpus matched all labels, but that small result does not override the false acceptance on real generated sentences. No repair/verifier layer was shipped; `skim-cg5e` remains open. The [quality record](releases/2026-09-24-summary-cancellation-quality.json) preserves synthetic controls, source/output hashes, corpus revisions and limits without republishing full source articles.
+
+All **441 tests** pass: 157 Rust, 155 frontend and 129 Swift. Desktop **0.1.28** is built and signed; iOS **0.1.13 (65)** is `VALID` and `IN_BETA_TESTING` for internal testers. Both artifacts retain 21 shared C symbols and 71 shared Swift policy symbols. The desktop parent again stalled for 120 seconds before `main()` in sandbox initialization; installed desktop remains 0.1.17. [Exact release evidence](releases/2026-09-24-summary-cancellation-release.json) keeps package validation separate from native interaction, model accuracy and full core sharing.
+
 ## Source-verified newspaper previews
 
 Hands-on review found a chronology error: a generated OpenAI preview attached a five-day notification delay to the breach itself. The bounded input already contained the June incident, August discovery and September notification milestones. Stronger instructions, temperature zero, a correction pass and removing the repetition penalty did not reliably repair the model's paraphrases. Those inference experiments did not change the production helper.

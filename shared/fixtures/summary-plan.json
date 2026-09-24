@@ -1,0 +1,230 @@
+[
+  {
+    "length": null,
+    "custom_words": 0,
+    "valid_custom": false,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 3,
+      "bullet_max_tokens": 200,
+      "full_max_tokens": 256
+    }
+  },
+  {
+    "length": "unknown",
+    "custom_words": 300,
+    "valid_custom": true,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 3,
+      "bullet_max_tokens": 200,
+      "full_max_tokens": 256
+    }
+  },
+  {
+    "length": "short",
+    "custom_words": 999,
+    "valid_custom": true,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 3,
+      "bullet_max_tokens": 200,
+      "full_max_tokens": 256
+    }
+  },
+  {
+    "length": "medium",
+    "custom_words": -100,
+    "valid_custom": false,
+    "plan": {
+      "word_count": 150,
+      "bullet_min": 3,
+      "bullet_max": 5,
+      "bullet_max_tokens": 600,
+      "full_max_tokens": 1200
+    }
+  },
+  {
+    "length": "long",
+    "custom_words": 1001,
+    "valid_custom": false,
+    "plan": {
+      "word_count": 300,
+      "bullet_min": 5,
+      "bullet_max": 8,
+      "bullet_max_tokens": 1200,
+      "full_max_tokens": 2400
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": -9223372036854775808,
+    "valid_custom": false,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 3,
+      "bullet_max_tokens": 200,
+      "full_max_tokens": 256
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": -100,
+    "valid_custom": false,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 3,
+      "bullet_max_tokens": 200,
+      "full_max_tokens": 256
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": -1,
+    "valid_custom": false,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 3,
+      "bullet_max_tokens": 200,
+      "full_max_tokens": 256
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": 0,
+    "valid_custom": false,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 3,
+      "bullet_max_tokens": 200,
+      "full_max_tokens": 256
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": 19,
+    "valid_custom": false,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 3,
+      "bullet_max_tokens": 200,
+      "full_max_tokens": 256
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": 20,
+    "valid_custom": true,
+    "plan": {
+      "word_count": 20,
+      "bullet_min": 2,
+      "bullet_max": 4,
+      "bullet_max_tokens": 168,
+      "full_max_tokens": 168
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": 30,
+    "valid_custom": true,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 4,
+      "bullet_max_tokens": 188,
+      "full_max_tokens": 188
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": 150,
+    "valid_custom": true,
+    "plan": {
+      "word_count": 150,
+      "bullet_min": 5,
+      "bullet_max": 7,
+      "bullet_max_tokens": 428,
+      "full_max_tokens": 428
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": 300,
+    "valid_custom": true,
+    "plan": {
+      "word_count": 300,
+      "bullet_min": 10,
+      "bullet_max": 12,
+      "bullet_max_tokens": 728,
+      "full_max_tokens": 728
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": 600,
+    "valid_custom": true,
+    "plan": {
+      "word_count": 600,
+      "bullet_min": 20,
+      "bullet_max": 22,
+      "bullet_max_tokens": 1328,
+      "full_max_tokens": 1328
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": 1000,
+    "valid_custom": true,
+    "plan": {
+      "word_count": 1000,
+      "bullet_min": 33,
+      "bullet_max": 35,
+      "bullet_max_tokens": 2128,
+      "full_max_tokens": 2128
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": 1001,
+    "valid_custom": false,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 3,
+      "bullet_max_tokens": 200,
+      "full_max_tokens": 256
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": 2147483647,
+    "valid_custom": false,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 3,
+      "bullet_max_tokens": 200,
+      "full_max_tokens": 256
+    }
+  },
+  {
+    "length": "custom",
+    "custom_words": 9223372036854775807,
+    "valid_custom": false,
+    "plan": {
+      "word_count": 30,
+      "bullet_min": 2,
+      "bullet_max": 3,
+      "bullet_max_tokens": 200,
+      "full_max_tokens": 256
+    }
+  }
+]

@@ -44,29 +44,18 @@ pub fn article_summary_system_prompt(settings: &AiSettings) -> String {
 }
 
 fn length_params(settings: &AiSettings) -> (String, String, i64, i64) {
-    // Returns (bullet_count, paragraph_desc, bullet_max_tokens, full_max_tokens)
-    if settings.summary_length.as_deref() == Some("custom") {
-        if let Some(words) = settings.summary_custom_word_count {
-            let bullets = std::cmp::max(2, words / 30);
-            // The requested word count covers the prose, not the JSON keys,
-            // punctuation and notes. Small custom summaries otherwise exhaust
-            // their budget before the structured response can close.
-            let max_tokens = (words as i64) * 2 + 128;
-            return (
-                format!("{}-{}", bullets, bullets + 2),
-                format!("approximately {} words", words),
-                max_tokens,
-                max_tokens,
-            );
-        }
-    }
-    // max_tokens includes JSON overhead (~50 tokens for keys/braces)
-    match settings.summary_length.as_deref().unwrap_or("short") {
-        "short" => ("2-3".into(), "1-2 sentences (~30 words)".into(), 200, 256),
-        "long" => ("5-8".into(), "3-5 paragraphs (~300 words)".into(), 1200, 2400),
-        "medium" => ("3-5".into(), "2-3 paragraphs (~150 words)".into(), 600, 1200),
-        _ => ("2-3".into(), "1-2 sentences (~30 words)".into(), 200, 256),
-    }
+    let plan = crate::db::story_policy::summary_plan(
+        settings.summary_length.as_deref(), settings.summary_custom_word_count.map(i64::from));
+    let description = match settings.summary_length.as_deref() {
+        Some("custom") if settings.summary_custom_word_count.is_some_and(|words|
+            crate::db::story_policy::summary_custom_words_valid(i64::from(words))) =>
+            format!("approximately {} words", plan.word_count),
+        Some("medium") => format!("2-3 paragraphs (~{} words)", plan.word_count),
+        Some("long") => format!("3-5 paragraphs (~{} words)", plan.word_count),
+        _ => format!("1-2 sentences (~{} words)", plan.word_count),
+    };
+    (format!("{}-{}", plan.bullet_min, plan.bullet_max), description,
+        i64::from(plan.bullet_max_tokens), i64::from(plan.full_max_tokens))
 }
 
 pub fn article_bullet_summary_prompt(title: &str, text: &str, settings: &AiSettings) -> String {
@@ -271,6 +260,20 @@ pub fn catchup_lede_retry_user_prompt(headline: &str, articles_text: &str) -> St
 #[cfg(test)]
 mod summary_prompt_tests {
     use super::*;
+
+    #[test]
+    fn persisted_invalid_custom_counts_generate_short_safe_requests() {
+        let mut settings = crate::db::models::AppSettings::default().ai;
+        settings.summary_length = Some("custom".into());
+        settings.summary_format = Some("both".into());
+        for count in [None, Some(i32::MIN), Some(-100), Some(0), Some(19), Some(1001), Some(i32::MAX)] {
+            settings.summary_custom_word_count = count;
+            assert!(article_full_summary_prompt("Title", "Evidence", &settings).contains("1-2 sentences (~30 words)"));
+            assert!(article_bullet_summary_prompt("Title", "Evidence", &settings).contains("2-3 bullet points"));
+            assert_eq!(full_max_tokens(&settings), 256);
+            assert_eq!(bullet_max_tokens(&settings), 200);
+        }
+    }
 
     #[test]
     fn every_summary_tone_uses_shared_fidelity_policy_before_json_adapter() {

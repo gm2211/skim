@@ -146,6 +146,7 @@ fn summary_cache_key(article_id: &str, title: &str, evidence: &str, ai: &AiSetti
     #[derive(Serialize)]
     struct SummaryKey<'a> {
         prompt_version: u32,
+        plan: crate::db::story_policy::SummaryPlan,
         article_id: &'a str,
         article_title: &'a str,
         source_fingerprint: String,
@@ -161,7 +162,9 @@ fn summary_cache_key(article_id: &str, title: &str, evidence: &str, ai: &AiSetti
     }
 
     let key = SummaryKey {
-        prompt_version: 3, // Shared style preserves source uncertainty and event timing.
+        prompt_version: 4, // Shared normalized length and bounded output budgets.
+        plan: crate::db::story_policy::summary_plan(ai.summary_length.as_deref(),
+            ai.summary_custom_word_count.map(i64::from)),
         article_id,
         article_title: title,
         source_fingerprint: format!("{:x}", Sha256::digest(evidence.as_bytes())),
@@ -173,7 +176,9 @@ fn summary_cache_key(article_id: &str, title: &str, evidence: &str, ai: &AiSetti
         summary_tone: ai.summary_tone.as_deref(),
         summary_format: ai.summary_format.as_deref(),
         summary_custom_prompt: ai.summary_custom_prompt.as_deref(),
-        summary_custom_word_count: ai.summary_custom_word_count,
+        summary_custom_word_count: (ai.summary_length.as_deref() == Some("custom")).then(||
+            crate::db::story_policy::summary_plan(ai.summary_length.as_deref(),
+                ai.summary_custom_word_count.map(i64::from)).word_count),
     };
 
     let bytes = serde_json::to_vec(&key).unwrap_or_default();
@@ -249,6 +254,23 @@ mod summary_cache_tests {
         assert_eq!(cached_summary(&db, &cache, &generation, id, "article", "key", false).await.unwrap_err(), "Summary cancelled");
         assert!(cache.lock().await.get("key").is_none());
         assert!(queries::get_article_summary(&db.conn.lock().unwrap(), "article", "key").unwrap().is_some());
+    }
+
+    #[test]
+    fn cache_keys_normalize_unused_counts_without_colliding_different_effective_plans() {
+        let mut ai = crate::db::models::AppSettings::default().ai;
+        ai.summary_length = Some("long".into());
+        let key = summary_cache_key("a", "title", "source", &ai);
+        ai.summary_custom_word_count = Some(i32::MAX);
+        assert_eq!(key, summary_cache_key("a", "title", "source", &ai));
+        ai.summary_length = Some("custom".into());
+        let invalid = summary_cache_key("a", "title", "source", &ai);
+        ai.summary_custom_word_count = Some(-100);
+        assert_eq!(invalid, summary_cache_key("a", "title", "source", &ai));
+        ai.summary_custom_word_count = None;
+        assert_eq!(invalid, summary_cache_key("a", "title", "source", &ai));
+        ai.summary_custom_word_count = Some(30);
+        assert_ne!(invalid, summary_cache_key("a", "title", "source", &ai));
     }
 
     #[test]
@@ -460,8 +482,9 @@ pub async fn summarize_article(
 
     // Apply per-article overrides before deriving the cache key or provider prompt.
     if let Some(word_count) = summary_custom_word_count {
-        if !(20..=1000).contains(&word_count) {
-            return Err("Summary word count must be between 20 and 1000".to_string());
+        if !crate::db::story_policy::summary_custom_words_valid(i64::from(word_count)) {
+            let (min, max) = crate::db::story_policy::summary_word_bounds();
+            return Err(format!("Summary word count must be between {min} and {max}"));
         }
         settings.ai.summary_custom_word_count = Some(word_count);
     }

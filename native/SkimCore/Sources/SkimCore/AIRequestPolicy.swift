@@ -19,13 +19,53 @@ public enum AIRequestPolicy {
         return resolved
     }
 
-    public static func summaryWordCount(_ settings: AISettings) -> Int {
-        switch settings.summaryLength ?? "short" {
-        case "custom": return settings.summaryCustomWordCount.flatMap { $0 > 0 ? $0 : nil } ?? 30
-        case "medium": return 150
-        case "long": return 300
-        default: return 30
+    public struct SummaryPlan: Equatable, Sendable {
+        public var wordCount: Int
+        public var bulletMin: Int
+        public var bulletMax: Int
+        public var bulletMaxTokens: Int
+        public var fullMaxTokens: Int
+
+        public var cacheIdentity: String {
+            [wordCount, bulletMin, bulletMax, bulletMaxTokens, fullMaxTokens]
+                .map(String.init).joined(separator: ":")
         }
+    }
+
+    public static var summaryWordRange: ClosedRange<Int> {
+        Int(skim_summary_min_words())...Int(skim_summary_max_words())
+    }
+
+    public static func validSummaryWordCount(_ count: Int) -> Bool {
+        skim_summary_custom_words_valid(Int64(clamping: count)) != 0
+    }
+
+    public static func summaryPlan(_ settings: AISettings) -> SummaryPlan {
+        let length = settings.summaryLength ?? ""
+        let plan = (length.contains("\0") ? "" : length).withCString {
+            skim_summary_plan($0, Int64(clamping: settings.summaryCustomWordCount ?? 0))
+        }
+        return SummaryPlan(wordCount: Int(plan.word_count), bulletMin: Int(plan.bullet_min),
+                           bulletMax: Int(plan.bullet_max), bulletMaxTokens: Int(plan.bullet_max_tokens),
+                           fullMaxTokens: Int(plan.full_max_tokens))
+    }
+
+    public static func summaryWordCount(_ settings: AISettings) -> Int {
+        summaryPlan(settings).wordCount
+    }
+
+    /// Apply an explicit count edit; reading a legacy setting never rewrites it.
+    public static func summarySettings(_ base: AISettings, wordCount: Int) -> AISettings {
+        var updated = base
+        let count = validSummaryWordCount(wordCount) ? wordCount : summaryPlan(AISettings(summaryLength: "short")).wordCount
+        switch count {
+        case 30: updated.summaryLength = "short"
+        case 150: updated.summaryLength = "medium"
+        case 300: updated.summaryLength = "long"
+        default: updated.summaryLength = "custom"
+        }
+        updated.summaryCustomWordCount = count
+        return updated
     }
 
     /// Shared style and fidelity policy, with the native plain-text response contract.

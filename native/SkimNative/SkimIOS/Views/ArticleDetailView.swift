@@ -411,7 +411,7 @@ struct SummaryConfigurationSheet: View {
                         Text("Length")
                             .summaryControlLabel()
                         SummaryWordCountPresetChips(wordCount: $wordCount)
-                        Stepper(value: $wordCount, in: 30...600, step: 25) {
+                        Stepper(value: $wordCount, in: AIRequestPolicy.summaryWordRange, step: 25) {
                             Text("\(wordCount) words")
                                 .font(.system(size: 17, weight: .regular))
                                 .foregroundStyle(SkimStyle.text)
@@ -458,10 +458,8 @@ struct SummaryConfigurationSheet: View {
     }
 
     private var configuredSettings: AISettings {
-        var next = defaults
+        var next = AIRequestPolicy.summarySettings(defaults, wordCount: wordCount)
         next.summaryTone = style
-        next.summaryLength = "custom"
-        next.summaryCustomWordCount = wordCount
         next.summaryCustomPrompt = customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         return next
     }
@@ -478,9 +476,9 @@ private struct SummaryWordCountPresetChips: View {
     }
 
     private let presets: [Preset] = [
-        Preset(label: "Short", value: 50),
+        Preset(label: "Short", value: 30),
         Preset(label: "Medium", value: 150),
-        Preset(label: "Long", value: 400),
+        Preset(label: "Long", value: 300),
         Preset(label: "XL", value: 600),
     ]
 

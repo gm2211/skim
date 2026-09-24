@@ -1,0 +1,105 @@
+{
+  "desktop_version": "0.1.33",
+  "ios_version": "0.1.13",
+  "ios_build": "70",
+  "desktop_sha256": "bd4783bfefc04edcb52da53fb06f5ddfc88ab06eed23537353863fc5bb86fa93",
+  "bundled_helper_sha256": "eafdeb44e442bfba470d59c45f052b11ddf6a4c343f5e9124e7a611acf8d8fa1",
+  "compiled_helper_sha256": "c6a11ae2cc910cdbdc000b5aa3e7922a3d8361675ec370d3ef1b636724d0080c",
+  "helper_text_matches_compiled": true,
+  "ios_sha256": "7eb97a0527ad28cabd2e41a1ae7f9132132856e39ef17a9a2f069bc50e3f14b6",
+  "ios_dsym_uuid": "D00EBFB4-04A4-3954-B7B3-82B45BE5D552",
+  "shared_c_symbols": [
+    "_skim_chat_evidence_spans",
+    "_skim_chat_rank",
+    "_skim_semantic_group_valid",
+    "_skim_semantic_max_candidates",
+    "_skim_semantic_max_pairs",
+    "_skim_semantic_pair_prompt",
+    "_skim_semantic_partition",
+    "_skim_semantic_prompt",
+    "_skim_semantic_rating_prompt",
+    "_skim_semantic_rating_valid",
+    "_skim_semantic_score",
+    "_skim_story_classify",
+    "_skim_story_confidence",
+    "_skim_story_default_thresholds",
+    "_skim_story_identity_hash",
+    "_skim_story_is_unique",
+    "_skim_story_score",
+    "_skim_summary_custom_words_valid",
+    "_skim_summary_max_words",
+    "_skim_summary_min_words",
+    "_skim_summary_plan",
+    "_skim_summary_style_prompt",
+    "_skim_today_lede_evidence_version",
+    "_skim_today_lede_excerpt_valid",
+    "_skim_today_lede_max_articles",
+    "_skim_today_lede_prompt",
+    "_skim_today_lede_retry_prompt",
+    "_skim_today_lede_text_characters"
+  ],
+  "desktop_shared_swift_symbol_count": 88,
+  "ios_shared_swift_symbol_count": 88,
+  "shared_source_sha256": {
+    "shared/SkimStoryPolicy/Sources/SkimStoryPolicy/SkimStoryPolicy.c": "cdf18e8dbafcb8ed5963ff79fab9b78202c6496f1923a9cfa901c637ba00e1d0",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalModelPolicy.swift": "159727c952106f95514507db4d0cbdb4444a536ba17448c2a19d877a0381dbb3",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/ModelChatTemplate.swift": "7567bab0ddb29d4df2cb5113960dcd65bf0360ed0ca88acaab2e8bccdef51354",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalChatMessages.swift": "4d5c8319b4a91942e9e3b7b0de8f2a815acd49cafda1b3b1b8c1fab763329664",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/FoundationChatMessages.swift": "0e2b8125558eab34815287b098b00cab40bd54fcb22925ca55ee86b2aa30c3d0"
+  },
+  "date": "2026-09-24",
+  "source_commit": "a9ecc0e22ee3cdbd179b0234acd741eb6c7db09d",
+  "testflight": {
+    "id": "c400a32e-99e0-4e4a-818f-0e730f962b9a",
+    "build": "70",
+    "processing": "VALID",
+    "audience": "INTERNAL_ONLY",
+    "beta": {
+      "autoNotifyEnabled": true,
+      "internalBuildState": "IN_BETA_TESTING",
+      "externalBuildState": "NOT_APPLICABLE"
+    }
+  },
+  "signed_parent_smoke": {
+    "timed_out": true,
+    "exit": -15,
+    "elapsed": 120.0,
+    "stdout": "",
+    "stderr": "",
+    "sample_boundary": [
+      "_libsecinit_appsandbox",
+      "_xpc_pipe_routine",
+      "mach_msg2_trap"
+    ],
+    "interpretation": "Timed out before main. Locked Mac is correlated, not a proven cause; standalone helper success does not pass signed-parent acceptance."
+  },
+  "installed_desktop": {
+    "version": "0.1.17",
+    "updated": false,
+    "native_interaction": "Computer control reports locked Mac; Terms acceptance remains unconfirmed."
+  },
+  "checks": {
+    "rust": 174,
+    "swift_core": 146,
+    "native_app_simulator": 41,
+    "frontend": 156,
+    "shared_inference": 18,
+    "packaging": 3,
+    "total": 538,
+    "excluded": [
+      "ai::local_provider::tests::test_summarize_local_model: local GGUF fixture unavailable"
+    ]
+  },
+  "production_artifact_checks": [
+    "desktop codesign --verify --deep --strict",
+    "28 identical shared C symbols in desktop executable and matching iOS dSYM",
+    "88 shared Swift symbols in desktop helper and iOS dSYM",
+    "LocalChatMessages.prepare and FoundationChatMessages.prepare in both production inference binaries",
+    "bundled helper machine code matches freshly compiled helper",
+    "iOS executable and dSYM UUID match",
+    "archive version/build bumped before archive",
+    "TestFlight VALID/IN_BETA_TESTING"
+  ],
+  "quality_limit": "Transport regressions fixed. Mock cloud requests and typed Foundation transcripts do not establish live provider or factual-answer quality. Factual-chat candidate rejected; skim-cg5e remains open.",
+  "full_core_migration": "skim-62qe remains open; bounded shared policy does not unify domain engines."
+}

@@ -145,7 +145,8 @@
       }
     ],
     "seconds": 1.265,
-    "boundary": "Standalone freshly packaged helper, not signed-parent or native UI. These controls distinguish scalar and structured-history handling; they do not establish model factual reliability."
+    "boundary": "Standalone freshly packaged helper, not signed-parent or native UI. These controls distinguish scalar and structured-history handling; they do not establish model factual reliability.",
+    "case_naming_note": "scalar_arithmetic means a single-turn question here; the recorded runtime request uses structured messages, not the legacy scalar fallback."
   },
   "independent_review": {
     "shared_foundation": "Review found block-only system instruction loss; fixed with regression before release. No remaining concrete transport defect found.",
@@ -158,7 +159,7 @@
   "acceptance_limits": [
     "Native cloud responses are mocked with fake credentials; no live provider quality or subscription-account acceptance claimed.",
     "FoundationModels transcript construction and compilation pass; actual inference unavailable because Apple Intelligence is disabled.",
-    "One fresh-helper history arithmetic probe answered 8 instead of 12. Three separately recorded scalar/history controls passed with different system wording. All observations retained; model factual reliability remains open.",
+    "One fresh-helper history arithmetic probe answered 8 instead of 12. Three separately recorded single-turn/history controls passed with different system wording. All observations retained; model factual reliability remains open.",
     "Signed desktop parent times out before main after 120 seconds in sandbox initialization. Locked Mac prevents native interaction; correlation is not a proven cause.",
     "Installed desktop remains 0.1.17. No new UI acceptance, Terms acceptance, or full domain-core unification claimed."
   ],
@@ -175,5 +176,43 @@
     "shared/SkimInferencePolicy/Tests/SkimInferencePolicyTests/FoundationChatMessagesTests.swift": "1f2400ccf48f949ac900afc5d453f6eb07f71a45d1bf5083190db1436de853aa",
     "src-tauri/src/ai/native_provider.rs": "81ee6db34a0ab3aa6dce6218350d0ac07df84e90edb7dd4841dd7a1f18f293df",
     "plugins/tauri-plugin-skim-ai/ios/MacBridge/main.swift": "14472bbc9f4c7917d009108d7e8a7af94c30f7f94018c01a360f8da183e4bbfa"
+  },
+  "native_simulator_result": "/tmp/skim-semantic-ios-build/Logs/Test/Test-Skim iOS-2026.09.24_18-24-44--0400.xcresult",
+  "native_simulator_summary": {
+    "devicesAndConfigurations": [
+      {
+        "device": {
+          "architecture": "arm64",
+          "deviceId": "6FBF2C17-A824-49B8-ABE0-C3FC96653D48",
+          "deviceName": "TapezeTest17",
+          "modelName": "iPhone 17",
+          "osBuildNumber": "23F77",
+          "osVersion": "26.5",
+          "platform": "iOS Simulator"
+        },
+        "expectedFailures": 0,
+        "failedTests": 0,
+        "passedTests": 41,
+        "skippedTests": 0,
+        "testPlanConfiguration": {
+          "configurationId": "1",
+          "configurationName": "Test Scheme Action"
+        }
+      }
+    ],
+    "environmentDescription": "Skim iOS \u00b7 Built with macOS 26.6.2",
+    "expectedFailures": 0,
+    "failedTests": 0,
+    "finishTime": 1790288695.063,
+    "passedTests": 41,
+    "result": "Passed",
+    "runtimeWarnings": [],
+    "skippedTests": 0,
+    "startTime": 1790288684.262,
+    "statistics": [],
+    "testFailures": [],
+    "title": "Test - Skim iOS",
+    "topInsights": [],
+    "totalTestCount": 41
   }
 }

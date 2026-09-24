@@ -520,9 +520,8 @@ enum NativeAI {
         return nil
     }
 
-    /// Pass two: write the lede under one headline, from the full text of the
-    /// articles behind it. Plain prose — there is nothing here worth risking a
-    /// JSON parse on.
+    /// Select a source passage under one headline; only an exact, bounded
+    /// excerpt from an individual supplied article may be shown.
     static func catchUpLede(
         headline: String,
         articles: [Article],
@@ -530,31 +529,23 @@ enum NativeAI {
     ) async throws -> String {
         guard !articles.isEmpty else { return "" }
 
-        let text = articles.prefix(TodayLedePolicy.maxArticles).map { article in
-            let body = article.plainBody.trimmingCharacters(in: .whitespacesAndNewlines)
-            return """
-            --- \(article.title) [\(PublicationName.of(article: article))]
-            \(body.isEmpty ? "No reader text available." : String(body.prefix(TodayLedePolicy.textCharacters)))
-            """
+        let selected = Array(articles.prefix(TodayLedePolicy.maxArticles))
+        let bodies = selected.map { String($0.plainBody.trimmingCharacters(in: .whitespacesAndNewlines).prefix(TodayLedePolicy.textCharacters)) }
+        let text = zip(selected, bodies).map { article, body in
+            "--- \(article.title) [\(PublicationName.of(article: article))]\n\(body)"
+        }.joined(separator: "\n\n")
+
+        let prompt = """
+        Headline: \(headline)
+
+        Article text behind it:
+        \(text)
+        """
+        // Both attempts use the same evidence; the plain retry cannot authorize rewrites.
+        return try await TodayLedePolicy.generateExcerpt(sources: bodies) { instructions, jsonMode in
+            try await complete(settings: settings, instructions: instructions, prompt: prompt,
+                maxTokens: 300, jsonMode: jsonMode, temperature: 0)
         }
-        .joined(separator: "\n\n")
-
-        let raw = try await complete(
-            settings: settings,
-            instructions: TodayLedePolicy.instructions + "\n\nOutput only the lede itself, as plain text.",
-            prompt: """
-            Headline: \(headline)
-
-            Article text behind it:
-            \(text)
-            """,
-            maxTokens: 300
-        )
-
-        let lede = cleanLede(raw)
-        // A model that answered with the prompt's own example leaves the story
-        // with a template string under it; better to show nothing.
-        return CatchUpText.isPlaceholder(lede) ? "" : lede
     }
 
     /// Strip the wrappers models put around a bare paragraph.

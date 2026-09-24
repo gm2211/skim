@@ -1,7 +1,7 @@
 use crate::ai::local_provider::SharedModelState;
 use crate::ai::prompts;
-use crate::ai::provider::{create_provider_with_app, ChatMessage, ChatRequest};
-use crate::commands::ai::{default_model, extract_json_object};
+use crate::ai::provider::{create_provider_with_app, AiProvider, ChatMessage, ChatRequest};
+use crate::commands::ai::default_model;
 use crate::db::today_edition::{self, TodayEditionItemView, TodayEditionView};
 use crate::db::Database;
 use crate::db::{queries, story_policy};
@@ -216,41 +216,18 @@ pub async fn generate_today_ledes(
     );
 
     for (index, (story_id, headline, article_ids)) in pending.iter().enumerate() {
-        let articles_text = lede_source_text(&db, article_ids).await?;
+        let evidence = lede_source_text(&db, article_ids).await?;
+        let articles_text = &evidence.prompt_text;
 
         if articles_text.trim().is_empty() {
             continue;
         }
 
-        let request = ChatRequest {
-            model: model.clone(),
-            messages: vec![
-                ChatMessage {
-                    role: "system".to_string(),
-                    content: prompts::catchup_lede_system_prompt(),
-                    content_blocks: None,
-                },
-                ChatMessage {
-                    role: "user".to_string(),
-                    content: prompts::catchup_lede_user_prompt(headline, &articles_text),
-                    content_blocks: None,
-                },
-            ],
-            temperature: Some(0.3),
-            max_tokens: Some(300),
-            json_mode: true,
-            tools: None,
-        };
-
-        let lede = match provider.chat(request).await {
-            Ok(response) => parse_lede(response.content.trim()),
-            // One story failing to write is not worth losing the page over.
-            Err(_) => String::new(),
-        };
+        let lede = verified_preview(provider.as_ref(), &model, headline, &evidence).await.unwrap_or_default();
 
         if !lede.is_empty() {
             let conn = db.conn.lock().map_err(|error| error.to_string())?;
-            queries::set_edition_item_lede(&conn, &edition_id, story_id, &lede)
+            queries::set_verified_edition_item_lede(&conn, &edition_id, story_id, &lede)
                 .map_err(|error| error.to_string())?;
         }
 
@@ -280,7 +257,12 @@ pub async fn generate_today_ledes(
 
 /// Read only this story's selected reports, release the DB lock before network
 /// work, and reuse the reader/chat resolver's cache, deadlines, and fallback.
-async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<String, String> {
+struct LedeEvidence {
+    prompt_text: String,
+    bodies: Vec<String>,
+}
+
+async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<LedeEvidence, String> {
     let articles = {
         let conn = db.conn.lock().map_err(|error| error.to_string())?;
         article_ids
@@ -298,6 +280,7 @@ async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<Strin
         .collect();
     let bodies = super::article_body::resolve_selected_article_texts(db, &sources).await;
     let mut text = String::new();
+    let mut bounded_bodies = Vec::new();
     for (article, body) in articles.iter().zip(bodies) {
         let body: String = body
             .chars()
@@ -315,34 +298,108 @@ async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<Strin
             ),
             body.trim()
         ));
+        bounded_bodies.push(body);
     }
-    Ok(text)
+    Ok(LedeEvidence { prompt_text: text, bodies: bounded_bodies })
+}
+
+async fn verified_preview(provider: &dyn AiProvider, model: &str, headline: &str, evidence: &LedeEvidence) -> Option<String> {
+    let make_request = |system: String, user: String, json_mode| ChatRequest {
+        model: model.into(), messages: vec![ChatMessage::text("system", system), ChatMessage::text("user", user)],
+        temperature: Some(0.0), max_tokens: Some(300), json_mode, tools: None,
+    };
+    let response = provider.chat(make_request(prompts::catchup_lede_system_prompt(),
+        prompts::catchup_lede_user_prompt(headline, &evidence.prompt_text), true)).await.ok()?;
+    if let Some(excerpt) = parse_excerpt(&response.content, &evidence.bodies) { return Some(excerpt); }
+    // One retry for invalid output only. Transport/model errors remain missing,
+    // and the entire plaintext reply must still pass the source validator.
+    let response = provider.chat(make_request(story_policy::today_lede_retry_prompt().into(),
+        prompts::catchup_lede_retry_user_prompt(headline, &evidence.prompt_text), false)).await.ok()?;
+    evidence.bodies.iter().find_map(|body| story_policy::validated_today_excerpt(body, &response.content))
 }
 
 #[derive(Deserialize)]
-struct LedeRaw {
-    #[serde(default, alias = "summary", alias = "text")]
-    lede: String,
+#[serde(deny_unknown_fields)]
+struct ExcerptRaw {
+    excerpt: String,
 }
 
-/// Providers that honour `json_mode` give us an object; the rest give prose.
-fn parse_lede(content: &str) -> String {
-    if let Some(parsed) = extract_json_object(content)
-        .and_then(|json| serde_json::from_str::<LedeRaw>(json).ok())
-        .map(|raw| raw.lede.trim().to_string())
-        .filter(|lede| !lede.is_empty())
-    {
-        return parsed;
-    }
-    if content.starts_with('{') {
-        return String::new();
-    }
-    content.to_string()
+fn parse_excerpt(content: &str, bodies: &[String]) -> Option<String> {
+    let trimmed = content.trim();
+    let json = if let Some(body) = trimmed.strip_prefix("```json").or_else(|| trimmed.strip_prefix("```")) {
+        body.trim().strip_suffix("```")?.trim()
+    } else { trimmed };
+    let raw: ExcerptRaw = serde_json::from_str(json).ok()?;
+    bodies.iter().find_map(|body| story_policy::validated_today_excerpt(body, &raw.excerpt))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct PreviewProvider {
+        replies: std::sync::Mutex<std::collections::VecDeque<Result<String, String>>>,
+        requests: std::sync::Mutex<Vec<ChatRequest>>,
+    }
+    #[async_trait::async_trait]
+    impl AiProvider for PreviewProvider {
+        async fn chat(&self, request: ChatRequest) -> Result<crate::ai::provider::ChatResponse, String> {
+            self.requests.lock().unwrap().push(request);
+            Ok(crate::ai::provider::ChatResponse {
+                content: self.replies.lock().unwrap().pop_front().expect("no third attempt")?,
+                model: "test".into(), usage: None, tool_uses: vec![], stop_reason: None,
+            })
+        }
+        fn name(&self) -> &str { "test" }
+    }
+
+    #[tokio::test]
+    async fn invalid_json_gets_one_source_verified_plaintext_retry_only() {
+        let evidence = LedeEvidence { prompt_text: "--- A report\nThe event happened in June.".into(),
+            bodies: vec!["The event happened in June.".into()] };
+        let valid = "The event happened in June.";
+        for (replies, expected, calls) in [
+            (vec![Ok(serde_json::json!({"excerpt":valid}).to_string())], Some(valid), 1),
+            (vec![Ok("{malformed".into()), Ok(format!("  {valid}\n"))], Some(valid), 2),
+            (vec![Ok("{malformed".into()), Ok("The event happened in August.".into())], None, 2),
+            (vec![Ok("{malformed".into()), Ok(format!("Here is the excerpt: {valid}"))], None, 2),
+            (vec![Ok("{malformed".into()), Err("model unavailable".into())], None, 2),
+            (vec![Err("model unavailable".into())], None, 1),
+        ] {
+            let provider = PreviewProvider { replies: std::sync::Mutex::new(replies.into()), requests: Default::default() };
+            assert_eq!(verified_preview(&provider, "configured-model", "Headline", &evidence).await.as_deref(), expected);
+            let requests = provider.requests.lock().unwrap();
+            assert_eq!(requests.len(), calls);
+            assert!(requests[0].json_mode);
+            for request in requests.iter() {
+                assert_eq!(request.model, "configured-model");
+                assert_eq!(request.temperature, Some(0.0));
+                assert_eq!(request.max_tokens, Some(300));
+            }
+            if calls == 2 {
+                assert!(!requests[1].json_mode);
+                assert_eq!(requests[1].messages[0].content, story_policy::today_lede_retry_prompt());
+                assert_eq!(requests[1].messages[1].content, "Headline: Headline\n\nArticle text behind it:\n--- A report\nThe event happened in June.");
+            }
+        }
+    }
+
+    #[test]
+    fn preview_requires_one_exact_source_passage_and_strict_object() {
+        let bodies = vec!["The breach happened in June. OpenAI discovered it in August.".into(),
+            "The report did not establish causation. Officials are investigating.".into()];
+        assert_eq!(parse_excerpt("```json\n{\"excerpt\":\"The breach  happened\\n in June.\"}\n```", &bodies), Some("The breach happened in June.".into()));
+        for excerpt in ["The breach happened in August.", "establish causation.",
+            "The breach happened in June. Officials are investigating.", "Headline only."] {
+            assert!(parse_excerpt(&serde_json::json!({"excerpt":excerpt}).to_string(), &bodies).is_none(), "{excerpt}");
+        }
+        for raw in ["The breach happened in June.", "prefix {\"excerpt\":\"The breach happened in June.\"}",
+            "{\"lede\":\"The breach happened in June.\"}", "{\"excerpt\":\"The breach happened in June.\",\"other\":true}"] {
+            assert!(parse_excerpt(raw, &bodies).is_none(), "{raw}");
+        }
+        let long = format!("{}ends.", "word ".repeat(61));
+        assert!(parse_excerpt(&serde_json::json!({"excerpt":long}).to_string(), &[long]).is_none());
+    }
 
     #[tokio::test]
     async fn lede_evidence_uses_full_reader_and_html_bodies_with_shared_bounds() {
@@ -373,7 +430,9 @@ mod tests {
             .unwrap();
         }
         let ids = ["cached", "html", "long", "empty", "excluded"].map(str::to_string);
-        let text = lede_source_text(&db, &ids).await.unwrap();
+        let evidence = lede_source_text(&db, &ids).await.unwrap();
+        assert_eq!(evidence.bodies.len(), 3);
+        let text = evidence.prompt_text;
         assert!(text.contains("Reader extraction with details absent from RSS."));
         assert!(text.contains("Full feed body with its supporting evidence."));
         assert!(!text.contains("RSS teaser"));

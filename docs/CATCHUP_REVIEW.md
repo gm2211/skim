@@ -2,7 +2,21 @@
 
 The acceptance target is a fast, attractive newspaper that groups related coverage, supports deeper summaries and article/library questions, and lets chat find relevant articles. This review does not claim that the full target or shared-core migration is complete.
 
-## Current-feed parser and frozen-update fixes
+## Source-verified newspaper previews
+
+Hands-on review found a chronology error: a generated OpenAI preview attached a five-day notification delay to the breach itself. The bounded input already contained the June incident, August discovery and September notification milestones. Stronger instructions, temperature zero, a correction pass and removing the repetition penalty did not reliably repair the model's paraphrases. Those inference experiments did not change the production helper.
+
+Today now selects a short source excerpt. Both production paths call one shared C validator and selection/retry policy: the passage must match one supplied body exactly after whitespace normalization, with conservative sentence/paragraph boundaries, no more than three sentences, 60 words and 600 Unicode scalars. The validator rejects source markup containing square brackets and limits source input to 65,536 bytes. A successful but invalid JSON response receives at most one plain-text retry; the entire retry must pass the same validation. Model errors do not cause an extra attempt. Detailed summaries and chat keep their existing behavior.
+
+Existing unverified ledes remain stored but hidden behind an evidence-version migration. Missing previews regenerate through the existing retry path; frozen edition identity, selected reports and reading state remain unchanged. Native reinsertion also excludes the derived lede symmetrically from snapshot comparisons, so generating a verified preview cannot cause an idempotent-insert conflict.
+
+The real desktop backend regenerated five of six lead previews in the isolated public-feed edition. The Greek report's selected quotation contained reference markup and was rejected, so its publisher snippet remains visible with the retry control. The actual React newspaper retained 10% read progress through reload, exposed all four grouped OpenAI reports, and opened the full reader. The 1280×720 screenshot retained readable copy and aligned controls without raw reference markup. This is browser component/backend integration, not installed native-app acceptance; the Mac remains locked.
+
+All 148 Rust library, 155 frontend and 118 Swift core tests pass. Both adapters run the 30-case shared excerpt corpus, and the bounded C scanner passes strict Clang and ASan/UBSan checks. Real Qwen 4B inference on five chronology cases in both request formats yielded ten accepted source passages with no definite factual contradictions in independent review. Two excerpts omit useful details; exact source matching does not establish completeness, editorial relevance or source truth. This is a small development sample, not representative accuracy. The native-format probes use the shared desktop inference helper, not an iOS UI.
+
+Quality evidence, synthetic inputs, output hashes and remaining limits are in [`releases/2026-09-24-source-preview-quality.json`](releases/2026-09-24-source-preview-quality.json). Release evidence is recorded separately. `skim-do2h` retains broader editorial quality, missing-preview retries and conservative extraction limitations; `skim-62qe` retains full domain sharing, and `skim-dz1g` retains installed native acceptance.
+
+## Previous current-feed parser and frozen-update fixes
 
 A complete 45-story current-feed run identified the earlier fallback precisely: Qwen 4B returned a complete JSON array, but both primary decoders required a `groups` object. Rust and Swift now accept whole arrays or envelopes, optionally fenced, while preserving shared numeric validation, all-pairs verification and independent ratings. Malformed identities, prose wrappers and truncated responses still fall back safely.
 

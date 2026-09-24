@@ -1,0 +1,152 @@
+[
+  {
+    "source": "The authority discovered the intrusion on May 11. It notified the regulator on May 14.",
+    "excerpt": "The authority discovered the intrusion on May 11. It notified the regulator on May 14.",
+    "valid": true
+  },
+  {
+    "source": "The authority discovered the intrusion on May 11.",
+    "excerpt": "The authority discovered the intrusion on May 4.",
+    "valid": false
+  },
+  {
+    "source": "The plan was not approved.",
+    "excerpt": "approved.",
+    "valid": false
+  },
+  {
+    "source": "The plan was not approved.",
+    "excerpt": "The plan was approved.",
+    "valid": false
+  },
+  {
+    "source": "An estimate suggested 40 homes. Inspections confirmed 27 homes.",
+    "excerpt": "Inspections confirmed 27 homes.",
+    "valid": true
+  },
+  {
+    "source": "An estimate suggested 40 homes. Inspections confirmed 27 homes.",
+    "excerpt": "An estimate suggested 27 homes.",
+    "valid": false
+  },
+  {
+    "source": "The notice was received.\n\nIt\twas escalated five days later.",
+    "excerpt": " It was escalated five days later.\n",
+    "valid": true
+  },
+  {
+    "source": "Officials said “The vote passed.” The law starts in April.",
+    "excerpt": "The law starts in April.",
+    "valid": true
+  },
+  {
+    "source": "The bill passed, but has not yet taken effect.",
+    "excerpt": "The bill passed.",
+    "valid": false
+  },
+  {
+    "source": "The council said the bill passed.",
+    "excerpt": "the bill passed.",
+    "valid": false
+  },
+  {
+    "source": "The report ends mid",
+    "excerpt": "The report ends mid",
+    "valid": false
+  },
+  {
+    "source": "Le résultat est confirmé. Le vote aura lieu demain.",
+    "excerpt": "Le résultat est confirmé.",
+    "valid": true
+  },
+  {
+    "source": "调查于五月十一日发现问题。",
+    "excerpt": "调查于五月十一日发现问题。",
+    "valid": true
+  },
+  {
+    "source": "No changes.",
+    "excerpt": "",
+    "valid": false
+  },
+  {
+    "source": "First claim. Second claim.",
+    "excerpt": "First claim. Fabricated claim. Second claim.",
+    "valid": false
+  },
+  {
+    "source": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word.",
+    "excerpt": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word.",
+    "valid": true
+  },
+  {
+    "source": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word.",
+    "excerpt": "word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word.",
+    "valid": false
+  },
+  {
+    "source": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.",
+    "excerpt": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé.",
+    "valid": false
+  },
+  {
+    "source": "One event happened. Two followed. Three arrived. Four ended.",
+    "excerpt": "One event happened. Two followed. Three arrived. Four ended.",
+    "valid": false
+  },
+  {
+    "source": "At 8 a.m. local time, the outage began. Crews repaired it.",
+    "excerpt": "local time, the outage began.",
+    "valid": false
+  },
+  {
+    "source": "Dr. Lee arrived. The council met later.",
+    "excerpt": "Dr. Lee arrived.",
+    "valid": true
+  },
+  {
+    "source": "Headline metadata for 4 September\n\nThe fire at Pine Hill was contained. It remains operational.",
+    "excerpt": "The fire at Pine Hill was contained. It remains operational.",
+    "valid": true
+  },
+  {
+    "source": "The operator said service resumed after repairs. It remains operational.",
+    "excerpt": "resumed after repairs. It remains operational.",
+    "valid": false
+  },
+  {
+    "source": "انتهى الاجتماع؟بدأ التصويت.",
+    "excerpt": "بدأ التصويت.",
+    "valid": true
+  },
+  {
+    "source": "Τελείωσε η συνεδρίαση;Άρχισε η ψηφοφορία.",
+    "excerpt": "Άρχισε η ψηφοφορία.",
+    "valid": true
+  },
+  {
+    "source": "調査は終了した。投票が始まった。",
+    "excerpt": "投票が始まった。",
+    "valid": true
+  },
+  {
+    "source": "Dr. Lee said 1.5 was safe. Second event occurred. Third detail followed. Fourth fact followed.",
+    "excerpt": "Dr. Lee said 1.5 was safe. Second event occurred. Third detail followed. Fourth fact followed.",
+    "valid": false
+  },
+  {
+    "source": "The report says the runner [crossed the line][2] before noon.",
+    "excerpt": "The report says the runner [crossed the line][2] before noon.",
+    "valid": false
+  },
+  {
+    "source": "Read [the official notice](https://example.invalid/notice) before voting.",
+    "excerpt": "Read [the official notice](https://example.invalid/notice) before voting.",
+    "valid": false
+  },
+  {
+    "source": "The train left at 8 a.m. The station closed later.",
+    "excerpt": "The train left at 8 a.m.",
+    "valid": true
+  }
+]

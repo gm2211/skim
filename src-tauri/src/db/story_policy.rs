@@ -9,6 +9,9 @@ struct Thresholds {
 }
 
 extern "C" {
+    fn skim_today_lede_excerpt_valid(source: *const u8, source_len: usize, excerpt: *const u8, excerpt_len: usize) -> i32;
+    fn skim_today_lede_evidence_version() -> i32;
+    fn skim_today_lede_retry_prompt() -> *const std::os::raw::c_char;
     fn skim_today_lede_prompt() -> *const std::os::raw::c_char;
     fn skim_today_lede_max_articles() -> usize;
     fn skim_today_lede_text_characters() -> usize;
@@ -95,6 +98,22 @@ pub fn is_unique(sources: i64) -> bool {
 pub fn identity_hash(seed: &str) -> u64 {
     // C reads exactly this slice synchronously and never retains its pointer.
     unsafe { skim_story_identity_hash(seed.as_ptr(), seed.len()) }
+}
+
+pub fn today_lede_evidence_version() -> i32 {
+    unsafe { skim_today_lede_evidence_version() }
+}
+
+pub fn validated_today_excerpt(source: &str, excerpt: &str) -> Option<String> {
+    let excerpt = excerpt.split_whitespace().collect::<Vec<_>>().join(" ");
+    // Owned UTF-8 buffers remain alive for the synchronous, read-only C call.
+    let valid = unsafe { skim_today_lede_excerpt_valid(source.as_ptr(), source.len(), excerpt.as_ptr(), excerpt.len()) };
+    (valid != 0).then_some(excerpt)
+}
+
+pub fn today_lede_retry_prompt() -> &'static str {
+    unsafe { std::ffi::CStr::from_ptr(skim_today_lede_retry_prompt()) }
+        .to_str().expect("shared retry instructions are UTF-8")
 }
 
 pub fn today_lede_prompt() -> &'static str {
@@ -204,6 +223,16 @@ pub fn semantic_score(base: f64, importance: f64, confidence: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn verified_today_excerpts_match_shared_corpus() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!("../../../shared/fixtures/today-excerpts.json")).unwrap();
+        for case in cases.as_array().unwrap() {
+            let result = validated_today_excerpt(case["source"].as_str().unwrap(), case["excerpt"].as_str().unwrap());
+            assert_eq!(result.is_some(), case["valid"].as_bool().unwrap(), "{case}");
+            if let Some(result) = result { assert_eq!(result, case["excerpt"].as_str().unwrap().split_whitespace().collect::<Vec<_>>().join(" ")); }
+        }
+    }
+
     #[test]
     fn shared_pair_partition_fixture() {
         let cases: serde_json::Value =

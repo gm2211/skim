@@ -83,10 +83,12 @@ impl SummaryCache {
 
 pub type SharedSummaryCache = Arc<Mutex<SummaryCache>>;
 
-fn summary_cache_key(article_id: &str, ai: &AiSettings) -> String {
+fn summary_cache_key(article_id: &str, title: &str, evidence: &str, ai: &AiSettings) -> String {
     #[derive(Serialize)]
     struct SummaryKey<'a> {
         article_id: &'a str,
+        article_title: &'a str,
+        source_fingerprint: String,
         provider: &'a str,
         model: Option<&'a str>,
         endpoint: Option<&'a str>,
@@ -100,6 +102,8 @@ fn summary_cache_key(article_id: &str, ai: &AiSettings) -> String {
 
     let key = SummaryKey {
         article_id,
+        article_title: title,
+        source_fingerprint: format!("{:x}", Sha256::digest(evidence.as_bytes())),
         provider: &ai.provider,
         model: ai.model.as_deref(),
         endpoint: ai.endpoint.as_deref(),
@@ -114,6 +118,29 @@ fn summary_cache_key(article_id: &str, ai: &AiSettings) -> String {
     let bytes = serde_json::to_vec(&key).unwrap_or_default();
     let digest = Sha256::digest(bytes);
     format!("{digest:x}")
+}
+
+#[cfg(test)]
+mod summary_cache_tests {
+    use super::*;
+
+    #[test]
+    fn summary_cache_tracks_evidence_title_and_requested_detail() {
+        let mut ai = crate::db::models::AppSettings::default().ai;
+        let key = summary_cache_key("article", "Initial headline", "RSS teaser.", &ai);
+        let summary = ArticleSummary {
+            article_id: "article".into(), bullet_summary: None,
+            full_summary: Some("Summary of teaser.".into()), provider: None,
+            model: None, created_at: 1,
+        };
+        let mut cache = SummaryCache::new();
+        cache.insert(key.clone(), summary);
+        assert!(cache.get(&summary_cache_key("article", "Initial headline", "RSS teaser.", &ai)).is_some());
+        assert!(cache.get(&summary_cache_key("article", "Initial headline", "Full reader evidence with corrected facts.", &ai)).is_none());
+        assert!(cache.get(&summary_cache_key("article", "Corrected headline", "RSS teaser.", &ai)).is_none());
+        ai.summary_length = Some("long".into());
+        assert!(cache.get(&summary_cache_key("article", "Initial headline", "RSS teaser.", &ai)).is_none());
+    }
 }
 
 /// Minimal cleanup: only strip ChatML tokens and code fences (structural, not heuristic).
@@ -227,64 +254,6 @@ fn extract_field_fuzzy(text: &str, field: &str) -> Option<String> {
     }
 
     Some(value.to_string())
-}
-
-/// Fetch the article URL and convert its body to plain text. Used as a fallback
-/// when the RSS entry only contains a title + link (Hacker News, Reddit, etc).
-pub(super) async fn fetch_article_text(url: &str) -> Result<String, String> {
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15")
-        .timeout(std::time::Duration::from_secs(20))
-        .build()
-        .map_err(|e| e.to_string())?;
-    let html = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .text()
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Strip everything outside <body>, then remove script/style/nav/etc
-    // before handing off to html2text.
-    let body = if let Some(start) = html.find("<body") {
-        let content_start = html[start..]
-            .find('>')
-            .map(|i| start + i + 1)
-            .unwrap_or(start);
-        if let Some(end) = html[content_start..].find("</body>") {
-            html[content_start..content_start + end].to_string()
-        } else {
-            html[content_start..].to_string()
-        }
-    } else {
-        html
-    };
-
-    let mut clean = body;
-    for tag in &[
-        "script", "style", "nav", "header", "footer", "noscript", "aside", "form", "svg", "iframe",
-    ] {
-        loop {
-            let lower = clean.to_lowercase();
-            let open = format!("<{}", tag);
-            let close = format!("</{}>", tag);
-            if let Some(s) = lower.find(&open) {
-                if let Some(e) = lower[s..].find(&close) {
-                    clean = format!("{}{}", &clean[..s], &clean[s + e + close.len()..]);
-                } else if let Some(gt) = clean[s..].find('>') {
-                    clean = format!("{}{}", &clean[..s], &clean[s + gt + 1..]);
-                } else {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-    }
-
-    Ok(html2text::from_read(clean.as_bytes(), 12000))
 }
 
 /// Find the first JSON object in a string (handles preamble text before the JSON)
@@ -405,7 +374,16 @@ pub async fn summarize_article(
         );
     }
 
-    let cache_key = summary_cache_key(&article_id, &settings.ai);
+    // Resolve evidence before looking up a summary: reader enrichment and feed
+    // corrections must not reuse a summary of an older teaser for the same ID.
+    let text = super::article_body::resolve_article_text(db.inner(), &article.article).await;
+    if text.trim().is_empty() {
+        return Err("No article content to summarize.".to_string());
+    }
+    if generation.0.load(Ordering::SeqCst) != gen_id {
+        return Err("Summary cancelled".to_string());
+    }
+    let cache_key = summary_cache_key(&article_id, &article.article.title, &text, &settings.ai);
     {
         let mut cache = summary_cache.lock().await;
         if force.unwrap_or(false) {
@@ -441,15 +419,10 @@ pub async fn summarize_article(
     {
         let provider_name = settings.ai.provider.as_str();
         if provider_name == "mlx" || provider_name == "foundation-models" {
-            // Resolve article body the same way the desktop path does below.
-            let text = super::article_body::resolve_article_text(db.inner(), &article.article).await;
-            if text.trim().is_empty() {
-                return Err("No article content to summarize.".to_string());
-            }
             let text = if provider_name == "mlx" {
                 ios_local_summary_text(&text)
             } else {
-                text
+                text.clone()
             };
 
             let plugin = app.skim_ai();
@@ -533,16 +506,6 @@ pub async fn summarize_article(
         .clone()
         .unwrap_or_else(|| default_model(&settings.ai.provider));
 
-    // Use the longest available content — prefer content_text, fall back to HTML stripped to text
-    // The reader's extraction first, then the feed body, then the linked page:
-    // many aggregator feeds (Hacker News, Reddit, most newsletters) ship only a
-    // title and a blurb, and summarizing the blurb is summarizing nothing.
-    let text = super::article_body::resolve_article_text(db.inner(), &article.article).await;
-
-    if text.trim().is_empty() {
-        return Err("No article content to summarize.".to_string());
-    }
-
     let system_prompt = prompts::article_summary_system_prompt(&settings.ai);
 
     // Get bullet summary (skip if format is paragraph-only)
@@ -605,20 +568,12 @@ pub async fn summarize_article(
     };
 
     let bullet_text = bullet_response.map(|r| {
-        log::info!(
-            "Bullet raw response: {}",
-            &r.content[..r.content.len().min(200)]
-        );
+        log::debug!("Bullet response: {} characters", r.content.chars().count());
         extract_bullets_field(&r.content)
     });
     let full_text = full_response.map(|r| {
-        log::info!(
-            "Summary raw response: {}",
-            &r.content[..r.content.len().min(500)]
-        );
-        let result = extract_summary_field(&r.content);
-        log::info!("Extracted summary: {}", &result[..result.len().min(200)]);
-        result
+        log::debug!("Summary response: {} characters", r.content.chars().count());
+        extract_summary_field(&r.content)
     });
 
     let summary = ArticleSummary {

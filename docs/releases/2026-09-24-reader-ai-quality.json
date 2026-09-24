@@ -1,0 +1,104 @@
+{
+  "checked_at": "2026-09-24",
+  "scope": "Reader evidence, summary cache, Unicode logging and native chat settings parity. General AI accuracy and native interactive acceptance remain open.",
+  "engineering_regressions": {
+    "desktop_actual_command_replay": {
+      "method": "Disposable SQLite library and deterministic local OpenAI-compatible provider; summarize_article through actual Rust devbridge.",
+      "before": [
+        "Same article ID with fuller evidence returned stale teaser summary without force.",
+        "300 CJK characters triggered UTF-8 byte-boundary panic and HTTP 500 with info logging."
+      ],
+      "after": [
+        "Evidence change returned updated summary without force.",
+        "All 300 CJK characters returned successfully with debug logging."
+      ],
+      "boundary": "Mock-provider command integration, not model-quality proof.",
+      "offline_extraction_replay": {
+        "first_seconds": 0.036,
+        "offline_repeat_seconds": 0.016,
+        "article_fetches": 1,
+        "same_cached_summary": true,
+        "genuine_extracted_html_separate_from_raw_page": true
+      }
+    },
+    "desktop_reader_cache": "First successful extracted HTML and raw page persist separately. Repeat, offline and library-source requests reuse extraction; empty extraction cannot promote raw navigation chrome. Individual fetch 20s, selected-source 2s/total 5s bounds.",
+    "native": "Fuller feed/reader-cache evidence used by summary and article chat; extracted plain text persists in existing memory/SQLite caches. Metadata and source URLs preserved. Chat provider/model overrides, preset word counts, cache source fingerprint, summary-context bounds and article-specific eviction covered by Core tests. Generated summary remains separately labeled untrusted context across turns/reopen; local web sources remain structured citations.",
+    "checks": {
+      "rust": 151,
+      "frontend": 155,
+      "swift_core": 125,
+      "typescript_vite": true,
+      "ios_simulator": true,
+      "excluded": "One pre-existing GGUF integration requires an unavailable model."
+    }
+  },
+  "live_desktop": {
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "provider": "mlx",
+    "environment": "Actual desktop React components and Rust devbridge in Codex in-app browser with disposable public-news library; not installed Tauri native runtime.",
+    "flows": [
+      "Expanded a four-report story; opened full BBC reader; verified detailed summary controls and resulting summary; opened article chat; follow-up corrected incorrect summary timeline using source.",
+      "Library chat found expected BBC World headline from phrase in full reader text. Result listed 15 retrieved sources; correct answer does not prove source-list precision."
+    ],
+    "visual": "1280x720 reader, summary options/result and chat screenshots inspected. Aligned glass surfaces, readable source and independently scrollable summary/chat. Native Mac remains locked.",
+    "known_failure": "Long summary still merged discovery/reporting timing into three-month detection delay. Follow-up could correct it; first answer remains defective."
+  },
+  "model_experiment": {
+    "design": {
+      "source_article_sha256": "86767b90a7fe2be2d2edb81edec5b6fd7ca3ebaef2d58d74aeb09731d6083c12",
+      "source_article_id": "62c01db0-6a81-4269-b52c-de060944cbe3",
+      "source_article_title": "Why did an OpenAI system hack Australia's health system - and can it be stopped in the future?",
+      "source_facts_preregistered": [
+        "incident June 18",
+        "OpenAI discovered in August",
+        "email sent some weeks later (exact month/day unstated)",
+        "email unnoticed five days",
+        "escalated to cyber-security experts September 10"
+      ],
+      "candidate_instruction": "Evidence grounding: Keep occurrence, discovery, notification, and escalation as separate milestones; never attach an interval to the wrong milestone. Preserve source wording for relative timing when an exact date or month is unstated; do not infer one. Distinguish amounts announced or proposed, pledged, handed over or received, and spent or disbursed. Preserve uncertainty and attribution. Use only article-supported claims; do not invent dates, amounts, causal links, or general conclusions.",
+      "comparison": "7 baseline and 7 candidate app-bridge calls interleaved: 3 long-summary repetitions, 2 OpenAI chronology questions, 2 synthetic chronology controls. Same packaged local MLX provider via live Tauri /invoke bridge on a disposable fixture DB. Summary candidate changes only transient summary_custom_prompt system text; chat candidate prepends the guard to the same user question because chat command has no per-call system override. This placement asymmetry limits direct prompt-effect attribution. No app settings persisted. Direct helper launch was not used because direct launch crashed during Metal device discovery; live devbridge calls succeeded (cause unproven).",
+      "synthetic_inputs": [
+        {
+          "id": "water",
+          "source_sha256": "bf5b912677cce3853c52d8e5cefdc711e73dee11ac1f62e757749ed6c7e2380b",
+          "body": "Vale Brook Water Authority said an unauthorized party first accessed a contractor account on May 4. The authority says the access ended May 6. It discovered the activity on May 11 and notified the regional regulator on May 14. The review is ongoing. The regulator confirmed receiving notice from Vale Brook Water Authority on May 14 about unauthorized access that occurred May 4\u20136. The utility found evidence of the intrusion on May 11. The regulator has not announced findings or penalties."
+        },
+        {
+          "id": "fare",
+          "source_sha256": "b9451484b40a409bcb189dfaac8331b155782224cafcd7c25344187280827beb",
+          "body": "On February 3, Lydon officials proposed raising standard ferry fares by 8 percent. The council scheduled a vote for February 19. Until a vote, the increase remains a proposal and current fares continue. Lydon's council approved the 8 percent standard-fare increase on February 19. The resolution sets April 1 as the effective date. No fare change takes effect before then."
+        }
+      ]
+    },
+    "latency": {
+      "summary_baseline_seconds": [
+        3.322,
+        3.297,
+        3.387
+      ],
+      "summary_baseline_mean": 3.335,
+      "summary_candidate_seconds": [
+        3.611,
+        3.653,
+        3.647
+      ],
+      "summary_candidate_mean": 3.637,
+      "candidate_delta_seconds": 0.302,
+      "candidate_delta_percent": 9.0,
+      "all_calls_baseline_mean": 2.101,
+      "all_calls_candidate_mean": 2.232
+    },
+    "findings": [
+      "14 paired app-bridge calls:3 summary repetitions, 2 article chronology questions, 2 synthetic controls per arm.",
+      "Candidate still misattached five-day delay in 1 of 3 summaries. Both arms hallucinated May-to-June date in water control; both passed fare control.",
+      "No production prompt changes adopted; this small mixed sample cannot establish reliable accuracy."
+    ],
+    "source_url": "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o",
+    "copyright": "Public source body and model summaries omitted; synthetic control inputs retained for reproducibility."
+  },
+  "open_issues": [
+    "skim-cg5e: detailed summary/chat chronology accuracy",
+    "skim-dz1g: native interactive acceptance",
+    "skim-62qe: complete shared domain core"
+  ]
+}

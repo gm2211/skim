@@ -298,8 +298,7 @@ struct ArticleListView: View {
         var settings = model.settings
         settings.ai = summarySettings
         activeSummaryConfiguration = nil
-        // The list has no web view, so always summarize from the stored article
-        // body (falling back to the external URL for thin aggregator posts).
+        // The list shares reader evidence: cached extraction, feed text, and a bounded fetch.
         let snapshot = WebViewSnapshot()
 
         Task {
@@ -312,12 +311,12 @@ struct ArticleListView: View {
                 subtitle: WebAIContext.subtitle(base: article, preferWeb: false, snapshot: snapshot),
                 statusLabel: NativeAI.loadingStatusLabel(for: settings.ai),
                 action: {
-                    let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot)
+                    let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot, store: model.store)
                     let text = try await NativeAI.summarize(article: contextArticle, settings: settings)
                     return AIResultAnswer(text: text, articles: [contextArticle])
                 },
                 streamAction: { onToken in
-                    let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot)
+                    let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot, store: model.store)
                     let text = try await NativeAI.summarizeStreaming(
                         article: contextArticle, settings: settings, onToken: onToken)
                     return AIResultAnswer(text: text, articles: [contextArticle])
@@ -334,9 +333,10 @@ struct ArticleListView: View {
                     activeAIChat = AIChatRequest(
                         sessionKey: WebAIContext.articleID(base: article, preferWeb: false, snapshot: snapshot),
                         title: "Chat with Article",
-                        placeholder: WebAIContext.subtitle(base: article, preferWeb: false, snapshot: snapshot)
+                        placeholder: WebAIContext.subtitle(base: article, preferWeb: false, snapshot: snapshot),
+                        generatedSummaryContext: summaryText
                     ) { conversation in
-                        let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot)
+                        let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot, store: model.store)
                         let (text, citations) = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
                         return AIChatAnswer(text: text, articles: [contextArticle], webCitations: citations)
                     }

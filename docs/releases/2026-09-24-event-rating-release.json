@@ -1,0 +1,72 @@
+{
+  "desktop_version": "0.1.22",
+  "ios_version": "0.1.13",
+  "ios_build": "58",
+  "desktop_sha256": "1596c56448bbcd081e87a279bf48fc48957d06a82db8b8b3fab7319fbcd8137b",
+  "bundled_helper_sha256": "19219ebd0966c2a52a6a62ffb5ad18b911dec5751b9facf8fbbdde6ad0efc882",
+  "compiled_helper_sha256": "8fd3de7750785cab41ca48600556df960245ddea29515a12efbeefff80cca1cc",
+  "helper_text_matches_compiled": true,
+  "ios_sha256": "b04ee21c25663790ba7fd4b4a27c21a67e92685a9e7b6a66ca587d8aeb954e5b",
+  "ios_dsym_uuid": "4AD7B6D2-A07E-3EB2-9F3A-D7B3492ABCE0",
+  "shared_c_symbols": [
+    "_skim_semantic_group_valid",
+    "_skim_semantic_max_candidates",
+    "_skim_semantic_max_pairs",
+    "_skim_semantic_pair_prompt",
+    "_skim_semantic_partition",
+    "_skim_semantic_prompt",
+    "_skim_semantic_rating_prompt",
+    "_skim_semantic_rating_valid",
+    "_skim_semantic_score",
+    "_skim_story_classify",
+    "_skim_story_confidence",
+    "_skim_story_default_thresholds",
+    "_skim_story_identity_hash",
+    "_skim_story_is_unique",
+    "_skim_story_score"
+  ],
+  "desktop_shared_swift_symbol_count": 53,
+  "ios_shared_swift_symbol_count": 53,
+  "shared_source_sha256": {
+    "shared/SkimStoryPolicy/Sources/SkimStoryPolicy/SkimStoryPolicy.c": "c57348391546b9b61231d66e963672f50d28a605a408bfdc79ae78cb992aa845",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalModelPolicy.swift": "159727c952106f95514507db4d0cbdb4444a536ba17448c2a19d877a0381dbb3",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/ModelChatTemplate.swift": "7567bab0ddb29d4df2cb5113960dcd65bf0360ed0ca88acaab2e8bccdef51354"
+  },
+  "verified_at": "2026-09-24T16:47:20.884875+00:00",
+  "tests": {
+    "frontend": 145,
+    "rust_library": 135,
+    "swift_core": 99,
+    "packaging": 3,
+    "excluded": "Existing Rust local-model integration test requires unavailable GGUF"
+  },
+  "builds": {
+    "typescript": true,
+    "vite": true,
+    "ios_simulator": true,
+    "desktop_release": true,
+    "ios_archive": true,
+    "testflight_upload": true
+  },
+  "signed_parent_smoke": {
+    "timed_out": true,
+    "exit": -15,
+    "elapsed": 120.0,
+    "stdout": "",
+    "stderr": "",
+    "stack": "_libsecinit_appsandbox -> _xpc_pipe_routine -> mach_msg2_trap before main"
+  },
+  "installed_desktop": {
+    "version": "0.1.17",
+    "sha256": "fa1f6902c5111c9e81b58822c802c1ae5d61bcd6ce6d8ac51c79045bab387704",
+    "updated": false
+  },
+  "native_ui": "Mac locked; hands-on acceptance pending",
+  "testflight_upload": {
+    "id": "2e8f7502-92c5-4983-b702-cee3d8243340",
+    "state": "PROCESSING",
+    "errors": [],
+    "warnings": [],
+    "checked_at": "2026-09-24T16:51:41.588799+00:00"
+  }
+}

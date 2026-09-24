@@ -14,12 +14,25 @@ public struct TodaySemanticGroup: Codable, Sendable {
     public var importance: Double
     public var confidence: Double
     public var reason: String
+    public var needsRating: Bool
 
-    public init(members: [Double], importance: Double, confidence: Double, reason: String) {
+    enum CodingKeys: String, CodingKey { case members, importance, confidence, reason }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        members = try values.decode([Double].self, forKey: .members)
+        importance = try values.decode(Double.self, forKey: .importance)
+        confidence = try values.decode(Double.self, forKey: .confidence)
+        reason = try values.decode(String.self, forKey: .reason)
+        needsRating = false
+    }
+
+    public init(members: [Double], importance: Double, confidence: Double, reason: String, needsRating: Bool = false) {
         self.members = members
         self.importance = importance
         self.confidence = confidence
         self.reason = reason
+        self.needsRating = needsRating
     }
 }
 
@@ -131,14 +144,7 @@ public enum TodaySemanticPolicy {
             }
         }
         struct Envelope: Decodable { let pairs: [Decision] }
-        var text = response.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.hasPrefix("```json") || text.hasPrefix("```") {
-            let prefixCount = text.hasPrefix("```json") ? 7 : 3
-            let body = String(text.dropFirst(prefixCount)).trimmingCharacters(in: .whitespacesAndNewlines)
-            if body.hasSuffix("```") {
-                text = String(body.dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
+        let text = unfenced(response)
         let data = Data(text.utf8)
         let decisions: [Decision]
         if text.hasPrefix("[") {
@@ -178,10 +184,83 @@ public enum TodaySemanticPolicy {
             guard count > 0 else { throw SkimCoreError.database("Invalid semantic partition") }
             return (0..<count).map { label in
                 TodaySemanticGroup(members: group.members.enumerated().filter { labels[$0.offset] == label }.map(\.element),
-                    importance: group.importance, confidence: group.confidence,
-                    reason: count > 1 ? "Importance estimated from related reports" : group.reason)
+                    importance: count > 1 ? 3 : group.importance, confidence: group.confidence,
+                    reason: count > 1 ? "From your feeds" : group.reason, needsRating: count > 1)
             }
         }
+    }
+
+    private static func unfenced(_ response: String) -> String {
+        let text = response.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("```json") || text.hasPrefix("```") {
+            let body = String(text.dropFirst(text.hasPrefix("```json") ? 7 : 3)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if body.hasSuffix("```") {
+                return String(body.dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        return text
+    }
+
+    public struct RatingPlan: Sendable {
+        public let payload: String
+        fileprivate let groups: [TodaySemanticGroup]
+        fileprivate let expected: Set<Int>
+    }
+
+    public static var ratingPrompt: String { String(cString: skim_semantic_rating_prompt()) }
+
+    public static func ratingPlan(groups: [TodaySemanticGroup], candidates: [TodaySemanticCandidate], groupID: Int? = nil) throws -> RatingPlan? {
+        let expected = Set(groups.indices.filter { groups[$0].needsRating && (groupID == nil || $0 == groupID) })
+        guard !expected.isEmpty else { return nil }
+        guard candidates.enumerated().allSatisfy({ $0.offset == $0.element.index && $0.element.timestamp.isFinite }) else {
+            throw SkimCoreError.database("Invalid semantic rating candidates")
+        }
+        struct Report: Encodable { let index: Int; let title: String; let excerpt: String; let activity_date: String }
+        struct Group: Encodable { let group_id: Int; let reports: [Report] }
+        struct Payload: Encodable { let groups: [Group] }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        let entries = try expected.sorted().map { index in
+            let reports = try groups[index].members.map { member in
+                guard member.isFinite, member.rounded(.towardZero) == member, member >= 0, member < Double(candidates.count) else {
+                    throw SkimCoreError.database("Invalid semantic rating member")
+                }
+                let candidate = candidates[Int(member)]
+                return Report(index: candidate.index, title: candidate.title, excerpt: candidate.excerpt,
+                    activity_date: formatter.string(from: Date(timeIntervalSince1970: candidate.timestamp)))
+            }
+            return Group(group_id: index, reports: reports)
+        }
+        let data = try JSONEncoder().encode(Payload(groups: entries))
+        return RatingPlan(payload: String(decoding: data, as: UTF8.self), groups: groups, expected: expected)
+    }
+
+    public static func rate(response: String, plan: RatingPlan) throws -> [TodaySemanticGroup] {
+        struct Rating: Decodable { let group_id: Double; let importance: Double; let confidence: Double; let reason: String }
+        struct Envelope: Decodable { let ratings: [Rating] }
+        let ratings = try JSONDecoder().decode(Envelope.self, from: Data(unfenced(response).utf8)).ratings
+        var seen = Set<Int>()
+        var result = plan.groups
+        for rating in ratings {
+            let reason = rating.reason.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard rating.group_id.isFinite, rating.group_id.rounded(.towardZero) == rating.group_id,
+                  rating.group_id >= 0, rating.group_id < Double(result.count),
+                  skim_semantic_rating_valid(rating.importance, rating.confidence) != 0,
+                  !reason.isEmpty, reason.count <= 280 else { throw SkimCoreError.database("Invalid semantic rating") }
+            let index = Int(rating.group_id)
+            guard plan.expected.contains(index), seen.insert(index).inserted else {
+                throw SkimCoreError.database("Unknown or duplicate semantic rating")
+            }
+            result[index].importance = rating.importance
+            result[index].confidence = rating.confidence
+            result[index].reason = reason
+            result[index].needsRating = false
+        }
+        guard seen == plan.expected else { throw SkimCoreError.database("Incomplete semantic ratings") }
+        return result
     }
 
     static func inputs(_ candidates: [TodayEditionCandidate], at date: Date) -> [TodaySemanticCandidate] {

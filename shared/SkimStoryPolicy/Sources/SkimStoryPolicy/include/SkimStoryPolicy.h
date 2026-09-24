@@ -41,6 +41,9 @@ int32_t skim_semantic_group_valid(const double *members, size_t member_count,
                                  size_t assigned_count, double importance,
                                  double confidence);
 double skim_semantic_score(double base, double importance, double confidence);
+/* Reassess verified fragments without inheriting a rejected combined rating. */
+const char *skim_semantic_rating_prompt(void);
+int32_t skim_semantic_rating_valid(double importance, double confidence);
 
 /* Verify proposed merges before hiding reports behind a shared story card. */
 const char *skim_semantic_pair_prompt(void);

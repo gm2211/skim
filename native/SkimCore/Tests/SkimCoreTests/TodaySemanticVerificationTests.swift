@@ -24,7 +24,7 @@ private func group(_ members: [Double]) -> TodaySemanticGroup {
     let response = #"[{"members":[2,1],"same_event":true,"confidence":0.95},{"members":[0,2],"same_event":false,"confidence":1},{"members":[1,0],"same_event":true,"confidence":0.9}]"#
     let result = try TodaySemanticPolicy.verify(response: response, plan: plan)
     #expect(result.map { Set($0.members) } == [Set([0.0, 1.0]), Set([2.0])])
-    #expect(result.allSatisfy { $0.reason == "Importance estimated from related reports" && $0.importance == 4 })
+    #expect(result.allSatisfy { $0.reason == "From your feeds" && $0.importance == 3 && $0.needsRating })
 }
 
 @Test func verificationRequiresEveryRequestedPairExactlyOnceAndStrictBoolean() throws {
@@ -124,6 +124,7 @@ private func group(_ members: [Double]) -> TodaySemanticGroup {
         let candidates: [TodaySemanticCandidate]
         let primary_response: String
         let verification_response: String
+        let rating_responses: [String]
         let expected_groups: [[Int]]
         let importance_constraints: [Constraint]
     }
@@ -133,7 +134,15 @@ private func group(_ members: [Double]) -> TodaySemanticGroup {
     for fixture in fixtures {
         let primary = try TodaySemanticPolicy.decode(fixture.primary_response)
         let plan = try TodaySemanticPolicy.verificationPlan(groups: primary, candidates: fixture.candidates)
-        let verified = try TodaySemanticPolicy.verify(response: fixture.verification_response, plan: plan)
+        var verified = try TodaySemanticPolicy.verify(response: fixture.verification_response, plan: plan)
+        #expect(verified.filter(\.needsRating).allSatisfy { $0.importance == 3 && $0.reason == "From your feeds" })
+        let ratingIDs = verified.indices.filter { verified[$0].needsRating }
+        try #require(fixture.rating_responses.count == ratingIDs.count)
+        for (groupID, response) in zip(ratingIDs, fixture.rating_responses) {
+            let ratingPlan = try #require(try TodaySemanticPolicy.ratingPlan(groups: verified, candidates: fixture.candidates, groupID: groupID))
+            verified = try TodaySemanticPolicy.rate(response: response, plan: ratingPlan)
+        }
+        #expect(verified.allSatisfy { !$0.needsRating })
         let actual = verified.map { $0.members.map(Int.init).sorted() }.sorted { $0.lexicographicallyPrecedes($1) }
         let expected = fixture.expected_groups.map { $0.sorted() }.sorted { $0.lexicographicallyPrecedes($1) }
         #expect(actual == expected, Comment(rawValue: fixture.name))
@@ -150,4 +159,77 @@ private func group(_ members: [Double]) -> TodaySemanticGroup {
             }
         }
     }
+}
+
+@Test func splitStoriesReceiveIndependentRatingsWithoutChangingMembership() throws {
+    let verification = try TodaySemanticPolicy.verificationPlan(groups: [group([0, 1]), group([2])], candidates: reports(3))
+    let neutral = try TodaySemanticPolicy.verify(response: #"[{"pair":[0,1],"same_event":false,"confidence":1}]"#, plan: verification)
+    #expect(neutral.map(\.importance) == [3, 3, 4])
+    let plan = try #require(try TodaySemanticPolicy.ratingPlan(groups: neutral, candidates: reports(3)))
+    let payload = try #require(JSONSerialization.jsonObject(with: Data(plan.payload.utf8)) as? [String: Any])
+    let groups = try #require(payload["groups"] as? [[String: Any]])
+    #expect(groups.count == 2)
+    #expect(groups.compactMap { $0["group_id"] as? Int } == [0, 1])
+    #expect(groups.allSatisfy { Set($0.keys) == ["group_id", "reports"] })
+    let source = try #require((groups[0]["reports"] as? [[String: Any]])?.first)
+    #expect(Set(source.keys) == ["index", "title", "excerpt", "activity_date"])
+    let rated = try TodaySemanticPolicy.rate(response: #"{"ratings":[{"group_id":1,"importance":1,"confidence":0.9,"reason":" Routine report "},{"group_id":0,"importance":5,"confidence":1,"reason":"Urgent public warning"}]}"#, plan: plan)
+    let encodedRatings = #"{"ratings":[{"group_id":0,"importance":5,"confidence":1,"reason":"Urgent"},{"group_id":1,"importance":1,"confidence":1,"reason":"Routine"}]}"#
+    let fenced = try TodaySemanticPolicy.rate(response: "```json\n\(encodedRatings)\n```", plan: plan)
+    #expect(fenced.map(\.importance) == [5, 1, 4])
+    #expect(rated.map(\.members) == neutral.map(\.members))
+    #expect(rated.map(\.importance) == [5, 1, 4])
+    #expect(rated.map(\.reason) == ["Urgent public warning", "Routine report", "Initial proposed event"])
+    #expect(rated.allSatisfy { !$0.needsRating })
+    #expect(try TodaySemanticPolicy.ratingPlan(groups: rated, candidates: reports(3)) == nil)
+}
+
+@Test func malformedRatingsRejectAtomicallyAndCannotInjectRatingMarker() throws {
+    let verification = try TodaySemanticPolicy.verificationPlan(groups: [group([0, 1])], candidates: reports(2))
+    let neutral = try TodaySemanticPolicy.verify(response: #"[{"pair":[0,1],"same_event":false,"confidence":1}]"#, plan: verification)
+    let plan = try #require(try TodaySemanticPolicy.ratingPlan(groups: neutral, candidates: reports(2)))
+    let valid = #"{"group_id":0,"importance":5,"confidence":1,"reason":"Urgent"}"#
+    for invalid in [
+        #"{"group_id":0,"importance":1,"confidence":1,"reason":"Duplicate"}"#,
+        #"{"group_id":2,"importance":1,"confidence":1,"reason":"Foreign"}"#,
+        #"{"group_id":1.5,"importance":1,"confidence":1,"reason":"Fractional"}"#,
+        #"{"group_id":true,"importance":1,"confidence":1,"reason":"Boolean"}"#,
+        #"{"group_id":1,"importance":6,"confidence":1,"reason":"Range"}"#,
+        #"{"group_id":1,"importance":true,"confidence":1,"reason":"Boolean"}"#,
+        #"{"group_id":1,"importance":1,"confidence":0.79,"reason":"Uncertain"}"#,
+        #"{"group_id":1,"importance":1,"confidence":1.1,"reason":"Range"}"#,
+        #"{"group_id":1,"importance":1,"confidence":true,"reason":"Boolean"}"#,
+        #"{"group_id":1,"importance":1,"confidence":1,"reason":"  "}"#,
+        "{\"group_id\":1,\"importance\":1,\"confidence\":1,\"reason\":\"\(String(repeating: "x", count: 281))\"}"
+    ] {
+        #expect(throws: (any Error).self) { try TodaySemanticPolicy.rate(response: "{\"ratings\":[\(valid),\(invalid)]}", plan: plan) }
+    }
+    for response in ["{\"ratings\":[\(valid)]}", "[]", "Prose {\"ratings\":[]}"] {
+        #expect(throws: (any Error).self) { try TodaySemanticPolicy.rate(response: response, plan: plan) }
+    }
+    #expect(neutral.allSatisfy { $0.importance == 3 && $0.reason == "From your feeds" && $0.needsRating })
+    let injected = try TodaySemanticPolicy.decode(#"{"groups":[{"members":[0],"importance":4,"confidence":1,"reason":"Existing","needsRating":true}]}"#)
+    #expect(injected[0].needsRating == false)
+    #expect(try TodaySemanticPolicy.ratingPlan(groups: injected, candidates: reports(2)) == nil)
+}
+
+@Test func isolatedRatingRequestsContainOnlyTheSelectedEventAndRetainAccumulatedResults() throws {
+    let verification = try TodaySemanticPolicy.verificationPlan(groups: [group([0, 1]), group([2])], candidates: reports(3))
+    let neutral = try TodaySemanticPolicy.verify(response: #"[{"pair":[0,1],"same_event":false,"confidence":1}]"#, plan: verification)
+    var accumulated = neutral
+    for index in [0, 1] {
+        let plan = try #require(try TodaySemanticPolicy.ratingPlan(groups: accumulated, candidates: reports(3), groupID: index))
+        let payload = try #require(JSONSerialization.jsonObject(with: Data(plan.payload.utf8)) as? [String: Any])
+        let groups = try #require(payload["groups"] as? [[String: Any]])
+        #expect(groups.count == 1)
+        #expect(groups[0]["group_id"] as? Int == index)
+        let included = try #require(groups[0]["reports"] as? [[String: Any]])
+        #expect(included.compactMap { $0["index"] as? Int } == [index])
+        let importance = index == 0 ? 5 : 1
+        accumulated = try TodaySemanticPolicy.rate(response: "{\"ratings\":[{\"group_id\":\(index),\"importance\":\(importance),\"confidence\":1,\"reason\":\"Independent rating\"}]}", plan: plan)
+    }
+    #expect(accumulated.map(\.importance) == [5, 1, 4])
+    #expect(accumulated.map(\.members) == neutral.map(\.members))
+    #expect(neutral.map(\.importance) == [3, 3, 4])
+    #expect(try TodaySemanticPolicy.ratingPlan(groups: neutral, candidates: reports(3), groupID: 2) == nil)
 }

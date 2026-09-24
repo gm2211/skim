@@ -99,9 +99,17 @@
         ]
       }
     ],
-    "notes": "Actual standalone helper responses replayed through both production adapters. Hand-selected historical reports; expected groups/importance are human editorial judgments. Not installed-app acceptance. Fresh-corpus response has one erroneous positive pair; complete-clique policy keeps its events separate in this sample.",
+    "notes": "Real local Qwen 4B responses with current shared prompts, isolated per-event ratings, and C partition; small historical sample, not general quality proof.",
     "elapsed_seconds": 5.39,
-    "pair_payload_date_key": "activity_date"
+    "pair_payload_date_key": "activity_date",
+    "rating_responses": [
+      "{\"ratings\": [{\"group_id\": 0, \"importance\": 3, \"confidence\": 0.98, \"reason\": \"Global AI regulation shifts risk-based oversight frameworks\"}]}",
+      "{\"ratings\": [{\"group_id\": 1, \"importance\": 4, \"confidence\": 0.98, \"reason\": \"Global AI regulation sets precedent for future tech governance.\"}]}",
+      "{\"ratings\":[{\"group_id\":2,\"importance\":3,\"confidence\":1.0,\"reason\":\"Broadens insurance access for Alzheimer's treatment\"}]}",
+      "{\"ratings\": [{\"group_id\": 3, \"importance\": 3, \"confidence\": 0.98, \"reason\": \"Alters treatment access for Alzheimer’s patients\"}]}"
+    ],
+    "probe_elapsed_seconds": 10.74,
+    "shared_policy_sha256": "c57348391546b9b61231d66e963672f50d28a605a408bfdc79ae78cb992aa845"
   },
   {
     "name": "skim-real-news-corpus",
@@ -232,8 +240,18 @@
         ]
       }
     ],
-    "notes": "Actual standalone helper responses replayed through both production adapters. Hand-selected historical reports; expected groups/importance are human editorial judgments. Not installed-app acceptance. Fresh-corpus response has one erroneous positive pair; complete-clique policy keeps its events separate in this sample.",
+    "notes": "Real local Qwen 4B responses with current shared prompts, isolated per-event ratings, and C partition; small historical sample, not general quality proof.",
     "elapsed_seconds": 5.94,
-    "pair_payload_date_key": "activity_date"
+    "pair_payload_date_key": "activity_date",
+    "rating_responses": [
+      "{\"ratings\": [{\"group_id\": 0, \"importance\": 4, \"confidence\": 0.98, \"reason\": \"Global health response triggered for cross-border mpox spread\"}]}",
+      "{\"ratings\":[{\"group_id\":1,\"importance\":4,\"confidence\":0.95,\"reason\":\"Pan-African emergency response and resource mobilization\"}]}",
+      "{\"ratings\": [{\"group_id\": 2, \"importance\": 3, \"confidence\": 0.98, \"reason\": \"Rate cuts affect borrowing, spending, and economic stability.\"}]}",
+      "{\"ratings\": [{\"group_id\": 3, \"importance\": 3, \"confidence\": 0.98, \"reason\": \"FOMC rate cut affects lending and inflation expectations\"}]}",
+      "{\"ratings\": [{\"group_id\": 5, \"importance\": 1, \"confidence\": 1.0, \"reason\": \"New color option with recycled materials, no functional change\"}]}",
+      "{\"ratings\": [{\"group_id\":6,\"importance\":1,\"confidence\":0.9,\"reason\":\"Minor product update with no functional or access impact\"}]}"
+    ],
+    "probe_elapsed_seconds": 14.42,
+    "shared_policy_sha256": "c57348391546b9b61231d66e963672f50d28a605a408bfdc79ae78cb992aa845"
   }
 ]

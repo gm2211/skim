@@ -33,6 +33,11 @@ double skim_story_score(int64_t independent_sources, double age_seconds,
 int32_t skim_story_is_unique(int64_t independent_sources);
 uint64_t skim_story_identity_hash(const uint8_t *bytes, size_t length);
 
+/* Shared summary style and fidelity instructions. tone is NULL or a valid
+ * NUL-terminated UTF-8 string. Unknown/empty tones use concise; descriptive
+ * aliases detailed. Returns immutable static storage; caller must not free. */
+const char *skim_summary_style_prompt(const char *tone);
+
 /* Evidence and editorial policy for a newspaper story's lede. Output encoding
    and source loading remain platform adapters. */
 const char *skim_today_lede_prompt(void);

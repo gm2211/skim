@@ -1,10 +1,10 @@
-# Shared story policy
+# Shared story and summary policy
 
 The functional Tauri desktop and native iOS app compile the same
 `Sources/SkimStoryPolicy/SkimStoryPolicy.c` into their binaries. Desktop builds it
 through `src-tauri/build.rs` and calls the safe Rust adapter in
 `src-tauri/src/db/story_policy.rs`. Native `SkimCore` declares this local Swift
-package as a dependency and calls it from `StoryClustering.swift` and `TodaySemantic.swift`.
+package as a dependency and calls it from `StoryClustering.swift`, `TodaySemantic.swift` and `AIRequestPolicy.swift`.
 
 This module owns lexical confidence weighting, default matching thresholds,
 duplicate/coverage/update/borderline classification, source/recency ranking,
@@ -32,8 +32,14 @@ Both adapters use the same selection prompt, plaintext-retry prompt, source/exce
 
 A successful but invalid JSON response receives at most one plaintext retry using the same configured provider/model, temperature zero and 300-token output limit. The entire retry passes the same validator; provider errors do not trigger another call. The Rust and Swift adapters each run the shared `today-excerpts.json` corpus. They preserve old preview bytes but hide noncurrent evidence versions, and stamp the current version only on newly verified previews. Frozen snapshots and reading state are unchanged. This does not verify source truth, editorial relevance or completeness, and does not change detailed summaries or chat.
 
+## Detailed-summary style
+
+`skim_summary_style_prompt` returns immutable static UTF-8 instructions for concise, detailed/descriptive, casual and technical tones. Unknown or absent tones fall back to concise. Both adapters map invalid embedded-NUL input to that fallback. The common text preserves source uncertainty, attribution, negation and event timing and treats source text as untrusted data. Rust `article_summary_system_prompt` and native `AIRequestPolicy.summaryInstructions` call it in the actual summary paths. Their JSON/plain-text wrappers, output budgets and custom-instruction precedence remain adapter policy. The shared `summary-style.json` corpus characterizes both bindings; both summary caches advance to version 3.
+
+This shared instruction source removes duplication and conflicting directives; it does not make generated claims reliable. The [summary quality record](../../docs/releases/2026-09-24-summary-policy-quality.json) records remaining factual failures on small, independently reviewed local-model samples. Full-source evidence, compatible prompts and correct bindings are necessary but insufficient for output accuracy.
+
 ## Release-path proof and remaining limits
 
-Desktop **0.1.26** and iOS **0.1.13 (63)** release inspection records **21 shared C symbols**. The separate `SkimInferencePolicy` package contributes **71 shared Swift policy symbols each** to the desktop helper and iOS evidence. The bundled desktop helper's code section matches the freshly compiled helper; signing changes its whole-file digest. Exact hashes and the matching iOS executable/dSYM UUID are in the [release record](../../docs/releases/2026-09-24-source-preview-release.json).
+Desktop **0.1.29** and iOS **0.1.13 (66)** artifacts contain **22 shared C symbols**, including the summary-style function. The separate `SkimInferencePolicy` package contributes **71 shared Swift policy symbols each** to the desktop helper and iOS evidence. The bundled desktop helper's code section matches the freshly compiled helper; signing changes its whole-file digest. Exact hashes, the matching iOS executable/dSYM UUID, and Apple's processing/beta state are in the [release record](../../docs/releases/2026-09-24-summary-policy-release.json).
 
-The [quality record](../../docs/releases/2026-09-24-source-preview-quality.json) covers limited real-model chronology probes and the current browser/backend integration. Five of six lead previews were verified; rejected source markup retained the publisher-snippet fallback. These selected samples do not establish general model accuracy. The signed desktop parent still stalls before `main()` in sandbox initialization, and the locked Mac blocks installed native interactive acceptance. Artifact inclusion, App Store Connect processing, installed operation and full product parity remain distinct claims. Full Rust/Swift engine consolidation remains open; these shared policies do not replace platform inference, persistence or UI adapters.
+The signed desktop parent still stalls before `main()` in sandbox initialization, and the locked Mac blocks installed native interactive acceptance. Artifact inclusion, TestFlight availability, installed operation and full product parity remain distinct claims. Full Rust/Swift engine consolidation remains open; these shared policies do not replace platform inference, persistence or UI adapters.

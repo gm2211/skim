@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import SkimStoryPolicy
 
 /// Provider-independent settings and context policy used by native AI entry points.
 public enum AIRequestPolicy {
@@ -25,6 +26,22 @@ public enum AIRequestPolicy {
         case "long": return 300
         default: return 30
         }
+    }
+
+    /// Shared style and fidelity policy, with the native plain-text response contract.
+    public static func summaryInstructions(_ settings: AISettings, wordCount: Int? = nil) -> String {
+        let tone = settings.summaryTone ?? ""
+        // Match CString adapters: embedded NUL is invalid, never a truncated valid tone.
+        var instructions = (tone.contains("\0") ? "" : tone).withCString {
+            String(cString: skim_summary_style_prompt($0))
+        }
+        if let wordCount {
+            instructions += " Write approximately \(wordCount) words. Output only the summary — no preamble, no restating the title, no metadata."
+        }
+        if let custom = settings.summaryCustomPrompt?.trimmingCharacters(in: .whitespacesAndNewlines), !custom.isEmpty {
+            instructions += "\n\nUser summary instructions:\n\(custom)"
+        }
+        return instructions
     }
 
     public static func summarySourceFingerprint(_ source: String) -> String {

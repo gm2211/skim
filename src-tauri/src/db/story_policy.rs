@@ -9,6 +9,7 @@ struct Thresholds {
 }
 
 extern "C" {
+    fn skim_summary_style_prompt(tone: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
     fn skim_today_lede_excerpt_valid(source: *const u8, source_len: usize, excerpt: *const u8, excerpt_len: usize) -> i32;
     fn skim_today_lede_evidence_version() -> i32;
     fn skim_today_lede_retry_prompt() -> *const std::os::raw::c_char;
@@ -98,6 +99,16 @@ pub fn is_unique(sources: i64) -> bool {
 pub fn identity_hash(seed: &str) -> u64 {
     // C reads exactly this slice synchronously and never retains its pointer.
     unsafe { skim_story_identity_hash(seed.as_ptr(), seed.len()) }
+}
+
+pub fn summary_style_prompt(tone: Option<&str>) -> &'static str {
+    // Embedded NUL is an invalid tone, not permission to truncate it into a
+    // recognized one. The optional owned CString lives through this C call.
+    let tone = tone.and_then(|tone| std::ffi::CString::new(tone).ok());
+    let ptr = tone.as_ref().map_or(std::ptr::null(), |tone| tone.as_ptr());
+    // C returns immutable, static NUL-terminated UTF-8 storage.
+    unsafe { std::ffi::CStr::from_ptr(skim_summary_style_prompt(ptr)) }
+        .to_str().expect("shared summary style is UTF-8")
 }
 
 pub fn today_lede_evidence_version() -> i32 {
@@ -223,6 +234,17 @@ pub fn semantic_score(base: f64, importance: f64, confidence: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn summary_style_shared_fixture_crosses_rust_abi() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../shared/fixtures/summary-style.json")).unwrap();
+        for case in fixture["cases"].as_array().unwrap() {
+            assert_eq!(summary_style_prompt(case["tone"].as_str()),
+                format!("{} {}", case["style"].as_str().unwrap(), fixture["common"].as_str().unwrap()),
+                "tone: {:?}", case["tone"]);
+        }
+    }
+
     #[test]
     fn verified_today_excerpts_match_shared_corpus() {
         let cases: serde_json::Value = serde_json::from_str(include_str!("../../../shared/fixtures/today-excerpts.json")).unwrap();

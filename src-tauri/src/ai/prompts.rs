@@ -260,7 +260,7 @@ Output JSON:
 /// Pass two: write the lede under one headline, from the full text of the
 /// articles behind it.
 pub fn catchup_lede_system_prompt() -> String {
-    format!("{}\n\nOutput JSON with one string field named lede.", crate::db::story_policy::today_lede_prompt())
+    format!("{}\n\nOutput JSON with one string field named excerpt.", crate::db::story_policy::today_lede_prompt())
 }
 
 /// Pass two's user turn, for one story.
@@ -272,6 +272,11 @@ Article text behind it:
 {articles_text}
 
 Output JSON:
-{{"lede":"What happened, with the specifics. Why it matters."}}"#
+{{"excerpt":"A complete verbatim passage from one supplied report."}}"#
     )
+}
+
+/// Retry uses the same evidence without a JSON footer.
+pub fn catchup_lede_retry_user_prompt(headline: &str, articles_text: &str) -> String {
+    format!("Headline: {headline}\n\nArticle text behind it:\n{articles_text}")
 }

@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-/* Plain scalar ABI: no allocation, ownership transfer, or platform runtime. */
+/* Plain scalar ABI: no allocation or ownership transfer crosses the ABI. */
 typedef struct {
     double duplicate;
     double coverage;
@@ -36,6 +36,22 @@ uint64_t skim_story_identity_hash(const uint8_t *bytes, size_t length);
 /* Evidence and editorial policy for a newspaper story's lede. Output encoding
    and source loading remain platform adapters. */
 const char *skim_today_lede_prompt(void);
+const char *skim_today_lede_retry_prompt(void);
+/* Source is raw UTF-8 and whitespace is normalized internally; blank-line
+ * paragraph starts are retained as valid passage starts. Excerpt must be
+ * valid UTF-8 with Unicode whitespace collapsed to single ASCII spaces and
+ * trimmed. Accept only an exact contiguous source passage bounded by sentence
+ * punctuation or a blank-line paragraph start. Raw source is capped at 65,536
+ * bytes; excerpt is capped at three sentences / 60 words / 600
+ * Unicode scalars. This proves textual provenance only, not relevance,
+ * context, or source truth. Square-bracket markup is conservatively rejected;
+ * sentence-boundary handling is conservative.
+ *
+ */
+int32_t skim_today_lede_excerpt_valid(const uint8_t *source, size_t source_len,
+                                    const uint8_t *excerpt, size_t excerpt_len);
+int32_t skim_today_lede_evidence_version(void);
+
 size_t skim_today_lede_max_articles(void);
 size_t skim_today_lede_text_characters(void);
 

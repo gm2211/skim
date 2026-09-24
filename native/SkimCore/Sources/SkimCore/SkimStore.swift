@@ -763,6 +763,10 @@ private final class SQLiteDatabase: @unchecked Sendable {
         // Ledes live outside frozen snapshot columns. Run this migration after
         // CREATE TABLE so first-launch databases receive it too.
         try? execute("ALTER TABLE edition_items ADD COLUMN lede TEXT")
+        let editionColumns = try query("PRAGMA table_info(edition_items)") { columnText($0, 1) }
+        if !editionColumns.contains("lede_evidence_version") {
+            try execute("ALTER TABLE edition_items ADD COLUMN lede_evidence_version INTEGER NOT NULL DEFAULT 0")
+        }
         try execute("CREATE INDEX IF NOT EXISTS idx_edition_items_order ON edition_items(edition_id, position)")
         try execute("CREATE INDEX IF NOT EXISTS idx_edition_items_story ON edition_items(story_id)")
 
@@ -1651,7 +1655,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
             SELECT edition_id, story_id, story_revision_number, position, section,
                    snapshot_title, snapshot_summary, snapshot_delta_summary,
                    snapshot_source_count, snapshot_reason, is_unique_find,
-                   lede, is_consumed, consumed_at
+                   CASE WHEN lede_evidence_version = \(TodayLedePolicy.evidenceVersion) THEN lede ELSE NULL END AS lede, is_consumed, consumed_at
             FROM edition_items
             WHERE edition_id = ? AND story_id = ?
             LIMIT 1
@@ -1893,11 +1897,14 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 .date(item.consumedAt)
             ]
         )
-        guard let stored = try editionItem(editionID: item.editionID, storyID: item.storyID) else {
+        guard var stored = try editionItem(editionID: item.editionID, storyID: item.storyID) else {
             throw SkimCoreError.database(
                 "Edition item \(item.editionID):\(item.storyID) was not persisted"
             )
         }
+        // Derived preview cache is not part of snapshot identity.
+        item.lede = nil
+        stored.lede = nil
         guard stored == item else {
             throw SkimCoreError.database(
                 "Conflicting edition item \(item.editionID):\(item.storyID)"
@@ -1915,7 +1922,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
             SELECT edition_id, story_id, story_revision_number, position, section,
                    snapshot_title, snapshot_summary, snapshot_delta_summary,
                    snapshot_source_count, snapshot_reason, is_unique_find,
-                   lede, is_consumed, consumed_at
+                   CASE WHEN lede_evidence_version = \(TodayLedePolicy.evidenceVersion) THEN lede ELSE NULL END AS lede, is_consumed, consumed_at
             FROM edition_items
             WHERE edition_id = ?
             ORDER BY position ASC, story_id ASC
@@ -2095,10 +2102,10 @@ private final class SQLiteDatabase: @unchecked Sendable {
         try execute(
             """
             UPDATE edition_items
-            SET lede = ?
+            SET lede = ?, lede_evidence_version = ?
             WHERE edition_id = ? AND story_id = ?
             """,
-            [.text(lede), .text(editionID), .text(storyID)]
+            [.text(lede), .int(TodayLedePolicy.evidenceVersion), .text(editionID), .text(storyID)]
         )
     }
 

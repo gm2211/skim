@@ -328,6 +328,14 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute_batch("ALTER TABLE edition_items ADD COLUMN lede TEXT;")?;
     }
 
+    // Preserve legacy preview bytes, but expose only evidence-validated versions.
+    let has_lede_evidence_version = conn.prepare("PRAGMA table_info(edition_items)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .filter_map(Result::ok).any(|name| name == "lede_evidence_version");
+    if !has_lede_evidence_version {
+        conn.execute_batch("ALTER TABLE edition_items ADD COLUMN lede_evidence_version INTEGER NOT NULL DEFAULT 0;")?;
+    }
+
     // Add feedly_entry_id column to articles (idempotent)
     let has_feedly_entry_id: bool = conn
         .prepare("PRAGMA table_info(articles)")?

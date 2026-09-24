@@ -3,8 +3,52 @@ import SkimStoryPolicy
 
 public enum TodayLedePolicy {
     public static var instructions: String { String(cString: skim_today_lede_prompt()) }
+    public static var retryInstructions: String { String(cString: skim_today_lede_retry_prompt()) }
     public static var maxArticles: Int { Int(skim_today_lede_max_articles()) }
     public static var textCharacters: Int { Int(skim_today_lede_text_characters()) }
+    public static var evidenceVersion: Int { Int(skim_today_lede_evidence_version()) }
+
+    public static func validatedExcerpt(candidate: String, sources: [String]) -> String? {
+        let excerpt = candidate.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        let excerptBytes = Array(excerpt.utf8)
+        for source in sources {
+            let sourceBytes = Array(source.utf8)
+            let valid = sourceBytes.withUnsafeBufferPointer { body in
+                excerptBytes.withUnsafeBufferPointer { passage in
+                    skim_today_lede_excerpt_valid(body.baseAddress, body.count, passage.baseAddress, passage.count) != 0
+                }
+            }
+            if valid { return excerpt }
+        }
+        return nil
+    }
+
+    /// Retry only a returned but invalid selection, never a failed provider request.
+    public static func generateExcerpt(
+        sources: [String],
+        request: @Sendable (_ instructions: String, _ jsonMode: Bool) async throws -> String
+    ) async throws -> String {
+        try Task.checkCancellation()
+        let primary = try await request(instructions, true)
+        try Task.checkCancellation()
+        if let excerpt = excerpt(from: primary, sources: sources) { return excerpt }
+        let plain = try await request(retryInstructions, false)
+        try Task.checkCancellation()
+        return validatedExcerpt(candidate: plain, sources: sources) ?? ""
+    }
+
+    public static func excerpt(from response: String, sources: [String]) -> String? {
+        var text = response.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("```json") || text.hasPrefix("```") {
+            let body = String(text.dropFirst(text.hasPrefix("```json") ? 7 : 3)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if body.hasSuffix("```") { text = String(body.dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        }
+        guard let object = try? JSONSerialization.jsonObject(with: Data(text.utf8)),
+              let envelope = object as? [String: Any], Set(envelope.keys) == ["excerpt"],
+              let excerpt = envelope["excerpt"] as? String else { return nil }
+        return validatedExcerpt(candidate: excerpt, sources: sources)
+    }
+
 }
 
 public struct TodaySemanticCandidate: Codable, Sendable {

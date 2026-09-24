@@ -1174,17 +1174,17 @@ pub fn insert_edition_items(
     Ok(())
 }
 
-/// Store the written lede for one story on the page. Separate from the
-/// snapshot fields, which the immutability trigger freezes.
-pub fn set_edition_item_lede(
+/// Store a source excerpt already accepted by validated_today_excerpt.
+/// The version stamp is separate from the immutable snapshot and reading state.
+pub fn set_verified_edition_item_lede(
     conn: &Connection,
     edition_id: &str,
     story_id: &str,
     lede: &str,
 ) -> Result<(), rusqlite::Error> {
     conn.execute(
-        "UPDATE edition_items SET lede = ?3 WHERE edition_id = ?1 AND story_id = ?2",
-        params![edition_id, story_id, lede],
+        "UPDATE edition_items SET lede = ?3, lede_evidence_version = ?4 WHERE edition_id = ?1 AND story_id = ?2",
+        params![edition_id, story_id, lede, super::story_policy::today_lede_evidence_version()],
     )?;
     Ok(())
 }
@@ -1198,13 +1198,13 @@ pub fn list_edition_items(
         "SELECT edition_id, story_id, story_revision_number, position, section,
                 snapshot_title, snapshot_summary, snapshot_delta_summary,
                 snapshot_source_count, snapshot_reason, is_unique_find,
-                lede, is_consumed, consumed_at
+                CASE WHEN lede_evidence_version = ?2 THEN lede ELSE NULL END, is_consumed, consumed_at
          FROM edition_items
          WHERE edition_id = ?1
          ORDER BY position",
     )?;
     let items = stmt
-        .query_map(params![edition_id], |row| {
+        .query_map(params![edition_id, super::story_policy::today_lede_evidence_version()], |row| {
             Ok(EditionItem {
                 edition_id: row.get(0)?,
                 story_id: row.get(1)?,
@@ -2496,6 +2496,28 @@ mod story_persistence_tests {
         assert_eq!(consumed.snapshot_title, "Frozen title");
         assert!(consumed.is_consumed);
         assert_eq!(consumed.consumed_at, Some(550));
+
+        // Simulate a pre-validation cache, then rerun migrations without losing
+        // its bytes, frozen source snapshot or consumed state.
+        conn.execute("UPDATE edition_items SET lede='Unverified legacy preview', lede_evidence_version=0 WHERE edition_id=?1", [&edition.id]).unwrap();
+        conn.execute_batch("ALTER TABLE edition_items DROP COLUMN lede_evidence_version").unwrap();
+        migrations::run_migrations(&conn).unwrap();
+        migrations::run_migrations(&conn).unwrap();
+        let hidden = list_edition_items(&conn, &edition.id).unwrap().remove(0);
+        assert!(hidden.lede.is_none());
+        let raw: String = conn.query_row("SELECT lede FROM edition_items WHERE edition_id=?1", [&edition.id], |row| row.get(0)).unwrap();
+        assert_eq!(raw, "Unverified legacy preview");
+        let verified = super::super::story_policy::validated_today_excerpt("The source confirmed the result.", "The source confirmed the result.").unwrap();
+        set_verified_edition_item_lede(&conn, &edition.id, &story.id, &verified).unwrap();
+        migrations::run_migrations(&conn).unwrap();
+        let fresh = list_edition_items(&conn, &edition.id).unwrap().remove(0);
+        assert_eq!(fresh.lede.as_deref(), Some(verified.as_str()));
+        assert_eq!(fresh.snapshot_title, consumed.snapshot_title);
+        assert_eq!(fresh.snapshot_summary, consumed.snapshot_summary);
+        assert_eq!(fresh.story_revision_number, consumed.story_revision_number);
+        assert!(fresh.is_consumed);
+        assert_eq!(fresh.consumed_at, consumed.consumed_at);
+
 
         assert!(update_edition_progress(
             &conn,

@@ -1810,3 +1810,55 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     blank.snapshot.snapshotDeltaSummary = " \n "
     #expect(blank.materialDelta == nil)
 }
+
+@Test func todayExcerptCacheMigrationHidesLegacyTextAndPreservesFrozenState() async throws {
+    let url = temporaryStoreURL()
+    let store = try SkimStore(databaseURL: url)
+    try await seedTodayStory(store: store, storyID: "excerpt-cache", sourceCount: 2, timestamp: 100)
+    let edition = try await store.getOrGenerateTodayEdition(startsAt: Date(timeIntervalSince1970: 0),
+        endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 500))
+    let storyID = try #require(edition.items.first?.snapshot.storyID)
+    let before = try await store.setTodayEditionItemConsumed(editionID: edition.id, storyID: storyID, isConsumed: true)
+    var database: OpaquePointer?
+    try #require(sqlite3_open(url.path, &database) == SQLITE_OK)
+    defer { sqlite3_close(database) }
+    // Recreate the pre-evidence cache schema without rewriting any frozen values.
+    try #require(sqlite3_exec(database, "UPDATE edition_items SET lede='Old unverified paraphrase'; ALTER TABLE edition_items DROP COLUMN lede_evidence_version;", nil, nil, nil) == SQLITE_OK)
+    let migrated = try SkimStore(databaseURL: url)
+    let hidden = try #require(try await migrated.todayEdition(id: edition.id))
+    #expect(hidden == before)
+    #expect(hidden.items.first?.sourceArticles.count == 2)
+    var statement: OpaquePointer?
+    try #require(sqlite3_prepare_v2(database, "SELECT lede, lede_evidence_version FROM edition_items LIMIT 1", -1, &statement, nil) == SQLITE_OK)
+    try #require(sqlite3_step(statement) == SQLITE_ROW)
+    #expect(String(cString: sqlite3_column_text(statement, 0)) == "Old unverified paraphrase")
+    #expect(sqlite3_column_int(statement, 1) == 0)
+    sqlite3_finalize(statement)
+    let source = "The mission launched on 10 September."
+    let excerpt = try #require(TodayLedePolicy.validatedExcerpt(candidate: source, sources: [source]))
+    let written = try await migrated.setTodayEditionItemLede(editionID: edition.id, storyID: storyID, lede: excerpt)
+    #expect(written.items.first?.snapshot.lede == source)
+    #expect(written.consumedItemCount == before.consumedItemCount)
+    #expect(written.items.first?.memberArticleIDs == before.items.first?.memberArticleIDs)
+    let reopened = try SkimStore(databaseURL: url)
+    #expect(try await reopened.todayEdition(id: edition.id) == written)
+}
+
+
+@Test func todaySnapshotReinsertPreservesVerifiedExcerptCache() async throws {
+    let store = try temporaryStore()
+    try await seedTodayStory(store: store, storyID: "reinsert-excerpt", sourceCount: 2, timestamp: 100)
+    let original = try await store.getOrGenerateTodayEdition(startsAt: Date(timeIntervalSince1970: 0),
+        endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 500))
+    let storyID = try #require(original.items.first?.snapshot.storyID)
+    let source = "The mission launched on 10 September."
+    let excerpt = try #require(TodayLedePolicy.validatedExcerpt(candidate: source, sources: [source]))
+    let written = try await store.setTodayEditionItemLede(editionID: original.id, storyID: storyID, lede: excerpt)
+    try await store.persistEdition(original.edition, items: original.items.map(\.snapshot))
+    try await store.persistEdition(written.edition, items: written.items.map(\.snapshot))
+    #expect(try await store.todayEdition(id: original.id) == written)
+    var changed = written.items.map(\.snapshot)
+    changed[0].snapshotTitle = "Different frozen headline"
+    #expect(await operationThrows { try await store.persistEdition(written.edition, items: changed) })
+    #expect(try await store.todayEdition(id: original.id) == written)
+}

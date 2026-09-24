@@ -1,0 +1,78 @@
+{
+  "desktop_version": "0.1.26",
+  "ios_version": "0.1.13",
+  "ios_build": "63",
+  "desktop_sha256": "4bf7664594c2e1e815b434d065dee8d5a58a8defd605e178a75de194d377212e",
+  "bundled_helper_sha256": "1b8aeaad4e05f025e35f034bb14fe387d09ce59b95669d60243aaa9daecab8e7",
+  "compiled_helper_sha256": "3dbb040fa3037d9141135d2d7c700699260e8fe6441f1c63b7826c86bce53bed",
+  "helper_text_matches_compiled": true,
+  "ios_sha256": "78f1631651da8e9e06d8037aa9b13cac0ea62b81a5a120de6826c433f970603e",
+  "ios_dsym_uuid": "E1D34C73-7372-3F9C-8DB8-1F932B2F7DE6",
+  "shared_c_symbols": [
+    "_skim_semantic_group_valid",
+    "_skim_semantic_max_candidates",
+    "_skim_semantic_max_pairs",
+    "_skim_semantic_pair_prompt",
+    "_skim_semantic_partition",
+    "_skim_semantic_prompt",
+    "_skim_semantic_rating_prompt",
+    "_skim_semantic_rating_valid",
+    "_skim_semantic_score",
+    "_skim_story_classify",
+    "_skim_story_confidence",
+    "_skim_story_default_thresholds",
+    "_skim_story_identity_hash",
+    "_skim_story_is_unique",
+    "_skim_story_score",
+    "_skim_today_lede_evidence_version",
+    "_skim_today_lede_excerpt_valid",
+    "_skim_today_lede_max_articles",
+    "_skim_today_lede_prompt",
+    "_skim_today_lede_retry_prompt",
+    "_skim_today_lede_text_characters"
+  ],
+  "desktop_shared_swift_symbol_count": 71,
+  "ios_shared_swift_symbol_count": 71,
+  "shared_source_sha256": {
+    "shared/SkimStoryPolicy/Sources/SkimStoryPolicy/SkimStoryPolicy.c": "b0648e6cc2ee0134a3df0236e2c48d810369562e6f58d90abc781f2a97f12b82",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalModelPolicy.swift": "159727c952106f95514507db4d0cbdb4444a536ba17448c2a19d877a0381dbb3",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/ModelChatTemplate.swift": "7567bab0ddb29d4df2cb5113960dcd65bf0360ed0ca88acaab2e8bccdef51354",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalChatMessages.swift": "4d5c8319b4a91942e9e3b7b0de8f2a815acd49cafda1b3b1b8c1fab763329664"
+  },
+  "verified_at": "2026-09-24T19:04:23.718873+00:00",
+  "source_commit": "cb2cf3a407bb94b17c08cda70b9d0b4a790c47a6",
+  "tests": {
+    "rust_library": 148,
+    "frontend": 155,
+    "native_core": 118,
+    "shared_excerpt_cases": 30,
+    "strict_clang": true,
+    "asan_ubsan": true,
+    "excluded": "Pre-existing Rust GGUF integration requires unavailable model"
+  },
+  "builds": {
+    "typescript": true,
+    "vite": true,
+    "desktop_release": true,
+    "ios_simulator": true,
+    "signed_ios_archive": true,
+    "testflight_upload": true
+  },
+  "signed_parent_smoke": {
+    "timed_out": true,
+    "exit": -15,
+    "elapsed": 120.0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "testflight": {
+    "build_id": "d0dd4411-1c5f-4207-a696-92bde2b8534d",
+    "processing": "VALID",
+    "audience": "INTERNAL_ONLY",
+    "internal_build_state": "IN_BETA_TESTING",
+    "auto_notify_enabled": true
+  },
+  "desktop_installed": false,
+  "installed_desktop_version": "0.1.17",
+  "acceptance_limit": "Mac remains locked; native automation unavailable. Final signed parent timed out before main in _libsecinit_appsandbox -> _xpc_pipe_routine -> mach_msg2_trap. Browser component QA against actual isolated Rust backend passes. Shared source-preview validation prevents novel wording; publisher fallback remains for one markup-heavy report. Full shared-domain engine, representative editorial quality, larger-than-64 candidates and installed-app acceptance remain open."
+}

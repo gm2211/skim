@@ -1,0 +1,317 @@
+{
+  "verified_at": "2026-09-24T18:58:15.514068+00:00",
+  "issue": "skim-89ip",
+  "cause": "Freeform local-model previews attached notification delay to the breach itself. The bounded input already contained the relevant chronology. Stronger instructions, temperature zero, correction passes and disabling repetition penalty did not reliably fix conflation.",
+  "change": "Shared C policy accepts only a contiguous source passage with conservative sentence boundaries, maximum3 sentences/60words/600Unicode scalars; strictJSON primary and at most one separately validated plaintext retry. Legacy derived preview cache is versioned without altering frozen editions or reading progress.",
+  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+  "helper_sha256": "3dbb040fa3037d9141135d2d7c700699260e8fe6441f1c63b7826c86bce53bed",
+  "model_probes": [
+    {
+      "style": "desktop",
+      "id": "live-openai",
+      "accepted": true,
+      "attempts": 1,
+      "seconds": 2.014323667041026,
+      "excerpt_sha256": "44e4f79595a4e6db19d510568abb8e004fa8012fb026894b05e4faff78ba95a8",
+      "words": 59
+    },
+    {
+      "style": "desktop",
+      "id": "water-incident-discovery-notice",
+      "accepted": true,
+      "attempts": 1,
+      "seconds": 0.5922928750514984,
+      "excerpt_sha256": "c9650aa7baa45d9e6820d2e63d822e9d48a0688eaf2d725cce089ef91d03b66d",
+      "words": 39
+    },
+    {
+      "style": "desktop",
+      "id": "fare-proposal-approval-effective",
+      "accepted": true,
+      "attempts": 1,
+      "seconds": 0.5187479589367285,
+      "excerpt_sha256": "1ba79cda2e8c130ecca422cd51e937be1d90b0576e9afe08eb9079baf2f28e69",
+      "words": 27
+    },
+    {
+      "style": "desktop",
+      "id": "storm-estimate-confirmed-count",
+      "accepted": true,
+      "attempts": 1,
+      "seconds": 0.5646160419564694,
+      "excerpt_sha256": "91de16b1bbc179bacb7c98dbf25d5d9285c3fab2ebdbd0f69144f43bdc78e284",
+      "words": 34
+    },
+    {
+      "style": "desktop",
+      "id": "millbrook-outage-corrected-timing",
+      "accepted": true,
+      "attempts": 2,
+      "seconds": 1.206250041956082,
+      "excerpt_sha256": "f53681fc731df81115e4604a466aff76628f6f7326c0eb973a3b539aecccec85",
+      "words": 18
+    },
+    {
+      "style": "native",
+      "id": "live-openai",
+      "accepted": true,
+      "attempts": 1,
+      "seconds": 1.1255063749849796,
+      "excerpt_sha256": "44e4f79595a4e6db19d510568abb8e004fa8012fb026894b05e4faff78ba95a8",
+      "words": 59
+    },
+    {
+      "style": "native",
+      "id": "water-incident-discovery-notice",
+      "accepted": true,
+      "attempts": 1,
+      "seconds": 0.46276675001718104,
+      "excerpt_sha256": "a55e8f56b3ac731b89f838c6d71ae591cd81a4c7f39c9d384c3631fc9bef198b",
+      "words": 23
+    },
+    {
+      "style": "native",
+      "id": "fare-proposal-approval-effective",
+      "accepted": true,
+      "attempts": 1,
+      "seconds": 0.4938812080072239,
+      "excerpt_sha256": "1ba79cda2e8c130ecca422cd51e937be1d90b0576e9afe08eb9079baf2f28e69",
+      "words": 27
+    },
+    {
+      "style": "native",
+      "id": "storm-estimate-confirmed-count",
+      "accepted": true,
+      "attempts": 1,
+      "seconds": 0.5402057920582592,
+      "excerpt_sha256": "91de16b1bbc179bacb7c98dbf25d5d9285c3fab2ebdbd0f69144f43bdc78e284",
+      "words": 34
+    },
+    {
+      "style": "native",
+      "id": "millbrook-outage-corrected-timing",
+      "accepted": true,
+      "attempts": 1,
+      "seconds": 0.6791789999697357,
+      "excerpt_sha256": "c3a9d6151da4d887125e28a01bd448c5aabf148f18bfeb75a4ef97a16f7c60f6",
+      "words": 40
+    }
+  ],
+  "synthetic_source_cases": [
+    {
+      "id": "water-incident-discovery-notice",
+      "headline": "Fictional water authority reports unauthorized system access",
+      "articles": [
+        {
+          "title": "Intruder accessed Vale Brook utility network on May 4, authority says",
+          "publication": "Vale Brook Ledger",
+          "body": "Vale Brook Water Authority said an unauthorized party first accessed a contractor account on May 4. The authority says the access ended May 6. It discovered the activity on May 11 and notified the regional regulator on May 14. The review is ongoing."
+        },
+        {
+          "title": "Regulator says Vale Brook notified it last week about May network intrusion",
+          "publication": "North County Wire",
+          "body": "The regulator confirmed receiving notice from Vale Brook Water Authority on May 14 about unauthorized access that occurred May 4\u20136. The utility found evidence of the intrusion on May 11. The regulator has not announced findings or penalties."
+        }
+      ],
+      "required_facts": [
+        "Unauthorized access occurred May 4\u20136.",
+        "The authority discovered it on May 11 and notified the regulator May 14; those are later milestones than the access itself."
+      ],
+      "forbidden_claims": [
+        "The intrusion began when the authority discovered it or notified the regulator.",
+        "The regulator has confirmed the intrusion's scope, data loss, or culpability."
+      ]
+    },
+    {
+      "id": "fare-proposal-approval-effective",
+      "headline": "Lydon council approves a proposed ferry fare increase for a later start",
+      "articles": [
+        {
+          "title": "Lydon council considers 8 percent ferry fare increase",
+          "publication": "Lydon Evening Post",
+          "body": "On February 3, Lydon officials proposed raising standard ferry fares by 8 percent. The council scheduled a vote for February 19. Until a vote, the increase remains a proposal and current fares continue."
+        },
+        {
+          "title": "Council approves ferry fare rise, effective April 1",
+          "publication": "Harbor District News",
+          "body": "Lydon's council approved the 8 percent standard-fare increase on February 19. The resolution sets April 1 as the effective date. No fare change takes effect before then."
+        }
+      ],
+      "required_facts": [
+        "The increase moved from proposal to council approval on February 19.",
+        "The approved increase is scheduled to take effect April 1."
+      ],
+      "forbidden_claims": [
+        "The increase took effect when proposed or approved.",
+        "The council rejected the proposal or approved a different percentage."
+      ]
+    },
+    {
+      "id": "storm-estimate-confirmed-count",
+      "headline": "Official inspection confirms damage count after an early estimate",
+      "articles": [
+        {
+          "title": "Initial survey estimates about 40 homes damaged by Bellweather storm",
+          "publication": "Bellweather County Bulletin",
+          "body": "County staff gave a preliminary estimate of roughly 40 homes with storm damage on August 8, while inspections were still underway. Officials cautioned that the number could change and had not confirmed a final count."
+        },
+        {
+          "title": "Completed inspections confirm 27 storm-damaged homes",
+          "publication": "Bellweather Public Radio",
+          "body": "The county completed its inspections on August 12 and confirmed 27 homes were damaged by the August 7 Bellweather storm. The earlier figure of about 40 was a preliminary estimate, not the completed count."
+        }
+      ],
+      "required_facts": [
+        "The roughly 40-home figure was preliminary.",
+        "After inspections, the county's confirmed count was 27 homes damaged by the August 7 storm."
+      ],
+      "forbidden_claims": [
+        "Forty homes were confirmed damaged.",
+        "The confirmed count was 27 on August 7 or before inspections finished."
+      ]
+    },
+    {
+      "id": "millbrook-outage-corrected-timing",
+      "headline": "Two reports align on the corrected start time of a fictional rail outage",
+      "articles": [
+        {
+          "title": "Signal failure delays Millbrook line; first bulletin lists 07:10 start",
+          "publication": "Millbrook Transit Desk",
+          "body": "A signal failure disrupted the Millbrook line on October 6. The transit desk's first bulletin listed 07:10 as the start time. A correction posted at 09:05 says the outage actually began at 07:40; the original time was entered incorrectly. Service resumed at 08:25."
+        },
+        {
+          "title": "Millbrook operator corrects outage chronology",
+          "publication": "East Vale Commuter News",
+          "body": "The operator confirmed that the October 6 signal failure began at 07:40 and service resumed at 08:25. Its initial bulletin incorrectly gave 07:10 as the start. The correction changes the recorded start time, not the incident or the restoration time."
+        }
+      ],
+      "required_facts": [
+        "Both reports concern the same October 6 signal-failure outage.",
+        "The corrected start time is 07:40; 07:10 was the erroneous initial entry, and service resumed at 08:25."
+      ],
+      "forbidden_claims": [
+        "There were two separate outages or the outage began at both 07:10 and 07:40.",
+        "The original 07:10 time is still the best-supported start time."
+      ]
+    }
+  ],
+  "runtime": {
+    "environment": "Actual Rust dev bridge plus actual desktop React components in Codex browser; isolated public RSS library, not installed native app",
+    "story_count": 10,
+    "validated_previews": 5,
+    "publisher_fallback_previews": 1,
+    "read_progress": "1 of10 /10% preserved through migration and reload",
+    "frozen_snapshot_unchanged": true,
+    "grouped_reports_opened": 4,
+    "full_reader_opened": true,
+    "all_displayed_generated_excerpts_match_one_source": true,
+    "stories": [
+      {
+        "title": "White House restores access to media outlets banned by Trump after judge's order",
+        "validated": true,
+        "excerpt_sha256": "83f3e605569d8dcfce167348c11d69d319373fe0cb3dda13a72453975d42c21b",
+        "source_urls": [
+          "https://www.bbc.co.uk/news/articles/cqe8ek7608mlo?at_medium=RSS&at_campaign=rss",
+          "https://www.bbc.co.uk/news/articles/cqe8ek7608mlo?at_medium=RSS&at_campaign=rss"
+        ]
+      },
+      {
+        "title": "Rogue OpenAI agent 'infiltrated' Australian government website in world first",
+        "validated": true,
+        "excerpt_sha256": "44e4f79595a4e6db19d510568abb8e004fa8012fb026894b05e4faff78ba95a8",
+        "source_urls": [
+          "https://www.bbc.co.uk/news/articles/c6vgy0333dppo?at_medium=RSS&at_campaign=rss",
+          "https://www.bbc.co.uk/news/articles/c6vgy0333dppo?at_medium=RSS&at_campaign=rss",
+          "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o?at_medium=RSS&at_campaign=rss",
+          "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o?at_medium=RSS&at_campaign=rss"
+        ]
+      },
+      {
+        "title": "Trump's Board of Peace unveils $2.45bn Gaza recovery plan",
+        "validated": true,
+        "excerpt_sha256": "7305d49b2719c691a28ccfb74e7b4991b12f031ae27a47bf5fc74ee08b91d2c0",
+        "source_urls": [
+          "https://www.bbc.co.uk/news/articles/cwlyke0mm0x3o?at_medium=RSS&at_campaign=rss"
+        ]
+      },
+      {
+        "title": "Spain's housing crisis in focus after eviction of 87-year-old woman",
+        "validated": true,
+        "excerpt_sha256": "19fe97c54c4aa223d94400ee6e54a05a35319607d8681f90a3d46e1887b1f693",
+        "source_urls": [
+          "https://www.bbc.co.uk/news/videos/cm4gjvz734w3o?at_medium=RSS&at_campaign=rss"
+        ]
+      },
+      {
+        "title": "Greek PM urges UK PM to return Elgin Marbles permanently",
+        "validated": false,
+        "excerpt_sha256": null,
+        "source_urls": [
+          "https://www.bbc.co.uk/news/articles/cqm2mgk6mlddo?at_medium=RSS&at_campaign=rss",
+          "https://www.bbc.co.uk/news/articles/cqm2mgk6mlddo?at_medium=RSS&at_campaign=rss"
+        ]
+      },
+      {
+        "title": "Poland says fire at Starlink station is sabotage as Denmark warns of rising Russian threat",
+        "validated": true,
+        "excerpt_sha256": "802bd0ff30bee56737b28bf89a803106a12ff9b57c53bb06bf26c76d72f499ec",
+        "source_urls": [
+          "https://www.bbc.co.uk/news/articles/cmp30r1klk37o?at_medium=RSS&at_campaign=rss",
+          "https://www.bbc.co.uk/news/articles/cmp30r1klk37o?at_medium=RSS&at_campaign=rss"
+        ]
+      }
+    ]
+  },
+  "validation": {
+    "rust_library_tests": 148,
+    "frontend_tests": 155,
+    "swift_core_tests": 118,
+    "shared_fixture_cases": 30,
+    "typescript_vite_build": true,
+    "simulator_build": true,
+    "excluded_rust_test": "ai::local_provider::tests::test_summarize_local_model: separate GGUF model unavailable",
+    "strict_clang": true,
+    "address_undefined_sanitizer": true
+  },
+  "limits": [
+    "Literal source matching does not prove source truth, editorial relevance or complete chronology.",
+    "Five development cases in two request formats are not representative or held-out accuracy. Native-style requests exercise shared inference helper, not an iOS device UI.",
+    "Greek report selection still contains Markdown; rejected output uses existing publisher snippet. Conservative bracket, abbreviation and paragraph handling may reject otherwise valid prose.",
+    "Native upstream source preparation may flatten paragraph boundaries before the validator.",
+    "Installed desktop acceptance remains blocked: Mac locked; installed version remains0.1.17.",
+    "Full feature extraction, selection and persistence remain separate across Rust and Swift; bounded policy sharing is not whole-domain consolidation."
+  ],
+  "independent_review": {
+    "assessment": "No definite factual or chronology failures in the 10 accepted desktop/native excerpts. All are exact contiguous source passages after whitespace normalization, within 60 words, and preserve the central verified state in the test cases.",
+    "validation": {
+      "outputs_reviewed": 10,
+      "contiguous_source_passages": 10,
+      "word_limit_failures": 0,
+      "definite_contradictions": 0,
+      "basis": "Compared accepted outputs with the four included synthetic cases and the captured public-source OpenAI evidence; full public article bodies remain outside repository."
+    },
+    "case_notes": [
+      {
+        "id": "live-openai",
+        "assessment": "Both clients select the June 18 test incident and retain the purpose of the agent, the Medicare portal, and the non-sensitive-data characterization. The passage is 59 words and is exact source text. It omits later discovery/reporting details, but this is optional detail, not a contradiction or loss of the core event."
+      },
+      {
+        "id": "water-incident-discovery-notice",
+        "assessment": "Desktop includes access start (May 4), end (May 6), discovery (May 11), and notice (May 14), in order. Native omits the May 4 start but accurately gives end, discovery, and notice; this is a meaningful cross-client completeness difference, not a false chronology."
+      },
+      {
+        "id": "fare-proposal-approval-effective",
+        "assessment": "Both distinguish council approval on February 19 from the April 1 effective date and explicitly say no fare change occurs before then."
+      },
+      {
+        "id": "storm-estimate-confirmed-count",
+        "assessment": "Both put the August 12 completed inspection after the August 7 storm, identify 27 as confirmed, and mark about 40 as preliminary rather than confirmed."
+      },
+      {
+        "id": "millbrook-outage-corrected-timing",
+        "assessment": "Both preserve the corrected 07:40 start and reject the erroneous 07:10 time. Native also includes the October 6 incident date and 08:25 resumption; desktop omits those helpful details but makes no contrary claim."
+      }
+    ],
+    "limits": "This is a small diagnostic set, not a representative quality estimate. Textual exactness does not establish that the chosen passage is the best possible excerpt."
+  }
+}

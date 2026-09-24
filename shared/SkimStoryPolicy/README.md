@@ -24,3 +24,5 @@ preference inputs, article identity seeds, persistence and migrations remain
 platform adapters or separate implementations. This is a bounded shared policy,
 not completion of the domain-core migration. Existing story memberships and
 frozen editions are not rewritten by this extraction.
+
+Verified fragments use the shared consequence-rating prompt and metric validation. Each platform sends one event per request, keeps one total deadline, and publishes the rating stage atomically; failure retains verified membership with neutral importance. Model output never owns member references.

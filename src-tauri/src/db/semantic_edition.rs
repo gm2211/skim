@@ -90,10 +90,48 @@ async fn plan_with_timeout(
     if !eligible_count(count) {
         return None;
     }
-    // One deadline spans both model calls, parsing and verification.
-    tokio::time::timeout(timeout, plan_verified(provider, model, listing, count))
+    // One deadline spans all calls. Once membership is verified, rating failure
+    // can safely retain those groups with their independent base scores.
+    let deadline = tokio::time::Instant::now() + timeout;
+    let verified = tokio::time::timeout_at(
+        deadline,
+        verify_memberships(provider, model, listing.clone(), count),
+    )
+    .await
+    .ok()??;
+    if verified.rating_ids.is_empty() {
+        return Some(verified.groups);
+    }
+    let mut rated = verified.groups.clone();
+    // Isolate each event: unrelated events in the same rating request distorted
+    // consequence ratings in local-model probes. Publish this stage atomically.
+    for &id in &verified.rating_ids {
+        let single = VerifiedPlan {
+            groups: rated,
+            rating_ids: vec![id],
+        };
+        let Some(payload) = rating_listing(&listing, count, &single) else {
+            return Some(verified.groups);
+        };
+        let response = tokio::time::timeout_at(
+            deadline,
+            request(
+                provider,
+                model,
+                story_policy::semantic_rating_prompt(),
+                payload,
+            ),
+        )
         .await
-        .ok()?
+        .ok()
+        .flatten()
+        .and_then(|raw| apply_ratings(&raw, &single));
+        let Some(result) = response else {
+            return Some(verified.groups);
+        };
+        rated = result;
+    }
+    Some(rated)
 }
 
 async fn request(
@@ -146,7 +184,7 @@ fn requested_pairs(groups: &[SemanticGroup]) -> Option<Vec<[usize; 2]>> {
     Some(pairs.into_iter().collect())
 }
 
-fn pair_listing(listing: &str, count: usize, pairs: &[[usize; 2]]) -> Option<String> {
+fn report_listing(listing: &str, count: usize) -> Option<Vec<serde_json::Value>> {
     let candidates: Vec<serde_json::Value> = serde_json::from_str(listing).ok()?;
     if candidates.len() != count {
         return None;
@@ -165,10 +203,15 @@ fn pair_listing(listing: &str, count: usize, pairs: &[[usize; 2]]) -> Option<Str
             .to_string();
         reports.push(serde_json::json!({"index":index, "title":candidate.get("title")?.as_str()?, "excerpt":candidate.get("excerpt")?.as_str()?, "activity_date":date}));
     }
+    Some(reports)
+}
+
+fn pair_listing(listing: &str, count: usize, pairs: &[[usize; 2]]) -> Option<String> {
+    let reports = report_listing(listing, count)?;
     serde_json::to_string(&serde_json::json!({"reports":reports,"pairs":pairs})).ok()
 }
 
-fn pair_matrix(content: &str, count: usize, requested: &[[usize; 2]]) -> Option<Vec<u8>> {
+fn whole_json(content: &str) -> Option<serde_json::Value> {
     let trimmed = content.trim();
     let unfenced = trimmed
         .strip_prefix("```json")
@@ -176,7 +219,11 @@ fn pair_matrix(content: &str, count: usize, requested: &[[usize; 2]]) -> Option<
         .and_then(|text| text.trim().strip_suffix("```"))
         .unwrap_or(trimmed)
         .trim();
-    let decoded: serde_json::Value = serde_json::from_str(unfenced).ok()?;
+    serde_json::from_str(unfenced).ok()
+}
+
+fn pair_matrix(content: &str, count: usize, requested: &[[usize; 2]]) -> Option<Vec<u8>> {
+    let decoded = whole_json(content)?;
     let results = decoded
         .as_array()
         .or_else(|| decoded.get("pairs")?.as_array())?;
@@ -218,12 +265,71 @@ fn pair_matrix(content: &str, count: usize, requested: &[[usize; 2]]) -> Option<
     (seen == expected).then_some(matrix)
 }
 
-async fn plan_verified(
+struct VerifiedPlan {
+    groups: Vec<SemanticGroup>,
+    rating_ids: Vec<usize>,
+}
+
+fn rating_listing(listing: &str, count: usize, plan: &VerifiedPlan) -> Option<String> {
+    let reports = report_listing(listing, count)?;
+    let mut groups = Vec::new();
+    for &id in &plan.rating_ids {
+        let members = plan
+            .groups
+            .get(id)?
+            .members
+            .iter()
+            .map(|&index| reports.get(index).cloned())
+            .collect::<Option<Vec<_>>>()?;
+        groups.push(serde_json::json!({"group_id":id, "reports":members}));
+    }
+    serde_json::to_string(&serde_json::json!({"groups":groups})).ok()
+}
+
+fn apply_ratings(content: &str, plan: &VerifiedPlan) -> Option<Vec<SemanticGroup>> {
+    let response = whole_json(content)?;
+    let ratings = response.get("ratings")?.as_array()?;
+    if ratings.len() != plan.rating_ids.len() {
+        return None;
+    }
+    let expected: std::collections::BTreeSet<_> = plan.rating_ids.iter().copied().collect();
+    let mut seen = std::collections::BTreeSet::new();
+    let mut result = plan.groups.clone();
+    for rating in ratings {
+        let number = rating.get("group_id")?.as_f64()?;
+        if !number.is_finite()
+            || number < 0.0
+            || number.fract() != 0.0
+            || number >= result.len() as f64
+        {
+            return None;
+        }
+        let id = number as usize;
+        if !expected.contains(&id) || !seen.insert(id) {
+            return None;
+        }
+        let importance = rating.get("importance")?.as_f64()?;
+        let confidence = rating.get("confidence")?.as_f64()?;
+        if !story_policy::valid_semantic_rating(importance, confidence) {
+            return None;
+        }
+        let reason = rating.get("reason")?.as_str()?.trim();
+        if reason.is_empty() || reason.chars().count() > 280 {
+            return None;
+        }
+        result[id].importance = importance;
+        result[id].confidence = confidence;
+        result[id].reason = reason.into();
+    }
+    (seen == expected).then_some(result)
+}
+
+async fn verify_memberships(
     provider: &dyn AiProvider,
     model: &str,
     listing: String,
     count: usize,
-) -> Option<Vec<SemanticGroup>> {
+) -> Option<VerifiedPlan> {
     let raw = request(
         provider,
         model,
@@ -234,31 +340,40 @@ async fn plan_verified(
     let groups = parse(&raw, count)?;
     let pairs = requested_pairs(&groups)?;
     if pairs.is_empty() {
-        return Some(groups);
+        return Some(VerifiedPlan {
+            groups,
+            rating_ids: Vec::new(),
+        });
     }
     let input = pair_listing(&listing, count, &pairs)?;
     let raw = request(provider, model, story_policy::semantic_pair_prompt(), input).await?;
     let matrix = pair_matrix(&raw, count, &pairs)?;
     let mut verified = Vec::new();
+    let mut rating_ids = Vec::new();
     for group in groups {
         let partitions = story_policy::semantic_partition(&group.members, count, &matrix)?;
         let split = partitions.len() > 1;
         for members in partitions {
+            if split {
+                rating_ids.push(verified.len());
+            }
             verified.push(SemanticGroup {
                 members,
-                importance: group.importance,
+                importance: if split { 3.0 } else { group.importance },
                 confidence: group.confidence,
-                // Verification establishes membership, not an independent importance
-                // estimate. Split subgroups inherit the primary rating for now.
+                // Neutral adjustment until this specific verified event is rated.
                 reason: if split {
-                    "Importance estimated from related reports".into()
+                    "From your feeds".into()
                 } else {
                     group.reason.clone()
                 },
             });
         }
     }
-    Some(verified)
+    Some(VerifiedPlan {
+        groups: verified,
+        rating_ids,
+    })
 }
 
 #[cfg(test)]
@@ -326,7 +441,7 @@ mod tests {
                 content: self
                     .replies
                     .get(index)
-                    .expect("unexpected extra model request")
+                    .ok_or("scripted provider has no more responses")?
                     .clone(),
                 model: "fake".into(),
                 usage: None,
@@ -399,17 +514,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn recorded_configured_responses_pass_real_two_stage_adapter() {
+    async fn recorded_configured_responses_pass_full_rating_pipeline() {
         let cases: serde_json::Value = serde_json::from_str(include_str!(
             "../../../shared/fixtures/semantic-verification-responses.json"
         ))
         .unwrap();
         for case in cases.as_array().unwrap() {
             let candidates = case["candidates"].as_array().unwrap();
-            let provider = Scripted::new(vec![
+            let mut replies = vec![
                 case["primary_response"].as_str().unwrap().into(),
                 case["verification_response"].as_str().unwrap().into(),
-            ]);
+            ];
+            replies.extend(
+                case["rating_responses"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|r| r.as_str().unwrap().to_string()),
+            );
+            let expected_calls = replies.len();
+            let provider = Scripted::new(replies);
             let result = plan(
                 Some(&provider),
                 case["model"].as_str().unwrap(),
@@ -459,7 +583,20 @@ mod tests {
                 }
             }
             let requests = provider.requests.lock().unwrap();
-            assert_eq!(requests.len(), 2);
+            assert_eq!(requests.len(), expected_calls);
+            for request in requests.iter().skip(2) {
+                let payload: serde_json::Value =
+                    serde_json::from_str(&request.messages[1].content).unwrap();
+                assert_eq!(
+                    payload["groups"].as_array().unwrap().len(),
+                    1,
+                    "rating must isolate one event"
+                );
+                assert_eq!(
+                    request.messages[0].content,
+                    story_policy::semantic_rating_prompt()
+                );
+            }
             assert_eq!(
                 requests[0].messages[0].content,
                 story_policy::semantic_prompt()
@@ -480,6 +617,39 @@ mod tests {
                 assert_eq!(report.as_object().unwrap().len(), 4);
             }
         }
+    }
+
+    #[tokio::test]
+    async fn split_events_receive_independent_consequence_ratings() {
+        assert!(story_policy::valid_semantic_rating(5.0, 0.95));
+        let provider = Scripted::new(vec![
+            first_pass(vec![0, 1]),
+            r#"{"pairs":[{"members":[0,1],"same_event":false,"confidence":1}]}"#.into(),
+            r#"{"ratings":[{"group_id":0,"importance":5,"confidence":0.95,"reason":"Urgent public safety evacuation"}]}"#.into(),
+            r#"{"ratings":[{"group_id":1,"importance":1,"confidence":0.9,"reason":"Routine product announcement"}]}"#.into(),
+        ]);
+        let result = plan(Some(&provider), "same-model", listing(2), 2)
+            .await
+            .unwrap();
+        assert_eq!(result[0].members, vec![0]);
+        assert_eq!(result[1].members, vec![1]);
+        assert_eq!(result[0].importance, 5.0);
+        assert_eq!(result[1].importance, 1.0);
+        assert_eq!(result[1].reason, "Routine product announcement");
+        let calls = provider.requests.lock().unwrap();
+        assert_eq!(calls.len(), 4);
+        assert!(calls
+            .iter()
+            .all(|r| r.model == "same-model" && r.temperature == Some(0.0)));
+        assert_eq!(
+            calls[2].messages[0].content,
+            story_policy::semantic_rating_prompt()
+        );
+        let payload: serde_json::Value =
+            serde_json::from_str(&calls[2].messages[1].content).unwrap();
+        assert_eq!(payload["groups"].as_array().unwrap().len(), 1);
+        assert!(payload["groups"][0].get("importance").is_none());
+        assert_eq!(payload["groups"][0]["reports"][0]["index"], 0);
     }
 
     #[tokio::test]
@@ -506,10 +676,11 @@ mod tests {
             .collect();
         memberships.sort();
         assert_eq!(memberships, vec![vec![0, 1], vec![2]]);
-        assert!(result.iter().all(|group| group.importance == 4.0
-            && group.reason == "Importance estimated from related reports"));
+        assert!(result
+            .iter()
+            .all(|group| group.importance == 3.0 && group.reason == "From your feeds"));
         let calls = provider.requests.lock().unwrap();
-        assert_eq!(calls.len(), 2);
+        assert_eq!(calls.len(), 3);
         assert!(calls.iter().all(|request| request.model == "same-model"
             && request.temperature == Some(0.0)
             && request.json_mode
@@ -523,6 +694,91 @@ mod tests {
         assert_eq!(pair_input["reports"].as_array().unwrap().len(), 3);
         assert_eq!(pair_input["reports"][0]["activity_date"], "2024-09-24");
         assert_eq!(pair_input["reports"][0].as_object().unwrap().len(), 4);
+    }
+
+    #[tokio::test]
+    async fn failed_or_incomplete_ratings_keep_verified_groups_neutral() {
+        let base = r#"{"ratings":[{"group_id":1,"importance":1,"confidence":0.9,"reason":"Routine announcement"}]}"#;
+        let valid: serde_json::Value = serde_json::from_str(base).unwrap();
+        let mut invalid = vec![
+            "not JSON".into(),
+            r#"{"ratings":[]}"#.into(),
+            format!("Prose {base}"),
+        ];
+        for value in [
+            serde_json::json!(0),
+            serde_json::json!(2),
+            serde_json::json!(0.5),
+            serde_json::json!(true),
+        ] {
+            let mut bad = valid.clone();
+            bad["ratings"][0]["group_id"] = value;
+            invalid.push(bad.to_string());
+        }
+        for (key, value) in [
+            ("importance", serde_json::json!(6)),
+            ("confidence", serde_json::json!(0.79)),
+            ("confidence", serde_json::json!(1.1)),
+            ("reason", serde_json::json!(" ")),
+            ("reason", serde_json::json!("x".repeat(281))),
+        ] {
+            let mut bad = valid.clone();
+            bad["ratings"][0][key] = value;
+            invalid.push(bad.to_string());
+        }
+        for response in invalid {
+            let provider = Scripted::new(vec![
+                first_pass(vec![0, 1]),
+                r#"{"pairs":[{"members":[0,1],"same_event":false,"confidence":1}]}"#.into(),
+                r#"{"ratings":[{"group_id":0,"importance":5,"confidence":0.95,"reason":"Urgent evacuation"}]}"#.into(),
+                response,
+            ]);
+            let result = plan(Some(&provider), "fake", listing(2), 2).await.unwrap();
+            assert_eq!(provider.requests.lock().unwrap().len(), 4);
+            assert_eq!(
+                result.iter().map(|g| g.members.clone()).collect::<Vec<_>>(),
+                vec![vec![0], vec![1]]
+            );
+            assert!(result
+                .iter()
+                .all(|g| g.importance == 3.0 && g.reason == "From your feeds"));
+        }
+    }
+
+    #[tokio::test]
+    async fn rating_deadline_preserves_neutral_memberships_without_extending_total_budget() {
+        let mut provider = Scripted::new(vec![
+            first_pass(vec![0, 1]),
+            r#"{"pairs":[{"members":[0,1],"same_event":false,"confidence":1}]}"#.into(),
+            r#"{"ratings":[{"group_id":0,"importance":5,"confidence":1,"reason":"Urgent event"}]}"#
+                .into(),
+            "too late".into(),
+        ]);
+        provider.delay = Duration::from_millis(60);
+        let result = plan_with_timeout(
+            Some(&provider),
+            "fake",
+            listing(2),
+            2,
+            Duration::from_millis(220),
+        )
+        .await
+        .unwrap();
+        assert_eq!(provider.requests.lock().unwrap().len(), 4);
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|g| g.importance == 3.0));
+    }
+
+    #[tokio::test]
+    async fn confirmed_group_needs_no_new_rating_call() {
+        let provider = Scripted::new(vec![
+            first_pass(vec![0, 1]),
+            r#"{"pairs":[{"members":[0,1],"same_event":true,"confidence":1}]}"#.into(),
+        ]);
+        let result = plan(Some(&provider), "fake", listing(2), 2).await.unwrap();
+        assert_eq!(provider.requests.lock().unwrap().len(), 2);
+        assert_eq!(result[0].importance, 4.0);
+        assert_eq!(result[0].reason, "Original event assertion");
     }
 
     #[tokio::test]

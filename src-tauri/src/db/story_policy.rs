@@ -22,6 +22,8 @@ extern "C" {
     fn skim_story_is_unique(sources: i64) -> i32;
     fn skim_story_identity_hash(bytes: *const u8, length: usize) -> u64;
     fn skim_semantic_pair_prompt() -> *const std::os::raw::c_char;
+    fn skim_semantic_rating_prompt() -> *const std::os::raw::c_char;
+    fn skim_semantic_rating_valid(importance: f64, confidence: f64) -> i32;
     fn skim_semantic_max_pairs() -> usize;
     fn skim_semantic_partition(
         members: *const f64,
@@ -101,6 +103,17 @@ pub fn semantic_pair_prompt() -> &'static str {
 
 pub fn semantic_max_pairs() -> usize {
     unsafe { skim_semantic_max_pairs() }
+}
+
+pub fn semantic_rating_prompt() -> &'static str {
+    // Static string owned by the shared C policy.
+    unsafe { std::ffi::CStr::from_ptr(skim_semantic_rating_prompt()) }
+        .to_str()
+        .expect("shared rating prompt is UTF-8")
+}
+
+pub fn valid_semantic_rating(importance: f64, confidence: f64) -> bool {
+    unsafe { skim_semantic_rating_valid(importance, confidence) != 0 }
 }
 
 pub fn semantic_partition(

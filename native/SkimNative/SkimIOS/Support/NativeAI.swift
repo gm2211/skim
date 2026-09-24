@@ -199,6 +199,7 @@ private final class TodaySemanticCompletion: @unchecked Sendable {
     private var continuation: CheckedContinuation<[TodaySemanticGroup], Error>?
     private var outcome: Result<[TodaySemanticGroup], Error>?
     private var tasks: [Task<Void, Never>] = []
+    private var fallback: [TodaySemanticGroup]?
 
     func install(_ continuation: CheckedContinuation<[TodaySemanticGroup], Error>) {
         lock.lock()
@@ -217,9 +218,16 @@ private final class TodaySemanticCompletion: @unchecked Sendable {
         else { tasks.append(task); lock.unlock() }
     }
 
-    func finish(_ result: Result<[TodaySemanticGroup], Error>) {
+    func setFallback(_ groups: [TodaySemanticGroup]) {
+        lock.lock()
+        if outcome == nil { fallback = groups }
+        lock.unlock()
+    }
+
+    func finish(_ result: Result<[TodaySemanticGroup], Error>, useFallback: Bool = false) {
         lock.lock()
         guard outcome == nil else { lock.unlock(); return }
+        let result = useFallback ? fallback.map { Result<[TodaySemanticGroup], Error>.success($0) } ?? result : result
         outcome = result
         let continuation = continuation
         self.continuation = nil
@@ -246,7 +254,7 @@ enum NativeAI {
             throw NativeAIError.unavailable("Today candidate pool exceeds the on-device context budget.")
         }
         let completion = TodaySemanticCompletion()
-        return try await withTaskCancellationHandler {
+        let result = try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 completion.install(continuation)
                 completion.retain(Task {
@@ -269,18 +277,44 @@ enum NativeAI {
                             try Task.checkCancellation()
                             verified = try TodaySemanticPolicy.verify(response: pairResponse, plan: plan)
                         }
-                        completion.finish(.success(verified))
+                        try Task.checkCancellation()
+                        completion.setFallback(verified)
+                        do {
+                            var rated = verified
+                            for groupID in verified.indices where verified[groupID].needsRating {
+                                try Task.checkCancellation()
+                                guard let ratingPlan = try TodaySemanticPolicy.ratingPlan(groups: rated, candidates: candidates, groupID: groupID) else {
+                                    throw NativeAIError.unavailable("Today rating group is unavailable.")
+                                }
+                                if settings.ai.provider == "foundation-models",
+                                   ratingPlan.payload.utf8.count + TodaySemanticPolicy.ratingPrompt.utf8.count > 2400 {
+                                    throw NativeAIError.unavailable("Today rating exceeds the on-device context budget.")
+                                }
+                                let ratingResponse = try await complete(settings: settings, instructions: TodaySemanticPolicy.ratingPrompt,
+                                    prompt: ratingPlan.payload, maxTokens: settings.ai.provider == "foundation-models" ? 1400 : 8192,
+                                    jsonMode: true, temperature: 0)
+                                try Task.checkCancellation()
+                                rated = try TodaySemanticPolicy.rate(response: ratingResponse, plan: ratingPlan)
+                            }
+                            try Task.checkCancellation()
+                            completion.finish(.success(rated))
+                        } catch {
+                            if Task.isCancelled || error is CancellationError { completion.finish(.failure(CancellationError())) }
+                            else { completion.finish(.success(verified)) }
+                        }
                     } catch { completion.finish(.failure(error)) }
                 })
                 completion.retain(Task {
                     do { try await Task.sleep(for: .seconds(30)) }
                     catch { return }
-                    completion.finish(.failure(NativeAIError.unavailable("Today semantic evaluation timed out.")))
+                    completion.finish(.failure(NativeAIError.unavailable("Today semantic evaluation timed out.")), useFallback: true)
                 })
             }
         } onCancel: {
             completion.finish(.failure(CancellationError()))
         }
+        try Task.checkCancellation()
+        return result
     }
 
     static func loadingStatusLabel(for ai: AISettings) -> String {

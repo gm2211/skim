@@ -1,0 +1,212 @@
+{
+  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+  "helper_sha256": "8fd3de7750785cab41ca48600556df960245ddea29515a12efbeefff80cca1cc",
+  "shared_policy_sha256": "c57348391546b9b61231d66e963672f50d28a605a408bfdc79ae78cb992aa845",
+  "limits": "Small selected samples used to diagnose and refine policy; not held-out accuracy, representative feed quality, installed-app acceptance or personalized importance. Current publisher sample has no defensible strict importance ordering. Raw RSS retrieval is separate from model probes.",
+  "samples": [
+    {
+      "corpus": "skim-semantic-fresh-corpus.json",
+      "reports": 8,
+      "expected_groups": 5,
+      "all_groups_correct": true,
+      "importance_constraints_pass": true,
+      "elapsed_seconds": 10.74,
+      "model_calls": 6,
+      "input_sha256": "5caea6fee384ef9df75fa64a6e5dbb8eca1931c1c73c00562e63845b0dd6580f",
+      "output_members": [
+        [
+          0,
+          1
+        ],
+        [
+          6
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          7
+        ],
+        [
+          4,
+          5
+        ]
+      ]
+    },
+    {
+      "corpus": "skim-real-news-corpus.json",
+      "reports": 10,
+      "expected_groups": 7,
+      "all_groups_correct": true,
+      "importance_constraints_pass": true,
+      "elapsed_seconds": 14.42,
+      "model_calls": 8,
+      "input_sha256": "2c7025e6999b31cb9e741bfac0651396e7e214c3623fee05281e4946880321ff",
+      "output_members": [
+        [
+          0,
+          1
+        ],
+        [
+          6
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          7
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          8
+        ],
+        [
+          9
+        ]
+      ]
+    },
+    {
+      "corpus": "skim-live-feed-corpus.json",
+      "reports": 14,
+      "expected_groups": 8,
+      "all_groups_correct": true,
+      "importance_constraints_pass": null,
+      "elapsed_seconds": 10.48,
+      "model_calls": 4,
+      "input_sha256": "2b5538be3660cc319fee187362047d6a48652af5f9e1ae08191931b2ade8763f",
+      "output_members": [
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          3
+        ],
+        [
+          4
+        ],
+        [
+          5,
+          6
+        ],
+        [
+          7,
+          8
+        ],
+        [
+          9
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          12,
+          13
+        ]
+      ]
+    }
+  ],
+  "public_source_retrieval": {
+    "retrieved_at_utc": "2026-09-24T16:26:31Z",
+    "sources": [
+      {
+        "id": "fed-sep26-official",
+        "url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20260916a.htm",
+        "publication_date": "2026-09-16"
+      },
+      {
+        "id": "fed-sep26-ap",
+        "url": "https://apnews.com/article/bab1bcb07e973bfb2dd0c3e5fbbb73b1",
+        "publication_date": "2026-09-16"
+      },
+      {
+        "id": "fed-sep26-cbs",
+        "url": "https://www.cbsnews.com/news/fed-interest-rate-decision-today/",
+        "publication_date": "2026-09-16"
+      },
+      {
+        "id": "fed-jul26-hold-ap",
+        "url": "https://apnews.com/article/ad10c177cb8d96f9e3ed122e12352a74",
+        "publication_date": "2026-07-28"
+      },
+      {
+        "id": "boj-sep26-hike-ap",
+        "url": "https://apnews.com/article/67e71246d3af41bcfc61aa788f9959c7",
+        "publication_date": "2026-09-18"
+      },
+      {
+        "id": "who-chile-rabies-en",
+        "url": "https://www.who.int/philippines/news/detail-global/14-09-2026-chile-becomes-first-country-in-south-america-validated-for-eliminating-dog-transmitted-rabies-as-a-public-health-problem",
+        "publication_date": "2026-09-14"
+      },
+      {
+        "id": "who-chile-rabies-es",
+        "url": "https://www.who.int/es/news-room/14-09-2026-chile-becomes-first-country-in-south-america-validated-for-eliminating-dog-transmitted-rabies-as-a-public-health-problem",
+        "publication_date": "2026-09-14"
+      },
+      {
+        "id": "who-bhutan-rabies-release",
+        "url": "https://www.who.int/news/item/04-09-2026-who-validates-bhutan-for-eliminating-dog-transmitted-human-rabies",
+        "publication_date": "2026-09-04"
+      },
+      {
+        "id": "who-bhutan-rabies-feature",
+        "url": "https://www.who.int/news-room/feature-stories/detail/bhutan-shows-the-world-rabies-elimination-is-possible",
+        "publication_date": "2026-09-16"
+      },
+      {
+        "id": "who-bhutan-prevalidation",
+        "url": "https://www.who.int/bhutan/news/detail/01-09-2026-bhutan-is-close-to-eliminating-dog-mediated-human-rabies",
+        "publication_date": "2026-09-01"
+      },
+      {
+        "id": "who-contraception-release",
+        "url": "https://www.who.int/news/item/23-09-2026-who-expands-safe-options-for-contraception",
+        "publication_date": "2026-09-23"
+      },
+      {
+        "id": "who-contraception-guideline",
+        "url": "https://www.who.int/publications/i/item/9789240124578",
+        "publication_date": "2026-09-23"
+      },
+      {
+        "id": "who-pabs-negotiation-en",
+        "url": "https://www.who.int/news/item/18-09-2026-member-states-advance-negotiations-on-pathogen-access-and-benefit-sharing-ahead-of-un-general-assembly-meeting-on-pandemics",
+        "publication_date": "2026-09-18"
+      },
+      {
+        "id": "who-pabs-negotiation-zh",
+        "url": "https://www.who.int/zh/news/item/18-09-2026-member-states-advance-negotiations-on-pathogen-access-and-benefit-sharing-ahead-of-un-general-assembly-meeting-on-pandemics",
+        "publication_date": "2026-09-18"
+      }
+    ],
+    "rss_files": [
+      {
+        "name": "bbc-world.xml",
+        "sha256": "62c904e926d221503a5d6f5f34c31acb646d6b44c40ca25d5b79643023101544"
+      },
+      {
+        "name": "federal-reserve.xml",
+        "sha256": "ffe7f69f7dcd1be7417ee9c0916dc3d05db42856a8acb290ad6da842963b2c5e"
+      },
+      {
+        "name": "nasa.xml",
+        "sha256": "94fe480b7023580185b4df2a8f3245e8ea7785ed478c4016320b68ec5f507dba"
+      },
+      {
+        "name": "who.xml",
+        "sha256": "53aed43dbed1bae5d223cd78d287a4716f9e2d97dab9d20d18bf00d35d3ddeac"
+      }
+    ],
+    "rss_matches": [
+      "Federal Reserve RSS contained selected official September decision URL. WHO RSS was accessible but newest item dated February; NASA/BBC were current but had no exact selected URL matches."
+    ]
+  }
+}

@@ -1,0 +1,218 @@
+{
+  "date": "2026-09-24",
+  "bead": "skim-po2g",
+  "scope": "Preserve conversation roles and authoritative instructions across native cloud and both production Foundation Models adapters; keep refreshed Anthropic tool calls in the tool loop.",
+  "base_commit": "b50e4d2e75c61379eb09388d29087b4583c71731",
+  "fixed_findings": [
+    "Native OpenAI-compatible and Anthropic article/library chat flattened prior user and assistant turns into one user message.",
+    "Desktop and native Foundation Models flattened history instead of using typed transcript entries.",
+    "Rust block-only system content was lost when deriving authoritative scalar instructions.",
+    "Native article-only instructions contradicted the web-search fallback.",
+    "A successful Anthropic subscription retry after 401 returned immediately and skipped tool_use handling."
+  ],
+  "checks": {
+    "rust": 174,
+    "swift_core": 146,
+    "native_app_simulator": 41,
+    "frontend": 156,
+    "shared_inference": 18,
+    "packaging": 3,
+    "total": 538,
+    "excluded": [
+      "ai::local_provider::tests::test_summarize_local_model: local GGUF fixture unavailable"
+    ]
+  },
+  "request_regressions": [
+    "Public NativeAI.chat with a scoped mock URLSession serializes system/user/assistant/user roles, selected source text, generated-summary distrust wrapper, and latest question exactly once.",
+    "Mock subscription sequence 401 -> injected fake-token refresh -> unknown-tool tool_use -> matching error tool_result -> final response proves retries continue through the existing tool parser; it does not execute live web search.",
+    "Anthropic request serialization retains assistant tool_use and user tool_result blocks and IDs.",
+    "Shared Foundation tests inspect actual typed transcript entries, authoritative retry/JSON instructions, literal role-looking text, latest user once, scalar fallback, and invalid-role rejection.",
+    "Rust serialization retains structured Foundation history, block-only system instructions, and existing sampling/output budgets.",
+    "Native web policy retains bracketed citation handles, latest-question/no-repeat behavior, permits supplied web evidence, and separates prior assistant output from source evidence."
+  ],
+  "inference_probe": {
+    "helper_sha256": "c6a11ae2cc910cdbdc000b5aa3e7922a3d8361675ec370d3ef1b636724d0080c",
+    "original_probe": {
+      "question": "Prior two plus three; assistant 5; latest Add seven to that result.",
+      "system": "Answer the latest arithmetic question with only the integer result.",
+      "temperature": 0,
+      "expected": "12",
+      "actual": "8",
+      "pass": false
+    },
+    "availability": {
+      "ok": true,
+      "availability": {
+        "available": false,
+        "message": "Apple Intelligence is off. Enable it in System Settings, then relaunch Skim.",
+        "status": "apple-intelligence-disabled"
+      }
+    },
+    "cases": [
+      {
+        "id": "scalar_arithmetic",
+        "request": {
+          "command": "mlx_complete",
+          "repoId": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "maxTokens": 100,
+          "temperature": 0,
+          "jsonMode": false,
+          "messages": [
+            {
+              "role": "system",
+              "content": "Answer the latest question with only the requested integer or code."
+            },
+            {
+              "role": "user",
+              "content": "What is 5 plus 7?"
+            }
+          ]
+        },
+        "response": {
+          "ok": true,
+          "value": "12"
+        },
+        "expected": "12",
+        "pass": true
+      },
+      {
+        "id": "history_arithmetic",
+        "request": {
+          "command": "mlx_complete",
+          "repoId": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "maxTokens": 100,
+          "temperature": 0,
+          "jsonMode": false,
+          "messages": [
+            {
+              "role": "system",
+              "content": "Answer the latest question with only the requested integer or code."
+            },
+            {
+              "role": "user",
+              "content": "What is two plus three?"
+            },
+            {
+              "role": "assistant",
+              "content": "5"
+            },
+            {
+              "role": "user",
+              "content": "Add seven to that result."
+            }
+          ]
+        },
+        "response": {
+          "ok": true,
+          "value": "12"
+        },
+        "expected": "12",
+        "pass": true
+      },
+      {
+        "id": "history_code",
+        "request": {
+          "command": "mlx_complete",
+          "repoId": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+          "maxTokens": 100,
+          "temperature": 0,
+          "jsonMode": false,
+          "messages": [
+            {
+              "role": "system",
+              "content": "Answer the latest question with only the requested integer or code."
+            },
+            {
+              "role": "user",
+              "content": "My reservation code is 31415."
+            },
+            {
+              "role": "assistant",
+              "content": "Noted."
+            },
+            {
+              "role": "user",
+              "content": "What reservation code did I give?"
+            }
+          ]
+        },
+        "response": {
+          "ok": true,
+          "value": "31415"
+        },
+        "expected": "31415",
+        "pass": true
+      }
+    ],
+    "seconds": 1.265,
+    "boundary": "Standalone freshly packaged helper, not signed-parent or native UI. These controls distinguish scalar and structured-history handling; they do not establish model factual reliability.",
+    "case_naming_note": "scalar_arithmetic means a single-turn question here; the recorded runtime request uses structured messages, not the legacy scalar fallback."
+  },
+  "independent_review": {
+    "shared_foundation": "Review found block-only system instruction loss; fixed with regression before release. No remaining concrete transport defect found.",
+    "native_cloud": "Review checked structured payloads, refreshed-token propagation and tool continuation. Final citation-format follow-up preserves the prior bracket syntax."
+  },
+  "experiment": {
+    "record": "2026-09-24-chat-fidelity-quality.json",
+    "outcome": "Stronger generic grounding prompt and greedy-sampling candidates rejected by preregistered 88-response study; no candidate, model preference, verifier, or repair layer adopted."
+  },
+  "acceptance_limits": [
+    "Native cloud responses are mocked with fake credentials; no live provider quality or subscription-account acceptance claimed.",
+    "FoundationModels transcript construction and compilation pass; actual inference unavailable because Apple Intelligence is disabled.",
+    "One fresh-helper history arithmetic probe answered 8 instead of 12. Three separately recorded single-turn/history controls passed with different system wording. All observations retained; model factual reliability remains open.",
+    "Signed desktop parent times out before main after 120 seconds in sandbox initialization. Locked Mac prevents native interaction; correlation is not a proven cause.",
+    "Installed desktop remains 0.1.17. No new UI acceptance, Terms acceptance, or full domain-core unification claimed."
+  ],
+  "open_issues": [
+    "skim-cg5e",
+    "skim-do2h",
+    "skim-dz1g",
+    "skim-62qe"
+  ],
+  "source_sha256": {
+    "native/SkimNative/SkimIOS/Support/NativeAI.swift": "a0c78b81910112e3c50034e13b86b97a686bb99fb3e495bcaa1f30b42152b951",
+    "native/SkimNative/SkimIOSTests/NativeAIModelsResponseTests.swift": "131e2e652a92c784d53ba707a212d43d9f08dca8c425c9f768bba6c92e1f6f42",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/FoundationChatMessages.swift": "0e2b8125558eab34815287b098b00cab40bd54fcb22925ca55ee86b2aa30c3d0",
+    "shared/SkimInferencePolicy/Tests/SkimInferencePolicyTests/FoundationChatMessagesTests.swift": "1f2400ccf48f949ac900afc5d453f6eb07f71a45d1bf5083190db1436de853aa",
+    "src-tauri/src/ai/native_provider.rs": "81ee6db34a0ab3aa6dce6218350d0ac07df84e90edb7dd4841dd7a1f18f293df",
+    "plugins/tauri-plugin-skim-ai/ios/MacBridge/main.swift": "14472bbc9f4c7917d009108d7e8a7af94c30f7f94018c01a360f8da183e4bbfa"
+  },
+  "native_simulator_result": "/tmp/skim-semantic-ios-build/Logs/Test/Test-Skim iOS-2026.09.24_18-24-44--0400.xcresult",
+  "native_simulator_summary": {
+    "devicesAndConfigurations": [
+      {
+        "device": {
+          "architecture": "arm64",
+          "deviceId": "6FBF2C17-A824-49B8-ABE0-C3FC96653D48",
+          "deviceName": "TapezeTest17",
+          "modelName": "iPhone 17",
+          "osBuildNumber": "23F77",
+          "osVersion": "26.5",
+          "platform": "iOS Simulator"
+        },
+        "expectedFailures": 0,
+        "failedTests": 0,
+        "passedTests": 41,
+        "skippedTests": 0,
+        "testPlanConfiguration": {
+          "configurationId": "1",
+          "configurationName": "Test Scheme Action"
+        }
+      }
+    ],
+    "environmentDescription": "Skim iOS \u00b7 Built with macOS 26.6.2",
+    "expectedFailures": 0,
+    "failedTests": 0,
+    "finishTime": 1790288695.063,
+    "passedTests": 41,
+    "result": "Passed",
+    "runtimeWarnings": [],
+    "skippedTests": 0,
+    "startTime": 1790288684.262,
+    "statistics": [],
+    "testFailures": [],
+    "title": "Test - Skim iOS",
+    "topInsights": [],
+    "totalTestCount": 41
+  }
+}

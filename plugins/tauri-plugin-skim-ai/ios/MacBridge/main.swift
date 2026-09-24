@@ -162,7 +162,8 @@ func process(_ request: Request) async {
             let availability = foundationAvailability()
             guard availability.available else { throw NSError(domain: "SkimAI", code: 3, userInfo: [NSLocalizedDescriptionKey: availability.message]) }
             let instructions = (request.system ?? "") + ((request.jsonMode ?? false) ? "\n\nRespond with a single valid JSON object. No prose, no markdown fences." : "")
-            let session = LanguageModelSession(instructions: instructions)
+            let prepared = try FoundationChatMessages.prepare(instructions: instructions, messages: request.messages, user: request.user ?? "")
+            let session = LanguageModelSession(transcript: prepared.transcript)
             let options: GenerationOptions
             if let temperature = request.temperature {
                 options = GenerationOptions(sampling: temperature == 0 ? .greedy : .random(top: 50),
@@ -170,7 +171,7 @@ func process(_ request: Request) async {
             } else {
                 options = GenerationOptions(maximumResponseTokens: request.maxTokens ?? 512)
             }
-            let text = try await session.respond(to: request.user ?? "", options: options).content
+            let text = try await session.respond(to: prepared.prompt, options: options).content
             emit(Response(ok: true, value: text, bool: nil, availability: nil, error: nil))
         default: throw NSError(domain: "SkimAI", code: 4, userInfo: [NSLocalizedDescriptionKey: "Unknown command"])
         }

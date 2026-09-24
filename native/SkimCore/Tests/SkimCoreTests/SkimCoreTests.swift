@@ -1600,3 +1600,173 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     #expect(try await store.listStoryRevisions(storyID: original.storyID) == revisions)
     #expect(try await store.todayEdition(id: frozen.id) == frozen)
 }
+
+@Test func semanticTodayGroupsSourcesAndRetainsOmittedStories() async throws {
+    let store = try temporaryStore()
+    for index in 0..<6 {
+        try await seedTodayStory(store: store, storyID: "semantic-\(index)", sourceCount: 1, timestamp: Double(100 + index))
+    }
+    let result = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 10,
+        generatedAt: Date(timeIntervalSince1970: 500), semanticEvaluator: { candidates in
+            #expect(candidates.count == 6)
+            #expect(candidates.allSatisfy { $0.excerpt.count <= 240 })
+            return [TodaySemanticGroup(members: [0, 1], importance: 5, confidence: 0.95, reason: "Same launch")]
+        })
+    #expect(result.items.count == 5)
+    #expect(result.items.first?.sourceArticles.count == 2)
+    #expect(Set(result.items.flatMap(\.memberArticleIDs)).count == 6)
+    #expect(result.items.first?.sourceArticles.filter(\.isRepresentative).count == 1)
+    let reopened = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 10,
+        generatedAt: Date(timeIntervalSince1970: 600), semanticEvaluator: { _ in
+            Issue.record("Frozen edition must not call evaluator")
+            return []
+        })
+    #expect(reopened == result)
+}
+
+@Test func semanticTodayInvalidGroupsCannotDiscardOrClaimCandidates() async throws {
+    let store = try temporaryStore()
+    for index in 0..<4 {
+        try await seedTodayStory(store: store, storyID: "invalid-\(index)", sourceCount: 1, timestamp: Double(100 + index))
+    }
+    let result = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 10,
+        generatedAt: Date(timeIntervalSince1970: 500), semanticEvaluator: { _ in
+            [TodaySemanticGroup(members: [0, 99], importance: 5, confidence: 1, reason: "Invalid"),
+             TodaySemanticGroup(members: [0, 1], importance: 5, confidence: 1, reason: "Valid"),
+             TodaySemanticGroup(members: [1, 2], importance: 5, confidence: 1, reason: "Overlap"),
+             TodaySemanticGroup(members: [2, 3], importance: 5, confidence: 0.79, reason: "Uncertain")]
+        })
+    #expect(result.items.count == 3)
+    #expect(Set(result.items.flatMap(\.memberArticleIDs)).count == 4)
+    #expect(result.items.first?.sourceArticles.count == 2)
+}
+
+@Test func semanticTodayFailureAndOversizedPoolUseDeterministicFallback() async throws {
+    let store = try temporaryStore()
+    for index in 0..<65 {
+        try await seedTodayStory(store: store, storyID: "wide-\(index)", sourceCount: 1, timestamp: Double(100 + index))
+    }
+    let result = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 20,
+        generatedAt: Date(timeIntervalSince1970: 500), semanticEvaluator: { _ in
+            Issue.record("Full pool exceeds budget; evaluation must not run")
+            return []
+        })
+    #expect(result.items.count == 2) // Existing deterministic unique-find policy.
+    let other = try temporaryStore()
+    try await seedTodayStory(store: other, storyID: "offline", sourceCount: 1, timestamp: 100)
+    let fallback = try await other.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 500), semanticEvaluator: { _ in throw URLError(.notConnectedToInternet) })
+    #expect(fallback.items.count == 1)
+}
+
+@Test func semanticTodayDiscardsResultAfterCandidateRevisionChanges() async throws {
+    let store = try temporaryStore()
+    try await seedTodayStory(store: store, storyID: "changed", sourceCount: 1, timestamp: 100)
+    let result = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 500), semanticEvaluator: { _ in
+            try await store.insertStoryRevision(StoryRevision(storyID: "changed", revisionNumber: 2,
+                title: "New revision", summary: "Changed while evaluating", sourceCount: 1,
+                isMaterialChange: true, createdAt: Date(timeIntervalSince1970: 400)))
+            return [TodaySemanticGroup(members: [0], importance: 5, confidence: 1, reason: "Stale model decision")]
+        })
+    #expect(result.items.first?.snapshot.storyRevisionNumber == 2)
+    #expect(result.items.first?.snapshot.snapshotReason != "Stale model decision")
+}
+
+@Test func semanticTodayConsumesEveryMemberAndAllowsMaterialUpdates() async throws {
+    let store = try temporaryStore()
+    for id in ["member-a", "member-b"] {
+        try await seedTodayStory(store: store, storyID: id, sourceCount: 1, timestamp: 100)
+    }
+    let first = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 500), semanticEvaluator: { _ in
+            [TodaySemanticGroup(members: [0, 1], importance: 5, confidence: 1, reason: "Same event")]
+        })
+    let grouped = try #require(first.items.first)
+    _ = try await store.setTodayEditionItemConsumed(editionID: first.id, storyID: grouped.snapshot.storyID, isConsumed: true)
+    for articleID in grouped.memberArticleIDs { #expect(try await store.article(id: articleID).isRead) }
+    for id in ["member-a", "member-b"] {
+        var story = try #require(await store.story(id: id))
+        story.lastActivityAt = Date(timeIntervalSince1970: 86500)
+        try await store.upsertStory(story)
+    }
+    let next = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 86400), endsAt: Date(timeIntervalSince1970: 172800), storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 87000))
+    #expect(next.items.isEmpty)
+    try await store.insertStoryRevision(StoryRevision(storyID: "member-b", revisionNumber: 2,
+        title: "Material update", summary: "New development", representativeArticleID: "member-b-article-0",
+        sourceCount: 1, isMaterialChange: true, createdAt: Date(timeIntervalSince1970: 86600)))
+    let updated = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 86400), endsAt: Date(timeIntervalSince1970: 172800), storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 87000))
+    #expect(updated.items.map(\.snapshot.storyID) == ["member-b"])
+}
+
+@Test func semanticTodayDecodeRejectsBooleanReferences() throws {
+    let groups = try TodaySemanticPolicy.decode(#"{"groups":[{"members":[true],"importance":5,"confidence":1,"reason":"bad"},{"members":[1],"importance":4,"confidence":1,"reason":"Valid"}]}"#)
+    #expect(groups.count == 1)
+    #expect(groups.first?.members == [1])
+}
+
+@Test func semanticTodayConcurrentGeneratorCannotReplaceFrozenEdition() async throws {
+    let store = try temporaryStore()
+    for index in 0..<3 {
+        try await seedTodayStory(store: store, storyID: "race-\(index)", sourceCount: 1, timestamp: Double(100 + index))
+    }
+    let result = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 500), semanticEvaluator: { _ in
+            let winner = try await store.getOrGenerateTodayEdition(
+                startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5,
+                generatedAt: Date(timeIntervalSince1970: 500))
+            #expect(winner.items.count == 2)
+            return [TodaySemanticGroup(members: [0, 1, 2], importance: 5, confidence: 1, reason: "Late grouping")]
+        })
+    #expect(result.items.count == 2)
+    #expect(result.items.allSatisfy { $0.sourceArticles.count == 1 })
+}
+
+@Test func semanticTodayMissingLiveArticleRetainsFrozenSourceAndConsumption() async throws {
+    let url = temporaryStoreURL()
+    let store = try SkimStore(databaseURL: url)
+    for id in ["missing-a", "missing-b"] {
+        try await seedTodayStory(store: store, storyID: id, sourceCount: 1, timestamp: 100)
+    }
+    let result = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5,
+        generatedAt: Date(timeIntervalSince1970: 500), semanticEvaluator: { _ in
+            [TodaySemanticGroup(members: [0, 1], importance: 5, confidence: 1, reason: "Same event")]
+        })
+    var database: OpaquePointer?
+    #expect(sqlite3_open(url.path, &database) == SQLITE_OK)
+    defer { sqlite3_close(database) }
+    #expect(sqlite3_exec(database, "PRAGMA foreign_keys = ON; DELETE FROM articles WHERE id = 'missing-b-article-0';", nil, nil, nil) == SQLITE_OK)
+    let reopenedStore = try SkimStore(databaseURL: url)
+    let reopened = try #require(try await reopenedStore.todayEdition(id: result.id))
+    #expect(reopened.items.first?.sourceArticles.count == 2)
+    let source = try #require(reopened.items.first?.sourceArticles.first { $0.articleID == "missing-b-article-0" })
+    #expect(source.liveArticle == nil)
+    #expect(!source.articleTitle.isEmpty)
+    let consumed = try await reopenedStore.setTodayEditionItemConsumed(
+        editionID: reopened.id, storyID: try #require(reopened.items.first?.snapshot.storyID), isConsumed: true)
+    #expect(consumed.consumedItemCount == 1)
+}
+
+@Test func semanticTodayCancellationDoesNotFreezeFallback() async throws {
+    let store = try temporaryStore()
+    try await seedTodayStory(store: store, storyID: "cancelled", sourceCount: 1, timestamp: 100)
+    await #expect(throws: CancellationError.self) {
+        try await store.getOrGenerateTodayEdition(
+            startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5,
+            generatedAt: Date(timeIntervalSince1970: 500), semanticEvaluator: { _ in throw CancellationError() })
+    }
+    #expect(try await store.listEditions().isEmpty)
+}

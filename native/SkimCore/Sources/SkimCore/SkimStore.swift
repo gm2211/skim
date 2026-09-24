@@ -274,7 +274,8 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         endsAt: Date,
         storyLimit: Int,
         generatedAt: Date = Date(),
-        preferences: TodayRankingPreferences = TodayRankingPreferences()
+        preferences: TodayRankingPreferences = TodayRankingPreferences(),
+        semanticEvaluator: TodaySemanticEvaluator? = nil
     ) async throws -> TodayEditionSnapshot {
         guard TodayEditionBuilder.supportedStoryLimits.contains(storyLimit) else {
             throw SkimCoreError.database("Today story limit must be 5, 10, or 20")
@@ -296,16 +297,40 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             ? db.todayEditionSnapshot(id: editionID) : nil
         if let existing, !existing.items.isEmpty { return existing }
 
-        let candidates = try db.todayEditionCandidates(
+        var candidates = try db.todayEditionCandidates(
             startsAt: startsAt,
             endsAt: endsAt,
             preferences: preferences
         )
+        var semantic = false
+        if let semanticEvaluator, !candidates.isEmpty,
+           candidates.count <= TodaySemanticPolicy.maximumCandidates {
+            let fingerprint = TodaySemanticPolicy.fingerprint(candidates)
+            let response: [TodaySemanticGroup]?
+            do { response = try await semanticEvaluator(TodaySemanticPolicy.inputs(candidates, at: generatedAt)) }
+            catch is CancellationError { throw CancellationError() }
+            catch { response = nil }
+            try Task.checkCancellation()
+            // Actor reentrancy permits refresh or another generator while the model runs.
+            if try db.edition(id: editionID) != nil {
+                let current = try db.todayEditionSnapshot(id: editionID)
+                if !current.items.isEmpty { return current }
+            }
+            let fresh = try db.todayEditionCandidates(startsAt: startsAt, endsAt: endsAt, preferences: preferences)
+            if fingerprint == TodaySemanticPolicy.fingerprint(fresh), let response,
+               let grouped = TodaySemanticPolicy.apply(response, to: fresh, at: generatedAt) {
+                candidates = grouped
+                semantic = true
+            } else {
+                candidates = fresh
+            }
+        }
         let generatedItems = TodayEditionBuilder.buildItems(
             editionID: editionID,
             candidates: candidates,
             storyLimit: storyLimit,
-            generatedAt: generatedAt
+            generatedAt: generatedAt,
+            semantic: semantic
         )
         if generatedItems.isEmpty, let existing { return existing }
         let distinctFeedIDs = Set(
@@ -338,6 +363,12 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             try db.insertEdition(edition)
             for generated in generatedItems {
                 try db.insertEditionItem(generated.item)
+                for member in generated.memberRevisions {
+                    try db.execute("""
+                        INSERT OR IGNORE INTO edition_item_story_revisions
+                        (edition_id, item_story_id, member_story_id, revision_number) VALUES (?, ?, ?, ?)
+                        """, [.text(editionID), .text(generated.item.storyID), .text(member.storyID), .int(member.revisionNumber)])
+                }
                 for source in generated.sourceArticles {
                     try db.insertEditionItemSource(
                         editionID: editionID,
@@ -710,6 +741,25 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 REFERENCES story_revisions(story_id, revision_number) ON DELETE RESTRICT
         )
         """)
+        try execute("""
+        CREATE TABLE IF NOT EXISTS edition_item_story_revisions (
+            edition_id TEXT NOT NULL,
+            item_story_id TEXT NOT NULL,
+            member_story_id TEXT NOT NULL,
+            revision_number INTEGER NOT NULL CHECK (revision_number > 0),
+            PRIMARY KEY (edition_id, item_story_id, member_story_id),
+            FOREIGN KEY (edition_id, item_story_id)
+                REFERENCES edition_items(edition_id, story_id) ON DELETE CASCADE,
+            FOREIGN KEY (member_story_id, revision_number)
+                REFERENCES story_revisions(story_id, revision_number) ON DELETE RESTRICT
+        )
+        """)
+        try execute("""
+        INSERT OR IGNORE INTO edition_item_story_revisions
+        (edition_id, item_story_id, member_story_id, revision_number)
+        SELECT edition_id, story_id, story_id, story_revision_number FROM edition_items
+        """)
+        try execute("CREATE INDEX IF NOT EXISTS idx_edition_item_story_revisions_member ON edition_item_story_revisions(member_story_id)")
         // Ledes live outside frozen snapshot columns. Run this migration after
         // CREATE TABLE so first-launch databases receive it too.
         try? execute("ALTER TABLE edition_items ADD COLUMN lede TEXT")
@@ -1057,12 +1107,14 @@ private final class SQLiteDatabase: @unchecked Sendable {
               AND NOT EXISTS (
                 SELECT 1 FROM edition_items consumed
                 JOIN editions previous ON previous.id = consumed.edition_id
-                WHERE consumed.story_id = stories.id
+                JOIN edition_item_story_revisions member
+                  ON member.edition_id = consumed.edition_id AND member.item_story_id = consumed.story_id
+                WHERE member.member_story_id = stories.id
                   AND consumed.is_consumed = 1 AND previous.ends_at <= ?
                   AND NOT EXISTS (
                     SELECT 1 FROM story_revisions revision
                     WHERE revision.story_id = stories.id
-                      AND revision.revision_number > consumed.story_revision_number
+                      AND revision.revision_number > member.revision_number
                       AND revision.is_material_change = 1
                   )
               )
@@ -1851,6 +1903,10 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 "Conflicting edition item \(item.editionID):\(item.storyID)"
             )
         }
+        try execute("""
+            INSERT OR IGNORE INTO edition_item_story_revisions
+            (edition_id, item_story_id, member_story_id, revision_number) VALUES (?, ?, ?, ?)
+            """, [.text(item.editionID), .text(item.storyID), .text(item.storyID), .int(item.storyRevisionNumber)])
     }
 
     func listEditionItems(editionID: String) throws -> [EditionItem] {

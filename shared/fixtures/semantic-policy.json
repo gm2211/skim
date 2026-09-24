@@ -1,0 +1,14 @@
+[
+  {"name":"valid paraphrase group","members":[0,2],"count":3,"assigned":[0,0,0],"importance":5,"confidence":0.95,"valid":true,"base":6,"score":12},
+  {"name":"low-confidence grouping rejected","members":[0,2],"count":3,"assigned":[0,0,0],"importance":5,"confidence":0.79,"valid":false,"base":6,"score":6},
+  {"name":"unknown reference rejected","members":[0,3],"count":3,"assigned":[0,0,0],"importance":4,"confidence":0.95,"valid":false,"base":6,"score":9},
+  {"name":"fractional reference rejected","members":[0,1.5],"count":3,"assigned":[0,0,0],"importance":4,"confidence":0.95,"valid":false,"base":6,"score":9},
+  {"name":"duplicate member rejected","members":[0,0],"count":3,"assigned":[0,0,0],"importance":4,"confidence":0.95,"valid":false,"base":6,"score":9},
+  {"name":"overlapping group rejected","members":[0,2],"count":3,"assigned":[0,0,1],"importance":4,"confidence":0.95,"valid":false,"base":6,"score":9},
+  {"name":"empty group rejected","members":[],"count":3,"assigned":[0,0,0],"importance":3,"confidence":0.9,"valid":false,"base":6,"score":6},
+  {"name":"negative reference rejected","members":[-1],"count":3,"assigned":[0,0,0],"importance":3,"confidence":0.9,"valid":false,"base":6,"score":6},
+  {"name":"bad importance rejected","members":[0],"count":3,"assigned":[0,0,0],"importance":6,"confidence":0.9,"valid":false,"base":6,"score":6},
+  {"name":"bad confidence rejected","members":[0],"count":3,"assigned":[0,0,0],"importance":4,"confidence":1.1,"valid":false,"base":6,"score":6},
+  {"name":"routine singleton remains represented","members":[1],"count":3,"assigned":[1,0,1],"importance":1,"confidence":0.9,"valid":true,"base":9,"score":3},
+  {"name":"undersized assigned buffer rejected","members":[2],"count":3,"assigned":[0],"importance":3,"confidence":0.9,"valid":false,"base":6,"score":6}
+]

@@ -10,6 +10,7 @@ import { CatchupDialog } from "../chat/CatchupDialog";
 import { SkimTitle } from "./SkimTitle";
 
 export function Sidebar() {
+  const askButtonRef = useRef<HTMLButtonElement>(null);
   const [askOpen, setAskOpen] = useState(false);
   const [askVisited, setAskVisited] = useState(false);
   const [returnToAsk, setReturnToAsk] = useState(false);
@@ -103,6 +104,7 @@ export function Sidebar() {
           </svg>
         </button>
         <button
+          ref={askButtonRef}
           onClick={() => { setAskVisited(true); setAskOpen(true); }}
           className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
           title="Ask Skim — search your feed with AI"
@@ -135,6 +137,7 @@ export function Sidebar() {
       </div>
       {askVisited && <AskSkimDialog
           open={askOpen}
+          restoreFocusTarget={() => askButtonRef.current}
           onClose={() => setAskOpen(false)}
           onOpenArticle={(id) => {
             setReturnToAsk(true);

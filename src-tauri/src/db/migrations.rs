@@ -232,6 +232,19 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
                 REFERENCES story_revisions(story_id, revision_number) ON DELETE RESTRICT
         );
 
+        CREATE TABLE IF NOT EXISTS edition_item_story_revisions (
+            edition_id TEXT NOT NULL,
+            item_story_id TEXT NOT NULL,
+            member_story_id TEXT NOT NULL,
+            revision_number INTEGER NOT NULL,
+            PRIMARY KEY (edition_id, item_story_id, member_story_id),
+            FOREIGN KEY (edition_id, item_story_id) REFERENCES edition_items(edition_id, story_id) ON DELETE CASCADE,
+            FOREIGN KEY (member_story_id, revision_number) REFERENCES story_revisions(story_id, revision_number) ON DELETE RESTRICT
+        );
+        INSERT OR IGNORE INTO edition_item_story_revisions
+            SELECT edition_id, story_id, story_id, story_revision_number FROM edition_items;
+        CREATE INDEX IF NOT EXISTS idx_edition_member_story ON edition_item_story_revisions(member_story_id);
+
         CREATE INDEX IF NOT EXISTS idx_edition_items_order
             ON edition_items(edition_id, position);
         CREATE INDEX IF NOT EXISTS idx_edition_items_story

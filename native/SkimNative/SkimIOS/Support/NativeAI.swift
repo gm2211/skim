@@ -192,7 +192,81 @@ private final class SummaryLRUCache: @unchecked Sendable {
     }
 }
 
+/// Unstructured requests allow the caller to leave at the deadline even if a
+/// provider ignores cancellation. The loser cannot publish a late result.
+private final class TodaySemanticCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<[TodaySemanticGroup], Error>?
+    private var outcome: Result<[TodaySemanticGroup], Error>?
+    private var tasks: [Task<Void, Never>] = []
+
+    func install(_ continuation: CheckedContinuation<[TodaySemanticGroup], Error>) {
+        lock.lock()
+        if let outcome {
+            lock.unlock()
+            continuation.resume(with: outcome)
+        } else {
+            self.continuation = continuation
+            lock.unlock()
+        }
+    }
+
+    func retain(_ task: Task<Void, Never>) {
+        lock.lock()
+        if outcome != nil { lock.unlock(); task.cancel() }
+        else { tasks.append(task); lock.unlock() }
+    }
+
+    func finish(_ result: Result<[TodaySemanticGroup], Error>) {
+        lock.lock()
+        guard outcome == nil else { lock.unlock(); return }
+        outcome = result
+        let continuation = continuation
+        self.continuation = nil
+        let tasks = tasks
+        self.tasks = []
+        lock.unlock()
+        continuation?.resume(with: result)
+        tasks.forEach { $0.cancel() }
+    }
+}
+
 enum NativeAI {
+    static func evaluateToday(candidates: [TodaySemanticCandidate], settings: AppSettings) async throws -> [TodaySemanticGroup] {
+        guard !candidates.isEmpty, candidates.count <= TodaySemanticPolicy.maximumCandidates else {
+            throw NativeAIError.unavailable("Today candidate pool exceeds the semantic context budget.")
+        }
+        let data = try JSONEncoder().encode(candidates)
+        let prompt = String(decoding: data, as: UTF8.self)
+        let instructions = TodaySemanticPolicy.prompt
+        // Conservative local context bound: reserve output capacity as well as
+        // input. Do not truncate the pool or silently switch to a cloud model.
+        if settings.ai.provider == "foundation-models",
+           prompt.utf8.count + instructions.utf8.count > 2400 {
+            throw NativeAIError.unavailable("Today candidate pool exceeds the on-device context budget.")
+        }
+        let completion = TodaySemanticCompletion()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                completion.install(continuation)
+                completion.retain(Task {
+                    do {
+                        let raw = try await complete(settings: settings, instructions: instructions,
+                            prompt: prompt, maxTokens: settings.ai.provider == "foundation-models" ? 1400 : 8192, jsonMode: true)
+                        completion.finish(.success(try TodaySemanticPolicy.decode(raw)))
+                    } catch { completion.finish(.failure(error)) }
+                })
+                completion.retain(Task {
+                    do { try await Task.sleep(for: .seconds(30)) }
+                    catch { return }
+                    completion.finish(.failure(NativeAIError.unavailable("Today semantic evaluation timed out.")))
+                })
+            }
+        } onCancel: {
+            completion.finish(.failure(CancellationError()))
+        }
+    }
+
     static func loadingStatusLabel(for ai: AISettings) -> String {
         switch ai.provider {
         case "foundation-models":

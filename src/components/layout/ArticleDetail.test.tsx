@@ -75,6 +75,12 @@ beforeEach(() => {
 });
 
 describe("ArticleDetail reader loading", () => {
+  it("focuses the newly opened reader without scrolling the page", async () => {
+    vi.mocked(getOrFetchReaderContent).mockResolvedValue({ html: "<p>Article</p>", raw_html: "" });
+    await act(async () => { render(<ArticleDetail />); });
+    expect(screen.getByRole("region", { name: "Article reader" })).toHaveFocus();
+  });
+
   it("makes the visible summary available to the article question", async () => {
     aiSettings.provider = "anthropic";
     summarizeMutation.data = { article_id: "a", bullet_summary: "Main claim", full_summary: "Detailed reasoning", provider: "anthropic", model: "test", created_at: 1 };

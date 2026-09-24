@@ -24,11 +24,12 @@ interface Message {
 
 interface Props {
   open?: boolean;
+  restoreFocusTarget?: () => HTMLElement | null;
   onClose: () => void;
   onOpenArticle?: (articleId: string) => void;
 }
 
-export function AskSkimDialog({ open = true, onClose, onOpenArticle }: Props) {
+export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
   const showSettings = useUiStore((s) => s.showSettings);
   const { data: settings } = useSettings();
@@ -37,16 +38,28 @@ export function AskSkimDialog({ open = true, onClose, onOpenArticle }: Props) {
   const needsSetup = provider === "none";
   useLockBodyScroll(open && isPhone && !showSettings);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const restoreOpener = useRef(true);
+  const focusAfterSend = useRef(false);
   useVisualViewportSync(dialogRef, open && isPhone && !showSettings);
-  useDialogFocus(dialogRef, onClose, open && !showSettings);
+  useDialogFocus(dialogRef, onClose, open && !showSettings, () => restoreOpener.current, restoreFocusTarget);
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(open && isPhone, onClose);
   const [scope, setScope] = useState<Scope>("unread");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [completedSends, setCompletedSends] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { if (open) restoreOpener.current = true; }, [open]);
+
+  useEffect(() => {
+    if (!loading && open && !showSettings && focusAfterSend.current) {
+      focusAfterSend.current = false;
+      inputRef.current?.focus({ preventScroll: true });
+    }
+  }, [loading, completedSends, open, showSettings]);
 
   useEffect(() => {
     if (!open || isPhone || needsSetup || showSettings) return;
@@ -70,6 +83,7 @@ export function AskSkimDialog({ open = true, onClose, onOpenArticle }: Props) {
     const next = [...messages, userMsg];
     setMessages(next);
     setInput("");
+    focusAfterSend.current = true;
     setLoading(true);
 
     const history: ChatMessageInput[] = messages.map((m) => ({ role: m.role, content: m.content }));
@@ -86,6 +100,7 @@ export function AskSkimDialog({ open = true, onClose, onOpenArticle }: Props) {
       setInput(query);
     } finally {
       setLoading(false);
+      setCompletedSends((count) => count + 1);
     }
   };
 
@@ -109,7 +124,7 @@ export function AskSkimDialog({ open = true, onClose, onOpenArticle }: Props) {
           willChange: isPhone ? "transform, height" : undefined,
           ...swipeToDismissStyle,
           margin: isPhone ? 0 : "0 20px",
-          paddingTop: isPhone ? "max(var(--sat, 0px), 60px)" : 0,
+          paddingTop: isPhone ? "max(var(--sat, 0px), 8px)" : 0,
           paddingBottom: isPhone ? "max(var(--sab, 0px), 12px)" : 0,
         }}
         onClick={(e) => e.stopPropagation()}
@@ -192,7 +207,11 @@ export function AskSkimDialog({ open = true, onClose, onOpenArticle }: Props) {
                 <SourceGroups
                   sources={m.sources}
                   content={m.content}
-                  onOpenArticle={onOpenArticle}
+                  onOpenArticle={onOpenArticle ? (id) => {
+                    restoreOpener.current = false;
+                    focusAfterSend.current = false;
+                    onOpenArticle(id);
+                  } : undefined}
                   onClose={onClose}
                 />
               )}

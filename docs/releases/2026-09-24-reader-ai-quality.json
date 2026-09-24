@@ -6,7 +6,7 @@
       "method": "Disposable SQLite library and deterministic local OpenAI-compatible provider; summarize_article through actual Rust devbridge.",
       "before": [
         "Same article ID with fuller evidence returned stale teaser summary without force.",
-        "300 CJK characters triggered UTF-8 byte-boundary panic and HTTP500 with info logging."
+        "300 CJK characters triggered UTF-8 byte-boundary panic and HTTP 500 with info logging."
       ],
       "after": [
         "Evidence change returned updated summary without force.",
@@ -21,7 +21,7 @@
         "genuine_extracted_html_separate_from_raw_page": true
       }
     },
-    "desktop_reader_cache": "First successful extracted HTML and raw page persist separately. Repeat, offline and library-source requests reuse extraction; empty extraction cannot promote raw navigation chrome. Individual fetch20s, selected-source2s/total5s bounds.",
+    "desktop_reader_cache": "First successful extracted HTML and raw page persist separately. Repeat, offline and library-source requests reuse extraction; empty extraction cannot promote raw navigation chrome. Individual fetch 20s, selected-source 2s/total 5s bounds.",
     "native": "Fuller feed/reader-cache evidence used by summary and article chat; extracted plain text persists in existing memory/SQLite caches. Metadata and source URLs preserved. Chat provider/model overrides, preset word counts, cache source fingerprint, summary-context bounds and article-specific eviction covered by Core tests. Generated summary remains separately labeled untrusted context across turns/reopen; local web sources remain structured citations.",
     "checks": {
       "rust": 151,
@@ -37,8 +37,8 @@
     "provider": "mlx",
     "environment": "Actual desktop React components and Rust devbridge in Codex in-app browser with disposable public-news library; not installed Tauri native runtime.",
     "flows": [
-      "Expanded4reportstory; opened full BBC reader; verified detailed summary controls and resulting summary; opened article chat; follow-up corrected incorrect summary timeline using source.",
-      "Library chat found expected BBC World headline from phrase in full reader text. Result listed15retrievedsources; correct answer does not prove source-list precision."
+      "Expanded a four-report story; opened full BBC reader; verified detailed summary controls and resulting summary; opened article chat; follow-up corrected incorrect summary timeline using source.",
+      "Library chat found expected BBC World headline from phrase in full reader text. Result listed 15 retrieved sources; correct answer does not prove source-list precision."
     ],
     "visual": "1280x720 reader, summary options/result and chat screenshots inspected. Aligned glass surfaces, readable source and independently scrollable summary/chat. Native Mac remains locked.",
     "known_failure": "Long summary still merged discovery/reporting timing into three-month detection delay. Follow-up could correct it; first answer remains defective."
@@ -89,8 +89,8 @@
       "all_calls_candidate_mean": 2.232
     },
     "findings": [
-      "14 paired app-bridge calls:3summary repetitions,2article chronology questions,2synthetic controls per arm.",
-      "Candidate still misattached five-day delay in1of3summaries. Both arms hallucinated May-to-June date in water control; both passed fare control.",
+      "14 paired app-bridge calls:3 summary repetitions, 2 article chronology questions, 2 synthetic controls per arm.",
+      "Candidate still misattached five-day delay in 1 of 3 summaries. Both arms hallucinated May-to-June date in water control; both passed fare control.",
       "No production prompt changes adopted; this small mixed sample cannot establish reliable accuracy."
     ],
     "source_url": "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o",

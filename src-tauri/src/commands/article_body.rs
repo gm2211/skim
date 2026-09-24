@@ -71,12 +71,66 @@ pub fn local_article_text(db: &Database, article: &Article) -> String {
 /// The fullest text available for `article`, fetching the linked page when
 /// neither the reader cache nor the feed has enough to work with.
 pub async fn resolve_article_text(db: &Database, article: &Article) -> String {
-    resolve_local_text(
-        local_article_text(db, article),
-        article.url.clone(),
-        |url| async move { super::ai::fetch_article_text(&url).await },
-    )
+    resolve_article_with(db, article, |url| async move {
+        super::articles::fetch_article_content(&url).await
+    })
     .await
+}
+
+async fn resolve_article_with<F, Fut>(db: &Database, article: &Article, fetch: F) -> String
+where
+    F: FnOnce(String) -> Fut,
+    Fut: Future<Output = Result<super::articles::FullArticleContent, String>>,
+{
+    let local = local_article_text(db, article);
+    // A successful extraction can legitimately be short. Do not repeatedly
+    // download it just because it remains below the feed teaser threshold.
+    if cached_reader_text(db, &article.id).is_some() {
+        return local;
+    }
+    resolve_local_text(local, article.url.clone(), |url| async move {
+        tokio::time::timeout(Duration::from_secs(20), async {
+            let content = fetch(url.clone()).await?;
+            cache_reader_evidence(db, &article.id, &url, content)
+        })
+        .await
+        .map_err(|_| "Article fetch timed out".to_string())?
+    })
+    .await
+}
+
+fn cache_reader_evidence(
+    db: &Database,
+    article_id: &str,
+    url: &str,
+    content: super::articles::FullArticleContent,
+) -> Result<String, String> {
+    // Only the reader extractor's HTML is evidence. raw_html may be a page
+    // shell or navigation chrome when extraction failed; never promote it.
+    let text = html2text::from_read(content.html.as_bytes(), TEXT_WIDTH);
+    if text.trim().is_empty() {
+        return Err("No article text extracted".into());
+    }
+    if let Ok(conn) = db.conn.lock() {
+        let existing = queries::get_reader_cache(&conn, article_id).ok().flatten();
+        let existing_len = existing
+            .as_ref()
+            .map(|(html, _)| visible_len(&html2text::from_read(html.as_bytes(), TEXT_WIDTH)))
+            .unwrap_or(0);
+        if visible_len(&text) > existing_len {
+            // Cache failure must not discard successfully fetched evidence.
+            if let Err(error) = queries::put_reader_cache(
+                &conn,
+                article_id,
+                Some(url),
+                &content.html,
+                &content.raw_html,
+            ) {
+                log::warn!("Could not cache AI reader evidence: {}", error);
+            }
+        }
+    }
+    Ok(text)
 }
 
 async fn resolve_local_text<F, Fut>(local: String, url: Option<String>, fetch: F) -> String
@@ -106,7 +160,10 @@ pub async fn resolve_selected_article_texts(db: &Database, articles: &[Article])
         4,
         Duration::from_secs(2),
         Duration::from_secs(5),
-        |url| async move { super::ai::fetch_article_text(&url).await },
+        |article_id, url| async move {
+            let content = super::articles::fetch_article_content(&url).await?;
+            cache_reader_evidence(db, &article_id, &url, content)
+        },
     )
     .await
 }
@@ -120,7 +177,7 @@ async fn resolve_selected_with<F, Fut>(
     fetch: F,
 ) -> Vec<String>
 where
-    F: Fn(String) -> Fut,
+    F: Fn(String, String) -> Fut,
     Fut: Future<Output = Result<String, String>>,
 {
     let mut texts: Vec<String> = articles
@@ -134,19 +191,28 @@ where
         .zip(&texts)
         .enumerate()
         .filter(|(_, (article, local))| {
-            article.url.is_some() && visible_len(local) < THIN_BODY_CHARS
+            article.url.is_some()
+                && visible_len(local) < THIN_BODY_CHARS
+                && cached_reader_text(db, &article.id).is_none()
         })
-        .map(|(index, (article, local))| (index, article.url.clone(), local.clone()))
+        .map(|(index, (article, local))| {
+            (
+                index,
+                article.id.clone(),
+                article.url.clone(),
+                local.clone(),
+            )
+        })
         .collect();
     let mut pending = stream::iter(work)
-        .map(|(index, url, local)| async move {
+        .map(|(index, article_id, url, local)| async move {
             if tokio::time::Instant::now() >= deadline {
                 return (index, local);
             }
             let source_deadline = (tokio::time::Instant::now() + source_timeout).min(deadline);
             let resolved = tokio::time::timeout_at(
                 source_deadline,
-                resolve_local_text(local.clone(), url, fetch),
+                resolve_local_text(local.clone(), url, |url| fetch(article_id, url)),
             )
             .await
             .unwrap_or(local);
@@ -224,7 +290,7 @@ mod tests {
             2,
             Duration::from_millis(40),
             Duration::from_millis(100),
-            |url| {
+            |_article_id, url| {
                 let started = started.clone();
                 let active = active.clone();
                 let maximum = maximum.clone();
@@ -271,7 +337,7 @@ mod tests {
             4,
             Duration::from_secs(1),
             Duration::from_millis(20),
-            |_| async {
+            |_, _| async {
                 calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 std::future::pending().await
             },
@@ -303,7 +369,7 @@ mod tests {
             4,
             Duration::from_secs(1),
             Duration::from_secs(1),
-            |_| async {
+            |_, _| async {
                 calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 Err("network should not be needed".into())
             },
@@ -312,6 +378,74 @@ mod tests {
         assert!(result[0].contains("nine hours"));
         assert_eq!(result[1], feed.content_text.unwrap());
         assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn fetched_reader_html_is_retained_for_repeat_and_offline_requests() {
+        let db = database();
+        let mut source = article(Some("teaser"), None);
+        source.url = Some("https://example.test/review".into());
+        let html = "<article><p>The battery lasted nine hours.</p></article>";
+        let raw = "<html><nav>Subscribe</nav><article><p>The battery lasted nine hours.</p></article></html>";
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let first = resolve_article_with(&db, &source, |_| async {
+            calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(super::super::articles::FullArticleContent {
+                html: html.into(),
+                raw_html: raw.into(),
+            })
+        })
+        .await;
+        assert!(first.contains("nine hours"));
+        assert!(!first.contains("Subscribe"));
+        assert_eq!(
+            queries::get_reader_cache(&db.conn.lock().unwrap(), &source.id)
+                .unwrap()
+                .unwrap(),
+            (html.into(), raw.into())
+        );
+        for _ in 0..2 {
+            let offline = resolve_article_with(&db, &source, |_| async {
+                calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err("offline".into())
+            })
+            .await;
+            assert_eq!(offline, first);
+        }
+        let selected = resolve_selected_with(
+            &db,
+            &[source],
+            4,
+            Duration::from_secs(2),
+            Duration::from_secs(5),
+            |_, _| async {
+                calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err("offline".into())
+            },
+        )
+        .await;
+        assert_eq!(selected, vec![first]);
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn failed_extraction_does_not_cache_page_chrome_and_keeps_feed_fallback() {
+        let db = database();
+        let mut source = article(Some("feed evidence"), None);
+        source.url = Some("https://example.test/review".into());
+        let result = resolve_article_with(&db, &source, |_| async {
+            Ok(super::super::articles::FullArticleContent {
+                html: String::new(),
+                raw_html: "<nav>Subscribe and sign in</nav>".into(),
+            })
+        })
+        .await;
+        assert_eq!(result, "feed evidence");
+        assert!(
+            queries::get_reader_cache(&db.conn.lock().unwrap(), &source.id)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

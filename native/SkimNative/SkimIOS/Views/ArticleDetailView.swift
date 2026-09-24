@@ -21,6 +21,7 @@ struct ArticleDetailView: View {
     @State private var activeAIChat: AIChatRequest?
     @State private var activeChatInitialMessage: String? = nil
     @State private var chatMessagesBySession: [String: [AIChatMessage]] = [:]
+    @State private var summaryContextBySession: [String: String] = [:]
     @State private var activeSummaryConfiguration: Article?
     @State private var showAIDisclaimerGate = false
     @State private var pendingAIAction: (() -> Void)?
@@ -293,7 +294,8 @@ struct ArticleDetailView: View {
                     let contextArticle = try await WebAIContext.article(
                         base: article,
                         preferWeb: useWebContext,
-                        snapshot: webSnapshot
+                        snapshot: webSnapshot,
+                        store: model.store
                     )
                     let text = try await NativeAI.summarize(article: contextArticle, settings: settings)
                     return AIResultAnswer(text: text, articles: [contextArticle])
@@ -302,7 +304,8 @@ struct ArticleDetailView: View {
                     let contextArticle = try await WebAIContext.article(
                         base: article,
                         preferWeb: useWebContext,
-                        snapshot: webSnapshot
+                        snapshot: webSnapshot,
+                        store: model.store
                     )
                     let text = try await NativeAI.summarizeStreaming(
                         article: contextArticle, settings: settings, onToken: onToken)
@@ -323,15 +326,18 @@ struct ArticleDetailView: View {
                     // then open the chat sheet with the summary pre-loaded.
                     activeAIResult = nil
                     activeChatInitialMessage = summaryText
+                    summaryContextBySession[chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot)] = summaryText
                     activeAIChat = AIChatRequest(
                         sessionKey: chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
                         title: "Chat with Article",
-                        placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot)
+                        placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
+                        generatedSummaryContext: summaryText
                     ) { conversation in
                         let contextArticle = try await WebAIContext.article(
                             base: article,
                             preferWeb: useWebContext,
-                            snapshot: webSnapshot
+                            snapshot: webSnapshot,
+                            store: model.store
                         )
                         let (text, citations) = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
                         return AIChatAnswer(text: text, articles: [contextArticle], webCitations: citations)
@@ -344,7 +350,10 @@ struct ArticleDetailView: View {
     private func chatMessagesBinding(for sessionKey: String) -> Binding<[AIChatMessage]> {
         Binding(
             get: { chatMessagesBySession[sessionKey] ?? [] },
-            set: { chatMessagesBySession[sessionKey] = $0 }
+            set: { messages in
+                chatMessagesBySession[sessionKey] = messages
+                if messages.isEmpty { summaryContextBySession.removeValue(forKey: sessionKey) }
+            }
         )
     }
 
@@ -368,7 +377,7 @@ struct SummaryConfigurationSheet: View {
         self.defaults = defaults
         self.onRun = onRun
         _style = State(initialValue: defaults.summaryTone ?? "concise")
-        _wordCount = State(initialValue: defaults.summaryCustomWordCount ?? 150)
+        _wordCount = State(initialValue: AIRequestPolicy.summaryWordCount(defaults))
         _customPrompt = State(initialValue: defaults.summaryCustomPrompt ?? "")
     }
 
@@ -451,6 +460,7 @@ struct SummaryConfigurationSheet: View {
     private var configuredSettings: AISettings {
         var next = defaults
         next.summaryTone = style
+        next.summaryLength = "custom"
         next.summaryCustomWordCount = wordCount
         next.summaryCustomPrompt = customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         return next
@@ -532,12 +542,14 @@ private extension ArticleDetailView {
             activeAIChat = AIChatRequest(
                 sessionKey: chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
                 title: useWebContext ? "Chat with Web Page" : "Chat with Article",
-                placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot)
+                placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
+                generatedSummaryContext: summaryContextBySession[chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot)]
             ) { conversation in
                 let contextArticle = try await WebAIContext.article(
                     base: article,
                     preferWeb: useWebContext,
-                    snapshot: webSnapshot
+                    snapshot: webSnapshot,
+                    store: model.store
                 )
                 let (text, citations) = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
                 return AIChatAnswer(text: text, articles: [contextArticle], webCitations: citations)
@@ -1087,36 +1099,9 @@ private struct WebPage: View {
 enum WebAIContext {
     private static let minimumUsefulTextLength = 200
 
-    static func article(base: Article, preferWeb: Bool, snapshot: WebViewSnapshot) async throws -> Article {
+    static func article(base: Article, preferWeb: Bool, snapshot: WebViewSnapshot, store: SkimStore) async throws -> Article {
         guard preferWeb else {
-            // Non-web path: if the article body is thin (aggregator/link posts) and
-            // there is an externalURL pointing to the real article, fetch and extract it.
-            if articleBodyIsThin(base), let externalURL = base.externalURL {
-                if let loaded = try? await loadDocument(at: externalURL, fallbackTitle: base.title),
-                   loaded.text.count >= minimumUsefulTextLength {
-                    // Preserve base.id so chat session keys remain stable.
-                    // Preserve base.feedTitle (not "Web View") so provenance is clear.
-                    return Article(
-                        id: base.id,
-                        feedID: base.feedID,
-                        feedTitle: base.feedTitle,
-                        title: loaded.title?.nilIfEmpty ?? base.title,
-                        url: loaded.url,
-                        author: base.author,
-                        contentText: loaded.text,
-                        contentHTML: nil,
-                        imageURL: base.imageURL,
-                        publishedAt: base.publishedAt,
-                        fetchedAt: base.fetchedAt,
-                        isRead: base.isRead,
-                        isStarred: base.isStarred,
-                        aggregatorKind: base.aggregatorKind,
-                        externalURL: base.externalURL,
-                        commentsURL: base.commentsURL
-                    )
-                }
-            }
-            return base
+            return try await ArticleReaderContentLoader.aiEvidence(for: base, store: store)
         }
 
         let contextURL = snapshot.url ?? base.externalURL ?? base.url
@@ -1226,16 +1211,6 @@ enum WebAIContext {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         )
         return cleaned.nilIfEmpty
-    }
-
-    /// Returns true when the article's readable body text is absent or shorter than
-    /// `minimumUsefulTextLength`. Used to detect aggregator/link posts (HN, lobste.rs,
-    /// Reddit) whose RSS items carry only a stub and whose real content lives at
-    /// `externalURL`.
-    private static func articleBodyIsThin(_ base: Article) -> Bool {
-        let body = sanitizedText(base.contentText) ?? sanitizedText(base.contentHTML?.skimPlainText)
-        guard let body else { return true }
-        return body.count < minimumUsefulTextLength
     }
 
     private static func isPDF(url: URL, mimeType: String, data: Data) -> Bool {

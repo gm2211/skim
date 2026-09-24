@@ -32,6 +32,38 @@ enum ArticleReaderContentLoader {
         return ArticleExtractor.sanitizeReaderText(cleaned)
     }
 
+    /// Resolve the same extraction caches used by reader mode without changing article identity.
+    /// The shared resolver bounds network work and retains local evidence when offline.
+    static func aiEvidence(for article: Article, store: SkimStore) async throws -> Article {
+        var prepared = article
+        var htmlOnly = article
+        htmlOnly.contentText = nil
+        let text = displayBody(for: article)
+        let html = displayBody(for: htmlOnly)
+        prepared.contentText = html.count > text.count ? html : text
+        let resolved = try await TodayReaderEvidence.resolve(
+            articles: [prepared], limit: 1,
+            cached: { article in
+                let disk = sanitizedText(try? await store.cachedReaderText(articleID: article.id)) ?? ""
+                let memory = sanitizedText(ExtractedContentCache.shared.get(article.id)) ?? ""
+                return memory.count > disk.count ? memory : disk
+            },
+            fetch: { article in try await loadText(for: article).text }
+        )
+        let evidence = resolved.first ?? prepared
+        try Task.checkCancellation()
+        // Publish only after the bounded resolver succeeds. A late cancelled fetch never
+        // writes caches, and later chat turns can reuse this evidence while offline.
+        if let body = evidence.contentText, body.count > (prepared.contentText?.count ?? 0) {
+            ExtractedContentCache.shared.set(article.id, value: body)
+            // This is the same sanitized plain-text extraction stored by ReaderPage.
+            // Cache failure must not prevent answering from the evidence just resolved.
+            try? await store.cacheReaderText(articleID: article.id, url: article.externalURL ?? article.url, text: body)
+            try Task.checkCancellation()
+        }
+        return evidence
+    }
+
     static func isSufficientRSSBody(_ article: Article) -> Bool {
         let body = displayBody(for: article)
         return body.count >= minimumUsefulTextLength && !body.articleReaderIsRSSBoilerplate

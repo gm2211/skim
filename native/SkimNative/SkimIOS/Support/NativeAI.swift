@@ -47,11 +47,13 @@ struct AIChatConversation: Sendable {
 
     var priorTurns: [Turn]
     var latestQuestion: String
+    var generatedSummaryContext: String?
 
-    init(latestQuestion: String, priorMessages: [AIChatMessage] = []) {
+    init(latestQuestion: String, priorMessages: [AIChatMessage] = [], generatedSummaryContext: String? = nil) {
+        self.generatedSummaryContext = generatedSummaryContext
         self.latestQuestion = latestQuestion
         self.priorTurns = priorMessages
-            .filter { !$0.isError }
+            .filter { !$0.isError && !($0.role == .assistant && $0.text == generatedSummaryContext) }
             .suffix(8)
             .map { message in
                 Turn(
@@ -62,6 +64,11 @@ struct AIChatConversation: Sendable {
     }
 
     var promptSection: String {
+        let summary = AIRequestPolicy.generatedSummaryContext(generatedSummaryContext)
+        return [summary, conversationSection].filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    private var conversationSection: String {
         let latest = latestQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !priorTurns.isEmpty else {
             return """
@@ -91,6 +98,7 @@ struct AIChatRequest: Identifiable {
     var sessionKey = UUID().uuidString
     var title: String
     var placeholder: String
+    var generatedSummaryContext: String? = nil
     var answer: (AIChatConversation) async throws -> AIChatAnswer
 }
 
@@ -175,6 +183,18 @@ private final class SummaryLRUCache: @unchecked Sendable {
         store.removeValue(forKey: key)
         order.removeAll(where: { $0 == key })
         defaults.removeObject(forKey: storageKey(for: key))
+        persistOrder()
+    }
+
+    func removeArticle(_ articleID: String) {
+        lock.lock(); defer { lock.unlock() }
+        restoreOrderIfNeeded()
+        let keys = AIRequestPolicy.summaryCacheKeys(for: articleID, among: Array(Set(order + Array(store.keys))))
+        for key in keys {
+            store.removeValue(forKey: key)
+            defaults.removeObject(forKey: storageKey(for: key))
+        }
+        order.removeAll { keys.contains($0) }
         persistOrder()
     }
 
@@ -826,7 +846,7 @@ enum NativeAI {
     }
 
     static func summarize(article: Article, settings: AppSettings) async throws -> String {
-        let key = summaryCacheKey(articleID: article.id, ai: settings.ai)
+        let key = summaryCacheKey(article: article, ai: settings.ai)
         if let cached = SummaryLRUCache.shared.get(key) {
             return cached
         }
@@ -858,18 +878,18 @@ enum NativeAI {
         settings: AppSettings,
         onToken: @MainActor @escaping (String) -> Void
     ) async throws -> String {
-        let key = summaryCacheKey(articleID: article.id, ai: settings.ai)
+        let key = summaryCacheKey(article: article, ai: settings.ai)
         if let cached = SummaryLRUCache.shared.get(key) {
             await onToken(cached)
             return cached
         }
         let wordCount = summaryTargetWordCount(settings.ai)
         let prompt = """
-        Summarize this article. Write a summary of approximately \(wordCount) words.
+        Article to summarize:
 
         \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
         """
-        let instructions = summaryInstructions(settings.ai)
+        let instructions = summaryInstructions(settings.ai, wordCount: wordCount)
         let maxTok = summaryMaxTokens(wordCount)
 
         let result: String
@@ -899,14 +919,16 @@ enum NativeAI {
 
     /// Evicts the cached summary for the given article + settings combination.
     static func clearSummaryCache(articleID: String, ai: AISettings) {
-        SummaryLRUCache.shared.remove(summaryCacheKey(articleID: articleID, ai: ai))
+        SummaryLRUCache.shared.removeArticle(articleID)
     }
 
-    private static func summaryCacheKey(articleID: String, ai: AISettings) -> String {
+    private static func summaryCacheKey(article: Article, ai: AISettings) -> String {
         let model = ai.model?.nilIfEmpty ?? ai.provider
         let wordCount = summaryTargetWordCount(ai)
         return [
-            articleID,
+            article.id,
+            "summary-v2",
+            AIRequestPolicy.summarySourceFingerprint(articleDigest([article], limit: 1, wordsPerArticle: 2200)),
             ai.provider,
             model,
             ai.endpoint?.nilIfEmpty ?? "",
@@ -1067,7 +1089,8 @@ enum NativeAI {
             ["role": turn.role == .user ? "user" : "assistant", "content": turn.text]
         }
 
-        let finalUser: [String: String] = ["role": "user", "content": conversation.latestQuestion]
+        let finalContent = [AIRequestPolicy.generatedSummaryContext(conversation.generatedSummaryContext), conversation.latestQuestion].filter { !$0.isEmpty }.joined(separator: "\n\n")
+        let finalUser: [String: String] = ["role": "user", "content": finalContent]
 
         return [systemMessage] + priorTurnMessages + [finalUser]
     }
@@ -1080,7 +1103,7 @@ enum NativeAI {
         instructions: String,
         answerMaxTokens: Int,
         settings: AppSettings
-    ) async throws -> String {
+    ) async throws -> (text: String, citations: [WebCitation]) {
         let skipRouter = canSkipRouter(conversation: conversation, articleCount: 1)
 
         let decision: LocalSearchDecision
@@ -1102,11 +1125,12 @@ enum NativeAI {
                 conversation: conversation,
                 webBlock: nil
             )
-            return try await NativeMLX.complete(
+            let text = try await NativeMLX.complete(
                 settings: settings.ai,
                 messages: msgs,
                 maxTokens: answerMaxTokens
             )
+            return (text, [])
 
         case .search(let query):
             let results = (try? await NativeWebSearch.run(query: query, maxResults: 4)) ?? []
@@ -1118,11 +1142,12 @@ enum NativeAI {
                     conversation: conversation,
                     webBlock: nil
                 )
-                return try await NativeMLX.complete(
+                let text = try await NativeMLX.complete(
                     settings: settings.ai,
                     messages: msgs,
                     maxTokens: answerMaxTokens
                 )
+                return (text, [])
             }
             let webBlock = formatWebResultsBlock(query: query, results: results)
             // Trim article digest when search fires to stay within 1B token budget
@@ -1134,11 +1159,12 @@ enum NativeAI {
                 conversation: conversation,
                 webBlock: webBlock
             )
-            return try await NativeMLX.complete(
+            let text = try await NativeMLX.complete(
                 settings: settings.ai,
                 messages: msgs,
                 maxTokens: answerMaxTokens
             )
+            return (text, results.map { WebCitation(title: $0.title, url: $0.url, snippet: $0.snippet, query: query) })
         }
     }
 
@@ -1153,6 +1179,8 @@ enum NativeAI {
     static func chat(
         conversation: AIChatConversation, article: Article, settings: AppSettings
     ) async throws -> (text: String, citations: [WebCitation]) {
+        var settings = settings
+        settings.ai = AIRequestPolicy.chatSettings(settings.ai)
         let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
         let baseInstructions = "You answer questions about a single article using only the provided article text and the conversation context. Answer only the latest user question. Use previous turns only to resolve references like 'that' or 'the second one'. Do not repeat a prior answer unless the latest question explicitly asks you to recap it. If the answer is not in the article, say so."
         let instructions = toolsOK
@@ -1162,14 +1190,13 @@ enum NativeAI {
         // Local MLX web-search path (skim-7oi1)
         if localWebSearchEnabled(settings.ai) {
             let articleContext = articleDigest([article], limit: 1, wordsPerArticle: 1800)
-            let text = try await chatLocalWithSearch(
+            return try await chatLocalWithSearch(
                 conversation: conversation,
                 articleContext: articleContext,
                 instructions: baseInstructions,
                 answerMaxTokens: 650,
                 settings: settings
             )
-            return (text, [])
         }
 
         // MLX without web search: still use multi-turn messages for better instruct-model behavior
@@ -1214,6 +1241,8 @@ enum NativeAI {
     static func chat(
         conversation: AIChatConversation, articles: [Article], settings: AppSettings
     ) async throws -> (text: String, citations: [WebCitation]) {
+        var settings = settings
+        settings.ai = AIRequestPolicy.chatSettings(settings.ai)
         let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
         let baseInstructions = """
             You answer questions across a set of RSS articles using the provided article list and conversation context. Answer only the latest user question. Use previous turns only to resolve references like 'that' or 'the second one'. Do not repeat prior answers unless the latest question explicitly asks. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable.
@@ -2282,10 +2311,7 @@ enum NativeAI {
     }
 
     private static func summaryTargetWordCount(_ settings: AISettings) -> Int {
-        if let words = settings.summaryCustomWordCount, words > 0 {
-            return words
-        }
-        return 150
+        AIRequestPolicy.summaryWordCount(settings)
     }
 
     private static func summaryMaxTokens(_ wordCount: Int) -> Int {
@@ -2999,7 +3025,7 @@ struct AIChatSheet: View {
         guard !question.isEmpty, !isSending else { return }
         let toSend = question
         let priorMessages = messages
-        let conversation = AIChatConversation(latestQuestion: toSend, priorMessages: priorMessages)
+        let conversation = AIChatConversation(latestQuestion: toSend, priorMessages: priorMessages, generatedSummaryContext: request.generatedSummaryContext ?? initialAssistantMessage)
         input = ""
         focused = true
         messages.append(AIChatMessage(role: .user, text: toSend))

@@ -292,9 +292,9 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             endsAt: endsAt,
             storyLimit: storyLimit
         )
-        if try db.edition(id: editionID) != nil {
-            return try db.todayEditionSnapshot(id: editionID)
-        }
+        let existing = try db.edition(id: editionID) != nil
+            ? db.todayEditionSnapshot(id: editionID) : nil
+        if let existing, !existing.items.isEmpty { return existing }
 
         let candidates = try db.todayEditionCandidates(
             startsAt: startsAt,
@@ -307,6 +307,7 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             storyLimit: storyLimit,
             generatedAt: generatedAt
         )
+        if generatedItems.isEmpty, let existing { return existing }
         let distinctFeedIDs = Set(
             generatedItems
                 .flatMap(\.sourceArticles)
@@ -327,6 +328,13 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             totalSourceCount: distinctFeedIDs.count
         )
         try db.transaction {
+            // Only an empty placeholder may be replaced after feeds arrive.
+            // Recheck under the write transaction so populated editions stay frozen.
+            if try db.edition(id: editionID) != nil {
+                guard try db.listEditionItems(editionID: editionID).isEmpty,
+                      !generatedItems.isEmpty else { return }
+                try db.execute("DELETE FROM editions WHERE id = ?", [.text(editionID)])
+            }
             try db.insertEdition(edition)
             for generated in generatedItems {
                 try db.insertEditionItem(generated.item)
@@ -557,9 +565,6 @@ private final class SQLiteDatabase: @unchecked Sendable {
         try? execute("ALTER TABLE articles ADD COLUMN aggregator_kind TEXT")
         try? execute("ALTER TABLE articles ADD COLUMN external_url TEXT")
         try? execute("ALTER TABLE articles ADD COLUMN comments_url TEXT")
-        // Ledes are written after the edition exists, so they live outside the
-        // frozen snapshot columns.
-        try? execute("ALTER TABLE edition_items ADD COLUMN lede TEXT")
 
         try execute("CREATE INDEX IF NOT EXISTS idx_articles_feed ON articles(feed_id)")
         try execute("CREATE INDEX IF NOT EXISTS idx_articles_read ON articles(is_read)")
@@ -705,6 +710,9 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 REFERENCES story_revisions(story_id, revision_number) ON DELETE RESTRICT
         )
         """)
+        // Ledes live outside frozen snapshot columns. Run this migration after
+        // CREATE TABLE so first-launch databases receive it too.
+        try? execute("ALTER TABLE edition_items ADD COLUMN lede TEXT")
         try execute("CREATE INDEX IF NOT EXISTS idx_edition_items_order ON edition_items(edition_id, position)")
         try execute("CREATE INDEX IF NOT EXISTS idx_edition_items_story ON edition_items(story_id)")
 
@@ -1046,9 +1054,21 @@ private final class SQLiteDatabase: @unchecked Sendable {
                    first_seen_at, last_activity_at, created_at, updated_at
             FROM stories
             WHERE last_activity_at >= ? AND last_activity_at < ?
+              AND NOT EXISTS (
+                SELECT 1 FROM edition_items consumed
+                JOIN editions previous ON previous.id = consumed.edition_id
+                WHERE consumed.story_id = stories.id
+                  AND consumed.is_consumed = 1 AND previous.ends_at <= ?
+                  AND NOT EXISTS (
+                    SELECT 1 FROM story_revisions revision
+                    WHERE revision.story_id = stories.id
+                      AND revision.revision_number > consumed.story_revision_number
+                      AND revision.is_material_change = 1
+                  )
+              )
             ORDER BY last_activity_at DESC, id ASC
             """,
-            [.date(startsAt), .date(endsAt)]
+            [.date(startsAt), .date(endsAt), .date(startsAt)]
         ) { makeStory(from: $0) }
 
         return try stories.compactMap { story in

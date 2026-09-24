@@ -31,6 +31,7 @@ struct CatchUpRangeTests {
         let articles = [
             article(id: "fresh", hoursAgo: 2),
             article(id: "yesterday", hoursAgo: 20),
+            article(id: "this-week", hoursAgo: 100),
             article(id: "old", hoursAgo: 200),
         ]
 
@@ -38,8 +39,19 @@ struct CatchUpRangeTests {
         #expect(CatchUpRange.day.filter(articles, now: now).map(\.id) == ["fresh", "yesterday"])
         #expect(
             CatchUpRange.week.filter(articles, now: now).map(\.id)
-                == ["fresh", "yesterday", "old"]
+                == ["fresh", "yesterday", "this-week"]
         )
+    }
+
+    @Test func everyFiniteRangeIncludesItsCutoffAndExcludesOlderArticles() {
+        for range in CatchUpRange.allCases where range != .anything {
+            let hours = Double(range.rawValue)
+            let articles = [
+                article(id: "at-cutoff", hoursAgo: hours),
+                article(id: "one-second-older", hoursAgo: hours + 1.0 / 3600),
+            ]
+            #expect(range.filter(articles, now: now).map(\.id) == ["at-cutoff"])
+        }
     }
 
     @Test func anArticleWithNoPublicationDateIsKept() {

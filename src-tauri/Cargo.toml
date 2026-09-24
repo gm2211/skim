@@ -26,7 +26,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-skim-ai = { path = "../plugins/tauri-plugin-skim-ai" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.31", features = ["bundled", "functions"] }
 feed-rs = "2"
 reqwest = { version = "0.12", features = ["json", "native-tls", "stream"], default-features = false }
 tokio = { version = "1", features = ["full"] }

@@ -483,17 +483,18 @@ export function ArticleDetail() {
         return;
       }
       // Force re-summarize if any per-article override is set
-      const hasOverrides = perArticleLength || perArticleTone || perArticlePrompt;
+      const hasOverrides = perArticleLength || perArticleTone || perArticlePrompt || perArticleWordCount;
       summarize.mutate({
         articleId: article.id,
         force: force || !!hasOverrides,
         summaryLength: perArticleLength,
         summaryTone: perArticleTone,
         summaryCustomPrompt: perArticlePrompt,
+        summaryCustomWordCount: perArticleWordCount,
       });
       setShowSummarizeMenu(false);
     },
-    [article, settings, summarize, perArticleLength, perArticleTone]
+    [article, settings, summarize, perArticleLength, perArticleTone, perArticlePrompt, perArticleWordCount]
   );
 
   // Mark as read when opened

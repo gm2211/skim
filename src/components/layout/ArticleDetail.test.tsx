@@ -38,10 +38,12 @@ vi.mock("../../hooks/useArticles", () => ({
   useToggleStar: () => ({ mutate: vi.fn() }),
   useToggleRead: () => ({ mutate: vi.fn() }),
 }));
+const summarizeMutation = { mutate: vi.fn(), reset: vi.fn(), data: null, isPending: false };
+let aiSettings = { provider: "none", summary_length: "custom", summary_custom_word_count: 150 };
 vi.mock("../../hooks/useAi", () => ({
-  useSummarizeArticle: () => ({ mutate: vi.fn(), reset: vi.fn(), data: null, isPending: false }),
+  useSummarizeArticle: () => summarizeMutation,
 }));
-vi.mock("../../hooks/useSettings", () => ({ useSettings: () => ({ data: { ai: { provider: "none" } } }) }));
+vi.mock("../../hooks/useSettings", () => ({ useSettings: () => ({ data: { ai: aiSettings } }) }));
 vi.mock("../../hooks/useLearning", () => ({ useReadingTimeTracker: vi.fn() }));
 vi.mock("../../hooks/usePullToRefresh", () => ({
   usePullToRefresh: () => ({ pullToRefreshHandlers: {}, pullToRefreshIndicator: null, pullToRefreshContentStyle: {}, beginPull: vi.fn(), movePull: vi.fn(), endPull: vi.fn() }),
@@ -50,7 +52,6 @@ vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 vi.mock("../article/ArticleLearningActions", () => ({ ArticleLearningActions: () => null }));
 vi.mock("../article/AggregatorDetails", () => ({ AggregatorDetails: () => null }));
 vi.mock("../common/AIDisclaimer", () => ({ AIDisclaimer: () => null }));
-vi.mock("../ui/NumberInput", () => ({ NumberInput: () => null }));
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -65,6 +66,7 @@ function article(id: string, title = `Article ${id}`): Article {
 beforeEach(() => {
   vi.clearAllMocks();
   selectedArticleId = "a";
+  aiSettings = { provider: "none", summary_length: "custom", summary_custom_word_count: 150 };
   articles.a = article("a");
   articles.b = article("b");
   vi.mocked(getOrFetchReaderContent).mockReset();
@@ -72,6 +74,24 @@ beforeEach(() => {
 });
 
 describe("ArticleDetail reader loading", () => {
+  it("forwards per-article word count and latest custom prompt to summary generation", async () => {
+    aiSettings.provider = "anthropic";
+    vi.mocked(getOrFetchReaderContent).mockResolvedValue({ html: "<p>Article</p>", raw_html: "" });
+    const user = userEvent.setup();
+    render(<ArticleDetail />);
+    await user.click(screen.getByRole("button", { name: "Summary options" }));
+    const wordCount = screen.getByPlaceholderText("Word count");
+    await user.clear(wordCount);
+    await user.type(wordCount, "650");
+    await user.type(screen.getByPlaceholderText("e.g. Focus on financial implications..."), "Explain the evidence and tradeoffs");
+    const summarizeButtons = screen.getAllByRole("button", { name: "Summarize" });
+    await user.click(summarizeButtons[summarizeButtons.length - 1]);
+    expect(summarizeMutation.mutate).toHaveBeenCalledWith(expect.objectContaining({
+      articleId: "a", force: true, summaryCustomWordCount: 650,
+      summaryCustomPrompt: "Explain the evidence and tradeoffs",
+    }));
+  });
+
   it("opens the same article chat from the toolbar and bottom toggle", async () => {
     vi.mocked(getOrFetchReaderContent).mockResolvedValue({ html: "<p>Article</p>", raw_html: "" });
     const user = userEvent.setup();

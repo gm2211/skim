@@ -179,28 +179,132 @@ pub struct WebCitation {
     pub query: String,
 }
 
-/// Extract lowercase word stems (3+ chars) from a query for keyword matching.
+/// Search terms carry topic words, not request scaffolding or assistant prose.
 fn query_keywords(query: &str) -> Vec<String> {
-    query
-        .split(|c: char| !c.is_alphanumeric())
-        .filter(|w| w.len() >= 3)
-        .map(|w| w.to_lowercase())
-        .collect()
+    const STOP: &[&str] = &["a", "an", "the", "and", "or", "of", "to", "in", "on", "at", "by", "for", "from", "with", "about", "this", "that", "these", "those", "it", "its", "is", "are", "was", "were", "be", "been", "what", "which", "who", "when", "where", "how", "why", "did", "does", "do", "can", "could", "would", "you", "your", "my", "me", "our", "we", "i", "find", "search", "show", "look", "looking", "please", "article", "articles", "piece", "pieces", "story", "stories", "feed", "feeds", "library", "read", "tell", "more", "catch", "up", "them", "they", "say", "said"];
+    let mut terms = Vec::new();
+    for word in query.split(|c: char| !c.is_alphanumeric()).map(str::to_lowercase) {
+        if word.chars().count() >= 2 && !STOP.contains(&word.as_str()) && !terms.contains(&word) {
+            terms.push(word);
+        }
+    }
+    terms.truncate(32);
+    terms
 }
 
-/// On a summary-only feed the stored body is a one-line teaser, so an excerpt
-/// taken from it says almost nothing. Prefer the reader's cached extraction
-/// where there is one. Stays off the network: this runs once per candidate
-/// article on every question.
-fn article_excerpt(
-    db: &Database,
-    a: &crate::db::models::ArticleWithFeed,
-    max_chars: usize,
-) -> String {
-    crate::commands::article_body::local_article_text(db, &a.article)
-        .chars()
-        .take(max_chars)
-        .collect()
+fn is_find_request(query: &str) -> bool {
+    let query = query.to_lowercase();
+    let words: Vec<&str> = query.split(|c: char| !c.is_alphanumeric()).collect();
+    words.iter().any(|word| matches!(*word, "find" | "search"))
+        || ["look for", "looking for", "which article", "which piece", "show me"].iter()
+            .any(|phrase| query.contains(phrase))
+}
+
+fn word_match(text: &str, term: &str) -> bool {
+    text.split(|c: char| !c.is_alphanumeric()).any(|word| word.to_lowercase() == term)
+}
+
+/// A recent sample is appropriate only for a general briefing, never as substitute
+/// evidence for an unmatched topic-specific question.
+fn is_broad_catchup(query: &str) -> bool {
+    let terms = query_keywords(query);
+    let broad = ["latest", "news", "recent", "today", "today's", "week", "weeks", "week's", "biggest", "important", "top", "catchup", "briefing", "brief", "overview", "summarize", "summary", "happening", "new", "missed", "have", "has", "happened", "been", "since", "yesterday"];
+    !is_find_request(query) && terms.iter().all(|term| broad.contains(&term.as_str()))
+}
+
+/// Search every scoped row before limiting the results. Returning IDs first keeps
+/// the full article payload bounded even for large libraries; the reader cache is
+/// searched alongside RSS content without fetching pages from the network.
+fn retrieve_chat_articles(
+    conn: &rusqlite::Connection,
+    scope: &str,
+    query: &str,
+    messages: &[ChatMessageInput],
+) -> Result<Vec<crate::db::models::ArticleWithFeed>, rusqlite::Error> {
+    conn.create_scalar_function("skim_chat_word", 2,
+        rusqlite::functions::FunctionFlags::SQLITE_UTF8 | rusqlite::functions::FunctionFlags::SQLITE_DETERMINISTIC,
+        |context| {
+            let text = context.get::<String>(0)?;
+            let term = context.get::<String>(1)?;
+            Ok(word_match(&text, &term))
+        })?;
+    let mut terms = query_keywords(query);
+    // Only an underspecified follow-up inherits earlier user terms. An assistant's
+    // answer must never drown out the reader's new subject or become search evidence.
+    if terms.is_empty() && !is_find_request(query) {
+        for message in messages.iter().rev().filter(|m| m.role == "user").take(2) {
+            for term in query_keywords(&message.content) {
+                if !terms.contains(&term) { terms.push(term); }
+            }
+        }
+        terms.truncate(32);
+    }
+    let scope_clause = match scope {
+        "unread" => "a.is_read = 0",
+        "inbox" => "COALESCE(t.priority, 0) >= 3",
+        _ => "1 = 1",
+    };
+    let mut parameters: Vec<String> = Vec::new();
+    let score = terms.iter().map(|term| {
+        parameters.push(term.clone());
+        let n = parameters.len();
+        // Short acronyms must not match "daily" or "mail", even inside a URL.
+        // Longer URL fragments still support domain/path discovery.
+        let url_match = if term.chars().count() < 3 {
+            format!("skim_chat_word(COALESCE(a.url, ''), ?{n})")
+        } else { format!("instr(lower(COALESCE(a.url, '')), ?{n}) > 0") };
+        format!("(CASE WHEN skim_chat_word(a.title, ?{n}) THEN 6 ELSE 0 END
+            + CASE WHEN {url_match} THEN 4 ELSE 0 END
+            + CASE WHEN skim_chat_word(f.title, ?{n}) THEN 2 ELSE 0 END
+            + CASE WHEN skim_chat_word(COALESCE(a.content_text, '') || ' ' || COALESCE(a.content_html, '') || ' ' || COALESCE(c.html, ''), ?{n}) THEN 1 ELSE 0 END)")
+    }).collect::<Vec<_>>().join(" + ");
+    let score = if score.is_empty() { "0".to_string() } else { score };
+    let sql = format!("SELECT a.id, ({score}) AS relevance FROM articles a
+        JOIN feeds f ON f.id = a.feed_id
+        LEFT JOIN article_reader_cache c ON c.article_id = a.id
+        LEFT JOIN article_triage t ON t.article_id = a.id
+        WHERE {scope_clause} AND ({score}) > 0
+        ORDER BY relevance DESC, COALESCE(a.published_at, a.fetched_at) DESC, a.id
+        LIMIT 15");
+    let mut statement = conn.prepare(&sql)?;
+    let mut ids = statement.query_map(rusqlite::params_from_iter(parameters.iter()), |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    if ids.is_empty() && is_broad_catchup(query)
+        && (messages.is_empty() || !query_keywords(query).is_empty() || terms.is_empty()) {
+        // Broad catch-up prompts still get a small recent sample when their words
+        // (e.g. "latest news") do not occur literally in any article.
+        let sql = format!("SELECT a.id FROM articles a JOIN feeds f ON f.id = a.feed_id
+            LEFT JOIN article_triage t ON t.article_id = a.id WHERE {scope_clause}
+            ORDER BY COALESCE(a.published_at, a.fetched_at) DESC, a.id LIMIT 8");
+        let mut statement = conn.prepare(&sql)?;
+        ids = statement.query_map([], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+    }
+    ids.iter().map(|id| queries::get_article_by_id(conn, id)).collect::<Result<Vec<_>, _>>()
+        .map(|articles| articles.into_iter().flatten().collect())
+}
+
+/// Include the passage that matched instead of cutting every article at its lead.
+fn query_excerpt(text: &str, query: &str, max_chars: usize) -> String {
+    let terms = query_keywords(query);
+    let chars: Vec<char> = text.chars().collect();
+    let mut lower = String::new();
+    let mut original_indices = Vec::new();
+    for (index, character) in chars.iter().enumerate() {
+        for normalized in character.to_lowercase() {
+            original_indices.extend(std::iter::repeat(index).take(normalized.len_utf8()));
+            lower.push(normalized);
+        }
+    }
+    let match_index = terms.iter().flat_map(|term| lower.match_indices(term).filter_map(|(byte, matched)| {
+        let before = lower[..byte].chars().next_back();
+        let after = lower[byte + matched.len()..].chars().next();
+        (!before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric)).then_some(byte)
+    })).min().and_then(|byte| original_indices.get(byte).copied()).unwrap_or(0);
+    let start = match_index.saturating_sub(160);
+    let end = (start + max_chars).min(chars.len());
+    format!("{}{}{}", if start > 0 { "…" } else { "" },
+        chars[start..end].iter().collect::<String>(), if end < chars.len() { "…" } else { "" })
 }
 
 /// Chat across multiple articles. Scope determines which articles form the
@@ -220,56 +324,19 @@ pub async fn chat_with_articles(
         return Err("Query cannot be empty".to_string());
     }
 
-    let (pool, settings_json) = {
+    let (selected, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        let settings_json =
-            queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
-        let pool: Vec<crate::db::models::ArticleWithFeed> = match scope.as_str() {
-            "inbox" => {
-                let inbox = queries::get_inbox_articles(&conn, Some(3), None, 500, 0)
-                    .map_err(|e| e.to_string())?;
-                inbox
-                    .into_iter()
-                    .map(|a| crate::db::models::ArticleWithFeed {
-                        article: a.article,
-                        feed_title: a.feed_title,
-                        feed_icon_url: a.feed_icon_url,
-                    })
-                    .collect()
-            }
-            "unread" => queries::get_articles(
-                &conn,
-                &crate::db::models::ArticleFilter {
-                    feed_id: None,
-                    feed_ids: None,
-                    search: None,
-                    theme_id: None,
-                    is_read: Some(false),
-                    is_starred: None,
-                    limit: Some(500),
-                    published_after: None,
-                    offset: None,
-                },
-            )
-            .map_err(|e| e.to_string())?,
-            _ => queries::get_articles(
-                &conn,
-                &crate::db::models::ArticleFilter {
-                    feed_id: None,
-                    feed_ids: None,
-                    search: None,
-                    theme_id: None,
-                    is_read: None,
-                    is_starred: None,
-                    limit: Some(1000),
-                    published_after: None,
-                    offset: None,
-                },
-            )
-            .map_err(|e| e.to_string())?,
-        };
-        (pool, settings_json)
+        let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
+        let selected = retrieve_chat_articles(&conn, &scope, &trimmed_query, &messages)
+            .map_err(|e| e.to_string())?;
+        (selected, settings_json)
     };
+    if selected.is_empty() {
+        return Ok(ArticleChatResponse {
+            content: "No matching articles found in this scope. Try another title, topic, source, or URL. The All scope includes read articles too.".into(),
+            provider: "local".into(), model: "library-search".into(), article_ids: vec![], sources: vec![],
+        });
+    }
 
     let settings: crate::db::models::AppSettings = settings_json
         .as_deref()
@@ -291,38 +358,6 @@ pub async fn chat_with_articles(
         .clone()
         .unwrap_or_else(|| crate::commands::ai::default_model(&ai_settings.provider));
 
-    // Rank articles by keyword overlap with the query + conversation history.
-    let mut haystack_query = trimmed_query.to_lowercase();
-    for m in &messages {
-        haystack_query.push(' ');
-        haystack_query.push_str(&m.content.to_lowercase());
-    }
-    let kws = query_keywords(&haystack_query);
-
-    let mut scored: Vec<(i64, &crate::db::models::ArticleWithFeed)> = pool
-        .iter()
-        .map(|a| {
-            let hay = format!(
-                "{} {} {}",
-                a.article.title.to_lowercase(),
-                a.feed_title.to_lowercase(),
-                a.article
-                    .content_text
-                    .as_deref()
-                    .unwrap_or("")
-                    .to_lowercase(),
-            );
-            let score: i64 = kws.iter().filter(|k| hay.contains(k.as_str())).count() as i64;
-            (score, a)
-        })
-        .collect();
-    scored.sort_by(|a, b| b.0.cmp(&a.0));
-    // If no keywords match anything, fall back to the newest articles.
-    let any_match = scored.first().map(|(s, _)| *s > 0).unwrap_or(false);
-    let top_k = if any_match { 15 } else { 8 };
-    let selected: Vec<&crate::db::models::ArticleWithFeed> =
-        scored.into_iter().take(top_k).map(|(_, a)| a).collect();
-
     // Build context. Keep excerpts short to stay well under any argv or
     // context window limits — the caller mostly needs titles and source.
     let mut context = String::new();
@@ -337,7 +372,8 @@ pub async fn chat_with_articles(
                     .unwrap_or_default()
             })
             .unwrap_or_default();
-        let excerpt = article_excerpt(db.inner(), a, 400);
+        let text = crate::commands::article_body::local_article_text(db.inner(), &a.article);
+        let excerpt = query_excerpt(&text, &trimmed_query, if i < 3 { 2400 } else { 800 });
         context.push_str(&format!(
             "[{i}] Title: {title}\nSource: {source}\nAuthor: {author}\nDate: {date}\nURL: {url}\nExcerpt: {excerpt}\n\n",
             i = i + 1,
@@ -866,6 +902,85 @@ fn resolve_chat_settings(ai: &AiSettings) -> AiSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn retrieval_database() -> rusqlite::Connection {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        crate::db::migrations::run_migrations(&conn).unwrap();
+        conn.execute_batch("INSERT INTO feeds(id,title,url,created_at,updated_at) VALUES ('f','Publication','https://feed.test',0,0);
+            INSERT INTO articles(id,feed_id,title,url,content_text,fetched_at,is_read) VALUES
+            ('old','f','Neutrino observatory','https://archive.test/neutrino','A discovery',1,1),
+            ('url','f','A report','https://singular-domain.test/research','A short preview',2,0),
+            ('cached','f','Another report','https://article.test','A short preview',3,0);
+            INSERT INTO article_reader_cache(article_id,html,raw_html,cached_at) VALUES
+            ('cached','<p>The quasar measurement is definitive.</p>','',1);").unwrap();
+        for index in 0..1100 {
+            conn.execute("INSERT INTO articles(id,feed_id,title,content_text,fetched_at) VALUES (?1,'f','Routine update','Daily bulletin',?2)",
+                rusqlite::params![format!("recent-{index}"), index + 100]).unwrap();
+        }
+        conn
+    }
+
+    fn ids(rows: Vec<crate::db::models::ArticleWithFeed>) -> Vec<String> {
+        rows.into_iter().map(|row| row.article.id).collect()
+    }
+
+    #[test]
+    fn library_retrieval_finds_old_titles_urls_and_reader_cache_without_fillers() {
+        let conn = retrieval_database();
+        for (query, expected) in [("find neutrino", "old"), ("find singular-domain", "url"), ("find quasar", "cached")] {
+            assert_eq!(ids(retrieve_chat_articles(&conn, "all", query, &[]).unwrap()), vec![expected]);
+        }
+        assert!(retrieve_chat_articles(&conn, "unread", "find neutrino", &[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn library_retrieval_preserves_inbox_scope_and_never_fills_failed_searches() {
+        let conn = retrieval_database();
+        assert!(retrieve_chat_articles(&conn, "inbox", "find quasar", &[]).unwrap().is_empty());
+        conn.execute_batch("INSERT INTO article_triage(article_id,priority,reason,created_at) VALUES ('cached',4,'Important',1)").unwrap();
+        assert_eq!(ids(retrieve_chat_articles(&conn, "inbox", "find quasar", &[]).unwrap()), vec!["cached"]);
+        assert!(retrieve_chat_articles(&conn, "all", "find nonexistenttopic", &[]).unwrap().is_empty());
+        assert_eq!(retrieve_chat_articles(&conn, "all", "catch me up", &[]).unwrap().len(), 8);
+    }
+
+    #[test]
+    fn followups_use_user_topics_without_assistant_noise_or_overriding_new_subjects() {
+        let conn = retrieval_database();
+        let history = vec![ChatMessageInput { role: "user".into(), content: "find neutrino".into() },
+            ChatMessageInput { role: "assistant".into(), content: "Routine daily update bulletin".repeat(20) }];
+        assert_eq!(ids(retrieve_chat_articles(&conn, "all", "tell me more", &history).unwrap()), vec!["old"]);
+        assert_eq!(ids(retrieve_chat_articles(&conn, "all", "find quasar", &history).unwrap()), vec!["cached"]);
+    }
+
+    #[test]
+    fn short_topic_terms_match_words_instead_of_daily_said_details_or_tail() {
+        let conn = retrieval_database();
+        conn.execute_batch("UPDATE articles SET title='Said daily details tail', content_text='Daily details', url='https://publisher.test/daily/' || id WHERE id LIKE 'recent-%';
+            UPDATE articles SET title='AI advances', url='https://old.test/story' WHERE id='old';").unwrap();
+        assert_eq!(ids(retrieve_chat_articles(&conn, "all", "find AI articles", &[]).unwrap()), vec!["old"]);
+        assert!(word_match("AI-powered systems", "ai"));
+        assert!(!word_match("Details", "ai"));
+        assert!(word_match("ÉTUDE française", "étude"));
+    }
+
+    #[test]
+    fn unmatched_specific_questions_do_not_receive_unrelated_recent_articles() {
+        let conn = retrieval_database();
+        assert!(retrieve_chat_articles(&conn, "all", "What happened to zirconium?", &[]).unwrap().is_empty());
+        assert_eq!(retrieve_chat_articles(&conn, "all", "What are the latest news stories?", &[]).unwrap().len(), 8);
+        let history = vec![ChatMessageInput { role: "user".into(), content: "find zirconium".into() }];
+        assert!(retrieve_chat_articles(&conn, "all", "tell me more", &history).unwrap().is_empty());
+    }
+
+    #[test]
+    fn snippets_include_matching_passages_beyond_the_lead_and_handle_unicode() {
+        let text = format!("{} Quasar measurement is definitive. {}", "Intro. ".repeat(200), "More. ".repeat(200));
+        let excerpt = query_excerpt(&text, "quasar", 200);
+        assert!(excerpt.contains("Quasar measurement"));
+        assert!(excerpt.starts_with('…'));
+        assert!(excerpt.chars().count() <= 202);
+        assert!(query_excerpt("İstanbul 🪐 quasar measurement", "quasar", 200).contains("quasar"));
+    }
 
     #[test]
     fn local_router_skips_short_article_questions_without_freshness_terms() {

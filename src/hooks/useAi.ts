@@ -9,12 +9,14 @@ export function useSummarizeArticle() {
       summaryLength?: string;
       summaryTone?: string;
       summaryCustomPrompt?: string;
+      summaryCustomWordCount?: number;
     }) =>
       commands.summarizeArticle(args.articleId, {
         force: args.force,
         summaryLength: args.summaryLength,
         summaryTone: args.summaryTone,
         summaryCustomPrompt: args.summaryCustomPrompt,
+        summaryCustomWordCount: args.summaryCustomWordCount,
       }),
   });
 }

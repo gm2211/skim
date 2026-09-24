@@ -90,9 +90,13 @@ pub fn get_or_generate(
 ) -> Result<TodayEditionView, rusqlite::Error> {
     validate_window_and_limit(starts_at, ends_at, generated_at, story_limit)?;
     let id = edition_id(starts_at, ends_at, story_limit);
-    if queries::get_edition(conn, &id)?.is_none() {
-        generate(conn, &id, starts_at, ends_at, generated_at, story_limit)?;
+    if queries::get_edition(conn, &id)?.is_some() {
+        let existing = load(conn, &id)?;
+        if !existing.items.is_empty() {
+            return Ok(existing);
+        }
     }
+    generate(conn, &id, starts_at, ends_at, generated_at, story_limit)?;
     load(conn, &id)
 }
 
@@ -147,6 +151,28 @@ fn generate(
         let Some(revision) = queries::get_latest_story_revision(conn, &rank.story_id)? else {
             continue;
         };
+        // A new syndicated copy can advance activity without adding news.
+        // Keep prior-day consumed stories off the page until a material revision
+        // arrives. Existing editions return before generation and stay frozen.
+        let already_consumed_without_update: bool = conn.query_row(
+            "SELECT EXISTS (
+                SELECT 1 FROM edition_items consumed
+                JOIN editions previous ON previous.id = consumed.edition_id
+                WHERE consumed.story_id = ?1 AND consumed.is_consumed = 1
+                  AND previous.ends_at <= ?2
+                  AND NOT EXISTS (
+                    SELECT 1 FROM story_revisions revision
+                    WHERE revision.story_id = ?1
+                      AND revision.revision_number > consumed.story_revision_number
+                      AND revision.is_material_change = 1
+                  )
+            )",
+            params![rank.story_id, starts_at],
+            |row| row.get(0),
+        )?;
+        if already_consumed_without_update {
+            continue;
+        }
         let memberships = queries::list_story_articles(conn, &rank.story_id)?;
         let is_update = memberships
             .iter()
@@ -209,6 +235,18 @@ fn generate(
         total_source_count,
     };
     let transaction = conn.unchecked_transaction()?;
+    // Empty placeholders can recover after feed refresh. Recheck in the same
+    // transaction as replacement; never overwrite a populated frozen edition.
+    if queries::get_edition(&transaction, id)?.is_some() {
+        let has_items: bool = transaction.query_row(
+            "SELECT EXISTS (SELECT 1 FROM edition_items WHERE edition_id = ?1)",
+            params![id], |row| row.get(0),
+        )?;
+        if has_items || is_empty {
+            return Ok(());
+        }
+        transaction.execute("DELETE FROM editions WHERE id = ?1", params![id])?;
+    }
     queries::insert_edition(&transaction, &edition)?;
     for (position, (candidate, _)) in selected_with_members.iter().enumerate() {
         let section = section_for(candidate);
@@ -526,7 +564,7 @@ mod tests {
     const DAY_END: i64 = DAY_START + 86_400;
     const GENERATED_AT: i64 = DAY_START + 43_200;
 
-    fn setup() -> Connection {
+    fn setup_empty() -> Connection {
         let conn = Connection::open_in_memory().expect("open");
         conn.execute_batch("PRAGMA foreign_keys=ON;").expect("fk");
         migrations::run_migrations(&conn).expect("migrate");
@@ -550,6 +588,11 @@ mod tests {
             )
             .expect("feed");
         }
+        conn
+    }
+
+    fn setup() -> Connection {
+        let conn = setup_empty();
         add_story(&conn, "wide", 3, false, GENERATED_AT - 10);
         add_story(&conn, "update", 2, true, GENERATED_AT - 20);
         add_story(&conn, "unique", 1, false, GENERATED_AT - 30);
@@ -663,6 +706,54 @@ mod tests {
         .into_iter()
         .map(|article| article.article.id)
         .collect()
+    }
+
+    #[test]
+    fn consumed_story_returns_only_after_material_update_not_duplicate() {
+        let conn = setup_empty();
+        let ingest = |id: &str, title: &str, at: i64| {
+            let article = Article {
+                id: id.into(), feed_id: "feed-1".into(), title: title.into(),
+                url: Some(format!("https://example.com/{id}")), author: None,
+                content_html: None,
+                content_text: Some("The product starts shipping this month in cities.".into()),
+                published_at: Some(at), fetched_at: at, is_read: false, is_starred: false,
+                feedly_entry_id: None, comments_url: None,
+            };
+            queries::insert_article(&conn, &article).unwrap();
+            story_clustering::process_article(&conn, &article).unwrap()
+        };
+        let title = "Acme launches solar battery for homes";
+        let original = ingest("original", title, DAY_START - 40_000);
+        let first = get_or_generate(&conn, DAY_START - 86_400, DAY_START, DAY_START - 1, 5).unwrap();
+        assert!(first.items.iter().any(|item| item.snapshot.story_id == original.story_id));
+        let duplicate = ingest("copy", title, DAY_START + 100);
+        assert_eq!(duplicate.story_id, original.story_id);
+        assert_eq!(duplicate.membership_type, StoryMembershipType::Duplicate);
+        let unconsumed = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        assert!(unconsumed.items.iter().any(|item| item.snapshot.story_id == original.story_id));
+        let consumed = set_item_consumed(&conn, &first.edition.id, &original.story_id, true, GENERATED_AT).unwrap();
+        let second = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 10).unwrap();
+        assert!(!second.items.iter().any(|item| item.snapshot.story_id == original.story_id));
+        let preserved = load(&conn, &first.edition.id).unwrap();
+        assert_eq!(preserved.items.len(), consumed.items.len());
+        let original_item = preserved.items.iter().find(|item| item.snapshot.story_id == original.story_id).unwrap();
+        assert!(original_item.snapshot.is_consumed);
+        assert_eq!(original_item.member_article_ids, vec!["original"]);
+
+        let title = "Acme launches solar battery update for homes after recall";
+        let update = ingest("update-original", title, DAY_START + 200);
+        assert_eq!(update.story_id, original.story_id);
+        assert_eq!(update.membership_type, StoryMembershipType::Update);
+        ingest("update-copy", title, DAY_START + 201);
+        let fresh = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 20).unwrap();
+        assert!(fresh.items.iter().any(|item| item.snapshot.story_id == original.story_id));
+        let frozen = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 10).unwrap();
+        assert!(frozen.items.iter().any(|item| item.snapshot.story_id == original.story_id));
+        set_item_consumed(&conn, &fresh.edition.id, &original.story_id, true, GENERATED_AT).unwrap();
+        ingest("third-day-copy", title, DAY_END + 100);
+        let third = get_or_generate(&conn, DAY_END, DAY_END + 86_400, DAY_END + 101, 5).unwrap();
+        assert!(!third.items.iter().any(|item| item.snapshot.story_id == original.story_id));
     }
 
     #[test]
@@ -880,6 +971,28 @@ mod tests {
                 .collect::<Vec<_>>(),
             snapshot_titles
         );
+    }
+
+    #[test]
+    fn empty_edition_recovers_after_feed_refresh_then_freezes() {
+        let conn = setup_empty();
+        let empty = get_or_generate(&conn, DAY_START, DAY_END, DAY_START + 1, 5).unwrap();
+        let still_empty = get_or_generate(&conn, DAY_START, DAY_END, DAY_START + 2, 5).unwrap();
+        assert!(still_empty.items.is_empty());
+        assert_eq!(still_empty.edition.generated_at, empty.edition.generated_at);
+        assert_eq!(still_empty.edition.completed_at, empty.edition.completed_at);
+        add_story(&conn, "arrived", 1, false, DAY_START + 3);
+        let populated = get_or_generate(&conn, DAY_START, DAY_END, DAY_START + 10, 5).unwrap();
+        assert_eq!(populated.edition.id, empty.edition.id);
+        assert_eq!(populated.items.len(), 1);
+        assert_eq!(populated.edition.status, EditionStatus::Ready);
+        assert_eq!(populated.edition.completed_at, None);
+        assert_eq!(populated.edition.generated_at, DAY_START + 10);
+        add_story(&conn, "later", 3, true, DAY_START + 20);
+        let frozen = get_or_generate(&conn, DAY_START, DAY_END, DAY_START + 30, 5).unwrap();
+        assert_eq!(frozen.items.len(), 1);
+        assert_eq!(frozen.items[0].snapshot.story_id, "arrived");
+        assert_eq!(frozen.edition.generated_at, populated.edition.generated_at);
     }
 
     #[test]

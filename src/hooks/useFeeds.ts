@@ -50,6 +50,7 @@ export function useRefreshFeed() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["todayEdition"] });
     },
   });
 }
@@ -61,6 +62,7 @@ export function useRefreshAllFeeds() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["articles"] });
+      qc.invalidateQueries({ queryKey: ["todayEdition"] });
       // Auto-triage new articles after refresh
       commands.triageArticles(false).then(() => {
         qc.invalidateQueries({ queryKey: ["inbox"] });

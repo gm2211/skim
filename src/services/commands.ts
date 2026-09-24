@@ -304,7 +304,7 @@ export const preloadArticlesForOffline = (limit: number) =>
 // AI
 export const summarizeArticle = (
   articleId: string,
-  opts?: { force?: boolean; summaryLength?: string; summaryTone?: string; summaryFormat?: string; summaryCustomPrompt?: string }
+  opts?: { force?: boolean; summaryLength?: string; summaryTone?: string; summaryFormat?: string; summaryCustomPrompt?: string; summaryCustomWordCount?: number }
 ) =>
   invoke<ArticleSummary>("summarize_article", {
     articleId,
@@ -313,6 +313,7 @@ export const summarizeArticle = (
     summaryTone: opts?.summaryTone ?? null,
     summaryFormat: opts?.summaryFormat ?? null,
     summaryCustomPrompt: opts?.summaryCustomPrompt ?? null,
+    summaryCustomWordCount: opts?.summaryCustomWordCount ?? null,
   });
 export const cancelSummarize = () => invoke<void>("cancel_summarize");
 export const generateThemes = () => invoke<Theme[]>("generate_themes");

@@ -530,3 +530,83 @@ select option {
     background: rgba(255, 255, 255, 0.14);
   }
 }
+
+/* Newspaper stories share one rhythm; reports open only when requested. */
+.today-story {
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+.today-headline {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+.today-story-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.today-story-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  transition: background 150ms ease, color 150ms ease;
+}
+.today-story-control:hover { background: rgba(255, 255, 255, 0.06); }
+.today-headline:focus-visible, .today-story-control:focus-visible, .today-reference:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+.today-references {
+  margin-top: 8px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.today-reference {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 0;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.today-reference + .today-reference { border-top: 1px solid rgba(255, 255, 255, 0.07); }
+@media (max-width: 600px), (pointer: coarse) {
+  .today-story-control { min-height: 44px; }
+}
+
+.today-lead-headline { font-size: 20px; }
+.today-lead-summary { font-size: 14px; }
+.today-title { font-size: 22px; }
+.today-page { container-type: inline-size; }
+.today-masthead, .today-content { width: 100%; max-width: 1080px; margin-inline: auto; }
+.today-stories { display: grid; grid-template-columns: minmax(0, 1fr); }
+.today-story-cell { min-width: 0; }
+.today-briefs-label { grid-column: 1 / -1; }
+@container (min-width: 720px) {
+  .today-stories { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
+  .today-story-cell:first-child { grid-column: 1 / -1; }
+  .today-story-cell:first-child .today-story { padding-block: 24px 8px; }
+  .today-story-cell:first-child h3 { font-size: 30px; max-width: 780px; }
+  .today-story-cell:first-child p { max-width: 780px; font-size: 16px; }
+  .today-masthead h2 { font-size: 32px; }
+}

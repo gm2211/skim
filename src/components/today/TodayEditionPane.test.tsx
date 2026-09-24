@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { listen } from "@tauri-apps/api/event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TodayEditionPane } from "./TodayEditionPane";
 import type { AppSettings, TodayEditionItem, TodayEditionView } from "../../services/types";
@@ -7,6 +9,8 @@ import { useUiStore } from "../../stores/uiStore";
 
 vi.mock("../../services/commands", () => ({
   getOrGenerateTodayEdition: vi.fn(),
+  refreshAllFeeds: vi.fn(),
+  triageArticles: vi.fn(),
   listTodayEditionItems: vi.fn(),
   setTodayEditionItemConsumed: vi.fn(),
   generateTodayLedes: vi.fn(),
@@ -112,14 +116,19 @@ function makeView(items: TodayEditionItem[]): TodayEditionView {
 
 function renderPane() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const result = render(
     <QueryClientProvider client={qc}>
       <TodayEditionPane />
     </QueryClientProvider>,
   );
+  return { ...result, qc };
 }
 
 beforeEach(() => {
+  vi.mocked(listen).mockClear();
+  useUiStore.setState({ selectedArticleId: null });
+  vi.mocked(commands.refreshAllFeeds).mockResolvedValue(1);
+  vi.mocked(commands.triageArticles).mockResolvedValue({ triaged_count: 0, batches: 0, errors: [] });
   useUiStore.setState({ isPhone: false, sidebarCollapsed: false });
   vi.mocked(commands.getSettings).mockResolvedValue(DEFAULT_SETTINGS);
   vi.mocked(commands.generateTodayLedes).mockImplementation((_id: string) => new Promise(() => {}));
@@ -184,7 +193,8 @@ describe("TodayEditionPane", () => {
 
     renderPane();
 
-    expect(await screen.findByText("example.com")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "1 report" }));
+    expect(screen.getByText("example.com")).toBeInTheDocument();
     expect(screen.queryByText("Feed One")).not.toBeInTheDocument();
   });
 
@@ -254,4 +264,109 @@ describe("TodayEditionPane", () => {
 
     await screen.findByText("No stories yet today");
   });
+});
+
+
+describe("Today interaction and async boundaries", () => {
+  it("keeps syndicated references optional and available", async () => {
+    const item = makeItem({});
+    item.member_articles.push({ ...item.member_articles[0], article_id: "duplicate", title: "Syndicated copy", membership_type: "duplicate", is_representative: false });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([item]));
+    renderPane();
+    const reports = await screen.findByRole("button", { name: "2 reports" });
+    expect(screen.queryByText("Syndicated copy")).not.toBeInTheDocument();
+    await userEvent.click(reports);
+    expect(reports).toHaveAttribute("aria-expanded", "true");
+    await userEvent.click(screen.getByRole("button", { name: /Syndicated copy/ }));
+    expect(useUiStore.getState().selectedArticleId).toBe("duplicate");
+    await userEvent.click(reports);
+    expect(screen.queryByText("Syndicated copy")).not.toBeInTheDocument();
+  });
+
+  it("opens a headline with the keyboard", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    const headline = await screen.findByRole("button", { name: "Default snapshot title" });
+    headline.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(useUiStore.getState().selectedArticleId).toBe("article-default");
+  });
+
+  it("reports a failed progress save without claiming the story is read", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    vi.mocked(commands.setTodayEditionItemConsumed).mockRejectedValue(new Error("Disk full"));
+    renderPane();
+    await userEvent.click(await screen.findByRole("button", { name: "Mark as read" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not save reading progress");
+    expect(screen.getByText("0 of 1 done")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mark as read" })).toBeEnabled();
+  });
+
+  it.each(["success", "failure"])("isolates a deferred previous-edition save on %s", async (outcome) => {
+    let resolveSave!: (view: TodayEditionView) => void;
+    let rejectSave!: (error: Error) => void;
+    const save = new Promise<TodayEditionView>((resolve, reject) => { resolveSave = resolve; rejectSave = reject; });
+    const first = makeView([makeItem({ snapshot_title: "Edition A" })]);
+    const next = makeView([makeItem({ snapshot_title: "Edition B", edition_id: "today-1-2-5" })]);
+    next.edition = { ...next.edition, id: "today-1-2-5", story_limit: 5 };
+    vi.mocked(commands.getOrGenerateTodayEdition).mockImplementation(async (_start, _end, _now, limit) => limit === 5 ? next : first);
+    vi.mocked(commands.setTodayEditionItemConsumed).mockReturnValue(save);
+    const { qc } = renderPane();
+    await screen.findByText("Edition A");
+    const firstKey = qc.getQueryCache().findAll({ queryKey: ["todayEdition"] })[0].queryKey;
+    await userEvent.click(screen.getByRole("button", { name: "Mark as read" }));
+    expect(screen.getByRole("button", { name: "Mark as read" })).toBeDisabled();
+    await act(async () => {
+      qc.setQueryData(["settings"], { ...DEFAULT_SETTINGS, sync: { ...DEFAULT_SETTINGS.sync, today_story_limit: 5 } });
+    });
+    await screen.findByText("Edition B");
+    expect(screen.getByRole("button", { name: "Mark as read" })).toBeEnabled();
+    const saved = makeView([makeItem({ snapshot_title: "Edition A", is_consumed: true })]);
+    await act(async () => {
+      if (outcome === "success") resolveSave(saved);
+      else rejectSave(new Error("Edition A disk failure"));
+    });
+    expect(screen.getByText("Edition B")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("0 of 1 done")).toBeInTheDocument();
+    if (outcome === "success") expect(qc.getQueryData<TodayEditionView>(firstKey)?.consumed_count).toBe(1);
+  });
+
+  it("ignores other editions' ledes and retains one stable subscription", async () => {
+    const view = makeView([makeItem({})]);
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
+    renderPane();
+    await screen.findByText("Default snapshot title");
+    await waitFor(() => expect(vi.mocked(listen).mock.calls.length).toBeGreaterThan(0));
+    const calls = vi.mocked(listen).mock.calls;
+    const callback = calls[calls.length - 1][1];
+    const count = calls.length;
+    const event = (eventView: TodayEditionView) => ({ event: "today_lede_progress", id: 1, payload: { edition_id: eventView.edition.id, completed: 1, total: 2, message: "Preparing summaries", view: eventView } });
+    const other = makeView([makeItem({ snapshot_title: "Wrong edition" })]);
+    other.edition.id = "tomorrow";
+    await act(async () => callback(event(other)));
+    expect(screen.queryByText("Wrong edition")).not.toBeInTheDocument();
+    await act(async () => callback(event(makeView([makeItem({ lede: "The written summary" })]))));
+    expect(screen.getByText("The written summary")).toBeInTheDocument();
+    expect(vi.mocked(listen).mock.calls.length).toBe(count);
+  });
+});
+
+
+it("fills an empty newspaper after refreshing feeds", async () => {
+  vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValueOnce(makeView([])).mockResolvedValue(makeView([makeItem({})]));
+  renderPane();
+  await screen.findByText("No stories yet today");
+  await userEvent.click(screen.getByRole("button", { name: "Refresh feeds" }));
+  expect(await screen.findByText("Default snapshot title")).toBeInTheDocument();
+  expect(screen.queryByText("No stories yet today")).not.toBeInTheDocument();
+});
+
+it("uses the desktop width until an article is opened", async () => {
+  vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+  const rendered = renderPane();
+  const pane = rendered.container.querySelector(".today-page");
+  expect(pane).toHaveStyle({ width: "100%" });
+  await userEvent.click(await screen.findByRole("button", { name: "Default snapshot title" }));
+  expect(pane).toHaveStyle({ width: "420px" });
 });

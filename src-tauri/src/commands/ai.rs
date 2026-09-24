@@ -344,6 +344,7 @@ pub async fn summarize_article(
     summary_tone: Option<String>,
     summary_format: Option<String>,
     summary_custom_prompt: Option<String>,
+    summary_custom_word_count: Option<i32>,
 ) -> Result<ArticleSummary, String> {
     let gen_id = generation.0.fetch_add(1, Ordering::SeqCst) + 1;
     // Get article content and settings
@@ -362,7 +363,13 @@ pub async fn summarize_article(
         .map(|s| serde_json::from_str(s).unwrap_or_default())
         .unwrap_or_default();
 
-    // Apply per-article overrides
+    // Apply per-article overrides before deriving the cache key or provider prompt.
+    if let Some(word_count) = summary_custom_word_count {
+        if !(20..=1000).contains(&word_count) {
+            return Err("Summary word count must be between 20 and 1000".to_string());
+        }
+        settings.ai.summary_custom_word_count = Some(word_count);
+    }
     if let Some(len) = summary_length {
         settings.ai.summary_length = Some(len);
     }

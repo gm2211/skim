@@ -1,4 +1,6 @@
+import { Fragment } from "react";
 import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
+import { useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useTodayEdition } from "../../hooks/useTodayEdition";
 import { useUiStore } from "../../stores/uiStore";
 import { rankFor, LEAD_COUNT } from "../../lib/todayEdition";
@@ -13,10 +15,12 @@ function formatWindowDate(startsAtSeconds: number): string {
 }
 
 export function TodayEditionPane() {
-  const { isPhone, sidebarCollapsed, openArticleFromToday, setPhonePane } = useUiStore();
-  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress } =
+  const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane } = useUiStore();
+  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, refetch } =
     useTodayEdition();
 
+  const refreshFeeds = useRefreshAllFeeds();
+  const isFrontPage = !isPhone && !selectedArticleId;
   const items = data?.items ?? [];
   const briefsStart = items.findIndex((_, index) => rankFor(index) === "brief");
 
@@ -31,10 +35,11 @@ export function TodayEditionPane() {
 
   return (
     <div
-      className={`${!isPhone ? "border-r border-white/5" : ""} bg-bg-secondary/70 flex flex-col h-full overflow-hidden`}
+      className={`today-page ${!isPhone ? "border-r border-white/5" : ""} bg-bg-secondary/70 flex flex-col h-full overflow-hidden`}
       style={{
-        width: isPhone ? "100%" : 420,
-        minWidth: isPhone ? "100%" : 360,
+        width: isPhone || isFrontPage ? "100%" : 420,
+        minWidth: isPhone ? "100%" : isFrontPage ? 0 : 360,
+        flex: isFrontPage ? 1 : undefined,
       }}
     >
       {sidebarCollapsed && !isPhone && <CollapsedSidebarTitlebar />}
@@ -61,11 +66,16 @@ export function TodayEditionPane() {
           </button>
         )}
         <div className="flex-1" />
+        <button className="today-story-control text-text-secondary hover:text-text-primary" disabled={refreshFeeds.isPending} onClick={() => refreshFeeds.mutate(undefined)}>
+          {refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
+        </button>
       </div>
 
+      <div className="flex-1 overflow-y-auto" style={{ padding: "0 24px 24px" }}>
+      <div className="today-content">
       {/* Title + progress */}
-      <div style={{ padding: "8px 24px 14px" }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700 }} className="text-text-primary truncate">
+      <div className="today-masthead" style={{ padding: "8px 0 14px" }}>
+        <h2 style={{ fontWeight: 700 }} className="today-title text-text-primary truncate">
           Today
         </h2>
         <p className="text-text-muted" style={{ fontSize: 13, marginTop: 2 }}>
@@ -92,7 +102,6 @@ export function TodayEditionPane() {
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto" style={{ padding: "0 20px 20px" }}>
         {isLoading && (
           <div className="flex items-center justify-center h-32">
             <span className="text-text-muted" style={{ fontSize: 14 }}>Loading...</span>
@@ -100,10 +109,14 @@ export function TodayEditionPane() {
         )}
 
         {isError && (
-          <p className="text-danger" style={{ fontSize: 12, padding: "12px 4px" }}>
-            {error instanceof Error ? error.message : "Could not load today's edition."}
-          </p>
+          <div role="alert" className="text-danger" style={{ fontSize: 13, padding: "12px 4px" }}>
+            <p>{error instanceof Error ? error.message : "Could not load today's edition."}</p>
+            <button className="today-story-control text-text-primary" onClick={() => void refetch()}>Try again</button>
+          </div>
         )}
+
+        {refreshFeeds.isError && <p role="alert" className="text-danger" style={{ fontSize: 13 }}>Could not refresh feeds. Please try again.</p>}
+        {setConsumed.isError && <p role="alert" className="text-danger" style={{ fontSize: 13 }}>Could not save reading progress. Please try again.</p>}
 
         {!isLoading && !isError && totalCount === 0 && (
           <div className="flex flex-col items-center justify-center px-6 text-center" style={{ minHeight: 220 }}>
@@ -122,7 +135,7 @@ export function TodayEditionPane() {
               No stories yet today
             </p>
             <p className="text-text-muted" style={{ fontSize: 12, lineHeight: 1.5, maxWidth: 280 }}>
-              Refresh your feeds to pull in today&apos;s coverage — Today fills in as stories are clustered and ranked.
+              Refresh your feeds to bring in new stories.
             </p>
           </div>
         )}
@@ -136,27 +149,32 @@ export function TodayEditionPane() {
           </div>
         )}
 
+        <div className="today-stories">
         {!isLoading &&
           !isError &&
           items.map((item, index) => (
-            <div key={item.story_id}>
+            <Fragment key={item.story_id}>
               {index === briefsStart && (
                 <div
-                  className="text-text-muted uppercase font-bold"
+                  className="today-briefs-label text-text-muted uppercase font-bold"
                   style={{ fontSize: 10.5, letterSpacing: 1.2, marginTop: 24 }}
                 >
                   Also
                 </div>
               )}
+              <div className="today-story-cell">
               <TodayStory
                 item={item}
                 rank={rankFor(index)}
                 isWritingLede={!!ledeProgress && index < LEAD_COUNT}
+                isSaving={setConsumed.isPending}
                 onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
                 onOpenArticle={handleOpenArticle}
               />
-            </div>
+              </div>
+            </Fragment>
           ))}
+        </div>
 
         {isFullyConsumed && (
           <div
@@ -168,6 +186,7 @@ export function TodayEditionPane() {
             </p>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

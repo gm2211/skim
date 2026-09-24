@@ -15,10 +15,56 @@ beforeEach(() => {
   settings = { ai: { provider: "none", chat_provider: "same" } };
   useUiStore.setState({ isPhone: false, showSettings: false });
   HTMLElement.prototype.scrollTo = vi.fn();
+  window.scrollTo = vi.fn();
   vi.mocked(chatWithArticles).mockResolvedValue({ content: "Answer", sources: [], provider: "openai", model: "test-model", article_ids: [] });
 });
 
 describe("AskSkimDialog setup recovery", () => {
+  it("restores composer focus after a fast response and restores opener only on ordinary close", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    const opener = document.createElement("button");
+    opener.textContent = "Fixture opener";
+    document.body.appendChild(opener);
+    opener.focus();
+    const close = vi.fn();
+    const view = render(<AskSkimDialog onClose={close} />);
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("textbox"), "Question");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Answer");
+    expect(screen.getByRole("textbox")).toHaveFocus();
+    view.rerender(<AskSkimDialog open={false} onClose={close} />);
+    expect(opener).toHaveFocus();
+    opener.remove();
+  });
+
+  it("does not restore the Ask opener when opening a citation and uses the phone safe area", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    useUiStore.setState({ isPhone: true });
+    const opener = document.createElement("button");
+    document.body.appendChild(opener);
+    opener.focus();
+    vi.mocked(chatWithArticles).mockResolvedValueOnce({ content: "Evidence [1]", sources: [{ id: "a", title: "Quasar report", feed_title: "Science", url: null, published_at: null, source_type: "article" }], provider: "openai", model: "test", article_ids: ["a"] });
+    const close = vi.fn();
+    const restoreFocusTarget = () => opener;
+    const view = render(<AskSkimDialog restoreFocusTarget={restoreFocusTarget} onClose={close} onOpenArticle={vi.fn()} />);
+    expect(screen.getByRole("dialog").style.paddingTop).toBe("max(var(--sat, 0px), 8px)");
+    const user = userEvent.setup();
+    await user.type(screen.getByRole("textbox"), "Quasar");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await user.click(await screen.findByRole("button", { name: /Quasar report/ }));
+    view.rerender(<AskSkimDialog open={false} restoreFocusTarget={restoreFocusTarget} onClose={close} onOpenArticle={vi.fn()} />);
+    expect(opener).not.toHaveFocus();
+    const reader = document.createElement("button");
+    document.body.appendChild(reader);
+    reader.focus();
+    view.rerender(<AskSkimDialog open restoreFocusTarget={restoreFocusTarget} onClose={close} onOpenArticle={vi.fn()} />);
+    reader.remove();
+    view.rerender(<AskSkimDialog open={false} restoreFocusTarget={restoreFocusTarget} onClose={close} onOpenArticle={vi.fn()} />);
+    expect(opener).toHaveFocus();
+    opener.remove();
+  });
+
   it("keeps conversation, scope and draft when hidden for reading a citation", async () => {
     settings = { ai: { provider: "openai", chat_provider: "same" } };
     const onClose = vi.fn();

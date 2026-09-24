@@ -1,5 +1,5 @@
-use crate::ai::prompts;
 use crate::ai::local_provider::SharedModelState;
+use crate::ai::prompts;
 use crate::ai::provider::{create_provider_with_app, ChatMessage, ChatRequest};
 use crate::commands::ai::{default_model, extract_json_object};
 use crate::db::queries;
@@ -11,15 +11,66 @@ use tauri::{Emitter, State};
 
 #[tauri::command]
 pub async fn get_or_generate_today_edition(
+    app: AppHandle,
     db: State<'_, Database>,
+    model_state: State<'_, SharedModelState>,
     starts_at: i64,
     ends_at: i64,
     generated_at: i64,
     story_limit: i64,
 ) -> Result<TodayEditionView, String> {
+    let (candidates, settings) = {
+        let conn = db.conn.lock().map_err(|error| error.to_string())?;
+        today_edition::validate_window_and_limit(starts_at, ends_at, generated_at, story_limit)
+            .map_err(|error| error.to_string())?;
+        let id = today_edition::edition_id(starts_at, ends_at, story_limit);
+        if let Some(view) = today_edition::frozen(&conn, &id).map_err(|error| error.to_string())? {
+            return Ok(view);
+        }
+        let candidates =
+            today_edition::collect_candidates(&conn, starts_at, ends_at, generated_at, story_limit)
+                .map_err(|error| error.to_string())?;
+        let settings: crate::db::models::AppSettings = queries::get_setting(&conn, "app_settings")
+            .map_err(|error| error.to_string())?
+            .as_deref()
+            .and_then(|value| serde_json::from_str(value).ok())
+            .unwrap_or_default();
+        (candidates, settings)
+    };
+    let fingerprint = today_edition::candidate_fingerprint(&candidates);
+    let mut groups = None;
+    if settings.ai.provider != "none"
+        && crate::db::semantic_edition::eligible_count(candidates.len())
+    {
+        let mut ai_settings = settings.ai.clone();
+        ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+        if let Ok(provider) =
+            create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)
+        {
+            let model = ai_settings
+                .model
+                .clone()
+                .unwrap_or_else(|| default_model(&ai_settings.provider));
+            groups = crate::db::semantic_edition::plan(
+                Some(provider.as_ref()),
+                &model,
+                today_edition::semantic_listing(&candidates),
+                candidates.len(),
+            )
+            .await;
+        }
+    }
     let conn = db.conn.lock().map_err(|error| error.to_string())?;
-    today_edition::get_or_generate(&conn, starts_at, ends_at, generated_at, story_limit)
-        .map_err(|error| error.to_string())
+    today_edition::finish_semantic(
+        &conn,
+        starts_at,
+        ends_at,
+        generated_at,
+        story_limit,
+        &fingerprint,
+        groups,
+    )
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -46,9 +97,8 @@ pub async fn set_today_edition_item_consumed(
 
 // --- Written ledes ----------------------------------------------------------
 //
-// An edition is assembled from the story index without a model in the loop, so
-// each story arrives with a mechanical excerpt under it. That reads like a
-// database row, not a front page. This pass writes a real lede for the stories
+// Semantic planning groups and ranks existing story records before freezing;
+// their summaries remain source excerpts. This separate pass writes ledes for stories
 // at the top of the page, once per edition, and publishes the page after each
 // one so they appear as they land.
 

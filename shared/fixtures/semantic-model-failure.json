@@ -1,0 +1,49 @@
+{
+  "description": "Recorded local inference on original synthetic news; malformed response must leave deterministic edition unchanged. This is failure evidence, not semantic-quality acceptance.",
+  "model": "mlx-community/gemma-3-1b-it-4bit",
+  "recorded_at": "2026-09-24",
+  "candidate_count": 8,
+  "input": [
+    {
+      "index": 0,
+      "title": "Aster Port halts departures after channel collision",
+      "excerpt": "A cargo vessel hit a dredger at Aster Port on September24. The collision blocked its only channel. All shipping departures are halted until tugboats clear the wreck."
+    },
+    {
+      "index": 1,
+      "title": "Freighter blocks only shipping lane into Aster Harbor",
+      "excerpt": "After striking a dredger on September24, a cargo ship obstructed the sole entrance to Aster Harbor. Port officials suspended arrivals and sailings while tug crews work."
+    },
+    {
+      "index": 2,
+      "title": "Boreal port raises shipping fees next month",
+      "excerpt": "Boreal port will raise docking charges by two percent from October1. The scheduled annual revision funds routine maintenance. Traffic is operating normally."
+    },
+    {
+      "index": 3,
+      "title": "Eastmere grid failure cuts power to 800000 residents",
+      "excerpt": "A transformer explosion on September24 shut down the Eastmere regional grid. Emergency shelters opened, rail service stopped and officials expect restoration to take two days."
+    },
+    {
+      "index": 4,
+      "title": "Sable launches a blue case for Orion phone",
+      "excerpt": "Sable introduced a cobalt-blue plastic case for the existing Orion smartphone on September24. It costs29 dollars and changes no phone features."
+    },
+    {
+      "index": 5,
+      "title": "Orion handset gains cobalt accessory",
+      "excerpt": "Phone maker Sable added a cobalt blue case to its Orion accessory range on September24. The new plastic cover is priced at29 dollars; handset hardware is unchanged."
+    },
+    {
+      "index": 6,
+      "title": "Sable recalls Orion battery packs after fires",
+      "excerpt": "Sable separately recalled two million Orion battery packs after seventeen fires. Regulators ordered sales halted immediately. The recall covers all packs from the affected factory."
+    },
+    {
+      "index": 7,
+      "title": "Council approves four billion dollar flood barrier",
+      "excerpt": "Eastmere council approved construction of a four billion dollar coastal flood barrier after a decade of planning. It protects the city and should be finished in six years."
+    }
+  ],
+  "response": "```json\n{\"groups\":[{\"members\": [0, 2], \"importance\": 4, \"confidence\": 0.95, \"reason\": \"The report describes a cargo vessel colliding with a dredger at Aster Port. This event is notable as it highlights a specific incident involving a cargo ship and a dredging operation.  The report does not contain any other relevant details.\"}\n{\"members\": [1, 2], \"importance\": 3, \"confidence\": 0.75, \"reason\": \"A freighter blocked the only shipping lane into Aster Harbor. This event is notable as it highlights a specific incident involving a cargo ship and a dredging operation. The report does not contain any other relevant details.\"}\n{\"members\": [3, 4], \"importance\": 2, \"confidence\": 0.6, \"reason\": \"A transformer explosion shut down the Eastmere regional grid. This event is notable as it highlights a specific incident involving a transformer explosion. The report does not contain any other relevant details.\"}\n{\"members\": [5, 6], \"importance\": 4, \"confidence\": 0.85, \"reason\": \"Sable launched a blue case for the Orion phone. This event is notable as it highlights a specific product launch. The report does not contain any other relevant details.\"}\n{\"members\": [7, 8], \"importance\": 5, \"confidence\": 0.9, \"reason\": \"Sable recalls Orion battery packs after fires. This event is notable as it highlights a specific incident involving a product recall. The report does not contain any other relevant details.\"}\n{\"members\": [9, 10], \"importance\": 3, \"confidence\": 0.4, \"reason\": \"Council approves four billion dollar flood barrier. This event is notable as it highlights a specific project. The report does not contain any other relevant details.\"}\n```"
+}

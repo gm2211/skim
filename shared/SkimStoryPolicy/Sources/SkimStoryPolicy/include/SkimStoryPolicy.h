@@ -33,6 +33,15 @@ double skim_story_score(int64_t independent_sources, double age_seconds,
 int32_t skim_story_is_unique(int64_t independent_sources);
 uint64_t skim_story_identity_hash(const uint8_t *bytes, size_t length);
 
+/* Edition-local semantic plans never rewrite the underlying story index. */
+const char *skim_semantic_prompt(void);
+size_t skim_semantic_max_candidates(void);
+int32_t skim_semantic_group_valid(const double *members, size_t member_count,
+                                 size_t candidate_count, const uint8_t *assigned,
+                                 size_t assigned_count, double importance,
+                                 double confidence);
+double skim_semantic_score(double base, double importance, double confidence);
+
 #ifdef __cplusplus
 }
 #endif

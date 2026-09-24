@@ -2,7 +2,11 @@ import { useEffect, useRef, type RefObject } from "react";
 
 // Keep keyboard navigation inside an active modal and restore its opener.
 // Disable while another dialog (such as provider settings) takes its place.
-export function useDialogFocus(ref: RefObject<HTMLElement | null>, onClose: () => void, enabled = true) {
+export function useDialogFocus(ref: RefObject<HTMLElement | null>, onClose: () => void, enabled = true, shouldRestoreFocus: () => boolean = () => true, restoreFocusTarget?: () => HTMLElement | null) {
+  const fallback = useRef(restoreFocusTarget);
+  fallback.current = restoreFocusTarget;
+  const restore = useRef(shouldRestoreFocus);
+  restore.current = shouldRestoreFocus;
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
@@ -39,7 +43,10 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, onClose: () =
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
-      if (previous?.isConnected) previous.focus();
+      if (restore.current()) {
+        const target = fallback.current?.() ?? previous;
+        if (target?.isConnected) target.focus({ preventScroll: true });
+      }
     };
   }, [enabled, ref]);
 }

@@ -156,9 +156,24 @@ final class AppModel: ObservableObject {
         todayError = nil
         defer { if todayLoadID == requestID { isLoadingToday = false } }
         do {
+            let aiSettings = settings
+            var evaluator: TodaySemanticEvaluator?
+            if aiSettings.ai.provider != "none" {
+                evaluator = { [weak self] candidates in
+                    do {
+                        let result = try await NativeAI.evaluateToday(candidates: candidates, settings: aiSettings)
+                        guard await self?.todayLoadID == requestID else { throw CancellationError() }
+                        return result
+                    } catch {
+                        guard await self?.todayLoadID == requestID else { throw CancellationError() }
+                        throw error
+                    }
+                }
+            }
             let edition = try await store.getOrGenerateTodayEdition(
                 startsAt: start, endsAt: end, storyLimit: storyLimit,
-                generatedAt: now, preferences: tasteStore.todayRankingPreferences()
+                generatedAt: now, preferences: tasteStore.todayRankingPreferences(),
+                semanticEvaluator: evaluator
             )
             guard todayLoadID == requestID else { return }
             todayEdition = edition

@@ -326,6 +326,10 @@ function prepareFetchedArticle(result: FetchedArticleContent): {
 export function ArticleDetail() {
   const { selectedArticleId, closeArticleDetail, listCollapsed, sidebarCollapsed, sidebarView, isPhone, phoneBack } = useUiStore();
   const { data: article, refetch: refetchArticle } = useArticle(selectedArticleId);
+  const readerFocusRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (article?.id === selectedArticleId) readerFocusRef.current?.focus({ preventScroll: true });
+  }, [article?.id, selectedArticleId]);
   const markRead = useMarkRead();
   const toggleStar = useToggleStar();
   const toggleRead = useToggleRead();
@@ -1071,7 +1075,7 @@ export function ArticleDetail() {
         : `transform ${SLIDE_MS}ms ${PHONE_SLIDE_EASING}`;
 
   return (
-    <div className="flex-1 min-w-0 min-h-0 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
+    <div ref={readerFocusRef} tabIndex={-1} role="region" aria-label="Article reader" className="flex-1 min-w-0 min-h-0 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
       {/* Toolbar */}
       <div
         className="flex items-center justify-between relative z-20 flex-shrink-0"

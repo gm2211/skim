@@ -3,6 +3,7 @@
 //! Edition snapshots are generated from the additive story index. Raw article
 //! rows and the chronological feed queries remain untouched.
 
+use super::semantic_edition::SemanticGroup;
 use crate::db::models::{Edition, EditionItem, EditionStatus, StoryMembershipType, StoryRevision};
 use crate::db::{queries, story_clustering};
 use rusqlite::{params, Connection, OptionalExtension};
@@ -15,6 +16,7 @@ pub const SECTION_WIDELY_COVERED: &str = "widely_covered";
 pub const SECTION_UNIQUE_FINDS: &str = "unique_finds";
 pub const SECTION_UPDATES: &str = "updates";
 const SCOPE_TODAY: &str = "today";
+#[cfg(test)]
 const MAX_RANK_CANDIDATES: usize = 10_000;
 
 #[derive(Debug, Clone, Serialize)]
@@ -54,14 +56,18 @@ pub struct TodayEditionView {
     pub total_count: i64,
 }
 
-#[derive(Debug)]
-struct Candidate {
+#[derive(Debug, Clone, Serialize)]
+pub struct Candidate {
     rank: story_clustering::RankedStory,
     revision: StoryRevision,
     is_update: bool,
+    constituents: Vec<(String, i64)>,
+    semantic_reason: Option<String>,
+    timestamp: i64,
+    sources: Vec<MemberSnapshot>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize)]
 struct MemberSnapshot {
     article_id: String,
     feed_id: String,
@@ -81,6 +87,7 @@ pub fn edition_id(starts_at: i64, ends_at: i64, story_limit: i64) -> String {
     format!("today-{starts_at}-{ends_at}-{story_limit}")
 }
 
+#[cfg(test)]
 pub fn get_or_generate(
     conn: &Connection,
     starts_at: i64,
@@ -100,7 +107,7 @@ pub fn get_or_generate(
     load(conn, &id)
 }
 
-fn validate_window_and_limit(
+pub(crate) fn validate_window_and_limit(
     starts_at: i64,
     ends_at: i64,
     generated_at: i64,
@@ -124,15 +131,21 @@ fn validate_window_and_limit(
     Ok(())
 }
 
-fn generate(
+pub fn collect_candidates(
     conn: &Connection,
-    id: &str,
     starts_at: i64,
     ends_at: i64,
     generated_at: i64,
     story_limit: i64,
-) -> Result<(), rusqlite::Error> {
-    let mut ranked = story_clustering::rank_stories(conn, generated_at, MAX_RANK_CANDIDATES)?;
+) -> Result<Vec<Candidate>, rusqlite::Error> {
+    validate_window_and_limit(starts_at, ends_at, generated_at, story_limit)?;
+    let mut ranked = story_clustering::rank_stories(
+        conn,
+        generated_at,
+        conn.query_row("SELECT COUNT(*) FROM stories", [], |row| {
+            row.get::<_, i64>(0)
+        })? as usize,
+    )?;
     ranked.sort_by(|left, right| {
         right
             .score
@@ -158,12 +171,13 @@ fn generate(
             "SELECT EXISTS (
                 SELECT 1 FROM edition_items consumed
                 JOIN editions previous ON previous.id = consumed.edition_id
-                WHERE consumed.story_id = ?1 AND consumed.is_consumed = 1
+                JOIN edition_item_story_revisions member ON member.edition_id = consumed.edition_id AND member.item_story_id = consumed.story_id
+                WHERE member.member_story_id = ?1 AND consumed.is_consumed = 1
                   AND previous.ends_at <= ?2
                   AND NOT EXISTS (
                     SELECT 1 FROM story_revisions revision
                     WHERE revision.story_id = ?1
-                      AND revision.revision_number > consumed.story_revision_number
+                      AND revision.revision_number > member.revision_number
                       AND revision.is_material_change = 1
                   )
             )",
@@ -178,13 +192,194 @@ fn generate(
             .iter()
             .any(|membership| membership.membership_type == StoryMembershipType::Update);
         candidates.push(Candidate {
+            timestamp: story.last_activity_at,
+            sources: member_snapshots(
+                conn,
+                &rank.story_id,
+                revision.representative_article_id.as_deref(),
+            )?,
+            constituents: vec![(rank.story_id.clone(), revision.revision_number)],
+            semantic_reason: None,
             rank,
             revision,
             is_update,
         });
     }
 
-    let mut selected = select_candidates(&candidates, story_limit as usize);
+    Ok(candidates)
+}
+
+pub fn semantic_listing(candidates: &[Candidate]) -> String {
+    serde_json::to_string(
+        &candidates
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| {
+                serde_json::json!({
+                    "index": index,
+                    "title": candidate.revision.title.chars().take(240).collect::<String>(),
+                    "excerpt": candidate.revision.summary.chars().take(240).collect::<String>(),
+                    "timestamp": candidate.timestamp as f64,
+                    "baseScore": candidate.rank.score
+                })
+            })
+            .collect::<Vec<_>>(),
+    )
+    .expect("serializable semantic inputs")
+}
+
+pub fn candidate_fingerprint(candidates: &[Candidate]) -> String {
+    serde_json::to_string(candidates).expect("serializable candidates")
+}
+
+pub fn frozen(conn: &Connection, id: &str) -> Result<Option<TodayEditionView>, rusqlite::Error> {
+    if queries::get_edition(conn, id)?.is_some() {
+        let view = load(conn, id)?;
+        if !view.items.is_empty() {
+            return Ok(Some(view));
+        }
+    }
+    Ok(None)
+}
+
+pub fn finish_semantic(
+    conn: &Connection,
+    starts_at: i64,
+    ends_at: i64,
+    generated_at: i64,
+    story_limit: i64,
+    fingerprint: &str,
+    groups: Option<Vec<SemanticGroup>>,
+) -> Result<TodayEditionView, rusqlite::Error> {
+    let id = edition_id(starts_at, ends_at, story_limit);
+    if let Some(view) = frozen(conn, &id)? {
+        return Ok(view);
+    }
+    let transaction = conn.unchecked_transaction()?;
+    let candidates =
+        collect_candidates(&transaction, starts_at, ends_at, generated_at, story_limit)?;
+    let groups = if candidate_fingerprint(&candidates) == fingerprint {
+        groups
+    } else {
+        None
+    };
+    persist_candidates(
+        &transaction,
+        &id,
+        starts_at,
+        ends_at,
+        generated_at,
+        story_limit,
+        candidates,
+        groups,
+    )?;
+    transaction.commit()?;
+    load(conn, &id)
+}
+
+#[cfg(test)]
+fn generate(
+    conn: &Connection,
+    id: &str,
+    starts_at: i64,
+    ends_at: i64,
+    generated_at: i64,
+    story_limit: i64,
+) -> Result<(), rusqlite::Error> {
+    let transaction = conn.unchecked_transaction()?;
+    let candidates =
+        collect_candidates(&transaction, starts_at, ends_at, generated_at, story_limit)?;
+    persist_candidates(
+        &transaction,
+        id,
+        starts_at,
+        ends_at,
+        generated_at,
+        story_limit,
+        candidates,
+        None,
+    )?;
+    transaction.commit()
+}
+
+fn persist_candidates(
+    conn: &Connection,
+    id: &str,
+    starts_at: i64,
+    ends_at: i64,
+    generated_at: i64,
+    story_limit: i64,
+    mut candidates: Vec<Candidate>,
+    groups: Option<Vec<SemanticGroup>>,
+) -> Result<(), rusqlite::Error> {
+    let semantic = groups.as_ref().is_some_and(|groups| !groups.is_empty());
+    if let Some(groups) = groups {
+        let mut used = BTreeSet::new();
+        let mut grouped = Vec::new();
+        for group in groups {
+            let mut indices = group.members.clone();
+            indices.sort_by(|a, b| {
+                candidates[*b]
+                    .rank
+                    .score
+                    .partial_cmp(&candidates[*a].rank.score)
+                    .unwrap_or(Ordering::Equal)
+                    .then_with(|| {
+                        candidates[*a]
+                            .rank
+                            .story_id
+                            .cmp(&candidates[*b].rank.story_id)
+                    })
+            });
+            let mut anchor = candidates[indices[0]].clone();
+            anchor.rank.score = super::story_policy::semantic_score(
+                anchor.rank.score,
+                group.importance,
+                group.confidence,
+            );
+            anchor.constituents.clear();
+            anchor.sources.clear();
+            anchor.semantic_reason = Some(group.reason);
+            for index in indices {
+                used.insert(index);
+                anchor
+                    .constituents
+                    .extend(candidates[index].constituents.clone());
+                anchor.is_update |= candidates[index].is_update;
+                anchor.sources.extend(candidates[index].sources.clone());
+            }
+            let mut article_ids = BTreeSet::new();
+            anchor
+                .sources
+                .retain(|source| article_ids.insert(source.article_id.clone()));
+            for source in &mut anchor.sources {
+                source.is_representative =
+                    Some(&source.article_id) == anchor.revision.representative_article_id.as_ref();
+            }
+            grouped.push(anchor);
+        }
+        grouped.extend(
+            candidates
+                .into_iter()
+                .enumerate()
+                .filter(|(index, _)| !used.contains(index))
+                .map(|(_, candidate)| candidate),
+        );
+        candidates = grouped;
+        candidates.sort_by(|a, b| {
+            b.rank
+                .score
+                .partial_cmp(&a.rank.score)
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| a.rank.story_id.cmp(&b.rank.story_id))
+        });
+    }
+
+    let mut selected = if semantic {
+        candidates.iter().take(story_limit as usize).collect()
+    } else {
+        select_candidates(&candidates, story_limit as usize)
+    };
     // A front page runs in order of importance. Ordering by section put every
     // story that no second outlet happened to cover — in practice almost all
     // of them — into one undifferentiated block at the bottom of the page.
@@ -199,17 +394,8 @@ fn generate(
     });
     let selected_with_members = selected
         .iter()
-        .map(|candidate| {
-            Ok((
-                *candidate,
-                member_snapshots(
-                    conn,
-                    &candidate.rank.story_id,
-                    candidate.revision.representative_article_id.as_deref(),
-                )?,
-            ))
-        })
-        .collect::<Result<Vec<_>, rusqlite::Error>>()?;
+        .map(|candidate| (*candidate, candidate.sources.clone()))
+        .collect::<Vec<_>>();
     let total_source_count = selected_with_members
         .iter()
         .flat_map(|(_, members)| members)
@@ -234,13 +420,14 @@ fn generate(
         completed_at: is_empty.then_some(generated_at),
         total_source_count,
     };
-    let transaction = conn.unchecked_transaction()?;
+    let transaction = conn;
     // Empty placeholders can recover after feed refresh. Recheck in the same
     // transaction as replacement; never overwrite a populated frozen edition.
     if queries::get_edition(&transaction, id)?.is_some() {
         let has_items: bool = transaction.query_row(
             "SELECT EXISTS (SELECT 1 FROM edition_items WHERE edition_id = ?1)",
-            params![id], |row| row.get(0),
+            params![id],
+            |row| row.get(0),
         )?;
         if has_items || is_empty {
             return Ok(());
@@ -248,8 +435,23 @@ fn generate(
         transaction.execute("DELETE FROM editions WHERE id = ?1", params![id])?;
     }
     queries::insert_edition(&transaction, &edition)?;
-    for (position, (candidate, _)) in selected_with_members.iter().enumerate() {
-        let section = section_for(candidate);
+    for (position, (candidate, members)) in selected_with_members.iter().enumerate() {
+        let source_count = members
+            .iter()
+            .filter(|member| member.membership_type != StoryMembershipType::Duplicate)
+            .map(|member| &member.feed_id)
+            .collect::<BTreeSet<_>>()
+            .len()
+            .max(1) as i64;
+        let section = if candidate.constituents.len() > 1 {
+            if candidate.is_update {
+                SECTION_UPDATES
+            } else {
+                SECTION_TOP_STORIES
+            }
+        } else {
+            section_for(candidate)
+        };
         transaction.execute(
             "INSERT INTO edition_items (
                 edition_id, story_id, story_revision_number, position, section,
@@ -266,13 +468,19 @@ fn generate(
                 candidate.revision.title,
                 candidate.revision.summary,
                 candidate.revision.delta_summary,
-                candidate.revision.source_count.max(1),
-                reason_for(section, candidate.revision.source_count),
-                candidate.rank.is_unique_find as i32,
+                source_count,
+                candidate
+                    .semantic_reason
+                    .clone()
+                    .unwrap_or_else(|| reason_for(section, source_count)),
+                (source_count == 1) as i32,
             ],
         )?;
     }
     for (candidate, members) in &selected_with_members {
+        for (member_story_id, revision_number) in &candidate.constituents {
+            transaction.execute("INSERT INTO edition_item_story_revisions (edition_id, item_story_id, member_story_id, revision_number) VALUES (?1, ?2, ?3, ?4)", params![id, candidate.rank.story_id, member_story_id, revision_number])?;
+        }
         for (snapshot_order, member) in members.iter().enumerate() {
             transaction.execute(
                 "INSERT INTO edition_item_articles (
@@ -301,7 +509,7 @@ fn generate(
             )?;
         }
     }
-    transaction.commit()
+    Ok(())
 }
 
 fn select_candidates(candidates: &[Candidate], limit: usize) -> Vec<&Candidate> {
@@ -687,6 +895,236 @@ mod tests {
         .expect("revision");
     }
 
+    #[test]
+    fn semantic_json_matches_native_fields_and_limits() {
+        let conn = setup();
+        let mut candidates =
+            collect_candidates(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        candidates[0].revision.title = "界".repeat(300);
+        candidates[0].revision.summary = "é".repeat(300);
+        let value: serde_json::Value =
+            serde_json::from_str(&semantic_listing(&candidates)).unwrap();
+        let first = &value[0];
+        assert_eq!(first.as_object().unwrap().len(), 5);
+        assert_eq!(first["index"], 0);
+        assert_eq!(first["title"].as_str().unwrap().chars().count(), 240);
+        assert_eq!(first["excerpt"].as_str().unwrap().chars().count(), 240);
+        assert_eq!(
+            first["timestamp"].as_f64(),
+            Some(candidates[0].timestamp as f64)
+        );
+        assert_eq!(first["baseScore"].as_f64(), Some(candidates[0].rank.score));
+    }
+
+    #[test]
+    fn semantic_source_replacement_race_discards_plan() {
+        let conn = setup_empty();
+        add_story(&conn, "first", 1, false, GENERATED_AT - 20);
+        add_story(&conn, "second", 1, false, GENERATED_AT - 10);
+        let candidates = collect_candidates(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        // Same feed, count, rank and frozen revision; only the live source changes.
+        conn.execute("UPDATE articles SET title = 'Replacement source report', url = 'https://source1.example/replacement' WHERE id = 'second-article-1'", []).unwrap();
+        let groups = super::super::semantic_edition::parse(
+            r#"{"groups":[{"members":[0,1],"importance":5,"confidence":1,"reason":"same event"}]}"#,
+            2,
+        );
+        let result = finish_semantic(
+            &conn,
+            DAY_START,
+            DAY_END,
+            GENERATED_AT,
+            5,
+            &candidate_fingerprint(&candidates),
+            groups,
+        )
+        .unwrap();
+        assert_eq!(result.items.len(), 2);
+        assert!(result
+            .items
+            .iter()
+            .flat_map(|item| &item.member_articles)
+            .any(|source| source.title == "Replacement source report"));
+    }
+
+    #[test]
+    fn semantic_groups_freeze_all_references_and_consume_every_constituent() {
+        let conn = setup_empty();
+        add_story(&conn, "first", 2, false, GENERATED_AT - 20);
+        add_story(&conn, "second", 1, false, GENERATED_AT - 10);
+        let candidates = collect_candidates(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        let groups = super::super::semantic_edition::parse(
+            r#"{"groups":[{"members":[0,1],"importance":5,"confidence":0.95,"reason":"Reports describe the same event"}]}"#,
+            2,
+        );
+        let grouped = finish_semantic(
+            &conn,
+            DAY_START,
+            DAY_END,
+            GENERATED_AT,
+            5,
+            &candidate_fingerprint(&candidates),
+            groups,
+        )
+        .unwrap();
+        assert_eq!(grouped.items.len(), 1);
+        assert_eq!(grouped.items[0].member_article_ids.len(), 3);
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM edition_item_story_revisions",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            2
+        );
+        let frozen = serde_json::to_string(&grouped).unwrap();
+        assert_eq!(
+            serde_json::to_string(
+                &get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT + 1, 5).unwrap()
+            )
+            .unwrap(),
+            frozen
+        );
+        let anchor = &grouped.items[0].snapshot.story_id;
+        set_item_consumed(&conn, &grouped.edition.id, anchor, true, GENERATED_AT + 1).unwrap();
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM articles WHERE is_read = 1",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            3
+        );
+        conn.execute("UPDATE stories SET last_activity_at = ?1", [DAY_END + 10])
+            .unwrap();
+        assert!(
+            collect_candidates(&conn, DAY_END, DAY_END + 86400, DAY_END + 100, 5)
+                .unwrap()
+                .is_empty()
+        );
+        let mut revision = queries::get_latest_story_revision(&conn, "second")
+            .unwrap()
+            .unwrap();
+        revision.revision_number += 1;
+        revision.is_material_change = true;
+        revision.content_fingerprint = Some("material-change".into());
+        queries::insert_story_revision(&conn, &revision).unwrap();
+        let next = collect_candidates(&conn, DAY_END, DAY_END + 86400, DAY_END + 100, 5).unwrap();
+        assert_eq!(next.len(), 1);
+        assert_eq!(next[0].rank.story_id, "second");
+        assert_eq!(
+            load(&conn, &grouped.edition.id).unwrap().items[0]
+                .member_article_ids
+                .len(),
+            3
+        );
+    }
+
+    #[test]
+    fn semantic_revision_race_falls_back_and_invalid_groups_omit_nothing() {
+        let conn = setup_empty();
+        add_story(&conn, "first", 1, false, GENERATED_AT - 20);
+        add_story(&conn, "second", 1, false, GENERATED_AT - 10);
+        let candidates = collect_candidates(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        let mut revision = queries::get_latest_story_revision(&conn, "first")
+            .unwrap()
+            .unwrap();
+        revision.revision_number += 1;
+        revision.is_material_change = true;
+        queries::insert_story_revision(&conn, &revision).unwrap();
+        let groups = super::super::semantic_edition::parse(
+            r#"{"groups":[{"members":[0,1],"importance":5,"confidence":1,"reason":"same"}]}"#,
+            2,
+        );
+        let result = finish_semantic(
+            &conn,
+            DAY_START,
+            DAY_END,
+            GENERATED_AT,
+            5,
+            &candidate_fingerprint(&candidates),
+            groups,
+        )
+        .unwrap();
+        assert_eq!(result.items.len(), 2);
+        assert_eq!(
+            result
+                .items
+                .iter()
+                .map(|item| item.member_article_ids.len())
+                .sum::<usize>(),
+            2
+        );
+        conn.execute("DELETE FROM edition_item_story_revisions", [])
+            .unwrap();
+        migrations::run_migrations(&conn).unwrap();
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM edition_item_story_revisions",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            2
+        );
+    }
+
+    #[test]
+    fn rejected_semantic_output_preserves_deterministic_snapshot() {
+        let conn = setup();
+        let baseline_conn = setup();
+        let candidates = collect_candidates(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        let rejected = super::super::semantic_edition::parse(
+            r#"{"groups":[{"members":[0,999],"importance":5,"confidence":1,"reason":"invalid handle"}]}"#,
+            candidates.len(),
+        );
+        let result = finish_semantic(
+            &conn,
+            DAY_START,
+            DAY_END,
+            GENERATED_AT,
+            5,
+            &candidate_fingerprint(&candidates),
+            rejected,
+        )
+        .unwrap();
+        let baseline =
+            get_or_generate(&baseline_conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        assert_eq!(
+            serde_json::to_string(&result).unwrap(),
+            serde_json::to_string(&baseline).unwrap()
+        );
+    }
+
+    #[test]
+    fn semantic_importance_overrides_category_quota_without_dropping_omissions() {
+        let conn = setup();
+        let candidates = collect_candidates(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        let low = candidates
+            .iter()
+            .position(|candidate| candidate.rank.story_id == "top-d")
+            .unwrap();
+        let groups = super::super::semantic_edition::parse(
+            &format!(
+                r#"{{"groups":[{{"members":[{low}],"importance":5,"confidence":1,"reason":"Major impact"}}]}}"#
+            ),
+            candidates.len(),
+        );
+        let result = finish_semantic(
+            &conn,
+            DAY_START,
+            DAY_END,
+            GENERATED_AT,
+            5,
+            &candidate_fingerprint(&candidates),
+            groups,
+        )
+        .unwrap();
+        assert_eq!(result.items.len(), 5);
+        assert_eq!(result.items[0].snapshot.story_id, "top-d");
+    }
+
     fn raw_articles(conn: &Connection) -> Vec<String> {
         queries::get_articles(
             conn,
@@ -713,31 +1151,59 @@ mod tests {
         let conn = setup_empty();
         let ingest = |id: &str, title: &str, at: i64| {
             let article = Article {
-                id: id.into(), feed_id: "feed-1".into(), title: title.into(),
-                url: Some(format!("https://example.com/{id}")), author: None,
+                id: id.into(),
+                feed_id: "feed-1".into(),
+                title: title.into(),
+                url: Some(format!("https://example.com/{id}")),
+                author: None,
                 content_html: None,
                 content_text: Some("The product starts shipping this month in cities.".into()),
-                published_at: Some(at), fetched_at: at, is_read: false, is_starred: false,
-                feedly_entry_id: None, comments_url: None,
+                published_at: Some(at),
+                fetched_at: at,
+                is_read: false,
+                is_starred: false,
+                feedly_entry_id: None,
+                comments_url: None,
             };
             queries::insert_article(&conn, &article).unwrap();
             story_clustering::process_article(&conn, &article).unwrap()
         };
         let title = "Acme launches solar battery for homes";
         let original = ingest("original", title, DAY_START - 40_000);
-        let first = get_or_generate(&conn, DAY_START - 86_400, DAY_START, DAY_START - 1, 5).unwrap();
-        assert!(first.items.iter().any(|item| item.snapshot.story_id == original.story_id));
+        let first =
+            get_or_generate(&conn, DAY_START - 86_400, DAY_START, DAY_START - 1, 5).unwrap();
+        assert!(first
+            .items
+            .iter()
+            .any(|item| item.snapshot.story_id == original.story_id));
         let duplicate = ingest("copy", title, DAY_START + 100);
         assert_eq!(duplicate.story_id, original.story_id);
         assert_eq!(duplicate.membership_type, StoryMembershipType::Duplicate);
         let unconsumed = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
-        assert!(unconsumed.items.iter().any(|item| item.snapshot.story_id == original.story_id));
-        let consumed = set_item_consumed(&conn, &first.edition.id, &original.story_id, true, GENERATED_AT).unwrap();
+        assert!(unconsumed
+            .items
+            .iter()
+            .any(|item| item.snapshot.story_id == original.story_id));
+        let consumed = set_item_consumed(
+            &conn,
+            &first.edition.id,
+            &original.story_id,
+            true,
+            GENERATED_AT,
+        )
+        .unwrap();
         let second = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 10).unwrap();
-        assert!(!second.items.iter().any(|item| item.snapshot.story_id == original.story_id));
+        assert!(!second
+            .items
+            .iter()
+            .any(|item| item.snapshot.story_id == original.story_id));
         let preserved = load(&conn, &first.edition.id).unwrap();
         assert_eq!(preserved.items.len(), consumed.items.len());
-        let original_item = preserved.items.iter().find(|item| item.snapshot.story_id == original.story_id).unwrap();
+        let original_item = preserved
+            .items
+            .iter()
+            .find(|item| item.snapshot.story_id == original.story_id)
+            .unwrap();
         assert!(original_item.snapshot.is_consumed);
         assert_eq!(original_item.member_article_ids, vec!["original"]);
 
@@ -747,13 +1213,29 @@ mod tests {
         assert_eq!(update.membership_type, StoryMembershipType::Update);
         ingest("update-copy", title, DAY_START + 201);
         let fresh = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 20).unwrap();
-        assert!(fresh.items.iter().any(|item| item.snapshot.story_id == original.story_id));
+        assert!(fresh
+            .items
+            .iter()
+            .any(|item| item.snapshot.story_id == original.story_id));
         let frozen = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 10).unwrap();
-        assert!(frozen.items.iter().any(|item| item.snapshot.story_id == original.story_id));
-        set_item_consumed(&conn, &fresh.edition.id, &original.story_id, true, GENERATED_AT).unwrap();
+        assert!(frozen
+            .items
+            .iter()
+            .any(|item| item.snapshot.story_id == original.story_id));
+        set_item_consumed(
+            &conn,
+            &fresh.edition.id,
+            &original.story_id,
+            true,
+            GENERATED_AT,
+        )
+        .unwrap();
         ingest("third-day-copy", title, DAY_END + 100);
         let third = get_or_generate(&conn, DAY_END, DAY_END + 86_400, DAY_END + 101, 5).unwrap();
-        assert!(!third.items.iter().any(|item| item.snapshot.story_id == original.story_id));
+        assert!(!third
+            .items
+            .iter()
+            .any(|item| item.snapshot.story_id == original.story_id));
     }
 
     #[test]
@@ -779,8 +1261,8 @@ mod tests {
         assert!(sections.contains(SECTION_WIDELY_COVERED));
         // The page runs in order of importance. Section is metadata on each
         // item; it no longer decides where the item sits.
-        let mut ranked =
-            story_clustering::rank_stories(&conn, GENERATED_AT, MAX_RANK_CANDIDATES).expect("ranked");
+        let mut ranked = story_clustering::rank_stories(&conn, GENERATED_AT, MAX_RANK_CANDIDATES)
+            .expect("ranked");
         ranked.sort_by(|left, right| {
             right
                 .score
@@ -859,8 +1341,8 @@ mod tests {
                 fetched_at: GENERATED_AT,
                 is_read: false,
                 is_starred: false,
-                    feedly_entry_id: None,
-                    comments_url: None,
+                feedly_entry_id: None,
+                comments_url: None,
             },
         )
         .expect("late article");

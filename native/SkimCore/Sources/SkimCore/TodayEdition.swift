@@ -158,9 +158,12 @@ struct TodayEditionCandidate: Sendable {
     var ranking: StoryRankingCandidate
     var revision: StoryRevision
     var sourceArticles: [TodayEditionCandidateSource]
+    var memberRevisions: [TodayStoryRevisionReference] = []
+    var semanticScore: Double? = nil
+    var semanticReason: String? = nil
 }
 
-struct TodayEditionCandidateSource: Sendable {
+struct TodayEditionCandidateSource: Sendable, Equatable {
     var article: Article
     var membership: StoryArticleMembership
 }
@@ -168,6 +171,7 @@ struct TodayEditionCandidateSource: Sendable {
 struct GeneratedTodayEditionItem: Sendable {
     var item: EditionItem
     var sourceArticles: [TodayEditionSourceArticle]
+    var memberRevisions: [TodayStoryRevisionReference] = []
 }
 
 enum TodayEditionBuilder {
@@ -187,7 +191,8 @@ enum TodayEditionBuilder {
         editionID: String,
         candidates: [TodayEditionCandidate],
         storyLimit: Int,
-        generatedAt: Date
+        generatedAt: Date,
+        semantic: Bool = false
     ) -> [GeneratedTodayEditionItem] {
         guard storyLimit > 0, !candidates.isEmpty else { return [] }
         let clusterer = StoryClusterer()
@@ -202,9 +207,10 @@ enum TodayEditionBuilder {
                     maximumStoriesPerRepresentativeFeed: 1
                 )
             )
-            guard let rankedStory = (ranking.topStories + ranking.uniqueFinds).first else {
+            guard var rankedStory = (ranking.topStories + ranking.uniqueFinds).first else {
                 return nil
             }
+            if let score = candidate.semanticScore { rankedStory.score = score }
             return (
                 rankedStory,
                 candidate,
@@ -221,7 +227,11 @@ enum TodayEditionBuilder {
         let reservationOrder: [EditionSectionRole] = [
             .updates, .widelyCovered, .uniqueFinds, .topStories
         ]
-        for role in reservationOrder {
+        if semantic {
+            selected = Array(choices.prefix(storyLimit))
+            selectedIDs = Set(selected.map { $0.0.storyID })
+        }
+        for role in reservationOrder where !semantic {
             guard selected.count < storyLimit,
                   let choice = choices.first(where: { $0.2 == role })
             else { continue }
@@ -234,7 +244,7 @@ enum TodayEditionBuilder {
         for choice in selected {
             feedCounts[choice.1.ranking.representativeFeedID, default: 0] += 1
         }
-        for choice in choices {
+        for choice in choices where !semantic {
             guard selected.count < storyLimit else { break }
             if choice.2 == .uniqueFinds,
                selected.filter({ $0.2 == .uniqueFinds }).count >= 2
@@ -249,7 +259,7 @@ enum TodayEditionBuilder {
             }
         }
         // Relax diversity only when needed to avoid a needlessly short edition.
-        for choice in choices {
+        for choice in choices where !semantic {
             guard selected.count < storyLimit else { break }
             if choice.2 == .uniqueFinds,
                selected.filter({ $0.2 == .uniqueFinds }).count >= 2
@@ -293,8 +303,8 @@ enum TodayEditionBuilder {
                     snapshotTitle: candidate.revision.title,
                     snapshotSummary: candidate.revision.summary,
                     snapshotDeltaSummary: candidate.revision.deltaSummary,
-                    snapshotSourceCount: candidate.revision.sourceCount,
-                    snapshotReason: reason(
+                    snapshotSourceCount: candidate.memberRevisions.isEmpty ? candidate.revision.sourceCount : max(1, candidate.ranking.distinctFeedCount),
+                    snapshotReason: candidate.semanticReason ?? reason(
                         for: role,
                         sourceCount: candidate.revision.sourceCount
                     ),
@@ -314,7 +324,10 @@ enum TodayEditionBuilder {
                         isRepresentative: source.article.id == representativeID,
                         liveArticle: source.article
                     )
-                }
+                },
+                memberRevisions: candidate.memberRevisions.isEmpty
+                    ? [TodayStoryRevisionReference(storyID: candidate.ranking.story.id, revisionNumber: candidate.revision.revisionNumber)]
+                    : candidate.memberRevisions
             )
         }
     }

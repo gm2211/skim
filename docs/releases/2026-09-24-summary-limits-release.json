@@ -44,7 +44,7 @@
     "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/ModelChatTemplate.swift": "7567bab0ddb29d4df2cb5113960dcd65bf0360ed0ca88acaab2e8bccdef51354",
     "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalChatMessages.swift": "4d5c8319b4a91942e9e3b7b0de8f2a815acd49cafda1b3b1b8c1fab763329664"
   },
-  "verified_at": "2026-09-24T20:39:49.238945+00:00",
+  "verified_at": "2026-09-24T20:40:38.660429+00:00",
   "source_commit": "7ed3d4ae75b432447e32dab2bec7b96fcf887ad1",
   "tests": {
     "rust_library": 162,
@@ -76,7 +76,9 @@
   "acceptance_limit": "Signed desktop parent still times out before main in _libsecinit_appsandbox -> _xpc_pipe_routine -> mach_msg2_trap; native app inventory again reports a locked Mac. Actual desktop commands prove shared bounded requests; isolated simulator controls prove their rendered states and endpoint taps. Factual reliability, installed interaction and complete domain sharing remain open.",
   "testflight": {
     "build_id": "49412251-ee29-46e9-b24f-cd867701c9c3",
-    "processing": "PROCESSING",
-    "audience": "INTERNAL_ONLY"
+    "processing": "VALID",
+    "audience": "INTERNAL_ONLY",
+    "internal_build_state": "IN_BETA_TESTING",
+    "auto_notify_enabled": true
   }
 }

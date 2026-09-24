@@ -13,6 +13,8 @@
 
 use crate::db::models::Article;
 use crate::db::{queries, Database};
+use futures_util::{stream, StreamExt};
+use std::{future::Future, time::Duration};
 
 /// Below this, a feed body is a teaser rather than an article, and it is worth
 /// going to the network for the real thing.
@@ -69,17 +71,92 @@ pub fn local_article_text(db: &Database, article: &Article) -> String {
 /// The fullest text available for `article`, fetching the linked page when
 /// neither the reader cache nor the feed has enough to work with.
 pub async fn resolve_article_text(db: &Database, article: &Article) -> String {
-    let local = local_article_text(db, article);
+    resolve_local_text(
+        local_article_text(db, article),
+        article.url.clone(),
+        |url| async move { super::ai::fetch_article_text(&url).await },
+    )
+    .await
+}
+
+async fn resolve_local_text<F, Fut>(local: String, url: Option<String>, fetch: F) -> String
+where
+    F: FnOnce(String) -> Fut,
+    Fut: Future<Output = Result<String, String>>,
+{
     if visible_len(&local) >= THIN_BODY_CHARS {
         return local;
     }
-    let Some(url) = article.url.as_deref() else {
+    let Some(url) = url else {
         return local;
     };
-    match super::ai::fetch_article_text(url).await {
+    match fetch(url).await {
         Ok(fetched) if visible_len(&fetched) > visible_len(&local) => fetched,
         _ => local,
     }
+}
+
+/// Resolve only the retrieved sources, preserving their input order/citation IDs.
+/// Four concurrent requests, two seconds per source, five seconds total; any
+/// unavailable or unfinished source keeps its fullest cached/feed body.
+pub async fn resolve_selected_article_texts(db: &Database, articles: &[Article]) -> Vec<String> {
+    resolve_selected_with(
+        db,
+        articles,
+        4,
+        Duration::from_secs(2),
+        Duration::from_secs(5),
+        |url| async move { super::ai::fetch_article_text(&url).await },
+    )
+    .await
+}
+
+async fn resolve_selected_with<F, Fut>(
+    db: &Database,
+    articles: &[Article],
+    concurrency: usize,
+    source_timeout: Duration,
+    total_timeout: Duration,
+    fetch: F,
+) -> Vec<String>
+where
+    F: Fn(String) -> Fut,
+    Fut: Future<Output = Result<String, String>>,
+{
+    let mut texts: Vec<String> = articles
+        .iter()
+        .map(|article| local_article_text(db, article))
+        .collect();
+    let deadline = tokio::time::Instant::now() + total_timeout;
+    let fetch = &fetch;
+    let work: Vec<_> = articles
+        .iter()
+        .zip(&texts)
+        .enumerate()
+        .filter(|(_, (article, local))| {
+            article.url.is_some() && visible_len(local) < THIN_BODY_CHARS
+        })
+        .map(|(index, (article, local))| (index, article.url.clone(), local.clone()))
+        .collect();
+    let mut pending = stream::iter(work)
+        .map(|(index, url, local)| async move {
+            if tokio::time::Instant::now() >= deadline {
+                return (index, local);
+            }
+            let source_deadline = (tokio::time::Instant::now() + source_timeout).min(deadline);
+            let resolved = tokio::time::timeout_at(
+                source_deadline,
+                resolve_local_text(local.clone(), url, fetch),
+            )
+            .await
+            .unwrap_or(local);
+            (index, resolved)
+        })
+        .buffer_unordered(concurrency.max(1));
+    while let Ok(Some((index, text))) = tokio::time::timeout_at(deadline, pending.next()).await {
+        texts[index] = text;
+    }
+    texts
 }
 
 #[cfg(test)]
@@ -122,6 +199,121 @@ mod tests {
         db
     }
 
+    #[tokio::test]
+    async fn selected_sources_use_full_text_without_reordering_slow_or_failed_sources() {
+        let db = database();
+        let mut sources = Vec::new();
+        for name in ["slow", "battery", "failed", "other"] {
+            let mut source = article(Some(name), None);
+            source.id = name.into();
+            source.url = Some(name.into());
+            sources.push(source);
+        }
+        let started = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let active = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let maximum = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        struct Active(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+        impl Drop for Active {
+            fn drop(&mut self) {
+                self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        let result = resolve_selected_with(
+            &db,
+            &sources,
+            2,
+            Duration::from_millis(40),
+            Duration::from_millis(100),
+            |url| {
+                let started = started.clone();
+                let active = active.clone();
+                let maximum = maximum.clone();
+                async move {
+                    use std::sync::atomic::Ordering::SeqCst;
+                    started.fetch_add(1, SeqCst);
+                    maximum.fetch_max(active.fetch_add(1, SeqCst) + 1, SeqCst);
+                    let _guard = Active(active);
+                    match url.as_str() {
+                        "slow" => std::future::pending().await,
+                        "failed" => Err("offline".into()),
+                        "battery" => Ok("The laptop lasted nine hours in the battery test.".into()),
+                        _ => Ok("Other complete article details.".into()),
+                    }
+                }
+            },
+        )
+        .await;
+        assert_eq!(
+            result,
+            vec![
+                "slow",
+                "The laptop lasted nine hours in the battery test.",
+                "failed",
+                "Other complete article details."
+            ]
+        );
+        assert_eq!(started.load(std::sync::atomic::Ordering::SeqCst), 4);
+        assert!(maximum.load(std::sync::atomic::Ordering::SeqCst) <= 2);
+        assert_eq!(active.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn selected_sources_bound_total_latency_and_cancel_unfinished_work() {
+        let db = database();
+        let mut source = article(Some("offline teaser"), None);
+        source.url = Some("slow".into());
+        let sources = vec![source; 15];
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let start = std::time::Instant::now();
+        let result = resolve_selected_with(
+            &db,
+            &sources,
+            4,
+            Duration::from_secs(1),
+            Duration::from_millis(20),
+            |_| async {
+                calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                std::future::pending().await
+            },
+        )
+        .await;
+        assert_eq!(result, vec!["offline teaser"; 15]);
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 4);
+        assert!(start.elapsed() < Duration::from_millis(500));
+    }
+
+    #[tokio::test]
+    async fn selected_cached_or_complete_feed_text_needs_no_network() {
+        let db = database();
+        let cached = format!(
+            "<p>The battery lasted nine hours. {}</p>",
+            "Useful cached text. ".repeat(30)
+        );
+        queries::put_reader_cache(&db.conn.lock().unwrap(), "article", None, &cached, &cached)
+            .unwrap();
+        let mut source = article(Some("teaser"), None);
+        source.url = Some("cached".into());
+        let mut feed = article(Some(&"Full feed body. ".repeat(50)), None);
+        feed.id = "full-feed".into();
+        feed.url = Some("full".into());
+        let calls = std::sync::atomic::AtomicUsize::new(0);
+        let result = resolve_selected_with(
+            &db,
+            &[source, feed.clone()],
+            4,
+            Duration::from_secs(1),
+            Duration::from_secs(1),
+            |_| async {
+                calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err("network should not be needed".into())
+            },
+        )
+        .await;
+        assert!(result[0].contains("nine hours"));
+        assert_eq!(result[1], feed.content_text.unwrap());
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
     #[test]
     fn feed_body_prefers_the_longer_representation() {
         assert_eq!(feed_body_text(&article(Some("short"), None)), "short");
@@ -157,6 +349,9 @@ mod tests {
     #[test]
     fn an_article_with_nothing_cached_falls_back_to_the_feed() {
         let db = database();
-        assert_eq!(local_article_text(&db, &article(Some("blurb"), None)), "blurb");
+        assert_eq!(
+            local_article_text(&db, &article(Some("blurb"), None)),
+            "blurb"
+        );
     }
 }

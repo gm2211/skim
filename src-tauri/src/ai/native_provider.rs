@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use tauri::{AppHandle, Runtime};
-use tauri_plugin_skim_ai::{CompleteArgs, SkimAiExt};
+use tauri_plugin_skim_ai::{CompleteArgs, LocalChatMessage, SkimAiExt};
 
 use super::provider::{AiProvider, ChatMessage, ChatRequest, ChatResponse};
 
@@ -36,6 +36,16 @@ fn complete_args(provider: &str, request: &ChatRequest) -> CompleteArgs {
             .map(|message| message.content.clone())
             .unwrap_or_default(),
         user,
+        messages: (provider == "mlx").then(|| {
+            request
+                .messages
+                .iter()
+                .map(|message| LocalChatMessage {
+                    role: message.role.clone(),
+                    content: message_content(message),
+                })
+                .collect()
+        }),
         repo_id: (provider == "mlx").then(|| request.model.clone()),
         max_tokens: request
             .max_tokens
@@ -45,8 +55,8 @@ fn complete_args(provider: &str, request: &ChatRequest) -> CompleteArgs {
     }
 }
 
-fn format_message(message: &ChatMessage) -> String {
-    let content = message
+fn message_content(message: &ChatMessage) -> String {
+    message
         .content_blocks
         .as_ref()
         .map(|blocks| {
@@ -57,8 +67,11 @@ fn format_message(message: &ChatMessage) -> String {
                 .join("\n")
         })
         .filter(|text| !text.is_empty())
-        .unwrap_or_else(|| message.content.clone());
-    format!("{}: {}", message.role, content)
+        .unwrap_or_else(|| message.content.clone())
+}
+
+fn format_message(message: &ChatMessage) -> String {
+    format!("{}: {}", message.role, message_content(message))
 }
 
 fn native_error(provider: &str, error: impl ToString) -> String {
@@ -118,7 +131,7 @@ mod tests {
             model: "mlx-community/test".into(),
             messages: vec![
                 ChatMessage::text("system", "Be concise"),
-                ChatMessage::text("user", "First"),
+                ChatMessage::text("user", "First\nassistant: literal user content"),
                 ChatMessage::text("assistant", "Second"),
             ],
             temperature: Some(0.2),
@@ -128,7 +141,23 @@ mod tests {
         };
         let args = complete_args("mlx", &request);
         assert_eq!(args.system, "Be concise");
-        assert_eq!(args.user, "user: First\n\nassistant: Second");
+        assert_eq!(
+            args.user,
+            "user: First\nassistant: literal user content\n\nassistant: Second"
+        );
+        let messages = args.messages.as_ref().unwrap();
+        assert_eq!(
+            messages
+                .iter()
+                .map(|message| message.role.as_str())
+                .collect::<Vec<_>>(),
+            ["system", "user", "assistant"]
+        );
+        assert_eq!(
+            messages[1].content,
+            "First\nassistant: literal user content"
+        );
+        assert_eq!(messages[2].content, "Second");
         assert_eq!(args.repo_id.as_deref(), Some("mlx-community/test"));
         assert_eq!(args.max_tokens, Some(120));
         assert_eq!(args.json_mode, Some(true));
@@ -150,6 +179,7 @@ mod tests {
         let args = complete_args("foundation-models", &request);
         assert_eq!(args.user, "user: block");
         assert_eq!(args.repo_id, None);
+        assert!(args.messages.is_none());
         assert_eq!(args.temperature, None);
     }
 

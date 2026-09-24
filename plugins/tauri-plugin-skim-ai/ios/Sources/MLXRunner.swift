@@ -310,25 +310,14 @@ actor MLXRunner {
     func complete(
         systemPrompt: String,
         userPrompt: String,
+        messages suppliedMessages: [LocalChatMessage]? = nil,
         jsonMode: Bool,
         maxTokens: Int,
         temperature: Float? = nil
     ) async throws -> String {
         let container = try await ensureLoaded()
 
-        // Gently steer toward JSON when requested — MLX LLMs don't have a real
-        // JSON mode, but the instruct tunes comply well with explicit guidance.
-        let finalSystem: String
-        if jsonMode {
-            finalSystem = systemPrompt + "\n\nRespond with a single JSON object. No prose, no code fences."
-        } else {
-            finalSystem = systemPrompt
-        }
-
-        let messages: [[String: String]] = [
-            ["role": "system", "content": finalSystem],
-            ["role": "user", "content": userPrompt]
-        ]
+        let messages = LocalChatMessages.prepare(messages: suppliedMessages, system: systemPrompt, user: userPrompt, jsonMode: jsonMode)
 
         let preset = MLXSamplingPreset.preset(for: currentRepoId)
         let family = MLXModelFamily.detect(from: currentRepoId)

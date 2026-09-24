@@ -1,3 +1,4 @@
+import SkimInferencePolicy
 import SwiftRs
 import Tauri
 import UIKit
@@ -12,6 +13,7 @@ class RepoIdArgs: Decodable {
 class CompleteArgs: Decodable {
     let system: String
     let user: String
+    let messages: [LocalChatMessage]?
     let repoId: String?
     let maxTokens: Int?
     let temperature: Float?
@@ -116,6 +118,7 @@ class SkimAIPlugin: Plugin {
                 let text = try await MLXRunner.shared.complete(
                     systemPrompt: args.system,
                     userPrompt: args.user,
+                    messages: args.messages,
                     jsonMode: args.jsonMode ?? false,
                     maxTokens: args.maxTokens ?? 512,
                     temperature: args.temperature

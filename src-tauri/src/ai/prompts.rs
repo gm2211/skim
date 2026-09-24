@@ -53,7 +53,10 @@ fn length_params(settings: &AiSettings) -> (String, String, i64, i64) {
     if settings.summary_length.as_deref() == Some("custom") {
         if let Some(words) = settings.summary_custom_word_count {
             let bullets = std::cmp::max(2, words / 30);
-            let max_tokens = (words as i64) * 2; // ~2 tokens per word
+            // The requested word count covers the prose, not the JSON keys,
+            // punctuation and notes. Small custom summaries otherwise exhaust
+            // their budget before the structured response can close.
+            let max_tokens = (words as i64) * 2 + 128;
             return (
                 format!("{}-{}", bullets, bullets + 2),
                 format!("approximately {} words", words),

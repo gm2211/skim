@@ -1,0 +1,191 @@
+{
+  "desktop_version": "0.1.35",
+  "ios_version": "0.1.13",
+  "ios_build": "72",
+  "desktop_sha256": "fe9a16e4110f71fba2ae0af5e1eba8a54b2a382c64e75bd4e29b4a7209df8e4c",
+  "bundled_helper_sha256": "ae15ad75b5339d672d79755ade15533d0955a8a22613ce66d04f32943089b650",
+  "compiled_helper_sha256": "c6a11ae2cc910cdbdc000b5aa3e7922a3d8361675ec370d3ef1b636724d0080c",
+  "helper_text_matches_compiled": true,
+  "ios_sha256": "853fbc079af3c9add55377f53a9521652b719502034f5156f32b8d65b1720a37",
+  "ios_dsym_uuid": "4703BCF7-8B4D-36F8-8938-ACD13364D0B2",
+  "desktop_shared_c_symbols": [
+    "_skim_chat_evidence_spans",
+    "_skim_chat_rank",
+    "_skim_semantic_evidence_characters",
+    "_skim_semantic_group_valid",
+    "_skim_semantic_max_candidates",
+    "_skim_semantic_max_pairs",
+    "_skim_semantic_pair_batch_length",
+    "_skim_semantic_pair_output_tokens",
+    "_skim_semantic_pair_prompt",
+    "_skim_semantic_pair_verdict",
+    "_skim_semantic_partition",
+    "_skim_semantic_prompt",
+    "_skim_semantic_rating_prompt",
+    "_skim_semantic_rating_valid",
+    "_skim_semantic_score",
+    "_skim_story_classify",
+    "_skim_story_confidence",
+    "_skim_story_default_thresholds",
+    "_skim_story_identity_hash",
+    "_skim_story_is_unique",
+    "_skim_story_score",
+    "_skim_summary_custom_words_valid",
+    "_skim_summary_max_words",
+    "_skim_summary_min_words",
+    "_skim_summary_plan",
+    "_skim_summary_style_prompt",
+    "_skim_today_lede_evidence_version",
+    "_skim_today_lede_excerpt_valid",
+    "_skim_today_lede_max_articles",
+    "_skim_today_lede_prompt",
+    "_skim_today_lede_retry_prompt",
+    "_skim_today_lede_text_characters"
+  ],
+  "ios_shared_c_symbols": [
+    "_skim_chat_evidence_spans",
+    "_skim_chat_rank",
+    "_skim_semantic_evidence_characters",
+    "_skim_semantic_group_valid",
+    "_skim_semantic_max_candidates",
+    "_skim_semantic_pair_batch_length",
+    "_skim_semantic_pair_output_tokens",
+    "_skim_semantic_pair_prompt",
+    "_skim_semantic_pair_verdict",
+    "_skim_semantic_partition",
+    "_skim_semantic_prompt",
+    "_skim_semantic_rating_prompt",
+    "_skim_semantic_rating_valid",
+    "_skim_semantic_score",
+    "_skim_story_classify",
+    "_skim_story_confidence",
+    "_skim_story_default_thresholds",
+    "_skim_story_identity_hash",
+    "_skim_story_is_unique",
+    "_skim_story_score",
+    "_skim_summary_custom_words_valid",
+    "_skim_summary_max_words",
+    "_skim_summary_min_words",
+    "_skim_summary_plan",
+    "_skim_summary_style_prompt",
+    "_skim_today_lede_evidence_version",
+    "_skim_today_lede_excerpt_valid",
+    "_skim_today_lede_max_articles",
+    "_skim_today_lede_prompt",
+    "_skim_today_lede_retry_prompt",
+    "_skim_today_lede_text_characters"
+  ],
+  "ios_inlined_max_pairs_evidence": [
+    "0000000100271694\tcmp\tx1, x0",
+    "0000000100271698\tcset\tw0, lo",
+    "000000010027169c\tret"
+  ],
+  "desktop_shared_swift_symbol_count": 88,
+  "ios_shared_swift_symbol_count": 88,
+  "shared_source_sha256": {
+    "shared/SkimStoryPolicy/Sources/SkimStoryPolicy/SkimStoryPolicy.c": "3dd36d85477dc7a59e8c0c355fc40b33c324c264164ee4f598a8f5f13db7a83f",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalModelPolicy.swift": "159727c952106f95514507db4d0cbdb4444a536ba17448c2a19d877a0381dbb3",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/ModelChatTemplate.swift": "7567bab0ddb29d4df2cb5113960dcd65bf0360ed0ca88acaab2e8bccdef51354",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalChatMessages.swift": "4d5c8319b4a91942e9e3b7b0de8f2a815acd49cafda1b3b1b8c1fab763329664",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/FoundationChatMessages.swift": "0e2b8125558eab34815287b098b00cab40bd54fcb22925ca55ee86b2aa30c3d0"
+  },
+  "source_commit": "2c3654dcaa0f749aa8ee3a5b01f26abf5b057c76",
+  "pull_request": "https://github.com/gm2211/skim/pull/155",
+  "verified_at_utc": "2026-09-24T23:42:56.993081+00:00",
+  "installation": {
+    "installed_version": "0.1.35",
+    "installed_sha256": "fe9a16e4110f71fba2ae0af5e1eba8a54b2a382c64e75bd4e29b4a7209df8e4c",
+    "backup": "/private/tmp/skim-before-verdict72-k098ih7s/Skim.app",
+    "stopped_pre_main_pid": null,
+    "launched": false,
+    "interaction": "Mac locked; interactive acceptance pending"
+  },
+  "testflight": {
+    "id": "37734481-756b-40f1-b263-6fcea368d63c",
+    "build": "72",
+    "processing": "VALID",
+    "audience": "INTERNAL_ONLY",
+    "beta": {
+      "autoNotifyEnabled": true,
+      "internalBuildState": "IN_BETA_TESTING",
+      "externalBuildState": "NOT_APPLICABLE"
+    }
+  },
+  "checks": {
+    "passed": 550,
+    "rust": 182,
+    "rust_exact_real_model_smoke_filtered": 1,
+    "native_core": 147,
+    "native_simulator_app": 44,
+    "frontend": 156,
+    "shared_inference": 18,
+    "helper_packaging": 3,
+    "c_parser_fixtures": 28,
+    "sanitizer_malformed_cases": 200000
+  },
+  "quality_record": "2026-09-24-semantic-verdict-quality.json",
+  "limits": [
+    "General grouping/fidelity accuracy is not accepted: fresh pair and full-plan errors remain recorded.",
+    "The Mac is locked; installed0.1.35 remains unlaunched and unaccepted. Localhost Terms approval is pending.",
+    "More-than64-candidate semantic coverage and full shared domain-engine migration remain open.",
+    "TestFlight internal availability does not prove iOS device model inference or complete UI parity."
+  ],
+  "evidence": {
+    "skim-verdict-final-rust.log": {
+      "local_path": "/tmp/skim-verdict-final-rust.log",
+      "sha256": "29e6991206e016d5426ddcf3f3fb28c933ff76c7516277a13e66e4b8ed569fb4"
+    },
+    "skim-pair-verdict-core.log": {
+      "local_path": "/tmp/skim-pair-verdict-core.log",
+      "sha256": "9e140b55c717c23d0ecdea3a5087bfff8f11da04f68fe889173ab5ef99f90924"
+    },
+    "skim-pair-verdict-pipeline-app.log": {
+      "local_path": "/tmp/skim-pair-verdict-pipeline-app.log",
+      "sha256": "2fc5cfa3b46603f08a29799cbb4f71511cd05b3eb748ed0747474bd763f0c49e"
+    },
+    "skim-verdict-web-tests.log": {
+      "local_path": "/tmp/skim-verdict-web-tests.log",
+      "sha256": "62e2ae4568e7098ebdf6eaca96f7049ecf0bb7772bad5e9aa8bd57a4eb710f60"
+    },
+    "skim-verdict-inference-tests.log": {
+      "local_path": "/tmp/skim-verdict-inference-tests.log",
+      "sha256": "55d96bd6114aeccca60f9773a65714f581e3a529892351260c524e5c3a2b6cc6"
+    },
+    "skim-verdict-packaging-tests.log": {
+      "local_path": "/tmp/skim-verdict-packaging-tests.log",
+      "sha256": "7c3f3266a6304d062ee3c3c9c9a8668a290b913e2d137fce8728a52e47cc945b"
+    },
+    "skim-verdict-helper-build.log": {
+      "local_path": "/tmp/skim-verdict-helper-build.log",
+      "sha256": "8cfb2dfdec73b3923626666ea8df6c645c3e67bc83e62971cbeaf5679cc1de3f"
+    },
+    "skim-verdict-desktop-build.log": {
+      "local_path": "/tmp/skim-verdict-desktop-build.log",
+      "sha256": "a917f0622cc628c69e4f21653c844d39ae2e886e356f0602811cebba857c9688"
+    },
+    "skim-verdict-signing.log": {
+      "local_path": "/tmp/skim-verdict-signing.log",
+      "sha256": "4c229996b0d8e09043d598314a8f6e2f0b23d1d55b345ae615d5ed80c2e8274d"
+    },
+    "skim-verdict-testflight-upload.log": {
+      "local_path": "/tmp/skim-verdict-testflight-upload.log",
+      "sha256": "aeaec00a0804d7125821e9c356a8f83e55101336d2444b2db05e38d52196bea9"
+    },
+    "skim-verdict72-artifact-check.log": {
+      "local_path": "/tmp/skim-verdict72-artifact-check.log",
+      "sha256": "57235d3dd9a45ef7f3c4ce3a96c218030077e8e1565076ace23d449ce4964729"
+    },
+    "skim-verdict72-evidence.py": {
+      "local_path": "/tmp/skim-verdict72-evidence.py",
+      "sha256": "6f18acd1d5bcbde7fdd5844cf77d50c7ac563abb93a37729307dfe326d52e806"
+    },
+    "skim-verdict72-install-evidence.json": {
+      "local_path": "/tmp/skim-verdict72-install-evidence.json",
+      "sha256": "78c929c8c55e81c6a2d996e537a7dc223d99e14cbd7442e5cd78af67a07dcfbb"
+    },
+    "skim-verdict-fuzz.c": {
+      "local_path": "/tmp/skim-verdict-fuzz.c",
+      "sha256": "5e59d5bd29b5a94e2430fcc393df226d8e8a03354b954ff39e82d4df1a354c14"
+    }
+  }
+}

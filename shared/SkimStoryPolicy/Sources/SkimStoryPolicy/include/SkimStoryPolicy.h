@@ -112,6 +112,14 @@ int32_t skim_semantic_rating_valid(double importance, double confidence);
 /* Verify proposed merges before hiding reports behind a shared story card. */
 const char *skim_semantic_pair_prompt(void);
 size_t skim_semantic_max_pairs(void);
+/* Original report evidence is bounded by Unicode scalar count in both adapters. */
+size_t skim_semantic_evidence_characters(void);
+size_t skim_semantic_pair_output_tokens(void);
+/* Strict bounded JSON verdict: same=1, different=0, uncertain=2, invalid=-1.
+   Accepts an object or singleton array, JSON whitespace and literal enum values.
+   Duplicate/extra fields, escapes, embedded NULs and trailing content are invalid.
+   Report identities never come from model output. At most 4096 response bytes. */
+int32_t skim_semantic_pair_verdict(const uint8_t *text, size_t length);
 /* Per-request verification budget. A large proposal is processed in full by
    advancing offset by the returned length; zero means no pairs remain. */
 size_t skim_semantic_pair_batch_length(size_t pair_count, size_t offset);

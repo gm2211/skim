@@ -1,0 +1,880 @@
+{
+  "date": "2026-09-24",
+  "scope": "Single-pair relation verification from bounded original evidence, before unchanged complete-clique partitioning. This does not fix proposal coverage or model accuracy.",
+  "diagnosis": [
+    "The card summary omitted the named organization needed to relate an Australia intrusion report to follow-up coverage; the original stored RSS body contains it.",
+    "The old numeric pair-output schema omitted or confused report identities. Caller-owned one-pair requests remove model control over those identities."
+  ],
+  "production_contract": {
+    "evidence": "Original representative article content_text/contentText, at most 2048 Unicode scalars, stored summary fallback for absent/blank content. Preserve original whitespace. Primary proposals and ratings retain existing short inputs.",
+    "response": "Shared C parser accepts an exact relation object, optionally wrapped in one singleton array for local-helper JSON output compatibility. Only same_event permits merging; different_event and uncertain keep reports separate. Duplicate/extra keys and trailing content are rejected.",
+    "pairs_per_request": 1,
+    "output_tokens": 160,
+    "temperature": 0,
+    "total_deadline_seconds": 30,
+    "atomicity": "All pair verdicts must validate before any merged membership is published. Ratings retain their separate atomic fallback. Source evidence edits invalidate pending plans."
+  },
+  "development_history": [
+    {
+      "input": "9 previously failed/diagnostic development pairs",
+      "protocol": "Legacy numeric pair identity, one request per pair, original IDs and local IDs",
+      "result": "18/18 structurally invalid; retained, not reinterpreted as passes."
+    },
+    {
+      "input": "Old 240-character card excerpts",
+      "protocol": "Identity-free JSON or plain enum",
+      "result": "Each arm matched8/9 judgments; Australia follow-up missed due lost source evidence."
+    },
+    {
+      "input": "Uniform original stored evidence up to2048 scalars",
+      "protocol": "Identity-free JSON or plain enum",
+      "result": "JSON9/9; plain enum8/9 with false merge. Plain enum rejected."
+    }
+  ],
+  "production_payload_parity": {
+    "development_cases": 9,
+    "fresh_cases": 8,
+    "result": "For every case, actual Rust and Swift production builders emitted byte-identical payload strings, shared prompt strings and token budgets. Native device inference was not run."
+  },
+  "development_production_wire": {
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "elapsed_seconds": 4.353,
+    "structurally_valid": 9,
+    "label_matches": 9,
+    "case_count": 9,
+    "cases": [
+      {
+        "name": "development-0",
+        "expected_same_event": true,
+        "verdict": 1,
+        "structurally_valid": true,
+        "label_pass": true,
+        "seconds": 1.227,
+        "response": {
+          "ok": true,
+          "value": "{\"relation\": \"same_event\"}"
+        },
+        "request_sha256": "3c36f3a762748037bf348a8d4a2076f7b150b2073600da09aac98ebfdfe399b5"
+      },
+      {
+        "name": "development-1",
+        "expected_same_event": true,
+        "verdict": 1,
+        "structurally_valid": true,
+        "label_pass": true,
+        "seconds": 0.428,
+        "response": {
+          "ok": true,
+          "value": "{\"relation\": \"same_event\"}"
+        },
+        "request_sha256": "1e1ce2541f68b37b2a800b29e89e0fdd6909a490adb5facf7791b997d6315a8d"
+      },
+      {
+        "name": "development-2",
+        "expected_same_event": true,
+        "verdict": 1,
+        "structurally_valid": true,
+        "label_pass": true,
+        "seconds": 0.35,
+        "response": {
+          "ok": true,
+          "value": "{\"relation\": \"same_event\"}"
+        },
+        "request_sha256": "a56a213c6b7e4f846a701df0749b5c1917f6d3ea2f06bba87331b80641125e5a"
+      },
+      {
+        "name": "development-3",
+        "expected_same_event": true,
+        "verdict": 1,
+        "structurally_valid": true,
+        "label_pass": true,
+        "seconds": 0.371,
+        "response": {
+          "ok": true,
+          "value": "{\"relation\": \"same_event\"}"
+        },
+        "request_sha256": "d8d03764bf33a28d719af09b57a239a4428f679c1fa4dbda0ee716cd8b69da53"
+      },
+      {
+        "name": "development-4",
+        "expected_same_event": false,
+        "verdict": 0,
+        "structurally_valid": true,
+        "label_pass": true,
+        "seconds": 0.249,
+        "response": {
+          "ok": true,
+          "value": "{\"relation\": \"different_event\"}"
+        },
+        "request_sha256": "5c3042f6f8a977e0cbafdb9605bdfb9812f35730962abdc2769d0666387d8f00"
+      },
+      {
+        "name": "development-5",
+        "expected_same_event": false,
+        "verdict": 0,
+        "structurally_valid": true,
+        "label_pass": true,
+        "seconds": 0.391,
+        "response": {
+          "ok": true,
+          "value": "{\"relation\": \"different_event\"}"
+        },
+        "request_sha256": "46d9e5291b6c3b68a9080599c6772be79cc2e708f7b316c907dc367161e18a37"
+      },
+      {
+        "name": "development-6",
+        "expected_same_event": false,
+        "verdict": 0,
+        "structurally_valid": true,
+        "label_pass": true,
+        "seconds": 0.347,
+        "response": {
+          "ok": true,
+          "value": "{\"relation\": \"different_event\"}"
+        },
+        "request_sha256": "398defcdbd000964d12c153f34011d78de3aa22ea1e54827494d5e3e11948d90"
+      },
+      {
+        "name": "development-7",
+        "expected_same_event": false,
+        "verdict": 0,
+        "structurally_valid": true,
+        "label_pass": true,
+        "seconds": 0.348,
+        "response": {
+          "ok": true,
+          "value": "{\"relation\": \"different_event\"}"
+        },
+        "request_sha256": "e738e299dc23b1a52c7a7acd8b155a8c712053c25e3894196fd6333e651ff83c"
+      },
+      {
+        "name": "development-8",
+        "expected_same_event": false,
+        "verdict": 0,
+        "structurally_valid": true,
+        "label_pass": true,
+        "seconds": 0.448,
+        "response": {
+          "ok": true,
+          "value": "{\"relation\": \"different_event\"}"
+        },
+        "request_sha256": "7881ec85bbb2451a5c4560d87bd9e0ab77fc737b89fa5e794425aae7e98bdd37"
+      }
+    ]
+  },
+  "fresh_holdout": {
+    "frozen_at_utc": "2026-09-24T23:29:24+00:00",
+    "source_urls": [
+      {
+        "id": "pope_bbc",
+        "url": "https://www.bbc.co.uk/news/articles/cmq8j904212po?at_medium=RSS&at_campaign=rss",
+        "feed": "https://feeds.bbci.co.uk/news/world/rss.xml"
+      },
+      {
+        "id": "pope_lemonde",
+        "url": "https://www.lemonde.fr/en/france/article/2026/09/24/pope-leo-xiv-s-visit-shines-a-light-on-france-s-catholic-revival-and-its-divisions_6757907_7.html",
+        "feed": "https://www.lemonde.fr/en/international/rss_full.xml"
+      },
+      {
+        "id": "polo_cbs",
+        "url": "https://www.cbsnews.com/news/hurricane-polo-category-5-mexico-life-threatening-flooding/",
+        "feed": "https://www.cbsnews.com/latest/rss/world"
+      },
+      {
+        "id": "polo_pbs",
+        "url": "https://www.pbs.org/newshour/nation/polo-off-mexican-coast-is-among-the-strongest-storms-ever",
+        "feed": "https://www.pbs.org/newshour/feeds/rss/world"
+      },
+      {
+        "id": "garrido_sentence_1",
+        "url": "https://www.lemonde.fr/en/france/article/2026/09/23/french-court-sentences-jihadist-othman-garrido-to-30-years-in-prison_6757831_7.html",
+        "feed": "https://www.lemonde.fr/en/police-and-justice/rss_full.xml"
+      },
+      {
+        "id": "garrido_sentence_2",
+        "url": "https://www.lemonde.fr/en/france/article/2026/09/23/french-jihadist-sentenced-to-30-years-in-prison-for-involvement-in-syria-execution_6757845_7.html",
+        "feed": "https://www.lemonde.fr/en/police-and-justice/rss_full.xml"
+      },
+      {
+        "id": "garrido_trial_speech",
+        "url": "https://www.lemonde.fr/en/france/article/2026/09/20/the-surprising-deradicalization-speech-of-jihadist-othman-garrido-on-trial-for-beheadings-in-syria_6757724_7.html",
+        "feed": "https://www.lemonde.fr/en/police-and-justice/rss_full.xml"
+      },
+      {
+        "id": "poland_stabbing_nyt",
+        "url": "https://www.nytimes.com/2026/09/24/world/europe/poland-stabbing-ukrainian-attacker.html",
+        "feed": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
+      },
+      {
+        "id": "poland_stabbing_aljazeera",
+        "url": "https://www.aljazeera.com/news/2026/9/24/ukrainian-knifeman-kills-one-wounds-four-at-abbey-in-poland?traffic_source=rss",
+        "feed": "https://www.aljazeera.com/xml/rss/all.xml"
+      },
+      {
+        "id": "ontario_synagogue",
+        "url": "https://www.cbsnews.com/news/ontario-canada-synagogue-attack-officer-jeff-smith/",
+        "feed": "https://www.cbsnews.com/latest/rss/world"
+      },
+      {
+        "id": "f35_diversion",
+        "url": "https://www.cbsnews.com/news/pentagon-f-35-fighter-jet-parts/",
+        "feed": "https://www.cbsnews.com/latest/rss/world"
+      },
+      {
+        "id": "trump_xi_cbc",
+        "url": "https://www.cbc.ca/news/world/trump-xi-summit-washington-9.7357449?cmp=rss",
+        "feed": "https://www.cbc.ca/webfeed/rss/rss-world"
+      },
+      {
+        "id": "nazi_guard_cbs",
+        "url": "https://www.cbsnews.com/news/nazi-pow-camp-guard-investigation-germany-stalag/",
+        "feed": "https://www.cbsnews.com/latest/rss/world"
+      }
+    ],
+    "sample": "13 publisher reports, all URLs absent from prior108 candidate mapping;4same-event and4different-event pairs labeled independently before inference.",
+    "input_conversion": "Frozen combined title/body cap and production separate-title/body cap preserve identical content on all13reports; max combined size920scalars. These are publisher RSS strings passed through actual pair builders, not an end-to-end feed-ingestion test.",
+    "limits": [
+      "Small convenience sample from currently retrievable RSS feeds, not representative of news coverage.",
+      "Labels are independent event judgments from titles and original RSS descriptions only; no model output was consulted.",
+      "Titles and descriptions are capped for input at 2,048 Unicode scalar values combined per report; full original feed description retained separately.",
+      "Some positive cases are the same event at different update times or duplicate/syndicated publisher output. Pair notes make this explicit.",
+      "No model outputs were inspected before label freeze."
+    ],
+    "results": {
+      "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+      "elapsed_seconds": 3.214,
+      "structurally_valid": 8,
+      "label_matches": 7,
+      "case_count": 8,
+      "cases": [
+        {
+          "name": "positive_pope_visit",
+          "expected_same_event": true,
+          "verdict": 1,
+          "structurally_valid": true,
+          "label_pass": true,
+          "seconds": 1.064,
+          "response": {
+            "ok": true,
+            "value": "{\"relation\": \"same_event\"}"
+          },
+          "request_sha256": "0e81622a0f0dfe7ff43cf8655ae82f29e8fae6cccacf99e3c51aaf52ac5173dc"
+        },
+        {
+          "name": "positive_hurricane_polo",
+          "expected_same_event": true,
+          "verdict": 1,
+          "structurally_valid": true,
+          "label_pass": true,
+          "seconds": 0.266,
+          "response": {
+            "ok": true,
+            "value": "{\"relation\": \"same_event\"}"
+          },
+          "request_sha256": "fdbbb96dc0c45484d6b3dd955058d09f1649b3a79182774cbd227f5320986ee8"
+        },
+        {
+          "name": "positive_garrido_verdict",
+          "expected_same_event": true,
+          "verdict": 1,
+          "structurally_valid": true,
+          "label_pass": true,
+          "seconds": 0.288,
+          "response": {
+            "ok": true,
+            "value": "{\"relation\": \"same_event\"}"
+          },
+          "request_sha256": "fbe0426204b9230829274c25165f100df66abeb813b337972d0b7b1ae99a1204"
+        },
+        {
+          "name": "positive_poland_abbey_attack",
+          "expected_same_event": true,
+          "verdict": 0,
+          "structurally_valid": true,
+          "label_pass": false,
+          "seconds": 0.265,
+          "response": {
+            "ok": true,
+            "value": "{\"relation\": \"different_event\"}"
+          },
+          "request_sha256": "4e2624ddbb79a05fe62ec9203da0e40277edcfb46476c400a8fdf2af44a5c580"
+        },
+        {
+          "name": "negative_garrido_proceedings",
+          "expected_same_event": false,
+          "verdict": 0,
+          "structurally_valid": true,
+          "label_pass": true,
+          "seconds": 0.289,
+          "response": {
+            "ok": true,
+            "value": "{\"relation\": \"different_event\"}"
+          },
+          "request_sha256": "0548a1530aac1a71436cb0b2c419d8425e1a5ea9df4345dad0931d66bbc03527"
+        },
+        {
+          "name": "negative_poland_vs_ontario_worship_attacks",
+          "expected_same_event": false,
+          "verdict": 0,
+          "structurally_valid": true,
+          "label_pass": true,
+          "seconds": 0.249,
+          "response": {
+            "ok": true,
+            "value": "{\"relation\": \"different_event\"}"
+          },
+          "request_sha256": "53f73283f8de5a19cbf367f5bdd2f7b31e169fbfcdbc946fb4d7b17cef4431f0"
+        },
+        {
+          "name": "negative_f35_vs_summit",
+          "expected_same_event": false,
+          "verdict": 0,
+          "structurally_valid": true,
+          "label_pass": true,
+          "seconds": 0.392,
+          "response": {
+            "ok": true,
+            "value": "{\"relation\": \"different_event\"}"
+          },
+          "request_sha256": "a22b5626f64564f68952092bbff5bbe49d35fabf7a16f99e6ef04462f3bd27ab"
+        },
+        {
+          "name": "negative_garrido_vs_nazi_guard",
+          "expected_same_event": false,
+          "verdict": 0,
+          "structurally_valid": true,
+          "label_pass": true,
+          "seconds": 0.265,
+          "response": {
+            "ok": true,
+            "value": "{\"relation\": \"different_event\"}"
+          },
+          "request_sha256": "14f49575843fbdd9309df09a8b441683e2f5646c359cfb3684d4279b96bb351a"
+        }
+      ]
+    },
+    "remaining_failure": "NYT and Al Jazeera reports on the same Poland abbey attack receive different_event. No retry, relabeling or prompt retuning was applied."
+  },
+  "verification": {
+    "c_parser_fixtures": 28,
+    "sanitizer": "Clang ASan+UBSan completed200000 malformed/truncated/random responses plus null/oversize cases without findings.",
+    "tests": {
+      "rust": 182,
+      "rust_exact_real_model_smoke_filtered": 1,
+      "skim_core": 147,
+      "native_simulator_app": 44,
+      "frontend": 156,
+      "shared_inference_policy": 18,
+      "helper_packaging": 3,
+      "total_passed": 550
+    }
+  },
+  "evidence": {
+    "skim-verdict-production-cases.json": {
+      "local_path": "/tmp/skim-verdict-production-cases.json",
+      "sha256": "965260f6c3968cbf31ce729bd613c2609da3b23cf33c11dd079f09478ec8e8d3"
+    },
+    "skim-verdict-rust-payloads.json": {
+      "local_path": "/tmp/skim-verdict-rust-payloads.json",
+      "sha256": "93e7f7dfd9e231c3357ab54b497f390df4a9702afc7f64b52607db3e51bcc34f"
+    },
+    "skim-verdict-swift-payloads.json": {
+      "local_path": "/tmp/skim-verdict-swift-payloads.json",
+      "sha256": "7d0aa92f3bd9adb1e00d46c146dad9844fc157c6794f8f48ccdc3fc85b0e2083"
+    },
+    "skim-verdict-production-model-results.json": {
+      "local_path": "/tmp/skim-verdict-production-model-results.json",
+      "sha256": "b0a1340fcf6ab6a540b57f53ff86495bb9fbef4b1817387edd7524d2d25dc8ac"
+    },
+    "skim-verdict-holdout-cases.json": {
+      "local_path": "/tmp/skim-verdict-holdout-cases.json",
+      "sha256": "2481c364bb9b2430f735501fb10e4b012ab1c8cca4f897ecfc0a58bb079a0294"
+    },
+    "skim-verdict-rust-holdout-payloads.json": {
+      "local_path": "/tmp/skim-verdict-rust-holdout-payloads.json",
+      "sha256": "0fbdaa415009f5e4cccbdaa24f4a6b9510c7fd58b864782a6c6af3ad082da200"
+    },
+    "skim-verdict-swift-holdout-payloads.json": {
+      "local_path": "/tmp/skim-verdict-swift-holdout-payloads.json",
+      "sha256": "4e9fe5de79dea0ae68c6504047a1efbe925bd27a50f6e2ed1169b2c0415c4dd9"
+    },
+    "skim-verdict-holdout-model-results.json": {
+      "local_path": "/tmp/skim-verdict-holdout-model-results.json",
+      "sha256": "d8288232304b212cb56914b5f032b2bcdd3265a1f1a991c4ace27411051770bb"
+    },
+    "skim-production-verdict-probe.py": {
+      "local_path": "/tmp/skim-production-verdict-probe.py",
+      "sha256": "6dde095ddbf6882d03d854537c60f99e8534e51fffb794544a27885cabe2af2c"
+    },
+    "skim-semantic-isolation-results.json": {
+      "local_path": "/tmp/skim-semantic-isolation-results.json",
+      "sha256": "c9ccad62edb1013105f009c70aae78d87eef19468c3d3bfc9c03e2aa4b959605"
+    },
+    "skim-semantic-verdict-results.json": {
+      "local_path": "/tmp/skim-semantic-verdict-results.json",
+      "sha256": "e690d241c16acb3e306f75ae751d22df0b821d11e86b52fe38f7b4d662417d57"
+    },
+    "skim-semantic-evidence-verdict-results.json": {
+      "local_path": "/tmp/skim-semantic-evidence-verdict-results.json",
+      "sha256": "d01cdbb2e94bff24588b13e613d5907e863263c5f1d74ac75cfd385dfd441528"
+    },
+    "reports.json": {
+      "local_path": "/tmp/skim-semantic-single-pair-holdout/reports.json",
+      "sha256": "66b5f47eb740d3a7fee07e0e5b62c028dddd676f6cd7eefa7b15940f6cac7b7b"
+    },
+    "labels.json": {
+      "local_path": "/tmp/skim-semantic-single-pair-holdout/labels.json",
+      "sha256": "6d81c67ab74ce58b65301f3aa9a14c7bebe50ee1cef9472f899c9748d990d452"
+    },
+    "manifest.json": {
+      "local_path": "/tmp/skim-semantic-single-pair-holdout/manifest.json",
+      "sha256": "b0d671985eec224ad0a636cb6ab0a65bc4a3fc0414d40d2058c41fadaa367035"
+    },
+    "skim-verdict-live-planner.json": {
+      "local_path": "/tmp/skim-verdict-live-planner.json",
+      "sha256": "0ebc3d2cc2d70cdff012c5f0add6c286adae0a21995c3f8378220bf79f0c590c"
+    },
+    "skim-verdict-independent-evaluation.json": {
+      "local_path": "/tmp/skim-verdict-independent-evaluation.json",
+      "sha256": "a2507dbc07092ae9c176ecdd3341304c5dfb54bab00ffbb3126c98e4ebfef1cf"
+    }
+  },
+  "limits": [
+    "Small selected samples do not establish representative accuracy, truth of publisher reports, complete grouping recall or editorial importance quality.",
+    "More than64eligible candidates still fall back deterministically; full-pool preparation/coverage is open.",
+    "Single-pair requests can increase provider-call overhead; unchanged30-second total deadline bounds the plan and can force fallback for large proposed groups.",
+    "Full desktop walkthrough remains blocked by locked Mac and pending localhost Terms approval. No native device model-inference acceptance.",
+    "Remaining domain engine, persistence and UI implementations are not fully shared.",
+    "Full-planner output still contains a false merge. Structural validation and small pair-stage gains do not establish correct newspaper grouping."
+  ],
+  "full_production_planner": {
+    "seconds": 7.487163667,
+    "deadline_seconds": 30,
+    "candidate_count": 13,
+    "request_count": 7,
+    "stages": "1 proposal +6 pair requests; no split required isolated ratings in this run.",
+    "groups": [
+      {
+        "confidence": 0.95,
+        "importance": 2.0,
+        "members": [
+          0,
+          1
+        ],
+        "reason": "Pope's visit to Paris highlights Catholic revival and conservative trends"
+      },
+      {
+        "confidence": 0.98,
+        "importance": 3.0,
+        "members": [
+          2,
+          3
+        ],
+        "reason": "Hurricane Polo intensifies off Mexico with strong forecast"
+      },
+      {
+        "confidence": 0.92,
+        "importance": 3.0,
+        "members": [
+          4,
+          5,
+          8
+        ],
+        "reason": "French jihadist sentenced and claims deradicalization after imprisonment"
+      },
+      {
+        "confidence": 0.85,
+        "importance": 2.0,
+        "members": [
+          6,
+          7
+        ],
+        "reason": "Ukrainian arrested in Poland over knife attack near border"
+      },
+      {
+        "confidence": 1.0,
+        "importance": 1.0,
+        "members": [
+          9
+        ],
+        "reason": "Officer shot but stops synagogue attack"
+      },
+      {
+        "confidence": 0.8,
+        "importance": 2.0,
+        "members": [
+          10
+        ],
+        "reason": "U.S. probes F-35 part diversion to China"
+      },
+      {
+        "confidence": 0.9,
+        "importance": 1.0,
+        "members": [
+          11
+        ],
+        "reason": "Trump and Xi meet at White House with no breakthroughs"
+      },
+      {
+        "confidence": 0.8,
+        "importance": 2.0,
+        "members": [
+          12
+        ],
+        "reason": "German man investigated for Nazi POW camp murder"
+      }
+    ],
+    "findings": [
+      "The full planner grouped all4 labeled same-event pairs, but also incorrectly merged the trial-speech and later-sentencing reports.",
+      "The Poland pair had an identical request to the isolated run but flipped from different_event to same_event. This exposes repeatability limits despite temperature zero.",
+      "The trial/sentencing pair changed report order between isolated and full-planner calls and flipped from different_event to same_event; ordering and run effects are not disentangled.",
+      "This is one actual production plan call through a temporary local-helper AiProvider transport adapter, without DB persistence or installed UI. No retries. The temporary test harness was removed."
+    ]
+  },
+  "independent_evaluation": {
+    "schema": "skim-independent-verdict-holdout-evaluation-v1",
+    "evaluatedAtUTC": "2026-09-24T23:39:11+00:00",
+    "frozenLabelsPath": "/tmp/skim-semantic-single-pair-holdout/labels.json",
+    "frozenLabelsSHA256": "6d81c67ab74ce58b65301f3aa9a14c7bebe50ee1cef9472f899c9748d990d452",
+    "holdoutReportsSHA256": "66b5f47eb740d3a7fee07e0e5b62c028dddd676f6cd7eefa7b15940f6cac7b7b",
+    "singlePairStage": {
+      "artifact": "/tmp/skim-verdict-holdout-model-results.json",
+      "sha256": "d8288232304b212cb56914b5f032b2bcdd3265a1f1a991c4ace27411051770bb",
+      "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+      "rows": 8,
+      "structurallyValidRows": 8,
+      "correctLabels": 7,
+      "accuracyOnFrozen8": 0.875,
+      "pairResults": [
+        {
+          "pair_id": "positive_pope_visit",
+          "expected_same_event": true,
+          "observed": true,
+          "structurally_valid": true,
+          "match": true,
+          "request_order": [
+            "Hundreds of thousands expected in Paris for Pope's visit",
+            "Pope Leo XIV's visit shines a light on France's Catholic revival and its divisions"
+          ]
+        },
+        {
+          "pair_id": "positive_hurricane_polo",
+          "expected_same_event": true,
+          "observed": true,
+          "structurally_valid": true,
+          "match": true,
+          "request_order": [
+            "Hurricane Polo is a powerful Category 4 storm off Mexico. See its path.",
+            "Polo off Mexican coast is among 'the strongest storms ever'"
+          ]
+        },
+        {
+          "pair_id": "positive_garrido_verdict",
+          "expected_same_event": true,
+          "observed": true,
+          "structurally_valid": true,
+          "match": true,
+          "request_order": [
+            "French court sentences jihadist Othman Garrido to 30 years in prison",
+            "French jihadist sentenced to 30 years in prison for involvement in Syria execution"
+          ]
+        },
+        {
+          "pair_id": "positive_poland_abbey_attack",
+          "expected_same_event": true,
+          "observed": false,
+          "structurally_valid": true,
+          "match": false,
+          "request_order": [
+            "Police in Poland Arrest Ukrainian Citizen Over Fatal Stabbing",
+            "Ukrainian man kills one, wounds four in Poland abbey knife attack"
+          ]
+        },
+        {
+          "pair_id": "negative_garrido_proceedings",
+          "expected_same_event": false,
+          "observed": false,
+          "structurally_valid": true,
+          "match": true,
+          "request_order": [
+            "The surprising deradicalization speech of jihadist Othman Garrido, on trial for beheadings in Syria",
+            "French court sentences jihadist Othman Garrido to 30 years in prison"
+          ]
+        },
+        {
+          "pair_id": "negative_poland_vs_ontario_worship_attacks",
+          "expected_same_event": false,
+          "observed": false,
+          "structurally_valid": true,
+          "match": true,
+          "request_order": [
+            "Police in Poland Arrest Ukrainian Citizen Over Fatal Stabbing",
+            "Officer thwarted Ontario synagogue shooting despite life-threatening injuries"
+          ]
+        },
+        {
+          "pair_id": "negative_f35_vs_summit",
+          "expected_same_event": false,
+          "observed": false,
+          "structurally_valid": true,
+          "match": true,
+          "request_order": [
+            "Pentagon probing how shipment of F-35 fighter jet parts was diverted",
+            "Fanfare surrounds Trump-Xi summit at White House, but no breakthroughs expected"
+          ]
+        },
+        {
+          "pair_id": "negative_garrido_vs_nazi_guard",
+          "expected_same_event": false,
+          "observed": false,
+          "structurally_valid": true,
+          "match": true,
+          "request_order": [
+            "French court sentences jihadist Othman Garrido to 30 years in prison",
+            "Accused Nazi POW camp guard, 105, being investigated in Germany"
+          ]
+        }
+      ],
+      "definiteError": "positive_poland_abbey_attack was returned as different_event although both feeds identify the same Jarosław abbey knife attack.",
+      "experimentCasesPath": "/tmp/skim-verdict-holdout-cases.json",
+      "experimentCasesSHA256": "2481c364bb9b2430f735501fb10e4b012ab1c8cca4f897ecfc0a58bb079a0294",
+      "experimentCasesMatchFrozenLabels": true
+    },
+    "fullPlannerStage": {
+      "artifact": "/tmp/skim-verdict-live-planner.json",
+      "sha256": "0ebc3d2cc2d70cdff012c5f0add6c286adae0a21995c3f8378220bf79f0c590c",
+      "candidateCount": 13,
+      "groups": 8,
+      "calls": 7,
+      "elapsedSeconds": 7.487163667,
+      "directFrozenPairCoverage": {
+        "labeledPairs": 8,
+        "queriedLabeledPairs": 5,
+        "notQueried": 3,
+        "note": "The planner proposed six verification pairs; five correspond to frozen labeled pairs, while the remaining queried pair (sentence2 vs trial speech) was not labeled."
+      },
+      "livePairCalls": [
+        {
+          "call_index": 1,
+          "candidate_indexes": [
+            0,
+            1
+          ],
+          "titles": [
+            "Hundreds of thousands expected in Paris for Pope's visit",
+            "Pope Leo XIV's visit shines a light on France's Catholic revival and its divisions"
+          ],
+          "same_event": true,
+          "response": "{\"relation\": \"same_event\"}"
+        },
+        {
+          "call_index": 2,
+          "candidate_indexes": [
+            2,
+            3
+          ],
+          "titles": [
+            "Hurricane Polo is a powerful Category 4 storm off Mexico. See its path.",
+            "Polo off Mexican coast is among 'the strongest storms ever'"
+          ],
+          "same_event": true,
+          "response": "{\"relation\": \"same_event\"}"
+        },
+        {
+          "call_index": 3,
+          "candidate_indexes": [
+            4,
+            5
+          ],
+          "titles": [
+            "French court sentences jihadist Othman Garrido to 30 years in prison",
+            "French jihadist sentenced to 30 years in prison for involvement in Syria execution"
+          ],
+          "same_event": true,
+          "response": "{\"relation\": \"same_event\"}"
+        },
+        {
+          "call_index": 4,
+          "candidate_indexes": [
+            4,
+            8
+          ],
+          "titles": [
+            "French court sentences jihadist Othman Garrido to 30 years in prison",
+            "The surprising deradicalization speech of jihadist Othman Garrido, on trial for beheadings in Syria"
+          ],
+          "same_event": true,
+          "response": "{\"relation\": \"same_event\"}"
+        },
+        {
+          "call_index": 5,
+          "candidate_indexes": [
+            5,
+            8
+          ],
+          "titles": [
+            "French jihadist sentenced to 30 years in prison for involvement in Syria execution",
+            "The surprising deradicalization speech of jihadist Othman Garrido, on trial for beheadings in Syria"
+          ],
+          "same_event": true,
+          "response": "{\"relation\": \"same_event\"}"
+        },
+        {
+          "call_index": 6,
+          "candidate_indexes": [
+            6,
+            7
+          ],
+          "titles": [
+            "Police in Poland Arrest Ukrainian Citizen Over Fatal Stabbing",
+            "Ukrainian man kills one, wounds four in Poland abbey knife attack"
+          ],
+          "same_event": true,
+          "response": "{\"relation\": \"same_event\"}"
+        }
+      ],
+      "finalPartitionJudgments": [
+        {
+          "pair_id": "positive_pope_visit",
+          "expected_same_event": true,
+          "final_group_same": true,
+          "match": true,
+          "candidate_indexes": [
+            0,
+            1
+          ],
+          "group_members": [
+            0,
+            1
+          ]
+        },
+        {
+          "pair_id": "positive_hurricane_polo",
+          "expected_same_event": true,
+          "final_group_same": true,
+          "match": true,
+          "candidate_indexes": [
+            2,
+            3
+          ],
+          "group_members": [
+            2,
+            3
+          ]
+        },
+        {
+          "pair_id": "positive_garrido_verdict",
+          "expected_same_event": true,
+          "final_group_same": true,
+          "match": true,
+          "candidate_indexes": [
+            4,
+            5
+          ],
+          "group_members": [
+            4,
+            5,
+            8
+          ]
+        },
+        {
+          "pair_id": "positive_poland_abbey_attack",
+          "expected_same_event": true,
+          "final_group_same": true,
+          "match": true,
+          "candidate_indexes": [
+            6,
+            7
+          ],
+          "group_members": [
+            6,
+            7
+          ]
+        },
+        {
+          "pair_id": "negative_garrido_proceedings",
+          "expected_same_event": false,
+          "final_group_same": true,
+          "match": false,
+          "candidate_indexes": [
+            8,
+            4
+          ],
+          "group_members": [
+            4,
+            5,
+            8
+          ]
+        },
+        {
+          "pair_id": "negative_poland_vs_ontario_worship_attacks",
+          "expected_same_event": false,
+          "final_group_same": false,
+          "match": true,
+          "candidate_indexes": [
+            6,
+            9
+          ],
+          "group_members": null
+        },
+        {
+          "pair_id": "negative_f35_vs_summit",
+          "expected_same_event": false,
+          "final_group_same": false,
+          "match": true,
+          "candidate_indexes": [
+            10,
+            11
+          ],
+          "group_members": null
+        },
+        {
+          "pair_id": "negative_garrido_vs_nazi_guard",
+          "expected_same_event": false,
+          "final_group_same": false,
+          "match": true,
+          "candidate_indexes": [
+            4,
+            12
+          ],
+          "group_members": null
+        }
+      ],
+      "falseMerge": {
+        "frozenPair": "negative_garrido_proceedings",
+        "candidateIndexes": [
+          4,
+          8
+        ],
+        "groupIndexes": [
+          4,
+          5,
+          8
+        ],
+        "why": "The September 20 trial speech was merged with the September 23 sentencing occurrence; the frozen event-level label requires separation."
+      }
+    },
+    "requestOrderingAndRepeatability": {
+      "polandSameRequestExactMessagesAndConfig": true,
+      "polandStandalone": "different_event",
+      "polandFullPlanner": "same_event",
+      "garridoNegativeStandaloneOrder": [
+        "trial speech",
+        "sentencing report"
+      ],
+      "garridoNegativeStandalone": "different_event",
+      "garridoNegativePlannerOrder": [
+        "sentencing report",
+        "trial speech"
+      ],
+      "garridoNegativePlanner": "same_event",
+      "limits": "The Poland mismatch uses identical system/user messages and request config, so the relation changed between runs for the same payload. There is one observation per run only; this establishes an observed repeatability inconsistency but cannot isolate sampling nondeterminism from other runtime state. The Garrido comparison also flips, but the A/B order is reversed, so order sensitivity and run variation are confounded."
+    },
+    "interpretationLimits": [
+      "Frozen convenience sample has eight pairs, not a representative estimate.",
+      "Pair-stage coverage is partial because the planner only verifies its proposed within-group edges; omitted frozen negatives were not pair-verified.",
+      "The final partition satisfies 7/8 frozen labels: all four positives and three negatives remain correctly grouped/separated; the Garrido proceedings negative is merged.",
+      "Importance ratings were not evaluated here."
+    ]
+  }
+}

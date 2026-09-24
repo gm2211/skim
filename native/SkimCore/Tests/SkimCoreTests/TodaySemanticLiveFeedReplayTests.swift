@@ -27,7 +27,7 @@ import Testing
     let primary = try TodaySemanticPolicy.decode(fixture.responses[0])
     let plan = try TodaySemanticPolicy.verificationPlan(groups: primary, candidates: fixture.candidates)
     #expect(plan.pairs.count == 3)
-    var verified = try TodaySemanticPolicy.verify(response: fixture.responses[1], plan: plan)
+    var verified = try verifyHistoricalDecisions(fixture.responses[1], plan: plan)
     let splitIDs = verified.indices.filter { verified[$0].needsRating }
     try #require(fixture.responses.count == splitIDs.count + 2)
     try #require(fixture.requests.count == fixture.responses.count)

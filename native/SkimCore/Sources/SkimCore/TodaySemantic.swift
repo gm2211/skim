@@ -57,6 +57,7 @@ public struct TodaySemanticCandidate: Codable, Sendable {
     public var excerpt: String
     public var timestamp: Double
     public var baseScore: Double
+    public var evidence: String? = nil
 }
 
 public struct TodaySemanticGroup: Codable, Sendable {
@@ -119,7 +120,6 @@ public enum TodaySemanticPolicy {
     }
 
     public struct VerificationPlan: Sendable {
-        public let payload: String
         public let pairs: [[Int]]
         fileprivate let groups: [TodaySemanticGroup]
         fileprivate let candidateCount: Int
@@ -156,7 +156,7 @@ public enum TodaySemanticPolicy {
             accepted.append(group)
             for index in indexes { assigned[index] = 1 }
         }
-        return VerificationPlan(payload: try verificationPayload(pairs: pairs, candidates: candidates), pairs: pairs,
+        return VerificationPlan(pairs: pairs,
             groups: accepted, candidateCount: candidates.count, candidates: candidates)
     }
 
@@ -177,25 +177,38 @@ public enum TodaySemanticPolicy {
         return batches
     }
 
-    private static func verificationPayload(pairs: [[Int]], candidates: [TodaySemanticCandidate]) throws -> String {
-        struct Report: Encodable {
-            let index: Int
-            let title: String
-            let excerpt: String
-            let activity_date: String
+    public static var evidenceCharacters: Int { Int(skim_semantic_evidence_characters()) }
+    public static var pairOutputTokens: Int { Int(skim_semantic_pair_output_tokens()) }
+
+    public static func primaryPayload(candidates: [TodaySemanticCandidate]) throws -> String {
+        let primary = candidates.map { candidate in
+            var copy = candidate
+            copy.evidence = nil
+            return copy
         }
-        struct Payload: Encodable { let reports: [Report]; let pairs: [[Int]] }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return String(decoding: try encoder.encode(primary), as: UTF8.self)
+    }
+
+    private static func verificationPayload(pairs: [[Int]], candidates: [TodaySemanticCandidate]) throws -> String {
+        guard pairs.count == 1, let pair = pairs.first else { throw SkimCoreError.database("Expected one semantic pair") }
+        struct Report: Encodable { let title: String; let excerpt: String; let activity_date: String }
+        struct Payload: Encodable { let report_a: Report; let report_b: Report }
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
-        let reports = candidates.map { candidate in
-            Report(index: candidate.index, title: candidate.title, excerpt: candidate.excerpt,
+        func report(_ index: Int) throws -> Report {
+            guard let candidate = candidates.first(where: { $0.index == index }) else { throw SkimCoreError.database("Missing semantic pair report") }
+            let text = candidate.evidence.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } ?? candidate.excerpt
+            return Report(title: candidate.title, excerpt: String(text.unicodeScalars.prefix(evidenceCharacters)),
                 activity_date: formatter.string(from: Date(timeIntervalSince1970: candidate.timestamp)))
         }
-        let data = try JSONEncoder().encode(Payload(reports: reports, pairs: pairs))
-        return String(decoding: data, as: UTF8.self)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return String(decoding: try encoder.encode(Payload(report_a: report(pair[0]), report_b: report(pair[1]))), as: UTF8.self)
     }
 
     /// Validate each completed request before spending another provider call.
@@ -220,51 +233,16 @@ public enum TodaySemanticPolicy {
     }
 
     private static func verifiedPairs(response: String, pairs: [[Int]], candidateCount: Int) throws -> [UInt8] {
-        struct Decision: Decodable {
-            let members: [Double]
-            let same_event: Bool
-            let confidence: Double
-
-            enum CodingKeys: String, CodingKey { case members, pair, same_event, confidence }
-            init(from decoder: any Decoder) throws {
-                let values = try decoder.container(keyedBy: CodingKeys.self)
-                guard values.contains(.members) != values.contains(.pair) else {
-                    throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
-                        debugDescription: "Exactly one pair identity key is required"))
-                }
-                members = try values.decode([Double].self, forKey: values.contains(.members) ? .members : .pair)
-                same_event = try values.decode(Bool.self, forKey: .same_event)
-                confidence = try values.decode(Double.self, forKey: .confidence)
-            }
-        }
-        struct Envelope: Decodable { let pairs: [Decision] }
-        let text = unfenced(response)
-        let data = Data(text.utf8)
-        let decisions: [Decision]
-        if text.hasPrefix("[") {
-            decisions = try JSONDecoder().decode([Decision].self, from: data)
-        } else {
-            decisions = try JSONDecoder().decode(Envelope.self, from: data).pairs
-        }
-        let requested = Set(pairs.map { $0[0] * candidateCount + $0[1] })
-        var answered = Set<Int>()
+        guard pairs.count == 1 else { throw SkimCoreError.database("Expected one semantic pair verdict") }
+        let bytes = Array(response.utf8)
+        let value = bytes.withUnsafeBufferPointer { skim_semantic_pair_verdict($0.baseAddress, $0.count) }
+        guard value >= 0 else { throw SkimCoreError.database("Unknown semantic relation") }
         var verified = [UInt8](repeating: 0, count: candidateCount * candidateCount)
-        for decision in decisions {
-            guard decision.members.count == 2,
-                  decision.members.allSatisfy({ $0.isFinite && $0.rounded(.towardZero) == $0 && $0 >= 0 && $0 < Double(candidateCount) }),
-                  decision.confidence.isFinite, (0...1).contains(decision.confidence)
-            else { throw SkimCoreError.database("Invalid semantic pair response") }
-            let pair = decision.members.map(Int.init).sorted()
-            let key = pair[0] * candidateCount + pair[1]
-            guard pair[0] != pair[1], requested.contains(key), answered.insert(key).inserted else {
-                throw SkimCoreError.database("Unknown or duplicate semantic pair")
-            }
-            if decision.same_event && decision.confidence >= 0.8 {
-                verified[key] = 1
-                verified[pair[1] * candidateCount + pair[0]] = 1
-            }
+        if value == 1 {
+            let pair = pairs[0]
+            verified[pair[0] * candidateCount + pair[1]] = 1
+            verified[pair[1] * candidateCount + pair[0]] = 1
         }
-        guard answered == requested else { throw SkimCoreError.database("Incomplete semantic pair response") }
         return verified
     }
 
@@ -361,13 +339,20 @@ public enum TodaySemanticPolicy {
         return result
     }
 
+    static func boundedEvidence(_ content: String?, fallback: String) -> String {
+        let text = content.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } ?? fallback
+        return String(text.unicodeScalars.prefix(evidenceCharacters))
+    }
+
     static func inputs(_ candidates: [TodayEditionCandidate], at date: Date) -> [TodaySemanticCandidate] {
         candidates.enumerated().map { index, candidate in
             let ranked = StoryClusterer().rank([candidate.ranking], asOf: date)
             let score = (ranked.topStories + ranked.uniqueFinds).first?.score ?? 0
             return TodaySemanticCandidate(index: index, title: String(candidate.revision.title.prefix(240)),
                 excerpt: String(candidate.revision.summary.prefix(240)),
-                timestamp: candidate.ranking.story.lastActivityAt.timeIntervalSince1970, baseScore: score)
+                timestamp: candidate.ranking.story.lastActivityAt.timeIntervalSince1970, baseScore: score,
+                evidence: boundedEvidence(candidate.sourceArticles.first(where: { $0.article.id == candidate.revision.representativeArticleID })?.article.contentText,
+                    fallback: candidate.revision.summary))
         }
     }
 

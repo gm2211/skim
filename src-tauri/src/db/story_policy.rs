@@ -57,6 +57,9 @@ extern "C" {
     fn skim_semantic_rating_prompt() -> *const std::os::raw::c_char;
     fn skim_semantic_rating_valid(importance: f64, confidence: f64) -> i32;
     fn skim_semantic_max_pairs() -> usize;
+    fn skim_semantic_pair_verdict(text: *const u8, length: usize) -> i32;
+    fn skim_semantic_evidence_characters() -> usize;
+    fn skim_semantic_pair_output_tokens() -> usize;
     fn skim_semantic_pair_batch_length(pair_count: usize, offset: usize) -> usize;
     fn skim_semantic_partition(
         members: *const f64,
@@ -221,6 +224,12 @@ pub fn semantic_pair_prompt() -> &'static str {
 pub fn semantic_pair_batch_length(pair_count: usize, offset: usize) -> usize {
     unsafe { skim_semantic_pair_batch_length(pair_count, offset) }
 }
+
+pub fn semantic_pair_verdict(response: &str) -> i32 {
+    unsafe { skim_semantic_pair_verdict(response.as_ptr(), response.len()) }
+}
+pub fn semantic_evidence_characters() -> usize { unsafe { skim_semantic_evidence_characters() } }
+pub fn semantic_pair_output_tokens() -> usize { unsafe { skim_semantic_pair_output_tokens() } }
 
 pub fn semantic_max_pairs() -> usize {
     unsafe { skim_semantic_max_pairs() }

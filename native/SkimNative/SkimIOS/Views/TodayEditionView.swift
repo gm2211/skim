@@ -59,6 +59,10 @@ struct TodayEditionView: View {
                             } else {
                                 if let status = model.todayLedeStatus {
                                     TodayWritingRule(status: status)
+                                } else if model.todayLedeNeedsRetry {
+                                    Button("Retry missing summaries") { Task { await model.retryTodayLedes() } }
+                                        .font(.subheadline)
+                                        .frame(minHeight: 44)
                                 }
                                 // The edition is already ordered by importance,
                                 // so position is all the page needs: the first
@@ -104,7 +108,6 @@ struct TodayEditionView: View {
         .task(id: storyLimit) {
             if ![5, 10, 20].contains(storyLimit) { storyLimit = 10; return }
             await load()
-            await model.writeTodayLedes(limit: Self.leadCount)
             // Renew the local-day window even if Today stays open across midnight.
             while !Task.isCancelled {
                 let start = Calendar.current.startOfDay(for: Date())
@@ -114,6 +117,7 @@ struct TodayEditionView: View {
                 await load()
             }
         }
+        .onDisappear { model.cancelTodayWork() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await load() } }
         }
@@ -174,6 +178,7 @@ private struct TodayStoryView: View {
     var isWritingLede: Bool
     var isUpdating: Bool
     var onToggleConsumed: () -> Void
+    @State private var referencesExpanded = false
 
     private var lead: Bool { rank == .lead }
     private var brief: Bool { rank == .brief }
@@ -190,11 +195,6 @@ private struct TodayStoryView: View {
 
     private var awaitingLede: Bool {
         !brief && (item.snapshot.lede ?? "").isEmpty && isWritingLede
-    }
-
-    private var behind: [TodayEditionSourceArticle] {
-        let real = item.sourceArticles.filter { $0.membershipType != .duplicate }
-        return brief ? Array(real.prefix(1)) : Array(real.prefix(4))
     }
 
     private var openable: TodayEditionSourceArticle? {
@@ -226,8 +226,25 @@ private struct TodayStoryView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            ForEach(behind, id: \.articleID) { source in
-                TodayByline(source: source)
+            if !item.sourceArticles.isEmpty {
+                DisclosureGroup(isExpanded: $referencesExpanded) {
+                    ForEach(item.sourceArticles, id: \.articleID) { source in
+                        VStack(alignment: .leading, spacing: 0) {
+                            TodayByline(source: source)
+                            if source.membershipType == .duplicate {
+                                Text("Syndicated report")
+                                    .font(.caption)
+                                    .foregroundStyle(SkimStyle.secondary)
+                            }
+                        }
+                    }
+                } label: {
+                    Text("\(item.sourceArticles.count) \(item.sourceArticles.count == 1 ? "report" : "reports")")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .frame(minHeight: 44)
+                }
+                .tint(SkimStyle.secondary)
             }
 
             Button(action: onToggleConsumed) {

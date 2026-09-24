@@ -28,6 +28,7 @@ use tauri::{Listener, Manager};
 /// JavaScript, which the mock runtime discards, so the bridge mirrors them into
 /// a buffer the browser polls instead.
 const FORWARDED_EVENTS: &[&str] = &[
+    crate::commands::editions::TODAY_LEDE_PROGRESS_EVENT,
     "theme_progress",
     "triage_progress",
     "model-download-progress",

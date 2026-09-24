@@ -530,29 +530,18 @@ enum NativeAI {
     ) async throws -> String {
         guard !articles.isEmpty else { return "" }
 
-        let text = articles.prefix(catchUpArticlesPerLede).map { article in
+        let text = articles.prefix(TodayLedePolicy.maxArticles).map { article in
             let body = article.plainBody.trimmingCharacters(in: .whitespacesAndNewlines)
             return """
             --- \(article.title) [\(PublicationName.of(article: article))]
-            \(body.isEmpty ? "No reader text available." : body.prefixWords(420))
+            \(body.isEmpty ? "No reader text available." : String(body.prefix(TodayLedePolicy.textCharacters)))
             """
         }
         .joined(separator: "\n\n")
 
         let raw = try await complete(
             settings: settings,
-            instructions: """
-            You write the lede that runs under a newspaper headline. Output ONLY the lede itself: plain text, no markdown, no heading, no quotation marks, no preamble.
-
-            \(frontPageStandard)
-
-            The lede:
-            - 2-3 sentences.
-            - The first sentence says what happened, concretely, using the specifics in the article text: names, numbers, versions, dates, who did it.
-            - A later sentence says why it matters to this reader, and only where that is genuinely not obvious from the first.
-            - Never restate the headline, never say "the article discusses" or "this piece covers", never hedge.
-            - Use only what the supplied text supports. Where it is thin, say the little that is known and stop. A short honest lede beats a padded one.
-            """,
+            instructions: TodayLedePolicy.instructions + "\n\nOutput only the lede itself, as plain text.",
             prompt: """
             Headline: \(headline)
 

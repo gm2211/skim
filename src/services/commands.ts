@@ -403,14 +403,15 @@ export const generateCatchupReport = (
 /** The page as it stands while the lede pass runs. */
 export interface TodayLedeProgress {
   edition_id: string;
+  request_id?: string;
   completed: number;
   total: number;
   message: string;
   view: TodayEditionView;
 }
 export const TODAY_LEDE_PROGRESS_EVENT = "today_lede_progress";
-export const generateTodayLedes = (editionId: string) =>
-  invoke<TodayEditionView>("generate_today_ledes", { editionId });
+export const generateTodayLedes = (editionId: string, requestId?: string) =>
+  invoke<TodayEditionView>("generate_today_ledes", requestId ? { editionId, requestId } : { editionId });
 
 export const getOrGenerateTodayEdition = (
   startsAt: number,

@@ -1,0 +1,119 @@
+{
+  "retrieved_at": "2026-09-24T17:25:17.717565+00:00",
+  "verified_at": "2026-09-24T17:45:11.638080+00:00",
+  "feeds": [
+    [
+      "BBC World",
+      "https://feeds.bbci.co.uk/news/world/rss.xml"
+    ],
+    [
+      "BBC Top",
+      "https://feeds.bbci.co.uk/news/rss.xml"
+    ],
+    [
+      "BBC Business",
+      "https://feeds.bbci.co.uk/news/business/rss.xml"
+    ],
+    [
+      "NASA",
+      "https://www.nasa.gov/rss/dyn/breaking_news.rss"
+    ],
+    [
+      "Federal Reserve",
+      "https://www.federalreserve.gov/feeds/press_all.xml"
+    ]
+  ],
+  "article_count": 133,
+  "current_day_story_count": 45,
+  "raw_feed_input_sha256": "292eb4e93b843aa9f1f6cecf15a223ff090480a8a4128562cb4186b6e7e5a8d2",
+  "provider": "mlx",
+  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+  "same_frozen_edition": true,
+  "summary_comparison": [
+    {
+      "position": 0,
+      "headline": "Spain's housing crisis in focus after eviction of 87-year-old woman",
+      "sources": [
+        "https://www.bbc.co.uk/news/videos/cm4gjvz734w3o?at_medium=RSS&at_campaign=rss"
+      ],
+      "baseline_lede": "A 87-year-old woman in Madrid's Retiro area was evicted after failing to pay rent that was raised by an investment firm. The case highlights how rising rents and housing insecurity are disproportionately affecting vulnerable elderly tenants in Spain.",
+      "hydrated_final_lede": "An 87-year-old woman named Maricarmen was evicted from her Madrid apartment after her rent was raised from \u20ac500 to \u20ac2,650 by investment firm Urbagesti\u00f3n, which bought the property in 2018. The case highlights Spain's worsening housing crisis, where elderly tenants face eviction due to unaffordable rents despite limited pension income.",
+      "final_words": 50
+    },
+    {
+      "position": 1,
+      "headline": "White House restores access to media outlets banned by Trump after judge's order",
+      "sources": [
+        "https://www.bbc.co.uk/news/articles/cqe8ek7608mlo?at_medium=RSS&at_campaign=rss",
+        "https://www.bbc.co.uk/news/articles/cqe8ek7608mlo?at_medium=RSS&at_campaign=rss"
+      ],
+      "baseline_lede": "CNN, Politico and MS Now are back at the White House after a judge ordered their reinstatement following prior bans by Trump. This move ensures continued press access to government operations during a period of heightened scrutiny.",
+      "hydrated_final_lede": "CNN, Politico, and MS Now were granted access to the White House hours after a federal judge ruled their ban likely violated constitutional due process rights. The decision restores press access during a period of heightened political tension, underscoring the judiciary's role in safeguarding media freedom amid executive claims of national security.",
+      "final_words": 52
+    },
+    {
+      "position": 2,
+      "headline": "NASA\u2019s Machines for Mars Make Beer Bubbly",
+      "sources": [
+        "https://www.nasa.gov/technology/tech-transfer-spinoffs/nasas-machines-for-mars-make-beer-bubbly/"
+      ],
+      "baseline_lede": "Amy George of Earthly Labs obtained an exclusive license to the Craft Brewery Recovery System, a carbon dioxide capture technology originally developed by Pioneer Astronautics for Mars resource utilization. The system now helps breweries, wineries, and energy companies capture and reuse CO2 from their operations, reducing emissions and cutting costs amid ongoing supply shortages.",
+      "hydrated_final_lede": "In 2021, Maine Beer Company faced a CO2 shortage that threatened to stale its beer, prompting them to adopt a Mars-inspired solution. Earthly Labs, which licensed NASA-derived carbon capture technology from Pioneer Astronautics, now uses the system to recover and reuse CO2 in brewing, reducing emissions and cutting costs for breweries, wineries, distilleries, and energy firms.",
+      "final_words": 56
+    },
+    {
+      "position": 3,
+      "headline": "Greek PM urges UK PM to return Elgin Marbles permanently",
+      "sources": [
+        "https://www.bbc.co.uk/news/articles/cqm2mgk6mlddo?at_medium=RSS&at_campaign=rss",
+        "https://www.bbc.co.uk/news/articles/cqm2mgk6mlddo?at_medium=RSS&at_campaign=rss"
+      ],
+      "baseline_lede": "Greek Prime Minister Mitsotakis has urged UK Prime Minister Andy Burnham to return the Elgin Marbles permanently, stating they should go back to Greece with 'no strings attached.' This move underscores ongoing diplomatic efforts to resolve the long-standing dispute over the marbles' ownership and cultural heritage.",
+      "hydrated_final_lede": "Greek Prime Minister Kyriakos Mitsotakis has urged UK PM Andy Burnham to return the Elgin Marbles to Greece permanently, calling it a 'decisive step' that would reunite the sculptures and signal cultural friendship. He rejects proposals that treat the marbles as a loan, arguing Greece cannot accept any arrangement that recognizes British ownership or involves borrowing parts of its heritage.",
+      "final_words": 60
+    },
+    {
+      "position": 4,
+      "headline": "Practicing for Safe Landings on the Moon and Beyond",
+      "sources": [
+        "https://www.nasa.gov/image-article/practicing-for-safe-landings-on-the-moon-and-beyond/"
+      ],
+      "baseline_lede": "NASA's Johnson Space Center developed and tested the SPLICE guidance and navigation experiment using an Alta-X drone in August 2026, successfully simulating lunar descent and landing maneuvers. This enables safe, precise landings on the Moon, Mars, and icy worlds in previously inaccessible or unknown terrain.",
+      "hydrated_final_lede": "A four-rotor Alta-X drone conducted simulated lunar descent maneuvers using NASA's SPLICE guidance and navigation system near Edwards, California, on Aug. 27, 2026. The technology enables safe, precise landings on the Moon, Mars, and icy worlds in previously inaccessible, scientifically valuable terrain.",
+      "final_words": 42
+    },
+    {
+      "position": 5,
+      "headline": "McLaren miles off pace in Baku practice - Norris",
+      "sources": [
+        "https://www.bbc.co.uk/sport/formula1/articles/cmwyzqn4w20qo?at_medium=RSS&at_campaign=rss"
+      ],
+      "baseline_lede": "Lando Norris stated that McLaren were 'miles off' the pace during the first day of practice at the Azerbaijan Grand Prix.",
+      "hydrated_final_lede": "Lando Norris finished sixth in Baku practice, 1.484 seconds off George Russell's Mercedes pace, as McLaren's new aerodynamic package failed to close the gap despite being predicted to perform as simulations showed. The shortfall highlights unresolved issues with the upgrade's performance, raising concerns about McLaren's competitiveness despite their recent race wins.",
+      "final_words": 51
+    }
+  ],
+  "browser_checks": {
+    "desktop": "1280x720",
+    "short_phone": "390x568",
+    "actual_backend": true,
+    "fixture_commands": false,
+    "readable_failure_state": true,
+    "explicit_retry_completed": true,
+    "consumption_preserved_during_summary": true,
+    "all_syndicated_references_disclosed": true,
+    "actual_article_reader_opened": true,
+    "refresh_completed_without_clustering_warnings": true
+  },
+  "database_after_refresh": {
+    "articles": 133,
+    "features": 133,
+    "foreign_key_violations": 0
+  },
+  "limits": [
+    "Component integration harness, not installed native app acceptance. Mac remains locked.",
+    "Six development stories; word target met in this run, not guaranteed by validator. Full factual-quality acceptance remains open.",
+    "Frozen edition used deterministic reasons despite a 45-story eligible pool. Semantic fallback reason and broad importance quality remain unverified.",
+    "Full shared domain engine and more-than-64 candidate semantic coverage remain incomplete."
+  ]
+}

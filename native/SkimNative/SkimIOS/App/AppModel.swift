@@ -117,6 +117,8 @@ final class AppModel: ObservableObject {
     @Published var todayError: String?
     /// Non-nil while the lede pass is still working down the page.
     @Published var todayLedeStatus: String?
+    @Published var todayLedeNeedsRetry = false
+    private var todayTask: Task<Void, Never>?
     private var todayLoadID = UUID()
 
     let store: SkimStore
@@ -140,8 +142,34 @@ final class AppModel: ObservableObject {
 
     // Edition generation, ranking, frozen content, and consumption live in SkimCore.
     func loadTodayEdition(storyLimit: Int) async {
+        todayTask?.cancel()
         let requestID = UUID()
         todayLoadID = requestID
+        todayLedeStatus = nil
+        todayLedeNeedsRetry = false
+        let task = Task {
+            await performTodayLoad(storyLimit: storyLimit, requestID: requestID)
+            guard !Task.isCancelled, todayLoadID == requestID, todayError == nil else { return }
+            await writeTodayLedes()
+        }
+        todayTask = task
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+    }
+
+    func cancelTodayWork() {
+        todayTask?.cancel()
+        todayTask = nil
+        todayLoadID = UUID()
+        todayLedeStatus = nil
+        isLoadingToday = false
+    }
+
+    func retryTodayLedes() async {
+        guard let edition = todayEdition else { return }
+        await loadTodayEdition(storyLimit: edition.edition.storyLimit)
+    }
+
+    private func performTodayLoad(storyLimit: Int, requestID: UUID) async {
         let now = Date()
         let start = Calendar.current.startOfDay(for: now)
         let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
@@ -175,10 +203,10 @@ final class AppModel: ObservableObject {
                 generatedAt: now, preferences: tasteStore.todayRankingPreferences(),
                 semanticEvaluator: evaluator
             )
-            guard todayLoadID == requestID else { return }
+            guard !Task.isCancelled, todayLoadID == requestID else { return }
             todayEdition = edition
         } catch {
-            guard todayLoadID == requestID else { return }
+            guard !Task.isCancelled, todayLoadID == requestID else { return }
             todayError = error.localizedDescription
         }
     }
@@ -188,7 +216,7 @@ final class AppModel: ObservableObject {
     /// writes a real lede for the stories at the top of the page, one at a
     /// time, republishing the page after each so they appear as they land.
     /// Cheap to call on every load: stories that already have one are skipped.
-    func writeTodayLedes(limit: Int = 6) async {
+    private func writeTodayLedes(limit: Int = 6) async {
         guard settings.ai.provider != "none",
               let edition = todayEdition,
               !edition.items.isEmpty
@@ -200,18 +228,45 @@ final class AppModel: ObservableObject {
             ($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         guard !pending.isEmpty else { return }
-        defer { if todayLoadID == requestID { todayLedeStatus = nil } }
+        defer {
+            if todayLoadID == requestID {
+                todayLedeStatus = nil
+                todayLedeNeedsRetry = todayEdition?.items.prefix(limit).contains {
+                    ($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                } ?? false
+            }
+        }
 
         for (index, item) in pending.enumerated() {
             // A reload, a different day or a different story limit ends the pass.
-            guard todayLoadID == requestID, todayEdition?.id == editionID else { return }
+            guard !Task.isCancelled, todayLoadID == requestID, todayEdition?.id == editionID else { return }
 
             todayLedeStatus = pending.count == 1
                 ? "Writing the lead story…"
                 : "Writing story \(index + 1) of \(pending.count)…"
 
-            let articles = item.sourceArticles.compactMap(\.liveArticle)
-            guard !articles.isEmpty else { continue }
+            let feedArticles = item.sourceArticles.compactMap(\.liveArticle).map { article in
+                var copy = article
+                let plain = ArticleReaderContentLoader.displayBody(for: article)
+                copy.contentText = nil
+                let html = ArticleReaderContentLoader.displayBody(for: copy)
+                copy.contentText = html.count > plain.count ? html : plain
+                return copy
+            }
+            let evidenceStore = store
+            guard let articles = try? await TodayReaderEvidence.resolve(
+                articles: feedArticles, limit: TodayLedePolicy.maxArticles,
+                cached: { article in
+                    let disk = ArticleReaderContentLoader.sanitizedText(try? await evidenceStore.cachedReaderText(articleID: article.id)) ?? ""
+                    let memory = ArticleReaderContentLoader.sanitizedText(ExtractedContentCache.shared.get(article.id)) ?? ""
+                    return memory.count > disk.count ? memory : disk
+                },
+                fetch: { article in try await ArticleReaderContentLoader.loadText(for: article).text }
+            ), !articles.isEmpty else {
+                if Task.isCancelled { return }
+                continue
+            }
+            guard !Task.isCancelled, todayLoadID == requestID else { return }
 
             // One story failing to write is not worth losing the page over.
             guard let lede = try? await NativeAI.catchUpLede(
@@ -220,13 +275,14 @@ final class AppModel: ObservableObject {
                 settings: settings
             ), !lede.isEmpty else { continue }
 
-            guard todayLoadID == requestID, todayEdition?.id == editionID else { return }
+            guard !Task.isCancelled, todayLoadID == requestID, todayEdition?.id == editionID else { return }
             if let updated = try? await store.setTodayEditionItemLede(
                 editionID: editionID,
                 storyID: item.snapshot.storyID,
                 lede: lede
             ) {
-                todayEdition = updated
+                guard !Task.isCancelled, todayLoadID == requestID else { return }
+                todayEdition = TodayEditionMerge.ledes(current: todayEdition, response: updated)
             }
         }
     }
@@ -243,7 +299,7 @@ final class AppModel: ObservableObject {
                 isConsumed: !item.snapshot.isConsumed
             )
             if todayLoadID == requestID, todayEdition?.id == edition.id {
-                todayEdition = updated
+                todayEdition = TodayEditionMerge.consumption(current: todayEdition, response: updated)
             }
             await reloadArticles()
         } catch {

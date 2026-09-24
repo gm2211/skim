@@ -1,9 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import * as commands from "../services/commands";
+import type { TodayEditionView } from "../services/types";
 import { msUntilWindowRollover, todayWindow, type TodayWindow } from "../lib/todayEdition";
 import { useSettings } from "./useSettings";
+
+/** Merge ledes without allowing an older whole-edition snapshot to erase newer state. */
+function mergeLedesIntoCurrent(current: TodayEditionView | undefined, incoming: TodayEditionView): TodayEditionView {
+  if (!current || current.edition.id !== incoming.edition.id) return incoming;
+  const ledes = new Map(incoming.items.filter((item) => item.lede?.trim()).map((item) => [item.story_id, item.lede]));
+  if (ledes.size === 0) return current;
+  return {
+    ...current,
+    items: current.items.map((item) => !item.lede?.trim() && ledes.has(item.story_id) ? { ...item, lede: ledes.get(item.story_id)! } : item),
+  };
+}
+
+/** Keep the latest generated ledes while applying a consumption-save response. */
+function preserveLatestLedes(saveView: TodayEditionView, current: TodayEditionView | undefined): TodayEditionView {
+  if (!current || current.edition.id !== saveView.edition.id) return saveView;
+  const ledes = new Map(current.items.filter((item) => item.lede?.trim()).map((item) => [item.story_id, item.lede]));
+  if (ledes.size === 0) return saveView;
+  return {
+    ...saveView,
+    items: saveView.items.map((item) => ledes.has(item.story_id) ? { ...item, lede: ledes.get(item.story_id)! } : item),
+  };
+}
 
 export function useTodayStoryLimit(): number {
   const { data: settings } = useSettings();
@@ -40,6 +63,8 @@ function useTodayWindow(): TodayWindow {
 export function useTodayEdition() {
   const qc = useQueryClient();
   const storyLimit = useTodayStoryLimit();
+  const { data: settings } = useSettings();
+  const aiEnabled = !!settings && settings.ai.provider !== "none";
   const win = useTodayWindow();
   const queryKey = useMemo(() => ["todayEdition", win.startsAt, win.endsAt, storyLimit] as const, [win.startsAt, win.endsAt, storyLimit]);
 
@@ -69,7 +94,7 @@ export function useTodayEdition() {
       return { view, key: queryKey };
     },
     onSuccess: ({ view, key }) => {
-      qc.setQueryData(key, view);
+      qc.setQueryData<TodayEditionView>(key, (current) => preserveLatestLedes(view, current));
       // set_today_edition_item_consumed also marks the underlying member
       // articles read server-side — the raw article/feed views need to
       // reflect that too.
@@ -92,45 +117,70 @@ export function useTodayEdition() {
     resetConsumed();
   }, [queryKey, editionId, resetConsumed]);
   const [ledeProgress, setLedeProgress] = useState<commands.TodayLedeProgress | null>(null);
+  const [requests, setRequests] = useState<Record<string, "pending" | "settled">>({});
+  const attempted = useRef(new Set<string>());
+  const inFlight = useRef(new Map<string, string>());
+  const currentEdition = useRef(editionId);
+  currentEdition.current = editionId;
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const missingLedes = !!query.data?.items.slice(0, 6).some((item) => !item.lede?.trim());
+  const isWritingLedes = !!editionId && requests[editionId] === "pending";
+
+  const retryLedes = useCallback(() => {
+    if (!editionId || !aiEnabled || !missingLedes || inFlight.current.has(editionId)) return;
+    const requestId = globalThis.crypto?.randomUUID?.()
+      ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    attempted.current.add(editionId);
+    inFlight.current.set(editionId, requestId);
+    setRequests((state) => ({ ...state, [editionId]: "pending" }));
+    setLedeProgress(null);
+    // Capture the cache key; effect cleanup must not discard a valid response
+    // or leave a request permanently pending (including StrictMode replays).
+    void commands.generateTodayLedes(editionId, requestId).then((view) => {
+      if (view.edition.id === editionId) {
+        qc.setQueryData<TodayEditionView>(queryKey, (current) => mergeLedesIntoCurrent(current, view));
+      }
+    }).catch(() => {
+      // Snapshot excerpts remain readable. Missing summaries expose a retry.
+    }).finally(() => {
+      if (inFlight.current.get(editionId) === requestId) inFlight.current.delete(editionId);
+      if (!mounted.current) return;
+      setRequests((state) => ({ ...state, [editionId]: "settled" }));
+      if (currentEdition.current === editionId) setLedeProgress(null);
+    });
+  }, [editionId, aiEnabled, missingLedes, qc, queryKey]);
+
+  useEffect(() => {
+    if (editionId && !attempted.current.has(editionId)) retryLedes();
+  }, [editionId, retryLedes]);
+
   useEffect(() => {
     let unlisten: (() => void) | null = null;
     let cancelled = false;
     setLedeProgress(null);
     listen<commands.TodayLedeProgress>(commands.TODAY_LEDE_PROGRESS_EVENT, (event) => {
-      if (cancelled || event.payload.view.edition.id !== editionId) return;
-      qc.setQueryData(queryKey, event.payload.view);
-      // The last emit carries no message and completes the count.
+      const activeRequestId = editionId ? inFlight.current.get(editionId) : undefined;
+      if (cancelled || !editionId || !activeRequestId
+        || event.payload.edition_id !== editionId
+        || event.payload.request_id !== activeRequestId
+        || event.payload.view.edition.id !== editionId) return;
+      qc.setQueryData<TodayEditionView>(queryKey, (current) => mergeLedesIntoCurrent(current, event.payload.view));
       const done = event.payload.completed >= event.payload.total;
-      setLedeProgress(done ? null : event.payload);
+      // A delayed terminal event must not resurrect a completed spinner.
+      setLedeProgress(!done && inFlight.current.get(editionId) === activeRequestId ? event.payload : null);
     }).then((fn) => {
       if (cancelled) fn();
       else unlisten = fn;
-    }).catch(() => { /* The page remains usable without progress events. */ });
+    }).catch(() => { /* Invocation completion also clears loading. */ });
     return () => {
       cancelled = true;
       if (unlisten) unlisten();
     };
   }, [qc, queryKey, editionId]);
-
-  // One pass per edition per session; the backend also skips stories that
-  // already carry a lede, so a repeat call is cheap but pointless.
-  const requestedFor = useRef<string | null>(null);
-  const hasStories = (query.data?.items.length ?? 0) > 0;
-  useEffect(() => {
-    if (!editionId || !hasStories || requestedFor.current === editionId) return;
-    requestedFor.current = editionId;
-    let cancelled = false;
-    commands
-      .generateTodayLedes(editionId)
-      .then((view) => {
-        if (!cancelled && view.edition.id === editionId) qc.setQueryData(queryKey, view);
-      })
-      .catch(() => {
-        // Today is readable without ledes; a failure here is not the page's.
-      })
-      .finally(() => { if (!cancelled) setLedeProgress(null); });
-    return () => { cancelled = true; };
-  }, [editionId, hasStories, qc, queryKey]);
 
   return {
     ...query,
@@ -138,5 +188,8 @@ export function useTodayEdition() {
     storyLimit,
     setConsumed,
     ledeProgress,
+    isWritingLedes,
+    canRetryLedes: aiEnabled && missingLedes && !isWritingLedes,
+    retryLedes,
   };
 }

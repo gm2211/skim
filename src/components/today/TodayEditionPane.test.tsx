@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -5,6 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TodayEditionPane } from "./TodayEditionPane";
 import type { AppSettings, TodayEditionItem, TodayEditionView } from "../../services/types";
+import { todayWindow } from "../../lib/todayEdition";
 import { useUiStore } from "../../stores/uiStore";
 
 vi.mock("../../services/commands", () => ({
@@ -114,11 +116,16 @@ function makeView(items: TodayEditionItem[]): TodayEditionView {
   };
 }
 
-function renderPane() {
+function renderPane(strict = false, cached?: TodayEditionView) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (cached) {
+    const win = todayWindow();
+    qc.setQueryData(["todayEdition", win.startsAt, win.endsAt, 10], cached);
+    qc.setQueryData(["settings"], { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } });
+  }
   const result = render(
     <QueryClientProvider client={qc}>
-      <TodayEditionPane />
+      {strict ? <StrictMode><TodayEditionPane /></StrictMode> : <TodayEditionPane />}
     </QueryClientProvider>,
   );
   return { ...result, qc };
@@ -333,6 +340,7 @@ describe("Today interaction and async boundaries", () => {
   });
 
   it("ignores other editions' ledes and retains one stable subscription", async () => {
+    vi.mocked(commands.getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } });
     const view = makeView([makeItem({})]);
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
     renderPane();
@@ -341,13 +349,14 @@ describe("Today interaction and async boundaries", () => {
     const calls = vi.mocked(listen).mock.calls;
     const callback = calls[calls.length - 1][1];
     const count = calls.length;
-    const event = (eventView: TodayEditionView) => ({ event: "today_lede_progress", id: 1, payload: { edition_id: eventView.edition.id, completed: 1, total: 2, message: "Preparing summaries", view: eventView } });
+    const requestId = vi.mocked(commands.generateTodayLedes).mock.calls[0][1];
+    const event = (eventView: TodayEditionView, request_id = requestId) => ({ event: "today_lede_progress", id: 1, payload: { edition_id: eventView.edition.id, request_id, completed: 1, total: 2, message: "Preparing summaries", view: eventView } });
     const other = makeView([makeItem({ snapshot_title: "Wrong edition" })]);
     other.edition.id = "tomorrow";
     await act(async () => callback(event(other)));
     expect(screen.queryByText("Wrong edition")).not.toBeInTheDocument();
     await act(async () => callback(event(makeView([makeItem({ lede: "The written summary" })]))));
-    expect(screen.getByText("The written summary")).toBeInTheDocument();
+    expect(await screen.findByText("The written summary")).toBeInTheDocument();
     expect(vi.mocked(listen).mock.calls.length).toBe(count);
   });
 });
@@ -369,4 +378,163 @@ it("uses the desktop width until an article is opened", async () => {
   expect(pane).toHaveStyle({ width: "100%" });
   await userEvent.click(await screen.findByRole("button", { name: "Default snapshot title" }));
   expect(pane).toHaveStyle({ width: "420px" });
+});
+
+
+describe("Today summary retries", () => {
+  function enableAI() {
+    vi.mocked(commands.getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } });
+  }
+  it("leaves no-AI excerpts readable without loading or a misleading retry", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    await screen.findByText("Default summary");
+    expect(commands.generateTodayLedes).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Retry summaries" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();
+  });
+
+  it.each(["failure", "partial"])("allows explicit retry after %s without automatic loops or regenerating", async (outcome) => {
+    enableAI();
+    const view = makeView([makeItem({})]);
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
+    if (outcome === "failure") vi.mocked(commands.generateTodayLedes).mockRejectedValueOnce(new Error("Unavailable"));
+    else vi.mocked(commands.generateTodayLedes).mockResolvedValueOnce(view);
+    vi.mocked(commands.generateTodayLedes).mockResolvedValueOnce(makeView([makeItem({ lede: "Recovered summary" })]));
+    renderPane(true);
+    await userEvent.click(await screen.findByRole("button", { name: "Retry summaries" }));
+    expect(await screen.findByText("Recovered summary")).toBeInTheDocument();
+    expect(commands.generateTodayLedes).toHaveBeenCalledTimes(2);
+    expect(commands.getOrGenerateTodayEdition).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry summaries" })).not.toBeInTheDocument();
+  });
+
+  it("applies completion after StrictMode replays a cached edition's effect", async () => {
+    enableAI();
+    const view = makeView([makeItem({})]);
+    let finish!: (view: TodayEditionView) => void;
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
+    vi.mocked(commands.generateTodayLedes).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const { qc } = renderPane(true, view);
+    await waitFor(() => expect(qc.isFetching()).toBe(0));
+    expect(commands.generateTodayLedes).toHaveBeenCalledTimes(1);
+    await act(async () => finish(makeView([makeItem({ lede: "Completed after effect replay" })])));
+    expect(await screen.findByText("Completed after effect replay")).toBeInTheDocument();
+    expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();
+    const calls = vi.mocked(listen).mock.calls;
+    const callback = calls[calls.length - 1][1];
+    await act(async () => callback({ event: "today_lede_progress", id: 1, payload: { edition_id: view.edition.id, request_id: "previous-attempt", completed: 0, total: 1, message: "Stale progress", view } }));
+    expect(screen.getByText("Completed after effect replay")).toBeInTheDocument();
+    expect(screen.queryByText("Stale progress")).not.toBeInTheDocument();
+  });
+
+  it("survives effect replays and isolates delayed prior-edition completion", async () => {
+    enableAI();
+    let finish!: (view: TodayEditionView) => void;
+    const first = makeView([makeItem({ snapshot_title: "First edition" })]);
+    const next = makeView([makeItem({ snapshot_title: "Second edition" })]);
+    next.edition = { ...next.edition, id: "second", story_limit: 5 };
+    vi.mocked(commands.getOrGenerateTodayEdition).mockImplementation(async (_a, _b, _c, limit) => limit === 5 ? next : first);
+    vi.mocked(commands.generateTodayLedes).mockImplementation((id) => id === first.edition.id ? new Promise((resolve) => { finish = resolve; }) : Promise.resolve(next));
+    const { qc } = renderPane(true);
+    await screen.findByText("Preparing summaries…");
+    expect(commands.generateTodayLedes).toHaveBeenCalledTimes(1);
+    await act(async () => { qc.setQueryData(["settings"], { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" }, sync: { ...DEFAULT_SETTINGS.sync, today_story_limit: 5 } }); });
+    await screen.findByText("Second edition");
+    await screen.findByRole("button", { name: "Retry summaries" });
+    await act(async () => finish({ ...first, items: [makeItem({ lede: "Late first summary" })] }));
+    expect(screen.queryByText("Late first summary")).not.toBeInTheDocument();
+    expect(screen.getByText("Second edition")).toBeInTheDocument();
+    expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();
+    expect(commands.generateTodayLedes).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores delayed progress from a previous attempt while retrying the same edition", async () => {
+    enableAI();
+    const view = makeView([makeItem({})]);
+    let finishRetry!: (view: TodayEditionView) => void;
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
+    vi.mocked(commands.generateTodayLedes)
+      .mockRejectedValueOnce(new Error("Temporary failure"))
+      .mockImplementationOnce(() => new Promise((resolve) => { finishRetry = resolve; }));
+    renderPane();
+    await userEvent.click(await screen.findByRole("button", { name: "Retry summaries" }));
+    await screen.findByText("Preparing summaries…");
+    const calls = vi.mocked(commands.generateTodayLedes).mock.calls;
+    expect(calls).toHaveLength(2);
+    const previousRequestId = calls[0][1];
+    const activeRequestId = calls[1][1];
+    expect(activeRequestId).toBeTruthy();
+    expect(activeRequestId).not.toBe(previousRequestId);
+    const listeners = vi.mocked(listen).mock.calls;
+    const callback = listeners[listeners.length - 1][1];
+    const stale = makeView([makeItem({ lede: "Stale prior-attempt summary" })]);
+    await act(async () => callback({
+      event: "today_lede_progress", id: 1,
+      payload: { edition_id: view.edition.id, request_id: previousRequestId, completed: 1, total: 1, message: "Old attempt", view: stale },
+    }));
+    expect(screen.queryByText("Stale prior-attempt summary")).not.toBeInTheDocument();
+    expect(screen.queryByText("Old attempt")).not.toBeInTheDocument();
+    const current = makeView([makeItem({ lede: "Current retry summary" })]);
+    await act(async () => callback({
+      event: "today_lede_progress", id: 1,
+      payload: { edition_id: view.edition.id, request_id: activeRequestId, completed: 0, total: 1, message: "Current attempt", view: current },
+    }));
+    expect(screen.getByText("Current retry summary")).toBeInTheDocument();
+    expect(screen.getByText("Current attempt")).toBeInTheDocument();
+    await act(async () => finishRetry(current));
+    expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();
+  });
+
+  it("keeps consumed state when same-attempt lede progress and completion arrive later", async () => {
+    enableAI();
+    const view = makeView([makeItem({})]);
+    let finishLedes!: (view: TodayEditionView) => void;
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
+    vi.mocked(commands.generateTodayLedes).mockReturnValue(new Promise((resolve) => { finishLedes = resolve; }));
+    const consumed = makeView([makeItem({ is_consumed: true, consumed_at: 42 })]);
+    vi.mocked(commands.setTodayEditionItemConsumed).mockResolvedValue(consumed);
+    renderPane();
+    await userEvent.click(await screen.findByRole("button", { name: "Mark as read" }));
+    await screen.findByText("All caught up");
+    const callbacks = vi.mocked(listen).mock.calls;
+    const callback = callbacks[callbacks.length - 1][1];
+    const requestId = vi.mocked(commands.generateTodayLedes).mock.calls[0][1];
+    const lateProgress = makeView([makeItem({ lede: "Progress lede" })]);
+    await act(async () => callback({ event: "today_lede_progress", id: 1, payload: {
+      edition_id: view.edition.id, request_id: requestId, completed: 0, total: 1, message: "Writing", view: lateProgress,
+    } }));
+    expect(screen.getByText("All caught up")).toBeInTheDocument();
+    expect(screen.getByText("Progress lede")).toBeInTheDocument();
+    const lateCompletion = makeView([makeItem({ lede: "Completed lede" })]);
+    await act(async () => finishLedes(lateCompletion));
+    expect(screen.getByText("All caught up")).toBeInTheDocument();
+    expect(screen.getByText("Progress lede")).toBeInTheDocument();
+  });
+
+  it("keeps a newly written lede when an earlier consumption save returns", async () => {
+    enableAI();
+    const view = makeView([makeItem({})]);
+    let finishLedes!: (view: TodayEditionView) => void;
+    let resolveSave!: (view: TodayEditionView) => void;
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
+    vi.mocked(commands.generateTodayLedes).mockReturnValue(new Promise((resolve) => { finishLedes = resolve; }));
+    vi.mocked(commands.setTodayEditionItemConsumed).mockReturnValue(new Promise((resolve) => { resolveSave = resolve; }));
+    renderPane();
+    await userEvent.click(await screen.findByRole("button", { name: "Mark as read" }));
+    const callbacks = vi.mocked(listen).mock.calls;
+    const callback = callbacks[callbacks.length - 1][1];
+    const requestId = vi.mocked(commands.generateTodayLedes).mock.calls[0][1];
+    const latestLede = makeView([makeItem({ lede: "Lede finished while save was pending" })]);
+    await act(async () => callback({ event: "today_lede_progress", id: 1, payload: {
+      edition_id: view.edition.id, request_id: requestId, completed: 1, total: 1, message: "Finished", view: latestLede,
+    } }));
+    expect(screen.getByText("Lede finished while save was pending")).toBeInTheDocument();
+    const savedWithoutLede = makeView([makeItem({ is_consumed: true, consumed_at: 42 })]);
+    await act(async () => resolveSave(savedWithoutLede));
+    expect(screen.getByText("All caught up")).toBeInTheDocument();
+    expect(screen.getByText("Lede finished while save was pending")).toBeInTheDocument();
+    await act(async () => finishLedes(latestLede));
+  });
 });

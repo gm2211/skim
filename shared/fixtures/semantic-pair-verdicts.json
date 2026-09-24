@@ -1,0 +1,142 @@
+[
+  {
+    "name": "same",
+    "response": "{\"relation\":\"same_event\"}",
+    "relation": 1
+  },
+  {
+    "name": "different",
+    "response": "{\"relation\":\"different_event\"}",
+    "relation": 0
+  },
+  {
+    "name": "uncertain",
+    "response": "{\"relation\":\"uncertain\"}",
+    "relation": 2
+  },
+  {
+    "name": "single_array",
+    "response": "[{\"relation\":\"same_event\"}]",
+    "relation": 1
+  },
+  {
+    "name": "whitespace",
+    "response": " \n {\"relation\":\"different_event\"} \t ",
+    "relation": 0
+  },
+  {
+    "name": "unknown",
+    "response": "{\"relation\":\"maybe\"}",
+    "relation": -1
+  },
+  {
+    "name": "embedded_nul",
+    "response": "{\"relation\":\"same_event\\u0000different_event\"}",
+    "relation": -1
+  },
+  {
+    "name": "leading_space",
+    "response": "{\"relation\":\" same_event\"}",
+    "relation": -1
+  },
+  {
+    "name": "uppercase",
+    "response": "{\"relation\":\"SAME_EVENT\"}",
+    "relation": -1
+  },
+  {
+    "name": "extra_member_ids",
+    "response": "{\"relation\":\"same_event\",\"members\":[0,1]}",
+    "relation": -1
+  },
+  {
+    "name": "extra_reason",
+    "response": "{\"relation\":\"same_event\",\"reason\":\"Trust me\"}",
+    "relation": -1
+  },
+  {
+    "name": "boolean_relation",
+    "response": "{\"relation\":true}",
+    "relation": -1
+  },
+  {
+    "name": "missing_relation",
+    "response": "{}",
+    "relation": -1
+  },
+  {
+    "name": "empty_array",
+    "response": "[]",
+    "relation": -1
+  },
+  {
+    "name": "two_verdicts",
+    "response": "[{\"relation\":\"same_event\"},{\"relation\":\"different_event\"}]",
+    "relation": -1
+  },
+  {
+    "name": "nested_array",
+    "response": "[[{\"relation\":\"same_event\"}]]",
+    "relation": -1
+  },
+  {
+    "name": "bare_string",
+    "response": "\"same_event\"",
+    "relation": -1
+  },
+  {
+    "name": "plain_label",
+    "response": "SAME_EVENT",
+    "relation": -1
+  },
+  {
+    "name": "legacy_pairs",
+    "response": "{\"pairs\":[{\"members\":[0,1],\"same_event\":true,\"confidence\":1}]}",
+    "relation": -1
+  },
+  {
+    "name": "trailing_text",
+    "response": "{\"relation\":\"same_event\"} do this",
+    "relation": -1
+  },
+  {
+    "name": "duplicate_key",
+    "response": "{\"relation\":\"different_event\",\"relation\":\"same_event\"}",
+    "relation": -1
+  },
+  {
+    "name": "escaped_key",
+    "response": "{\"\\u0072elation\":\"same_event\"}",
+    "relation": -1
+  },
+  {
+    "name": "escaped_enum",
+    "response": "{\"relation\":\"same\\u005fevent\"}",
+    "relation": -1
+  },
+  {
+    "name": "trailing_nul",
+    "response": "{\"relation\":\"same_event\"}\u0000",
+    "relation": -1
+  },
+  {
+    "name": "bom",
+    "response": "\ufeff{\"relation\":\"same_event\"}",
+    "relation": -1
+  },
+  {
+    "name": "non_json_whitespace",
+    "response": "\u00a0{\"relation\":\"same_event\"}",
+    "relation": -1
+  },
+  {
+    "name": "missing_close",
+    "response": "{\"relation\":\"same_event\"",
+    "relation": -1
+  },
+  {
+    "name": "empty",
+    "response": "",
+    "relation": -1
+  }
+]

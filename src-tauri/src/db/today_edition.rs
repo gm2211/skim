@@ -65,6 +65,7 @@ pub struct Candidate {
     constituents: Vec<(String, i64)>,
     semantic_reason: Option<String>,
     timestamp: i64,
+    evidence: String,
     sources: Vec<MemberSnapshot>,
 }
 
@@ -192,7 +193,14 @@ pub fn collect_candidates(
         let is_update = memberships
             .iter()
             .any(|membership| membership.membership_type == StoryMembershipType::Update);
+        let evidence = revision.representative_article_id.as_deref()
+            .map(|id| queries::get_article_by_id(conn, id)).transpose()?.flatten()
+            .and_then(|article| article.article.content_text)
+            .filter(|text| !text.trim().is_empty())
+            .unwrap_or_else(|| revision.summary.clone())
+            .chars().take(super::story_policy::semantic_evidence_characters()).collect();
         candidates.push(Candidate {
+            evidence,
             timestamp: story.last_activity_at,
             sources: member_snapshots(
                 conn,
@@ -221,7 +229,8 @@ pub fn semantic_listing(candidates: &[Candidate]) -> String {
                     "title": candidate.revision.title.chars().take(240).collect::<String>(),
                     "excerpt": candidate.revision.summary.chars().take(240).collect::<String>(),
                     "timestamp": candidate.timestamp as f64,
-                    "baseScore": candidate.rank.score
+                    "baseScore": candidate.rank.score,
+                    "evidence": candidate.evidence
                 })
             })
             .collect::<Vec<_>>(),
@@ -939,7 +948,7 @@ mod tests {
         let value: serde_json::Value =
             serde_json::from_str(&semantic_listing(&candidates)).unwrap();
         let first = &value[0];
-        assert_eq!(first.as_object().unwrap().len(), 5);
+        assert_eq!(first.as_object().unwrap().len(), 6);
         assert_eq!(first["index"], 0);
         assert_eq!(first["title"].as_str().unwrap().chars().count(), 240);
         assert_eq!(first["excerpt"].as_str().unwrap().chars().count(), 240);
@@ -948,6 +957,29 @@ mod tests {
             Some(candidates[0].timestamp as f64)
         );
         assert_eq!(first["baseScore"].as_f64(), Some(candidates[0].rank.score));
+    }
+
+    #[test]
+    fn representative_body_evidence_is_bounded_and_invalidates_stale_plan() {
+        let conn = setup_empty();
+        add_story(&conn, "first", 1, false, GENERATED_AT - 20);
+        add_story(&conn, "second", 1, false, GENERATED_AT - 10);
+        let body = format!("{}The permit was denied, not granted. {}", "Context. ".repeat(40), "界".repeat(2500));
+        conn.execute("UPDATE articles SET content_text = ?1 WHERE id = 'first-article-1'", [&body]).unwrap();
+        let candidates = collect_candidates(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        let candidate = candidates.iter().find(|c| c.rank.story_id == "first").unwrap();
+        assert!(candidate.evidence.contains("permit was denied"));
+        assert_eq!(candidate.evidence.chars().count(), 2048);
+        let fingerprint = candidate_fingerprint(&candidates);
+        conn.execute("UPDATE articles SET content_text = 'Changed underlying evidence' WHERE id = 'first-article-1'", []).unwrap();
+        let groups = super::super::semantic_edition::parse(r#"{"groups":[{"members":[0,1],"importance":5,"confidence":1,"reason":"same event"}]}"#, 2);
+        let edition = finish_semantic(&conn, DAY_START, DAY_END, GENERATED_AT, 5, &fingerprint, groups).unwrap();
+        assert_eq!(edition.items.len(), 2, "stale evidence must discard merge");
+        conn.execute("UPDATE articles SET content_text = ' ' WHERE id = 'first-article-1'", []).unwrap();
+        let fresh = collect_candidates(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        let candidate = fresh.iter().find(|c| c.rank.story_id == "first").unwrap();
+        assert_eq!(candidate.evidence, candidate.revision.summary);
+        assert_eq!(frozen(&conn, &edition.edition.id).unwrap().unwrap().items.len(), 2);
     }
 
     #[test]

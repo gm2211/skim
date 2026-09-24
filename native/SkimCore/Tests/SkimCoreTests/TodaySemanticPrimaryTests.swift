@@ -22,7 +22,7 @@ private func primaryCandidates(_ count: Int) -> [TodaySemanticCandidate] {
     let response = #"[{"members":[0,1],"importance":4,"confidence":1,"reason":"First event"},{"members":[1,2],"importance":4,"confidence":1,"reason":"Overlapping event"},{"members":[true,2],"importance":4,"confidence":1,"reason":"Invalid handle"},{"members":[2,99],"importance":4,"confidence":1,"reason":"Unknown handle"}]"#
     let plan = try TodaySemanticPolicy.verificationPlan(groups: TodaySemanticPolicy.decode(response), candidates: primaryCandidates(3))
     #expect(plan.pairs == [[0, 1]])
-    let verified = try TodaySemanticPolicy.verify(response: #"[{"pair":[0,1],"same_event":true,"confidence":1}]"#, plan: plan)
+    let verified = try TodaySemanticPolicy.verify(response: #"{"relation":"same_event"}"#, plan: plan)
     #expect(verified.count == 1)
     #expect(verified[0].members == [0, 1])
 }
@@ -37,7 +37,7 @@ private func primaryCandidates(_ count: Int) -> [TodaySemanticCandidate] {
     let plan = try TodaySemanticPolicy.verificationPlan(groups: decoded, candidates: primaryCandidates(fixture.candidate_count))
     #expect(plan.pairs.count == 3)
     let decisions: [[String: Any]] = plan.pairs.map { ["pair": $0, "same_event": true, "confidence": 1.0] }
-    let verified = try TodaySemanticPolicy.verify(response: String(decoding: JSONSerialization.data(withJSONObject: decisions), as: UTF8.self), plan: plan)
+    let verified = try verifyHistoricalDecisions(String(decoding: JSONSerialization.data(withJSONObject: decisions), as: UTF8.self), plan: plan)
     #expect(verified.count == 42)
     #expect(verified.flatMap(\.members).map(Int.init).sorted() == Array(0..<45))
 }

@@ -1,5 +1,14 @@
 # Mobile and desktop architecture comparison
 
+## Latest verification: shared original-evidence pair verdicts
+
+The functional Tauri desktop and native iOS release paths now compile one C parser and policy for single-pair semantic decisions. Both preserve original representative source text (up to 2,048 Unicode scalars), keep report identities in code and request a 160-token relation verdict. Rust/Swift production payloads, prompts and budgets are byte-identical across 17 checked pairs. Both retain their existing proposal/rating inputs, cancellation, atomic publication and 30-second deadline. New complete-pipeline regression tests cover evidence flow and rating fallback.
+
+All 550 automated checks pass. Local-model evidence is narrower: 9/9 development labels and 7/8 fresh pair labels match; a full 13-report planner run still falsely merges trial remarks and later sentencing. Identical inputs can produce different verdicts across runs. [Quality record](releases/2026-09-24-semantic-verdict-quality.json) retains these failures. This shares production policy and fixes evidence/identity handling; it does not complete full-pool coverage, model accuracy or the remaining domain-engine migration.
+
+Desktop 0.1.35 is installed; iOS 0.1.13 (72) is `VALID` and `IN_BETA_TESTING` for internal testers, with final state in the [release record](releases/2026-09-24-semantic-verdict-release.json). Artifacts contain 32 desktop/31 native shared C symbols plus 88 shared Swift policy symbols each. The native difference is an inlined one-pair constant, verified by disassembly. Installed native interaction remains unaccepted because the Mac is locked; the localhost UI awaits Terms approval.
+
+
 Initial audit: 2026-09-20; shared policy, reader and cancellation update: 2026-09-24. Evidence includes source/build paths and inspection of the release artifacts described below. It does not establish installed-app runtime acceptance or complete feature parity. The feature matrix distinguishes resolved and remaining issues. Historical validation below refers to the initial audit; current checks and releases are recorded in `docs/CATCHUP_REVIEW.md`. Paths and line numbers may move with subsequent edits.
 
 ## Main finding

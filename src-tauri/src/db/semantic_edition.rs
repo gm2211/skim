@@ -153,7 +153,7 @@ async fn request(
                 },
             ],
             temperature: Some(0.0),
-            max_tokens: Some(if foundation_models { 1400 } else { 8192 }),
+            max_tokens: Some(if prompt == story_policy::semantic_pair_prompt() { story_policy::semantic_pair_output_tokens() as i64 } else if foundation_models { 1400 } else { 8192 }),
             json_mode: true,
             tools: None,
         })
@@ -196,12 +196,37 @@ fn report_listing(listing: &str, count: usize) -> Option<Vec<serde_json::Value>>
     Some(reports)
 }
 
+fn primary_listing(listing: &str) -> Option<String> {
+    let mut rows: Vec<serde_json::Value> = serde_json::from_str(listing).ok()?;
+    for row in &mut rows { row.as_object_mut()?.remove("evidence"); }
+    serde_json::to_string(&rows).ok()
+}
+
 fn pair_listing(listing: &str, count: usize, pairs: &[[usize; 2]]) -> Option<String> {
+    let [pair] = pairs else { return None; };
     let reports = report_listing(listing, count)?;
-    let referenced: std::collections::BTreeSet<_> = pairs.iter().flatten().copied().collect();
-    let reports: Vec<_> = reports.into_iter().enumerate()
-        .filter_map(|(index, report)| referenced.contains(&index).then_some(report)).collect();
-    serde_json::to_string(&serde_json::json!({"reports":reports,"pairs":pairs})).ok()
+    let inputs: Vec<serde_json::Value> = serde_json::from_str(listing).ok()?;
+    let report = |index: usize| -> Option<serde_json::Value> {
+        let mut value = reports.get(index)?.clone();
+        value.as_object_mut()?.remove("index");
+        let evidence = inputs[index].get("evidence").and_then(|v| v.as_str())
+            .filter(|text| !text.trim().is_empty())
+            .unwrap_or(inputs[index].get("excerpt")?.as_str()?);
+        value["excerpt"] = evidence.chars().take(story_policy::semantic_evidence_characters()).collect::<String>().into();
+        Some(value)
+    };
+    serde_json::to_string(&serde_json::json!({"report_a":report(pair[0])?,"report_b":report(pair[1])?})).ok()
+}
+
+fn pair_verdict(content: &str, count: usize, pairs: &[[usize; 2]]) -> Option<Vec<u8>> {
+    let [pair] = pairs else { return None; };
+    let positive = match story_policy::semantic_pair_verdict(content) {
+        1 => true, 0 | 2 => false, _ => return None,
+    };
+    if pair[0] >= count || pair[1] >= count || pair[0] == pair[1] { return None; }
+    let mut matrix = vec![0; count.checked_mul(count)?];
+    if positive { matrix[pair[0] * count + pair[1]] = 1; matrix[pair[1] * count + pair[0]] = 1; }
+    Some(matrix)
 }
 
 fn whole_json(content: &str) -> Option<serde_json::Value> {
@@ -215,6 +240,7 @@ fn whole_json(content: &str) -> Option<serde_json::Value> {
     serde_json::from_str(unfenced).ok()
 }
 
+#[cfg(test)]
 fn pair_matrix(content: &str, count: usize, requested: &[[usize; 2]]) -> Option<Vec<u8>> {
     let decoded = whole_json(content)?;
     let results = decoded
@@ -327,7 +353,7 @@ async fn verify_memberships(
         provider,
         model,
         story_policy::semantic_prompt(),
-        listing.clone(),
+        primary_listing(&listing)?,
     )
     .await?;
     let groups = parse(&raw, count)?;
@@ -346,14 +372,17 @@ async fn verify_memberships(
         let batch = pairs.get(offset..offset.checked_add(length)?)?;
         let input = pair_listing(&listing, count, batch)?;
         let raw = request(provider, model, story_policy::semantic_pair_prompt(), input).await?;
-        let validated = pair_matrix(&raw, count, batch)?;
+        let validated = pair_verdict(&raw, count, batch)?;
         for (combined, value) in matrix.iter_mut().zip(validated) {
             *combined |= value;
         }
         offset += length;
     }
     // No group is published until every requested pair has been validated.
+    partition_groups(groups, count, &matrix)
+}
 
+fn partition_groups(groups: Vec<SemanticGroup>, count: usize, matrix: &[u8]) -> Option<VerifiedPlan> {
     let mut verified = Vec::new();
     let mut rating_ids = Vec::new();
     for group in groups {
@@ -384,7 +413,45 @@ async fn verify_memberships(
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
+    // Historical model outputs exercise legacy decisions, partitioning and ratings
+    // only. They are not evidence for the new relation-only request protocol.
+    fn replay_legacy(primary: &str, pairs: &str, ratings: &[String], count: usize) -> Vec<SemanticGroup> {
+        let groups = parse(primary, count).unwrap();
+        let requested = requested_pairs(&groups).unwrap();
+        let matrix = pair_matrix(pairs, count, &requested).unwrap();
+        let verified = partition_groups(groups, count, &matrix).unwrap();
+        let mut groups = verified.groups;
+        for (id, response) in verified.rating_ids.into_iter().zip(ratings) {
+            groups = apply_ratings(response, &VerifiedPlan { groups, rating_ids: vec![id] }).unwrap();
+        }
+        groups
+    }
+
+    #[test]
+    fn shared_relation_schema_corpus_and_verbatim_evidence_payload() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!("../../../shared/fixtures/semantic-pair-verdicts.json")).unwrap();
+        for case in cases.as_array().unwrap() {
+            let response = case["response"].as_str().unwrap();
+            let expected = case["relation"].as_i64().unwrap() as i32;
+            assert_eq!(story_policy::semantic_pair_verdict(response), expected, "{}", case["name"]);
+            let matrix = pair_verdict(response, 3, &[[1,2]]);
+            if expected < 0 { assert!(matrix.is_none()); }
+            else { assert_eq!(matrix.unwrap()[5], u8::from(expected == 1)); }
+        }
+        let mut rows: serde_json::Value = serde_json::from_str(&listing(2)).unwrap();
+        let evidence = format!("{}The council denied the permit, not approved it. {}", "Earlier paragraph. ".repeat(30), "界".repeat(2500));
+        rows[0]["evidence"] = evidence.clone().into();
+        let payload = pair_listing(&rows.to_string(), 2, &[[0,1]]).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert!(parsed["report_a"]["excerpt"].as_str().unwrap().contains("denied the permit, not approved"));
+        assert_eq!(parsed["report_a"]["excerpt"].as_str().unwrap(), evidence.chars().take(2048).collect::<String>());
+        assert_eq!(parsed["report_b"]["excerpt"], "Source details");
+        assert_eq!(payload, serde_json::to_string(&parsed).unwrap());
+        assert!(!primary_listing(&rows.to_string()).unwrap().contains("denied the permit"));
+    }
+
     #[test]
     fn recorded_local_model_failure_is_rejected() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
@@ -460,7 +527,7 @@ mod tests {
                 requests.push(request);
                 index
             };
-            tokio::time::sleep(self.delay).await;
+            if !self.delay.is_zero() { tokio::time::sleep(self.delay).await; }
             Ok(crate::ai::provider::ChatResponse {
                 content: self
                     .replies
@@ -538,16 +605,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn recorded_live_feed_pipeline_preserves_handles_and_independent_labels() {
+    async fn legacy_recorded_decisions_preserve_handles_and_independent_labels() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
             "../../../shared/fixtures/semantic-live-feed-replay.json"
         )).unwrap();
         let candidates = fixture["candidates"].as_array().unwrap();
         let replies = fixture["responses"].as_array().unwrap().iter()
             .map(|value| value.as_str().unwrap().to_owned()).collect();
-        let provider = Scripted::new(replies);
-        let groups = plan(Some(&provider), fixture["model"].as_str().unwrap(),
-            fixture["candidates"].to_string(), candidates.len()).await.unwrap();
+        let replies: Vec<String> = replies;
+        let groups = replay_legacy(&replies[0], &replies[1], &replies[2..], candidates.len());
         let handles: Vec<_> = groups.iter().flat_map(|group| group.members.iter().copied()).collect();
         assert_eq!(handles.len(), candidates.len(), "no duplicated or lost references");
         assert_eq!(handles.iter().copied().collect::<std::collections::BTreeSet<_>>(),
@@ -571,35 +637,11 @@ mod tests {
             assert!(groups[group_for(higher)].importance > groups[group_for(lower)].importance,
                 "independent consequence comparison {higher} > {lower}");
         }
-        // Verify the complete production request protocol against the capture;
-        // labels are evaluation-only and never enter any model request.
-        let requests = provider.requests.lock().unwrap();
-        let recorded = fixture["requests"].as_array().unwrap();
-        assert_eq!(requests.len(), recorded.len());
-        for (request, expected) in requests.iter().zip(recorded) {
-            assert_eq!(request.model, expected["model"].as_str().unwrap());
-            assert_eq!(request.temperature, Some(0.0));
-            assert_eq!(request.max_tokens, Some(8192));
-            assert!(request.json_mode);
-            assert_eq!(request.messages.len(), 2);
-            assert_eq!(request.messages[0].content, expected["messages"][0]["content"].as_str().unwrap());
-            let actual: serde_json::Value = serde_json::from_str(&request.messages[1].content).unwrap();
-            let mut expected: serde_json::Value = serde_json::from_str(expected["messages"][1]["content"].as_str().unwrap()).unwrap();
-            // Historical captures sent the complete pool. The batched protocol
-            // now sends only reports named by these exact original pair IDs.
-            if request.messages[0].content == story_policy::semantic_pair_prompt() {
-                let referenced: std::collections::BTreeSet<_> = expected["pairs"].as_array().unwrap()
-                    .iter().flat_map(|pair| pair.as_array().unwrap()).map(|id| id.as_u64().unwrap()).collect();
-                expected["reports"].as_array_mut().unwrap().retain(|report|
-                    referenced.contains(&report["index"].as_u64().unwrap()));
-            }
-            assert_eq!(actual, expected);
-        }
         // Unlabeled groupings are deliberately not asserted as editorial truth.
     }
 
     #[tokio::test]
-    async fn recorded_configured_responses_pass_full_rating_pipeline() {
+    async fn legacy_recorded_decisions_pass_partition_and_rating_checks() {
         let cases: serde_json::Value = serde_json::from_str(include_str!(
             "../../../shared/fixtures/semantic-verification-responses.json"
         ))
@@ -617,16 +659,7 @@ mod tests {
                     .iter()
                     .map(|r| r.as_str().unwrap().to_string()),
             );
-            let expected_calls = replies.len();
-            let provider = Scripted::new(replies);
-            let result = plan(
-                Some(&provider),
-                case["model"].as_str().unwrap(),
-                case["candidates"].to_string(),
-                candidates.len(),
-            )
-            .await
-            .unwrap();
+            let result = replay_legacy(&replies[0], &replies[1], &replies[2..], candidates.len());
             let mut actual: Vec<_> = result
                 .iter()
                 .map(|group| {
@@ -667,41 +700,40 @@ mod tests {
                     }
                 }
             }
-            let requests = provider.requests.lock().unwrap();
-            assert_eq!(requests.len(), expected_calls);
-            for request in requests.iter().skip(2) {
-                let payload: serde_json::Value =
-                    serde_json::from_str(&request.messages[1].content).unwrap();
-                assert_eq!(
-                    payload["groups"].as_array().unwrap().len(),
-                    1,
-                    "rating must isolate one event"
-                );
-                assert_eq!(
-                    request.messages[0].content,
-                    story_policy::semantic_rating_prompt()
-                );
-            }
-            assert_eq!(
-                requests[0].messages[0].content,
-                story_policy::semantic_prompt()
-            );
-            assert_eq!(
-                requests[1].messages[0].content,
-                story_policy::semantic_pair_prompt()
-            );
-            assert_eq!(
-                requests[0].messages[1].content,
-                case["candidates"].to_string()
-            );
-            let second: serde_json::Value =
-                serde_json::from_str(&requests[1].messages[1].content).unwrap();
-            assert_eq!(second.as_object().unwrap().len(), 2);
-            assert!(second.get("reports").is_some() && second.get("pairs").is_some());
-            for report in second["reports"].as_array().unwrap() {
-                assert_eq!(report.as_object().unwrap().len(), 4);
-            }
+
         }
+    }
+
+    #[tokio::test]
+    async fn scripted_planner_preserves_original_evidence_through_verdict_and_independent_ratings() {
+        // Synthetic provider responses test orchestration, not model quality.
+        let mut candidates: serde_json::Value = serde_json::from_str(&listing(2)).unwrap();
+        candidates[0]["evidence"] = format!("{}Original report: the permit was denied.", "Earlier context. ".repeat(30)).into();
+        candidates[1]["evidence"] = "Another report: a different authority approved a different permit.".into();
+        let input = candidates.to_string();
+        let provider = Scripted::new(vec![
+            first_pass(vec![0,1]),
+            r#"{"relation":"different_event"}"#.into(),
+            r#"{"ratings":[{"group_id":0,"importance":5,"confidence":1,"reason":"Urgent impact"}]}"#.into(),
+            r#"{"ratings":[{"group_id":1,"importance":1,"confidence":1,"reason":"Routine activity"}]}"#.into(),
+        ]);
+        let result = plan(Some(&provider), "configured-model", input.clone(), 2).await.unwrap();
+        assert_eq!(result.iter().map(|group|group.members.clone()).collect::<Vec<_>>(), vec![vec![0],vec![1]]);
+        assert_eq!(result.iter().map(|group|group.importance).collect::<Vec<_>>(), vec![5.0,1.0]);
+        let requests = provider.requests.lock().unwrap();
+        assert_eq!(requests.len(),4);
+        assert_eq!(requests[0].messages[1].content,primary_listing(&input).unwrap());
+        assert!(!requests[0].messages[1].content.contains("Original report"));
+        assert_eq!(requests[1].messages[0].content,story_policy::semantic_pair_prompt());
+        assert_eq!(requests[1].messages[1].content,pair_listing(&input,2,&[[0,1]]).unwrap());
+        assert!(requests[1].messages[1].content.contains("permit was denied"));
+        assert_eq!(requests[1].max_tokens,Some(160));
+        for request in &requests[2..] {
+            assert_eq!(request.messages[0].content,story_policy::semantic_rating_prompt());
+            assert!(!request.messages[1].content.contains("Original report"));
+            assert_eq!(request.max_tokens,Some(8192));
+        }
+        assert!(requests.iter().all(|request| request.model=="configured-model" && request.temperature==Some(0.0) && request.json_mode));
     }
 
     #[tokio::test]
@@ -709,7 +741,7 @@ mod tests {
         assert!(story_policy::valid_semantic_rating(5.0, 0.95));
         let provider = Scripted::new(vec![
             first_pass(vec![0, 1]),
-            r#"{"pairs":[{"members":[0,1],"same_event":false,"confidence":1}]}"#.into(),
+            r#"{"relation":"different_event"}"#.into(),
             r#"{"ratings":[{"group_id":0,"importance":5,"confidence":0.95,"reason":"Urgent public safety evacuation"}]}"#.into(),
             r#"{"ratings":[{"group_id":1,"importance":1,"confidence":0.9,"reason":"Routine product announcement"}]}"#.into(),
         ]);
@@ -741,12 +773,9 @@ mod tests {
     async fn two_pass_verification_splits_non_clique_and_preserves_reports() {
         let provider = Scripted::new(vec![
             first_pass(vec![2, 0, 1]),
-            serde_json::json!([
-                {"members":[0,1],"same_event":true,"confidence":1},
-                {"members":[0,2],"same_event":false,"confidence":1},
-                {"members":[1,2],"same_event":true,"confidence":1}
-            ])
-            .to_string(),
+            r#"{"relation":"same_event"}"#.into(),
+            r#"{"relation":"uncertain"}"#.into(),
+            r#"{"relation":"same_event"}"#.into(),
         ]);
         let result = plan(Some(&provider), "same-model", listing(3), 3)
             .await
@@ -765,20 +794,18 @@ mod tests {
             .iter()
             .all(|group| group.importance == 3.0 && group.reason == "From your feeds"));
         let calls = provider.requests.lock().unwrap();
-        assert_eq!(calls.len(), 3);
+        assert_eq!(calls.len(), 5);
         assert!(calls.iter().all(|request| request.model == "same-model"
             && request.temperature == Some(0.0)
             && request.json_mode
             && request.tools.is_none()));
         let pair_input: serde_json::Value =
             serde_json::from_str(&calls[1].messages[1].content).unwrap();
-        assert_eq!(
-            pair_input["pairs"],
-            serde_json::json!([[0, 1], [0, 2], [1, 2]])
-        );
-        assert_eq!(pair_input["reports"].as_array().unwrap().len(), 3);
-        assert_eq!(pair_input["reports"][0]["activity_date"], "2024-09-24");
-        assert_eq!(pair_input["reports"][0].as_object().unwrap().len(), 4);
+        assert_eq!(pair_input["report_a"]["activity_date"], "2024-09-24");
+        assert_eq!(pair_input["report_a"].as_object().unwrap().len(), 3);
+        assert_eq!(pair_input["report_a"]["title"], "Report 0");
+        assert_eq!(pair_input["report_b"]["title"], "Report 1");
+
     }
 
     #[tokio::test]
@@ -814,7 +841,7 @@ mod tests {
         for response in invalid {
             let provider = Scripted::new(vec![
                 first_pass(vec![0, 1]),
-                r#"{"pairs":[{"members":[0,1],"same_event":false,"confidence":1}]}"#.into(),
+                r#"{"relation":"different_event"}"#.into(),
                 r#"{"ratings":[{"group_id":0,"importance":5,"confidence":0.95,"reason":"Urgent evacuation"}]}"#.into(),
                 response,
             ]);
@@ -834,7 +861,7 @@ mod tests {
     async fn rating_deadline_preserves_neutral_memberships_without_extending_total_budget() {
         let mut provider = Scripted::new(vec![
             first_pass(vec![0, 1]),
-            r#"{"pairs":[{"members":[0,1],"same_event":false,"confidence":1}]}"#.into(),
+            r#"{"relation":"different_event"}"#.into(),
             r#"{"ratings":[{"group_id":0,"importance":5,"confidence":1,"reason":"Urgent event"}]}"#
                 .into(),
             "too late".into(),
@@ -858,7 +885,7 @@ mod tests {
     async fn confirmed_group_needs_no_new_rating_call() {
         let provider = Scripted::new(vec![
             first_pass(vec![0, 1]),
-            r#"{"pairs":[{"members":[0,1],"same_event":true,"confidence":1}]}"#.into(),
+            r#"{"relation":"same_event"}"#.into(),
         ]);
         let result = plan(Some(&provider), "fake", listing(2), 2).await.unwrap();
         assert_eq!(provider.requests.lock().unwrap().len(), 2);
@@ -883,16 +910,14 @@ mod tests {
         let mut offset = 0;
         while offset < pairs.len() {
             let length = story_policy::semantic_pair_batch_length(pairs.len(), offset);
-            replies.push(serde_json::json!({"pairs":pairs[offset..offset + length].iter().map(|pair|
-                serde_json::json!({"members":pair,"same_event":true,"confidence":1})
-            ).collect::<Vec<_>>()} ).to_string());
+            replies.push(r#"{"relation":"same_event"}"#.into());
             offset += length;
         }
         replies
     }
 
     #[tokio::test]
-    async fn all_66_pairs_verified_in_two_batches_and_singleton_importance_retained() {
+    async fn all_66_pairs_verified_individually_and_singleton_importance_retained() {
         let mut replies = positive_batch_replies(12);
         let mut primary: serde_json::Value = serde_json::from_str(&replies[0]).unwrap();
         primary["groups"].as_array_mut().unwrap().push(serde_json::json!({
@@ -906,13 +931,17 @@ mod tests {
         assert_eq!(result[1].members, vec![12]);
         assert_eq!(result[1].importance, 5.0);
         let requests = provider.requests.lock().unwrap();
-        assert_eq!(requests.len(), 3);
-        let first: serde_json::Value = serde_json::from_str(&requests[1].messages[1].content).unwrap();
-        let second: serde_json::Value = serde_json::from_str(&requests[2].messages[1].content).unwrap();
-        assert_eq!(first["pairs"].as_array().unwrap().len(), 64);
-        assert_eq!(second["pairs"], serde_json::json!([[9,11],[10,11]]));
-        assert_eq!(second["reports"].as_array().unwrap().iter().map(|r|r["index"].as_u64().unwrap()).collect::<Vec<_>>(), vec![9,10,11]);
-        assert!(!first["reports"].as_array().unwrap().iter().any(|r|r["index"] == 12));
+        assert_eq!(requests.len(), 67);
+        for request in requests.iter().skip(1) {
+            let payload: serde_json::Value = serde_json::from_str(&request.messages[1].content).unwrap();
+            assert_eq!(payload.as_object().unwrap().len(), 2);
+            assert!(payload.get("report_a").is_some() && payload.get("report_b").is_some());
+            assert!(payload["report_a"].get("index").is_none());
+            assert_ne!(payload["report_a"]["title"], "Report 12");
+            assert_ne!(payload["report_b"]["title"], "Report 12");
+            assert_eq!(request.max_tokens, Some(160));
+        }
+
     }
 
     #[tokio::test]
@@ -934,10 +963,9 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].members, (0..64).collect::<Vec<_>>());
         let requests = provider.requests.lock().unwrap();
-        assert_eq!(requests.len(), 33); // primary + ceil(2016 / 64)
-        let batches: Vec<serde_json::Value> = requests.iter().skip(1).map(|r|serde_json::from_str(&r.messages[1].content).unwrap()).collect();
-        assert!(batches.iter().all(|b| b["pairs"].as_array().unwrap().len() <= 64));
-        assert_eq!(batches.iter().map(|b|b["pairs"].as_array().unwrap().len()).sum::<usize>(), 2016);
+        assert_eq!(requests.len(), 2017);
+        assert!(requests.iter().skip(1).all(|r| r.max_tokens == Some(160)));
+
     }
 
     #[tokio::test]
@@ -978,7 +1006,7 @@ mod tests {
     async fn two_calls_share_one_deadline() {
         let mut provider = Scripted::new(vec![
             first_pass(vec![0, 1]),
-            r#"{"pairs":[{"members":[0,1],"same_event":true,"confidence":1}]}"#.into(),
+            r#"{"relation":"same_event"}"#.into(),
         ]);
         provider.delay = Duration::from_millis(60);
         assert!(plan_with_timeout(

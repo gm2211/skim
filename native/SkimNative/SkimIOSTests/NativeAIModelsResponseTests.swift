@@ -517,16 +517,16 @@ private actor TodayPairBatchTransport {
     init(failAt: Int? = nil) { self.failAt = failAt }
     func complete(instructions: String, payload: String, maxTokens: Int) throws -> String {
         #expect(instructions == TodaySemanticPolicy.pairPrompt)
-        #expect(maxTokens == 8192)
+        #expect(maxTokens == 160)
         let object = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
-        let pairs = try #require(object["pairs"] as? [[Int]])
-        let reports = try #require(object["reports"] as? [[String: Any]])
-        #expect(Set(reports.compactMap { $0["index"] as? Int }) == Set(pairs.flatMap { $0 }))
-        counts.append(pairs.count)
-        if counts.count == failAt { return "{\"pairs\":[]}" }
-        return String(decoding: try JSONSerialization.data(withJSONObject: pairs.map {
-            ["members": $0, "same_event": true, "confidence": 0.99] as [String: Any]
-        }), as: UTF8.self)
+        #expect(Set(object.keys) == ["report_a", "report_b"])
+        for key in ["report_a", "report_b"] {
+            let report = try #require(object[key] as? [String: String])
+            #expect(Set(report.keys) == ["title", "excerpt", "activity_date"])
+        }
+        counts.append(1)
+        if counts.count == failAt { return "{\"relation\":\"invented\"}" }
+        return #"{"relation":"same_event"}"#
     }
 }
 
@@ -542,7 +542,7 @@ private actor TodayPairBatchTransport {
     let result = try await NativeAI.verifyToday(plan: plan, provider: "mlx") { instructions, payload, maxTokens in
         try await transport.complete(instructions: instructions, payload: payload, maxTokens: maxTokens)
     }
-    #expect(await transport.counts == [64, 2])
+    #expect(await transport.counts == Array(repeating: 1, count: 66))
     #expect(result.map(\.members) == groups.map(\.members))
     let failing = TodayPairBatchTransport(failAt: 2)
     await #expect(throws: (any Error).self) {
@@ -550,12 +550,95 @@ private actor TodayPairBatchTransport {
             try await failing.complete(instructions: instructions, payload: payload, maxTokens: maxTokens)
         }
     }
-    #expect(await failing.counts == [64, 2])
+    #expect(await failing.counts == [1, 1])
     let firstFailure = TodayPairBatchTransport(failAt: 1)
     await #expect(throws: (any Error).self) {
         try await NativeAI.verifyToday(plan: plan, provider: "mlx") { instructions, payload, maxTokens in
             try await firstFailure.complete(instructions: instructions, payload: payload, maxTokens: maxTokens)
         }
     }
-    #expect(await firstFailure.counts == [64])
+    #expect(await firstFailure.counts == [1])
+}
+
+// Synthetic transport proof only; these scripted judgments are not model-quality evidence.
+private actor SyntheticTodayPipelineTransport {
+    var stages: [String] = []
+    let failLastRating: Bool
+    let cancelLastRating: Bool
+    init(failLastRating: Bool = false, cancelLastRating: Bool = false) {
+        self.failLastRating = failLastRating
+        self.cancelLastRating = cancelLastRating
+    }
+    func request(_ instructions: String, _ payload: String, _ maxTokens: Int) throws -> String {
+        switch stages.count {
+        case 0:
+            stages.append("primary")
+            #expect(instructions == TodaySemanticPolicy.prompt)
+            #expect(maxTokens == 8192)
+            let rows = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [[String: Any]])
+            #expect(rows.count == 3 && rows.allSatisfy { $0["evidence"] == nil })
+            #expect(!payload.contains("The permit was denied"))
+            return #"{"groups":[{"members":[0,1],"importance":5,"confidence":0.95,"reason":"Proposed pair"},{"members":[2],"importance":4,"confidence":0.95,"reason":"Unrelated event"}]}"#
+        case 1:
+            stages.append("verification")
+            #expect(instructions == TodaySemanticPolicy.pairPrompt)
+            #expect(maxTokens == 160)
+            let object = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+            #expect(Set(object.keys) == ["report_a", "report_b"])
+            let report = try #require(object["report_a"] as? [String: String])
+            #expect(report["excerpt"]?.contains("The permit was denied, not approved.") == true)
+            return #"{"relation":"different_event"}"#
+        case 2, 3:
+            let groupID = stages.count - 2
+            stages.append("rating-\(groupID)")
+            #expect(instructions == TodaySemanticPolicy.ratingPrompt)
+            #expect(maxTokens == 8192)
+            let object = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+            let groups = try #require(object["groups"] as? [[String: Any]])
+            #expect(groups.count == 1 && groups[0]["group_id"] as? Int == groupID)
+            if groupID == 1 && cancelLastRating { throw CancellationError() }
+            if groupID == 1 && failLastRating { return #"{"ratings":[]}"# }
+            return "{\"ratings\":[{\"group_id\":\(groupID),\"importance\":\(groupID == 0 ? 5 : 1),\"confidence\":0.95,\"reason\":\"Independent assessment\"}]}"
+        default:
+            Issue.record("Unexpected extra semantic request")
+            throw NativeAIError.unavailable("Unexpected request")
+        }
+    }
+}
+
+private func syntheticPipelineCandidates() throws -> [TodaySemanticCandidate] {
+    let body = String(repeating: "Earlier context. ", count: 30) + "The permit was denied, not approved."
+    let data = try JSONSerialization.data(withJSONObject: (0..<3).map {
+        ["index": $0, "title": "Report \($0)", "excerpt": "Short generated summary", "timestamp": 0,
+         "baseScore": 3, "evidence": $0 == 0 ? body : "Distinct source evidence."] as [String: Any]
+    })
+    return try JSONDecoder().decode([TodaySemanticCandidate].self, from: data)
+}
+
+@Test func syntheticTodayCompletePipelineUsesOriginalEvidenceAndIndependentRatings() async throws {
+    let transport = SyntheticTodayPipelineTransport()
+    let result = try await NativeAI.evaluateToday(candidates: syntheticPipelineCandidates(), provider: "mlx") {
+        try await transport.request($0, $1, $2)
+    }
+    #expect(await transport.stages == ["primary", "verification", "rating-0", "rating-1"])
+    #expect(result.map(\.members) == [[0], [1], [2]])
+    #expect(result.map(\.importance) == [5, 1, 4])
+    #expect(result.allSatisfy { !$0.needsRating })
+}
+
+@Test func syntheticTodayRatingFailureKeepsWholeVerifiedFallbackAndCancellationThrows() async throws {
+    let failed = SyntheticTodayPipelineTransport(failLastRating: true)
+    let fallback = try await NativeAI.evaluateToday(candidates: syntheticPipelineCandidates(), provider: "mlx") {
+        try await failed.request($0, $1, $2)
+    }
+    #expect(await failed.stages == ["primary", "verification", "rating-0", "rating-1"])
+    #expect(fallback.map(\.members) == [[0], [1], [2]])
+    #expect(fallback.map(\.importance) == [3, 3, 4])
+    #expect(fallback.prefix(2).allSatisfy { $0.needsRating && $0.reason == "From your feeds" })
+    let cancelled = SyntheticTodayPipelineTransport(cancelLastRating: true)
+    await #expect(throws: CancellationError.self) {
+        try await NativeAI.evaluateToday(candidates: syntheticPipelineCandidates(), provider: "mlx") {
+            try await cancelled.request($0, $1, $2)
+        }
+    }
 }

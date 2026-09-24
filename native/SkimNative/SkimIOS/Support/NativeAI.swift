@@ -294,7 +294,7 @@ enum NativeAI {
                 throw NativeAIError.unavailable("Today verification exceeds the on-device context budget.")
             }
             let response = try await complete(TodaySemanticPolicy.pairPrompt, batch.payload,
-                provider == "foundation-models" ? 1400 : 8192)
+                TodaySemanticPolicy.pairOutputTokens)
             try Task.checkCancellation()
             try TodaySemanticPolicy.validateVerificationResponse(response, batch: batch, plan: plan)
             responses.append(response)
@@ -303,15 +303,22 @@ enum NativeAI {
     }
 
     static func evaluateToday(candidates: [TodaySemanticCandidate], settings: AppSettings) async throws -> [TodaySemanticGroup] {
+        try await evaluateToday(candidates: candidates, provider: settings.ai.provider) { instructions, payload, maxTokens in
+            try await complete(settings: settings, instructions: instructions, prompt: payload,
+                maxTokens: maxTokens, jsonMode: true, temperature: 0)
+        }
+    }
+
+    static func evaluateToday(candidates: [TodaySemanticCandidate], provider: String,
+        request: @escaping @Sendable (String, String, Int) async throws -> String) async throws -> [TodaySemanticGroup] {
         guard !candidates.isEmpty, candidates.count <= TodaySemanticPolicy.maximumCandidates else {
             throw NativeAIError.unavailable("Today candidate pool exceeds the semantic context budget.")
         }
-        let data = try JSONEncoder().encode(candidates)
-        let prompt = String(decoding: data, as: UTF8.self)
+        let prompt = try TodaySemanticPolicy.primaryPayload(candidates: candidates)
         let instructions = TodaySemanticPolicy.prompt
         // Conservative local context bound: reserve output capacity as well as
         // input. Do not truncate the pool or silently switch to a cloud model.
-        if settings.ai.provider == "foundation-models",
+        if provider == "foundation-models",
            prompt.utf8.count + instructions.utf8.count > 2400 {
             throw NativeAIError.unavailable("Today candidate pool exceeds the on-device context budget.")
         }
@@ -321,13 +328,11 @@ enum NativeAI {
                 completion.install(continuation)
                 completion.retain(Task {
                     do {
-                        let raw = try await complete(settings: settings, instructions: instructions,
-                            prompt: prompt, maxTokens: settings.ai.provider == "foundation-models" ? 1400 : 8192, jsonMode: true, temperature: 0)
+                        let raw = try await request(instructions, prompt, provider == "foundation-models" ? 1400 : 8192)
                         try Task.checkCancellation()
                         let plan = try TodaySemanticPolicy.verificationPlan(groups: TodaySemanticPolicy.decode(raw), candidates: candidates)
-                        let verified = try await verifyToday(plan: plan, provider: settings.ai.provider) { instructions, payload, maxTokens in
-                            try await complete(settings: settings, instructions: instructions, prompt: payload,
-                                maxTokens: maxTokens, jsonMode: true, temperature: 0)
+                        let verified = try await verifyToday(plan: plan, provider: provider) { instructions, payload, maxTokens in
+                            try await request(instructions, payload, maxTokens)
                         }
                         try Task.checkCancellation()
                         completion.setFallback(verified)
@@ -338,13 +343,12 @@ enum NativeAI {
                                 guard let ratingPlan = try TodaySemanticPolicy.ratingPlan(groups: rated, candidates: candidates, groupID: groupID) else {
                                     throw NativeAIError.unavailable("Today rating group is unavailable.")
                                 }
-                                if settings.ai.provider == "foundation-models",
+                                if provider == "foundation-models",
                                    ratingPlan.payload.utf8.count + TodaySemanticPolicy.ratingPrompt.utf8.count > 2400 {
                                     throw NativeAIError.unavailable("Today rating exceeds the on-device context budget.")
                                 }
-                                let ratingResponse = try await complete(settings: settings, instructions: TodaySemanticPolicy.ratingPrompt,
-                                    prompt: ratingPlan.payload, maxTokens: settings.ai.provider == "foundation-models" ? 1400 : 8192,
-                                    jsonMode: true, temperature: 0)
+                                let ratingResponse = try await request(TodaySemanticPolicy.ratingPrompt, ratingPlan.payload,
+                                    provider == "foundation-models" ? 1400 : 8192)
                                 try Task.checkCancellation()
                                 rated = try TodaySemanticPolicy.rate(response: ratingResponse, plan: ratingPlan)
                             }

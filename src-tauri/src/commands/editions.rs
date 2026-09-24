@@ -5,8 +5,9 @@ use crate::commands::ai::{default_model, extract_json_object};
 use crate::db::queries;
 use crate::db::today_edition::{self, TodayEditionItemView, TodayEditionView};
 use crate::db::Database;
+use crate::AppHandle;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{Emitter, State};
 
 #[tauri::command]
 pub async fn get_or_generate_today_edition(

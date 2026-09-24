@@ -6,6 +6,7 @@
 
 use crate::db::models::{Article, Story, StoryArticle, StoryMembershipType, StoryRevision};
 use crate::db::queries;
+use crate::db::story_policy::{self, Relationship};
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -14,10 +15,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use url::Url;
 
 pub const ROLLING_WINDOW_SECONDS: i64 = 96 * 60 * 60;
-pub const DUPLICATE_THRESHOLD: f64 = 0.88;
-pub const COVERAGE_THRESHOLD: f64 = 0.68;
-pub const BORDERLINE_THRESHOLD: f64 = 0.58;
-const FEATURE_VERSION: i64 = 1;
+const FEATURE_VERSION: i64 = 2;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MatchDecision {
@@ -124,10 +122,30 @@ pub fn normalized_story_title(title: &str) -> String {
     let without_suffix = separator
         .and_then(|(index, separator)| {
             let suffix = &title[index + separator.len()..];
-            (suffix.split_whitespace().count() <= 4).then_some(&title[..index])
+            is_publisher_suffix(suffix).then_some(&title[..index])
         })
         .unwrap_or(title);
     normalize_text(without_suffix)
+}
+
+/// Punctuation alone is not evidence that the trailing clause names a publisher.
+fn is_publisher_suffix(suffix: &str) -> bool {
+    let normalized = normalize_text(suffix);
+    let words: Vec<&str> = normalized.split_whitespace().collect();
+    if words.is_empty() || words.len() > 4 { return false; }
+    matches!(normalized.as_str(), "reuters" | "bbc" | "bbc news" | "cnn" | "associated press" | "ap news" | "example news" | "new york times" | "the new york times" | "financial times" | "wall street journal" | "the wall street journal" | "washington post" | "the washington post")
+
+}
+
+fn entity_guard(left: &ArticleFeatures, right: &ArticleFeatures) -> bool {
+    if left.entities.is_empty() || right.entities.is_empty() || overlaps(&left.entities, &right.entities) {
+        return true;
+    }
+    // Sentence-initial names are intentionally not guessed as entities. A name
+    // extracted from the other title can still corroborate that first word.
+    let left_words = significant_terms(&left.normalized_title);
+    let right_words = significant_terms(&right.normalized_title);
+    overlaps(&left.entities, &right_words) && overlaps(&right.entities, &left_words)
 }
 
 fn normalize_text(value: &str) -> String {
@@ -220,11 +238,7 @@ fn sha256(value: &str) -> String {
 /// Shared cross-platform stable identity: FNV-1a 64 rendered as 16 lowercase
 /// hex digits with the `story-` prefix.
 pub fn stable_story_id(seed: &str) -> String {
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in seed.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
+    let hash = story_policy::identity_hash(seed);
     format!("story-{hash:016x}")
 }
 
@@ -284,6 +298,24 @@ fn recent_candidates(
 ) -> Result<Vec<CandidateArticle>, rusqlite::Error> {
     let since = article_time.saturating_sub(ROLLING_WINDOW_SECONDS);
     let until = article_time.saturating_add(ROLLING_WINDOW_SECONDS);
+    // Refresh derived data only; established memberships and edition snapshots
+    // remain immutable. Collect IDs before writing so no query cursor is active.
+    let stale_ids = {
+        let mut statement = conn.prepare(
+            "SELECT a.id FROM story_articles sa
+             JOIN articles a ON a.id = sa.article_id
+             JOIN article_story_features af ON af.article_id = a.id
+             WHERE COALESCE(a.published_at, a.fetched_at) BETWEEN ?1 AND ?2
+               AND af.feature_version < ?3",
+        )?;
+        let rows = statement.query_map(params![since, until, FEATURE_VERSION], |row| row.get::<_, String>(0))?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+    for id in stale_ids {
+        if let Some(article) = queries::get_article_by_id(conn, &id)? {
+            cache_features(conn, &article.article, &article_features(&article.article))?;
+        }
+    }
     let mut statement = conn.prepare(
         "SELECT sa.story_id, COALESCE(a.published_at, a.fetched_at),
                 af.canonical_url, af.normalized_title, af.normalized_lead,
@@ -341,26 +373,22 @@ fn classify(features: &ArticleFeatures, candidates: &[CandidateArticle], at: i64
             &significant_terms(&candidate.features.normalized_title),
         );
         let lexical_similarity = cosine(&features.tokens, &candidate.features.tokens);
-        let entity_guard = features.entities.is_empty()
-            || candidate.features.entities.is_empty()
-            || overlaps(&features.entities, &candidate.features.entities);
-        let confidence = (lexical_similarity * 0.65 + title_similarity * 0.35).clamp(0.0, 1.0);
-        let relationship =
-            if confidence >= DUPLICATE_THRESHOLD && title_similarity >= 0.78 && entity_guard {
-                Some(StoryMembershipType::Duplicate)
-            } else if confidence >= COVERAGE_THRESHOLD && title_similarity >= 0.45 && entity_guard {
-                let novel = novelty_ratio(&features.tokens, &candidate.features.tokens) >= 0.30;
-                let update_marker = contains_update_marker(&features.normalized_title);
-                Some(
-                    if at >= candidate.published_at && (novel || update_marker) {
-                        StoryMembershipType::Update
-                    } else {
-                        StoryMembershipType::Coverage
-                    },
-                )
-            } else {
-                None
-            };
+        let entity_guard = entity_guard(features, &candidate.features);
+        let confidence = story_policy::confidence(lexical_similarity, title_similarity);
+        let novel = novelty_ratio(&features.tokens, &candidate.features.tokens) >= 0.30;
+        let update_marker = contains_update_marker(&features.normalized_title);
+        let decision = story_policy::classify(
+            confidence,
+            title_similarity,
+            entity_guard,
+            at >= candidate.published_at && (novel || update_marker),
+        );
+        let relationship = match decision {
+            Relationship::Duplicate => Some(StoryMembershipType::Duplicate),
+            Relationship::Coverage => Some(StoryMembershipType::Coverage),
+            Relationship::Update => Some(StoryMembershipType::Update),
+            _ => None,
+        };
         if let Some(relationship) = relationship {
             let replace = best_match
                 .as_ref()
@@ -372,7 +400,7 @@ fn classify(features: &ArticleFeatures, candidates: &[CandidateArticle], at: i64
             if replace {
                 best_match = Some((candidate.story_id.clone(), relationship, confidence));
             }
-        } else if confidence >= BORDERLINE_THRESHOLD && entity_guard {
+        } else if decision == Relationship::Borderline {
             let replace = best_borderline
                 .as_ref()
                 .map(|current| {
@@ -767,19 +795,17 @@ pub fn rank_stories(
             let last_activity: i64 = row.get(1)?;
             let distinct_sources: i64 = row.get(3)?;
             let age = now.saturating_sub(last_activity).max(0) as f64;
-            let recency = (1.0 - age / ROLLING_WINDOW_SECONDS as f64).max(0.0) * 4.0;
             let followed: i64 = row.get(5)?;
             let starred: i64 = row.get(6)?;
             let feedback: i64 = row.get(7)?;
             let priority: i64 = row.get(8)?;
-            let source_score = (distinct_sources as f64 + 1.0).ln() * 3.0;
             let preference = followed as f64 * 3.0
                 + starred.min(2) as f64 * 0.5
                 + feedback as f64
                 + priority as f64 * 0.25;
             Ok(RankCandidate {
                 story_id: row.get(0)?,
-                score: source_score + recency + preference,
+                score: story_policy::score(distinct_sources, age, ROLLING_WINDOW_SECONDS as f64, preference),
                 distinct_sources,
                 raw_articles: row.get(4)?,
                 representative_feed_id: row.get(2)?,
@@ -842,7 +868,7 @@ pub fn rank_stories(
 }
 
 fn is_unique_candidate(candidate: &RankCandidate) -> bool {
-    candidate.distinct_sources == 1 && candidate.raw_articles == 1
+    story_policy::is_unique(candidate.distinct_sources)
 }
 
 fn ranked(candidate: &RankCandidate, is_unique_find: bool) -> RankedStory {
@@ -912,6 +938,62 @@ mod tests {
     }
 
     #[test]
+    fn meaningful_suffixes_do_not_merge_distinct_deals() {
+        let conn = setup();
+        let beta = article("beta", "feed-1", "Acme announces deal — buys Beta", "https://one.test/beta", "Acme acquires Beta software company.", 1000);
+        let gamma = article("gamma", "feed-2", "Acme announces deal — buys Gamma", "https://two.test/gamma", "Acme acquires Gamma shipping company.", 1001);
+        assert_ne!(normalized_story_title(&beta.title), normalized_story_title(&gamma.title));
+        assert_ne!(insert_and_cluster(&conn, &beta).story_id, insert_and_cluster(&conn, &gamma).story_id);
+        assert_eq!(normalized_story_title("Acme launches rocket — Example News"), "acme launches rocket");
+        assert_eq!(normalized_story_title("Acme reports earnings — bad news"), "acme reports earnings bad news");
+        assert_eq!(normalized_story_title("Acme launches rocket — three times"), "acme launches rocket three times");
+    }
+
+    #[test]
+    fn stale_features_upgrade_without_changing_frozen_history() {
+        let conn = setup();
+        let beta = article("old-beta", "feed-1", "Acme announces deal — buys Beta", "https://one.test/beta", "Acme acquires Beta software company.", 1000);
+        let original = insert_and_cluster(&conn, &beta);
+        let frozen = crate::db::today_edition::get_or_generate(&conn, 0, 86400, 1100, 5).unwrap();
+        let frozen_json = serde_json::to_string(&frozen).unwrap();
+        let revisions = serde_json::to_string(&queries::get_latest_story_revision(&conn, &original.story_id).unwrap()).unwrap();
+        conn.execute("UPDATE article_story_features SET normalized_title = 'acme announces deal', feature_version = 1 WHERE article_id = ?1", [&beta.id]).unwrap();
+        let gamma = article("new-gamma", "feed-2", "Acme announces deal", "https://two.test/gamma", "Gamma shipping merger wins approval.", 1200);
+        let next = insert_and_cluster(&conn, &gamma);
+        assert_ne!(original.story_id, next.story_id);
+        let cached: (String, i64) = conn.query_row("SELECT normalized_title, feature_version FROM article_story_features WHERE article_id = ?1", [&beta.id], |row| Ok((row.get(0)?, row.get(1)?))).unwrap();
+        assert_eq!(cached, ("acme announces deal buys beta".into(), 2));
+        assert_eq!(existing_assignment(&conn, &beta.id).unwrap().unwrap().story_id, original.story_id);
+        assert_eq!(serde_json::to_string(&queries::get_latest_story_revision(&conn, &original.story_id).unwrap()).unwrap(), revisions);
+        assert_eq!(serde_json::to_string(&crate::db::today_edition::load(&conn, &frozen.edition.id).unwrap()).unwrap(), frozen_json);
+    }
+
+    #[test]
+    fn first_word_names_are_corroborated_without_accepting_conflicting_entities() {
+        let conn = setup();
+        let first = article("first", "feed-1", "SpaceX launches Falcon rocket", "https://one.test/rocket", "The rocket launched successfully.", 1000);
+        let second = article("second", "feed-2", "Falcon rocket launches with SpaceX", "https://two.test/rocket", "The rocket launched successfully.", 1001);
+        assert_eq!(insert_and_cluster(&conn, &first).story_id, insert_and_cluster(&conn, &second).story_id);
+        let conflicting = article("other", "feed-3", "Rocket launches with BlueOrigin", "https://three.test/rocket", "The rocket launched successfully.", 1002);
+        assert!(!entity_guard(&article_features(&second), &article_features(&conflicting)));
+    }
+
+    #[test]
+    fn syndicated_copy_preserves_single_independent_source_unique_status() {
+        let conn = setup();
+        let first = article("first", "feed-1", "Observatory discovers comet", "https://one.test/comet", "A comet was discovered.", 1000);
+        let copy = article("copy", "feed-2", "Observatory discovers comet", "https://one.test/comet", "A comet was discovered.", 1001);
+        let original = insert_and_cluster(&conn, &first);
+        let before = rank_stories(&conn, 1001, 5).unwrap();
+        insert_and_cluster(&conn, &copy);
+        let after = rank_stories(&conn, 1001, 5).unwrap();
+        assert!(before[0].is_unique_find && after[0].is_unique_find);
+        assert_eq!(after[0].story_id, original.story_id);
+        assert_eq!(after[0].distinct_source_count, 1);
+        assert_eq!(after[0].raw_article_count, 2);
+    }
+
+    #[test]
     fn shared_golden_normalization_and_stable_id() {
         assert_eq!(
             canonical_article_url(
@@ -935,7 +1017,7 @@ mod tests {
         let first = article(
             "a1",
             "feed-1",
-            "Mars Mission Launches Successfully | Source One",
+            "Mars Mission Launches Successfully | Reuters",
             "https://News.Example/mars/?utm_source=rss&b=2&a=1#top",
             "The Mars mission launched successfully today.",
             10_000,
@@ -943,7 +1025,7 @@ mod tests {
         let duplicate = article(
             "a2",
             "feed-2",
-            "Mars Mission Launches Successfully — Source Two",
+            "Mars Mission Launches Successfully — BBC News",
             "https://news.example/mars?a=1&b=2",
             "The Mars mission launched successfully today.",
             10_100,

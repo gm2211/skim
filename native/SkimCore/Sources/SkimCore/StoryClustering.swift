@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import SkimStoryPolicy
 
 /// Cached, deterministic lexical representation of an article.
 ///
@@ -7,7 +8,7 @@ import Foundation
 /// the same normalized strings, sorted tokens, entities, and SHA-256
 /// fingerprint rather than platform-specific embeddings.
 public struct StoryArticleFeature: Codable, Hashable, Sendable {
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     public var articleID: String
     public var canonicalURL: String?
@@ -56,9 +57,9 @@ public struct StoryArticleFeature: Codable, Hashable, Sendable {
 
 public struct StoryClusteringConfiguration: Codable, Hashable, Sendable {
     public static let defaultRollingWindow: TimeInterval = 96 * 60 * 60
-    public static let defaultDuplicateThreshold = 0.88
-    public static let defaultCoverageThreshold = 0.68
-    public static let defaultBorderlineThreshold = 0.58
+    public static let defaultDuplicateThreshold = skim_story_default_thresholds().duplicate
+    public static let defaultCoverageThreshold = skim_story_default_thresholds().coverage
+    public static let defaultBorderlineThreshold = skim_story_default_thresholds().borderline
 
     public var rollingWindow: TimeInterval
     public var duplicateThreshold: Double
@@ -357,27 +358,24 @@ public struct StoryClusterer: Sendable {
                 feature.tokens,
                 candidate.feature.tokens
             )
-            let confidence = min(
-                1,
-                max(0, (0.65 * lexicalSimilarity) + (0.35 * titleSimilarity))
+            let confidence = skim_story_confidence(lexicalSimilarity, titleSimilarity)
+            let decision = skim_story_classify(
+                confidence, titleSimilarity,
+                entityGuard(feature, candidate.feature) ? 1 : 0,
+                isUpdate(article: article, feature: feature, candidate: candidate) ? 1 : 0,
+                SkimStoryThresholds(
+                    duplicate: configuration.duplicateThreshold,
+                    coverage: configuration.coverageThreshold,
+                    borderline: configuration.borderlineThreshold
+                )
             )
-            guard entityGuard(feature, candidate.feature) else { continue }
 
             let membershipType: StoryMembershipType?
-            if confidence >= configuration.duplicateThreshold,
-               titleSimilarity >= 0.78
-            {
-                membershipType = .duplicate
-            } else if confidence >= configuration.coverageThreshold,
-                      titleSimilarity >= 0.45
-            {
-                membershipType = isUpdate(
-                    article: article,
-                    feature: feature,
-                    candidate: candidate
-                ) ? .update : .coverage
-            } else {
-                membershipType = nil
+            switch Int(decision) {
+            case SKIM_STORY_DUPLICATE: membershipType = .duplicate
+            case SKIM_STORY_COVERAGE: membershipType = .coverage
+            case SKIM_STORY_UPDATE: membershipType = .update
+            default: membershipType = nil
             }
 
             if let membershipType {
@@ -388,7 +386,7 @@ public struct StoryClusterer: Sendable {
                 ) {
                     bestMatch = (candidate, membershipType, confidence)
                 }
-            } else if confidence >= configuration.borderlineThreshold,
+            } else if decision == SKIM_STORY_BORDERLINE,
                       shouldReplace(
                         candidate: candidate,
                         confidence: confidence,
@@ -429,16 +427,11 @@ public struct StoryClusterer: Sendable {
         let scored = candidates
             .map { candidate -> (StoryRankingCandidate, RankedStory) in
                 let age = max(0, asOf.timeIntervalSince(candidate.story.lastActivityAt))
-                let recency = max(
-                    0,
-                    1 - (age / max(1, configuration.recencyWindow))
-                ) * 4
-                let sourceScore = log(
-                    Double(max(0, candidate.distinctFeedCount)) + 1
-                ) * 3
-                let score = sourceScore + recency + candidate.preferenceSignal
-                let unique = candidate.distinctFeedCount == 1
-                    && candidate.articleCount == 1
+                let score = skim_story_score(
+                    Int64(candidate.distinctFeedCount), age,
+                    configuration.recencyWindow, candidate.preferenceSignal
+                )
+                let unique = skim_story_is_unique(Int64(candidate.distinctFeedCount)) != 0
                 let reason = unique
                     ? "unique_single_source"
                     : "\(candidate.distinctFeedCount)_independent_sources"
@@ -462,7 +455,7 @@ public struct StoryClusterer: Sendable {
         var feedCounts: [String: Int] = [:]
         var topStories: [RankedStory] = []
         for (candidate, ranked) in scored
-        where !(candidate.distinctFeedCount == 1 && candidate.articleCount == 1) {
+        where !ranked.isUniqueFind {
             let count = feedCounts[candidate.representativeFeedID, default: 0]
             guard count < configuration.maximumStoriesPerRepresentativeFeed else { continue }
             topStories.append(ranked)
@@ -472,7 +465,7 @@ public struct StoryClusterer: Sendable {
 
         let uniqueFinds = scored
             .filter {
-                $0.0.distinctFeedCount == 1 && $0.0.articleCount == 1
+                $0.1.isUniqueFind
             }
             .prefix(max(0, configuration.uniqueFindLimit))
             .map(\.1)
@@ -536,13 +529,20 @@ public struct StoryClusterer: Sendable {
         }
         if let range = trailingSeparator {
             let suffix = titleWithoutPublisher[range.upperBound...]
-            if suffix.split(separator: " ").count <= 4 {
+            if isPublisherSuffix(String(suffix)) {
                 titleWithoutPublisher = String(
                     titleWithoutPublisher[..<range.lowerBound]
                 )
             }
         }
         return normalizeText(titleWithoutPublisher)
+    }
+
+    private static func isPublisherSuffix(_ suffix: String) -> Bool {
+        let normalized = normalizeText(suffix)
+        let words = normalized.split(separator: " ").map(String.init)
+        guard !words.isEmpty, words.count <= 4 else { return false }
+        return ["reuters", "bbc", "bbc news", "cnn", "associated press", "ap news", "example news", "new york times", "the new york times", "financial times", "wall street journal", "the wall street journal", "washington post", "the washington post"].contains(normalized)
     }
 
     public static func normalizeText(_ text: String) -> String {
@@ -566,10 +566,8 @@ public struct StoryClusterer: Sendable {
     /// Shared desktop/native stable ID contract: FNV-1a 64, lowercase and
     /// zero-padded to exactly 16 hexadecimal digits.
     public static func fnv1a64(_ value: String) -> String {
-        var hash: UInt64 = 0xcbf29ce484222325
-        for byte in value.utf8 {
-            hash ^= UInt64(byte)
-            hash &*= 0x100000001b3
+        let hash = Array(value.utf8).withUnsafeBufferPointer {
+            skim_story_identity_hash($0.baseAddress, $0.count)
         }
         return String(format: "%016llx", hash)
     }
@@ -598,6 +596,8 @@ public struct StoryClusterer: Sendable {
         return leftEntities.isEmpty
             || rightEntities.isEmpty
             || !leftEntities.isDisjoint(with: rightEntities)
+            || (!leftEntities.isDisjoint(with: Set(Self.significantTerms(rhs.normalizedTitle)))
+                && !rightEntities.isDisjoint(with: Set(Self.significantTerms(lhs.normalizedTitle))))
     }
 
     private func isUpdate(

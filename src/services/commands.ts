@@ -304,7 +304,7 @@ export const preloadArticlesForOffline = (limit: number) =>
 // AI
 export const summarizeArticle = (
   articleId: string,
-  opts?: { force?: boolean; summaryLength?: string; summaryTone?: string; summaryFormat?: string; summaryCustomPrompt?: string }
+  opts?: { force?: boolean; summaryLength?: string; summaryTone?: string; summaryFormat?: string; summaryCustomPrompt?: string; summaryCustomWordCount?: number }
 ) =>
   invoke<ArticleSummary>("summarize_article", {
     articleId,
@@ -313,6 +313,7 @@ export const summarizeArticle = (
     summaryTone: opts?.summaryTone ?? null,
     summaryFormat: opts?.summaryFormat ?? null,
     summaryCustomPrompt: opts?.summaryCustomPrompt ?? null,
+    summaryCustomWordCount: opts?.summaryCustomWordCount ?? null,
   });
 export const cancelSummarize = () => invoke<void>("cancel_summarize");
 export const generateThemes = () => invoke<Theme[]>("generate_themes");
@@ -451,8 +452,8 @@ export const getArticleInteraction = (articleId: string) =>
   invoke<ArticleInteraction | null>("get_article_interaction", { articleId });
 
 // Chat
-export const chatWithArticle = (articleId: string, messages: ChatMessageInput[]) =>
-  invoke<ChatResponse>("chat_with_article", { articleId, messages });
+export const chatWithArticle = (articleId: string, messages: ChatMessageInput[], summaryContext?: string) =>
+  invoke<ChatResponse>("chat_with_article", { articleId, messages, summaryContext: summaryContext ?? null });
 
 export interface ChatSource {
   id: string;
@@ -474,8 +475,9 @@ export const chatWithArticles = (
   scope: "inbox" | "unread" | "all",
   query: string,
   messages: ChatMessageInput[],
+  priorArticleIds?: string[],
 ) =>
-  invoke<ArticleChatResponse>("chat_with_articles", { scope, query, messages });
+  invoke<ArticleChatResponse>("chat_with_articles", { scope, query, messages, priorArticleIds: priorArticleIds ?? null });
 export const webSearch = (query: string) =>
   invoke<SearchResult[]>("web_search", { query });
 

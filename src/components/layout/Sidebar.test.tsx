@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Sidebar } from "./Sidebar";
 import { useUiStore } from "../../stores/uiStore";
@@ -23,6 +23,10 @@ vi.mock("./FeedsSection", () => ({
   FeedsSection: () => null,
 }));
 
+vi.mock("../chat/AskSkimDialog", () => ({
+  AskSkimDialog: ({ open, onOpenArticle, onClose }: { open: boolean; onOpenArticle: (id: string) => void; onClose: () => void }) => open ? <button onClick={() => { onOpenArticle("source-1"); onClose(); }}>Open cited report</button> : null,
+}));
+
 // Snapshot of the store's shape (including its stable action closures) taken
 // once at module load, before any test mutates it.
 const INITIAL_STATE = useUiStore.getState();
@@ -36,6 +40,17 @@ describe("Sidebar — All Articles regression guard", () => {
   // Articles. All Articles must remain the complete chronological archive,
   // reachable in a single click, no matter which sidebar destination is
   // currently active — this guards against Today ever hiding or replacing it.
+  it("returns to Ask Skim after closing a cited article", async () => {
+    const user = userEvent.setup();
+    render(<Sidebar />);
+    await user.click(screen.getByRole("button", { name: /Ask Skim/ }));
+    await user.click(screen.getByRole("button", { name: "Open cited report" }));
+    expect(useUiStore.getState().selectedArticleId).toBe("source-1");
+    expect(screen.queryByRole("button", { name: "Open cited report" })).not.toBeInTheDocument();
+    act(() => useUiStore.getState().closeArticleDetail());
+    expect(screen.getByRole("button", { name: "Open cited report" })).toBeInTheDocument();
+  });
+
   it("keeps All Articles visible and one click away while viewing Today", async () => {
     const user = userEvent.setup();
     render(<Sidebar />);

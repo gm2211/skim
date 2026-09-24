@@ -19,25 +19,27 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   sources?: ChatSource[];
+  articleIds?: string[];
 }
 
 interface Props {
+  open?: boolean;
   onClose: () => void;
   onOpenArticle?: (articleId: string) => void;
 }
 
-export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
+export function AskSkimDialog({ open = true, onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
   const showSettings = useUiStore((s) => s.showSettings);
   const { data: settings } = useSettings();
   const chatProvider = settings?.ai.chat_provider;
   const provider = chatProvider && chatProvider !== "same" ? chatProvider : settings?.ai.provider;
   const needsSetup = provider === "none";
-  useLockBodyScroll(isPhone && !showSettings);
+  useLockBodyScroll(open && isPhone && !showSettings);
   const dialogRef = useRef<HTMLDivElement>(null);
-  useVisualViewportSync(dialogRef, isPhone && !showSettings);
-  useDialogFocus(dialogRef, onClose, !showSettings);
-  const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(isPhone, onClose);
+  useVisualViewportSync(dialogRef, open && isPhone && !showSettings);
+  useDialogFocus(dialogRef, onClose, open && !showSettings);
+  const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(open && isPhone, onClose);
   const [scope, setScope] = useState<Scope>("unread");
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -47,9 +49,9 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (isPhone || needsSetup || showSettings) return;
+    if (!open || isPhone || needsSetup || showSettings) return;
     inputRef.current?.focus();
-  }, [isPhone, needsSetup, showSettings]);
+  }, [open, isPhone, needsSetup, showSettings]);
 
   useEffect(() => {
     setError((previous) => isAiSetupError(previous) ? null : previous);
@@ -73,10 +75,10 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
     const history: ChatMessageInput[] = messages.map((m) => ({ role: m.role, content: m.content }));
 
     try {
-      const resp: ArticleChatResponse = await chatWithArticles(scope, query, history);
+      const resp: ArticleChatResponse = await chatWithArticles(scope, query, history, [...messages].reverse().find((message) => message.role === "assistant")?.articleIds);
       setMessages((m) => [
         ...m,
-        { role: "assistant", content: resp.content, sources: resp.sources },
+        { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids },
       ]);
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
@@ -87,7 +89,7 @@ export function AskSkimDialog({ onClose, onOpenArticle }: Props) {
     }
   };
 
-  return showSettings ? null : createPortal(
+  return !open || showSettings ? null : createPortal(
     <div
       className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 dialog-fade-in ${isPhone ? "" : "flex items-center justify-center"}`}
       onClick={onClose}

@@ -60,6 +60,7 @@ function App() {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["feeds"] }),
         qc.invalidateQueries({ queryKey: ["articles"] }),
+        qc.invalidateQueries({ queryKey: ["todayEdition"] }),
         qc.invalidateQueries({ queryKey: ["articleCount"] }),
         qc.invalidateQueries({ queryKey: ["inbox"] }),
         qc.invalidateQueries({ queryKey: ["triageStats"] }),
@@ -139,6 +140,7 @@ function App() {
         .then(() => {
           qc.invalidateQueries({ queryKey: ["feeds"] });
           qc.invalidateQueries({ queryKey: ["articles"] });
+          qc.invalidateQueries({ queryKey: ["todayEdition"] });
           qc.invalidateQueries({ queryKey: ["articleCount"] });
           return triageArticles(false);
         })
@@ -173,6 +175,7 @@ function App() {
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["feeds"] }),
         qc.invalidateQueries({ queryKey: ["articles"] }),
+        qc.invalidateQueries({ queryKey: ["todayEdition"] }),
         qc.invalidateQueries({ queryKey: ["articleCount"] }),
         qc.invalidateQueries({ queryKey: ["inbox"] }),
         qc.invalidateQueries({ queryKey: ["triageStats"] }),
@@ -506,7 +509,7 @@ function App() {
           {isToday ? <TodayEditionPane /> : <ArticleList />}
           {selectedArticleId ? (
             <ArticleDetail />
-          ) : (
+          ) : !isToday ? (
             <div
               className={`flex-1 flex flex-col items-center justify-center bg-bg-primary/60 select-none ${listCollapsed ? "cursor-pointer" : ""}`}
               onClick={() => {
@@ -524,7 +527,7 @@ function App() {
                 <span className="text-sm">{listCollapsed ? "Show article list" : "Select an article to read"}</span>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
       {opmlToast}

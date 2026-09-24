@@ -483,17 +483,18 @@ export function ArticleDetail() {
         return;
       }
       // Force re-summarize if any per-article override is set
-      const hasOverrides = perArticleLength || perArticleTone || perArticlePrompt;
+      const hasOverrides = perArticleLength || perArticleTone || perArticlePrompt || perArticleWordCount;
       summarize.mutate({
         articleId: article.id,
         force: force || !!hasOverrides,
         summaryLength: perArticleLength,
         summaryTone: perArticleTone,
         summaryCustomPrompt: perArticlePrompt,
+        summaryCustomWordCount: perArticleWordCount,
       });
       setShowSummarizeMenu(false);
     },
-    [article, settings, summarize, perArticleLength, perArticleTone]
+    [article, settings, summarize, perArticleLength, perArticleTone, perArticlePrompt, perArticleWordCount]
   );
 
   // Mark as read when opened
@@ -1577,7 +1578,7 @@ export function ArticleDetail() {
       </div>
 
       {/* Chat drawer — collapsible bottom pane */}
-      <ChatDrawer articleId={article.id} articleTitle={article.title} open={chatOpen} onOpenChange={setChatOpen} />
+      <ChatDrawer articleId={article.id} articleTitle={article.title} summaryContext={summarize.data?.article_id === article.id ? ([summarize.data.bullet_summary, summarize.data.full_summary].filter(Boolean).join("\n\n") || undefined) : undefined} open={chatOpen} onOpenChange={setChatOpen} />
     </div>
   );
 }

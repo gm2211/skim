@@ -11,7 +11,9 @@ import { SkimTitle } from "./SkimTitle";
 
 export function Sidebar() {
   const [askOpen, setAskOpen] = useState(false);
-  const { sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone, showCatchup, setShowCatchup, openArticleFromCatchup } =
+  const [askVisited, setAskVisited] = useState(false);
+  const [returnToAsk, setReturnToAsk] = useState(false);
+  const { selectedArticleId, sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone, showCatchup, setShowCatchup, openArticleFromCatchup } =
     useUiStore();
   const { data: feeds } = useFeeds();
   const { data: triageStats } = useTriageStats();
@@ -20,6 +22,13 @@ export function Sidebar() {
   const triageProgress = useTriageProgress();
   const generateThemes = useGenerateThemes();
   const themeProgress = useThemeProgress();
+
+  useEffect(() => {
+    if (returnToAsk && !selectedArticleId) {
+      setReturnToAsk(false);
+      setAskOpen(true);
+    }
+  }, [returnToAsk, selectedArticleId]);
 
   const totalUnread = feeds?.reduce((sum, f) => sum + f.unread_count, 0) ?? 0;
 
@@ -94,7 +103,7 @@ export function Sidebar() {
           </svg>
         </button>
         <button
-          onClick={() => setAskOpen(true)}
+          onClick={() => { setAskVisited(true); setAskOpen(true); }}
           className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
           title="Ask Skim — search your feed with AI"
           aria-label="Ask Skim"
@@ -124,14 +133,14 @@ export function Sidebar() {
           </svg>
         </button>
       </div>
-      {askOpen && (
-        <AskSkimDialog
+      {askVisited && <AskSkimDialog
+          open={askOpen}
           onClose={() => setAskOpen(false)}
           onOpenArticle={(id) => {
+            setReturnToAsk(true);
             useUiStore.getState().setSelectedArticleId(id);
           }}
-        />
-      )}
+        />}
       {showCatchup && (
         <CatchupDialog
           onClose={() => setShowCatchup(false)}

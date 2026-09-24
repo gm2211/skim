@@ -4,19 +4,11 @@ This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get sta
 
 ## Quick Reference
 
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work atomically
-bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
-```
+See the Quick Reference in Beads Issue Tracker below (`bd update <id> --claim` claims atomically). Also available: `bd dolt push` (push beads data to remote).
 
 ## Non-Interactive Shell Commands
 
-**ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.
-
-Shell commands like `cp`, `mv`, and `rm` may be aliased to include `-i` (interactive) mode on some systems, causing the agent to hang indefinitely waiting for y/n input.
+**ALWAYS use non-interactive flags** with file operations. `cp`, `mv`, and `rm` may be aliased to `-i` (interactive) mode on some systems, causing the agent to hang indefinitely waiting for y/n input.
 
 **Use these forms instead:**
 ```bash
@@ -38,7 +30,7 @@ cp -rf source dest          # NOT: cp -r source dest
 
 ## Release Archives
 
-Before producing any new archive for Xcode Organizer or App Store Connect, bump the app version/build metadata first. Do not create, export, or upload an Organizer archive from an unchanged version. Verify the final archive/package reports the bumped version and build number before handing it off.
+Before creating, exporting, or uploading an Xcode Organizer / App Store Connect archive, bump the app version/build metadata — never do so from an unchanged version. Verify the final archive/package reports the bumped version and build number before handing it off.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker

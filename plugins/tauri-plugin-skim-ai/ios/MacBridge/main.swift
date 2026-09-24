@@ -1,4 +1,5 @@
 import Foundation
+import SkimInferencePolicy
 import FoundationModels
 import Hub
 import MLX
@@ -11,6 +12,7 @@ struct Request: Decodable {
     let system: String?
     let user: String?
     let maxTokens: Int?
+    let temperature: Float?
     let jsonMode: Bool?
 }
 
@@ -46,6 +48,7 @@ func validatedRepoId(_ value: String?) throws -> String {
 func isDownloaded(_ repoId: String) -> Bool {
     let files = (try? FileManager.default.contentsOfDirectory(atPath: cacheDirectory(repoId).path)) ?? []
     return files.contains("config.json") && files.contains(where: { $0.hasSuffix(".safetensors") })
+        && ModelChatTemplate.isUsable(in: cacheDirectory(repoId))
 }
 
 @available(macOS 26.0, *)
@@ -82,12 +85,13 @@ actor MLXWorker {
 
     func complete(_ request: Request) async throws -> String {
       let repo = try validatedRepoId(request.repoId ?? "mlx-community/gemma-3-1b-it-4bit")
+      guard ModelChatTemplate.isUsable(in: cacheDirectory(repo)) else {
+          throw NSError(domain: "SkimAI", code: 12, userInfo: [NSLocalizedDescriptionKey: "Model chat template missing or invalid — re-download this model."])
+      }
       guard isDownloaded(repo) else { throw NSError(domain: "SkimAI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Model \(repo) is not downloaded."]) }
       if container == nil || repoId != repo {
-        // Directory-backed configurations avoid network access, but they also
-        // bypass LLMRegistry metadata. Restore Gemma's turn terminator so
-        // generation stops before decoding and continuing past the answer.
-        let extraEOSTokens: Set<String> = repo.lowercased().contains("gemma") ? ["<end_of_turn>"] : []
+        // Directory-backed loading needs the same family terminators as native iOS.
+        let extraEOSTokens = MLXModelFamily.detect(from: repo).extraEOSTokens
         let configuration = ModelConfiguration(
             directory: cacheDirectory(repo),
             extraEOSTokens: extraEOSTokens
@@ -96,15 +100,26 @@ actor MLXWorker {
         repoId = repo
       }
       let container = container!
-    let system = (request.system ?? "") + ((request.jsonMode ?? false) ? "\n\nRespond with a single JSON object. No prose, no code fences." : "")
-    let input = UserInput(messages: [["role": "system", "content": system], ["role": "user", "content": request.user ?? ""]])
-      return try await container.perform { context in
+      let family = MLXModelFamily.detect(from: repo)
+      let preset = MLXSamplingPreset.preset(for: repo)
+      let system = (request.system ?? "") + ((request.jsonMode ?? false) ? "\n\nRespond with a single JSON object. No prose, no code fences." : "")
+      let input = UserInput(
+          messages: [["role": "system", "content": system], ["role": "user", "content": request.user ?? ""]],
+          additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
+      )
+      let parameters = GenerateParameters(
+          maxTokens: request.maxTokens ?? 512,
+          temperature: request.temperature ?? preset.temperature,
+          topP: preset.topP,
+          repetitionPenalty: preset.repetitionPenalty,
+          repetitionContextSize: preset.repetitionContextSize
+      )
+      let raw = try await container.perform { context in
         let prepared = try await context.processor.prepare(input: input)
-        let result = try MLXLMCommon.generate(input: prepared, parameters: GenerateParameters(temperature: 0.3), context: context) { tokens in
-            tokens.count >= (request.maxTokens ?? 512) ? .stop : .more
-        }
+        let result = try MLXLMCommon.generate(input: prepared, parameters: parameters, context: context) { (_: [Int]) in GenerateDisposition.more }
         return result.output
       }
+      return LocalModelOutput.sanitize(raw, family: family)
     }
 
     func evict(_ repo: String) {
@@ -125,7 +140,18 @@ func process(_ request: Request) async {
             emit(Response(ok: true, value: nil, bool: nil, availability: nil, error: nil))
         case "mlx_download":
             let repo = try validatedRepoId(request.repoId)
-            _ = try await MLXLMCommon.downloadModel(hub: HubApi(), configuration: ModelConfiguration(id: repo)) { emitProgress($0.fractionCompleted) }
+            let hub = HubApi()
+            try Task.checkCancellation()
+            _ = try await MLXLMCommon.downloadModel(hub: hub, configuration: ModelConfiguration(id: repo)) { emitProgress($0.fractionCompleted) }
+            try Task.checkCancellation()
+            // The model downloader excludes standalone templates; snapshot reuses
+            // cached weights and fetches only the repository's authoritative Jinja.
+            _ = try await hub.snapshot(from: Hub.Repo(id: repo), matching: ["*.jinja"])
+            try Task.checkCancellation()
+            guard ModelChatTemplate.isUsable(in: cacheDirectory(repo)) else {
+                throw NSError(domain: "SkimAI", code: 12, userInfo: [NSLocalizedDescriptionKey: "Model chat template missing or invalid — re-download this model."])
+            }
+            await mlxWorker.evict(repo)
             emit(Response(ok: true, value: nil, bool: nil, availability: nil, error: nil))
         case "mlx_complete": emit(Response(ok: true, value: try await mlxWorker.complete(request), bool: nil, availability: nil, error: nil))
         case "fm_availability":
@@ -137,7 +163,14 @@ func process(_ request: Request) async {
             guard availability.available else { throw NSError(domain: "SkimAI", code: 3, userInfo: [NSLocalizedDescriptionKey: availability.message]) }
             let instructions = (request.system ?? "") + ((request.jsonMode ?? false) ? "\n\nRespond with a single valid JSON object. No prose, no markdown fences." : "")
             let session = LanguageModelSession(instructions: instructions)
-            let text = try await session.respond(to: request.user ?? "", options: GenerationOptions(maximumResponseTokens: request.maxTokens ?? 512)).content
+            let options: GenerationOptions
+            if let temperature = request.temperature {
+                options = GenerationOptions(sampling: temperature == 0 ? .greedy : .random(top: 50),
+                    temperature: Double(temperature), maximumResponseTokens: request.maxTokens ?? 512)
+            } else {
+                options = GenerationOptions(maximumResponseTokens: request.maxTokens ?? 512)
+            }
+            let text = try await session.respond(to: request.user ?? "", options: options).content
             emit(Response(ok: true, value: text, bool: nil, availability: nil, error: nil))
         default: throw NSError(domain: "SkimAI", code: 4, userInfo: [NSLocalizedDescriptionKey: "Unknown command"])
         }

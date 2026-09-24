@@ -1,0 +1,60 @@
+{
+  "desktop_version": "0.1.21",
+  "ios_version": "0.1.13",
+  "ios_build": "57",
+  "desktop_sha256": "4d4b818026d5056a08c3eeca6463c67a6e4013f3f7ea489a53d93267d6a39122",
+  "bundled_helper_sha256": "19219ebd0966c2a52a6a62ffb5ad18b911dec5751b9facf8fbbdde6ad0efc882",
+  "compiled_helper_sha256": "8fd3de7750785cab41ca48600556df960245ddea29515a12efbeefff80cca1cc",
+  "helper_text_matches_compiled": true,
+  "ios_sha256": "1ec29b00226acacfc348f71b26f0e96a006d7fa1c6adbd6d3668c48733895672",
+  "ios_dsym_uuid": "BB1D3829-AAA7-38E8-8722-CC0A27D72F13",
+  "shared_c_symbols": [
+    "_skim_semantic_group_valid",
+    "_skim_semantic_max_candidates",
+    "_skim_semantic_max_pairs",
+    "_skim_semantic_pair_prompt",
+    "_skim_semantic_partition",
+    "_skim_semantic_prompt",
+    "_skim_semantic_score",
+    "_skim_story_classify",
+    "_skim_story_confidence",
+    "_skim_story_default_thresholds",
+    "_skim_story_identity_hash",
+    "_skim_story_is_unique",
+    "_skim_story_score"
+  ],
+  "desktop_shared_swift_symbol_count": 53,
+  "ios_shared_swift_symbol_count": 53,
+  "shared_source_sha256": {
+    "shared/SkimStoryPolicy/Sources/SkimStoryPolicy/SkimStoryPolicy.c": "7d11d85e8cbd92d7dc5200aa491b206493cc0d6c45886bc612c2e40e941a6172",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalModelPolicy.swift": "159727c952106f95514507db4d0cbdb4444a536ba17448c2a19d877a0381dbb3",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/ModelChatTemplate.swift": "7567bab0ddb29d4df2cb5113960dcd65bf0360ed0ca88acaab2e8bccdef51354"
+  },
+  "verified_at": "2026-09-24T16:19:42.844596+00:00",
+  "testflight": {
+    "id": "1e4d068c-7701-4e7f-96f1-d6c94560e466",
+    "audience": "INTERNAL_ONLY",
+    "internal_state": "IN_BETA_TESTING"
+  },
+  "tests": {
+    "frontend": 145,
+    "rust_library": 131,
+    "swift_core": 96,
+    "swift_inference_policy": 13,
+    "rust_plugin": 1,
+    "packaging": 3,
+    "excluded": "Existing Rust local-model test requires unavailable GGUF"
+  },
+  "signed_parent_smoke": {
+    "timed_out": true,
+    "seconds": 120,
+    "stdout": "",
+    "stack": "_libsecinit_appsandbox -> _xpc_pipe_routine -> mach_msg2_trap before main"
+  },
+  "installed_desktop": {
+    "version": "0.1.17",
+    "sha256": "fa1f6902c5111c9e81b58822c802c1ae5d61bcd6ce6d8ac51c79045bab387704",
+    "updated": false
+  },
+  "native_ui": "Mac locked; hands-on acceptance pending"
+}

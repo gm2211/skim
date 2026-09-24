@@ -55,6 +55,135 @@ public enum TodaySemanticPolicy {
         }
     }
 
+    public struct VerificationPlan: Sendable {
+        public let payload: String
+        public let pairs: [[Int]]
+        fileprivate let groups: [TodaySemanticGroup]
+        fileprivate let candidateCount: Int
+    }
+
+    public static var pairPrompt: String { String(cString: skim_semantic_pair_prompt()) }
+
+    public static func verificationPlan(groups: [TodaySemanticGroup], candidates: [TodaySemanticCandidate]) throws -> VerificationPlan {
+        guard !candidates.isEmpty, candidates.count <= maximumCandidates,
+              candidates.enumerated().allSatisfy({ $0.offset == $0.element.index && $0.element.timestamp.isFinite })
+        else { throw SkimCoreError.database("Invalid semantic verification candidates") }
+        var assigned = [UInt8](repeating: 0, count: candidates.count)
+        var accepted: [TodaySemanticGroup] = []
+        var pairs: [[Int]] = []
+        for group in groups {
+            let valid = group.members.withUnsafeBufferPointer { members in
+                assigned.withUnsafeBufferPointer { used in
+                    skim_semantic_group_valid(members.baseAddress, members.count, candidates.count,
+                        used.baseAddress, used.count, group.importance, group.confidence) != 0
+                }
+            }
+            guard valid, !group.reason.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  group.reason.count <= 280 else { continue }
+            let indexes = group.members.map(Int.init).sorted()
+            for (offset, left) in indexes.enumerated() {
+                for right in indexes.dropFirst(offset + 1) { pairs.append([left, right]) }
+            }
+            guard pairs.count <= Int(skim_semantic_max_pairs()) else {
+                throw SkimCoreError.database("Semantic verification pair budget exceeded")
+            }
+            accepted.append(group)
+            for index in indexes { assigned[index] = 1 }
+        }
+        struct Report: Encodable {
+            let index: Int
+            let title: String
+            let excerpt: String
+            let activity_date: String
+        }
+        struct Payload: Encodable { let reports: [Report]; let pairs: [[Int]] }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        let reports = candidates.map { candidate in
+            Report(index: candidate.index, title: candidate.title, excerpt: candidate.excerpt,
+                activity_date: formatter.string(from: Date(timeIntervalSince1970: candidate.timestamp)))
+        }
+        let data = try JSONEncoder().encode(Payload(reports: reports, pairs: pairs))
+        return VerificationPlan(payload: String(decoding: data, as: UTF8.self), pairs: pairs,
+            groups: accepted, candidateCount: candidates.count)
+    }
+
+    public static func verify(response: String, plan: VerificationPlan) throws -> [TodaySemanticGroup] {
+        guard !plan.pairs.isEmpty else { return plan.groups }
+        struct Decision: Decodable {
+            let members: [Double]
+            let same_event: Bool
+            let confidence: Double
+
+            enum CodingKeys: String, CodingKey { case members, pair, same_event, confidence }
+            init(from decoder: any Decoder) throws {
+                let values = try decoder.container(keyedBy: CodingKeys.self)
+                guard values.contains(.members) != values.contains(.pair) else {
+                    throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath,
+                        debugDescription: "Exactly one pair identity key is required"))
+                }
+                members = try values.decode([Double].self, forKey: values.contains(.members) ? .members : .pair)
+                same_event = try values.decode(Bool.self, forKey: .same_event)
+                confidence = try values.decode(Double.self, forKey: .confidence)
+            }
+        }
+        struct Envelope: Decodable { let pairs: [Decision] }
+        var text = response.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("```json") || text.hasPrefix("```") {
+            let prefixCount = text.hasPrefix("```json") ? 7 : 3
+            let body = String(text.dropFirst(prefixCount)).trimmingCharacters(in: .whitespacesAndNewlines)
+            if body.hasSuffix("```") {
+                text = String(body.dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        let data = Data(text.utf8)
+        let decisions: [Decision]
+        if text.hasPrefix("[") {
+            decisions = try JSONDecoder().decode([Decision].self, from: data)
+        } else {
+            decisions = try JSONDecoder().decode(Envelope.self, from: data).pairs
+        }
+        let requested = Set(plan.pairs.map { $0[0] * plan.candidateCount + $0[1] })
+        var answered = Set<Int>()
+        var verified = [UInt8](repeating: 0, count: plan.candidateCount * plan.candidateCount)
+        for decision in decisions {
+            guard decision.members.count == 2,
+                  decision.members.allSatisfy({ $0.isFinite && $0.rounded(.towardZero) == $0 && $0 >= 0 && $0 < Double(plan.candidateCount) }),
+                  decision.confidence.isFinite, (0...1).contains(decision.confidence)
+            else { throw SkimCoreError.database("Invalid semantic pair response") }
+            let pair = decision.members.map(Int.init).sorted()
+            let key = pair[0] * plan.candidateCount + pair[1]
+            guard pair[0] != pair[1], requested.contains(key), answered.insert(key).inserted else {
+                throw SkimCoreError.database("Unknown or duplicate semantic pair")
+            }
+            if decision.same_event && decision.confidence >= 0.8 {
+                verified[key] = 1
+                verified[pair[1] * plan.candidateCount + pair[0]] = 1
+            }
+        }
+        guard answered == requested else { throw SkimCoreError.database("Incomplete semantic pair response") }
+        return try plan.groups.flatMap { group in
+            var labels = [Int32](repeating: -1, count: group.members.count)
+            let count = group.members.withUnsafeBufferPointer { members in
+                verified.withUnsafeBufferPointer { matrix in
+                    labels.withUnsafeMutableBufferPointer { output in
+                        skim_semantic_partition(members.baseAddress, members.count, plan.candidateCount,
+                            matrix.baseAddress, matrix.count, output.baseAddress, output.count)
+                    }
+                }
+            }
+            guard count > 0 else { throw SkimCoreError.database("Invalid semantic partition") }
+            return (0..<count).map { label in
+                TodaySemanticGroup(members: group.members.enumerated().filter { labels[$0.offset] == label }.map(\.element),
+                    importance: group.importance, confidence: group.confidence,
+                    reason: count > 1 ? "Importance estimated from related reports" : group.reason)
+            }
+        }
+    }
+
     static func inputs(_ candidates: [TodayEditionCandidate], at date: Date) -> [TodaySemanticCandidate] {
         candidates.enumerated().map { index, candidate in
             let ranked = StoryClusterer().rank([candidate.ranking], asOf: date)

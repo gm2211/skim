@@ -42,6 +42,17 @@ int32_t skim_semantic_group_valid(const double *members, size_t member_count,
                                  double confidence);
 double skim_semantic_score(double base, double importance, double confidence);
 
+/* Verify proposed merges before hiding reports behind a shared story card. */
+const char *skim_semantic_pair_prompt(void);
+size_t skim_semantic_max_pairs(void);
+/* verified is a candidate_count squared row-major matrix. Only mutual 1s
+   support a pair. labels align with members, not the global candidate indexes.
+   Returns subgroup count, or zero on invalid buffers/handles. No allocation. */
+int32_t skim_semantic_partition(const double *members, size_t member_count,
+                                size_t candidate_count, const uint8_t *verified,
+                                size_t verified_count, int32_t *labels,
+                                size_t labels_count);
+
 #ifdef __cplusplus
 }
 #endif

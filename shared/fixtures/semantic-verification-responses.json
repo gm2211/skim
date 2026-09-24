@@ -1,0 +1,239 @@
+[
+  {
+    "name": "skim-semantic-fresh-corpus",
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "helper_sha256": "8fd3de7750785cab41ca48600556df960245ddea29515a12efbeefff80cca1cc",
+    "candidates": [
+      {
+        "index": 0,
+        "title": "EU schafft Blaupause für vertrauenswürdige KI in der ganzen Welt",
+        "excerpt": "European Parliament members approved the AI Act by 523 votes to 46, with 49 abstentions. The measure regulates AI according to risk. Formal Council endorsement was still required.",
+        "timestamp": 1710288000.0,
+        "baseScore": 5
+      },
+      {
+        "index": 1,
+        "title": "Lawmakers approve AI Act with overwhelming majority",
+        "excerpt": "The European Parliament voted overwhelmingly for rules imposing obligations on AI systems according to their risks. The tally was 523 in favour, 46 against and 49 abstentions.",
+        "timestamp": 1710288000.0,
+        "baseScore": 5
+      },
+      {
+        "index": 2,
+        "title": "FDA Converts Novel Alzheimer’s Disease Treatment to Traditional Approval",
+        "excerpt": "FDA converted Leqembi from accelerated to traditional approval after a confirmatory study demonstrated clinical benefit for Alzheimer’s disease. The agency had previously cleared the treatment through the accelerated pathway.",
+        "timestamp": 1688601600.0,
+        "baseScore": 5
+      },
+      {
+        "index": 3,
+        "title": "FDA approves first drug to slow Alzheimer's progression",
+        "excerpt": "Leqembi received full FDA approval, opening a path to broader insurance coverage.",
+        "timestamp": 1688601600.0,
+        "baseScore": 5
+      },
+      {
+        "index": 4,
+        "title": "Nintendo announces Nintendo Switch OLED Model with a vibrant 7-inch OLED screen launching Oct 8",
+        "excerpt": "Nintendo announced a Switch model with a larger OLED display, more storage and an improved stand. The company scheduled October 8 availability at a suggested $349.99 price.",
+        "timestamp": 1625529600.0,
+        "baseScore": 5
+      },
+      {
+        "index": 5,
+        "title": "Nintendo Switch OLED coming this October",
+        "excerpt": "Nintendo unveiled an OLED Switch with expanded storage and an adjustable stand.",
+        "timestamp": 1625529600.0,
+        "baseScore": 5
+      },
+      {
+        "index": 6,
+        "title": "Artificial intelligence (AI) act: Council gives final green light to the first worldwide rules on AI",
+        "excerpt": "The Council formally approved the AI Act, including risk-based obligations and prohibited uses. Signature and official publication were the next steps before entry into force.",
+        "timestamp": 1716249600.0,
+        "baseScore": 5
+      },
+      {
+        "index": 7,
+        "title": "FDA Grants Accelerated Approval for Alzheimer’s Disease Treatment",
+        "excerpt": "FDA approved Leqembi through its accelerated approval pathway for Alzheimer’s disease. The announcement described a medicine targeting the disease’s underlying biology.",
+        "timestamp": 1672963200.0,
+        "baseScore": 5
+      }
+    ],
+    "primary_response": "{\n  \"groups\": [\n    {\n      \"members\": [0, 1, 6],\n      \"importance\": 5,\n      \"confidence\": 1.0,\n      \"reason\": \"EU AI Act finalized with risk-based regulations\"\n    },\n    {\n      \"members\": [2, 3, 7],\n      \"importance\": 5,\n      \"confidence\": 1.0,\n      \"reason\": \"FDA switches Leqembi approval to traditional pathway\"\n    },\n    {\n      \"members\": [4, 5],\n      \"importance\": 1,\n      \"confidence\": 1.0,\n      \"reason\": \"Nintendo Switch OLED launches October with new features\"\n    }\n  ]\n}",
+    "verification_response": "[\n  {\n    \"pair\": [0, 1],\n    \"same_event\": true,\n    \"confidence\": 1.0\n  },\n  {\n    \"pair\": [0, 6],\n    \"same_event\": false,\n    \"confidence\": 0.95\n  },\n  {\n    \"pair\": [1, 6],\n    \"same_event\": false,\n    \"confidence\": 0.98\n  },\n  {\n    \"pair\": [2, 3],\n    \"same_event\": true,\n    \"confidence\": 1.0\n  },\n  {\n    \"pair\": [2, 7],\n    \"same_event\": true,\n    \"confidence\": 1.0\n  },\n  {\n    \"pair\": [3, 7],\n    \"same_event\": false,\n    \"confidence\": 0.95\n  },\n  {\n    \"pair\": [4, 5],\n    \"same_event\": true,\n    \"confidence\": 1.0\n  }\n]",
+    "expected_groups": [
+      [
+        0,
+        1
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        6
+      ],
+      [
+        7
+      ]
+    ],
+    "importance_constraints": [
+      {
+        "higher": [
+          0,
+          1,
+          6,
+          2,
+          3,
+          7
+        ],
+        "lower": [
+          4,
+          5
+        ]
+      }
+    ],
+    "notes": "Actual standalone helper responses replayed through both production adapters. Hand-selected historical reports; expected groups/importance are human editorial judgments. Not installed-app acceptance. Fresh-corpus response has one erroneous positive pair; complete-clique policy keeps its events separate in this sample.",
+    "elapsed_seconds": 5.39,
+    "pair_payload_date_key": "activity_date"
+  },
+  {
+    "name": "skim-real-news-corpus",
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "helper_sha256": "8fd3de7750785cab41ca48600556df960245ddea29515a12efbeefff80cca1cc",
+    "candidates": [
+      {
+        "index": 0,
+        "title": "WHO Director-General declares mpox outbreak a public health emergency of international concern",
+        "excerpt": "WHO designated the expanding mpox outbreak in the Democratic Republic of the Congo and other African countries an international health emergency. The decision followed expert advice and called for coordinated action against cross-border spr",
+        "timestamp": 1723593600.0,
+        "baseScore": 5
+      },
+      {
+        "index": 1,
+        "title": "WHO declares international mpox emergency",
+        "excerpt": "WHO issued its global emergency designation as mpox spread across African countries.",
+        "timestamp": 1723593600.0,
+        "baseScore": 5
+      },
+      {
+        "index": 2,
+        "title": "Federal Reserve issues FOMC statement",
+        "excerpt": "The FOMC reduced its federal funds target by half a percentage point to 4.75–5 percent. Policymakers cited progress against inflation and a changing balance of employment and inflation risks. One voter preferred a smaller cut.",
+        "timestamp": 1726617600.0,
+        "baseScore": 5
+      },
+      {
+        "index": 3,
+        "title": "Fed cuts interest rates 0.5 point, noting slowing job market",
+        "excerpt": "The September decision lowered the target to 4.75–5 percent amid employment concerns.",
+        "timestamp": 1726617600.0,
+        "baseScore": 5
+      },
+      {
+        "index": 4,
+        "title": "NASA’s Europa Clipper Mission Launches From Kennedy Space Center (Highlights)",
+        "excerpt": "Europa Clipper departed Florida on October 14 aboard a Falcon Heavy. Its mission will investigate whether Jupiter’s icy moon offers conditions compatible with life, using instruments during repeated flybys after reaching Jupiter in 2030.",
+        "timestamp": 1728864000.0,
+        "baseScore": 5
+      },
+      {
+        "index": 5,
+        "title": "‘Europa Clipper’: la NASA lanza la mayor nave interplanetaria para buscar rastros de vida en la luna de Júpiter",
+        "excerpt": "NASA launched Europa Clipper toward Jupiter’s moon Europa. The spacecraft will examine an icy ocean world and assess its potential to sustain life.",
+        "timestamp": 1728864000.0,
+        "baseScore": 5
+      },
+      {
+        "index": 6,
+        "title": "Africa CDC Declares Mpox A Public Health Emergency of Continental Security, Mobilizing Resources Across the Continent",
+        "excerpt": "Africa CDC made its first continental emergency declaration over mpox on August 13. The agency invoked its own statutory authority to coordinate responses and mobilize resources, surveillance and laboratory capacity across affected African ",
+        "timestamp": 1723507200.0,
+        "baseScore": 5
+      },
+      {
+        "index": 7,
+        "title": "Federal Reserve issues FOMC statement",
+        "excerpt": "At its November meeting, the FOMC lowered the federal funds target by a quarter percentage point to 4.5–4.75 percent. It continued reducing securities holdings and said employment and inflation risks were roughly balanced.",
+        "timestamp": 1730937600.0,
+        "baseScore": 5
+      },
+      {
+        "index": 8,
+        "title": "Apple introduces HomePod mini in midnight",
+        "excerpt": "Apple announced a midnight color option for its existing HomePod mini smart speaker. The new finish uses recycled mesh and was scheduled for availability on July 17, alongside the product’s other colors.",
+        "timestamp": 1721001600.0,
+        "baseScore": 5
+      },
+      {
+        "index": 9,
+        "title": "Apple introduces the new HomePod with breakthrough sound and intelligence",
+        "excerpt": "Apple announced its second-generation full-size HomePod speaker, with computational audio and smart-home features. Orders opened January 18, with availability scheduled for February 3.",
+        "timestamp": 1674000000.0,
+        "baseScore": 5
+      }
+    ],
+    "primary_response": "{\n  \"groups\": [\n    {\n      \"members\": [0, 1, 6],\n      \"importance\": 5,\n      \"confidence\": 1.0,\n      \"reason\": \"WHO and Africa CDC declare mpox international emergency\"\n    },\n    {\n      \"members\": [2, 3, 7],\n      \"importance\": 4,\n      \"confidence\": 1.0,\n      \"reason\": \"Fed cuts rates multiple times in September and November\"\n    },\n    {\n      \"members\": [4, 5],\n      \"importance\": 3,\n      \"confidence\": 1.0,\n      \"reason\": \"NASA launches Europa Clipper to Jupiter moon\"\n    },\n    {\n      \"members\": [8, 9],\n      \"importance\": 1,\n      \"confidence\": 1.0,\n      \"reason\": \"Apple releases HomePod mini and new HomePod\"\n    }\n  ]\n}",
+    "verification_response": "[\n  {\n    \"members\": [0, 1],\n    \"same_event\": true,\n    \"confidence\": 1.0\n  },\n  {\n    \"members\": [0, 6],\n    \"same_event\": false,\n    \"confidence\": 0.95\n  },\n  {\n    \"members\": [1, 6],\n    \"same_event\": false,\n    \"confidence\": 0.98\n  },\n  {\n    \"members\": [2, 3],\n    \"same_event\": true,\n    \"confidence\": 1.0\n  },\n  {\n    \"members\": [2, 7],\n    \"same_event\": false,\n    \"confidence\": 0.99\n  },\n  {\n    \"members\": [3, 7],\n    \"same_event\": false,\n    \"confidence\": 0.97\n  },\n  {\n    \"members\": [4, 5],\n    \"same_event\": true,\n    \"confidence\": 1.0\n  },\n  {\n    \"members\": [8, 9],\n    \"same_event\": false,\n    \"confidence\": 0.99\n  }\n]",
+    "expected_groups": [
+      [
+        0,
+        1
+      ],
+      [
+        2,
+        3
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        6
+      ],
+      [
+        7
+      ],
+      [
+        8
+      ],
+      [
+        9
+      ]
+    ],
+    "importance_constraints": [
+      {
+        "higher": [
+          0,
+          1,
+          6,
+          2,
+          3,
+          7
+        ],
+        "lower": [
+          8,
+          9
+        ]
+      },
+      {
+        "higher": [
+          4,
+          5
+        ],
+        "lower": [
+          8
+        ]
+      }
+    ],
+    "notes": "Actual standalone helper responses replayed through both production adapters. Hand-selected historical reports; expected groups/importance are human editorial judgments. Not installed-app acceptance. Fresh-corpus response has one erroneous positive pair; complete-clique policy keeps its events separate in this sample.",
+    "elapsed_seconds": 5.94,
+    "pair_payload_date_key": "activity_date"
+  }
+]

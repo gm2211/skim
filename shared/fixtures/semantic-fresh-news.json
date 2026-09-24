@@ -1,0 +1,238 @@
+{
+  "name": "skim-semantic-fresh-heldout-2026-09-24",
+  "collected_on": "2026-09-24",
+  "purpose": "Fresh acceptance corpus collected after pair-verification prompt was frozen. No model inference or prompt tuning performed by corpus researcher.",
+  "provenance_notes": [
+    "Eight public historical reports from2021–2024 on entirely different specific events from the prior corpus. Small deliberately selected sample, not representative live news.",
+    "Heldout means new to this engineering evaluation; historical material may have appeared in model pretraining. No claim of unseen pretraining content.",
+    "Excerpts are short researcher paraphrases. German Commission headline retained; excerpt translated into English, which may simplify source language.",
+    "All retained citation pages opened successfully and facts/dates checked. FDA accelerated item is a section from an official archived bulletin; main linked release did not load.",
+    "Original source publication dates and event dates retained. Euronews has a next-day update; Nintendo reports an announcement in July of planned October availability.",
+    "Axios headline-plus-excerpt totals remain under25words per page. No private feeds, app database, credentials, model calls or production edits.",
+    "Expected groups, negatives, importance, provenance and inference notes must stay out of model inputs. Only allowlisted article fields should be supplied."
+  ],
+  "evaluation_protocol": {
+    "input_fields": [
+      "id",
+      "publisher",
+      "publication_date",
+      "title",
+      "excerpt"
+    ],
+    "clustering_unit": "Same specific occurrence or decision; related legislative stages and regulatory pathways remain separate.",
+    "ranking": "General-interest public consequence at the time of each event. Disable/equalize recency and personal preferences while preserving dates for event identity.",
+    "out_of_scope": [
+      "current-day freshness",
+      "representative model quality",
+      "model pretraining exclusion",
+      "personalized relevance",
+      "live feed extraction"
+    ]
+  },
+  "articles": [
+    {
+      "id": "commission-parliament",
+      "publisher": "European Commission Representation in Germany",
+      "publication_date": "2024-03-13",
+      "event_date": "2024-03-13",
+      "title": "EU schafft Blaupause für vertrauenswürdige KI in der ganzen Welt",
+      "excerpt": "European Parliament members approved the AI Act by 523 votes to 46, with 49 abstentions. The measure regulates AI according to risk. Formal Council endorsement was still required.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://germany.representation.ec.europa.eu/news/eu-schafft-blaupause-fur-vertrauenswurdige-ki-der-ganzen-welt-2024-03-13_de",
+      "source_kind": "primary",
+      "verification": "Opened German Commission page; checked March13 publication and parliamentary vote, including Council endorsement still pending. English excerpt translated/paraphrased.",
+      "original_title_language": "de",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "euronews-parliament",
+      "publisher": "Euronews",
+      "publication_date": "2024-03-13",
+      "event_date": "2024-03-13",
+      "title": "Lawmakers approve AI Act with overwhelming majority",
+      "excerpt": "The European Parliament voted overwhelmingly for rules imposing obligations on AI systems according to their risks. The tally was 523 in favour, 46 against and 49 abstentions.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.euronews.com/my-europe/2024/03/13/lawmakers-approve-ai-act-with-overwhelming-majority",
+      "source_kind": "independent_reporting",
+      "verification": "Opened page; original publication March13, updated March14. Checked vote and institution; original publication date retained.",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "fda-traditional",
+      "publisher": "FDA",
+      "publication_date": "2023-07-06",
+      "event_date": "2023-07-06",
+      "title": "FDA Converts Novel Alzheimer’s Disease Treatment to Traditional Approval",
+      "excerpt": "FDA converted Leqembi from accelerated to traditional approval after a confirmatory study demonstrated clinical benefit for Alzheimer’s disease. The agency had previously cleared the treatment through the accelerated pathway.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.fda.gov/news-events/press-announcements/fda-converts-novel-alzheimers-disease-treatment-traditional-approval",
+      "source_kind": "primary",
+      "verification": "Opened source page and checked publication date and described action.",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "axios-traditional",
+      "publisher": "Axios",
+      "publication_date": "2023-07-06",
+      "event_date": "2023-07-06",
+      "title": "FDA approves first drug to slow Alzheimer's progression",
+      "excerpt": "Leqembi received full FDA approval, opening a path to broader insurance coverage.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.axios.com/2023/07/06/leqembi-alzheimers-fda-approval",
+      "source_kind": "independent_reporting",
+      "verification": "Opened source page and checked publication date and described action.",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "nintendo-oled",
+      "publisher": "Nintendo",
+      "publication_date": "2021-07-06",
+      "event_date": "2021-07-06",
+      "title": "Nintendo announces Nintendo Switch OLED Model with a vibrant 7-inch OLED screen launching Oct 8",
+      "excerpt": "Nintendo announced a Switch model with a larger OLED display, more storage and an improved stand. The company scheduled October 8 availability at a suggested $349.99 price.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.nintendo.com/us/whatsnew/nintendo-announces-nintendo-switch-oled-model-with-a-vibrant-7-inch-oled-screen-launching-oct-8/",
+      "source_kind": "primary",
+      "verification": "Opened source page and checked publication date and described action.",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "axios-oled",
+      "publisher": "Axios",
+      "publication_date": "2021-07-06",
+      "event_date": "2021-07-06",
+      "title": "Nintendo Switch OLED coming this October",
+      "excerpt": "Nintendo unveiled an OLED Switch with expanded storage and an adjustable stand.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.axios.com/2021/07/06/nintendo-switch-oled-release-date",
+      "source_kind": "independent_reporting",
+      "verification": "Opened source page and checked publication date and described action.",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "council-ai",
+      "publisher": "Council of the European Union",
+      "publication_date": "2024-05-21",
+      "event_date": "2024-05-21",
+      "title": "Artificial intelligence (AI) act: Council gives final green light to the first worldwide rules on AI",
+      "excerpt": "The Council formally approved the AI Act, including risk-based obligations and prohibited uses. Signature and official publication were the next steps before entry into force.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.consilium.europa.eu/en/press/press-releases/2024/05/21/artificial-intelligence-ai-act-council-gives-final-green-light-to-the-first-worldwide-rules-on-ai/",
+      "source_kind": "primary",
+      "verification": "Opened source page and checked publication date and described action.",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "fda-accelerated",
+      "publisher": "FDA stakeholder bulletin",
+      "publication_date": "2023-01-06",
+      "event_date": "2023-01-06",
+      "title": "FDA Grants Accelerated Approval for Alzheimer’s Disease Treatment",
+      "excerpt": "FDA approved Leqembi through its accelerated approval pathway for Alzheimer’s disease. The announcement described a medicine targeting the disease’s underlying biology.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://content.govdelivery.com/accounts/USFDA/bulletins/34113b1",
+      "source_kind": "primary",
+      "verification": "Opened official FDA bulletin dated January6 at14:45EST; title is the news-release section heading, not the full bulletin title. Original linked FDA release did not load; bulletin is accessible primary evidence.",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    }
+  ],
+  "expected_groups": [
+    {
+      "id": "parliament-ai-vote",
+      "members": [
+        "commission-parliament",
+        "euronews-parliament"
+      ],
+      "reason": "Both report the same European Parliament vote, with identical tally and subject; Commission reaction is accompanying coverage."
+    },
+    {
+      "id": "leqembi-traditional",
+      "members": [
+        "fda-traditional",
+        "axios-traditional"
+      ],
+      "reason": "Same FDA conversion to traditional approval after clinical-benefit confirmation."
+    },
+    {
+      "id": "switch-oled-announcement",
+      "members": [
+        "nintendo-oled",
+        "axios-oled"
+      ],
+      "reason": "Same model announcement and announced future availability, not an October launch-day event."
+    },
+    {
+      "id": "council-ai-approval",
+      "members": [
+        "council-ai"
+      ],
+      "reason": "Separate formal decision by the Council, another required legislative actor, rather than the earlier Parliament vote."
+    },
+    {
+      "id": "leqembi-accelerated",
+      "members": [
+        "fda-accelerated"
+      ],
+      "reason": "Earlier accelerated authorization is a different regulatory action and evidence standard from conversion to traditional approval."
+    }
+  ],
+  "hard_negative_pairs": [
+    [
+      "commission-parliament",
+      "council-ai"
+    ],
+    [
+      "euronews-parliament",
+      "council-ai"
+    ],
+    [
+      "fda-traditional",
+      "fda-accelerated"
+    ],
+    [
+      "axios-traditional",
+      "fda-accelerated"
+    ]
+  ],
+  "expected_importance": {
+    "status": "Human editorial inference, not source fact or universal personal preference.",
+    "ordered_tiers_high_to_low": [
+      [
+        "parliament-ai-vote",
+        "council-ai-approval",
+        "leqembi-traditional",
+        "leqembi-accelerated"
+      ],
+      [
+        "switch-oled-announcement"
+      ]
+    ],
+    "strict_acceptance_constraints": [
+      {
+        "higher": [
+          "commission-parliament",
+          "euronews-parliament",
+          "council-ai",
+          "fda-traditional",
+          "axios-traditional",
+          "fda-accelerated"
+        ],
+        "lower": [
+          "nintendo-oled",
+          "axios-oled"
+        ],
+        "reason": "Broad legal-rights or disease-treatment decisions outweigh a consumer-console hardware refresh for a general-interest reader."
+      }
+    ],
+    "ties_allowed_within_tier": true,
+    "caveat": "Relative importance among health and regulation is debatable; only the broad major-versus-consumer-refresh constraint is scored."
+  },
+  "label_status": "All group, negative-pair and importance labels are manually reasoned judgments. Broad continuing-story clustering could combine legislative stages or drug approvals; labels explicitly use separate specific decisions. Distinctions rely on actor/action/legal pathway, not dates alone."
+}

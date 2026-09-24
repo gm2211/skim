@@ -4,15 +4,21 @@ PLUGIN_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 SCRATCH_DIR="${TMPDIR:-/tmp}/skim-ai-macos-bridge-build"
 export SKIM_AI_MAC_BRIDGE_ONLY=1
 export MACOSX_DEPLOYMENT_TARGET=14.0
-swift build --package-path "$PLUGIN_DIR/ios" --product skim-ai-macos-bridge -c release --scratch-path "$SCRATCH_DIR"
-BIN_PATH=$(find "$SCRATCH_DIR" -path '*/release/skim-ai-macos-bridge' -type f | head -1)
-test -n "$BIN_PATH"
+# Query the same build configuration: SwiftPM's output layout changes between
+# toolchains, and old products may coexist in this reusable scratch directory.
+set -- --package-path "$PLUGIN_DIR/ios" --product skim-ai-macos-bridge -c release --scratch-path "$SCRATCH_DIR"
+swift build "$@"
+BIN_DIR=$(swift build "$@" --show-bin-path)
+BIN_PATH="$BIN_DIR/skim-ai-macos-bridge"
+RESOURCE_PATH="$BIN_DIR/swift-transformers_Hub.bundle"
+if [ ! -f "$BIN_PATH" ] || [ ! -d "$RESOURCE_PATH" ]; then
+  echo "Missing macOS AI bridge or resource bundle in SwiftPM output: $BIN_DIR" >&2
+  exit 1
+fi
 mkdir -p "$PLUGIN_DIR/bin" "$PLUGIN_DIR/resources"
 cp -f "$BIN_PATH" "$PLUGIN_DIR/bin/skim-ai-macos-bridge-aarch64-apple-darwin"
-RESOURCE_PATH=$(find "$(dirname "$BIN_PATH")" -maxdepth 1 -name 'swift-transformers_Hub.bundle' -type d | head -1)
-test -n "$RESOURCE_PATH"
 rm -rf "$PLUGIN_DIR/resources/swift-transformers_Hub.bundle"
-cp -R "$RESOURCE_PATH" "$PLUGIN_DIR/resources/swift-transformers_Hub.bundle"
+cp -Rf "$RESOURCE_PATH" "$PLUGIN_DIR/resources/swift-transformers_Hub.bundle"
 chmod -R u+w "$PLUGIN_DIR/resources/swift-transformers_Hub.bundle"
 MLX_METAL_DIR=$(find "$SCRATCH_DIR/checkouts/mlx-swift" -path '*/mlx-generated/metal' -type d | head -1)
 test -n "$MLX_METAL_DIR"

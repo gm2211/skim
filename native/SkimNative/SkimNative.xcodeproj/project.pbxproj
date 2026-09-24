@@ -12,7 +12,8 @@
 		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
 		1DC5A4B057212FB263947314 /* SmartFolderEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */; };
 		20D5454E94949C27DBAF38C5 /* AIErrorBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B61709B52E5986EFC1C3ECB /* AIErrorBox.swift */; };
-		214DC26687D7CFE6647B4E3C /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = C72D1637C2C2401209468AAB /* MLXLLM */; };
+		214DC26687D7CFE6647B4E3C /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */; };
+		25F3EE8A8FEBDA2FC33DB56E /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 8B0DFA296F4A48F6B090AFBC /* Hub */; };
 		2A601923CBA16F4DD268D2C9 /* NativeKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B69429F0218849C4A4E655 /* NativeKeychain.swift */; };
 		31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89737FFF993802E562860605 /* AIDisclaimerLabel.swift */; };
 		434D05C938D50201696ECD5A /* TodayEditionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9B482B07ABFB0BD983D016 /* TodayEditionView.swift */; };
@@ -30,7 +31,7 @@
 		8ED4B358481AC4273C225054 /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474BA38A4E522DB5D3ECB21 /* WebView.swift */; };
 		949AEC33EE8019F0584D6253 /* ArticleExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */; };
 		96F49A7819D5D167616F137F /* LegalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8387834F563CFA86721EBF1D /* LegalView.swift */; };
-		9A48EFF3F29B3477E0CE9120 /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 8B0DFA296F4A48F6B090AFBC /* Hub */; };
+		9A48EFF3F29B3477E0CE9120 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = C72D1637C2C2401209468AAB /* MLXLLM */; };
 		A20D6777CCE9FF23884FB7F1 /* NativeClaudeOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */; };
 		AFD473138D9923FB717FE9E2 /* NativeAIGuardrailRefusalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D15E5B261AE4E05EEAE52DC /* NativeAIGuardrailRefusalTests.swift */; };
 		B953F0D786947B4765B2827E /* hackernoon-9m0.html in Resources */ = {isa = PBXBuildFile; fileRef = 7F972FCF70051CCDDFB99F04 /* hackernoon-9m0.html */; };
@@ -42,11 +43,11 @@
 		D5D2795C99FD3003AA0F056B /* NativeWebSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1B88832F456973EA297F0F /* NativeWebSearch.swift */; };
 		D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A483594667B890576E4D368D /* SkimNativeApp.swift */; };
 		DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BA45434D97C1ACA953B839 /* NativeMLX.swift */; };
-		DFC1782BE965DCD3BBEAFEC9 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */; };
+		DFC1782BE965DCD3BBEAFEC9 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = A6EF4FD219591BC7A9787950 /* MLX */; };
 		E0006C62ED6F6DE502164145 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9AD11F7D9C976F34C0C9347 /* RootView.swift */; };
 		E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */; };
 		F22F6907C7390FE6C195AD8C /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 96F35F36DD1B890E9DE5ACBA /* SkimCore */; };
-		F77D922DF2F50121B27BDD3B /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = A6EF4FD219591BC7A9787950 /* MLX */; };
+		F77D922DF2F50121B27BDD3B /* SkimInferencePolicy in Frameworks */ = {isa = PBXBuildFile; productRef = DC6D547D6D1E448AFD5E74FA /* SkimInferencePolicy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -95,6 +96,7 @@
 		B72B2D107E596891809ECA5E /* Skim macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Skim macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9167BE3C78659C05031D238 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		BFC1D459A8E191D2264A703F /* NativeAIDegenerateRepetitionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIDegenerateRepetitionTests.swift; sourceTree = "<group>"; };
+		CAB966C027C845488FBAF8FD /* SkimInferencePolicy */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimInferencePolicy; path = ../../shared/SkimInferencePolicy; sourceTree = SOURCE_ROOT; };
 		D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleDetailView.swift; sourceTree = "<group>"; };
 		D60276D39C8ED76452B2EB26 /* Skim iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Skim iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXRunner.swift; sourceTree = "<group>"; };
@@ -115,10 +117,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				568EFC6280529AB7F91222BD /* SkimCore in Frameworks */,
-				F77D922DF2F50121B27BDD3B /* MLX in Frameworks */,
-				DFC1782BE965DCD3BBEAFEC9 /* MLXLMCommon in Frameworks */,
-				214DC26687D7CFE6647B4E3C /* MLXLLM in Frameworks */,
-				9A48EFF3F29B3477E0CE9120 /* Hub in Frameworks */,
+				F77D922DF2F50121B27BDD3B /* SkimInferencePolicy in Frameworks */,
+				DFC1782BE965DCD3BBEAFEC9 /* MLX in Frameworks */,
+				214DC26687D7CFE6647B4E3C /* MLXLMCommon in Frameworks */,
+				9A48EFF3F29B3477E0CE9120 /* MLXLLM in Frameworks */,
+				25F3EE8A8FEBDA2FC33DB56E /* Hub in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -179,6 +182,7 @@
 			isa = PBXGroup;
 			children = (
 				55C58C12B9B2AB383B4BA89C /* SkimCore */,
+				CAB966C027C845488FBAF8FD /* SkimInferencePolicy */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -296,6 +300,7 @@
 			name = "Skim iOS";
 			packageProductDependencies = (
 				8734D4E26C300D1AD49D4262 /* SkimCore */,
+				DC6D547D6D1E448AFD5E74FA /* SkimInferencePolicy */,
 				A6EF4FD219591BC7A9787950 /* MLX */,
 				01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */,
 				C72D1637C2C2401209468AAB /* MLXLLM */,
@@ -361,6 +366,7 @@
 				8EFD0C399CD27477B350989C /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
 				9A45BD01B133ECCCE6766556 /* XCRemoteSwiftPackageReference "swift-transformers" */,
 				DD3DF580024801F9AE4E4899 /* XCLocalSwiftPackageReference "../SkimCore" */,
+				98DD53F3341BA0D6BEF2F73E /* XCLocalSwiftPackageReference "../../shared/SkimInferencePolicy" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D7ABB738AAC39584D7DAB6DD /* Products */;
@@ -464,7 +470,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
@@ -551,7 +557,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
@@ -618,7 +624,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkimIOS/Info.plist;
@@ -652,7 +658,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 56;
+				CURRENT_PROJECT_VERSION = 57;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkimIOS/Info.plist;
@@ -777,6 +783,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		98DD53F3341BA0D6BEF2F73E /* XCLocalSwiftPackageReference "../../shared/SkimInferencePolicy" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../shared/SkimInferencePolicy;
+		};
 		DD3DF580024801F9AE4E4899 /* XCLocalSwiftPackageReference "../SkimCore" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../SkimCore;
@@ -838,6 +848,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 8EFD0C399CD27477B350989C /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
 			productName = MLXLLM;
+		};
+		DC6D547D6D1E448AFD5E74FA /* SkimInferencePolicy */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SkimInferencePolicy;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

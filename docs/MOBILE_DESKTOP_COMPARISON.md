@@ -4,7 +4,7 @@ Initial audit: 2026-09-20; shared story-policy update: 2026-09-24. Evidence desc
 
 ## Main finding
 
-The functional desktop app and native iOS app still have separate domain engines, with a bounded shared story-policy module added on 2026-09-24. Desktop uses React, Tauri and Rust. Native iOS uses SwiftUI and the Swift `SkimCore` package, with substantial additional business logic in its application target. Both now compile and execute `shared/SkimStoryPolicy` for matching thresholds/classification, confidence, base ranking, single-source protection and stable identity hashing. They also share semantic edition instructions, group validation and importance score adjustment; the configured-provider and storage adapters remain separate. Similar models, SQLite tables and remaining algorithms are still parallel implementations.
+The functional desktop app and native iOS app still have separate domain engines, with bounded shared story and local-inference policy modules added on 2026-09-24. Desktop uses React, Tauri and Rust. Native iOS uses SwiftUI and the Swift `SkimCore` package, with substantial additional business logic in its application target. Both now compile and execute `shared/SkimStoryPolicy` for matching thresholds/classification, confidence, base ranking, single-source protection and stable identity hashing. They also share semantic edition instructions, group validation, pair-verification prompts, complete-clique partitioning and importance score adjustment; the configured-provider and storage adapters remain separate. Native iOS and the desktop Swift helper additionally consume `shared/SkimInferencePolicy` for model families, end-of-turn tokens, thinking flags, sampling presets and output cleanup. Similar models, SQLite tables and remaining algorithms are still parallel implementations.
 
 There is also a native macOS target that depends on `SkimCore`. It currently renders a placeholder rather than the reader application. Counting that package dependency as desktop/mobile sharing would conceal the actual production architecture.
 
@@ -91,7 +91,7 @@ Desktop has persistent themes, triage, summaries and article interactions (`src-
 
 ## What is shared today
 
-`shared/SkimStoryPolicy` is compiled from the same C source by desktop Cargo and native SwiftPM. Both production callers use it; duplicate authoritative threshold, confidence, base score, unique-source and hash implementations were removed. The later semantic edition path adds common prompt, index validation and importance adjustment, with a 64-candidate limit and deterministic fallback. Provider calls, JSON decoding, source snapshots and migrations remain separate adapters. The cached 1B model failed an actual quality probe; safe response rejection is tested, while useful semantic grouping remains unproven. `shared/fixtures/story-policy.json` checks both ABI adapters against one contract. This establishes code sharing for those capabilities, not a shared end-to-end clustering engine: feature extraction, exact-match checks, tie-breaking, selection, preferences and storage remain separate. See `shared/SkimStoryPolicy/README.md` for the build paths and boundary.
+`shared/SkimStoryPolicy` is compiled from the same C source by desktop Cargo and native SwiftPM. Both production callers use it; duplicate authoritative threshold, confidence, base score, unique-source and hash implementations were removed. The later semantic edition path adds common prompt, index validation and importance adjustment, with a 64-candidate limit and deterministic fallback. Provider calls, JSON decoding, source snapshots and migrations remain separate adapters. Earlier model probes used a stale helper selected by the release script; the script now uses the exact SwiftPM output path. Current small-model probes still fail the public-news quality sample. A bounded second pair-verification pass now splits proposed groups using the same C clique policy in both apps; the desktop-recommended Qwen 4B passes two small historical samples. Valid model judgments can still be wrong, and larger pools and general semantic quality remain unaccepted. `shared/fixtures/story-policy.json` checks both ABI adapters against one contract. This establishes code sharing for those capabilities, not a shared end-to-end clustering engine: feature extraction, exact-match checks, tie-breaking, selection, preferences and storage remain separate. See `shared/SkimStoryPolicy/README.md` for the build paths and boundary.
 
 `SkimCore` is a real reusable Swift library. It owns native feed parsing/refresh, OPML, aggregator retrieval, domain records, SQLite operations, stories and editions. iOS constructs and calls these services (`native/SkimNative/SkimIOS/App/AppModel.swift:116-127`). The native macOS target links the same package but does not yet exercise those services in a functioning reader.
 
@@ -104,6 +104,12 @@ Three acceptance claims must remain distinct:
 - **Feature parity:** users can complete the same supported task in both products, with platform-appropriate presentation.
 
 One does not establish either of the others.
+
+## Shared local inference policy and release packaging
+
+The shipping Swift helper and native iOS target both import the same dependency-free `shared/SkimInferencePolicy` package. Duplicate native policy was removed. Desktop now preserves caller temperature (including zero), applies the existing native model presets, disables supported thinking templates, and removes leading reasoning/trailing terminators without damaging literal tokens in answers. Model loading, generation, settings and transport stay in platform adapters.
+
+The desktop bridge build previously searched a reusable scratch directory for the first matching release binary. Old toolchain output could win over the newly compiled product. Packaging now queries `swift build --show-bin-path` with the same build configuration and requires its exact executable and resource bundle; coexistence and missing-product regressions cover the failure. See `docs/CATCHUP_REVIEW.md` for artifact and model-quality evidence.
 
 ## Recommended ownership and migration
 

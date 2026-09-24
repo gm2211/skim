@@ -41,6 +41,7 @@ fn complete_args(provider: &str, request: &ChatRequest) -> CompleteArgs {
             .max_tokens
             .map(|value| value.clamp(1, u32::MAX as i64) as u32),
         json_mode: Some(request.json_mode),
+        temperature: request.temperature,
     }
 }
 
@@ -131,6 +132,7 @@ mod tests {
         assert_eq!(args.repo_id.as_deref(), Some("mlx-community/test"));
         assert_eq!(args.max_tokens, Some(120));
         assert_eq!(args.json_mode, Some(true));
+        assert_eq!(args.temperature, Some(0.2));
     }
 
     #[test]
@@ -148,6 +150,21 @@ mod tests {
         let args = complete_args("foundation-models", &request);
         assert_eq!(args.user, "user: block");
         assert_eq!(args.repo_id, None);
+        assert_eq!(args.temperature, None);
+    }
+
+    #[test]
+    fn deterministic_temperature_survives_native_wire_serialization() {
+        let request = ChatRequest {
+            model: "mlx-community/test".into(),
+            messages: vec![ChatMessage::text("user", "Classify these reports")],
+            temperature: Some(0.0),
+            max_tokens: Some(512),
+            json_mode: true,
+            tools: None,
+        };
+        let wire = serde_json::to_value(complete_args("mlx", &request)).unwrap();
+        assert_eq!(wire["temperature"], serde_json::json!(0.0));
     }
 
     #[test]
@@ -157,6 +174,9 @@ mod tests {
             native_error("MLX", "request timed out"),
             "request timed out"
         );
-        assert_eq!(native_error("MLX", "model inference timed out"), "model inference timed out");
+        assert_eq!(
+            native_error("MLX", "model inference timed out"),
+            "model inference timed out"
+        );
     }
 }

@@ -21,6 +21,17 @@ extern "C" {
     fn skim_story_score(sources: i64, age: f64, window: f64, preference: f64) -> f64;
     fn skim_story_is_unique(sources: i64) -> i32;
     fn skim_story_identity_hash(bytes: *const u8, length: usize) -> u64;
+    fn skim_semantic_pair_prompt() -> *const std::os::raw::c_char;
+    fn skim_semantic_max_pairs() -> usize;
+    fn skim_semantic_partition(
+        members: *const f64,
+        member_count: usize,
+        candidate_count: usize,
+        verified: *const u8,
+        verified_count: usize,
+        labels: *mut i32,
+        labels_count: usize,
+    ) -> i32;
     fn skim_semantic_prompt() -> *const std::os::raw::c_char;
     fn skim_semantic_max_candidates() -> usize;
     fn skim_semantic_group_valid(
@@ -81,6 +92,49 @@ pub fn identity_hash(seed: &str) -> u64 {
     unsafe { skim_story_identity_hash(seed.as_ptr(), seed.len()) }
 }
 
+pub fn semantic_pair_prompt() -> &'static str {
+    // Static NUL-terminated UTF-8 string owned by the common policy.
+    unsafe { std::ffi::CStr::from_ptr(skim_semantic_pair_prompt()) }
+        .to_str()
+        .expect("shared pair prompt is UTF-8")
+}
+
+pub fn semantic_max_pairs() -> usize {
+    unsafe { skim_semantic_max_pairs() }
+}
+
+pub fn semantic_partition(
+    members: &[usize],
+    candidate_count: usize,
+    verified: &[u8],
+) -> Option<Vec<Vec<usize>>> {
+    let numeric: Vec<f64> = members.iter().map(|&index| index as f64).collect();
+    let mut labels = vec![-1; members.len()];
+    // C receives actual slice lengths; all buffers live for the synchronous call.
+    let count = unsafe {
+        skim_semantic_partition(
+            numeric.as_ptr(),
+            numeric.len(),
+            candidate_count,
+            verified.as_ptr(),
+            verified.len(),
+            labels.as_mut_ptr(),
+            labels.len(),
+        )
+    };
+    if count <= 0 || count as usize > members.len() {
+        return None;
+    }
+    let mut groups = vec![Vec::new(); count as usize];
+    for (&member, label) in members.iter().zip(labels) {
+        groups.get_mut(usize::try_from(label).ok()?)?.push(member);
+    }
+    if groups.iter().any(Vec::is_empty) {
+        return None;
+    }
+    Some(groups)
+}
+
 pub fn semantic_prompt() -> &'static str {
     // C returns a static, NUL-terminated UTF-8 string; ownership never transfers.
     unsafe { std::ffi::CStr::from_ptr(skim_semantic_prompt()) }
@@ -119,6 +173,42 @@ pub fn semantic_score(base: f64, importance: f64, confidence: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shared_pair_partition_fixture() {
+        let cases: serde_json::Value =
+            serde_json::from_str(include_str!("../../../shared/fixtures/semantic-pairs.json"))
+                .unwrap();
+        for case in cases.as_array().unwrap() {
+            let count = case["candidate_count"].as_u64().unwrap() as usize;
+            let members: Vec<usize> = serde_json::from_value(case["members"].clone()).unwrap();
+            let mut matrix = vec![0u8; count * count];
+            for pair in case["positive_pairs"].as_array().unwrap() {
+                let a = pair[0].as_u64().unwrap() as usize;
+                let b = pair[1].as_u64().unwrap() as usize;
+                matrix[a * count + b] = 1;
+                matrix[b * count + a] = 1;
+            }
+            let groups = super::semantic_partition(&members, count, &matrix).unwrap();
+            let labels: Vec<usize> = members
+                .iter()
+                .map(|member| {
+                    groups
+                        .iter()
+                        .position(|group| group.contains(member))
+                        .unwrap()
+                })
+                .collect();
+            assert_eq!(
+                serde_json::json!(labels),
+                case["expected_labels"],
+                "{}",
+                case["name"]
+            );
+        }
+        assert!(super::semantic_partition(&[0, 1], 2, &[1]).is_none());
+        assert!(super::semantic_partition(&[0, 0], 2, &[0; 4]).is_none());
+    }
+
     use super::*;
 
     #[test]

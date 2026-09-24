@@ -14,6 +14,10 @@ sandbox inheritance before signing the parent. Do not sign the whole tree with
 
 Release checks:
 
+- Run `python3 plugins/tauri-plugin-skim-ai/tests/test_build_macos_bridge.py` and
+  `swift test --package-path shared/SkimInferencePolicy` to cover packaging and
+  shared model policy. The bridge build must use the exact `swift build
+  --show-bin-path` product; stale products can coexist in its scratch directory.
 - Run frontend tests and the Rust library suite. The existing local-model
   integration test requires a separately downloaded GGUF file.
 - Verify `codesign --verify --deep --strict Skim.app` and the bundle version.

@@ -996,6 +996,13 @@ const char *skim_semantic_pair_prompt(void) {
 
 size_t skim_semantic_max_pairs(void) { return 64; }
 
+size_t skim_semantic_pair_batch_length(size_t pair_count, size_t offset) {
+    if (offset >= pair_count) return 0;
+    const size_t remaining = pair_count - offset;
+    const size_t limit = skim_semantic_max_pairs();
+    return remaining < limit ? remaining : limit;
+}
+
 int32_t skim_semantic_partition(const double *members, size_t member_count,
                                 size_t candidate_count, const uint8_t *verified,
                                 size_t verified_count, int32_t *labels,

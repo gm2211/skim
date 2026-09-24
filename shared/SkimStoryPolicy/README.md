@@ -16,7 +16,7 @@ Scalar inputs and caller-owned UTF-8 bytes cross a fixed C ABI. The excerpt vali
 `shared/fixtures/story-policy.json` and `shared/fixtures/semantic-policy.json`.
 `shared/fixtures/semantic-model-failure.json` records a real local-model failure
 on synthetic reports, replayed by both adapters. It proves rejection, not model quality.
-`semantic-pairs.json` checks clique decisions; `semantic-verification-responses.json` replays actual local-model responses through both adapters. Pools over 64 candidates or more than 64 requested pairs use full deterministic fallback. Grouping, pair verification and sequential per-event ratings share one total 30-second deadline. Failure before verification falls back deterministically; rating-stage failure retains verified membership with neutral importance for split groups.
+`semantic-pairs.json` checks clique decisions; `semantic-verification-responses.json` replays actual local-model responses through both adapters. Pools over 64 candidates still use full deterministic fallback. Pair verification uses the shared batch-length policy and `semantic-pair-batches.json` fixture: each request contains at most 64 pairs and only the original reports those pairs reference. All batches must validate before any merged group is published; a malformed early batch stops further calls. Grouping, pair verification and sequential per-event ratings share one total 30-second deadline. Failure before verification falls back deterministically; rating-stage failure retains verified membership with neutral importance for split groups.
 
 Feature extraction, exact-match detection, candidate tie-breaking and selection,
 preference inputs, article identity seeds, persistence and migrations remain

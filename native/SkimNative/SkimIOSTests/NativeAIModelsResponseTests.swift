@@ -510,3 +510,52 @@ private final class NativeChatCaptureURLProtocol: URLProtocol, @unchecked Sendab
 
     override func stopLoading() {}
 }
+
+private actor TodayPairBatchTransport {
+    var counts: [Int] = []
+    let failAt: Int?
+    init(failAt: Int? = nil) { self.failAt = failAt }
+    func complete(instructions: String, payload: String, maxTokens: Int) throws -> String {
+        #expect(instructions == TodaySemanticPolicy.pairPrompt)
+        #expect(maxTokens == 8192)
+        let object = try #require(JSONSerialization.jsonObject(with: Data(payload.utf8)) as? [String: Any])
+        let pairs = try #require(object["pairs"] as? [[Int]])
+        let reports = try #require(object["reports"] as? [[String: Any]])
+        #expect(Set(reports.compactMap { $0["index"] as? Int }) == Set(pairs.flatMap { $0 }))
+        counts.append(pairs.count)
+        if counts.count == failAt { return "{\"pairs\":[]}" }
+        return String(decoding: try JSONSerialization.data(withJSONObject: pairs.map {
+            ["members": $0, "same_event": true, "confidence": 0.99] as [String: Any]
+        }), as: UTF8.self)
+    }
+}
+
+@Test func nativeTodayVerificationTransportRequestsEveryBatchAndFailsAtomically() async throws {
+    let candidateData = try JSONSerialization.data(withJSONObject: (0..<13).map {
+        ["index": $0, "title": "Report \($0)", "excerpt": "Evidence", "timestamp": 0, "baseScore": 3] as [String: Any]
+    })
+    let candidates = try JSONDecoder().decode([TodaySemanticCandidate].self, from: candidateData)
+    let groups = [TodaySemanticGroup(members: (0..<12).map(Double.init), importance: 4, confidence: 0.95, reason: "Event"),
+                  TodaySemanticGroup(members: [12], importance: 2, confidence: 0.95, reason: "Unrelated")]
+    let plan = try TodaySemanticPolicy.verificationPlan(groups: groups, candidates: candidates)
+    let transport = TodayPairBatchTransport()
+    let result = try await NativeAI.verifyToday(plan: plan, provider: "mlx") { instructions, payload, maxTokens in
+        try await transport.complete(instructions: instructions, payload: payload, maxTokens: maxTokens)
+    }
+    #expect(await transport.counts == [64, 2])
+    #expect(result.map(\.members) == groups.map(\.members))
+    let failing = TodayPairBatchTransport(failAt: 2)
+    await #expect(throws: (any Error).self) {
+        try await NativeAI.verifyToday(plan: plan, provider: "mlx") { instructions, payload, maxTokens in
+            try await failing.complete(instructions: instructions, payload: payload, maxTokens: maxTokens)
+        }
+    }
+    #expect(await failing.counts == [64, 2])
+    let firstFailure = TodayPairBatchTransport(failAt: 1)
+    await #expect(throws: (any Error).self) {
+        try await NativeAI.verifyToday(plan: plan, provider: "mlx") { instructions, payload, maxTokens in
+            try await firstFailure.complete(instructions: instructions, payload: payload, maxTokens: maxTokens)
+        }
+    }
+    #expect(await firstFailure.counts == [64])
+}

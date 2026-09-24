@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import SkimStoryPolicy
 @testable import SkimCore
 
 private func reports(_ count: Int) -> [TodaySemanticCandidate] {
@@ -66,9 +67,6 @@ private func group(_ members: [Double]) -> TodaySemanticGroup {
 }
 
 @Test func verificationBoundsPairWorkAndRejectsOverlappingInitialGroups() throws {
-    #expect(throws: (any Error).self) {
-        try TodaySemanticPolicy.verificationPlan(groups: [group((0..<12).map(Double.init))], candidates: reports(12))
-    }
     let plan = try TodaySemanticPolicy.verificationPlan(groups: [group([0, 99]), group([0, 1]), group([1, 2])], candidates: reports(3))
     #expect(plan.pairs == [[0, 1]])
 }
@@ -232,4 +230,43 @@ private func group(_ members: [Double]) -> TodaySemanticGroup {
     #expect(accumulated.map(\.members) == neutral.map(\.members))
     #expect(neutral.map(\.importance) == [3, 3, 4])
     #expect(try TodaySemanticPolicy.ratingPlan(groups: neutral, candidates: reports(3), groupID: 2) == nil)
+}
+
+@Test func verificationBatchesPreserveAllPairsAndPartitionOnlyAfterCompleteValidation() throws {
+    let plan = try TodaySemanticPolicy.verificationPlan(groups: [group((0..<12).map(Double.init)), group([12])], candidates: reports(13))
+    let batches = try TodaySemanticPolicy.verificationBatches(plan: plan)
+    #expect(batches.map { $0.pairs.count } == [64, 2])
+    #expect(batches.flatMap(\.pairs) == plan.pairs)
+    for batch in batches {
+        let payload = try #require(JSONSerialization.jsonObject(with: Data(batch.payload.utf8)) as? [String: Any])
+        let entries = try #require(payload["reports"] as? [[String: Any]])
+        #expect(Set(entries.compactMap { $0["index"] as? Int }) == Set(batch.pairs.flatMap { $0 }))
+        #expect(!entries.contains { $0["index"] as? Int == 12 })
+    }
+    func response(_ pairs: [[Int]]) throws -> String {
+        String(decoding: try JSONSerialization.data(withJSONObject: pairs.map {
+            ["members": $0, "same_event": true, "confidence": 0.99] as [String: Any]
+        }), as: UTF8.self)
+    }
+    let responses = try batches.map { try response($0.pairs) }
+    for (batch, raw) in zip(batches, responses) {
+        try TodaySemanticPolicy.validateVerificationResponse(raw, batch: batch, plan: plan)
+        #expect(throws: (any Error).self) { try TodaySemanticPolicy.validateVerificationResponse("[]", batch: batch, plan: plan) }
+    }
+    let verified = try TodaySemanticPolicy.verify(responses: responses, plan: plan)
+    #expect(verified.map(\.members) == [(0..<12).map(Double.init), [12]])
+    #expect(verified.allSatisfy { !$0.needsRating })
+    for invalid in [Array(responses.prefix(1)), responses + [responses[0]], [responses[0], "[]"],
+                    [responses[0], responses[0]], [responses[0], try response([[0, 12]])]] {
+        #expect(throws: (any Error).self) { try TodaySemanticPolicy.verify(responses: invalid, plan: plan) }
+    }
+    #expect(throws: (any Error).self) { try TodaySemanticPolicy.verify(response: responses[0], plan: plan) }
+}
+
+@Test func verificationBatchLengthMatchesSharedFixture() throws {
+    struct Case: Decodable { let pair_count: Int; let offset: Int; let length: Int }
+    var root = URL(fileURLWithPath: #filePath)
+    for _ in 0..<5 { root.deleteLastPathComponent() }
+    let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: root.appendingPathComponent("shared/fixtures/semantic-pair-batches.json")))
+    for item in cases { #expect(skim_semantic_pair_batch_length(item.pair_count, item.offset) == item.length) }
 }

@@ -459,6 +459,7 @@ pub async fn summarize_article(
             let bullet_prompt = prompts::article_bullet_summary_prompt(title, &text, &settings.ai);
             let bullet_text = if !bullet_prompt.is_empty() {
                 let args = CompleteArgs {
+                    messages: None,
                     system: system_prompt.clone(),
                     user: bullet_prompt,
                     repo_id: repo_id.clone(),
@@ -483,6 +484,7 @@ pub async fn summarize_article(
             let full_prompt = prompts::article_full_summary_prompt(title, &text, &settings.ai);
             let full_text = if !full_prompt.is_empty() {
                 let args = CompleteArgs {
+                    messages: None,
                     system: system_prompt,
                     user: full_prompt,
                     repo_id,

@@ -1,0 +1,126 @@
+{
+  "verified_at": "2026-09-24T17:19:18.123546+00:00",
+  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+  "scope": "Real desktop backend and persistent macOS helper; isolated synthetic RSS library from scripts/dev-newsstand.mjs. Publisher labels and article claims in that fixture are fictional test material. No user library/settings changed; no cloud inference.",
+  "before": [
+    {
+      "case": "library_exact_fact",
+      "seconds": 0.22,
+      "answer": "The provided article does not mention battery life. [1]",
+      "sources": [
+        "A small laptop with a very good keyboard"
+      ]
+    },
+    {
+      "case": "20_word_summary",
+      "seconds": 0.64,
+      "answer": "EU probes cloud egress fees to prevent vendor lock-in, focusing on pricing for partial workloads moving between services.\""
+    }
+  ],
+  "after": [
+    {
+      "case": "20_word_summary",
+      "seconds": 1.89,
+      "answer": "EU probes if cloud egress fees are designed to prevent customers from switching providers."
+    },
+    {
+      "case": "250_word_summary",
+      "seconds": 1.85,
+      "answer": "The European Commission has launched a formal investigation into cloud egress fees charged by Amazon Web Services, Microsoft Azure, and Google Cloud, examining whether these fees are designed to make it irrational for customers to switch providers. While current egress costs can be up to fifty times higher than storage costs, the regulators focus specifically on scenarios where customers retain one workload and migrate only another. The investigation centers on whether the fees are structured to lock customers into a single vendor rather than reflecting actual costs. Although all three providers have reduced egress pricing over the past 18 months and now waive fees for full exits, regulators are scrutinizing the practice of charging exorbitant fees for data movement. If found abusive, the Commission could mandate transparent, per-gigabyte pricing in a standardized format\u2014similar to how it has required telecoms roaming pricing transparency. This move aims to promote fair competition and prevent anti-competitive behavior in cloud computing services."
+    },
+    {
+      "case": "article_exact_fact",
+      "seconds": 0.32,
+      "answer": "The laptop lasted nine hours of real work, which is less than the fourteen hours claimed on the box."
+    },
+    {
+      "case": "article_followup",
+      "seconds": 0.67,
+      "answer": "To find the percentage shorter:\n\nDifference = 14 - 9 = 5 hours  \nPercentage shorter = (5 / 14) \u00d7 100 \u2248 35.7%\n\nSo, the real-world battery life is about **35.7% shorter** than the claim on the box."
+    },
+    {
+      "case": "library_exact_fact",
+      "seconds": 0.32,
+      "answer": "The reviewer got nine hours of real work from the laptop's battery [1].",
+      "sources": [
+        "A small laptop with a very good keyboard"
+      ]
+    },
+    {
+      "case": "library_search",
+      "seconds": 1.69,
+      "answer": "Articles about cloud egress fees include:\n\n- [1] EU regulators open formal probe into cloud egress fees: The European Commission launched a formal investigation into egress fees charged by AWS, Azure, and Google Cloud, questioning whether the fees are designed to make switching irrational [1].\n\n- [2] Cloud providers race to publish egress fee schedules: Following the probe, two of the three providers released revised pricing with per-region transfer costs, though analysts note the tables lack comparability across providers [2].\n\n- [3] Egress fees and the shape of lock-in: Analyzes egress fees as a disclosure issue, arguing that while egress is the only visible line item in cloud lock-in, its regulation may not significantly reduce overall vendor lock-in without comparable pricing for other costs [3].",
+      "sources": [
+        "EU regulators open formal probe into cloud egress fees",
+        "Cloud providers race to publish egress fee schedules",
+        "Egress fees and the shape of lock-in"
+      ]
+    },
+    {
+      "case": "library_no_match",
+      "seconds": 0.0,
+      "answer": "No matching articles found in this scope. Try another title, topic, source, or URL. The All scope includes read articles too.",
+      "sources": []
+    },
+    {
+      "case": "followup_after_read",
+      "seconds": 1.24,
+      "answer": "The reviewer achieved nine hours of real work, which is less than the advertised fourteen hours [1].",
+      "sources": [
+        "A small laptop with a very good keyboard"
+      ]
+    },
+    {
+      "case": "explicit_new_search_respects_unread",
+      "seconds": 0.0,
+      "answer": "No matching articles found in this scope. Try another title, topic, source, or URL. The All scope includes read articles too.",
+      "sources": []
+    },
+    {
+      "case": "mixed_context_and_new_topic",
+      "seconds": 1.16,
+      "answer": "The information about the laptop review does not relate to cloud egress fees. The query about cloud egress fees is addressed in articles [2] and [3], which discuss EU regulators investigating whether egress fees are set to make switching between cloud providers irrational. The battery life of a laptop has no connection to cloud egress fees.",
+      "sources": [
+        "A small laptop with a very good keyboard",
+        "EU regulators open formal probe into cloud egress fees",
+        "Cloud providers race to publish egress fee schedules",
+        "Egress fees and the shape of lock-in"
+      ]
+    }
+  ],
+  "browser_qa": {
+    "surface": "Codex in-app browser, real Sidebar/AskSkimDialog/ArticleDetail using desktop dev bridge",
+    "verified": [
+      "Cited full-text answer is visible",
+      "Opening citation marks test article read",
+      "Closing reader returns to preserved conversation",
+      "Unread follow-up retains opened source and answers nine versus fourteen hours",
+      "Aligned answer bubbles, source cards, composer and glass modal inspected at desktop size"
+    ],
+    "limits": "Not the signed macOS webview or native compositor. Mac is locked; native automation unavailable."
+  },
+  "semantic_regression": [
+    {
+      "corpus": "skim-semantic-fresh-corpus.json",
+      "all_groups_correct": true,
+      "importance_constraints_pass": true,
+      "seconds": 12.04,
+      "reports": 8
+    },
+    {
+      "corpus": "skim-real-news-corpus.json",
+      "all_groups_correct": true,
+      "importance_constraints_pass": true,
+      "seconds": 15.22,
+      "reports": 10
+    },
+    {
+      "corpus": "skim-live-feed-corpus.json",
+      "all_groups_correct": true,
+      "importance_constraints_pass": null,
+      "seconds": 11.03,
+      "reports": 14
+    }
+  ],
+  "semantic_limit": "32 selected development reports, not a held-out or representative accuracy estimate; current publisher sample has no strict importance order. Does not address more than 64 candidates."
+}

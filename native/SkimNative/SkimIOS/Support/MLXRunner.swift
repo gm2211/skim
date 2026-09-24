@@ -494,7 +494,7 @@ actor MLXRunner {
         do {
             let raw = try await container.perform { (context: ModelContext) -> String in
                 let userInput = UserInput(
-                    messages: messages,
+                    messages: LocalChatMessages.prepare(messages: messages.map { LocalChatMessage(role: $0["role"] ?? "user", content: $0["content"] ?? "") }),
                     additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
                 )
                 let lmInput = try await context.processor.prepare(input: userInput)
@@ -557,7 +557,7 @@ actor MLXRunner {
         do {
             let raw = try await container.perform { (context: ModelContext) -> String in
                 let userInput = UserInput(
-                    messages: messages,
+                    messages: LocalChatMessages.prepare(messages: messages.map { LocalChatMessage(role: $0["role"] ?? "user", content: $0["content"] ?? "") }),
                     additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
                 )
                 let lmInput = try await context.processor.prepare(input: userInput)
@@ -607,13 +607,7 @@ actor MLXRunner {
         repetitionPenalty: Float? = nil,
         repetitionContextSize: Int? = nil
     ) async throws -> String {
-        let finalSystem = jsonMode
-            ? systemPrompt + "\n\nRespond with a single JSON object. No prose, no code fences."
-            : systemPrompt
-        let messages: [[String: String]] = [
-            ["role": "system", "content": finalSystem],
-            ["role": "user", "content": userPrompt]
-        ]
+        let messages = LocalChatMessages.prepare(system: systemPrompt, user: userPrompt, jsonMode: jsonMode)
         return try await complete(
             messages: messages,
             maxTokens: maxTokens,
@@ -637,13 +631,7 @@ actor MLXRunner {
         repetitionContextSize: Int? = nil,
         onToken: @Sendable @escaping (String) -> Void
     ) async throws -> String {
-        let finalSystem = jsonMode
-            ? systemPrompt + "\n\nRespond with a single JSON object. No prose, no code fences."
-            : systemPrompt
-        let messages: [[String: String]] = [
-            ["role": "system", "content": finalSystem],
-            ["role": "user", "content": userPrompt]
-        ]
+        let messages = LocalChatMessages.prepare(system: systemPrompt, user: userPrompt, jsonMode: jsonMode)
         return try await stream(
             messages: messages,
             maxTokens: maxTokens,

@@ -11,6 +11,7 @@ struct Request: Decodable {
     let repoId: String?
     let system: String?
     let user: String?
+    let messages: [LocalChatMessage]?
     let maxTokens: Int?
     let temperature: Float?
     let jsonMode: Bool?
@@ -102,9 +103,8 @@ actor MLXWorker {
       let container = container!
       let family = MLXModelFamily.detect(from: repo)
       let preset = MLXSamplingPreset.preset(for: repo)
-      let system = (request.system ?? "") + ((request.jsonMode ?? false) ? "\n\nRespond with a single JSON object. No prose, no code fences." : "")
       let input = UserInput(
-          messages: [["role": "system", "content": system], ["role": "user", "content": request.user ?? ""]],
+          messages: LocalChatMessages.prepare(messages: request.messages, system: request.system ?? "", user: request.user ?? "", jsonMode: request.jsonMode ?? false),
           additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
       )
       let parameters = GenerateParameters(

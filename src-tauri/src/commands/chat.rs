@@ -242,8 +242,26 @@ fn topic_keywords(query: &str) -> Vec<String> {
 }
 
 fn is_contextual_followup(query: &str) -> bool {
-    topic_keywords(query).is_empty() && !is_find_request(query)
-        && !(query.to_lowercase().contains("catch") && is_broad_catchup(query))
+    if is_find_request(query) { return false; }
+    if topic_keywords(query).is_empty() {
+        return !(query.to_lowercase().contains("catch") && is_broad_catchup(query));
+    }
+    // A question whose grammatical subject points back to the conversation can
+    // introduce new attributes (such as advertised battery life). Anchor this
+    // pattern at the start: a pronoun anywhere in a new topic is insufficient.
+    let words: Vec<String> = query.split(|ch: char| !ch.is_alphanumeric())
+        .filter(|word| !word.is_empty()).map(str::to_lowercase).collect();
+    if words.len() < 4 || !["how", "why", "what"].contains(&words[0].as_str())
+        || !["does", "do", "did", "is", "are", "was", "were", "would", "will", "can", "could", "should"].contains(&words[1].as_str()) {
+        return false;
+    }
+    match words[2].as_str() {
+        "it" | "they" => true,
+        // Demonstratives can also introduce a NEW noun ("that quasar").
+        // Require a supported predicate immediately after the demonstrative.
+        "this" | "that" | "these" | "those" => ["compare", "mean", "affect", "matter", "differ", "change", "work", "happen", "help", "relate", "suggest", "imply", "show", "tell", "important", "different", "better", "worse", "useful", "possible", "relevant", "significant", "surprising", "expensive", "cheaper", "faster", "slower"].contains(&words[3].as_str()),
+        _ => false,
+    }
 }
 
 fn retrieval_topic(query: &str, messages: &[ChatMessageInput]) -> (Vec<String>, bool) {
@@ -252,6 +270,7 @@ fn retrieval_topic(query: &str, messages: &[ChatMessageInput]) -> (Vec<String>, 
         // Use the most recent substantive user topic, skipping operation-only
         // follow-ups. Never merge old subjects or mine assistant output.
         for message in messages.iter().rev().filter(|message| message.role == "user") {
+            if is_contextual_followup(&message.content) { continue; }
             let previous = topic_keywords(&message.content);
             if !previous.is_empty() || (message.content.to_lowercase().contains("catch") && is_broad_catchup(&message.content)) {
                 return (previous, is_broad_catchup(&message.content));
@@ -270,6 +289,16 @@ fn retrieve_chat_articles(
     query: &str,
     messages: &[ChatMessageInput],
 ) -> Result<Vec<crate::db::models::ArticleWithFeed>, rusqlite::Error> {
+    let (terms, allow_recent_fallback) = retrieval_topic(query, messages);
+    retrieve_chat_articles_for_terms(conn, scope, &terms, allow_recent_fallback)
+}
+
+fn retrieve_chat_articles_for_terms(
+    conn: &rusqlite::Connection,
+    scope: &str,
+    terms: &[String],
+    allow_recent_fallback: bool,
+) -> Result<Vec<crate::db::models::ArticleWithFeed>, rusqlite::Error> {
     conn.create_scalar_function("skim_chat_word", 2,
         rusqlite::functions::FunctionFlags::SQLITE_UTF8 | rusqlite::functions::FunctionFlags::SQLITE_DETERMINISTIC,
         |context| {
@@ -277,7 +306,6 @@ fn retrieve_chat_articles(
             let term = context.get::<String>(1)?;
             Ok(word_match(&text, &term))
         })?;
-    let (terms, allow_recent_fallback) = retrieval_topic(query, messages);
     let scope_clause = match scope {
         "unread" => "a.is_read = 0",
         "inbox" => "COALESCE(t.priority, 0) >= 3",
@@ -337,7 +365,20 @@ fn retrieve_chat_articles_with_references(
             if references.iter().any(|article: &crate::db::models::ArticleWithFeed| article.article.id == *id) { continue; }
             if let Some(article) = queries::get_article_by_id(conn, id)? { references.push(article); }
         }
-        if !references.is_empty() { return Ok(references); }
+        if !references.is_empty() {
+            let current_terms = topic_keywords(query);
+            if !current_terms.is_empty() && references.len() < 15 {
+                // Mixed follow-ups retain their cited story and may introduce a
+                // related subject. Search only that subject within the selected
+                // scope, never substitute recent rows or inherit earlier terms.
+                for article in retrieve_chat_articles_for_terms(conn, scope, &current_terms, false)? {
+                    if references.iter().any(|existing| existing.article.id == article.article.id) { continue; }
+                    references.push(article);
+                    if references.len() == 15 { break; }
+                }
+            }
+            return Ok(references);
+        }
     }
     retrieve_chat_articles(conn, scope, query, messages)
 }
@@ -418,8 +459,10 @@ pub async fn chat_with_articles(
         .clone()
         .unwrap_or_else(|| crate::commands::ai::default_model(&ai_settings.provider));
 
-    // Build context. Keep excerpts short to stay well under any argv or
-    // context window limits — the caller mostly needs titles and source.
+    // Resolve only retrieved sources, with bounded fetching and offline fallback.
+    // Preserve source ordering so citations continue to identify the same rows.
+    let source_articles: Vec<_> = selected.iter().map(|source| source.article.clone()).collect();
+    let source_texts = crate::commands::article_body::resolve_selected_article_texts(db.inner(), &source_articles).await;
     let excerpt_topic = retrieval_topic(&trimmed_query, &messages).0.join(" ");
     let mut context = String::new();
     context.push_str("Relevant articles from the user's RSS feed:\n\n");
@@ -433,8 +476,7 @@ pub async fn chat_with_articles(
                     .unwrap_or_default()
             })
             .unwrap_or_default();
-        let text = crate::commands::article_body::local_article_text(db.inner(), &a.article);
-        let excerpt = query_excerpt(&text, &excerpt_topic, if i < 3 { 2400 } else { 800 });
+        let excerpt = query_excerpt(&source_texts[i], &excerpt_topic, if i < 3 { 2400 } else { 800 });
         context.push_str(&format!(
             "[{i}] Title: {title}\nSource: {source}\nAuthor: {author}\nDate: {date}\nURL: {url}\nExcerpt: {excerpt}\n\n",
             i = i + 1,
@@ -1052,6 +1094,50 @@ mod tests {
         let text = format!("{}Quasar evidence at the end.", "introductory text ".repeat(400));
         let topic = retrieval_topic("summarize that", &history).0.join(" ");
         assert!(query_excerpt(&text, &topic, 200).contains("Quasar evidence"));
+    }
+
+    #[test]
+    fn anaphoric_questions_keep_opened_laptop_reference_without_broadening_new_searches() {
+        let conn = retrieval_database();
+        conn.execute("UPDATE articles SET title='Laptop review', content_text='Battery lasted nine hours; advertised battery life was twelve hours', is_read=1 WHERE id='cached'", []).unwrap();
+        let mut history = vec![ChatMessageInput { role: "user".into(), content: "Find the laptop review. What battery life did the reviewer get?".into() },
+            ChatMessageInput { role: "assistant".into(), content: "Nine hours [1].".into() }];
+        let prior = vec!["cached".into()];
+        for query in ["How does that compare with the advertised battery life?", "Why is it lower than advertised?", "What does that mean for travel?"] {
+            assert_eq!(ids(retrieve_chat_articles_with_references(&conn, "unread", query, &history, &prior).unwrap()), vec!["cached"], "{query}");
+        }
+        history.push(ChatMessageInput { role: "user".into(), content: "How does that compare with the advertised battery life?".into() });
+        assert_eq!(retrieval_topic("Why is it lower than advertised?", &history).0, topic_keywords(&history[0].content));
+        for query in ["find that quasar article", "summarize neutrino", "How does that quasar form?", "Explain the neutrino result", "What does neutrino oscillation mean?"] {
+            assert!(!is_contextual_followup(query), "{query}");
+            assert!(retrieve_chat_articles_with_references(&conn, "unread", query, &history, &prior).unwrap().is_empty(), "{query}");
+        }
+        assert_eq!(ids(retrieve_chat_articles_with_references(&conn, "all", "summarize neutrino", &history, &prior).unwrap()), vec!["old"]);
+        assert!(retrieve_chat_articles_with_references(&conn, "inbox", "find that laptop review", &history, &prior).unwrap().is_empty());
+    }
+
+    #[test]
+    fn mixed_followups_append_current_subject_matches_only_within_scope() {
+        let conn = retrieval_database();
+        conn.execute("UPDATE articles SET title='Laptop review', content_text='Battery lasted nine hours', is_read=1 WHERE id='cached'", []).unwrap();
+        conn.execute("INSERT INTO articles(id,feed_id,title,content_text,fetched_at,is_read) VALUES ('unread-neutrino','f','Neutrino oscillations','New measurement',50,0)", []).unwrap();
+        let history = vec![ChatMessageInput { role: "user".into(), content: "Find the laptop review".into() }];
+        let prior = vec!["cached".into(), "cached".into()];
+        let query = "What does that mean for neutrino oscillations?";
+        assert_eq!(ids(retrieve_chat_articles_with_references(&conn, "unread", query, &history, &prior).unwrap()), vec!["cached", "unread-neutrino"]);
+        assert_eq!(ids(retrieve_chat_articles_with_references(&conn, "all", query, &history, &prior).unwrap()), vec!["cached", "unread-neutrino", "old"]);
+        assert_eq!(ids(retrieve_chat_articles_with_references(&conn, "inbox", query, &history, &prior).unwrap()), vec!["cached"]);
+        assert_eq!(ids(retrieve_chat_articles_with_references(&conn, "all", "summarize that", &history, &prior).unwrap()), vec!["cached"]);
+        assert_eq!(ids(retrieve_chat_articles_with_references(&conn, "all", "What does that mean for travel?", &history, &prior).unwrap()), vec!["cached"]);
+        // Matching the referenced row must not duplicate it or consume extra slots.
+        assert_eq!(ids(retrieve_chat_articles_with_references(&conn, "all", "What does that mean for battery life?", &history, &prior).unwrap()), vec!["cached"]);
+        for index in 0..20 {
+            conn.execute("INSERT INTO articles(id,feed_id,title,fetched_at) VALUES (?1,'f','Neutrino oscillations',?2)", rusqlite::params![format!("extra-{index}"), index+100]).unwrap();
+        }
+        let rows = ids(retrieve_chat_articles_with_references(&conn, "unread", query, &history, &prior).unwrap());
+        assert_eq!(rows.len(), 15);
+        assert_eq!(rows[0], "cached");
+        assert!(!rows.contains(&"old".into()));
     }
 
     #[test]

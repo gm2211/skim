@@ -33,10 +33,10 @@ fn complete_args(provider: &str, request: &ChatRequest) -> CompleteArgs {
             .messages
             .iter()
             .find(|message| message.role == "system")
-            .map(|message| message.content.clone())
+            .map(message_content)
             .unwrap_or_default(),
         user,
-        messages: (provider == "mlx").then(|| {
+        messages: matches!(provider, "mlx" | "foundation-models").then(|| {
             request
                 .messages
                 .iter()
@@ -165,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn flattens_content_blocks_for_foundation_models_without_repo_id() {
+    fn preserves_content_blocks_for_foundation_models_without_repo_id() {
         let mut message = ChatMessage::text("user", "fallback");
         message.content_blocks = Some(vec![serde_json::json!({"type": "text", "text": "block"})]);
         let request = ChatRequest {
@@ -179,8 +179,51 @@ mod tests {
         let args = complete_args("foundation-models", &request);
         assert_eq!(args.user, "user: block");
         assert_eq!(args.repo_id, None);
-        assert!(args.messages.is_none());
+        assert_eq!(args.messages.as_ref().unwrap()[0].role, "user");
+        assert_eq!(args.messages.as_ref().unwrap()[0].content, "block");
         assert_eq!(args.temperature, None);
+    }
+
+    #[test]
+    fn block_only_system_is_preserved_as_authoritative_instructions() {
+        let mut system = ChatMessage::text("system", "");
+        system.content_blocks = Some(vec![serde_json::json!({"type": "text", "text": "Source policy"})]);
+        let request = ChatRequest {
+            model: "foundation-model".into(),
+            messages: vec![system, ChatMessage::text("user", "Final question")],
+            temperature: None, max_tokens: Some(650), json_mode: false, tools: None,
+        };
+        for provider in ["foundation-models", "mlx"] {
+            let args = complete_args(provider, &request);
+            assert_eq!(args.system, "Source policy");
+            let messages = args.messages.unwrap();
+            assert_eq!(messages[0].content, args.system);
+            assert_eq!(messages[1].role, "user");
+            assert_eq!(messages[1].content, "Final question");
+        }
+    }
+
+    #[test]
+    fn foundation_models_wire_preserves_history_roles_and_latest_once() {
+        let request = ChatRequest {
+            model: "foundation-model".into(),
+            messages: vec![
+                ChatMessage::text("system", "Source + instructions"),
+                ChatMessage::text("user", "Earlier question"),
+                ChatMessage::text("assistant", "Earlier answer"),
+                ChatMessage::text("user", "Latest question"),
+            ],
+            temperature: Some(0.4), max_tokens: Some(2048), json_mode: false, tools: None,
+        };
+        let wire = serde_json::to_value(complete_args("foundation-models", &request)).unwrap();
+        assert_eq!(wire["messages"], serde_json::json!([
+            {"role":"system", "content":"Source + instructions"},
+            {"role":"user", "content":"Earlier question"},
+            {"role":"assistant", "content":"Earlier answer"},
+            {"role":"user", "content":"Latest question"}
+        ]));
+        assert_eq!(wire["temperature"], 0.4);
+        assert_eq!(wire["maxTokens"], 2048);
     }
 
     #[test]

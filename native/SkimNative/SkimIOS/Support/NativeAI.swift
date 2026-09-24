@@ -1,5 +1,6 @@
 import OSLog
 import SkimCore
+import SkimInferencePolicy
 import SwiftUI
 #if canImport(FoundationModels)
 import FoundationModels
@@ -1132,6 +1133,14 @@ enum NativeAI {
         return [systemMessage] + priorTurnMessages + [finalUser]
     }
 
+    static func chatInstructions(isLibrary: Bool, enableWebSearch: Bool) -> String {
+        let base = isLibrary
+            ? "You answer questions across a set of RSS articles using the provided article list and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable. If the answer is not supported by the supplied articles or web results, say so."
+            : "You answer questions about a single article using the provided article text and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks you to recap it. If the answer is not supported by the supplied article text or web results, say so."
+        guard enableWebSearch else { return base }
+        return base + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices."
+    }
+
     /// Local MLX chat with optional web-search augmentation (2-pass: router + answer).
     /// Falls back to a plain local answer on any failure in the router or search step.
     private static func chatLocalWithSearch(
@@ -1217,22 +1226,20 @@ enum NativeAI {
     }
 
     static func chat(
-        conversation: AIChatConversation, article: Article, settings: AppSettings
+        conversation: AIChatConversation, article: Article, settings: AppSettings,
+        urlSession: URLSession = .shared
     ) async throws -> (text: String, citations: [WebCitation]) {
         var settings = settings
         settings.ai = AIRequestPolicy.chatSettings(settings.ai)
         let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
-        let baseInstructions = "You answer questions about a single article using only the provided article text and the conversation context. Answer only the latest user question. Use previous turns only to resolve references like 'that' or 'the second one'. Do not repeat a prior answer unless the latest question explicitly asks you to recap it. If the answer is not in the article, say so."
-        let instructions = toolsOK
-            ? baseInstructions + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices."
-            : baseInstructions
+        let instructions = chatInstructions(isLibrary: false, enableWebSearch: toolsOK)
 
         // Local MLX web-search path (skim-7oi1)
         if localWebSearchEnabled(settings.ai) {
             return try await chatLocalWithSearch(
                 conversation: conversation,
                 article: article,
-                instructions: baseInstructions,
+                instructions: chatInstructions(isLibrary: false, enableWebSearch: false),
                 answerMaxTokens: 650,
                 settings: settings
             )
@@ -1242,7 +1249,7 @@ enum NativeAI {
         if settings.ai.provider == "mlx" {
             let articleContext = try singleArticleChatContext(article: article, conversation: conversation)
             let msgs = buildLocalChatMessages(
-                instructions: baseInstructions,
+                instructions: instructions,
                 articleContext: articleContext,
                 conversation: conversation,
                 webBlock: nil
@@ -1255,17 +1262,25 @@ enum NativeAI {
             return (text, [])
         }
 
+        let articleContext = try singleArticleChatContext(article: article, conversation: conversation)
         return try await completeWithCitations(
             settings: settings,
             instructions: instructions,
             prompt: """
             Article:
-            \(try singleArticleChatContext(article: article, conversation: conversation))
+            \(articleContext)
 
             \(conversation.promptSection)
             """,
             maxTokens: 650,
-            enableWebSearch: toolsOK
+            enableWebSearch: toolsOK,
+            urlSession: urlSession,
+            messages: buildLocalChatMessages(
+                instructions: instructions,
+                articleContext: articleContext,
+                conversation: conversation,
+                webBlock: nil
+            )
         )
     }
 
@@ -1327,20 +1342,16 @@ enum NativeAI {
     }
 
     static func chat(
-        conversation: AIChatConversation, articles: [Article], settings: AppSettings
+        conversation: AIChatConversation, articles: [Article], settings: AppSettings,
+        urlSession: URLSession = .shared
     ) async throws -> (text: String, citations: [WebCitation]) {
         var settings = settings
         settings.ai = AIRequestPolicy.chatSettings(settings.ai)
         let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
-        let baseInstructions = """
-            You answer questions across a set of RSS articles using the provided article list and conversation context. Answer only the latest user question. Use previous turns only to resolve references like 'that' or 'the second one'. Do not repeat prior answers unless the latest question explicitly asks. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable.
-            """
-        let instructions = toolsOK
-            ? baseInstructions + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices."
-            : baseInstructions
+        let instructions = chatInstructions(isLibrary: true, enableWebSearch: toolsOK)
         let context = try libraryChatContext(articles: articles, conversation: conversation)
         if settings.ai.provider == "mlx" {
-            let messages = buildLocalChatMessages(instructions: baseInstructions, articleContext: context,
+            let messages = buildLocalChatMessages(instructions: chatInstructions(isLibrary: true, enableWebSearch: false), articleContext: context,
                 conversation: conversation, webBlock: nil)
             return (try await NativeMLX.complete(settings: settings.ai, messages: messages, maxTokens: 850), [])
         }
@@ -1354,7 +1365,14 @@ enum NativeAI {
             \(conversation.promptSection)
             """,
             maxTokens: 850,
-            enableWebSearch: toolsOK
+            enableWebSearch: toolsOK,
+            urlSession: urlSession,
+            messages: buildLocalChatMessages(
+                instructions: instructions,
+                articleContext: context,
+                conversation: conversation,
+                webBlock: nil
+            )
         )
     }
 
@@ -1404,9 +1422,57 @@ enum NativeAI {
         instructions: String,
         prompt: String,
         maxTokens: Int,
-        enableWebSearch: Bool = false
+        enableWebSearch: Bool = false,
+        urlSession: URLSession = .shared,
+        messages: [[String: String]]? = nil
     ) async throws -> (text: String, citations: [WebCitation]) {
         let ai = settings.ai
+        if let messages {
+            let system = messages.first(where: { $0["role"] == "system" })?["content"] ?? instructions
+            let turns = messages.filter { $0["role"] != "system" }.map { message -> [String: Any] in
+                ["role": message["role"] ?? "user", "content": message["content"] ?? ""]
+            }
+            if ["openai", "xai", "openrouter", "custom"].contains(ai.provider) {
+                let text = try await completeOpenAICompatible(
+                    settings: ai,
+                    instructions: system,
+                    prompt: prompt,
+                    maxTokens: maxTokens,
+                    urlSession: urlSession,
+                    messages: messages
+                )
+                return (text, [])
+            }
+            if ["anthropic", "claude-subscription"].contains(ai.provider) {
+                if enableWebSearch {
+                    return try await completeAnthropicWithTools(
+                        settings: ai,
+                        instructions: system,
+                        prompt: prompt,
+                        maxTokens: maxTokens,
+                        initialMessages: turns,
+                        urlSession: urlSession
+                    )
+                }
+                let text = try await completeAnthropic(
+                    settings: ai,
+                    instructions: system,
+                    prompt: prompt,
+                    maxTokens: maxTokens,
+                    messages: turns
+                )
+                return (text, [])
+            }
+            if ai.provider == "foundation-models" {
+                let text = try await completeWithFoundationModels(
+                    instructions: system,
+                    prompt: prompt,
+                    maxTokens: maxTokens,
+                    messages: messages.map { LocalChatMessage(role: $0["role"] ?? "user", content: $0["content"] ?? "") }
+                )
+                return (text, [])
+            }
+        }
         guard enableWebSearch, ["anthropic", "claude-subscription"].contains(ai.provider) else {
             let text = try await complete(
                 settings: settings,
@@ -1420,7 +1486,13 @@ enum NativeAI {
         return try await completeAnthropicWithTools(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
     }
 
-    static func completeWithFoundationModels(instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil) async throws -> String {
+    static func completeWithFoundationModels(
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        temperature: Double? = nil,
+        messages: [LocalChatMessage]? = nil
+    ) async throws -> String {
 #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             let model = SystemLanguageModel(useCase: .general)
@@ -1432,15 +1504,24 @@ enum NativeAI {
             }
 
             func attempt(instructions: String) async throws -> String {
-                let session = LanguageModelSession(model: model, instructions: instructions)
-                let response = try await session.respond(
-                    to: prompt,
-                    options: GenerationOptions(
-                        sampling: temperature == 0 ? .greedy : .random(top: 50),
-                        temperature: temperature ?? 0.7,
-                        maximumResponseTokens: maxTokens
-                    )
+                let options = GenerationOptions(
+                    sampling: temperature == 0 ? .greedy : .random(top: 50),
+                    temperature: temperature ?? 0.7,
+                    maximumResponseTokens: maxTokens
                 )
+                if let messages {
+                    let prepared = try FoundationChatMessages.prepare(
+                        instructions: instructions,
+                        messages: messages,
+                        user: prompt
+                    )
+                    let session = LanguageModelSession(model: model, transcript: prepared.transcript)
+                    let response = try await session.respond(to: prepared.prompt, options: options)
+                    let raw = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return stripEchoedPrompt(raw, prompt: prepared.prompt)
+                }
+                let session = LanguageModelSession(model: model, instructions: instructions)
+                let response = try await session.respond(to: prompt, options: options)
                 let raw = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
                 return stripEchoedPrompt(raw, prompt: prompt)
             }
@@ -1762,13 +1843,60 @@ enum NativeAI {
         return (kept, true)
     }
 
-    private static func completeOpenAICompatible(settings: AISettings, instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil) async throws -> String {
+    private static func completeOpenAICompatible(
+        settings: AISettings,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        temperature: Double? = nil,
+        urlSession: URLSession = .shared,
+        messages: [[String: String]]? = nil
+    ) async throws -> String {
         let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         let provider = settings.provider
         if provider != "custom", key == nil {
             throw NativeAIError.unavailable("Add an API key for \(providerDisplayName(provider)) in Settings.")
         }
 
+        let request = try buildOpenAICompatibleRequest(
+            settings: settings,
+            instructions: instructions,
+            prompt: prompt,
+            maxTokens: maxTokens,
+            temperature: temperature ?? 0.2,
+            messages: messages
+        )
+        let (data, response) = try await urlSession.data(for: request)
+        try validate(response: response, data: data, provider: providerDisplayName(provider))
+        let decoded = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+        guard let content = decoded.choices.first?.message.content.nilIfEmpty else {
+            throw NativeAIError.unavailable("The \(providerDisplayName(provider)) response was empty.")
+        }
+        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func buildOpenAICompatibleRequest(
+        settings: AISettings,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        temperature: Double = 0.2,
+        messages: [[String: String]]? = nil
+    ) throws -> URLRequest {
+        let provider = settings.provider
+        let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        if provider != "custom", key == nil {
+            throw NativeAIError.unavailable("Add an API key for \(providerDisplayName(provider)) in Settings.")
+        }
+        let body: [String: Any] = [
+            "model": settings.model?.nilIfEmpty ?? defaultModel(for: provider),
+            "messages": messages ?? [
+                ["role": "system", "content": instructions],
+                ["role": "user", "content": prompt]
+            ],
+            "temperature": temperature,
+            "max_tokens": maxTokens
+        ]
         var request = URLRequest(url: openAICompatibleURL(settings))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -1778,36 +1906,20 @@ enum NativeAI {
         if provider == "openrouter" {
             request.setValue("Skim", forHTTPHeaderField: "X-Title")
         }
-
-        let body: [String: Any] = [
-            "model": settings.model?.nilIfEmpty ?? defaultModel(for: provider),
-            "messages": [
-                ["role": "system", "content": instructions],
-                ["role": "user", "content": prompt]
-            ],
-            "temperature": temperature ?? 0.2,
-            "max_tokens": maxTokens
-        ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        try validate(response: response, data: data, provider: providerDisplayName(provider))
-        let decoded = try JSONDecoder().decode(OpenAIResponse.self, from: data)
-        guard let content = decoded.choices.first?.message.content.nilIfEmpty else {
-            throw NativeAIError.unavailable("The \(providerDisplayName(provider)) response was empty.")
-        }
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return request
     }
 
-    private static func completeAnthropic(settings: AISettings, instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil) async throws -> String {
+    private static func completeAnthropic(settings: AISettings, instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil, messages: [[String: Any]]? = nil) async throws -> String {
         if settings.provider == "claude-subscription" {
-            return try await completeAnthropicSubscription(settings: settings, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
+            return try await completeAnthropicSubscription(settings: settings, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature, messages: messages)
         }
         // API-key path (provider == "anthropic")
         let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         guard let key else {
             throw NativeAIError.unavailable("Add a Claude API key in Settings.")
         }
-        let request = try buildAnthropicRequest(settings: settings, accessToken: key, isSubscription: false, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
+        let request = try buildAnthropicRequest(settings: settings, accessToken: key, isSubscription: false, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature, messages: messages)
         let (data, response) = try await URLSession.shared.data(for: request)
         try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
         return try decodeAnthropicContent(data: data)
@@ -1815,7 +1927,7 @@ enum NativeAI {
 
     /// Handles the claude-subscription path with Keychain token storage, migration,
     /// and automatic one-shot refresh on 401.
-    private static func completeAnthropicSubscription(settings: AISettings, instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil) async throws -> String {
+    private static func completeAnthropicSubscription(settings: AISettings, instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil, messages: [[String: Any]]? = nil) async throws -> String {
         // Resolve the access token: prefer Keychain, fall back to settings.apiKey
         // (legacy location), migrating if found.
         let accessToken: String
@@ -1833,7 +1945,7 @@ enum NativeAI {
             throw NativeAIError.unavailable("Sign in with Claude in Settings to use your Claude subscription.")
         }
 
-        let request = try buildAnthropicRequest(settings: settings, accessToken: accessToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
+        let request = try buildAnthropicRequest(settings: settings, accessToken: accessToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature, messages: messages)
         let (data, response) = try await URLSession.shared.data(for: request)
 
         // On 401, attempt token refresh and retry once.
@@ -1845,7 +1957,7 @@ enum NativeAI {
                 // Refresh failed — Keychain already cleared inside refreshStoredTokens().
                 throw NativeAIError.requiresReauthentication
             }
-            let retryRequest = try buildAnthropicRequest(settings: settings, accessToken: newToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
+            let retryRequest = try buildAnthropicRequest(settings: settings, accessToken: newToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature, messages: messages)
             let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
             try validate(response: retryResponse, data: retryData, provider: providerDisplayName(settings.provider))
             return try decodeAnthropicContent(data: retryData)
@@ -1860,7 +1972,7 @@ enum NativeAI {
     /// Full-featured request builder. `messages` is the complete array of chat turns;
     /// `tools` (optional) injects tool definitions. This is the single source of truth
     /// for all Anthropic HTTP requests.
-    private static func buildAnthropicRequestFull(
+    static func buildAnthropicRequestFull(
         settings: AISettings,
         accessToken: String,
         isSubscription: Bool,
@@ -1897,13 +2009,13 @@ enum NativeAI {
     /// Thin wrapper preserving the original single-message, no-tools signature
     /// used by all non-chat callers (summarize, triage, inbox). Byte-for-byte
     /// equivalent to the old `buildAnthropicRequest`.
-    private static func buildAnthropicRequest(settings: AISettings, accessToken: String, isSubscription: Bool, instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil) throws -> URLRequest {
+    private static func buildAnthropicRequest(settings: AISettings, accessToken: String, isSubscription: Bool, instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil, messages: [[String: Any]]? = nil) throws -> URLRequest {
         try buildAnthropicRequestFull(
             settings: settings,
             accessToken: accessToken,
             isSubscription: isSubscription,
             instructions: instructions,
-            messages: [["role": "user", "content": prompt]],
+            messages: messages ?? [["role": "user", "content": prompt]],
             maxTokens: maxTokens,
             tools: nil,
             temperature: temperature
@@ -2054,17 +2166,23 @@ enum NativeAI {
 
     /// Chat completion with web_search tool support. Handles both api-key and
     /// subscription providers. Loops up to 3 tool iterations then returns.
-    private static func completeAnthropicWithTools(
+    static func completeAnthropicWithTools(
         settings: AISettings,
         instructions: String,
         prompt: String,
-        maxTokens: Int
+        maxTokens: Int,
+        initialMessages: [[String: Any]]? = nil,
+        urlSession: URLSession = .shared,
+        accessTokenOverride: String? = nil,
+        refreshAccessToken: (@Sendable () async throws -> String)? = nil
     ) async throws -> (text: String, citations: [WebCitation]) {
         let isSubscription = settings.provider == "claude-subscription"
 
         // Resolve access token (mirrors completeAnthropic / completeAnthropicSubscription)
         let accessToken: String
-        if isSubscription {
+        if let accessTokenOverride {
+            accessToken = accessTokenOverride
+        } else if isSubscription {
             if ClaudeKeychainStore.loadAccessToken() != nil {
                 // Proactively refresh if the stored token is expired/near-expiry.
                 guard let keychainToken = await NativeClaudeOAuth.validAccessToken() else {
@@ -2085,7 +2203,7 @@ enum NativeAI {
         }
 
         let tools: [[String: Any]] = [webSearchToolDefinition]
-        var messages: [[String: Any]] = [["role": "user", "content": prompt]]
+        var messages: [[String: Any]] = initialMessages ?? [["role": "user", "content": prompt]]
 
         let maxIterations = 3
         var currentToken = accessToken
@@ -2107,14 +2225,18 @@ enum NativeAI {
             )
 
             // Execute the request, handling subscription 401 refresh once per iteration.
-            let data: Data
-            let response: URLResponse
-            (data, response) = try await URLSession.shared.data(for: request)
+            var data: Data
+            var response: URLResponse
+            (data, response) = try await urlSession.data(for: request)
 
             if isSubscription, let http = response as? HTTPURLResponse, http.statusCode == 401 {
                 let newToken: String
                 do {
-                    newToken = try await NativeClaudeOAuth.refreshStoredTokens()
+                    if let refreshAccessToken {
+                        newToken = try await refreshAccessToken()
+                    } else {
+                        newToken = try await NativeClaudeOAuth.refreshStoredTokens()
+                    }
                 } catch {
                     throw NativeAIError.requiresReauthentication
                 }
@@ -2128,9 +2250,7 @@ enum NativeAI {
                     maxTokens: maxTokens,
                     tools: tools
                 )
-                let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
-                try validate(response: retryResponse, data: retryData, provider: providerDisplayName(settings.provider))
-                return (try decodeAnthropicContent(data: retryData), citations)
+                (data, response) = try await urlSession.data(for: retryRequest)
             }
 
             try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
@@ -2172,8 +2292,6 @@ enum NativeAI {
                 }
                 assistantContentBlocks.append(tb)
             }
-            messages.append(["role": "assistant", "content": assistantContentBlocks])
-
             // --- Execute each tool call ---
             var resultBlocks: [[String: Any]] = []
             for block in toolUseBlocks {
@@ -2239,11 +2357,24 @@ enum NativeAI {
                     ])
                 }
             }
-            messages.append(["role": "user", "content": resultBlocks])
+            appendAnthropicToolContinuation(
+                to: &messages,
+                assistantContent: assistantContentBlocks,
+                resultContent: resultBlocks
+            )
         }
 
         // Should never reach here due to loop structure, but satisfy the compiler.
         throw NativeAIError.unavailable("Tool-use loop exited without a final response.")
+    }
+
+    static func appendAnthropicToolContinuation(
+        to messages: inout [[String: Any]],
+        assistantContent: [[String: Any]],
+        resultContent: [[String: Any]]
+    ) {
+        messages.append(["role": "assistant", "content": assistantContent])
+        messages.append(["role": "user", "content": resultContent])
     }
 
     private static func openAICompatibleURL(_ settings: AISettings) -> URL {

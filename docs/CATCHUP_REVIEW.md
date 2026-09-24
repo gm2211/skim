@@ -2,7 +2,19 @@
 
 The acceptance target is a fast, attractive newspaper that groups related coverage, supports deeper summaries and article/library questions, and lets chat find relevant articles. This review does not claim that the full target or shared-core migration is complete.
 
-## Changes verified in this slice
+## Current Today reliability slice
+
+Both production paths now consume one shared C lede prompt, four-report limit, and 3,000-character evidence budget. The prompt preserves source uncertainty and targets two or three short sentences, at most 60 words. Desktop uses the reader/chat body resolver; native uses a bounded reader resolver with cancellation and individual fallback. Both choose the fullest cached/feed body before fetching thin sources. Their platform I/O and persistence remain separate implementations.
+
+Today retries missing summaries without losing its frozen edition. Desktop progress carries an attempt ID; stale events cannot overwrite a newer retry. Summary and read-save responses merge only their owned fields on both platforms, preventing either response from erasing newer read state or written ledes. Native refresh, foreground entry, day rollover, and dismissal replace or cancel the owned generation task. All native report references, including syndicated copies, appear in an optional disclosure without a display cap.
+
+A real five-feed import ingested 133 articles. Repeated refresh exposed duplicate URLs whose rejected new UUIDs were still sent to clustering. All desktop feed ingestion paths now cluster the persisted article identity and content. The reproducer failed with a foreign-key error before the fix; the live refresh after the fix retained 133 valid article features and no foreign-key violations or clustering warnings.
+
+The in-app browser exercised actual Today, Sidebar, and ArticleDetail components against an isolated Rust backend and local Qwen 4B. Desktop and 390×568 layouts retained aligned glass surfaces and readable references. Actual provider failure left excerpts readable with a retry action; retry completed while a concurrent read action stayed saved. Six summaries received fuller article evidence and produced 42–60 words in the final comparison. These are development examples, not a factual-accuracy guarantee. The frozen 45-story candidate pool used deterministic reasons; semantic fallback and representative importance quality remain open. Exact inputs, source links, comparisons, and proof boundaries are recorded in [`releases/2026-09-24-today-quality.json`](releases/2026-09-24-today-quality.json).
+
+Final checks: 142 Rust library tests, 153 frontend tests, 105 native core tests, and three packaging regressions. The separate GGUF integration remains excluded because its model is unavailable. Native Simulator build passes. Release artifact and TestFlight verification are recorded separately in [`releases/2026-09-24-today-release.json`](releases/2026-09-24-today-release.json). Installed native acceptance remains open because the Mac is locked; browser component integration does not establish native compositing or signed-parent execution.
+
+## Earlier verified changes
 
 - Today fills the available desktop space until a reference is opened, then becomes a compact reading column. Larger newspaper layouts use aligned columns; narrow layouts keep a single readable column. Translucent surfaces and the existing native window material remain in place.
 - Each story appears once. All reports, including syndicated copies, stay available behind an explicit disclosure. Headlines are keyboard-operable buttons, controls share dimensions, and read stories retain legible contrast.
@@ -16,7 +28,7 @@ The acceptance target is a fast, attractive newspaper that groups related covera
 
 ## Evidence and limits
 
-Current ranking slice: 145 frontend tests, 135 Rust library tests, 99 Swift core tests and three packaging regressions pass. The shared-inference slice also verified 13 policy tests and one plugin test against unchanged inference adapters. TypeScript and the Vite production build pass. The Rust local-model integration test remains excluded because its separate GGUF model is unavailable. Both ABI adapters execute one shared policy fixture corpus. Cache-upgrade regressions were verified to fail with the upgrade disabled and pass when restored.
+Earlier ranking slice: 145 frontend tests, 135 Rust library tests, 99 Swift core tests and three packaging regressions pass. The shared-inference slice also verified 13 policy tests and one plugin test against unchanged inference adapters. TypeScript and the Vite production build pass. The Rust local-model integration test remains excluded because its separate GGUF model is unavailable. Both ABI adapters execute one shared policy fixture corpus. Cache-upgrade regressions were verified to fail with the upgrade disabled and pass when restored.
 
 The in-app browser exercised the real Today React components in an isolated fixture harness at desktop width and 375×667. Reviewed collapsed/expanded references, long publication names, keyboard headline activation, compact reader transition, loading, empty, error and completed states. The harness used fixture command responses and a placeholder reader panel: it proves layout and interaction boundaries, not live journalism quality, real-provider answers, or native window compositing.
 
@@ -52,7 +64,7 @@ Actual local Qwen 4B checks exposed a further consequence-rating defect: batchin
 
 The final pipeline grouped all 32 reports into the 20 expected events across the two historical samples and 14 newly retrieved publisher reports. Every historical importance constraint passed; no importance ordering was asserted for the current sample because its relative consequences were insufficiently clear. Runs took 10.74, 14.42 and 10.48 seconds. Recorded historical responses replay through the full Rust planner and Swift stages, including every original historical importance comparison. These are small selected development samples, not held-out or representative accuracy. Fresh raw RSS retrieval also succeeded for the Federal Reserve, NASA, BBC and WHO; only the selected Fed report matched a feed item directly, while WHO's feed was stale. The model inputs came from verified publisher pages; this does not claim full RSS-to-newspaper integration for that sample. Input/source digests and source links are in [`releases/2026-09-24-event-rating-quality.json`](releases/2026-09-24-event-rating-quality.json).
 
-## Latest event-rating release
+## Previous event-rating release
 
 - Native iOS **0.1.13 (58)** archived and uploaded successfully; archive metadata and matching dSYM verified. Apple processing/availability is checked separately from upload success.
 - Desktop **0.1.22** built and signed; bundle metadata, strict signature, current-helper code and all fifteen shared C symbols verified against the iOS archive. The signed-parent smoke check again timed out at 120 seconds before `main()` in macOS sandbox initialization. Installed desktop remains 0.1.17; native UI acceptance remains blocked by the locked Mac.

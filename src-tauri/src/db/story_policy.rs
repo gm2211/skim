@@ -9,6 +9,9 @@ struct Thresholds {
 }
 
 extern "C" {
+    fn skim_today_lede_prompt() -> *const std::os::raw::c_char;
+    fn skim_today_lede_max_articles() -> usize;
+    fn skim_today_lede_text_characters() -> usize;
     fn skim_story_default_thresholds() -> Thresholds;
     fn skim_story_confidence(lexical_similarity: f64, title_similarity: f64) -> f64;
     fn skim_story_classify(
@@ -92,6 +95,21 @@ pub fn is_unique(sources: i64) -> bool {
 pub fn identity_hash(seed: &str) -> u64 {
     // C reads exactly this slice synchronously and never retains its pointer.
     unsafe { skim_story_identity_hash(seed.as_ptr(), seed.len()) }
+}
+
+pub fn today_lede_prompt() -> &'static str {
+    // The common policy owns this static NUL-terminated UTF-8 string.
+    unsafe { std::ffi::CStr::from_ptr(skim_today_lede_prompt()) }
+        .to_str()
+        .expect("shared lede instructions are UTF-8")
+}
+
+pub fn today_lede_max_articles() -> usize {
+    unsafe { skim_today_lede_max_articles() }
+}
+
+pub fn today_lede_text_characters() -> usize {
+    unsafe { skim_today_lede_text_characters() }
 }
 
 pub fn semantic_pair_prompt() -> &'static str {

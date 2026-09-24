@@ -1,6 +1,12 @@
 import Foundation
 import SkimStoryPolicy
 
+public enum TodayLedePolicy {
+    public static var instructions: String { String(cString: skim_today_lede_prompt()) }
+    public static var maxArticles: Int { Int(skim_today_lede_max_articles()) }
+    public static var textCharacters: Int { Int(skim_today_lede_text_characters()) }
+}
+
 public struct TodaySemanticCandidate: Codable, Sendable {
     public var index: Int
     public var title: String

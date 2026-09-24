@@ -16,7 +16,7 @@ function formatWindowDate(startsAtSeconds: number): string {
 
 export function TodayEditionPane() {
   const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane } = useUiStore();
-  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, refetch } =
+  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch } =
     useTodayEdition();
 
   const refreshFeeds = useRefreshAllFeeds();
@@ -140,13 +140,21 @@ export function TodayEditionPane() {
           </div>
         )}
 
-        {!isLoading && !isError && ledeProgress && (
+        {!isLoading && !isError && isWritingLedes && (
           <div style={{ marginTop: 14 }}>
             <span className="text-text-muted" style={{ fontSize: 11.5 }}>
-              {ledeProgress.message}
+              {ledeProgress?.message || "Preparing summaries…"}
             </span>
             <div className="story-rule-live" style={{ height: 2, borderRadius: 999, marginTop: 6 }} />
           </div>
+        )}
+
+        {!isLoading && !isError && canRetryLedes && (
+          <button type="button" onClick={retryLedes}
+            className="today-story-control text-text-secondary border border-white/10 bg-white/5"
+            style={{ marginTop: 14 }}>
+            Retry summaries
+          </button>
         )}
 
         <div className="today-stories">
@@ -166,7 +174,7 @@ export function TodayEditionPane() {
               <TodayStory
                 item={item}
                 rank={rankFor(index)}
-                isWritingLede={!!ledeProgress && index < LEAD_COUNT}
+                isWritingLede={isWritingLedes && index < LEAD_COUNT}
                 isSaving={setConsumed.isPending}
                 onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
                 onOpenArticle={handleOpenArticle}

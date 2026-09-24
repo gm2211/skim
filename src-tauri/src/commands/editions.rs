@@ -2,9 +2,9 @@ use crate::ai::local_provider::SharedModelState;
 use crate::ai::prompts;
 use crate::ai::provider::{create_provider_with_app, ChatMessage, ChatRequest};
 use crate::commands::ai::{default_model, extract_json_object};
-use crate::db::queries;
 use crate::db::today_edition::{self, TodayEditionItemView, TodayEditionView};
 use crate::db::Database;
+use crate::db::{queries, story_policy};
 use crate::AppHandle;
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, State};
@@ -107,14 +107,12 @@ pub const TODAY_LEDE_PROGRESS_EVENT: &str = "today_lede_progress";
 /// How far down the page ledes are written. Below this, a story is a brief and
 /// its own excerpt is the right length already.
 const TODAY_LEDE_LIMIT: usize = 6;
-/// Articles read in full when writing one story's lede.
-const ARTICLES_PER_LEDE: usize = 4;
-/// Characters of each of those articles handed to the model.
-const LEDE_TEXT_CHARS: usize = 3000;
 
 #[derive(Serialize, Clone)]
 struct TodayLedeProgress {
     edition_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    request_id: Option<String>,
     completed: u32,
     total: u32,
     message: String,
@@ -124,6 +122,7 @@ struct TodayLedeProgress {
 fn emit_lede_progress(
     app: &AppHandle,
     edition_id: &str,
+    request_id: Option<&str>,
     completed: u32,
     total: u32,
     message: &str,
@@ -133,6 +132,7 @@ fn emit_lede_progress(
         TODAY_LEDE_PROGRESS_EVENT,
         TodayLedeProgress {
             edition_id: edition_id.to_string(),
+            request_id: request_id.map(str::to_string),
             completed,
             total,
             message: message.to_string(),
@@ -151,6 +151,7 @@ pub async fn generate_today_ledes(
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     edition_id: String,
+    request_id: Option<String>,
 ) -> Result<TodayEditionView, String> {
     let (view, settings_json, pending) = {
         let conn = db.conn.lock().map_err(|error| error.to_string())?;
@@ -204,6 +205,7 @@ pub async fn generate_today_ledes(
     emit_lede_progress(
         &app,
         &edition_id,
+        request_id.as_deref(),
         0,
         total,
         &match total {
@@ -214,38 +216,7 @@ pub async fn generate_today_ledes(
     );
 
     for (index, (story_id, headline, article_ids)) in pending.iter().enumerate() {
-        let articles_text = {
-            let conn = db.conn.lock().map_err(|error| error.to_string())?;
-            let mut text = String::new();
-            for article_id in article_ids.iter().take(ARTICLES_PER_LEDE) {
-                let Some(article) =
-                    queries::get_article_by_id(&conn, article_id).map_err(|e| e.to_string())?
-                else {
-                    continue;
-                };
-                let body: String = article
-                    .article
-                    .content_text
-                    .as_deref()
-                    .unwrap_or_default()
-                    .chars()
-                    .take(LEDE_TEXT_CHARS)
-                    .collect();
-                if body.trim().is_empty() {
-                    continue;
-                }
-                text.push_str(&format!(
-                    "--- {} [{}]\n{}\n\n",
-                    article.article.title.trim(),
-                    crate::ai::publication::publication_name(
-                        &article.feed_title,
-                        article.article.url.as_deref()
-                    ),
-                    body.trim()
-                ));
-            }
-            text
-        };
+        let articles_text = lede_source_text(&db, article_ids).await?;
 
         if articles_text.trim().is_empty() {
             continue;
@@ -291,6 +262,7 @@ pub async fn generate_today_ledes(
         emit_lede_progress(
             &app,
             &edition_id,
+            request_id.as_deref(),
             completed,
             total,
             &format!("Writing story {completed} of {total}…"),
@@ -302,8 +274,49 @@ pub async fn generate_today_ledes(
         let conn = db.conn.lock().map_err(|error| error.to_string())?;
         today_edition::load(&conn, &edition_id).map_err(|error| error.to_string())?
     };
-    emit_lede_progress(&app, &edition_id, total, total, "", &final_view);
+    emit_lede_progress(&app, &edition_id, request_id.as_deref(), total, total, "", &final_view);
     Ok(final_view)
+}
+
+/// Read only this story's selected reports, release the DB lock before network
+/// work, and reuse the reader/chat resolver's cache, deadlines, and fallback.
+async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<String, String> {
+    let articles = {
+        let conn = db.conn.lock().map_err(|error| error.to_string())?;
+        article_ids
+            .iter()
+            .take(story_policy::today_lede_max_articles())
+            .map(|id| queries::get_article_by_id(&conn, id).map_err(|error| error.to_string()))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+    };
+    let sources: Vec<_> = articles
+        .iter()
+        .map(|article| article.article.clone())
+        .collect();
+    let bodies = super::article_body::resolve_selected_article_texts(db, &sources).await;
+    let mut text = String::new();
+    for (article, body) in articles.iter().zip(bodies) {
+        let body: String = body
+            .chars()
+            .take(story_policy::today_lede_text_characters())
+            .collect();
+        if body.trim().is_empty() {
+            continue;
+        }
+        text.push_str(&format!(
+            "--- {} [{}]\n{}\n\n",
+            article.article.title.trim(),
+            crate::ai::publication::publication_name(
+                &article.feed_title,
+                article.article.url.as_deref()
+            ),
+            body.trim()
+        ));
+    }
+    Ok(text)
 }
 
 #[derive(Deserialize)]
@@ -325,4 +338,51 @@ fn parse_lede(content: &str) -> String {
         return String::new();
     }
     content.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn lede_evidence_uses_full_reader_and_html_bodies_with_shared_bounds() {
+        let db =
+            Database::new(std::env::temp_dir().join(format!("skim-lede-{}", uuid::Uuid::new_v4())))
+                .unwrap();
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute_batch("INSERT INTO feeds (id, title, url, created_at, updated_at) VALUES ('feed', 'News', 'https://feed.test', 0, 0);
+                INSERT INTO articles (id, feed_id, title, content_text, content_html, fetched_at) VALUES
+                ('cached', 'feed', 'Cached report', 'RSS teaser', NULL, 0),
+                ('html', 'feed', 'HTML report', 'Short', '<p>Full feed body with its supporting evidence.</p>', 0),
+                ('long', 'feed', 'Long report', NULL, NULL, 0),
+                ('empty', 'feed', 'Empty report', NULL, NULL, 0),
+                ('excluded', 'feed', 'Excluded report', 'Must not enter evidence', NULL, 0);").unwrap();
+            queries::put_reader_cache(
+                &conn,
+                "cached",
+                None,
+                "<p>Reader extraction with details absent from RSS.</p>",
+                "",
+            )
+            .unwrap();
+            conn.execute(
+                "UPDATE articles SET content_text = ?1 WHERE id = 'long'",
+                ["é".repeat(story_policy::today_lede_text_characters() + 1)],
+            )
+            .unwrap();
+        }
+        let ids = ["cached", "html", "long", "empty", "excluded"].map(str::to_string);
+        let text = lede_source_text(&db, &ids).await.unwrap();
+        assert!(text.contains("Reader extraction with details absent from RSS."));
+        assert!(text.contains("Full feed body with its supporting evidence."));
+        assert!(!text.contains("RSS teaser"));
+        assert!(!text.contains("Empty report"));
+        assert!(!text.contains("Excluded report"));
+        assert_eq!(
+            text.matches('é').count(),
+            story_policy::today_lede_text_characters()
+        );
+        assert!(text.find("Cached report").unwrap() < text.find("HTML report").unwrap());
+    }
 }

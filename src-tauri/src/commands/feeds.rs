@@ -12,6 +12,23 @@ use serde::{Deserialize, Serialize};
 use crate::AppHandle;
 use tauri::State;
 
+fn cluster_persisted_article(
+    conn: &rusqlite::Connection,
+    article: &crate::db::models::Article,
+) -> Result<(), rusqlite::Error> {
+    use rusqlite::OptionalExtension;
+    // RSS refreshes assign new UUIDs. INSERT OR IGNORE can keep an older row
+    // for the same feed/URL, so only persisted identity/content may be clustered.
+    let persisted_id: Option<String> = conn.query_row(
+        "SELECT id FROM articles WHERE id=?1 OR (feed_id=?2 AND url=?3) ORDER BY (id=?1) DESC LIMIT 1",
+        rusqlite::params![article.id, article.feed_id, article.url], |row| row.get(0),
+    ).optional()?;
+    let id = persisted_id.ok_or(rusqlite::Error::QueryReturnedNoRows)?;
+    let persisted =
+        queries::get_article_by_id(conn, &id)?.ok_or(rusqlite::Error::QueryReturnedNoRows)?;
+    story_clustering::process_article(conn, &persisted.article).map(|_| ())
+}
+
 #[derive(Debug, Serialize)]
 pub struct FeedWithCount {
     #[serde(flatten)]
@@ -139,7 +156,7 @@ pub async fn add_feed(db: State<'_, Database>, url: String) -> Result<Feed, Stri
     for article in &articles {
         queries::insert_article(&conn, article)
             .map_err(|e| format!("Failed to save article: {}", e))?;
-        if let Err(error) = story_clustering::process_article(&conn, article) {
+        if let Err(error) = cluster_persisted_article(&conn, article) {
             log::warn!("Failed to cluster article {}: {}", article.id, error);
         }
     }
@@ -235,7 +252,7 @@ pub async fn refresh_feed(
         if queries::insert_article(&conn, article).map_err(|e| e.to_string())? {
             new_count += 1;
         }
-        if let Err(error) = story_clustering::process_article(&conn, article) {
+        if let Err(error) = cluster_persisted_article(&conn, article) {
             log::warn!("Failed to cluster article {}: {}", article.id, error);
         }
     }
@@ -298,7 +315,7 @@ pub async fn refresh_all_feeds(db: State<'_, Database>) -> Result<i32, String> {
                     if queries::insert_article(&conn, article).map_err(|e| e.to_string())? {
                         total_new += 1;
                     }
-                    if let Err(error) = story_clustering::process_article(&conn, article) {
+                    if let Err(error) = cluster_persisted_article(&conn, article) {
                         log::warn!("Failed to cluster article {}: {}", article.id, error);
                     }
                 }
@@ -397,7 +414,7 @@ pub async fn import_feedly(
         }
         for article in &articles {
             let _ = queries::insert_article(&conn, article);
-            if let Err(error) = story_clustering::process_article(&conn, article) {
+            if let Err(error) = cluster_persisted_article(&conn, article) {
                 log::warn!("Failed to cluster article {}: {}", article.id, error);
             }
         }
@@ -908,6 +925,50 @@ fn validate_smart_rules(rules: &SmartRules) -> Result<(), String> {
 #[cfg(test)]
 mod smart_folder_validation_tests {
     use super::*;
+
+    #[test]
+    fn duplicate_feed_urls_cluster_the_persisted_row_without_phantom_features() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON").unwrap();
+        crate::db::migrations::run_migrations(&conn).unwrap();
+        conn.execute_batch("INSERT INTO feeds(id,title,url,created_at,updated_at) VALUES ('feed','Source','https://example.test/rss',0,0);
+            INSERT INTO articles(id,feed_id,title,url,content_text,fetched_at) VALUES ('saved','feed','Rocket reaches orbit','https://example.test/rocket','Successful orbital launch',1000);").unwrap();
+        let saved = queries::get_article_by_id(&conn, "saved")
+            .unwrap()
+            .unwrap()
+            .article;
+        let mut incoming = saved.clone();
+        incoming.id = "rejected-uuid".into();
+        incoming.title = "Different transient payload".into();
+        assert!(!queries::insert_article(&conn, &incoming).unwrap());
+        cluster_persisted_article(&conn, &incoming).unwrap();
+        cluster_persisted_article(&conn, &incoming).unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM article_story_features WHERE article_id='saved'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+        let title: String = conn
+            .query_row("SELECT title FROM stories", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(title, saved.title);
+        let revisions: i64 = conn
+            .query_row("SELECT COUNT(*) FROM story_revisions", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(revisions, 1);
+        assert!(queries::get_article_by_id(&conn, &incoming.id)
+            .unwrap()
+            .is_none());
+        let violations: i64 = conn
+            .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(violations, 0);
+    }
 
     #[test]
     fn smart_folders_match_shared_native_corpus() {

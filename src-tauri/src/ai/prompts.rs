@@ -260,16 +260,7 @@ Output JSON:
 /// Pass two: write the lede under one headline, from the full text of the
 /// articles behind it.
 pub fn catchup_lede_system_prompt() -> String {
-    format!(
-        "You write the lede that runs under a newspaper headline. Output JSON only.\n\n\
-     {FRONT_PAGE_STANDARD}\n\n\
-     The lede:\n\
-     - 2-3 sentences, plain text, no markdown.\n\
-     - The first sentence says what happened, concretely, using the specifics in the article text: names, numbers, versions, dates, who did it.\n\
-     - A later sentence says why it matters to this reader, and only where that is genuinely not obvious from the first.\n\
-     - Never restate the headline, never say \"the article discusses\" or \"this piece covers\", never hedge.\n\
-     - Use only what the supplied text supports. Where it is thin, say the little that is known and stop. A short honest lede beats a padded one."
-    )
+    format!("{}\n\nOutput JSON with one string field named lede.", crate::db::story_policy::today_lede_prompt())
 }
 
 /// Pass two's user turn, for one story.

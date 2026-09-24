@@ -33,6 +33,12 @@ double skim_story_score(int64_t independent_sources, double age_seconds,
 int32_t skim_story_is_unique(int64_t independent_sources);
 uint64_t skim_story_identity_hash(const uint8_t *bytes, size_t length);
 
+/* Evidence and editorial policy for a newspaper story's lede. Output encoding
+   and source loading remain platform adapters. */
+const char *skim_today_lede_prompt(void);
+size_t skim_today_lede_max_articles(void);
+size_t skim_today_lede_text_characters(void);
+
 /* Edition-local semantic plans never rewrite the underlying story index. */
 const char *skim_semantic_prompt(void);
 size_t skim_semantic_max_candidates(void);

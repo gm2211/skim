@@ -238,6 +238,577 @@ static int lede_has_square_bracket(const uint8_t *s, size_t n) {
     return 0;
 }
 
+typedef struct {
+    size_t start;
+    size_t end;
+    size_t scalars;
+    uint32_t terms;
+} EvidenceCandidate;
+
+typedef struct {
+    size_t start;
+    size_t length;
+} EvidenceQueryTerm;
+
+#include "SkimUnicodeCaseFold.h"
+
+static int evidence_word_scalar(uint32_t c) {
+    if (c < 0x80) return isalnum((unsigned char)c) || c == '_';
+    size_t lo = 0, hi = sizeof(evidence_word_ranges) / sizeof(evidence_word_ranges[0]);
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        if (evidence_word_ranges[mid][1] < c) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo < sizeof(evidence_word_ranges) / sizeof(evidence_word_ranges[0]) &&
+        evidence_word_ranges[lo][0] <= c;
+}
+
+static int evidence_whitespace(uint32_t c) {
+    return lede_unicode_whitespace(c);
+}
+
+
+typedef struct {
+    const uint8_t *bytes;
+    size_t length;
+    size_t offset;
+    uint32_t pending[3];
+    size_t pending_index;
+    size_t pending_count;
+} EvidenceFoldCursor;
+
+static int evidence_fold_next(EvidenceFoldCursor *cursor, uint32_t *value) {
+    if (cursor->pending_index < cursor->pending_count) {
+        *value = cursor->pending[cursor->pending_index++];
+        return 1;
+    }
+    if (cursor->offset >= cursor->length) return 0;
+    uint32_t scalar;
+    size_t width = lede_scalar(cursor->bytes + cursor->offset,
+                               cursor->length - cursor->offset, &scalar);
+    if (!width) return 0;
+    cursor->offset += width;
+    if (scalar < 0x80) {
+        *value = scalar >= 'A' && scalar <= 'Z' ? scalar + ('a' - 'A') : scalar;
+        return 1;
+    }
+    size_t lo = 0, hi = sizeof(evidence_casefold) / sizeof(evidence_casefold[0]);
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo) / 2;
+        if (evidence_casefold[mid][0] < scalar) lo = mid + 1;
+        else hi = mid;
+    }
+    if (lo < sizeof(evidence_casefold) / sizeof(evidence_casefold[0]) &&
+        evidence_casefold[lo][0] == scalar) {
+        cursor->pending_count = 0;
+        for (size_t i = 1; i < 4 && evidence_casefold[lo][i]; ++i)
+            cursor->pending[cursor->pending_count++] = evidence_casefold[lo][i];
+        cursor->pending_index = 1;
+        *value = cursor->pending[0];
+    } else *value = scalar;
+    return 1;
+}
+
+static int evidence_equal_term(const uint8_t *a, size_t a_len,
+                               const uint8_t *b, size_t b_len) {
+    EvidenceFoldCursor left = {.bytes = a, .length = a_len};
+    EvidenceFoldCursor right = {.bytes = b, .length = b_len};
+    uint32_t l, r;
+    for (;;) {
+        int has_left = evidence_fold_next(&left, &l);
+        int has_right = evidence_fold_next(&right, &r);
+        if (!has_left || !has_right) return has_left == has_right;
+        if (l != r) return 0;
+    }
+}
+
+static int evidence_query_stopword(const uint8_t *bytes, size_t length) {
+    static const char *const stopwords[] = {
+        "a", "about", "after", "all", "an", "and", "any", "are", "article",
+        "as", "at", "be", "before", "but", "by", "can", "compare", "could",
+        "did", "do", "does", "for", "from", "give", "has", "have", "how",
+        "i", "in", "is", "it", "me", "more", "news", "of", "on", "or",
+        "please", "report", "show", "summarize", "tell", "that", "the", "their",
+        "them", "there", "this", "those", "to", "up", "was", "what", "when",
+        "where", "which", "who", "why", "will", "with", "would", "you"
+    };
+    for (size_t i = 0; i < sizeof(stopwords) / sizeof(stopwords[0]); ++i) {
+        if (evidence_equal_term(bytes, length, (const uint8_t *)stopwords[i], strlen(stopwords[i])))
+            return 1;
+    }
+    return 0;
+}
+
+static size_t evidence_query_terms(const uint8_t *query, size_t query_len,
+                                   EvidenceQueryTerm terms[32]) {
+    size_t count = 0;
+    for (size_t i = 0; i < query_len && count < 32;) {
+        uint32_t scalar;
+        size_t width = lede_scalar(query + i, query_len - i, &scalar);
+        if (!width) return 0;
+        if (!evidence_word_scalar(scalar)) { i += width; continue; }
+        size_t start = i;
+        i += width;
+        while (i < query_len) {
+            if (!lede_scalar(query + i, query_len - i, &scalar)) return 0;
+            if (!evidence_word_scalar(scalar)) break;
+            i += lede_scalar(query + i, query_len - i, &scalar);
+        }
+        int duplicate = 0;
+        for (size_t t = 0; t < count; ++t) {
+            if (evidence_equal_term(query + start, i - start,
+                                    query + terms[t].start, terms[t].length)) {
+                duplicate = 1;
+                break;
+            }
+        }
+        if (!duplicate && !evidence_query_stopword(query + start, i - start))
+            terms[count++] = (EvidenceQueryTerm){start, i - start};
+    }
+    return count;
+}
+
+static uint32_t evidence_candidate_terms(const uint8_t *source, size_t start, size_t end,
+                                         const uint8_t *query, const EvidenceQueryTerm *terms,
+                                         size_t term_count) {
+    uint32_t mask = 0;
+    for (size_t i = start; i < end;) {
+        uint32_t scalar;
+        size_t width = lede_scalar(source + i, end - i, &scalar);
+        if (!width) return 0;
+        if (!evidence_word_scalar(scalar)) { i += width; continue; }
+        size_t token_start = i;
+        i += width;
+        while (i < end) {
+            if (!lede_scalar(source + i, end - i, &scalar)) return 0;
+            if (!evidence_word_scalar(scalar)) break;
+            i += lede_scalar(source + i, end - i, &scalar);
+        }
+        for (size_t t = 0; t < term_count; ++t) {
+            if (evidence_equal_term(source + token_start, i - token_start,
+                                    query + terms[t].start, terms[t].length))
+                mask |= (uint32_t)1u << t;
+        }
+    }
+    return mask;
+}
+
+static int evidence_add_candidate(EvidenceCandidate *candidates, size_t capacity,
+                                  size_t *count, const uint8_t *source,
+                                  size_t start, size_t end, const uint8_t *query,
+                                  const EvidenceQueryTerm *terms, size_t term_count) {
+    while (start < end) {
+        uint32_t scalar;
+        size_t width = lede_scalar(source + start, end - start, &scalar);
+        if (!width) return 0;
+        if (!evidence_whitespace(scalar)) break;
+        start += width;
+    }
+    while (end > start) {
+        size_t before = end;
+        uint32_t scalar = lede_previous(source, &end);
+        if (!evidence_whitespace(scalar)) { end = before; break; }
+    }
+    if (start >= end) return 1;
+    if (*count >= capacity) return 0;
+    size_t scalars = 0;
+    for (size_t i = start; i < end;) {
+        uint32_t scalar;
+        size_t width = lede_scalar(source + i, end - i, &scalar);
+        if (!width) return 0;
+        i += width;
+        ++scalars;
+    }
+    candidates[(*count)++] = (EvidenceCandidate){
+        start, end, scalars,
+        evidence_candidate_terms(source, start, end, query, terms, term_count)
+    };
+    return 1;
+}
+
+static size_t evidence_word_window_end(const uint8_t *source, size_t start, size_t end,
+                                       size_t scalar_budget) {
+    size_t last_boundary = start, scalars = 0, i = start;
+    while (i < end && scalars < scalar_budget) {
+        uint32_t scalar;
+        size_t width = lede_scalar(source + i, end - i, &scalar);
+        if (!width) return last_boundary;
+        i += width;
+        ++scalars;
+        if (!evidence_word_scalar(scalar)) last_boundary = i;
+    }
+    if (i == end) return end;
+    uint32_t next;
+    if (lede_scalar(source + i, end - i, &next) && !evidence_word_scalar(next)) return i;
+    /* A single word longer than the entire budget still returns a valid UTF-8
+     * prefix; otherwise do not leave a first letter of the next word. */
+    return last_boundary > start ? last_boundary : i;
+}
+
+static size_t evidence_last_term_start(const uint8_t *source, size_t source_len,
+                                       const uint8_t *query, EvidenceQueryTerm term) {
+    size_t last = SIZE_MAX;
+    for (size_t i = 0; i < source_len;) {
+        uint32_t scalar;
+        size_t width = lede_scalar(source + i, source_len - i, &scalar);
+        if (!width) return SIZE_MAX;
+        if (!evidence_word_scalar(scalar)) { i += width; continue; }
+        size_t start = i;
+        i += width;
+        while (i < source_len) {
+            if (!lede_scalar(source + i, source_len - i, &scalar)) return SIZE_MAX;
+            if (!evidence_word_scalar(scalar)) break;
+            i += lede_scalar(source + i, source_len - i, &scalar);
+        }
+        if (evidence_equal_term(source + start, i - start, query + term.start, term.length))
+            last = start;
+    }
+    return last;
+}
+
+static size_t evidence_context_start(const uint8_t *source, size_t term_start,
+                                      size_t scalar_budget) {
+    size_t start = term_start, count = 0;
+    while (start && count++ < scalar_budget) lede_previous(source, &start);
+    if (start) {
+        size_t previous = start;
+        uint32_t before = lede_previous(source, &previous), current;
+        if (evidence_word_scalar(before)) {
+            while (start < term_start) {
+                size_t width = lede_scalar(source + start, term_start - start, &current);
+                if (!width || !evidence_word_scalar(current)) break;
+                start += width;
+            }
+        }
+    }
+    return start;
+}
+
+static int evidence_valid_utf8(const uint8_t *bytes, size_t length) {
+    for (size_t i = 0; i < length;) {
+        uint32_t scalar;
+        size_t width = lede_scalar(bytes + i, length - i, &scalar);
+        if (!width) return 0;
+        i += width;
+    }
+    return 1;
+}
+
+size_t skim_chat_evidence_spans(const uint8_t *source, size_t source_len,
+                                const uint8_t *query, size_t query_len,
+                                size_t max_scalars, SkimEvidenceSpan *out,
+                                size_t capacity) {
+    enum { MAX_SPANS = 4 };
+    if (!source || !out || !capacity || !max_scalars || source_len == 0 ||
+        (!query && query_len) || !evidence_valid_utf8(source, source_len) ||
+        (query_len && !evidence_valid_utf8(query, query_len))) return 0;
+
+    const size_t output_capacity = capacity < MAX_SPANS ? capacity : MAX_SPANS;
+    EvidenceQueryTerm query_terms[32];
+    size_t query_term_count = query_len ? evidence_query_terms(query, query_len, query_terms) : 0;
+    size_t stop_count = 0, paragraph_count = 0, breaks = 0;
+    int previous_break_cr = 0, in_paragraph_break = 0;
+    for (size_t i = 0; i < source_len;) {
+        uint32_t scalar;
+        size_t width = lede_scalar(source + i, source_len - i, &scalar);
+        if (!width) return 0;
+        if (lede_sentence_stop(scalar)) ++stop_count;
+        if (evidence_whitespace(scalar)) {
+            if (lede_line_break(scalar)) {
+                if (!(scalar == '\n' && previous_break_cr) && breaks < 2) ++breaks;
+                previous_break_cr = scalar == '\r';
+                if (breaks >= 2 && !in_paragraph_break) {
+                    ++paragraph_count;
+                    in_paragraph_break = 1;
+                }
+            } else previous_break_cr = 0;
+        } else {
+            breaks = 0;
+            previous_break_cr = 0;
+            in_paragraph_break = 0;
+        }
+        i += width;
+    }
+    if (stop_count > (SIZE_MAX - 4 * paragraph_count - 40) / 2) return 0;
+    const size_t candidate_capacity = 2 * stop_count + 4 * paragraph_count + 40;
+    if (candidate_capacity > SIZE_MAX / sizeof(EvidenceCandidate)) return 0;
+    EvidenceCandidate *candidates = calloc(candidate_capacity, sizeof(*candidates));
+    if (!candidates) return 0;
+    size_t candidate_count = 0, sentence_start = 0, paragraph_start = 0, line_break_count = 0;
+    size_t previous_sentence = SIZE_MAX;
+    int previous_cr = 0;
+    for (size_t i = 0; i < source_len;) {
+        uint32_t scalar;
+        size_t width = lede_scalar(source + i, source_len - i, &scalar);
+        if (!width) { free(candidates); return 0; }
+        if (evidence_whitespace(scalar)) {
+            if (lede_line_break(scalar)) {
+                if (!(scalar == '\n' && previous_cr) && line_break_count < 2) ++line_break_count;
+                previous_cr = scalar == '\r';
+            } else previous_cr = 0;
+            if (line_break_count >= 2) {
+                if (!evidence_add_candidate(candidates, candidate_capacity, &candidate_count,
+                                            source, paragraph_start, i, query,
+                                            query_terms, query_term_count)) {
+                    free(candidates); return 0;
+                }
+                if (!evidence_add_candidate(candidates, candidate_capacity, &candidate_count,
+                                            source, sentence_start, i, query,
+                                            query_terms, query_term_count)) {
+                    free(candidates); return 0;
+                }
+                sentence_start = i + width;
+                paragraph_start = i + width;
+                previous_sentence = SIZE_MAX;
+            }
+            i += width;
+            continue;
+        }
+        line_break_count = 0;
+        previous_cr = 0;
+        int is_stop = lede_sentence_stop(scalar);
+        if (is_stop && scalar == '.' &&
+            (lede_decimal_point(source, source_len, i) || lede_abbreviation_period(source, source_len, i)))
+            is_stop = 0;
+        if (is_stop) {
+            size_t end = i + width;
+            while (end < source_len) {
+                uint32_t following;
+                size_t following_width = lede_scalar(source + end, source_len - end, &following);
+                if (!following_width) { free(candidates); return 0; }
+                if (lede_closer(following) || (following != '.' && lede_sentence_stop(following))) {
+                    end += following_width;
+                    continue;
+                }
+                if (!evidence_whitespace(following)) end = i + width;
+                break;
+            }
+            const size_t before_sentence = candidate_count;
+            if (!evidence_add_candidate(candidates, candidate_capacity, &candidate_count,
+                                        source, sentence_start, end, query,
+                                        query_terms, query_term_count)) {
+                free(candidates); return 0;
+            }
+            if (candidate_count > before_sentence) {
+                const size_t current_sentence = candidate_count - 1;
+                if (previous_sentence != SIZE_MAX) {
+                    const size_t pair_start = candidates[previous_sentence].start;
+                    const size_t pair_end = candidates[current_sentence].end;
+                    size_t pair_scalars = 0;
+                    for (size_t p = pair_start; p < pair_end;) {
+                        uint32_t pair_scalar;
+                        size_t pair_width = lede_scalar(source + p, pair_end - p, &pair_scalar);
+                        if (!pair_width) { free(candidates); return 0; }
+                        p += pair_width;
+                        ++pair_scalars;
+                    }
+                    if (pair_scalars <= max_scalars && !evidence_add_candidate(
+                            candidates, candidate_capacity, &candidate_count, source,
+                            pair_start, pair_end, query, query_terms, query_term_count)) {
+                        free(candidates); return 0;
+                    }
+                }
+                previous_sentence = current_sentence;
+            }
+            sentence_start = end;
+        }
+        i += width;
+    }
+    const size_t before_final = candidate_count;
+    if (!evidence_add_candidate(candidates, candidate_capacity, &candidate_count,
+                                source, sentence_start, source_len, query,
+                                query_terms, query_term_count)) {
+        free(candidates); return 0;
+    }
+    if (candidate_count > before_final && previous_sentence != SIZE_MAX) {
+        const size_t pair_start = candidates[previous_sentence].start;
+        const size_t pair_end = candidates[candidate_count - 1].end;
+        size_t pair_scalars = 0;
+        for (size_t p = pair_start; p < pair_end;) {
+            uint32_t pair_scalar;
+            size_t pair_width = lede_scalar(source + p, pair_end - p, &pair_scalar);
+            if (!pair_width) { free(candidates); return 0; }
+            p += pair_width;
+            ++pair_scalars;
+        }
+        if (pair_scalars <= max_scalars && !evidence_add_candidate(
+                candidates, candidate_capacity, &candidate_count, source,
+                pair_start, pair_end, query, query_terms, query_term_count)) {
+            free(candidates); return 0;
+        }
+    }
+    if (!evidence_add_candidate(candidates, candidate_capacity, &candidate_count,
+                                source, paragraph_start, source_len, query,
+                                query_terms, query_term_count)) {
+        free(candidates); return 0;
+    }
+    if (!candidate_count) { free(candidates); return 0; }
+    const size_t original_candidate_count = candidate_count;
+
+    /* A source that already fits is more useful and more faithful verbatim. */
+    size_t full_scalars = 0;
+    for (size_t i = 0; i < source_len;) {
+        uint32_t scalar;
+        size_t width = lede_scalar(source + i, source_len - i, &scalar);
+        if (!width) { free(candidates); return 0; }
+        i += width;
+        ++full_scalars;
+    }
+    if (full_scalars <= max_scalars) {
+        out[0] = (SkimEvidenceSpan){0, source_len, full_scalars};
+        free(candidates);
+        return 1;
+    }
+
+    size_t selected[MAX_SPANS], selected_count = 0, selected_scalars = 0;
+    size_t first_limit = max_scalars / 4;
+    if (first_limit > 400) first_limit = 400;
+    if (!first_limit) first_limit = 1;
+    /* Keep the lede when it leaves room for likely distant evidence. */
+    size_t lead = SIZE_MAX;
+    for (size_t i = 0; i < candidate_count; ++i) {
+        if (candidates[i].scalars > first_limit) continue;
+        if (lead == SIZE_MAX || candidates[i].start < candidates[lead].start ||
+            (candidates[i].start == candidates[lead].start &&
+             candidates[i].scalars > candidates[lead].scalars)) lead = i;
+    }
+    if (lead == SIZE_MAX && candidate_count && candidate_count < candidate_capacity) {
+        const size_t lead_budget = first_limit / 3 ? first_limit / 3 : 1;
+        const size_t lead_end = evidence_word_window_end(source, candidates[0].start,
+                                                         candidates[0].end, lead_budget);
+        if (lead_end > candidates[0].start && evidence_add_candidate(
+                candidates, candidate_capacity, &candidate_count, source,
+                candidates[0].start, lead_end, query, query_terms, query_term_count))
+            lead = candidate_count - 1;
+    }
+    /* Long unbroken paragraphs can exceed the whole budget. Add bounded exact
+     * word windows around the last occurrence of each distinct query term. */
+    if (query_term_count) {
+        size_t window_count = output_capacity > 1 ? output_capacity - 1 : 1;
+        if (window_count > query_term_count) window_count = query_term_count;
+        const size_t lead_scalars = lead == SIZE_MAX ? 0 : candidates[lead].scalars;
+        const size_t reserved = lead_scalars + 3 * window_count;
+        const size_t available = max_scalars > reserved ? max_scalars - reserved : max_scalars;
+        const size_t window_budget = available / window_count;
+        for (size_t t = 0; t < query_term_count && candidate_count < candidate_capacity; ++t) {
+            const size_t term_start = evidence_last_term_start(source, source_len, query,
+                                                               query_terms[t]);
+            if (term_start == SIZE_MAX) continue;
+            int has_complete_candidate = 0;
+            const uint32_t term_bit = (uint32_t)1u << t;
+            for (size_t i = 0; i < original_candidate_count; ++i) {
+                if ((candidates[i].terms & term_bit) && candidates[i].start <= term_start &&
+                    candidates[i].end > term_start && candidates[i].scalars <= max_scalars) {
+                    has_complete_candidate = 1;
+                    break;
+                }
+            }
+            if (has_complete_candidate) continue;
+            size_t before_budget = window_budget / 3;
+            if (before_budget > 80) before_budget = 80;
+            const size_t start = evidence_context_start(source, term_start, before_budget);
+            const size_t end = evidence_word_window_end(source, start, source_len,
+                                                        window_budget ? window_budget : 1);
+            if (end > term_start)
+                evidence_add_candidate(candidates, candidate_capacity, &candidate_count,
+                                       source, start, end, query, query_terms,
+                                       query_term_count);
+        }
+    }
+    if (lead == SIZE_MAX) { free(candidates); return 0; }
+
+    uint32_t query_mask = query_term_count == 32 ? UINT32_MAX :
+        (((uint32_t)1u << query_term_count) - 1u);
+    int any_query_match = 0;
+    for (size_t i = 0; i < candidate_count; ++i)
+        if (candidates[i].terms & query_mask) any_query_match = 1;
+    if (!query_term_count || !any_query_match) {
+        /* Broad questions retain the existing full-budget lead across paragraph
+         * boundaries rather than reducing an article to its first sentence. */
+        const size_t end = evidence_word_window_end(source, 0, source_len, max_scalars);
+        size_t scalars = 0;
+        for (size_t i = 0; i < end;) {
+            uint32_t scalar;
+            size_t width = lede_scalar(source + i, end - i, &scalar);
+            if (!width) { free(candidates); return 0; }
+            i += width;
+            ++scalars;
+        }
+        if (end) out[0] = (SkimEvidenceSpan){0, end, scalars};
+        free(candidates);
+        return end ? 1 : 0;
+    }
+    selected[selected_count++] = lead;
+    selected_scalars = candidates[lead].scalars;
+    uint32_t covered = candidates[lead].terms;
+    size_t max_content_scalars = max_scalars;
+
+    while (selected_count < output_capacity && query_term_count) {
+        size_t best = SIZE_MAX;
+        int best_new_terms = 0;
+        int best_total_terms = 0;
+        for (size_t i = 0; i < candidate_count; ++i) {
+            int already_selected = 0;
+            for (size_t j = 0; j < selected_count; ++j) {
+                const EvidenceCandidate prior = candidates[selected[j]];
+                if (candidates[i].start >= prior.start && candidates[i].end <= prior.end)
+                    already_selected = 1;
+            }
+            if (already_selected) continue;
+            size_t budget_cost = candidates[i].scalars + 3;
+            if (selected_scalars + budget_cost > max_content_scalars) continue;
+            const uint32_t newly_covered = candidates[i].terms & ~covered;
+            const int new_terms = chat_term_count(newly_covered);
+            const int total_terms = chat_term_count(candidates[i].terms);
+            /* Topic words in a lead do not establish that the lead answers the
+             * question. Keep additional nonredundant same-topic evidence. */
+            if (!total_terms) continue;
+            if (best == SIZE_MAX || new_terms > best_new_terms ||
+                (new_terms == best_new_terms && total_terms > best_total_terms) ||
+                (new_terms == best_new_terms && total_terms == best_total_terms && candidates[i].scalars > candidates[best].scalars) ||
+                (new_terms == best_new_terms && total_terms == best_total_terms && candidates[i].scalars == candidates[best].scalars && i < best)) {
+                best = i;
+                best_new_terms = new_terms;
+                best_total_terms = total_terms;
+            }
+        }
+        if (best == SIZE_MAX) break;
+        selected[selected_count++] = best;
+        selected_scalars += candidates[best].scalars + 3;
+        covered |= candidates[best].terms;
+    }
+
+    /* Return spans in source order for deterministic, readable joining. */
+    for (size_t i = 0; i < selected_count; ++i) {
+        for (size_t j = i + 1; j < selected_count; ++j) {
+            if (candidates[selected[j]].start < candidates[selected[i]].start) {
+                size_t swap = selected[i]; selected[i] = selected[j]; selected[j] = swap;
+            }
+        }
+    }
+    size_t output_count = 0;
+    for (size_t i = 0; i < selected_count; ++i) {
+        const EvidenceCandidate candidate = candidates[selected[i]];
+        if (output_count && candidate.start <= out[output_count - 1].byte_offset + out[output_count - 1].byte_length) {
+            SkimEvidenceSpan *prior = &out[output_count - 1];
+            const size_t prior_end = prior->byte_offset + prior->byte_length;
+            if (candidate.end > prior_end) {
+                for (size_t p = prior_end; p < candidate.end;) {
+                    uint32_t scalar;
+                    p += lede_scalar(source + p, candidate.end - p, &scalar);
+                    ++prior->scalar_count;
+                }
+                prior->byte_length = candidate.end - prior->byte_offset;
+            }
+        } else {
+            out[output_count++] = (SkimEvidenceSpan){candidate.start, candidate.end - candidate.start, candidate.scalars};
+        }
+    }
+    free(candidates);
+    return output_count;
+}
+
 int32_t skim_today_lede_excerpt_valid(const uint8_t *source, size_t source_len,
                                     const uint8_t *excerpt, size_t excerpt_len) {
     size_t scalars, words, normalized_len = 0;

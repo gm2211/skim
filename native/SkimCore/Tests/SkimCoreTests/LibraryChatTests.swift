@@ -50,8 +50,8 @@ import Testing
     let source = "daily " + String(repeating: "filler ", count: 36) + "AI evidence appears here."
     let excerpt = LibraryChatPolicy.queryExcerpt(text: source, query: "AI", maxCharacters: 100)
     #expect(excerpt.contains("AI evidence appears here."))
-    #expect(excerpt.count <= 102) // one leading/trailing ellipsis may be added
-    #expect(excerpt.contains("filler"))
+    #expect(excerpt.unicodeScalars.count <= 100)
+    for passage in excerpt.components(separatedBy: "\n…\n") { #expect(source.contains(passage)) }
 }
 
 @Test func libraryChatSearchScansPastFiveHundredRowsAndRanksFullCoverageFirst() async throws {

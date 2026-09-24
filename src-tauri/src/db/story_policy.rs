@@ -18,7 +18,17 @@ pub struct SummaryPlan {
     pub full_max_tokens: i32,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct EvidenceSpan {
+    byte_offset: usize,
+    byte_length: usize,
+    scalar_count: usize,
+}
+
 extern "C" {
+    fn skim_chat_evidence_spans(source: *const u8, source_len: usize, query: *const u8,
+        query_len: usize, max_scalars: usize, out: *mut EvidenceSpan, capacity: usize) -> usize;
     fn skim_chat_rank(title_terms: u32, url_terms: u32, source_terms: u32, body_terms: u32) -> i32;
     fn skim_summary_plan(length: *const std::os::raw::c_char, custom_words: i64) -> SummaryPlan;
     fn skim_summary_min_words() -> i32;
@@ -114,6 +124,31 @@ pub fn is_unique(sources: i64) -> bool {
 pub fn identity_hash(seed: &str) -> u64 {
     // C reads exactly this slice synchronously and never retains its pointer.
     unsafe { skim_story_identity_hash(seed.as_ptr(), seed.len()) }
+}
+
+/// Preserve original UTF-8 passages; the common selector owns ranking and budgets.
+pub fn chat_evidence(source: &str, query: &str, max_scalars: usize) -> String {
+    let mut spans = [EvidenceSpan::default(); 4];
+    let count = unsafe { skim_chat_evidence_spans(source.as_ptr(), source.len(),
+        query.as_ptr(), query.len(), max_scalars, spans.as_mut_ptr(), spans.len()) };
+    if count > spans.len() { return String::new(); }
+    let mut passages = Vec::new();
+    let mut previous_end = 0;
+    let mut used = 0usize;
+    for span in &spans[..count] {
+        let Some(end) = span.byte_offset.checked_add(span.byte_length) else { return String::new(); };
+        let Some(passage) = source.get(span.byte_offset..end) else { return String::new(); };
+        if span.byte_offset < previous_end || passage.is_empty() { return String::new(); }
+        let actual_count = passage.chars().count();
+        if actual_count != span.scalar_count { return String::new(); }
+        let Some(next_used) = used.checked_add(actual_count).and_then(|n|
+            n.checked_add(if passages.is_empty() { 0 } else { 3 })) else { return String::new(); };
+        if next_used > max_scalars { return String::new(); }
+        used = next_used;
+        passages.push(passage);
+        previous_end = end;
+    }
+    passages.join("\n…\n")
 }
 
 pub fn chat_rank(title_terms: u32, url_terms: u32, source_terms: u32, body_terms: u32) -> i32 {
@@ -267,6 +302,37 @@ pub fn semantic_score(base: f64, importance: f64, confidence: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shared_chat_evidence_fixture_preserves_facts_qualifiers_and_unicode() {
+        #[derive(serde::Deserialize)]
+        struct Segment { text: String, repeat: Option<usize> }
+        #[derive(serde::Deserialize)]
+        struct Case {
+            name: String, segments: Vec<Segment>, query: String, max_scalars: usize,
+            contains: Vec<String>, exact_source: Option<bool>, min_scalars: Option<usize>,
+        }
+        let cases: Vec<Case> = serde_json::from_str(include_str!("../../../shared/fixtures/chat-evidence.json")).unwrap();
+        let mut failures = Vec::new();
+        for case in cases {
+            let source = case.segments.iter().map(|segment|
+                segment.text.repeat(segment.repeat.unwrap_or(1))).collect::<String>();
+            let actual = chat_evidence(&source, &case.query, case.max_scalars);
+            let scalars = actual.chars().count();
+            assert!(scalars <= case.max_scalars, "{} exceeds budget", case.name);
+            if let Some(minimum) = case.min_scalars { assert!(scalars >= minimum, "{} produced only {scalars} scalars", case.name); }
+            for expected in case.contains {
+                if !actual.contains(&expected) {
+                    failures.push(format!("{} missing {:?}; selected {:?}", case.name, expected, actual));
+                }
+            }
+            if case.exact_source == Some(true) { assert_eq!(actual, source, "{}", case.name); }
+            for passage in actual.split("\n…\n") {
+                assert!(!passage.is_empty() && source.contains(passage), "{} rewrote source evidence", case.name);
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
     #[test]
     fn chat_ranking_shared_fixture_and_coverage_dominance() {
         #[derive(serde::Deserialize)]

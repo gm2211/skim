@@ -1,0 +1,218 @@
+[
+  {
+    "name": "Distant dates and funding retain separate qualifiers",
+    "segments": [
+      {
+        "text": "Harborline Museum published a phased reopening plan.\n\n"
+      },
+      {
+        "text": "Conservation work continues. ",
+        "repeat": 700
+      },
+      {
+        "text": "\n\nThe Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.\n\n"
+      },
+      {
+        "text": "Archival catalog work continues. ",
+        "repeat": 500
+      },
+      {
+        "text": "\n\nThe authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final."
+      }
+    ],
+    "query": "revised Atrium reopening date authorized budget final",
+    "max_scalars": 800,
+    "contains": [
+      "The Atrium reopening was moved to March 17, 2028 because the ventilation inspection was incomplete. This date is provisional: the city has not issued the occupancy permit.",
+      "The authorized project budget increased from $4.2 million to $5.8 million. This funding authorization is final, but it does not make the provisional opening date final."
+    ]
+  },
+  {
+    "name": "Lead already covers topic words but does not contain the answer",
+    "segments": [
+      {
+        "text": "This laptop report discusses battery endurance and charger weight.\n\n"
+      },
+      {
+        "text": "Ordinary background sentence. ",
+        "repeat": 700
+      },
+      {
+        "text": "\n\nBattery endurance was nine hours. The charger weighs 240 grams."
+      }
+    ],
+    "query": "battery endurance charger weight",
+    "max_scalars": 800,
+    "contains": [
+      "Battery endurance was nine hours. The charger weighs 240 grams."
+    ]
+  },
+  {
+    "name": "Late exact evidence after a huge unpunctuated paragraph",
+    "segments": [
+      {
+        "text": "background ",
+        "repeat": 150000
+      },
+      {
+        "text": "Quasar evidence at the end."
+      }
+    ],
+    "query": "quasar evidence",
+    "max_scalars": 200,
+    "contains": [
+      "Quasar evidence at the end."
+    ]
+  },
+  {
+    "name": "NBSP boundaries",
+    "segments": [
+      {
+        "text": "Background observations. ",
+        "repeat": 200
+      },
+      {
+        "text": "\n\nThe permit remains provisional."
+      }
+    ],
+    "query": "permit",
+    "max_scalars": 180,
+    "contains": [
+      "The permit remains provisional."
+    ]
+  },
+  {
+    "name": "Smart quotes and em dash boundaries",
+    "segments": [
+      {
+        "text": "Background observations. ",
+        "repeat": 200
+      },
+      {
+        "text": "\n\nThe “permit”—not final—remains provisional."
+      }
+    ],
+    "query": "permit",
+    "max_scalars": 180,
+    "contains": [
+      "The “permit”—not final—remains provisional."
+    ]
+  },
+  {
+    "name": "Accented Latin casefold",
+    "segments": [
+      {
+        "text": "Background observations. ",
+        "repeat": 200
+      },
+      {
+        "text": "\n\nÉlodie confirmed the permit remains provisional."
+      }
+    ],
+    "query": "élodie",
+    "max_scalars": 180,
+    "contains": [
+      "Élodie confirmed the permit remains provisional."
+    ]
+  },
+  {
+    "name": "Expanding German casefold",
+    "segments": [
+      {
+        "text": "Background observations. ",
+        "repeat": 200
+      },
+      {
+        "text": "\n\nDie Straße bleibt bis Freitag gesperrt."
+      }
+    ],
+    "query": "STRASSE",
+    "max_scalars": 180,
+    "contains": [
+      "Die Straße bleibt bis Freitag gesperrt."
+    ]
+  },
+  {
+    "name": "Greek casefold",
+    "segments": [
+      {
+        "text": "Background observations. ",
+        "repeat": 200
+      },
+      {
+        "text": "\n\nΗ ΑΘΉΝΑ ανοίγει την Παρασκευή."
+      }
+    ],
+    "query": "αθήνα",
+    "max_scalars": 180,
+    "contains": [
+      "Η ΑΘΉΝΑ ανοίγει την Παρασκευή."
+    ]
+  },
+  {
+    "name": "Cyrillic casefold",
+    "segments": [
+      {
+        "text": "Background observations. ",
+        "repeat": 200
+      },
+      {
+        "text": "\n\nМОСКВА откроется в пятницу."
+      }
+    ],
+    "query": "москва",
+    "max_scalars": 180,
+    "contains": [
+      "МОСКВА откроется в пятницу."
+    ]
+  },
+  {
+    "name": "Short source stays byte-for-byte original",
+    "segments": [
+      {
+        "text": "Élodie tested 東京.\nThe permit is not issued.\n\nKeep original spacing:  two spaces."
+      }
+    ],
+    "query": "permit",
+    "max_scalars": 800,
+    "contains": [
+      "Élodie tested 東京.\nThe permit is not issued.\n\nKeep original spacing:  two spaces."
+    ],
+    "exact_source": true
+  },
+  {
+    "name": "No query fills useful lead budget",
+    "segments": [
+      {
+        "text": "A useful opening paragraph explains the project.\n\n"
+      },
+      {
+        "text": "Background context remains relevant. ",
+        "repeat": 300
+      }
+    ],
+    "query": "",
+    "max_scalars": 2400,
+    "contains": [
+      "A useful opening paragraph explains the project."
+    ],
+    "min_scalars": 2300
+  },
+  {
+    "name": "Unpunctuated final word stays intact",
+    "segments": [
+      {
+        "text": "background ",
+        "repeat": 1000
+      },
+      {
+        "text": "The final identifier is qzxvtoken"
+      }
+    ],
+    "query": "qzxvtoken",
+    "max_scalars": 100,
+    "contains": [
+      "The final identifier is qzxvtoken"
+    ]
+  }
+]

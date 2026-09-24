@@ -132,7 +132,7 @@ struct NativeLibraryChatTests {
         #expect(LibraryChatScope(filter: base, feedIDs: ["b", "a"], folderID: "f", listMode: "unread").sessionKey == LibraryChatScope(filter: base, feedIDs: ["a", "b"], folderID: "f", listMode: "unread").sessionKey)
     }
 
-    @Test func citedHandleSurvivesReorderedFollowupAndNeverPointsOutsidePrompt() {
+    @Test func citedHandleSurvivesReorderedFollowupAndNeverPointsOutsidePrompt() throws {
         let sources = [article("a"), article("b"), article("c")]
         let previous = AIChatMessage(role: .assistant, text: "See [3].", referencedArticles: [sources[2]],
             contextArticles: sources, contextHandles: [1, 2, 3])
@@ -141,7 +141,7 @@ struct NativeLibraryChatTests {
         let handles = NativeAI.libraryChatHandles(articles: selected, conversation: followup)
         #expect(handles == [3, 4])
         #expect(followup.priorArticleReferences.map(\.id) == ["c"])
-        #expect(NativeAI.libraryChatContext(articles: selected, conversation: followup).contains("[3] Story c"))
+        #expect(try NativeAI.libraryChatContext(articles: selected, conversation: followup).contains("[3] Story c"))
         #expect(ArticleReferenceExtractor.references(in: "See [1], [3], and [36]", articles: selected, handles: handles).map(\.id) == ["c"])
         let newTopic = AIChatConversation(latestQuestion: "Find articles about quasar", priorMessages: [previous])
         #expect(NativeAI.libraryChatHandles(articles: selected, conversation: newTopic) == [3, 4])
@@ -160,14 +160,14 @@ struct NativeLibraryChatTests {
         #expect(NativeAI.libraryChatHandleRegistry(articles: sources, conversation: conversation)[a.id] == 1)
     }
 
-    @Test func libraryPromptIncludesMatchingTailAndEveryProvidedSource() {
+    @Test func libraryPromptIncludesMatchingTailAndEveryProvidedSource() throws {
         let source = article("late", body: String(repeating: "Ordinary background. ", count: 200) + "Quasar launch is scheduled for October 12.")
         let conversation = AIChatConversation(latestQuestion: "Find quasar launch")
-        let context = NativeAI.libraryChatContext(articles: [source], conversation: conversation)
+        let context = try NativeAI.libraryChatContext(articles: [source], conversation: conversation)
         #expect(context.contains("Quasar launch is scheduled for October 12."))
         #expect(context.contains("[1] Story late"))
         let sources = (1...36).map { article("\($0)") }
-        #expect(NativeAI.libraryChatContext(articles: sources, conversation: conversation).contains("[36] Story 36"))
+        #expect(try NativeAI.libraryChatContext(articles: sources, conversation: conversation).contains("[36] Story 36"))
     }
 
     @Test func sourceNamedRulingFollowupPreservesHandleButNewQuasarDoesNot() {
@@ -201,7 +201,33 @@ struct NativeLibraryChatTests {
         #expect(selected.first?.isRead == true)
         #expect(selected.first?.contentText?.contains("lawsuit requires filings") == true)
         #expect(NativeAI.libraryChatHandles(articles: selected, conversation: conversation) == [3])
-        #expect(NativeAI.libraryChatContext(articles: selected, conversation: conversation).contains("October 12"))
+        #expect(try NativeAI.libraryChatContext(articles: selected, conversation: conversation).contains("October 12"))
+    }
+
+    @Test func singleArticleEvidenceReselectsLateFactForAnswerRouterAndSearch() throws {
+        let fact = "The lawsuit requires filings by October 12, while the hearing is on October 19."
+        var source = article("court", body:
+            "Court officials released an update.\n\n" + String(repeating: "Unrelated background describes ordinary office routines.\n\n", count: 500) + fact)
+        source.title = "Court update"
+        let conversation = AIChatConversation(latestQuestion: "What does that lawsuit require by October 12?", priorMessages: [
+            AIChatMessage(role: .user, text: "Explain the lawsuit"),
+            AIChatMessage(role: .assistant, text: "Incorrect generated assertion: November 30.")])
+        for budget in [2400, 4200, 12000] {
+            let context = try NativeAI.singleArticleChatContext(article: source, conversation: conversation, maxCharacters: budget)
+            #expect(context.contains(fact))
+            #expect(context.contains("[1] Court update"))
+            #expect(!context.contains("November 30"))
+            let body = context.components(separatedBy: "Excerpt: ").last ?? ""
+            #expect(body.unicodeScalars.count <= budget)
+        }
+    }
+
+    @Test func articleEvidenceFailureStopsBeforeProviderRequest() {
+        let source = article("unsupported", body: "Available reader evidence.")
+        let conversation = AIChatConversation(latestQuestion: "What happened?")
+        #expect(throws: (any Error).self) { try NativeAI.singleArticleChatContext(article: source, conversation: conversation, maxCharacters: 0) }
+        #expect(throws: (any Error).self) { try NativeAI.validateChatEvidence(source: source.contentText ?? "", excerpt: "") }
+        #expect(throws: Never.self) { try NativeAI.validateChatEvidence(source: "", excerpt: "") }
     }
 
     @Test func localLibraryHistoryPreservesRolesAndLiteralRoleText() {

@@ -1086,7 +1086,7 @@ enum NativeAI {
 
         If you are not sure, reply ANSWER. Never explain your choice.
         """
-        let digest = articleContext.prefixWords(400)
+        let digest = articleContext
         let routerUser = """
         \(digest)
 
@@ -1136,22 +1136,25 @@ enum NativeAI {
     /// Falls back to a plain local answer on any failure in the router or search step.
     private static func chatLocalWithSearch(
         conversation: AIChatConversation,
-        articleContext: String,
+        article: Article,
         instructions: String,
         answerMaxTokens: Int,
         settings: AppSettings
     ) async throws -> (text: String, citations: [WebCitation]) {
+        let articleContext = try singleArticleChatContext(article: article, conversation: conversation)
         let skipRouter = canSkipRouter(conversation: conversation, articleCount: 1)
 
         let decision: LocalSearchDecision
         if skipRouter {
             decision = .answer
-        } else {
+        } else if let routerContext = try? singleArticleChatContext(article: article, conversation: conversation, maxCharacters: 2400) {
             decision = await routeLocalChat(
                 conversation: conversation,
-                articleContext: articleContext,
+                articleContext: routerContext,
                 settings: settings
             )
+        } else {
+            decision = .answer
         }
 
         switch decision {
@@ -1187,8 +1190,8 @@ enum NativeAI {
                 return (text, [])
             }
             let webBlock = formatWebResultsBlock(query: query, results: results)
-            // Trim article digest when search fires to stay within 1B token budget
-            let trimmedContext = articleContext.prefixWords(700)
+            // Reselect from the full source at the smaller web-augmented budget.
+            let trimmedContext = try singleArticleChatContext(article: article, conversation: conversation, maxCharacters: 4200)
             let answerInstructions = instructions + "\n\nWeb search results are provided below; use them for facts the article doesn't cover; if they don't help, say what you couldn't find."
             let msgs = buildLocalChatMessages(
                 instructions: answerInstructions,
@@ -1226,10 +1229,9 @@ enum NativeAI {
 
         // Local MLX web-search path (skim-7oi1)
         if localWebSearchEnabled(settings.ai) {
-            let articleContext = articleDigest([article], limit: 1, wordsPerArticle: 1800)
             return try await chatLocalWithSearch(
                 conversation: conversation,
-                articleContext: articleContext,
+                article: article,
                 instructions: baseInstructions,
                 answerMaxTokens: 650,
                 settings: settings
@@ -1238,7 +1240,7 @@ enum NativeAI {
 
         // MLX without web search: still use multi-turn messages for better instruct-model behavior
         if settings.ai.provider == "mlx" {
-            let articleContext = articleDigest([article], limit: 1, wordsPerArticle: 1800)
+            let articleContext = try singleArticleChatContext(article: article, conversation: conversation)
             let msgs = buildLocalChatMessages(
                 instructions: baseInstructions,
                 articleContext: articleContext,
@@ -1258,13 +1260,29 @@ enum NativeAI {
             instructions: instructions,
             prompt: """
             Article:
-            \(articleDigest([article], limit: 1, wordsPerArticle: 1800))
+            \(try singleArticleChatContext(article: article, conversation: conversation))
 
             \(conversation.promptSection)
             """,
             maxTokens: 650,
             enableWebSearch: toolsOK
         )
+    }
+
+    static func validateChatEvidence(source: String, excerpt: String) throws {
+        guard source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !excerpt.isEmpty else {
+            throw NativeAIError.unavailable("Could not prepare article text for this question. Try opening the article again.")
+        }
+    }
+
+    static func singleArticleChatContext(article: Article, conversation: AIChatConversation, maxCharacters: Int = 12000) throws -> String {
+        let body = article.plainBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = ChatEvidencePolicy.retrievalQuery(query: conversation.latestQuestion,
+            priorUserQueries: conversation.priorTurns.filter { $0.role == .user }.map(\.text), referenceText: body)
+        let excerpt = body.isEmpty ? "No reader text available."
+            : ChatEvidencePolicy.excerpt(text: body, query: query, maxCharacters: maxCharacters)
+        try validateChatEvidence(source: body, excerpt: excerpt)
+        return "[1] \(article.title)\nFeed: \(article.feedTitle)\nAuthor: \(article.author ?? "unknown")\nExcerpt: \(excerpt)"
     }
 
     static func libraryChatHandleRegistry(articles: [Article], conversation: AIChatConversation) -> [String: Int] {
@@ -1282,7 +1300,7 @@ enum NativeAI {
         return articles.compactMap { registry[$0.id] }
     }
 
-    static func libraryChatContext(articles: [Article], conversation: AIChatConversation) -> String {
+    static func libraryChatContext(articles: [Article], conversation: AIChatConversation) throws -> String {
         let priorIDs = Set((conversation.priorArticleReferences.isEmpty
             ? conversation.priorArticleContext : conversation.priorArticleReferences).map(\.id))
         let refreshedReferences = articles.filter { priorIDs.contains($0.id) }
@@ -1291,10 +1309,11 @@ enum NativeAI {
             priorUserQueries: conversation.priorTurns.filter { $0.role == .user }.map(\.text),
             referenceTexts: refreshedReferences.isEmpty ? conversation.priorReferenceTexts : refreshedReferences)
         let handles = libraryChatHandles(articles: articles, conversation: conversation)
-        return zip(articles, handles).enumerated().map { index, source in
+        return try zip(articles, handles).enumerated().map { index, source in
             let (article, handle) = source
             let excerpt = LibraryChatPolicy.queryExcerpt(text: article.plainBody,
-                query: topic.terms.joined(separator: " "), maxCharacters: index < 3 ? 2400 : 800)
+                query: (topic.terms + LibraryChatPolicy.topicKeywords(conversation.latestQuestion)).joined(separator: " "), maxCharacters: index < 3 ? 2400 : 800)
+            try validateChatEvidence(source: article.plainBody, excerpt: excerpt)
             return "[\(handle)] \(article.title)\nFeed: \(article.feedTitle)\nURL: \(article.externalURL?.absoluteString ?? article.url?.absoluteString ?? "")\nExcerpt: \(excerpt)"
         }.joined(separator: "\n\n")
     }
@@ -1319,7 +1338,7 @@ enum NativeAI {
         let instructions = toolsOK
             ? baseInstructions + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices."
             : baseInstructions
-        let context = libraryChatContext(articles: articles, conversation: conversation)
+        let context = try libraryChatContext(articles: articles, conversation: conversation)
         if settings.ai.provider == "mlx" {
             let messages = buildLocalChatMessages(instructions: baseInstructions, articleContext: context,
                 conversation: conversation, webBlock: nil)

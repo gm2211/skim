@@ -283,6 +283,25 @@ private final class TodaySemanticCompletion: @unchecked Sendable {
 }
 
 enum NativeAI {
+    static func verifyToday(plan: TodaySemanticPolicy.VerificationPlan, provider: String,
+        complete: @Sendable (String, String, Int) async throws -> String) async throws -> [TodaySemanticGroup] {
+        let batches = try TodaySemanticPolicy.verificationBatches(plan: plan)
+        var responses: [String] = []
+        for batch in batches {
+            try Task.checkCancellation()
+            if provider == "foundation-models",
+               batch.payload.utf8.count + TodaySemanticPolicy.pairPrompt.utf8.count > 2400 {
+                throw NativeAIError.unavailable("Today verification exceeds the on-device context budget.")
+            }
+            let response = try await complete(TodaySemanticPolicy.pairPrompt, batch.payload,
+                provider == "foundation-models" ? 1400 : 8192)
+            try Task.checkCancellation()
+            try TodaySemanticPolicy.validateVerificationResponse(response, batch: batch, plan: plan)
+            responses.append(response)
+        }
+        return try TodaySemanticPolicy.verify(responses: responses, plan: plan)
+    }
+
     static func evaluateToday(candidates: [TodaySemanticCandidate], settings: AppSettings) async throws -> [TodaySemanticGroup] {
         guard !candidates.isEmpty, candidates.count <= TodaySemanticPolicy.maximumCandidates else {
             throw NativeAIError.unavailable("Today candidate pool exceeds the semantic context budget.")
@@ -306,19 +325,9 @@ enum NativeAI {
                             prompt: prompt, maxTokens: settings.ai.provider == "foundation-models" ? 1400 : 8192, jsonMode: true, temperature: 0)
                         try Task.checkCancellation()
                         let plan = try TodaySemanticPolicy.verificationPlan(groups: TodaySemanticPolicy.decode(raw), candidates: candidates)
-                        let verified: [TodaySemanticGroup]
-                        if plan.pairs.isEmpty {
-                            verified = try TodaySemanticPolicy.verify(response: "", plan: plan)
-                        } else {
-                            if settings.ai.provider == "foundation-models",
-                               plan.payload.utf8.count + TodaySemanticPolicy.pairPrompt.utf8.count > 2400 {
-                                throw NativeAIError.unavailable("Today verification exceeds the on-device context budget.")
-                            }
-                            let pairResponse = try await complete(settings: settings, instructions: TodaySemanticPolicy.pairPrompt,
-                                prompt: plan.payload, maxTokens: settings.ai.provider == "foundation-models" ? 1400 : 8192,
-                                jsonMode: true, temperature: 0)
-                            try Task.checkCancellation()
-                            verified = try TodaySemanticPolicy.verify(response: pairResponse, plan: plan)
+                        let verified = try await verifyToday(plan: plan, provider: settings.ai.provider) { instructions, payload, maxTokens in
+                            try await complete(settings: settings, instructions: instructions, prompt: payload,
+                                maxTokens: maxTokens, jsonMode: true, temperature: 0)
                         }
                         try Task.checkCancellation()
                         completion.setFallback(verified)

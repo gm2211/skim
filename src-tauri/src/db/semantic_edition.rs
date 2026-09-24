@@ -168,9 +168,6 @@ fn requested_pairs(groups: &[SemanticGroup]) -> Option<Vec<[usize; 2]>> {
         for (offset, &left) in group.members.iter().enumerate() {
             for &right in &group.members[offset + 1..] {
                 pairs.insert([left.min(right), left.max(right)]);
-                if pairs.len() > story_policy::semantic_max_pairs() {
-                    return None;
-                }
             }
         }
     }
@@ -201,6 +198,9 @@ fn report_listing(listing: &str, count: usize) -> Option<Vec<serde_json::Value>>
 
 fn pair_listing(listing: &str, count: usize, pairs: &[[usize; 2]]) -> Option<String> {
     let reports = report_listing(listing, count)?;
+    let referenced: std::collections::BTreeSet<_> = pairs.iter().flatten().copied().collect();
+    let reports: Vec<_> = reports.into_iter().enumerate()
+        .filter_map(|(index, report)| referenced.contains(&index).then_some(report)).collect();
     serde_json::to_string(&serde_json::json!({"reports":reports,"pairs":pairs})).ok()
 }
 
@@ -338,9 +338,22 @@ async fn verify_memberships(
             rating_ids: Vec::new(),
         });
     }
-    let input = pair_listing(&listing, count, &pairs)?;
-    let raw = request(provider, model, story_policy::semantic_pair_prompt(), input).await?;
-    let matrix = pair_matrix(&raw, count, &pairs)?;
+    let mut matrix = vec![0u8; count.checked_mul(count)?];
+    let mut offset = 0;
+    while offset < pairs.len() {
+        let length = story_policy::semantic_pair_batch_length(pairs.len(), offset);
+        if length == 0 || length > story_policy::semantic_max_pairs() { return None; }
+        let batch = pairs.get(offset..offset.checked_add(length)?)?;
+        let input = pair_listing(&listing, count, batch)?;
+        let raw = request(provider, model, story_policy::semantic_pair_prompt(), input).await?;
+        let validated = pair_matrix(&raw, count, batch)?;
+        for (combined, value) in matrix.iter_mut().zip(validated) {
+            *combined |= value;
+        }
+        offset += length;
+    }
+    // No group is published until every requested pair has been validated.
+
     let mut verified = Vec::new();
     let mut rating_ids = Vec::new();
     for group in groups {
@@ -571,7 +584,15 @@ mod tests {
             assert_eq!(request.messages.len(), 2);
             assert_eq!(request.messages[0].content, expected["messages"][0]["content"].as_str().unwrap());
             let actual: serde_json::Value = serde_json::from_str(&request.messages[1].content).unwrap();
-            let expected: serde_json::Value = serde_json::from_str(expected["messages"][1]["content"].as_str().unwrap()).unwrap();
+            let mut expected: serde_json::Value = serde_json::from_str(expected["messages"][1]["content"].as_str().unwrap()).unwrap();
+            // Historical captures sent the complete pool. The batched protocol
+            // now sends only reports named by these exact original pair IDs.
+            if request.messages[0].content == story_policy::semantic_pair_prompt() {
+                let referenced: std::collections::BTreeSet<_> = expected["pairs"].as_array().unwrap()
+                    .iter().flat_map(|pair| pair.as_array().unwrap()).map(|id| id.as_u64().unwrap()).collect();
+                expected["reports"].as_array_mut().unwrap().retain(|report|
+                    referenced.contains(&report["index"].as_u64().unwrap()));
+            }
             assert_eq!(actual, expected);
         }
         // Unlabeled groupings are deliberately not asserted as editorial truth.
@@ -846,17 +867,101 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn singleton_skips_verification_and_pair_budget_fails_closed() {
+    async fn singleton_skips_verification() {
         let singleton = Scripted::new(vec![first_pass(vec![0])]);
         assert!(plan(Some(&singleton), "fake", listing(2), 2)
             .await
             .is_some());
         assert_eq!(singleton.requests.lock().unwrap().len(), 1);
-        let oversized = Scripted::new(vec![first_pass((0..12).collect())]);
-        assert!(plan(Some(&oversized), "fake", listing(12), 12)
-            .await
-            .is_none());
-        assert_eq!(oversized.requests.lock().unwrap().len(), 1);
+
+    }
+
+    fn positive_batch_replies(count: usize) -> Vec<String> {
+        let groups = parse(&first_pass((0..count).collect()), count).unwrap();
+        let pairs = requested_pairs(&groups).unwrap();
+        let mut replies = vec![first_pass((0..count).collect())];
+        let mut offset = 0;
+        while offset < pairs.len() {
+            let length = story_policy::semantic_pair_batch_length(pairs.len(), offset);
+            replies.push(serde_json::json!({"pairs":pairs[offset..offset + length].iter().map(|pair|
+                serde_json::json!({"members":pair,"same_event":true,"confidence":1})
+            ).collect::<Vec<_>>()} ).to_string());
+            offset += length;
+        }
+        replies
+    }
+
+    #[tokio::test]
+    async fn all_66_pairs_verified_in_two_batches_and_singleton_importance_retained() {
+        let mut replies = positive_batch_replies(12);
+        let mut primary: serde_json::Value = serde_json::from_str(&replies[0]).unwrap();
+        primary["groups"].as_array_mut().unwrap().push(serde_json::json!({
+            "members":[12],"importance":5,"confidence":1,"reason":"Independent urgent story"
+        }));
+        replies[0] = primary.to_string();
+        let provider = Scripted::new(replies);
+        let result = plan(Some(&provider), "same-model", listing(13), 13).await.unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].members, (0..12).collect::<Vec<_>>());
+        assert_eq!(result[1].members, vec![12]);
+        assert_eq!(result[1].importance, 5.0);
+        let requests = provider.requests.lock().unwrap();
+        assert_eq!(requests.len(), 3);
+        let first: serde_json::Value = serde_json::from_str(&requests[1].messages[1].content).unwrap();
+        let second: serde_json::Value = serde_json::from_str(&requests[2].messages[1].content).unwrap();
+        assert_eq!(first["pairs"].as_array().unwrap().len(), 64);
+        assert_eq!(second["pairs"], serde_json::json!([[9,11],[10,11]]));
+        assert_eq!(second["reports"].as_array().unwrap().iter().map(|r|r["index"].as_u64().unwrap()).collect::<Vec<_>>(), vec![9,10,11]);
+        assert!(!first["reports"].as_array().unwrap().iter().any(|r|r["index"] == 12));
+    }
+
+    #[tokio::test]
+    async fn invalid_later_batch_discards_all_earlier_positive_decisions() {
+        for invalid in ["malformed", r#"{"pairs":[]}"#,
+            r#"{"pairs":[{"members":[0,1],"same_event":true,"confidence":1},{"members":[10,11],"same_event":true,"confidence":1}]}"#] {
+            let mut replies = positive_batch_replies(12);
+            replies[2] = invalid.into();
+            let provider = Scripted::new(replies);
+            assert!(plan(Some(&provider), "same-model", listing(12), 12).await.is_none());
+            assert_eq!(provider.requests.lock().unwrap().len(), 3);
+        }
+    }
+
+    #[tokio::test]
+    async fn maximum_pool_verifies_all_2016_pairs_with_bounded_requests() {
+        let provider = Scripted::new(positive_batch_replies(64));
+        let result = plan(Some(&provider), "same-model", listing(64), 64).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].members, (0..64).collect::<Vec<_>>());
+        let requests = provider.requests.lock().unwrap();
+        assert_eq!(requests.len(), 33); // primary + ceil(2016 / 64)
+        let batches: Vec<serde_json::Value> = requests.iter().skip(1).map(|r|serde_json::from_str(&r.messages[1].content).unwrap()).collect();
+        assert!(batches.iter().all(|b| b["pairs"].as_array().unwrap().len() <= 64));
+        assert_eq!(batches.iter().map(|b|b["pairs"].as_array().unwrap().len()).sum::<usize>(), 2016);
+    }
+
+    #[tokio::test]
+    async fn later_pair_batch_respects_original_deadline_and_cancellation() {
+        let mut provider = Scripted::new(positive_batch_replies(12));
+        provider.delay = Duration::from_millis(40);
+        assert!(plan_with_timeout(Some(&provider), "same-model", listing(12), 12,
+            Duration::from_millis(105)).await.is_none());
+        assert_eq!(provider.requests.lock().unwrap().len(), 3);
+
+        let mut provider = Scripted::new(positive_batch_replies(12));
+        provider.delay = Duration::from_millis(40);
+        let provider = std::sync::Arc::new(provider);
+        let running = provider.clone();
+        let task = tokio::spawn(async move { plan(Some(running.as_ref()), "same-model", listing(12), 12).await });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if provider.requests.lock().unwrap().len() == 3 { break; }
+                tokio::task::yield_now().await;
+            }
+        }).await.unwrap();
+        task.abort();
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert_eq!(provider.requests.lock().unwrap().len(), 3);
     }
 
     #[tokio::test]

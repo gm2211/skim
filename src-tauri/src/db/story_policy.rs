@@ -57,6 +57,7 @@ extern "C" {
     fn skim_semantic_rating_prompt() -> *const std::os::raw::c_char;
     fn skim_semantic_rating_valid(importance: f64, confidence: f64) -> i32;
     fn skim_semantic_max_pairs() -> usize;
+    fn skim_semantic_pair_batch_length(pair_count: usize, offset: usize) -> usize;
     fn skim_semantic_partition(
         members: *const f64,
         member_count: usize,
@@ -217,6 +218,10 @@ pub fn semantic_pair_prompt() -> &'static str {
         .expect("shared pair prompt is UTF-8")
 }
 
+pub fn semantic_pair_batch_length(pair_count: usize, offset: usize) -> usize {
+    unsafe { skim_semantic_pair_batch_length(pair_count, offset) }
+}
+
 pub fn semantic_max_pairs() -> usize {
     unsafe { skim_semantic_max_pairs() }
 }
@@ -302,6 +307,15 @@ pub fn semantic_score(base: f64, importance: f64, confidence: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shared_semantic_pair_batch_fixture() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!("../../../shared/fixtures/semantic-pair-batches.json")).unwrap();
+        for case in cases.as_array().unwrap() {
+            assert_eq!(super::semantic_pair_batch_length(case["pair_count"].as_u64().unwrap() as usize,
+                case["offset"].as_u64().unwrap() as usize), case["length"].as_u64().unwrap() as usize, "{case}");
+        }
+    }
+
     #[test]
     fn shared_chat_evidence_fixture_preserves_facts_qualifiers_and_unicode() {
         #[derive(serde::Deserialize)]

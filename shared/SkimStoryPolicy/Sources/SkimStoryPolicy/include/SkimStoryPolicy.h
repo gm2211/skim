@@ -112,6 +112,9 @@ int32_t skim_semantic_rating_valid(double importance, double confidence);
 /* Verify proposed merges before hiding reports behind a shared story card. */
 const char *skim_semantic_pair_prompt(void);
 size_t skim_semantic_max_pairs(void);
+/* Per-request verification budget. A large proposal is processed in full by
+   advancing offset by the returned length; zero means no pairs remain. */
+size_t skim_semantic_pair_batch_length(size_t pair_count, size_t offset);
 /* verified is a candidate_count squared row-major matrix. Only mutual 1s
    support a pair. labels align with members, not the global candidate indexes.
    Returns subgroup count, or zero on invalid buffers/handles. No allocation. */

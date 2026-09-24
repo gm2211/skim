@@ -123,6 +123,12 @@ public enum TodaySemanticPolicy {
         public let pairs: [[Int]]
         fileprivate let groups: [TodaySemanticGroup]
         fileprivate let candidateCount: Int
+        fileprivate let candidates: [TodaySemanticCandidate]
+    }
+
+    public struct VerificationBatch: Sendable {
+        public let payload: String
+        public let pairs: [[Int]]
     }
 
     public static var pairPrompt: String { String(cString: skim_semantic_pair_prompt()) }
@@ -147,12 +153,31 @@ public enum TodaySemanticPolicy {
             for (offset, left) in indexes.enumerated() {
                 for right in indexes.dropFirst(offset + 1) { pairs.append([left, right]) }
             }
-            guard pairs.count <= Int(skim_semantic_max_pairs()) else {
-                throw SkimCoreError.database("Semantic verification pair budget exceeded")
-            }
             accepted.append(group)
             for index in indexes { assigned[index] = 1 }
         }
+        return VerificationPlan(payload: try verificationPayload(pairs: pairs, candidates: candidates), pairs: pairs,
+            groups: accepted, candidateCount: candidates.count, candidates: candidates)
+    }
+
+    public static func verificationBatches(plan: VerificationPlan) throws -> [VerificationBatch] {
+        var batches: [VerificationBatch] = []
+        var offset = 0
+        while offset < plan.pairs.count {
+            let length = Int(skim_semantic_pair_batch_length(plan.pairs.count, offset))
+            guard length > 0, length <= plan.pairs.count - offset else {
+                throw SkimCoreError.database("Invalid semantic pair batch length")
+            }
+            let pairs = Array(plan.pairs[offset..<(offset + length)])
+            let referenced = Set(pairs.flatMap { $0 })
+            let reports = plan.candidates.filter { referenced.contains($0.index) }
+            batches.append(VerificationBatch(payload: try verificationPayload(pairs: pairs, candidates: reports), pairs: pairs))
+            offset += length
+        }
+        return batches
+    }
+
+    private static func verificationPayload(pairs: [[Int]], candidates: [TodaySemanticCandidate]) throws -> String {
         struct Report: Encodable {
             let index: Int
             let title: String
@@ -170,12 +195,31 @@ public enum TodaySemanticPolicy {
                 activity_date: formatter.string(from: Date(timeIntervalSince1970: candidate.timestamp)))
         }
         let data = try JSONEncoder().encode(Payload(reports: reports, pairs: pairs))
-        return VerificationPlan(payload: String(decoding: data, as: UTF8.self), pairs: pairs,
-            groups: accepted, candidateCount: candidates.count)
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    /// Validate each completed request before spending another provider call.
+    /// This never partitions or publishes groups; final verification remains atomic.
+    public static func validateVerificationResponse(_ response: String, batch: VerificationBatch, plan: VerificationPlan) throws {
+        _ = try verifiedPairs(response: response, pairs: batch.pairs, candidateCount: plan.candidateCount)
     }
 
     public static func verify(response: String, plan: VerificationPlan) throws -> [TodaySemanticGroup] {
-        guard !plan.pairs.isEmpty else { return plan.groups }
+        try verify(responses: plan.pairs.isEmpty ? [] : [response], plan: plan)
+    }
+
+    public static func verify(responses: [String], plan: VerificationPlan) throws -> [TodaySemanticGroup] {
+        let batches = try verificationBatches(plan: plan)
+        guard responses.count == batches.count else { throw SkimCoreError.database("Incomplete semantic verification batches") }
+        var verified = [UInt8](repeating: 0, count: plan.candidateCount * plan.candidateCount)
+        for (batch, response) in zip(batches, responses) {
+            let matrix = try verifiedPairs(response: response, pairs: batch.pairs, candidateCount: plan.candidateCount)
+            for index in matrix.indices where matrix[index] == 1 { verified[index] = 1 }
+        }
+        return try partition(plan: plan, verified: verified)
+    }
+
+    private static func verifiedPairs(response: String, pairs: [[Int]], candidateCount: Int) throws -> [UInt8] {
         struct Decision: Decodable {
             let members: [Double]
             let same_event: Bool
@@ -202,25 +246,29 @@ public enum TodaySemanticPolicy {
         } else {
             decisions = try JSONDecoder().decode(Envelope.self, from: data).pairs
         }
-        let requested = Set(plan.pairs.map { $0[0] * plan.candidateCount + $0[1] })
+        let requested = Set(pairs.map { $0[0] * candidateCount + $0[1] })
         var answered = Set<Int>()
-        var verified = [UInt8](repeating: 0, count: plan.candidateCount * plan.candidateCount)
+        var verified = [UInt8](repeating: 0, count: candidateCount * candidateCount)
         for decision in decisions {
             guard decision.members.count == 2,
-                  decision.members.allSatisfy({ $0.isFinite && $0.rounded(.towardZero) == $0 && $0 >= 0 && $0 < Double(plan.candidateCount) }),
+                  decision.members.allSatisfy({ $0.isFinite && $0.rounded(.towardZero) == $0 && $0 >= 0 && $0 < Double(candidateCount) }),
                   decision.confidence.isFinite, (0...1).contains(decision.confidence)
             else { throw SkimCoreError.database("Invalid semantic pair response") }
             let pair = decision.members.map(Int.init).sorted()
-            let key = pair[0] * plan.candidateCount + pair[1]
+            let key = pair[0] * candidateCount + pair[1]
             guard pair[0] != pair[1], requested.contains(key), answered.insert(key).inserted else {
                 throw SkimCoreError.database("Unknown or duplicate semantic pair")
             }
             if decision.same_event && decision.confidence >= 0.8 {
                 verified[key] = 1
-                verified[pair[1] * plan.candidateCount + pair[0]] = 1
+                verified[pair[1] * candidateCount + pair[0]] = 1
             }
         }
         guard answered == requested else { throw SkimCoreError.database("Incomplete semantic pair response") }
+        return verified
+    }
+
+    private static func partition(plan: VerificationPlan, verified: [UInt8]) throws -> [TodaySemanticGroup] {
         return try plan.groups.flatMap { group in
             var labels = [Int32](repeating: -1, count: group.members.count)
             let count = group.members.withUnsafeBufferPointer { members in

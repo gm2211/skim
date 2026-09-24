@@ -1770,3 +1770,43 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     }
     #expect(try await store.listEditions().isEmpty)
 }
+
+
+@Test func todayMaterialDeltaUsesFrozenRevisionRatherThanLatestRevision() async throws {
+    let store = try temporaryStore()
+    let start = Date(timeIntervalSince1970: 100_000)
+    let end = Date(timeIntervalSince1970: 186_400)
+    let generated = Date(timeIntervalSince1970: 180_000)
+    try await seedTodayStory(store: store, storyID: "material-delta", sourceCount: 2, timestamp: 110_000, isUpdate: true)
+    let materialEdition = try await store.getOrGenerateTodayEdition(startsAt: start, endsAt: end, storyLimit: 5, generatedAt: generated)
+    let material = try #require(materialEdition.items.first)
+    #expect(material.materialDelta == "update")
+    var duplicate = material.revision
+    duplicate.revisionNumber += 1
+    duplicate.deltaSummary = "Another syndicated report"
+    duplicate.contentFingerprint = "duplicate-revision"
+    duplicate.isMaterialChange = false
+    try await store.insertStoryRevision(duplicate)
+    let duplicateEdition = try await store.getOrGenerateTodayEdition(startsAt: start, endsAt: end, storyLimit: 10, generatedAt: generated)
+    let nonmaterial = try #require(duplicateEdition.items.first)
+    #expect(nonmaterial.revision.revisionNumber == duplicate.revisionNumber)
+    #expect(nonmaterial.snapshot.snapshotDeltaSummary == "Another syndicated report")
+    #expect(nonmaterial.materialDelta == nil)
+    let reopenedMaterial = try #require(try await store.todayEdition(id: materialEdition.id))
+    #expect(reopenedMaterial.items.first?.materialDelta == "update")
+    var latest = duplicate
+    latest.revisionNumber += 1
+    latest.deltaSummary = "Important new development"
+    latest.contentFingerprint = "material-revision"
+    latest.isMaterialChange = true
+    try await store.insertStoryRevision(latest)
+    let reopenedDuplicate = try #require(try await store.todayEdition(id: duplicateEdition.id))
+    #expect(reopenedDuplicate.items.first?.revision.revisionNumber == duplicate.revisionNumber)
+    #expect(reopenedDuplicate.items.first?.materialDelta == nil)
+    var mismatched = nonmaterial
+    mismatched.revision = latest
+    #expect(mismatched.materialDelta == nil)
+    var blank = material
+    blank.snapshot.snapshotDeltaSummary = " \n "
+    #expect(blank.materialDelta == nil)
+}

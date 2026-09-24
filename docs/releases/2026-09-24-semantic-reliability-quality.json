@@ -1,0 +1,189 @@
+{
+  "verified_at": "2026-09-24T18:12:39.782247+00:00",
+  "fixture": "shared/fixtures/semantic-live-feed-replay.json",
+  "fixture_sha256": "18aa4fae58afab9575b4b4d6210f140ad027d0aba0cf894e8aa40a5c885a3f33",
+  "library": {
+    "article_count": 133,
+    "candidate_count": 45,
+    "feeds": [
+      {
+        "title": "BBC Business",
+        "url": "https://feeds.bbci.co.uk/news/business/rss.xml"
+      },
+      {
+        "title": "BBC Top",
+        "url": "https://feeds.bbci.co.uk/news/rss.xml"
+      },
+      {
+        "title": "BBC World",
+        "url": "https://feeds.bbci.co.uk/news/world/rss.xml"
+      },
+      {
+        "title": "Federal Reserve",
+        "url": "https://www.federalreserve.gov/feeds/press_all.xml"
+      },
+      {
+        "title": "NASA",
+        "url": "https://www.nasa.gov/rss/dyn/breaking_news.rss"
+      }
+    ],
+    "user_library_modified": false
+  },
+  "cause": "Complete primary JSON array was rejected before pair verification by object-only decoders. Both adapters now accept whole arrays or groups envelopes, retaining identity validation, all-pairs verification and independent ratings. Prose-wrapped or truncated JSON remains rejected.",
+  "before": {
+    "count": 45,
+    "diagnostic_deadline_seconds": 90,
+    "fingerprint_unchanged": true,
+    "groups": null,
+    "production_deadline_seconds": 30,
+    "seconds": 20.527200209
+  },
+  "after": {
+    "diagnostic_seconds": 25.5077895,
+    "diagnostic_deadline_seconds": 90,
+    "actual_command_seconds": 24.985425582970493,
+    "actual_command_deadline_seconds": 30,
+    "edition_items": 10,
+    "all_45_candidate_handles_preserved_in_replay": true,
+    "false_primary_groups_split": [
+      [
+        2,
+        4
+      ],
+      [
+        3,
+        17
+      ]
+    ],
+    "verified_same_event_group": [
+      9,
+      18
+    ],
+    "independent_constraints": [
+      {
+        "pair": [
+          9,
+          18
+        ],
+        "expected_same": true,
+        "pass": true
+      },
+      {
+        "pair": [
+          9,
+          27
+        ],
+        "expected_same": false,
+        "pass": true
+      },
+      {
+        "pair": [
+          18,
+          27
+        ],
+        "expected_same": false,
+        "pass": true
+      },
+      {
+        "pair": [
+          14,
+          34
+        ],
+        "expected_same": false,
+        "pass": true
+      },
+      {
+        "pair": [
+          4,
+          19
+        ],
+        "expected_same": false,
+        "pass": true
+      },
+      {
+        "pair": [
+          22,
+          40
+        ],
+        "expected_same": false,
+        "pass": true
+      },
+      {
+        "higher": 22,
+        "lower": 26,
+        "pass": true,
+        "scores": [
+          3.0,
+          1.0
+        ]
+      },
+      {
+        "higher": 36,
+        "lower": 26,
+        "pass": true,
+        "scores": [
+          3.0,
+          1.0
+        ]
+      },
+      {
+        "higher": 15,
+        "lower": 7,
+        "pass": true,
+        "scores": [
+          3.0,
+          2.0
+        ]
+      },
+      {
+        "higher": 10,
+        "lower": 31,
+        "pass": true,
+        "scores": [
+          2.0,
+          1.0
+        ]
+      },
+      {
+        "higher": 1,
+        "lower": 29,
+        "pass": true,
+        "scores": [
+          4.0,
+          1.0
+        ]
+      },
+      {
+        "higher": 30,
+        "lower": 26,
+        "pass": true,
+        "scores": [
+          4.0,
+          1.0
+        ]
+      }
+    ]
+  },
+  "ui": {
+    "surface": "Actual React Today, Sidebar and ArticleDetail components through isolated Rust devbridge in Codex in-app browser",
+    "viewport": [
+      1280,
+      720
+    ],
+    "grouped_reports": 4,
+    "mark_read_updates_all_group_members": true,
+    "unrelated_openai_report_stays_unread": true,
+    "read_progress_persists_after_reload": "1 of 10, 10%",
+    "related_report_opens_full_reader_body": true,
+    "duplicate_only_delta_hidden": true,
+    "frozen_material_delta_covered_by_rust_swift_ui_regressions": true,
+    "foreign_key_errors": 0
+  },
+  "limits": [
+    "Small current-feed development sample, not representative or held-out accuracy. Only independently labeled comparisons asserted.",
+    "45 candidates complete within current deadline; larger-than-64 pools and over-budget pair proposals still use deterministic fallback.",
+    "Lede factual accuracy remains unaccepted: observed summary conflates five-day email escalation delay with breach detection delay.",
+    "Browser component integration does not establish installed native UI or sandboxed parent/helper runtime acceptance.",
+    "Platform orchestration, feature extraction and persistence remain separate; shared production policy and inference modules are unchanged."
+  ]
+}

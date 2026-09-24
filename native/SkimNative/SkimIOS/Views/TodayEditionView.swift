@@ -219,7 +219,7 @@ private struct TodayStoryView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if let delta = item.snapshot.snapshotDeltaSummary, !brief {
+            if let delta = item.materialDelta, !brief {
                 Text("What's new: \(delta)")
                     .font(.system(size: 14))
                     .foregroundStyle(SkimStyle.accent)

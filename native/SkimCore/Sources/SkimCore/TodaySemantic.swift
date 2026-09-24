@@ -54,13 +54,13 @@ public enum TodaySemanticPolicy {
     public static var maximumCandidates: Int { Int(skim_semantic_max_candidates()) }
 
     public static func decode(_ text: String) throws -> [TodaySemanticGroup] {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let objectText: String
-        if let start = trimmed.firstIndex(of: "{"), let end = trimmed.lastIndex(of: "}"), start <= end {
-            objectText = String(trimmed[start...end])
-        } else { objectText = trimmed }
-        let object = try JSONSerialization.jsonObject(with: Data(objectText.utf8))
-        guard let response = object as? [String: Any], let groups = response["groups"] as? [Any] else {
+        let object = try JSONSerialization.jsonObject(with: Data(unfenced(text).utf8))
+        let groups: [Any]
+        if let array = object as? [Any] {
+            groups = array
+        } else if let response = object as? [String: Any], let array = response["groups"] as? [Any] {
+            groups = array
+        } else {
             throw SkimCoreError.database("Invalid semantic Today response")
         }
         return groups.compactMap { value in

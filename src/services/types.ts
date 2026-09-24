@@ -355,6 +355,7 @@ export interface TodayEditionItem {
   snapshot_title: string;
   snapshot_summary: string;
   snapshot_delta_summary: string | null;
+  has_material_update: boolean;
   snapshot_source_count: number;
   snapshot_reason: string | null;
   is_unique_find: boolean;

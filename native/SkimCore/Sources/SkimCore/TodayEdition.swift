@@ -98,6 +98,16 @@ public struct TodayEditionItem: Identifiable, Codable, Hashable, Sendable {
 
     public var id: String { snapshot.id }
 
+    /// Only the exact revision frozen into this edition establishes a material update.
+    public var materialDelta: String? {
+        guard revision.isMaterialChange,
+              revision.storyID == snapshot.storyID,
+              revision.revisionNumber == snapshot.storyRevisionNumber,
+              let delta = snapshot.snapshotDeltaSummary,
+              !delta.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return delta
+    }
+
     public init(
         snapshot: EditionItem,
         revision: StoryRevision,

@@ -184,8 +184,8 @@ struct SettingsSheet: View {
 
             WordCountPresetChips(wordCount: summaryWordCountBinding)
 
-            Stepper(value: summaryWordCountBinding, in: 30...600, step: 25) {
-                Text("Summary length: \(draft.ai.summaryCustomWordCount ?? 150) words")
+            Stepper(value: summaryWordCountBinding, in: AIRequestPolicy.summaryWordRange, step: 25) {
+                Text("Summary length: \(AIRequestPolicy.summaryWordCount(draft.ai)) words")
                     .font(.system(size: 16, weight: .regular))
                     .foregroundStyle(SkimStyle.text)
             }
@@ -583,8 +583,8 @@ struct SettingsSheet: View {
 
     private var summaryWordCountBinding: Binding<Int> {
         Binding(
-            get: { draft.ai.summaryCustomWordCount ?? 150 },
-            set: { value in updateAI { $0.summaryCustomWordCount = value } }
+            get: { AIRequestPolicy.summaryWordCount(draft.ai) },
+            set: { value in updateAI { $0 = AIRequestPolicy.summarySettings($0, wordCount: value) } }
         )
     }
 
@@ -1531,9 +1531,9 @@ private struct WordCountPresetChips: View {
     }
 
     private let presets: [Preset] = [
-        Preset(label: "Short", value: 50),
+        Preset(label: "Short", value: 30),
         Preset(label: "Medium", value: 150),
-        Preset(label: "Long", value: 400),
+        Preset(label: "Long", value: 300),
         Preset(label: "XL", value: 600),
     ]
 

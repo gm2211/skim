@@ -8,7 +8,21 @@ struct Thresholds {
     borderline: f64,
 }
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+pub struct SummaryPlan {
+    pub word_count: i32,
+    pub bullet_min: i32,
+    pub bullet_max: i32,
+    pub bullet_max_tokens: i32,
+    pub full_max_tokens: i32,
+}
+
 extern "C" {
+    fn skim_summary_plan(length: *const std::os::raw::c_char, custom_words: i64) -> SummaryPlan;
+    fn skim_summary_min_words() -> i32;
+    fn skim_summary_max_words() -> i32;
+    fn skim_summary_custom_words_valid(words: i64) -> i32;
     fn skim_summary_style_prompt(tone: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
     fn skim_today_lede_excerpt_valid(source: *const u8, source_len: usize, excerpt: *const u8, excerpt_len: usize) -> i32;
     fn skim_today_lede_evidence_version() -> i32;
@@ -99,6 +113,20 @@ pub fn is_unique(sources: i64) -> bool {
 pub fn identity_hash(seed: &str) -> u64 {
     // C reads exactly this slice synchronously and never retains its pointer.
     unsafe { skim_story_identity_hash(seed.as_ptr(), seed.len()) }
+}
+
+pub fn summary_plan(length: Option<&str>, custom_words: Option<i64>) -> SummaryPlan {
+    let length = length.and_then(|value| std::ffi::CString::new(value).ok());
+    let ptr = length.as_ref().map_or(std::ptr::null(), |value| value.as_ptr());
+    unsafe { skim_summary_plan(ptr, custom_words.unwrap_or(0)) }
+}
+
+pub fn summary_word_bounds() -> (i32, i32) {
+    unsafe { (skim_summary_min_words(), skim_summary_max_words()) }
+}
+
+pub fn summary_custom_words_valid(words: i64) -> bool {
+    unsafe { skim_summary_custom_words_valid(words) != 0 }
 }
 
 pub fn summary_style_prompt(tone: Option<&str>) -> &'static str {
@@ -234,6 +262,24 @@ pub fn semantic_score(base: f64, importance: f64, confidence: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn shared_summary_plans_bound_invalid_counts_before_arithmetic() {
+        #[derive(serde::Deserialize)]
+        struct Case { length: Option<String>, custom_words: i64, valid_custom: bool, plan: SummaryPlan }
+        let cases: Vec<Case> = serde_json::from_str(include_str!("../../../shared/fixtures/summary-plan.json")).unwrap();
+        assert_eq!(summary_word_bounds(), (20, 1000));
+        for case in cases {
+            let plan = summary_plan(case.length.as_deref(), Some(case.custom_words));
+            assert_eq!(plan, case.plan);
+            assert_eq!(summary_custom_words_valid(case.custom_words), case.valid_custom);
+            assert!((20..=1000).contains(&plan.word_count));
+            assert!((1..=2400).contains(&plan.full_max_tokens));
+            assert!((1..=2400).contains(&plan.bullet_max_tokens));
+        }
+        assert_eq!(summary_plan(Some("custom"), None), summary_plan(None, None));
+        assert_eq!(summary_plan(Some("custom\0long"), Some(1000)), summary_plan(None, None));
+    }
+
     #[test]
     fn summary_style_shared_fixture_crosses_rust_abi() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(

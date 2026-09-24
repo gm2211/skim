@@ -866,7 +866,7 @@ enum NativeAI {
 
                 \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
                 """,
-                maxTokens: summaryMaxTokens(wordCount)
+                maxTokens: AIRequestPolicy.summaryPlan(settings.ai).fullMaxTokens
             )
             try Task.checkCancellation()
             guard publication.publish({ SummaryLRUCache.shared.set(key, value: result) }) else { throw CancellationError() }
@@ -902,7 +902,7 @@ enum NativeAI {
             \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
             """
             let instructions = summaryInstructions(settings.ai, wordCount: wordCount)
-            let maxTok = summaryMaxTokens(wordCount)
+            let maxTok = AIRequestPolicy.summaryPlan(settings.ai).fullMaxTokens
 
             let result: String
             if settings.ai.provider == "mlx" {
@@ -941,7 +941,8 @@ enum NativeAI {
         let wordCount = summaryTargetWordCount(ai)
         return [
             article.id,
-            "summary-v3",
+            "summary-v4",
+            AIRequestPolicy.summaryPlan(ai).cacheIdentity,
             AIRequestPolicy.summarySourceFingerprint(articleDigest([article], limit: 1, wordsPerArticle: 2200)),
             ai.provider,
             model,
@@ -2318,10 +2319,6 @@ enum NativeAI {
 
     private static func summaryTargetWordCount(_ settings: AISettings) -> Int {
         AIRequestPolicy.summaryWordCount(settings)
-    }
-
-    private static func summaryMaxTokens(_ wordCount: Int) -> Int {
-        Int(Double(wordCount) * 1.5) + 50
     }
 
     private static func articleDigest(_ articles: [Article], limit: Int, wordsPerArticle: Int = 95) -> String {

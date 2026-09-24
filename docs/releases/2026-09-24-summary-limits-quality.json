@@ -1,0 +1,404 @@
+{
+  "purpose": "Compact, reproducible record of the paired native-summary output-budget check; this is exploratory evidence about visible truncation, not a general quality benchmark.",
+  "artifacts": {
+    "review": "/tmp/skim-native-summary-budget-review.json",
+    "results": [
+      "/tmp/skim-native-summary-budget-results.json",
+      "/tmp/skim-native-summary-budget-languages.json"
+    ],
+    "frozen_acceptance": "/tmp/skim-summary-acceptance-v3.json"
+  },
+  "reproducibility": {
+    "tool": "mlx_complete through the desktop Swift inference helper with native-format instructions; no iOS inference",
+    "model_repo": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "temperature": 0,
+    "json_mode": false,
+    "prompt": "shared detailed-summary instruction, approximately 300 words, with language-specific instruction; no prompt difference between paired token budgets",
+    "languages": [
+      "English",
+      "Spanish",
+      "German",
+      "Polish",
+      "Ukrainian"
+    ],
+    "source_cases": [
+      "fictional-harbor-outage",
+      "fictional-recovery-fund"
+    ],
+    "pairs": 10,
+    "budgets_tokens": [
+      500,
+      2400
+    ],
+    "output_row_count": 20,
+    "results_file_sha256": {
+      "/tmp/skim-native-summary-budget-results.json": "7deb51431950c58042a9844ab047f1573f48e968e2603da8274ad98ef5dc6671",
+      "/tmp/skim-native-summary-budget-languages.json": "2afc63ec87c8b8d191a17816ea249479a58bdbaaaa8125ce6f3d95e4bfb5a231"
+    },
+    "synthetic_source_sha256": {
+      "fictional-harbor-outage": "d0a6a7c3c221d05fe2d513d3b835921526710167b50f1231696c6a11308df861",
+      "fictional-recovery-fund": "a0719dcb3a17b8e00cdcd5a74b8d2cc8e00af23e0a4dba8b242fd9b6a82d12fe"
+    },
+    "synthetic_sources": [
+      {
+        "id": "fictional-harbor-outage",
+        "kind": "synthetic",
+        "source": {
+          "title": "Harbor authority corrects outage timeline after review",
+          "publication": "North Quay Gazette",
+          "url": null,
+          "body": "North Quay Harbor Authority said a control-system outage disrupted the eastern freight terminal on March 3. The first public bulletin, posted at 06:20, said the outage began at 05:10. It also said crews were investigating and that no cause had been established.\n\nAt 08:45, the authority posted a correction. A review of access logs showed the outage began at 05:40, not 05:10. The earlier time had been copied from a scheduled maintenance window. The correction did not change the reported restoration time: terminal systems returned to service at 07:25. The authority said cargo handling was paused during the outage, but it gave no count of delayed shipments or estimate of financial loss.\n\nA second bulletin said the first signs of the fault appeared in a monitoring dashboard at 05:47. That was when staff noticed an alarm, not when the outage began. The authority said it was still checking whether a damaged sensor or a configuration error caused the interruption. Neither possibility had been confirmed by the end of the day.\n\nThe port operator said vessels continued to use the western terminal and that emergency services were unaffected. It did not say that all freight operations continued normally. Two shipping companies said some scheduled collections had been moved to later slots, but neither supplied a total number.\n\nThe regional transport office confirmed receiving an incident notice from the harbor authority at 09:10. The notice followed the 08:45 correction. It was separate from the public bulletin and did not mark the time the outage was discovered or began. The office said it had requested a technical report, which was due the following week. It had not opened a formal enforcement case.\n\nBy evening, the harbor authority stood by the corrected 05:40 start and 07:25 restoration times. It said the technical review remained open. The available reports therefore establish the event window and later notice, but leave both the cause and the eventual effect on cargo volumes unresolved.",
+          "body_sha256": "d0a6a7c3c221d05fe2d513d3b835921526710167b50f1231696c6a11308df861",
+          "word_count": 325
+        },
+        "detailed_summary_acceptance": {
+          "must_cover": [
+            "A control-system outage affected the eastern freight terminal on March 3; western terminal and emergency services were said to be unaffected.",
+            "Corrected occurrence start is 05:40; 05:10 was copied from scheduled maintenance and is superseded.",
+            "Staff noticed the dashboard alarm at 05:47; detection is distinct from occurrence.",
+            "Service restored at 07:25.",
+            "The regional transport office received a separate notice at 09:10, after the public correction.",
+            "Cause and shipment/loss totals remain unconfirmed or unreported."
+          ],
+          "misleading_if_omitted": [
+            "Corrected start versus superseded 05:10 estimate.",
+            "Difference between 05:40 occurrence, 05:47 alarm, and 09:10 regulator notice."
+          ],
+          "target": "About 90-140 words; omission of secondary operational details is acceptable, but all six points above are required for a pass."
+        },
+        "direct_qa_acceptance": [
+          {
+            "query": "When did the outage actually begin, when was it noticed, and when did the transport office receive notice?",
+            "answer_must_include": [
+              "Began 05:40; initial 05:10 was corrected.",
+              "Dashboard alarm noticed at 05:47.",
+              "Office received notice at 09:10."
+            ],
+            "must_not_say": [
+              "05:10 is the confirmed start.",
+              "05:47 is when the outage began."
+            ]
+          },
+          {
+            "query": "What caused the outage, and how many shipments or what financial losses resulted?",
+            "answer_must_include": [
+              "Cause was still under review; sensor damage and configuration error were possibilities, not findings.",
+              "No shipment total or financial-loss estimate was provided."
+            ],
+            "must_not_say": [
+              "Either possible cause as established.",
+              "A specific shipment count or loss amount."
+            ]
+          }
+        ]
+      },
+      {
+        "id": "fictional-recovery-fund",
+        "kind": "synthetic",
+        "source": {
+          "title": "Regional council announces recovery package while contributions lag",
+          "publication": "Cedar Valley Public Record",
+          "url": null,
+          "body": "The Cedar Valley Recovery Council announced a six-month package on September 2 to repair roads, reopen clinics, and restore water service after spring flooding. The council described the package as worth 840 million crowns and said it contained 24 planned projects across three districts. The announcement was a spending plan, not a report that the full amount had been transferred or spent.\n\nAt the same briefing, the council said partners had pledged 1.6 billion crowns for the broader recovery effort. It said 210 million crowns had reached the joint recovery account by September 1. The council did not say that this account balance had been distributed to contractors or local governments. It also did not provide a donor-by-donor breakdown or identify how much any single partner had paid.\n\nThe package includes a proposed bridge replacement, repairs to two water-treatment sites, temporary clinic buildings, and debris removal. Project schedules are subject to engineering checks and procurement. The council said construction on the bridge could begin in November if permits are completed, while water-treatment work was already underway under separate emergency contracts. Officials cautioned that those existing contracts should not be counted as completed spending from the new package.\n\nA finance director said the 840 million figure is the estimated value of planned work over six months. It may change as bids arrive and damage assessments are updated. The council has not approved a final contract total for every project. It said the next public accounting would list signed contracts and payments separately from pledges and announced allocations.\n\nThe national treasury confirmed that it had authorized a transfer of 35 million crowns to the joint account on August 29. The treasury said the transfer was included in the 210 million already received. It did not say the money had been spent. Two private foundations said they intended to contribute, but their statements did not specify a payment date or amount.\n\nLocal officials welcomed the plan but said several damaged roads remain closed. The council expects to publish a progress report in October. Until then, its figures describe different stages: 1.6 billion pledged, 210 million received in the account, and 840 million planned for a package of projects. They should not be treated as interchangeable measures of cash delivered or work completed.",
+          "body_sha256": "a0719dcb3a17b8e00cdcd5a74b8d2cc8e00af23e0a4dba8b242fd9b6a82d12fe",
+          "word_count": 379
+        },
+        "detailed_summary_acceptance": {
+          "must_cover": [
+            "The council announced an 840-million-crown, six-month planned package of 24 projects; this is planned work, not money already transferred or spent.",
+            "Broader recovery pledges total 1.6 billion crowns; 210 million had reached the joint account by September 1.",
+            "The received 210 million is not reported as distributed or spent; the treasury's 35 million transfer is included in it.",
+            "No donor-by-donor amounts or payment schedule for the foundations is provided.",
+            "Plans/contracts/status remain distinct: bridge work could start in November if permits; some water work is under separate emergency contracts.",
+            "Figures may change; the council promised separate accounting of contracts and payments."
+          ],
+          "misleading_if_omitted": [
+            "Distinction between planned package, pledged total, and cash received.",
+            "Received funds are not reported as disbursed/spent."
+          ],
+          "target": "About 90-140 words; must preserve status of all three headline amounts, but can omit project examples."
+        },
+        "direct_qa_acceptance": [
+          {
+            "query": "Has the 840 million crowns already been delivered to the region? How do the 1.6 billion and 210 million figures differ?",
+            "answer_must_include": [
+              "840 million is the estimated value of a planned package, not transferred/spent funds.",
+              "1.6 billion is pledged; 210 million had reached the account by September 1."
+            ],
+            "must_not_say": [
+              "840 million was already paid out.",
+              "1.6 billion was received."
+            ]
+          },
+          {
+            "query": "How much has been spent, and which donors supplied the 210 million?",
+            "answer_must_include": [
+              "Article does not say how much was spent or distributed.",
+              "No donor-by-donor breakdown is given; treasury's 35 million transfer is included in the account total."
+            ],
+            "must_not_say": [
+              "Treating the account balance as spent.",
+              "Inventing identities or amounts for other donors."
+            ]
+          }
+        ]
+      }
+    ],
+    "prompt_recipe": "Shared C detailed-style instruction + \" Write approximately 300 words. Output only the summary — no preamble, no restating the title, no metadata.\" + \"\\n\\nUser summary instructions:\\nWrite in <language>.\" User input: \"Article to summarize:\\n\\n[1] <title>\\nFeed: <publication>\\nAuthor: unknown\\nExcerpt: <body>\"."
+  },
+  "completion_counts": {
+    "pairs": 10,
+    "identical_complete_pairs": 6,
+    "strict_prefix_nonidentical_pairs": 4,
+    "definite_midword_cuts": 2,
+    "incomplete_punctuation_boundary": 1,
+    "low_stops_after_complete_sentence": 1
+  },
+  "completion_method": "Compare stripped low/high text for exact equality and strict prefix. Independently inspect final characters/word; a word count below 300 is not counted as truncation. No finish_reason was recorded, so textual truncation supports but does not prove max-token cause.",
+  "key_observations": [
+    "All four English/Spanish pairs were byte-identical and complete despite being 230-293 words.",
+    "Six of ten pairs were identical and ended with complete sentences.",
+    "Two low-budget Ukrainian outputs visibly end mid-word; corresponding high-budget outputs continue the cut word/fragment.",
+    "Polish harbor low output is a strict prefix ending at 07:25 without terminal punctuation; high adds punctuation and a concluding sentence.",
+    "Polish recovery low output is a strict prefix but ends at a complete sentence; visible text alone does not establish a cutoff.",
+    "Factual accuracy does not track completion: some completed high-budget outputs retain concrete status/quantity errors."
+  ],
+  "accuracy_limits": {
+    "review_scope": "Material facts checked against the two synthetic source bodies only. Language-specific review was strongest for English and moderate for Spanish/German/Polish/Ukrainian; non-English fluency defects are not comprehensively rated.",
+    "not_established": [
+      "This small set does not prove 500 tokens is generally inadequate or 2400 is generally better.",
+      "No finish-reason field confirms token-limit termination.",
+      "The higher-budget outputs are not assumed accurate merely because they complete the text.",
+      "These synthetic sources do not represent real-world retrieval or source quality."
+    ]
+  },
+  "synthetic_evidence_fragments": {
+    "fictional-harbor-outage": {
+      "sha256": "d0a6a7c3c221d05fe2d513d3b835921526710167b50f1231696c6a11308df861",
+      "quotes": [
+        "The first public bulletin, posted at 06:20, said the outage began at 05:10.",
+        "At 08:45, the authority posted a correction. A review of access logs showed the outage began at 05:40, not 05:10.",
+        "The correction did not change the reported restoration time: terminal systems returned to service at 07:25.",
+        "The regional transport office confirmed receiving an incident notice from the harbor authority at 09:10."
+      ]
+    },
+    "fictional-recovery-fund": {
+      "sha256": "a0719dcb3a17b8e00cdcd5a74b8d2cc8e00af23e0a4dba8b242fd9b6a82d12fe",
+      "quotes": [
+        "At the same briefing, the council said partners had pledged 1.6 billion crowns for the broader recovery effort. It said 210 million crowns had reached the joint recovery account by September 1.",
+        "The council did not say that this account balance had been distributed to contractors or local governments.",
+        "The council has not approved a final contract total for every project.",
+        "It did not say the money had been spent."
+      ]
+    }
+  },
+  "material_accuracy_findings": [
+    {
+      "language": "Polish",
+      "case_id": "fictional-harbor-outage",
+      "output_claim": "first bulletin at 06:40",
+      "source": "first bulletin at 06:20",
+      "impact": "invented/wrong publication time"
+    },
+    {
+      "language": "English",
+      "case_id": "fictional-recovery-fund",
+      "output_claim": "amount received was not disclosed; no contracts fully approved or funded",
+      "source": "210m received is specified; only final contract totals for every project are not approved",
+      "impact": "misstates reported amount and overstates contract status"
+    },
+    {
+      "language": "German",
+      "case_id": "fictional-recovery-fund",
+      "output_claim": "sum was not distributed; no final contracts or payments exist",
+      "source": "source does not state distribution; final total not approved for every project",
+      "impact": "turns nondisclosure into categorical status"
+    },
+    {
+      "language": "Polish",
+      "case_id": "fictional-recovery-fund",
+      "output_claim": "210m had not been distributed; high version says it was not used",
+      "source": "council did not say whether it was distributed; spending status is not stated",
+      "impact": "turns uncertainty into categorical negative"
+    },
+    {
+      "language": "Ukrainian",
+      "case_id": "fictional-recovery-fund",
+      "output_claim": "1.6 million crowns pledged",
+      "source": "1.6 billion crowns pledged",
+      "impact": "large amount error; high version also says no project has been signed, which source does not establish"
+    },
+    {
+      "language": "Ukrainian",
+      "case_id": "fictional-harbor-outage",
+      "output_claim": "notice received as ‘attention’ and report corrected next week",
+      "source": "office received a notice and requested a report due the following week",
+      "impact": "materially garbled translation in high-budget completion"
+    }
+  ],
+  "desktop_command_regression": {
+    "method": "Actual summarize_article command against a disposable SQLite library and recording HTTP test provider; synthetic source only. Stub response proves request construction, not real inference or provider acceptance.",
+    "before": [
+      {
+        "length": "custom",
+        "stored_custom_count": -100,
+        "max_tokens": -72,
+        "request_first_line": "Summarize the following article in approximately -100 words.",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": 0,
+        "max_tokens": 128,
+        "request_first_line": "Summarize the following article in approximately 0 words.",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": 2147483647,
+        "max_tokens": 4294967422,
+        "request_first_line": "Summarize the following article in approximately 2147483647 words.",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": 1001,
+        "max_tokens": 2130,
+        "request_first_line": "Summarize the following article in approximately 1001 words.",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": null,
+        "max_tokens": 256,
+        "request_first_line": "Summarize the following article in 1-2 sentences (~30 words).",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": 20,
+        "max_tokens": 168,
+        "request_first_line": "Summarize the following article in approximately 20 words.",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": 1000,
+        "max_tokens": 2128,
+        "request_first_line": "Summarize the following article in approximately 1000 words.",
+        "command_ok": true
+      },
+      {
+        "length": "long",
+        "stored_custom_count": 2147483647,
+        "max_tokens": 2400,
+        "request_first_line": "Summarize the following article in 3-5 paragraphs (~300 words).",
+        "command_ok": true
+      }
+    ],
+    "after": [
+      {
+        "length": "custom",
+        "stored_custom_count": -100,
+        "max_tokens": 256,
+        "request_first_line": "Summarize the following article in 1-2 sentences (~30 words).",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": 0,
+        "max_tokens": 256,
+        "request_first_line": "Summarize the following article in 1-2 sentences (~30 words).",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": 2147483647,
+        "max_tokens": 256,
+        "request_first_line": "Summarize the following article in 1-2 sentences (~30 words).",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": 1001,
+        "max_tokens": 256,
+        "request_first_line": "Summarize the following article in 1-2 sentences (~30 words).",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": null,
+        "max_tokens": 256,
+        "request_first_line": "Summarize the following article in 1-2 sentences (~30 words).",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": 20,
+        "max_tokens": 168,
+        "request_first_line": "Summarize the following article in approximately 20 words.",
+        "command_ok": true
+      },
+      {
+        "length": "custom",
+        "stored_custom_count": 1000,
+        "max_tokens": 2128,
+        "request_first_line": "Summarize the following article in approximately 1000 words.",
+        "command_ok": true
+      },
+      {
+        "length": "long",
+        "stored_custom_count": 2147483647,
+        "max_tokens": 2400,
+        "request_first_line": "Summarize the following article in 3-5 paragraphs (~300 words).",
+        "command_ok": true
+      }
+    ],
+    "explicit_invalid_overrides": [
+      {
+        "explicit_count": -100,
+        "result": {
+          "error": "Summary word count must be between 20 and 1000",
+          "ok": false
+        }
+      },
+      {
+        "explicit_count": 19,
+        "result": {
+          "error": "Summary word count must be between 20 and 1000",
+          "ok": false
+        }
+      },
+      {
+        "explicit_count": 1001,
+        "result": {
+          "error": "Summary word count must be between 20 and 1000",
+          "ok": false
+        }
+      },
+      {
+        "explicit_count": 2147483647,
+        "result": {
+          "error": "Summary word count must be between 20 and 1000",
+          "ok": false
+        }
+      }
+    ]
+  },
+  "native_controls": {
+    "core_tests": "Explicit edits from short to 600 change effective length and budget; preset/custom boundaries and Int extrema covered. Read resolution does not mutate stored settings.",
+    "render": "Isolated iPhone 17e simulator app copied current SummaryConfigurationSheet and Settings chip/Stepper source with current SkimCore; reviewed 30 and 1000 word states. Full Settings page and actual application flows not rendered.",
+    "endpoint_test": "One isolated XCUITest passed: actual Stepper taps clamp 30 to 20 and 995 to 1000.",
+    "screenshots": [
+      "/tmp/skim-summary-controls-render/summary-30.png",
+      "/tmp/skim-summary-controls-render/summary-1000.png",
+      "/tmp/skim-summary-controls-render/settings-1000.png"
+    ]
+  },
+  "policy_contract": "shared/fixtures/summary-plan.json: 19 cases run through Rust and Swift ABI bindings; complete short fallback before arithmetic, 20...1000 custom range, presets ignore stale counts.",
+  "remaining_limits": [
+    "Explicit native MLX maxTokens override still takes precedence over the shared default.",
+    "Foundation Models still uses its existing context handling; no on-device inference is available on this host.",
+    "Factual model errors, installed native interaction and full domain sharing remain open."
+  ]
+}

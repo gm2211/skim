@@ -77,3 +77,57 @@ import Testing
     #expect(AIRequestPolicy.summaryInstructions(settings) == style + "\n\nUser summary instructions:\nFocus on dates.")
     #expect(AIRequestPolicy.summaryInstructions(AISettings(summaryTone: "technical", summaryCustomPrompt: " \n ")) == style)
 }
+
+@Test func summaryPlanMatchesSharedCorpusAndBounds() throws {
+    struct Entry: Decodable {
+        struct Plan: Decodable {
+            var word_count: Int; var bullet_min: Int; var bullet_max: Int
+            var bullet_max_tokens: Int; var full_max_tokens: Int
+        }
+        var length: String?; var custom_words: Int; var valid_custom: Bool; var plan: Plan
+    }
+    var root = URL(fileURLWithPath: #filePath)
+    for _ in 0..<5 { root.deleteLastPathComponent() }
+    let entries = try JSONDecoder().decode([Entry].self, from: Data(
+        contentsOf: root.appendingPathComponent("shared/fixtures/summary-plan.json")))
+    #expect(AIRequestPolicy.summaryWordRange == 20...1000)
+    for entry in entries {
+        let actual = AIRequestPolicy.summaryPlan(AISettings(summaryLength: entry.length, summaryCustomWordCount: entry.custom_words))
+        #expect(actual.wordCount == entry.plan.word_count)
+        #expect(actual.bulletMin == entry.plan.bullet_min)
+        #expect(actual.bulletMax == entry.plan.bullet_max)
+        #expect(actual.bulletMaxTokens == entry.plan.bullet_max_tokens)
+        #expect(actual.fullMaxTokens == entry.plan.full_max_tokens)
+        #expect(AIRequestPolicy.validSummaryWordCount(entry.custom_words) == entry.valid_custom)
+    }
+}
+
+@Test func explicitSummaryCountEditControlsPromptAndBudgetWithoutChangingOtherSettings() {
+    let base = AISettings(provider: "mlx", model: "test/model", summaryLength: "short", summaryTone: "technical", summaryCustomWordCount: 30, mlxMaxTokens: 99)
+    for (count, length, budget) in [(30,"short",256),(150,"medium",1200),(300,"long",2400),(600,"custom",1328),(20,"custom",168),(1000,"custom",2128)] {
+        let edited = AIRequestPolicy.summarySettings(base, wordCount: count)
+        #expect(edited.summaryLength == length)
+        #expect(edited.summaryCustomWordCount == count)
+        #expect(edited.provider == base.provider && edited.model == base.model && edited.mlxMaxTokens == 99)
+        let plan = AIRequestPolicy.summaryPlan(edited)
+        #expect(plan.wordCount == count && plan.fullMaxTokens == budget)
+        #expect(AIRequestPolicy.summaryInstructions(edited, wordCount: plan.wordCount).contains("Write approximately \(count) words."))
+    }
+    #expect(base.summaryLength == "short" && base.summaryCustomWordCount == 30)
+}
+
+@Test func invalidStoredSummaryCountsAreBoundedWithoutMutationAndHaveDistinctBudgetIdentity() {
+    let short = AIRequestPolicy.summaryPlan(AISettings(summaryLength: "short"))
+    let custom30 = AIRequestPolicy.summaryPlan(AISettings(summaryLength: "custom", summaryCustomWordCount: 30))
+    #expect(short.wordCount == custom30.wordCount)
+    #expect(short.fullMaxTokens == 256 && custom30.fullMaxTokens == 188)
+    #expect(short.cacheIdentity != custom30.cacheIdentity)
+    for invalid in [Int.min, -1, 0, 1, 19, 1001, Int.max] {
+        let stored = AISettings(summaryLength: "custom", summaryCustomWordCount: invalid)
+        #expect(AIRequestPolicy.summaryPlan(stored) == short)
+        #expect(AIRequestPolicy.summaryPlan(stored).cacheIdentity == short.cacheIdentity)
+        #expect(stored.summaryCustomWordCount == invalid && stored.summaryLength == "custom")
+        let edited = AIRequestPolicy.summarySettings(stored, wordCount: invalid)
+        #expect(edited.summaryLength == "short" && edited.summaryCustomWordCount == 30)
+    }
+}

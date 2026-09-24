@@ -33,6 +33,20 @@ double skim_story_score(int64_t independent_sources, double age_seconds,
 int32_t skim_story_is_unique(int64_t independent_sources);
 uint64_t skim_story_identity_hash(const uint8_t *bytes, size_t length);
 
+typedef struct {
+    int32_t word_count;
+    int32_t bullet_min;
+    int32_t bullet_max;
+    int32_t bullet_max_tokens;
+    int32_t full_max_tokens;
+} SkimSummaryPlan;
+int32_t skim_summary_min_words(void);
+int32_t skim_summary_max_words(void);
+int32_t skim_summary_custom_words_valid(int64_t words);
+/* NULL/unknown length or invalid custom count resolves the complete short plan.
+ * Missing custom count is encoded as zero. Presets ignore stale custom counts. */
+SkimSummaryPlan skim_summary_plan(const char *length, int64_t custom_words);
+
 /* Shared summary style and fidelity instructions. tone is NULL or a valid
  * NUL-terminated UTF-8 string. Unknown/empty tones use concise; descriptive
  * aliases detailed. Returns immutable static storage; caller must not free. */

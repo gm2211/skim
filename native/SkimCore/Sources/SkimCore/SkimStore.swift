@@ -1,6 +1,7 @@
 import Foundation
 import SQLite3
 import os
+import SkimStoryPolicy
 
 private let skimStoreLogger = Logger(subsystem: "com.skim.app", category: "skim-store")
 
@@ -88,6 +89,26 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
 
     public func listArticles(filter: ArticleFilter) async throws -> [Article] {
         try db.listArticles(filter: filter)
+    }
+
+    /// Searches the full selected library scope before retaining the highest
+    /// ranked matches. A non-nil empty feed list is an explicit empty scope.
+    /// The returned body uses the most relevant available RSS, HTML, or reader
+    /// cache text, without fetching additional article content.
+    public func searchArticlesForChat(
+        filter: ArticleFilter,
+        feedIDs: [String]?,
+        terms: [String],
+        allowRecentFallback: Bool,
+        limit: Int = 15
+    ) throws -> [Article] {
+        try db.searchArticlesForChat(
+            filter: filter,
+            feedIDs: feedIDs,
+            terms: LibraryChatPolicy.normalizedSearchTerms(terms),
+            allowRecentFallback: allowRecentFallback,
+            limit: min(max(limit, 0), 15)
+        )
     }
 
     public func countUnread(feedID: String?) async throws -> Int {
@@ -965,6 +986,172 @@ private final class SQLiteDatabase: @unchecked Sendable {
         ) { statement in
             makeArticle(from: statement)
         }
+    }
+
+    func searchArticlesForChat(
+        filter: ArticleFilter,
+        feedIDs: [String]?,
+        terms: [String],
+        allowRecentFallback: Bool,
+        limit: Int
+    ) throws -> [Article] {
+        try withIOErrorRetry {
+            try searchArticlesForChatOnce(
+                filter: filter,
+                feedIDs: feedIDs,
+                terms: terms,
+                allowRecentFallback: allowRecentFallback,
+                limit: limit
+            )
+        }
+    }
+
+    private func searchArticlesForChatOnce(
+        filter: ArticleFilter,
+        feedIDs: [String]?,
+        terms: [String],
+        allowRecentFallback: Bool,
+        limit: Int
+    ) throws -> [Article] {
+        guard limit > 0 else { return [] }
+        if let feedIDs, feedIDs.isEmpty { return [] }
+
+        var clauses: [String] = []
+        var values: [SQLiteValue] = []
+        if let feedID = filter.feedID {
+            clauses.append("a.feed_id = ?")
+            values.append(.text(feedID))
+        }
+        if let feedIDs {
+            let placeholders = Array(repeating: "?", count: feedIDs.count).joined(separator: ", ")
+            clauses.append("a.feed_id IN (\(placeholders))")
+            values.append(contentsOf: feedIDs.map(SQLiteValue.text))
+        }
+        switch filter.readState {
+        case .all: break
+        case .unread: clauses.append("a.is_read = 0")
+        case .read: clauses.append("a.is_read = 1")
+        }
+        if filter.starredOnly { clauses.append("a.is_starred = 1") }
+        if let search = filter.searchQuery?.trimmingCharacters(in: .whitespacesAndNewlines), !search.isEmpty {
+            clauses.append("(a.title LIKE ? OR a.feed_title LIKE ? OR a.author LIKE ?)")
+            let pattern = "%\(search)%"
+            values.append(.text(pattern))
+            values.append(.text(pattern))
+            values.append(.text(pattern))
+        }
+        let whereClause = clauses.isEmpty ? "" : "WHERE \(clauses.joined(separator: " AND "))"
+        let normalizedTerms = LibraryChatPolicy.normalizedSearchTerms(terms)
+        if normalizedTerms.isEmpty {
+            guard allowRecentFallback else { return [] }
+            return try recentChatArticles(whereClause: whereClause, values: values, limit: limit)
+        }
+        let sql = """
+        SELECT a.id, a.feed_id, a.feed_title, a.title, a.url, a.author, a.content_text, a.content_html,
+               a.image_url, a.published_at, a.fetched_at, a.is_read, a.is_starred,
+               a.aggregator_kind, a.external_url, a.comments_url, rc.text, f.title
+        FROM articles a
+        JOIN feeds f ON f.id = a.feed_id
+        LEFT JOIN article_reader_cache rc ON rc.article_id = a.id
+        \(whereClause)
+        ORDER BY COALESCE(a.published_at, a.fetched_at) DESC, a.id
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else {
+            throw error()
+        }
+        defer { sqlite3_finalize(statement) }
+        try bind(values, to: statement)
+
+        struct RankedArticle {
+            var article: Article
+            var score: Int32
+            var date: Date
+        }
+        var retained: [RankedArticle] = []
+        let keepCount = limit
+        while true {
+            if Task.isCancelled { throw CancellationError() }
+            let code = sqlite3_step(statement)
+            guard code == SQLITE_ROW else {
+                if code == SQLITE_DONE { break }
+                throw error()
+            }
+            var article = makeArticle(from: statement)
+            let originalText = article.contentText
+            let readerText = columnOptionalText(statement, 16)
+            let htmlBody = article.contentHTML.map(LibraryChatPolicy.plainTextFromHTMLForSearch)
+            let evidenceText = LibraryChatPolicy.articleEvidenceText(
+                contentText: originalText,
+                contentHTML: article.contentHTML,
+                readerText: readerText,
+                terms: normalizedTerms
+            )
+            article.contentText = evidenceText
+
+            let titleMask = LibraryChatPolicy.termMask(in: article.title, terms: normalizedTerms)
+            let urlMask = LibraryChatPolicy.urlTermMask(in: article.url?.absoluteString ?? "", terms: normalizedTerms)
+            let sourceMask = LibraryChatPolicy.termMask(in: columnText(statement, 17), terms: normalizedTerms)
+            let body = [originalText, htmlBody, readerText]
+                .compactMap { $0 }
+                .joined(separator: " ")
+            let bodyMask = LibraryChatPolicy.termMask(in: body, terms: normalizedTerms)
+            let score = skim_chat_rank(titleMask, urlMask, sourceMask, bodyMask)
+            guard score > 0 else { continue }
+
+            let candidate = RankedArticle(article: article, score: score, date: article.publishedAt ?? article.fetchedAt)
+            let insertion = retained.firstIndex {
+                if $0.score != candidate.score { return $0.score < candidate.score }
+                if $0.date != candidate.date { return $0.date < candidate.date }
+                return $0.article.id > candidate.article.id
+            } ?? retained.endIndex
+            retained.insert(candidate, at: insertion)
+            if retained.count > keepCount { retained.removeLast() }
+        }
+
+        if !retained.isEmpty || !allowRecentFallback { return retained.map(\.article) }
+        return try recentChatArticles(whereClause: whereClause, values: values, limit: limit)
+    }
+
+    private func recentChatArticles(whereClause: String, values: [SQLiteValue], limit: Int) throws -> [Article] {
+        // Broad catch-up prompts get a small recent sample only inside the
+        // caller's exact scope and only when topical retrieval found nothing.
+        var fallbackValues = values
+        fallbackValues.append(.int(min(limit, 8)))
+        let fallbackSQL = """
+        SELECT a.id, a.feed_id, a.feed_title, a.title, a.url, a.author, a.content_text, a.content_html,
+               a.image_url, a.published_at, a.fetched_at, a.is_read, a.is_starred,
+               a.aggregator_kind, a.external_url, a.comments_url, rc.text
+        FROM articles a
+        JOIN feeds f ON f.id = a.feed_id
+        LEFT JOIN article_reader_cache rc ON rc.article_id = a.id
+        \(whereClause)
+        ORDER BY COALESCE(a.published_at, a.fetched_at) DESC, a.id
+        LIMIT ?
+        """
+        var fallback: OpaquePointer?
+        guard sqlite3_prepare_v2(handle, fallbackSQL, -1, &fallback, nil) == SQLITE_OK, let fallback else {
+            throw error()
+        }
+        defer { sqlite3_finalize(fallback) }
+        try bind(fallbackValues, to: fallback)
+        var recent: [Article] = []
+        while true {
+            if Task.isCancelled { throw CancellationError() }
+            let code = sqlite3_step(fallback)
+            guard code == SQLITE_ROW else {
+                if code == SQLITE_DONE { break }
+                throw error()
+            }
+            var article = makeArticle(from: fallback)
+            article.contentText = LibraryChatPolicy.articleEvidenceText(
+                contentText: article.contentText,
+                contentHTML: article.contentHTML,
+                readerText: columnOptionalText(fallback, 16)
+            )
+            recent.append(article)
+        }
+        return recent
     }
 
     func article(id: String) throws -> Article? {

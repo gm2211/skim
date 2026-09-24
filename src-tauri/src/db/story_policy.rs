@@ -19,6 +19,7 @@ pub struct SummaryPlan {
 }
 
 extern "C" {
+    fn skim_chat_rank(title_terms: u32, url_terms: u32, source_terms: u32, body_terms: u32) -> i32;
     fn skim_summary_plan(length: *const std::os::raw::c_char, custom_words: i64) -> SummaryPlan;
     fn skim_summary_min_words() -> i32;
     fn skim_summary_max_words() -> i32;
@@ -113,6 +114,10 @@ pub fn is_unique(sources: i64) -> bool {
 pub fn identity_hash(seed: &str) -> u64 {
     // C reads exactly this slice synchronously and never retains its pointer.
     unsafe { skim_story_identity_hash(seed.as_ptr(), seed.len()) }
+}
+
+pub fn chat_rank(title_terms: u32, url_terms: u32, source_terms: u32, body_terms: u32) -> i32 {
+    unsafe { skim_chat_rank(title_terms, url_terms, source_terms, body_terms) }
 }
 
 pub fn summary_plan(length: Option<&str>, custom_words: Option<i64>) -> SummaryPlan {
@@ -262,6 +267,21 @@ pub fn semantic_score(base: f64, importance: f64, confidence: f64) -> f64 {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn chat_ranking_shared_fixture_and_coverage_dominance() {
+        #[derive(serde::Deserialize)]
+        struct Case { name: String, title_terms: u32, url_terms: u32, source_terms: u32, body_terms: u32, rank: i32 }
+        let cases: Vec<Case> = serde_json::from_str(include_str!("../../../shared/fixtures/chat-ranking.json")).unwrap();
+        for case in cases {
+            assert_eq!(chat_rank(case.title_terms, case.url_terms, case.source_terms, case.body_terms), case.rank, "{}", case.name);
+        }
+        for covered in 0..32 {
+            let partial = ((1u64 << covered) - 1) as u32;
+            let complete = ((1u64 << (covered + 1)) - 1) as u32;
+            assert!(chat_rank(0, 0, 0, complete) > chat_rank(partial, partial, partial, partial));
+        }
+    }
+
     #[test]
     fn shared_summary_plans_bound_invalid_counts_before_arithmetic() {
         #[derive(serde::Deserialize)]

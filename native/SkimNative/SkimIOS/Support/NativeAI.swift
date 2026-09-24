@@ -48,9 +48,25 @@ struct AIChatConversation: Sendable {
     var priorTurns: [Turn]
     var latestQuestion: String
     var generatedSummaryContext: String?
+    var priorArticleReferences: [Article]
+    var priorArticleContext: [Article]
+    var priorArticleHandles: [Int]
+    var articleHandleRegistry: [String: Int]
 
     init(latestQuestion: String, priorMessages: [AIChatMessage] = [], generatedSummaryContext: String? = nil) {
         self.generatedSummaryContext = generatedSummaryContext
+        let previousAnswer = priorMessages.last { $0.role == .assistant && !$0.isError }
+        self.priorArticleReferences = previousAnswer?.referencedArticles ?? []
+        self.priorArticleContext = previousAnswer?.contextArticles ?? []
+        self.priorArticleHandles = previousAnswer?.contextHandles ?? []
+        var registry: [String: Int] = [:]
+        for message in priorMessages where message.role == .assistant && !message.isError {
+            for (id, handle) in message.articleHandleRegistry where registry[id] == nil { registry[id] = handle }
+            for (article, handle) in zip(message.contextArticles, message.contextHandles) where registry[article.id] == nil {
+                registry[article.id] = handle
+            }
+        }
+        self.articleHandleRegistry = registry
         self.latestQuestion = latestQuestion
         self.priorTurns = priorMessages
             .filter { !$0.isError && !($0.role == .assistant && $0.text == generatedSummaryContext) }
@@ -61,6 +77,11 @@ struct AIChatConversation: Sendable {
                     text: message.text
                 )
             }
+    }
+
+    var priorReferenceTexts: [String] {
+        let sources = priorArticleReferences.isEmpty ? priorArticleContext : priorArticleReferences
+        return sources.prefix(15).map { "\($0.title)\n\($0.feedTitle)\n\($0.plainBody)" }
     }
 
     var promptSection: String {
@@ -106,6 +127,7 @@ struct AIChatAnswer {
     var text: String
     var articles: [Article]
     var webCitations: [WebCitation] = []
+    var articleHandles: [Int]? = nil
 }
 
 /// A citation the model surfaced via the `web_search` tool during a chat
@@ -1088,7 +1110,7 @@ enum NativeAI {
     ///   [system] instructions + article context + optional web block
     ///   [user/assistant] one message per prior turn in conversation.priorTurns
     ///   [user] conversation.latestQuestion
-    private static func buildLocalChatMessages(
+    static func buildLocalChatMessages(
         instructions: String,
         articleContext: String,
         conversation: AIChatConversation,
@@ -1245,6 +1267,38 @@ enum NativeAI {
         )
     }
 
+    static func libraryChatHandleRegistry(articles: [Article], conversation: AIChatConversation) -> [String: Int] {
+        var registry = conversation.articleHandleRegistry
+        var next = (registry.values.max() ?? 0) + 1
+        for article in articles where registry[article.id] == nil {
+            registry[article.id] = next
+            next += 1
+        }
+        return registry
+    }
+
+    static func libraryChatHandles(articles: [Article], conversation: AIChatConversation) -> [Int] {
+        let registry = libraryChatHandleRegistry(articles: articles, conversation: conversation)
+        return articles.compactMap { registry[$0.id] }
+    }
+
+    static func libraryChatContext(articles: [Article], conversation: AIChatConversation) -> String {
+        let priorIDs = Set((conversation.priorArticleReferences.isEmpty
+            ? conversation.priorArticleContext : conversation.priorArticleReferences).map(\.id))
+        let refreshedReferences = articles.filter { priorIDs.contains($0.id) }
+            .map { "\($0.title)\n\($0.feedTitle)\n\($0.plainBody)" }
+        let topic = LibraryChatPolicy.retrievalTopic(query: conversation.latestQuestion,
+            priorUserQueries: conversation.priorTurns.filter { $0.role == .user }.map(\.text),
+            referenceTexts: refreshedReferences.isEmpty ? conversation.priorReferenceTexts : refreshedReferences)
+        let handles = libraryChatHandles(articles: articles, conversation: conversation)
+        return zip(articles, handles).enumerated().map { index, source in
+            let (article, handle) = source
+            let excerpt = LibraryChatPolicy.queryExcerpt(text: article.plainBody,
+                query: topic.terms.joined(separator: " "), maxCharacters: index < 3 ? 2400 : 800)
+            return "[\(handle)] \(article.title)\nFeed: \(article.feedTitle)\nURL: \(article.externalURL?.absoluteString ?? article.url?.absoluteString ?? "")\nExcerpt: \(excerpt)"
+        }.joined(separator: "\n\n")
+    }
+
     static func chat(question: String, articles: [Article], settings: AppSettings) async throws -> String {
         try await chat(
             conversation: AIChatConversation(latestQuestion: question),
@@ -1265,14 +1319,18 @@ enum NativeAI {
         let instructions = toolsOK
             ? baseInstructions + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices."
             : baseInstructions
-        // Note (skim-7oi1 v1): local MLX web search is scoped to single-article chat only.
-        // Multi-article chat falls through to the plain complete() path.
+        let context = libraryChatContext(articles: articles, conversation: conversation)
+        if settings.ai.provider == "mlx" {
+            let messages = buildLocalChatMessages(instructions: baseInstructions, articleContext: context,
+                conversation: conversation, webBlock: nil)
+            return (try await NativeMLX.complete(settings: settings.ai, messages: messages, maxTokens: 850), [])
+        }
         return try await completeWithCitations(
             settings: settings,
             instructions: instructions,
             prompt: """
             Articles:
-            \(articleDigest(articles, limit: 35))
+            \(context)
 
             \(conversation.promptSection)
             """,
@@ -3059,8 +3117,11 @@ struct AIChatSheet: View {
                 AIChatMessage(
                     role: .assistant,
                     text: answer.text,
-                    referencedArticles: ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles),
-                    webCitations: answer.webCitations
+                    referencedArticles: ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles, handles: answer.articleHandles),
+                    webCitations: answer.webCitations,
+                    contextArticles: answer.articles,
+                    contextHandles: answer.articleHandles ?? answer.articles.indices.map { $0 + 1 },
+                    articleHandleRegistry: NativeAI.libraryChatHandleRegistry(articles: answer.articles, conversation: conversation)
                 )
             )
         } catch {
@@ -3085,6 +3146,9 @@ struct AIChatMessage: Identifiable, Sendable {
     var text: String
     var referencedArticles: [Article] = []
     var webCitations: [WebCitation] = []
+    var contextArticles: [Article] = []
+    var contextHandles: [Int] = []
+    var articleHandleRegistry: [String: Int] = [:]
     var isError = false
     var needsReauth = false
     var remedy: AIErrorRemedy = .none
@@ -3345,14 +3409,20 @@ private struct ChatArticleReferenceRow: View {
     }
 }
 
-private enum ArticleReferenceExtractor {
-    static func references(in text: String, articles: [Article]) -> [Article] {
+enum ArticleReferenceExtractor {
+    static func references(in text: String, articles: [Article], handles: [Int]? = nil) -> [Article] {
         var references: [Article] = []
         var seenIDs: Set<String> = []
 
         for index in numericHandles(in: text) {
-            let zeroBased = index - 1
-            guard articles.indices.contains(zeroBased) else { continue }
+            let zeroBased: Int
+            if let handles {
+                guard let position = handles.firstIndex(of: index), articles.indices.contains(position) else { continue }
+                zeroBased = position
+            } else {
+                zeroBased = index - 1
+                guard articles.indices.contains(zeroBased) else { continue }
+            }
             let article = articles[zeroBased]
             if seenIDs.insert(article.id).inserted {
                 references.append(article)
@@ -3371,7 +3441,7 @@ private enum ArticleReferenceExtractor {
     }
 
     private static func numericHandles(in text: String) -> [Int] {
-        let pattern = #"\[(\d{1,3})\]"#
+        let pattern = #"\[(\d+)\]"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
         let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
         return regex.matches(in: text, range: nsRange).compactMap { match in

@@ -374,18 +374,19 @@ struct ArticleListView: View {
     private func presentArticleChat() {
         gatedAI {
             dismissTextEntry()
-            let articles = model.articles
+            let scope = model.captureLibraryChatScope()
             activeAIChat = AIChatRequest(
-                sessionKey: "visible-articles",
+                sessionKey: scope.sessionKey,
                 title: "Chat with Articles",
-                placeholder: articles.isEmpty ? "Ask about the latest articles." : "Ask about the currently visible articles."
+                placeholder: "Find or ask about articles in this view."
             ) { conversation in
-                let context = try await model.articlesForAIContext(preferred: articles)
+                let context = try await model.articlesForLibraryChat(scope: scope, conversation: conversation)
                 guard !context.isEmpty else {
-                    throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before chatting.")
+                    return AIChatAnswer(text: "No matching articles found in this view. Try another title, topic, source, or URL.", articles: [])
                 }
                 let (text, citations) = try await NativeAI.chat(conversation: conversation, articles: context, settings: model.settings)
-                return AIChatAnswer(text: text, articles: context, webCitations: citations)
+                return AIChatAnswer(text: text, articles: context, webCitations: citations,
+                                    articleHandles: NativeAI.libraryChatHandles(articles: context, conversation: conversation))
             }
         }
     }

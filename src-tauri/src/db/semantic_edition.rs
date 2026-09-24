@@ -1,7 +1,6 @@
 //! Bounded, configured-provider planning. Invalid output never removes a story.
 use super::story_policy;
 use crate::ai::provider::{AiProvider, ChatMessage, ChatRequest};
-use serde::Deserialize;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -12,18 +11,12 @@ pub struct SemanticGroup {
     pub reason: String,
 }
 
-#[derive(Deserialize)]
-struct Response {
-    groups: Vec<serde_json::Value>,
-}
-
 pub fn parse(content: &str, count: usize) -> Option<Vec<SemanticGroup>> {
-    let response: Response =
-        serde_json::from_str(crate::commands::ai::extract_json_object(content).unwrap_or(content))
-            .ok()?;
+    let response = whole_json(content)?;
+    let values = response.as_array().or_else(|| response.get("groups")?.as_array())?;
     let mut assigned = vec![0u8; count];
     let mut groups = Vec::new();
-    for value in response.groups {
+    for value in values {
         let Some(members) = value
             .get("members")
             .and_then(|v| v.as_array())
@@ -393,6 +386,24 @@ mod tests {
     }
 
     #[test]
+    fn complete_primary_arrays_preserve_validation_and_verification() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../shared/fixtures/semantic-primary-array.json")).unwrap();
+        let raw = fixture["response"].as_str().unwrap();
+        let groups = parse(raw, 45).unwrap();
+        assert_eq!(groups.len(), 42);
+        assert_eq!(requested_pairs(&groups).unwrap(), vec![[2, 4], [3, 17], [9, 18]]);
+        assert_eq!(parse(&format!("```json\n{raw}\n```"), 45).unwrap().len(), 42);
+        assert!(parse(&format!("{raw} trailing"), 45).is_none());
+        assert!(parse(&raw[..raw.len() - 2], 45).is_none());
+        assert!(parse(r#"{"members":[0],"importance":5,"confidence":1,"reason":"Bare group"}"#, 1).is_none());
+        let mixed = r#"[{"members":[0,1],"importance":4,"confidence":1,"reason":"Valid"},{"members":[1,2],"importance":4,"confidence":1,"reason":"Overlap"},{"members":[true],"importance":5,"confidence":1,"reason":"Invalid identity"},{"members":[9],"importance":4,"confidence":1,"reason":"Foreign identity"}]"#;
+        let validated = parse(mixed, 3).unwrap();
+        assert_eq!(validated.len(), 1);
+        assert_eq!(validated[0].members, vec![0, 1]);
+        assert_eq!(requested_pairs(&validated).unwrap(), vec![[0, 1]]);
+    }
+
+    #[test]
     fn malformed_and_invalid_groups_leave_items_unassigned() {
         assert!(parse("not json", 3).is_none());
         assert!(parse(
@@ -511,6 +522,59 @@ mod tests {
         ] {
             assert!(pair_matrix(output, 2, &[[0, 1]]).is_none());
         }
+    }
+
+    #[tokio::test]
+    async fn recorded_live_feed_pipeline_preserves_handles_and_independent_labels() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../shared/fixtures/semantic-live-feed-replay.json"
+        )).unwrap();
+        let candidates = fixture["candidates"].as_array().unwrap();
+        let replies = fixture["responses"].as_array().unwrap().iter()
+            .map(|value| value.as_str().unwrap().to_owned()).collect();
+        let provider = Scripted::new(replies);
+        let groups = plan(Some(&provider), fixture["model"].as_str().unwrap(),
+            fixture["candidates"].to_string(), candidates.len()).await.unwrap();
+        let handles: Vec<_> = groups.iter().flat_map(|group| group.members.iter().copied()).collect();
+        assert_eq!(handles.len(), candidates.len(), "no duplicated or lost references");
+        assert_eq!(handles.iter().copied().collect::<std::collections::BTreeSet<_>>(),
+            (0..candidates.len()).collect());
+        let group_for = |index: usize| groups.iter().position(|group| group.members.contains(&index)).unwrap();
+        let labels = &fixture["editorial_labels"];
+        for pair in labels["must_group_same_event_pairs"].as_array().unwrap() {
+            let members = pair["members"].as_array().unwrap();
+            assert_eq!(group_for(members[0].as_u64().unwrap() as usize),
+                group_for(members[1].as_u64().unwrap() as usize), "independent same-event label {pair}");
+        }
+        for pair in labels["must_separate_different_event_pairs"].as_array().unwrap().iter()
+            .map(|pair| &pair["members"])
+            .chain(fixture["primary_false_group_separations"].as_array().unwrap().iter()) {
+            assert_ne!(group_for(pair[0].as_u64().unwrap() as usize),
+                group_for(pair[1].as_u64().unwrap() as usize), "distinct events {pair}");
+        }
+        for comparison in labels["importance_comparisons"].as_array().unwrap() {
+            let higher = comparison["higher_index"].as_u64().unwrap() as usize;
+            let lower = comparison["lower_index"].as_u64().unwrap() as usize;
+            assert!(groups[group_for(higher)].importance > groups[group_for(lower)].importance,
+                "independent consequence comparison {higher} > {lower}");
+        }
+        // Verify the complete production request protocol against the capture;
+        // labels are evaluation-only and never enter any model request.
+        let requests = provider.requests.lock().unwrap();
+        let recorded = fixture["requests"].as_array().unwrap();
+        assert_eq!(requests.len(), recorded.len());
+        for (request, expected) in requests.iter().zip(recorded) {
+            assert_eq!(request.model, expected["model"].as_str().unwrap());
+            assert_eq!(request.temperature, Some(0.0));
+            assert_eq!(request.max_tokens, Some(8192));
+            assert!(request.json_mode);
+            assert_eq!(request.messages.len(), 2);
+            assert_eq!(request.messages[0].content, expected["messages"][0]["content"].as_str().unwrap());
+            let actual: serde_json::Value = serde_json::from_str(&request.messages[1].content).unwrap();
+            let expected: serde_json::Value = serde_json::from_str(expected["messages"][1]["content"].as_str().unwrap()).unwrap();
+            assert_eq!(actual, expected);
+        }
+        // Unlabeled groupings are deliberately not asserted as editorial truth.
     }
 
     #[tokio::test]

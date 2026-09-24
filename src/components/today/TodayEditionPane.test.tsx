@@ -63,6 +63,7 @@ function makeItem(overrides: Partial<TodayEditionItem>): TodayEditionItem {
     snapshot_title: "Default snapshot title",
     snapshot_summary: "Default summary",
     snapshot_delta_summary: null,
+    has_material_update: false,
     snapshot_source_count: 1,
     snapshot_reason: "high_rank_recent",
     is_unique_find: false,
@@ -193,6 +194,16 @@ describe("TodayEditionPane", () => {
       await screen.findByText("Congress passed the bill on Friday after a four-hour debate."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/news\.ycombinator\.com/)).not.toBeInTheDocument();
+  });
+
+  it.each([false, true])("shows update copy only for a material frozen revision (%s)", async (material) => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({
+      snapshot_delta_summary: "A new report arrived.", has_material_update: material,
+    })]));
+    renderPane();
+    await screen.findByText("Default snapshot title");
+    if (material) expect(screen.getByText(/What's new: A new report arrived/)).toBeInTheDocument();
+    else expect(screen.queryByText(/What's new:/)).not.toBeInTheDocument();
   });
 
   it("names the publication under a story rather than the feed's own title", async () => {
@@ -533,7 +544,7 @@ describe("Today summary retries", () => {
     expect(screen.getByText("Lede finished while save was pending")).toBeInTheDocument();
     const savedWithoutLede = makeView([makeItem({ is_consumed: true, consumed_at: 42 })]);
     await act(async () => resolveSave(savedWithoutLede));
-    expect(screen.getByText("All caught up")).toBeInTheDocument();
+    expect(await screen.findByText("All caught up")).toBeInTheDocument();
     expect(screen.getByText("Lede finished while save was pending")).toBeInTheDocument();
     await act(async () => finishLedes(latestLede));
   });

@@ -43,6 +43,7 @@ pub struct TodayEditionMemberArticle {
 pub struct TodayEditionItemView {
     #[serde(flatten)]
     pub snapshot: EditionItem,
+    pub has_material_update: bool,
     pub representative_article_id: Option<String>,
     pub member_article_ids: Vec<String>,
     pub member_articles: Vec<TodayEditionMemberArticle>,
@@ -656,7 +657,11 @@ pub fn list_items(
                 .iter()
                 .map(|member| member.article_id.clone())
                 .collect();
+            let has_material_update = queries::get_story_revision(
+                conn, &snapshot.story_id, snapshot.story_revision_number,
+            )?.is_some_and(|revision| revision.is_material_change);
             Ok(TodayEditionItemView {
+                has_material_update,
                 snapshot,
                 representative_article_id,
                 member_article_ids,
@@ -893,6 +898,35 @@ mod tests {
             },
         )
         .expect("revision");
+    }
+
+    #[test]
+    fn material_update_flag_uses_frozen_revision_not_later_revisions() {
+        let conn = setup_empty();
+        add_story(&conn, "duplicate", 1, false, GENERATED_AT - 10);
+        add_story(&conn, "material", 1, true, GENERATED_AT - 9);
+        let mut duplicate = queries::get_latest_story_revision(&conn, "duplicate").unwrap().unwrap();
+        duplicate.revision_number += 1;
+        duplicate.delta_summary = Some("Another source published the same report".into());
+        queries::insert_story_revision(&conn, &duplicate).unwrap();
+        let edition = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        for item in &edition.items {
+            assert_eq!(item.has_material_update, item.snapshot.story_id == "material");
+            assert!(item.snapshot.snapshot_delta_summary.is_some());
+            let mut later = queries::get_latest_story_revision(&conn, &item.snapshot.story_id).unwrap().unwrap();
+            later.revision_number += 1;
+            later.is_material_change = !later.is_material_change;
+            later.delta_summary = Some("A later revision must not change the frozen card".into());
+            queries::insert_story_revision(&conn, &later).unwrap();
+        }
+        let reloaded = load(&conn, &edition.edition.id).unwrap();
+        assert_eq!(reloaded.items.len(), 2);
+        for item in reloaded.items {
+            let frozen = edition.items.iter().find(|old| old.snapshot.story_id == item.snapshot.story_id).unwrap();
+            assert_eq!(item.has_material_update, frozen.has_material_update);
+            assert_eq!(item.snapshot.story_revision_number, frozen.snapshot.story_revision_number);
+            assert_eq!(item.snapshot.snapshot_delta_summary, frozen.snapshot.snapshot_delta_summary);
+        }
     }
 
     #[test]

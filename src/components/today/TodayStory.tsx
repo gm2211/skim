@@ -62,7 +62,7 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
           <div className="story-rule-live" style={{ height: 2, borderRadius: 999, marginTop: 6 }} />
         </div>
       )}
-      {item.snapshot_delta_summary && !brief && (
+      {item.has_material_update && item.snapshot_delta_summary && !brief && (
         <p className="text-accent" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
           What&apos;s new: {item.snapshot_delta_summary}
         </p>

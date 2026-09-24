@@ -1,0 +1,70 @@
+{
+  "desktop_version": "0.1.23",
+  "ios_version": "0.1.13",
+  "ios_build": "59",
+  "desktop_sha256": "63b0d4ff7ff6852502f5bdb5d6410619d4d1506400950abbd4bdd337f1588497",
+  "bundled_helper_sha256": "1b8aeaad4e05f025e35f034bb14fe387d09ce59b95669d60243aaa9daecab8e7",
+  "compiled_helper_sha256": "3dbb040fa3037d9141135d2d7c700699260e8fe6441f1c63b7826c86bce53bed",
+  "helper_text_matches_compiled": true,
+  "ios_sha256": "817125b97166b86061a2884b275e7873738935f9427f74655431648bb8880acc",
+  "ios_dsym_uuid": "3C598CE4-602A-39B0-95C7-2254964F8E4E",
+  "shared_c_symbols": [
+    "_skim_semantic_group_valid",
+    "_skim_semantic_max_candidates",
+    "_skim_semantic_max_pairs",
+    "_skim_semantic_pair_prompt",
+    "_skim_semantic_partition",
+    "_skim_semantic_prompt",
+    "_skim_semantic_rating_prompt",
+    "_skim_semantic_rating_valid",
+    "_skim_semantic_score",
+    "_skim_story_classify",
+    "_skim_story_confidence",
+    "_skim_story_default_thresholds",
+    "_skim_story_identity_hash",
+    "_skim_story_is_unique",
+    "_skim_story_score"
+  ],
+  "desktop_shared_swift_symbol_count": 71,
+  "ios_shared_swift_symbol_count": 71,
+  "shared_source_sha256": {
+    "shared/SkimStoryPolicy/Sources/SkimStoryPolicy/SkimStoryPolicy.c": "c57348391546b9b61231d66e963672f50d28a605a408bfdc79ae78cb992aa845",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalModelPolicy.swift": "159727c952106f95514507db4d0cbdb4444a536ba17448c2a19d877a0381dbb3",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/ModelChatTemplate.swift": "7567bab0ddb29d4df2cb5113960dcd65bf0360ed0ca88acaab2e8bccdef51354",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalChatMessages.swift": "4d5c8319b4a91942e9e3b7b0de8f2a815acd49cafda1b3b1b8c1fab763329664"
+  },
+  "verified_at": "2026-09-24T17:21:25.709334+00:00",
+  "source_commit": "f0aa06ca658a2aaec016e2d8aa240c649a8ade28",
+  "tests": {
+    "rust_library": 140,
+    "frontend": 145,
+    "shared_swift_policy": 16,
+    "plugin_wire": 2,
+    "packaging": 3,
+    "excluded": "Pre-existing Rust GGUF integration requires unavailable model"
+  },
+  "builds": {
+    "typescript": true,
+    "vite": true,
+    "desktop_release": true,
+    "ios_simulator": true,
+    "signed_ios_archive": true,
+    "testflight_upload": true
+  },
+  "shared_message_builder_in_both_artifacts": true,
+  "signed_parent_smoke": {
+    "timed_out": true,
+    "exit": -15,
+    "elapsed": 120.0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "testflight": {
+    "upload_id": "eacec63a-e9f4-4405-bd8d-6905ab635814",
+    "processing": "VALID",
+    "audience": "INTERNAL_ONLY",
+    "internal_build_state": "IN_BETA_TESTING"
+  },
+  "desktop_installed": false,
+  "acceptance_limit": "Mac is locked; native automation unavailable. Final signed parent timed out before main in _libsecinit_appsandbox -> _xpc_pipe_routine -> mach_msg2_trap. Isolated real-backend browser QA passed but does not establish native app acceptance. Full shared-domain engine and >64 candidate semantic coverage remain incomplete."
+}

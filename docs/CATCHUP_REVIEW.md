@@ -26,8 +26,8 @@ An isolated Rust devbridge and repository newsstand exercised actual commands ag
 
 ## Release evidence
 
-- Native iOS **0.1.13 (54)** archived, exported and uploaded successfully. Archive metadata was checked; App Store Connect reports `VALID`, `INTERNAL_ONLY` and `IN_BETA_TESTING`.
-- Desktop **0.1.19** built and signed; `codesign --verify --deep --strict` and bundle metadata passed. Installation remains pending. Native **0.1.13 (55)** archive metadata also passed; its upload is in progress at this checkpoint.
+- Native iOS **0.1.13 (55)** archived, exported and uploaded successfully. Archive metadata was checked; App Store Connect reports `IN_BETA_TESTING` for internal testers. Earlier build 54 was also uploaded and processed during this review; build 55 contains the final shared-policy, grouping and chat fixes.
+- Desktop **0.1.19** built and signed; `codesign --verify --deep --strict` and bundle metadata passed. Installation remains pending.
 - The earlier signed desktop smoke check could not start on this host: both the new 0.1.18 bundle and installed 0.1.17 stall in `_libsecinit_appsandbox` before `main()` or any helper child launches. A sampled process is blocked in `_xpc_pipe_routine` / `mach_msg2_trap`. This identifies a host startup blocker, not successful model inference. Current computer-control also reports the Mac is locked. Native runtime and installed-binary verification remain open.
 
 The six shared policy functions appear in the desktop 0.1.19 symbol table and iOS build 55 dSYM. The iOS dSYM UUID matches the archived executable (`F6F8E50D-8154-323C-A926-2B5578C067A7`). Both release build graphs compile the same C source, SHA-256 `0fef47ad1dc5d4f8bbf51e9e78259f581ed8e2a9c683e13632d77327382ece8a`. Desktop executable SHA-256: `11cae2c0f12583e6c2e560a3dd5a9e25c48bb946b836d8914ada6449fafd76ee`; archived iOS executable: `882adbde25cae890ed854d8dbb660c08e7682cadfdfb6b9211a50445e574e765`.

@@ -252,8 +252,24 @@ enum NativeAI {
                 completion.retain(Task {
                     do {
                         let raw = try await complete(settings: settings, instructions: instructions,
-                            prompt: prompt, maxTokens: settings.ai.provider == "foundation-models" ? 1400 : 8192, jsonMode: true)
-                        completion.finish(.success(try TodaySemanticPolicy.decode(raw)))
+                            prompt: prompt, maxTokens: settings.ai.provider == "foundation-models" ? 1400 : 8192, jsonMode: true, temperature: 0)
+                        try Task.checkCancellation()
+                        let plan = try TodaySemanticPolicy.verificationPlan(groups: TodaySemanticPolicy.decode(raw), candidates: candidates)
+                        let verified: [TodaySemanticGroup]
+                        if plan.pairs.isEmpty {
+                            verified = try TodaySemanticPolicy.verify(response: "", plan: plan)
+                        } else {
+                            if settings.ai.provider == "foundation-models",
+                               plan.payload.utf8.count + TodaySemanticPolicy.pairPrompt.utf8.count > 2400 {
+                                throw NativeAIError.unavailable("Today verification exceeds the on-device context budget.")
+                            }
+                            let pairResponse = try await complete(settings: settings, instructions: TodaySemanticPolicy.pairPrompt,
+                                prompt: plan.payload, maxTokens: settings.ai.provider == "foundation-models" ? 1400 : 8192,
+                                jsonMode: true, temperature: 0)
+                            try Task.checkCancellation()
+                            verified = try TodaySemanticPolicy.verify(response: pairResponse, plan: plan)
+                        }
+                        completion.finish(.success(verified))
                     } catch { completion.finish(.failure(error)) }
                 })
                 completion.retain(Task {
@@ -1213,21 +1229,23 @@ enum NativeAI {
         prompt: String,
         maxTokens: Int,
         jsonMode: Bool = false,
-        enableWebSearch: Bool = false
+        enableWebSearch: Bool = false,
+        temperature: Double? = nil
     ) async throws -> String {
-        let ai = settings.ai
+        var ai = settings.ai
+        if let temperature { ai.mlxTemperature = temperature }
         switch ai.provider {
         case "none":
             throw NativeAIError.unavailable("AI features are disabled in Settings.")
         case "foundation-models":
-            return try await completeWithFoundationModels(instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+            return try await completeWithFoundationModels(instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
         case "openai", "xai", "openrouter", "custom":
-            return try await completeOpenAICompatible(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+            return try await completeOpenAICompatible(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
         case "anthropic", "claude-subscription":
             if enableWebSearch {
                 return try await completeAnthropicWithTools(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens).text
             }
-            return try await completeAnthropic(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+            return try await completeAnthropic(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
         case "mlx":
             return try await NativeMLX.complete(
                 settings: ai,
@@ -1267,7 +1285,7 @@ enum NativeAI {
         return try await completeAnthropicWithTools(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
     }
 
-    static func completeWithFoundationModels(instructions: String, prompt: String, maxTokens: Int) async throws -> String {
+    static func completeWithFoundationModels(instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil) async throws -> String {
 #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             let model = SystemLanguageModel(useCase: .general)
@@ -1283,8 +1301,8 @@ enum NativeAI {
                 let response = try await session.respond(
                     to: prompt,
                     options: GenerationOptions(
-                        sampling: .random(top: 50),
-                        temperature: 0.7,
+                        sampling: temperature == 0 ? .greedy : .random(top: 50),
+                        temperature: temperature ?? 0.7,
                         maximumResponseTokens: maxTokens
                     )
                 )
@@ -1609,7 +1627,7 @@ enum NativeAI {
         return (kept, true)
     }
 
-    private static func completeOpenAICompatible(settings: AISettings, instructions: String, prompt: String, maxTokens: Int) async throws -> String {
+    private static func completeOpenAICompatible(settings: AISettings, instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil) async throws -> String {
         let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         let provider = settings.provider
         if provider != "custom", key == nil {
@@ -1632,7 +1650,7 @@ enum NativeAI {
                 ["role": "system", "content": instructions],
                 ["role": "user", "content": prompt]
             ],
-            "temperature": 0.2,
+            "temperature": temperature ?? 0.2,
             "max_tokens": maxTokens
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -1645,16 +1663,16 @@ enum NativeAI {
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func completeAnthropic(settings: AISettings, instructions: String, prompt: String, maxTokens: Int) async throws -> String {
+    private static func completeAnthropic(settings: AISettings, instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil) async throws -> String {
         if settings.provider == "claude-subscription" {
-            return try await completeAnthropicSubscription(settings: settings, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+            return try await completeAnthropicSubscription(settings: settings, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
         }
         // API-key path (provider == "anthropic")
         let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         guard let key else {
             throw NativeAIError.unavailable("Add a Claude API key in Settings.")
         }
-        let request = try buildAnthropicRequest(settings: settings, accessToken: key, isSubscription: false, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+        let request = try buildAnthropicRequest(settings: settings, accessToken: key, isSubscription: false, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
         let (data, response) = try await URLSession.shared.data(for: request)
         try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
         return try decodeAnthropicContent(data: data)
@@ -1662,7 +1680,7 @@ enum NativeAI {
 
     /// Handles the claude-subscription path with Keychain token storage, migration,
     /// and automatic one-shot refresh on 401.
-    private static func completeAnthropicSubscription(settings: AISettings, instructions: String, prompt: String, maxTokens: Int) async throws -> String {
+    private static func completeAnthropicSubscription(settings: AISettings, instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil) async throws -> String {
         // Resolve the access token: prefer Keychain, fall back to settings.apiKey
         // (legacy location), migrating if found.
         let accessToken: String
@@ -1680,7 +1698,7 @@ enum NativeAI {
             throw NativeAIError.unavailable("Sign in with Claude in Settings to use your Claude subscription.")
         }
 
-        let request = try buildAnthropicRequest(settings: settings, accessToken: accessToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+        let request = try buildAnthropicRequest(settings: settings, accessToken: accessToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
         let (data, response) = try await URLSession.shared.data(for: request)
 
         // On 401, attempt token refresh and retry once.
@@ -1692,7 +1710,7 @@ enum NativeAI {
                 // Refresh failed — Keychain already cleared inside refreshStoredTokens().
                 throw NativeAIError.requiresReauthentication
             }
-            let retryRequest = try buildAnthropicRequest(settings: settings, accessToken: newToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens)
+            let retryRequest = try buildAnthropicRequest(settings: settings, accessToken: newToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
             let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
             try validate(response: retryResponse, data: retryData, provider: providerDisplayName(settings.provider))
             return try decodeAnthropicContent(data: retryData)
@@ -1714,7 +1732,8 @@ enum NativeAI {
         instructions: String,
         messages: [[String: Any]],
         maxTokens: Int,
-        tools: [[String: Any]]? = nil
+        tools: [[String: Any]]? = nil,
+        temperature: Double? = nil
     ) throws -> URLRequest {
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         request.httpMethod = "POST"
@@ -1730,7 +1749,7 @@ enum NativeAI {
             "model": resolveAnthropicModel(settings),
             "system": instructions,
             "messages": messages,
-            "temperature": 0.2,
+            "temperature": temperature ?? 0.2,
             "max_tokens": maxTokens
         ]
         if let tools {
@@ -1743,7 +1762,7 @@ enum NativeAI {
     /// Thin wrapper preserving the original single-message, no-tools signature
     /// used by all non-chat callers (summarize, triage, inbox). Byte-for-byte
     /// equivalent to the old `buildAnthropicRequest`.
-    private static func buildAnthropicRequest(settings: AISettings, accessToken: String, isSubscription: Bool, instructions: String, prompt: String, maxTokens: Int) throws -> URLRequest {
+    private static func buildAnthropicRequest(settings: AISettings, accessToken: String, isSubscription: Bool, instructions: String, prompt: String, maxTokens: Int, temperature: Double? = nil) throws -> URLRequest {
         try buildAnthropicRequestFull(
             settings: settings,
             accessToken: accessToken,
@@ -1751,7 +1770,8 @@ enum NativeAI {
             instructions: instructions,
             messages: [["role": "user", "content": prompt]],
             maxTokens: maxTokens,
-            tools: nil
+            tools: nil,
+            temperature: temperature
         )
     }
 

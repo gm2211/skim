@@ -1,4 +1,5 @@
 import Foundation
+import SkimInferencePolicy
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -133,7 +134,7 @@ actor MLXRunner {
         let contents = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
         let hasWeights = contents.contains { $0.hasSuffix(".safetensors") }
         let hasConfig = contents.contains("config.json")
-        return hasWeights && hasConfig
+        return hasWeights && hasConfig && ModelChatTemplate.isUsable(in: dir)
     }
 
     nonisolated static func downloadedRepoIds() -> [String] {
@@ -179,6 +180,11 @@ actor MLXRunner {
             return
         }
 
+        // An incomplete selected model must be repaired, not silently replaced.
+        if FileManager.default.fileExists(atPath: MLXRunner.cacheDirectory(forRepo: preferredRepoId).path) {
+            setModel(repoId: preferredRepoId)
+            return
+        }
         let fallbacks = [MLXRunner.defaultRepoId] + MLXRunner.downloadedRepoIds()
         if let fallback = fallbacks.first(where: { MLXRunner.isRepoDownloaded($0) }) {
             setModel(repoId: fallback)
@@ -220,15 +226,23 @@ actor MLXRunner {
     func downloadModel(repoId: String) async throws {
         let sink = progressSink
         let cfg = ModelConfiguration(id: repoId)
+        let hub = HubApi()
         do {
+            try Task.checkCancellation()
             MLXRunner.cleanupPartialDownloads(repoId: repoId)
             _ = try await MLXLMCommon.downloadModel(
-                hub: HubApi(),
+                hub: hub,
                 configuration: cfg,
                 progressHandler: { progress in
                     sink?(progress.fractionCompleted)
                 }
             )
+            try Task.checkCancellation()
+            _ = try await hub.snapshot(from: Hub.Repo(id: repoId), matching: ["*.jinja"])
+            try Task.checkCancellation()
+            guard ModelChatTemplate.isUsable(in: MLXRunner.cacheDirectory(forRepo: repoId)) else {
+                throw MLXError.loadFailed("Model chat template missing or invalid — re-download this model.")
+            }
             loadedContainer = nil
             loadingTask = nil
             sink?(1.0)
@@ -254,6 +268,9 @@ actor MLXRunner {
     /// Ensure the model is loaded and cached. Triggers download on first call.
     @discardableResult
     func ensureLoaded() async throws -> ModelContainer {
+        guard ModelChatTemplate.isUsable(in: MLXRunner.cacheDirectory(forRepo: currentRepoId)) else {
+            throw MLXError.loadFailed("Model chat template missing or invalid — re-download this model.")
+        }
         if let c = loadedContainer { return c }
         if let task = loadingTask { return try await task.value }
 
@@ -264,7 +281,7 @@ actor MLXRunner {
         let sink = progressSink
         let task = Task { () throws -> ModelContainer in
             do {
-                let cfg = ModelConfiguration(id: repoId)
+                let cfg = ModelConfiguration(id: repoId, extraEOSTokens: MLXModelFamily.detect(from: repoId).extraEOSTokens)
                 let container = try await LLMModelFactory.shared.loadContainer(
                     configuration: cfg,
                     progressHandler: { progress in
@@ -294,7 +311,8 @@ actor MLXRunner {
         systemPrompt: String,
         userPrompt: String,
         jsonMode: Bool,
-        maxTokens: Int
+        maxTokens: Int,
+        temperature: Float? = nil
     ) async throws -> String {
         let container = try await ensureLoaded()
 
@@ -312,26 +330,29 @@ actor MLXRunner {
             ["role": "user", "content": userPrompt]
         ]
 
-        // MLXLMCommon 2.21 does not support maxTokens on GenerateParameters.
-        // Instead we enforce the token budget via the didGenerate callback.
-        let params = GenerateParameters(temperature: 0.3)
-        let budget = maxTokens
+        let preset = MLXSamplingPreset.preset(for: currentRepoId)
+        let family = MLXModelFamily.detect(from: currentRepoId)
+        let params = GenerateParameters(
+            maxTokens: maxTokens,
+            temperature: temperature ?? preset.temperature,
+            topP: preset.topP,
+            repetitionPenalty: preset.repetitionPenalty,
+            repetitionContextSize: preset.repetitionContextSize
+        )
 
         do {
             let output: String = try await container.perform { (context: ModelContext) -> String in
-                let userInput = UserInput(messages: messages)
+                let userInput = UserInput(messages: messages, additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil)
                 let lmInput = try await context.processor.prepare(input: userInput)
 
                 let result = try MLXLMCommon.generate(
                     input: lmInput,
                     parameters: params,
                     context: context
-                ) { tokens in
-                    tokens.count >= budget ? .stop : .more
-                }
+                ) { (_: [Int]) in GenerateDisposition.more }
                 return result.output
             }
-            return output
+            return LocalModelOutput.sanitize(output, family: family)
         } catch let e as MLXError {
             throw e
         } catch {

@@ -1,0 +1,298 @@
+{
+  "name": "skim-real-news-heldout-2026-09-24",
+  "collected_on": "2026-09-24",
+  "purpose": "Held-out editorial grouping and public-consequence importance evaluation; not training material or proof of live current-news performance.",
+  "provenance_notes": [
+    "Historical 2023–2024 reports selected for independently checkable event identity. Dates are original publication/event dates, not current news.",
+    "All excerpts are short researcher paraphrases. El País excerpt is an English paraphrase of Spanish reporting; this introduces a translation simplification.",
+    "Headlines are retained from public pages. Two Axios entries intentionally have very short excerpts to respect a 25-word total source budget including headline.",
+    "No private app database, feed credentials or external AI service used.",
+    "Keep labels and reasoning below out of model input. Run one held-out evaluation before changing prompts against this corpus; later reruns are no longer untouched holdout.",
+    "This compact, hand-selected sample is not representative of all news or languages. Historical events may exist in model pretraining; held-out refers to this engineering session, not guaranteed model-training exclusion."
+  ],
+  "evaluation_protocol": {
+    "input_fields": [
+      "id",
+      "publisher",
+      "publication_date",
+      "title",
+      "excerpt"
+    ],
+    "clustering_unit": "Same specific dated occurrence or decision; distinguish a related continuing topic from the identical event.",
+    "ranking": "General-interest public-consequence importance at the time of each event. Disable or equalize recency and personal feed weights; do not silently change the original dates. Score below high/low pairwise constraints, not exact total order.",
+    "out_of_scope": [
+      "actual current-day freshness",
+      "full-text extraction quality",
+      "live model availability",
+      "personalized relevance"
+    ]
+  },
+  "articles": [
+    {
+      "id": "who-mpox",
+      "publisher": "WHO",
+      "publication_date": "2024-08-14",
+      "event_date": "2024-08-14",
+      "title": "WHO Director-General declares mpox outbreak a public health emergency of international concern",
+      "excerpt": "WHO designated the expanding mpox outbreak in the Democratic Republic of the Congo and other African countries an international health emergency. The decision followed expert advice and called for coordinated action against cross-border spread.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.who.int/news/item/14-08-2024-who-director-general-declares-mpox-outbreak-a-public-health-emergency-of-international-concern",
+      "source_kind": "primary",
+      "verification": "Opened public page and checked dated event text",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "axios-mpox",
+      "publisher": "Axios",
+      "publication_date": "2024-08-14",
+      "event_date": "2024-08-14",
+      "title": "WHO declares international mpox emergency",
+      "excerpt": "WHO issued its global emergency designation as mpox spread across African countries.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.axios.com/2024/08/14/who-declare-international-mpox-emergency",
+      "source_kind": "independent_reporting",
+      "verification": "Opened public page and checked dated event text",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "fed-september",
+      "publisher": "Federal Reserve",
+      "publication_date": "2024-09-18",
+      "event_date": "2024-09-18",
+      "title": "Federal Reserve issues FOMC statement",
+      "excerpt": "The FOMC reduced its federal funds target by half a percentage point to 4.75–5 percent. Policymakers cited progress against inflation and a changing balance of employment and inflation risks. One voter preferred a smaller cut.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20240918a.htm",
+      "source_kind": "primary",
+      "verification": "Opened public page and checked dated event text",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "axios-september",
+      "publisher": "Axios",
+      "publication_date": "2024-09-18",
+      "event_date": "2024-09-18",
+      "title": "Fed cuts interest rates 0.5 point, noting slowing job market",
+      "excerpt": "The September decision lowered the target to 4.75–5 percent amid employment concerns.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.axios.com/2024/09/18/fed-rate-cuts",
+      "source_kind": "independent_reporting",
+      "verification": "Opened public page and checked dated event text",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "nasa-clipper",
+      "publisher": "NASA JPL",
+      "publication_date": "2024-10-14",
+      "event_date": "2024-10-14",
+      "title": "NASA’s Europa Clipper Mission Launches From Kennedy Space Center (Highlights)",
+      "excerpt": "Europa Clipper departed Florida on October 14 aboard a Falcon Heavy. Its mission will investigate whether Jupiter’s icy moon offers conditions compatible with life, using instruments during repeated flybys after reaching Jupiter in 2030.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.jpl.nasa.gov/videos/nasas-europa-clipper-mission-launches-from-kennedy-space-center-highlights/",
+      "source_kind": "primary_video_description",
+      "verification": "Opened public page and checked dated event text",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "elpais-clipper",
+      "publisher": "El País",
+      "publication_date": "2024-10-14",
+      "event_date": "2024-10-14",
+      "title": "‘Europa Clipper’: la NASA lanza la mayor nave interplanetaria para buscar rastros de vida en la luna de Júpiter",
+      "excerpt": "NASA launched Europa Clipper toward Jupiter’s moon Europa. The spacecraft will examine an icy ocean world and assess its potential to sustain life.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://elpais.com/ciencia/2024-10-14/europa-clipper-la-nasa-lanza-la-mayor-nave-interplanetaria-para-buscar-rastros-de-vida-en-la-luna-de-jupiter.html",
+      "source_kind": "independent_reporting",
+      "verification": "Opened public page and checked dated event text",
+      "original_title_language": "es",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "africacdc-mpox",
+      "publisher": "Africa CDC",
+      "publication_date": "2024-08-13",
+      "event_date": "2024-08-13",
+      "title": "Africa CDC Declares Mpox A Public Health Emergency of Continental Security, Mobilizing Resources Across the Continent",
+      "excerpt": "Africa CDC made its first continental emergency declaration over mpox on August 13. The agency invoked its own statutory authority to coordinate responses and mobilize resources, surveillance and laboratory capacity across affected African countries.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://africacdc.org/news-item/africa-cdc-declares-mpox-a-public-health-emergency-of-continental-security-mobilizing-resources-across-the-continent/",
+      "source_kind": "primary",
+      "verification": "Opened public page and checked dated event text",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "fed-november",
+      "publisher": "Federal Reserve",
+      "publication_date": "2024-11-07",
+      "event_date": "2024-11-07",
+      "title": "Federal Reserve issues FOMC statement",
+      "excerpt": "At its November meeting, the FOMC lowered the federal funds target by a quarter percentage point to 4.5–4.75 percent. It continued reducing securities holdings and said employment and inflation risks were roughly balanced.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.federalreserve.gov/newsevents/pressreleases/monetary20241107a.htm",
+      "source_kind": "primary",
+      "verification": "Opened public page and checked dated event text",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "apple-color",
+      "publisher": "Apple",
+      "publication_date": "2024-07-15",
+      "event_date": "2024-07-15",
+      "title": "Apple introduces HomePod mini in midnight",
+      "excerpt": "Apple announced a midnight color option for its existing HomePod mini smart speaker. The new finish uses recycled mesh and was scheduled for availability on July 17, alongside the product’s other colors.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.apple.com/newsroom/2024/07/apple-introduces-homepod-mini-in-midnight/",
+      "source_kind": "promotional_primary",
+      "verification": "Opened public page and checked dated event text",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    },
+    {
+      "id": "apple-homepod",
+      "publisher": "Apple",
+      "publication_date": "2023-01-18",
+      "event_date": "2023-01-18",
+      "title": "Apple introduces the new HomePod with breakthrough sound and intelligence",
+      "excerpt": "Apple announced its second-generation full-size HomePod speaker, with computational audio and smart-home features. Orders opened January 18, with availability scheduled for February 3.",
+      "excerpt_kind": "researcher_paraphrase_not_original_article_text",
+      "citation_url": "https://www.apple.com/newsroom/2023/01/apple-introduces-the-new-homepod-with-breakthrough-sound-and-intelligence/",
+      "source_kind": "promotional_primary",
+      "verification": "Opened public page and checked dated event text",
+      "original_title_language": "en",
+      "excerpt_language": "en"
+    }
+  ],
+  "expected_groups": [
+    {
+      "id": "who-aug14-declaration",
+      "members": [
+        "who-mpox",
+        "axios-mpox"
+      ],
+      "reason": "Same WHO international emergency decision on August 14; independent publisher covers primary action."
+    },
+    {
+      "id": "fed-sep18-decision",
+      "members": [
+        "fed-september",
+        "axios-september"
+      ],
+      "reason": "Same FOMC meeting, half-point cut and resulting 4.75–5 percent range."
+    },
+    {
+      "id": "clipper-oct14-launch",
+      "members": [
+        "nasa-clipper",
+        "elpais-clipper"
+      ],
+      "reason": "Same spacecraft liftoff on October 14; different publishers/languages."
+    },
+    {
+      "id": "africacdc-aug13-declaration",
+      "members": [
+        "africacdc-mpox"
+      ],
+      "reason": "Distinct continental legal declaration a day earlier; related outbreak but different issuing authority and instrument."
+    },
+    {
+      "id": "fed-nov7-decision",
+      "members": [
+        "fed-november"
+      ],
+      "reason": "Different meeting, cut magnitude and resulting rate range despite identical official headline."
+    },
+    {
+      "id": "homepod-mini-color",
+      "members": [
+        "apple-color"
+      ],
+      "reason": "Cosmetic option for existing mini speaker in July 2024."
+    },
+    {
+      "id": "homepod-generation",
+      "members": [
+        "apple-homepod"
+      ],
+      "reason": "Second-generation full-size speaker announcement in January 2023; distinct model and date."
+    }
+  ],
+  "hard_negative_pairs": [
+    [
+      "fed-september",
+      "fed-november"
+    ],
+    [
+      "axios-september",
+      "fed-november"
+    ],
+    [
+      "who-mpox",
+      "africacdc-mpox"
+    ],
+    [
+      "axios-mpox",
+      "africacdc-mpox"
+    ],
+    [
+      "apple-color",
+      "apple-homepod"
+    ]
+  ],
+  "expected_importance": {
+    "status": "Human editorial inference, not a fact asserted by sources or a universal personalized preference.",
+    "ordered_tiers_high_to_low": [
+      [
+        "who-aug14-declaration",
+        "africacdc-aug13-declaration",
+        "fed-sep18-decision",
+        "fed-nov7-decision"
+      ],
+      [
+        "clipper-oct14-launch"
+      ],
+      [
+        "homepod-generation"
+      ],
+      [
+        "homepod-mini-color"
+      ]
+    ],
+    "strict_acceptance_constraints": [
+      {
+        "higher": [
+          "who-mpox",
+          "axios-mpox",
+          "africacdc-mpox",
+          "fed-september",
+          "axios-september",
+          "fed-november"
+        ],
+        "lower": [
+          "apple-color",
+          "apple-homepod"
+        ],
+        "reason": "Broad public-health or monetary-policy consequences outweigh routine consumer-product promotion for a general-interest reader."
+      },
+      {
+        "higher": [
+          "nasa-clipper",
+          "elpais-clipper"
+        ],
+        "lower": [
+          "apple-color"
+        ],
+        "reason": "Major planetary science mission is substantively more consequential than an existing speaker color option."
+      }
+    ],
+    "ties_allowed_within_tier": true,
+    "caveat": "Relative ordering among health, economics and science is debatable. Only strict constraints should count as clear ranking failures."
+  },
+  "label_status": "All grouping, negative-pair and importance labels are manually reasoned researcher judgments from cited facts. WHO/AfricaCDC may belong to one broad evolving outbreak thread, but are deliberately separate under specific-event identity."
+}

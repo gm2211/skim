@@ -171,7 +171,7 @@ mod platform {
         }
         pub fn mlx_complete(&self, p: CompleteArgs) -> crate::Result<String> {
             let repo = p.repo_id.clone();
-            self.call(json!({"command":"mlx_complete","repoId":p.repo_id,"system":p.system,"user":p.user,"maxTokens":p.max_tokens,"jsonMode":p.json_mode}),repo.as_deref())?.value.ok_or_else(||crate::Error::Other("MLX returned no text".into()))
+            self.call(p.into_bridge_request("mlx_complete"),repo.as_deref())?.value.ok_or_else(||crate::Error::Other("MLX returned no text".into()))
         }
         pub fn fm_is_available(&self) -> crate::Result<bool> {
             Ok(self.fm_availability()?.available)
@@ -184,7 +184,7 @@ mod platform {
                 })
         }
         pub fn fm_complete(&self, p: CompleteArgs) -> crate::Result<String> {
-            self.call(json!({"command":"fm_complete","system":p.system,"user":p.user,"maxTokens":p.max_tokens,"jsonMode":p.json_mode}),None)?.value.ok_or_else(||crate::Error::Other("Foundation Models returned no text".into()))
+            self.call(p.into_bridge_request("fm_complete"),None)?.value.ok_or_else(||crate::Error::Other("Foundation Models returned no text".into()))
         }
         pub fn ios_keychain_store(&self, _: KeychainSetArgs) -> crate::Result<()> {
             Err(crate::Error::Other(

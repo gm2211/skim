@@ -132,7 +132,8 @@ actor FoundationModelRunner {
         systemPrompt: String,
         userPrompt: String,
         jsonMode: Bool,
-        maxTokens: Int
+        maxTokens: Int,
+        temperature: Float? = nil
     ) async throws -> String {
         #if targetEnvironment(simulator)
         throw FMError.unavailable("Apple Intelligence is not available in the iOS Simulator. Use the MLX provider instead, or test on a real iPhone with Apple Intelligence enabled.")
@@ -151,7 +152,13 @@ actor FoundationModelRunner {
                 : systemPrompt
 
             let session = self.session(for: effectiveSystem)
-            let options = GenerationOptions(maximumResponseTokens: maxTokens)
+            let options: GenerationOptions
+            if let temperature {
+                options = GenerationOptions(sampling: temperature == 0 ? .greedy : .random(top: 50),
+                    temperature: Double(temperature), maximumResponseTokens: maxTokens)
+            } else {
+                options = GenerationOptions(maximumResponseTokens: maxTokens)
+            }
 
             let response = try await session.respond(to: userPrompt, options: options)
             let text = Self.extractText(from: response)

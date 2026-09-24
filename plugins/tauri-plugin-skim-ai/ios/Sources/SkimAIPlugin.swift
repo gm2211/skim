@@ -14,6 +14,7 @@ class CompleteArgs: Decodable {
     let user: String
     let repoId: String?
     let maxTokens: Int?
+    let temperature: Float?
     let jsonMode: Bool?
 }
 
@@ -116,7 +117,8 @@ class SkimAIPlugin: Plugin {
                     systemPrompt: args.system,
                     userPrompt: args.user,
                     jsonMode: args.jsonMode ?? false,
-                    maxTokens: args.maxTokens ?? 512
+                    maxTokens: args.maxTokens ?? 512,
+                    temperature: args.temperature
                 )
                 invoke.resolve(text)
             } catch {
@@ -150,7 +152,8 @@ class SkimAIPlugin: Plugin {
                     systemPrompt: args.system,
                     userPrompt: args.user,
                     jsonMode: args.jsonMode ?? false,
-                    maxTokens: args.maxTokens ?? 512
+                    maxTokens: args.maxTokens ?? 512,
+                    temperature: args.temperature
                 )
                 invoke.resolve(text)
             } catch {

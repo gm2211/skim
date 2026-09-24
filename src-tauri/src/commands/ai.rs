@@ -464,6 +464,7 @@ pub async fn summarize_article(
                     repo_id: repo_id.clone(),
                     json_mode: Some(true),
                     max_tokens: Some(prompts::bullet_max_tokens(&settings.ai) as u32),
+                    temperature: None,
                 };
                 let raw = if provider_name == "mlx" {
                     plugin.mlx_complete(args).map_err(|e| e.to_string())?
@@ -487,6 +488,7 @@ pub async fn summarize_article(
                     repo_id,
                     json_mode: Some(true),
                     max_tokens: Some(prompts::full_max_tokens(&settings.ai) as u32),
+                    temperature: None,
                 };
                 let raw = if provider_name == "mlx" {
                     plugin.mlx_complete(args).map_err(|e| e.to_string())?

@@ -7,6 +7,8 @@ options:
 packages:
   SkimCore:
     path: ../SkimCore
+  SkimInferencePolicy:
+    path: ../../shared/SkimInferencePolicy
   mlx-swift:
     url: https://github.com/ml-explore/mlx-swift.git
     from: 0.18.0
@@ -27,6 +29,7 @@ targets:
         buildPhase: resources
     dependencies:
       - package: SkimCore
+      - package: SkimInferencePolicy
       - package: mlx-swift
         product: MLX
       - package: mlx-swift-examples
@@ -44,7 +47,7 @@ targets:
         PRODUCT_NAME: Skim
         DEVELOPMENT_TEAM: 6KQV68SJ5P
         MARKETING_VERSION: 0.1.13
-        CURRENT_PROJECT_VERSION: 56
+        CURRENT_PROJECT_VERSION: 57
         SWIFT_VERSION: 6.0
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Skim
@@ -97,7 +100,7 @@ targets:
         PRODUCT_NAME: Skim
         DEVELOPMENT_TEAM: 6KQV68SJ5P
         MARKETING_VERSION: 0.1.13
-        CURRENT_PROJECT_VERSION: 56
+        CURRENT_PROJECT_VERSION: 57
         SWIFT_VERSION: 6.0
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Skim

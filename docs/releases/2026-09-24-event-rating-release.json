@@ -61,5 +61,12 @@
     "sha256": "fa1f6902c5111c9e81b58822c802c1ae5d61bcd6ce6d8ac51c79045bab387704",
     "updated": false
   },
-  "native_ui": "Mac locked; hands-on acceptance pending"
+  "native_ui": "Mac locked; hands-on acceptance pending",
+  "testflight_upload": {
+    "id": "2e8f7502-92c5-4983-b702-cee3d8243340",
+    "state": "PROCESSING",
+    "errors": [],
+    "warnings": [],
+    "checked_at": "2026-09-24T16:51:41.588799+00:00"
+  }
 }

@@ -170,7 +170,7 @@ pub fn init_state<R: tauri::Runtime>(app: &tauri::AppHandle<R>, app_dir: std::pa
     app.manage(model_state);
     app.manage(DownloadCancelFlag(Arc::new(AtomicBool::new(false))));
     app.manage(Arc::new(Mutex::new(SummaryCache::new())) as SharedSummaryCache);
-    app.manage(SummaryGeneration(std::sync::atomic::AtomicU64::new(0)));
+    app.manage(SummaryGeneration::default());
     app.manage(commands::claude_oauth::PasteFlowState::default());
 }
 

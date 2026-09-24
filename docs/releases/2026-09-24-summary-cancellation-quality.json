@@ -1,0 +1,309 @@
+{
+  "verified_at": "2026-09-24T19:56:33.570655+00:00",
+  "scope": "Cancellation publication and desktop JSON instruction consistency. This does not resolve detailed-summary factual accuracy or complete shared-core migration.",
+  "tests": {
+    "rust_library": 157,
+    "frontend": 155,
+    "native_core": 129,
+    "total": 441,
+    "excluded": "Pre-existing Rust GGUF integration requires an unavailable model"
+  },
+  "builds": {
+    "desktop_release": true,
+    "typescript_vite": true,
+    "ios_simulator": true,
+    "ios_release_archive": true
+  },
+  "independent_review": {
+    "rust": "No blocking finding: final responses, SQLite and LRU publication are guarded; generation rechecked after async cache lock; no synchronous generation lock across await or reversed DB/cache lock order.",
+    "native": "No blocking finding: queued tokens and replaced/dismissed UI runs are guarded. Nonstreaming cache hits lack a final cancellation check, but the UI gate still prevents cancelled publication."
+  },
+  "actual_desktop_command_regression": {
+    "method": "Disposable SQLite library and deterministic local OpenAI-compatible provider. Start summarize_article, await provider request, cancel_summarize, release late provider result, inspect command response and SQLite. Also complete normally and repeat without force; only one provider call.",
+    "before": {
+      "cancellation": {
+        "data": null,
+        "ok": true
+      },
+      "completion": {
+        "data": {
+          "article_id": "62c01db0-6a81-4269-b52c-de060944cbe3",
+          "bullet_summary": null,
+          "created_at": 1790279216,
+          "full_summary": "Late provider summary.",
+          "model": "cancellation-fixture",
+          "provider": "custom"
+        },
+        "ok": true
+      },
+      "cached_rows": 1,
+      "provider_calls": 1
+    },
+    "after": {
+      "cancellation": {
+        "data": null,
+        "ok": true
+      },
+      "completion": {
+        "error": "Summary cancelled",
+        "ok": false
+      },
+      "cached_rows": 0,
+      "provider_calls": 1
+    },
+    "normal_completion_and_repeat_cache_hit": {
+      "cancellation": {
+        "skipped": true
+      },
+      "completion": {
+        "data": {
+          "article_id": "62c01db0-6a81-4269-b52c-de060944cbe3",
+          "bullet_summary": null,
+          "created_at": 1790279307,
+          "full_summary": "Late provider summary.",
+          "model": "cancellation-fixture",
+          "provider": "custom"
+        },
+        "ok": true
+      },
+      "cached_rows": 1,
+      "provider_calls": 1
+    },
+    "boundary": "Real desktop commands through devbridge. Native cancellation is verified by package tests and compilation, not interactive acceptance. Cancellation cannot retract a publication already completed before cancellation linearizes."
+  },
+  "prompt_change": {
+    "before": "System required two string keys summary/notes and forbade arrays while bullet request required a bullets array. Prose and bullet examples injected fictional particle-discovery facts.",
+    "after": "System defers keys/types to the selected request; bullet and prose prompts define consistent schemas without fictional examples. Tone, detail lengths, token budgets and explicit custom system override are preserved. Summary cache key version advances to 2.",
+    "live_commands": [
+      {
+        "format": "both",
+        "length": "long",
+        "success": true,
+        "seconds": 6.985
+      },
+      {
+        "format": "paragraph",
+        "length": "long",
+        "success": true,
+        "seconds": 3.048
+      },
+      {
+        "format": "paragraph",
+        "length": "long",
+        "success": true,
+        "seconds": 3.072
+      }
+    ],
+    "live_command_boundary": "Three actual local-model summarize_article calls returned usable summaries. The both-format call returned bullets and prose. This does not prove every raw model response follows the requested JSON schema. Factual overstatements persist."
+  },
+  "rejected_factual_experiments": {
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "source_url": "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o",
+    "source_body_sha256": "86767b90a7fe2be2d2edb81edec5b6fd7ca3ebaef2d58d74aeb09731d6083c12",
+    "method": "Packaged local MLX helper, complete reader evidence, generic instructions. Independent reviewer checked generated claims against source evidence. No experimental verifier or repair layer was added to production.",
+    "whole_summary_repair": {
+      "runs": 3,
+      "temperature": 0,
+      "seconds": [
+        5.836,
+        5.124,
+        5.226
+      ],
+      "outcome": "Rejected: one repair fixed a date but another retained the wrong detection interval and email month while claiming to correct them."
+    },
+    "exact_evidence_linked_generation": {
+      "runs": 2,
+      "seconds": [
+        5.139,
+        5.175
+      ],
+      "outcome": "Rejected: both responses used the wrong sentence schema and presented paraphrased or noncontiguous evidence as quotations."
+    },
+    "paragraph_linked_generation": {
+      "runs": 2,
+      "temperature": 0.3,
+      "seconds": [
+        5.352,
+        4.223
+      ],
+      "outcome": "Rejected: per-sentence checking accepted an uncertainty upgrade from a possible first incident to a confirmed first incident. Other errors overstated harm assessment and an expert position."
+    },
+    "atomic_linked_generation": {
+      "runs": 2,
+      "seconds": [
+        4.992,
+        2.22
+      ],
+      "outcome": "Rejected: one malformed JSON response; the parseable response conflated discovery, the later email delay and escalation."
+    },
+    "small_verifier_corpus": {
+      "items": [
+        {
+          "id": "real-openai-event-date-supported",
+          "source_type": "public-source",
+          "source_title": "Why did an OpenAI system hack Australia's health system - and can it be stopped in the future?",
+          "source_url": "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o",
+          "source_body_sha256": "86767b90a7fe2be2d2edb81edec5b6fd7ca3ebaef2d58d74aeb09731d6083c12",
+          "expected_supported": true,
+          "observed_supported": true,
+          "seconds": 1.528,
+          "evidence_sha256": "735897c2dbcdd718124a8d66ece8baeea341f96839b7941386460eb6b5baea3d",
+          "claim_sha256": "f01e942c889f25c4594964b5e532ca9f9023682207ffc7c9cf52f1e393b38552",
+          "source_hash_basis": "Saved article_reader_cache.html, tags removed, HTML entities decoded, whitespace collapsed."
+        },
+        {
+          "id": "real-openai-email-month-unsupported",
+          "source_type": "public-source",
+          "source_title": "Why did an OpenAI system hack Australia's health system - and can it be stopped in the future?",
+          "source_url": "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o",
+          "source_body_sha256": "86767b90a7fe2be2d2edb81edec5b6fd7ca3ebaef2d58d74aeb09731d6083c12",
+          "expected_supported": false,
+          "observed_supported": false,
+          "seconds": 0.475,
+          "evidence_sha256": "a01cab839da56aedf28d21a2a65d4512e1be2ad86a2317ff0c4ddf54d16dcd99",
+          "claim_sha256": "106c400f8160a74e5cceb84612201bacbe95a2f87fa8791b5574b66769217971",
+          "source_hash_basis": "Saved article_reader_cache.html, tags removed, HTML entities decoded, whitespace collapsed."
+        },
+        {
+          "id": "real-gaza-funding-status-supported",
+          "source_type": "public-source",
+          "source_title": "Trump's Board of Peace unveils $2.45bn Gaza recovery plan",
+          "source_url": "https://www.bbc.co.uk/news/articles/cwlyke0mm0x3o",
+          "source_body_sha256": "b58028682cfa779f7b2bc379891859c80e27a40ca34a6e59cbdea8554b337d65",
+          "expected_supported": true,
+          "observed_supported": true,
+          "seconds": 0.375,
+          "evidence_sha256": "970c34e5e19d63b47704a6a772ad654d90db1ca640b76bea9d155c8981d35aa9",
+          "claim_sha256": "4c1d947e05889eb6cf7496f5f80e1e5f99bac842742ca08c48ac9d6ef92e4ed7",
+          "source_hash_basis": "Fetched original publisher page; 31 main article paragraphs in DOM order, internal whitespace collapsed and paragraphs separated by two newlines; excludes page chrome, title, captions, and related links."
+        },
+        {
+          "id": "real-gaza-pledge-reversed-unsupported",
+          "source_type": "public-source",
+          "source_title": "Trump's Board of Peace unveils $2.45bn Gaza recovery plan",
+          "source_url": "https://www.bbc.co.uk/news/articles/cwlyke0mm0x3o",
+          "source_body_sha256": "b58028682cfa779f7b2bc379891859c80e27a40ca34a6e59cbdea8554b337d65",
+          "expected_supported": false,
+          "observed_supported": false,
+          "seconds": 0.467,
+          "evidence_sha256": "970c34e5e19d63b47704a6a772ad654d90db1ca640b76bea9d155c8981d35aa9",
+          "claim_sha256": "0e4af42fc87b1fdacd9ede852882e28a9a491e6be827342df70441d0a314976a",
+          "source_hash_basis": "Fetched original publisher page; 31 main article paragraphs in DOM order, internal whitespace collapsed and paragraphs separated by two newlines; excludes page chrome, title, captions, and related links."
+        },
+        {
+          "id": "synthetic-flood-timeline-supported",
+          "source_type": "synthetic",
+          "source_title": "Larkspur County flood response bulletin",
+          "source_url": null,
+          "source_body_sha256": "ce32bf9c1a22690475fd8a9d81a81e14bf7a14988494d14f1ff3fefea81c5722",
+          "expected_supported": true,
+          "observed_supported": true,
+          "seconds": 0.534,
+          "evidence": "Larkspur County emergency management declared a flood warning at 09:00 on May 12. The mayor ordered evacuation of four low-lying streets at 12:30 that same day.",
+          "claim": "The flood warning came at 09:00 on May 12, followed by an evacuation order at 12:30 that day."
+        },
+        {
+          "id": "synthetic-intrusion-delay-misattached",
+          "source_type": "synthetic",
+          "source_title": "North Quarry Co-op access review",
+          "source_url": null,
+          "source_body_sha256": "a22d1f41553436f44d0545214d9d697ec13b33e49400901f80a2c1c7e99733f1",
+          "expected_supported": false,
+          "observed_supported": false,
+          "seconds": 0.533,
+          "evidence": "North Quarry Co-op says unauthorized access began on June 1 and its monitoring team detected it on June 5. The vendor emailed the co-op three weeks after the access began. The message sat unread in a shared mailbox for two days before the co-op escalated it to the national response team.",
+          "claim": "The co-op discovered the intrusion two days after it began."
+        },
+        {
+          "id": "synthetic-grant-plan-and-payment-supported",
+          "source_type": "synthetic",
+          "source_title": "Eastmere council approves housing repair program",
+          "source_url": null,
+          "source_body_sha256": "a4813d941dac20ba694f175683d86ddb6e7a173fd86a259e511baf7a761fe181",
+          "expected_supported": true,
+          "observed_supported": true,
+          "seconds": 0.608,
+          "evidence": "On November 2, Eastmere Council approved a $42 million housing-repair grant program. The treasury scheduled the first disbursements for January 1. As of December 15, no program payments had been made.",
+          "claim": "Eastmere approved the $42 million program on November 2, but payments were not expected to start until January 1 and none had been made by December 15."
+        },
+        {
+          "id": "synthetic-grant-plan-as-paid-unsupported",
+          "source_type": "synthetic",
+          "source_title": "Eastmere council approves housing repair program",
+          "source_url": null,
+          "source_body_sha256": "a4813d941dac20ba694f175683d86ddb6e7a173fd86a259e511baf7a761fe181",
+          "expected_supported": false,
+          "observed_supported": false,
+          "seconds": 0.467,
+          "evidence": "On November 2, Eastmere Council approved a $42 million housing-repair grant program. The treasury scheduled the first disbursements for January 1. As of December 15, no program payments had been made.",
+          "claim": "The city paid out the full $42 million when the council approved the program on November 2."
+        },
+        {
+          "id": "synthetic-health-attribution-and-uncertainty-supported",
+          "source_type": "synthetic",
+          "source_title": "State reviews reports of dizziness after clinic opening",
+          "source_url": null,
+          "source_body_sha256": "bbd63e09574d47989b440ff60142b404b3e0ff6844c3dfd3d22fefa816382872",
+          "expected_supported": true,
+          "observed_supported": true,
+          "seconds": 0.462,
+          "evidence": "A clinic spokesperson said 12 residents reported dizziness after the new clinic opened. The state health office said it had not determined whether the symptoms were connected to the clinic. Its review is ongoing.",
+          "claim": "The clinic spokesperson said 12 residents reported dizziness after it opened, and the state office has not determined whether the symptoms are connected."
+        },
+        {
+          "id": "synthetic-health-attribution-converted-to-fact-unsupported",
+          "source_type": "synthetic",
+          "source_title": "State reviews reports of dizziness after clinic opening",
+          "source_url": null,
+          "source_body_sha256": "bbd63e09574d47989b440ff60142b404b3e0ff6844c3dfd3d22fefa816382872",
+          "expected_supported": false,
+          "observed_supported": false,
+          "seconds": 0.463,
+          "evidence": "A clinic spokesperson said 12 residents reported dizziness after the new clinic opened. The state health office said it had not determined whether the symptoms were connected to the clinic. Its review is ongoing.",
+          "claim": "The state confirmed that the clinic caused dizziness in 12 residents."
+        },
+        {
+          "id": "synthetic-bridge-negation-supported",
+          "source_type": "synthetic",
+          "source_title": "Bridge remains closed while county finishes inspection",
+          "source_url": null,
+          "source_body_sha256": "d4cd72ecc289d32589e507f007f3bacb89f92913ed9a1bbf4bd04c261109180e",
+          "expected_supported": true,
+          "observed_supported": true,
+          "seconds": 0.371,
+          "evidence": "An initial engineering survey found no structural damage. Officials said they had not determined the bridge was unsafe; it will remain closed until the final inspection is complete.",
+          "claim": "The initial survey found no structural damage, but officials have not yet determined whether the bridge is unsafe."
+        },
+        {
+          "id": "synthetic-river-causality-unsupported",
+          "source_type": "synthetic",
+          "source_title": "River level falls before pump trial begins",
+          "source_url": null,
+          "source_body_sha256": "ad637af9d0778a86a63fa9c0cd5ad590e078dbdd991bf6dde7c0bf2b847c1f89",
+          "expected_supported": false,
+          "observed_supported": false,
+          "seconds": 0.404,
+          "evidence": "River gauges recorded a falling water level on October 8. The city activated two trial pumps on October 9. Researchers said their review could not determine whether the pumps affected the river level; monitoring is continuing.",
+          "claim": "The city's new pumps caused the river level to fall."
+        }
+      ],
+      "matches": 12,
+      "total": 12,
+      "version": 2,
+      "revision": "Independent corpus v1 preceded model calls. Evidence review then corrected incomplete/paraphrased passages and ambiguous claims in v2, retaining all labels. V2 is therefore a revised small development corpus, not held-out production accuracy.",
+      "boundary": "Twelve narrow verdicts matched labels, but checking real generated sentences still falsely accepted unsupported assertions. The small corpus does not justify deploying this verifier."
+    },
+    "remaining_issue": "skim-cg5e",
+    "raw_local_artifact_sha256": {
+      "skim-grounding-initial": "ac9727937a57c4e78792f9c99a05e5ad83a91ae796d8a226cf829d5e3b1e6d3f",
+      "skim-linked-paragraph-results": "b20b23bb4a4fb36cca638ce26d4e0c486bbb2f5ba51f4b52fad5257f9a2ad95c",
+      "skim-atomic-summary-results": "0b7c7e8eda5d9d359e5af587cb3c0215be685f41002b676fbb4b87c58458236e",
+      "skim-atomic-linked-independent-review": "1ed21363c84cfc4b6c77bcb22dc8ee7ab1fd768289a74061b96867abcd7b24f2",
+      "skim-summary-fidelity-verifier-corpus-v1": "1f69b167c9427a90f8aed84d83cb20313869c98f00499bc21ece7f02a86d99b8",
+      "skim-summary-fidelity-verifier-corpus-v2": "46cc5775b2da6089f04b2c76da41613f5488410c29bbedce4f1423656d87792a",
+      "skim-verifier-corpus-v2-results": "7b319480870b9dae4a30ccdf8ef907c174f7d5e3060e9244c017f2cd1ed0ec38",
+      "skim-clean-summary-app-results": "3d91febc8fa4f64fed02e1e3cd8e1d0439429d33afbc7417635825378992fbb9"
+    }
+  },
+  "acceptance_limit": "No new frontend layout changes in this release. Prior real browser/backend reader checks remain separate. Installed signed desktop/native interaction, representative model accuracy and full domain-core sharing remain open."
+}

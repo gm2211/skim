@@ -43,8 +43,8 @@ pub fn article_summary_system_prompt(settings: &AiSettings) -> String {
 
     format!(
         "{tone} Lead with the single most important takeaway. \
-         Always respond with a JSON object containing exactly two string keys: \"summary\" and \"notes\". \
-         Never use arrays, nested objects, or any other keys. Put your entire summary as a single string in \"summary\"."
+         Always respond with a JSON object using exactly the keys and value types requested in the user message. \
+         Do not add other keys or text outside the JSON object."
     )
 }
 
@@ -91,12 +91,9 @@ Article text:
 {truncated}
 
 Write a JSON object with exactly two keys: "bullets" and "notes".
-Put your bullet points as a JSON array of strings in "bullets". Put any caveats in "notes".
-
-Example of the expected output format:
-{{"bullets": ["CERN scientists discovered the Zephyr boson in LHC collisions.", "The particle does not fit the Standard Model."], "notes": "Preliminary findings only."}}
-
-Now write your JSON for the article above:"#
+Put your bullet points as a JSON array of strings in "bullets".
+Put any caveats as a string in "notes"; use an empty string if none.
+Do not add other keys or text outside the JSON object."#
     )
 }
 
@@ -109,12 +106,6 @@ pub fn article_full_summary_prompt(title: &str, text: &str, settings: &AiSetting
         _ => {}
     }
 
-    let example = match settings.summary_length.as_deref().unwrap_or("short") {
-        "long" => r#"{"summary": "Scientists at CERN announced the discovery of a new subatomic particle called the Zephyr boson. The particle was detected during high-energy collisions in the Large Hadron Collider and has properties that challenge the Standard Model. If confirmed, this could open the door to new physics, potentially explaining dark matter and dark energy. The research team, led by Dr. Elena Vasquez, published their findings in Nature Physics. The discovery has generated significant excitement in the scientific community.", "notes": "none"}"#,
-        "medium" => r#"{"summary": "Scientists at CERN discovered a new subatomic particle called the Zephyr boson that challenges the Standard Model. If confirmed by independent experiments, it could reshape quantum physics and help explain dark matter and dark energy.", "notes": "none"}"#,
-        _ => r#"{"summary": "CERN scientists discovered the Zephyr boson, a particle that challenges the Standard Model.", "notes": "none"}"#,
-    };
-
     format!(
         r#"Summarize the following article in {paragraph_count}.
 
@@ -123,8 +114,9 @@ Article title: {title}
 Article text:
 {truncated}
 
-Respond with a JSON object with keys "summary" and "notes". Example:
-{example}"#
+Respond with a JSON object containing exactly two string-valued keys: "summary" and "notes".
+Put the entire summary in "summary". Put any caveats in "notes"; use an empty string if none.
+Do not use arrays or add other keys or text outside the JSON object."#
     )
 }
 
@@ -279,4 +271,66 @@ Output JSON:
 /// Retry uses the same evidence without a JSON footer.
 pub fn catchup_lede_retry_user_prompt(headline: &str, articles_text: &str) -> String {
     format!("Headline: {headline}\n\nArticle text behind it:\n{articles_text}")
+}
+
+#[cfg(test)]
+mod summary_prompt_tests {
+    use super::*;
+
+    #[test]
+    fn paragraph_bullet_and_both_requests_have_compatible_shapes() {
+        for (format, bullets, prose) in [("paragraph", false, true), ("bullets", true, false), ("both", true, true)] {
+            let mut settings = crate::db::models::AppSettings::default().ai;
+            settings.summary_format = Some(format.into());
+            let system = article_summary_system_prompt(&settings);
+            assert!(system.contains("keys and value types requested in the user message"));
+            assert!(!system.contains("Never use arrays"));
+            let bullet = article_bullet_summary_prompt("Title", "Evidence", &settings);
+            let full = article_full_summary_prompt("Title", "Evidence", &settings);
+            assert_eq!(!bullet.is_empty(), bullets);
+            assert_eq!(!full.is_empty(), prose);
+            if bullets {
+                assert!(bullet.contains("JSON array of strings in \"bullets\""));
+                assert!(bullet.contains("as a string in \"notes\""));
+            }
+            if prose { assert!(full.contains("two string-valued keys: \"summary\" and \"notes\"")); }
+        }
+    }
+
+    #[test]
+    fn detail_levels_keep_counts_without_invented_example_facts() {
+        for (length, words, bullets, full_tokens) in [
+            ("short", "~30 words", "2-3", 256),
+            ("medium", "~150 words", "3-5", 1200),
+            ("long", "~300 words", "5-8", 2400),
+            ("custom", "approximately 87 words", "2-4", 302),
+        ] {
+            let mut settings = crate::db::models::AppSettings::default().ai;
+            settings.summary_format = Some("both".into());
+            settings.summary_length = Some(length.into());
+            settings.summary_custom_word_count = Some(87);
+            let full = article_full_summary_prompt("Actual headline", "Actual source.", &settings);
+            let bullet = article_bullet_summary_prompt("Actual headline", "Actual source.", &settings);
+            assert!(full.contains(words));
+            assert!(bullet.contains(&format!("in {bullets} bullet points")));
+            assert_eq!(full_max_tokens(&settings), full_tokens);
+            for prompt in [full, bullet] {
+                assert!(prompt.contains("Actual source."));
+                for invented in ["Zephyr", "CERN", "Elena", "dark matter", "Example"] {
+                    assert!(!prompt.contains(invented));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn custom_system_prompt_and_tone_remain_intact() {
+        let mut settings = crate::db::models::AppSettings::default().ai;
+        settings.summary_tone = Some("technical".into());
+        assert!(article_summary_system_prompt(&settings).starts_with("You write precise, technical summaries."));
+        settings.summary_custom_prompt = Some(" My exact custom instructions. ".into());
+        assert_eq!(article_summary_system_prompt(&settings), " My exact custom instructions. ");
+        settings.summary_custom_prompt = Some("  ".into());
+        assert!(article_summary_system_prompt(&settings).starts_with("You write precise, technical summaries."));
+    }
 }

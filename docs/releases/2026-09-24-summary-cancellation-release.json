@@ -1,0 +1,75 @@
+{
+  "desktop_version": "0.1.28",
+  "ios_version": "0.1.13",
+  "ios_build": "65",
+  "desktop_sha256": "3ac85731f05f4e9241108ec00ce665af3138a05b9cd104b50c9379c901727344",
+  "bundled_helper_sha256": "1b8aeaad4e05f025e35f034bb14fe387d09ce59b95669d60243aaa9daecab8e7",
+  "compiled_helper_sha256": "3dbb040fa3037d9141135d2d7c700699260e8fe6441f1c63b7826c86bce53bed",
+  "helper_text_matches_compiled": true,
+  "ios_sha256": "174e0d49236d938c09f28bea9a528b84607d405509bd57604850f562c38a9877",
+  "ios_dsym_uuid": "BE674A5F-571F-3C7E-A578-347AB7EE675A",
+  "shared_c_symbols": [
+    "_skim_semantic_group_valid",
+    "_skim_semantic_max_candidates",
+    "_skim_semantic_max_pairs",
+    "_skim_semantic_pair_prompt",
+    "_skim_semantic_partition",
+    "_skim_semantic_prompt",
+    "_skim_semantic_rating_prompt",
+    "_skim_semantic_rating_valid",
+    "_skim_semantic_score",
+    "_skim_story_classify",
+    "_skim_story_confidence",
+    "_skim_story_default_thresholds",
+    "_skim_story_identity_hash",
+    "_skim_story_is_unique",
+    "_skim_story_score",
+    "_skim_today_lede_evidence_version",
+    "_skim_today_lede_excerpt_valid",
+    "_skim_today_lede_max_articles",
+    "_skim_today_lede_prompt",
+    "_skim_today_lede_retry_prompt",
+    "_skim_today_lede_text_characters"
+  ],
+  "desktop_shared_swift_symbol_count": 71,
+  "ios_shared_swift_symbol_count": 71,
+  "shared_source_sha256": {
+    "shared/SkimStoryPolicy/Sources/SkimStoryPolicy/SkimStoryPolicy.c": "b0648e6cc2ee0134a3df0236e2c48d810369562e6f58d90abc781f2a97f12b82",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalModelPolicy.swift": "159727c952106f95514507db4d0cbdb4444a536ba17448c2a19d877a0381dbb3",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/ModelChatTemplate.swift": "7567bab0ddb29d4df2cb5113960dcd65bf0360ed0ca88acaab2e8bccdef51354",
+    "shared/SkimInferencePolicy/Sources/SkimInferencePolicy/LocalChatMessages.swift": "4d5c8319b4a91942e9e3b7b0de8f2a815acd49cafda1b3b1b8c1fab763329664"
+  },
+  "verified_at": "2026-09-24T19:57:46.180286+00:00",
+  "source_commit": "7e4a9c3604d854c1c03febefdbf20dc7c93e0c6e",
+  "tests": {
+    "rust_library": 157,
+    "frontend": 155,
+    "native_core": 129,
+    "excluded": "Pre-existing Rust GGUF integration requires unavailable model"
+  },
+  "builds": {
+    "typescript": true,
+    "vite": true,
+    "desktop_release": true,
+    "ios_simulator": true,
+    "signed_ios_archive": true,
+    "testflight_upload": true
+  },
+  "signed_parent_smoke": {
+    "timed_out": true,
+    "exit": -15,
+    "elapsed": 120.0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "desktop_installed": false,
+  "installed_desktop_version": "0.1.17",
+  "acceptance_limit": "Signed desktop parent timed out before main in _libsecinit_appsandbox -> _xpc_pipe_routine -> mach_msg2_trap. Native UI acceptance remains open; the last native-control check reported a locked Mac. Actual desktop command cancellation and normal-cache controls passed using disposable data. Detailed-summary factual accuracy and complete domain-core consolidation remain open. See summary-cancellation-quality.json.",
+  "testflight": {
+    "build_id": "85a6e22e-1cce-4d95-a533-e062a60d3299",
+    "processing": "VALID",
+    "audience": "INTERNAL_ONLY",
+    "internal_build_state": "IN_BETA_TESTING",
+    "auto_notify_enabled": true
+  }
+}

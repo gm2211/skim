@@ -846,26 +846,32 @@ enum NativeAI {
     }
 
     static func summarize(article: Article, settings: AppSettings) async throws -> String {
-        let key = summaryCacheKey(article: article, ai: settings.ai)
-        if let cached = SummaryLRUCache.shared.get(key) {
-            return cached
-        }
-        let wordCount = summaryTargetWordCount(settings.ai)
-        // Pass wordCount into instructions so the system prompt carries the full directive.
-        // The user turn contains only the article body to avoid FM echoing the instruction
-        // text back as part of the response (a known issue with some Foundation Models builds).
-        let result = try await complete(
-            settings: settings,
-            instructions: summaryInstructions(settings.ai, wordCount: wordCount),
-            prompt: """
-            Article to summarize:
+        let publication = AIPublicationGate()
+        defer { publication.cancel() }
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            let key = summaryCacheKey(article: article, ai: settings.ai)
+            if let cached = SummaryLRUCache.shared.get(key) {
+                return cached
+            }
+            let wordCount = summaryTargetWordCount(settings.ai)
+            // Pass wordCount into instructions so the system prompt carries the full directive.
+            // The user turn contains only the article body to avoid FM echoing the instruction
+            // text back as part of the response (a known issue with some Foundation Models builds).
+            let result = try await complete(
+                settings: settings,
+                instructions: summaryInstructions(settings.ai, wordCount: wordCount),
+                prompt: """
+                Article to summarize:
 
-            \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
-            """,
-            maxTokens: summaryMaxTokens(wordCount)
-        )
-        SummaryLRUCache.shared.set(key, value: result)
-        return result
+                \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
+                """,
+                maxTokens: summaryMaxTokens(wordCount)
+            )
+            try Task.checkCancellation()
+            guard publication.publish({ SummaryLRUCache.shared.set(key, value: result) }) else { throw CancellationError() }
+            return result
+        } onCancel: { publication.cancel() }
     }
 
     /// Streaming variant of `summarize`. For MLX provider this calls `NativeMLX.stream()`
@@ -878,43 +884,51 @@ enum NativeAI {
         settings: AppSettings,
         onToken: @MainActor @escaping (String) -> Void
     ) async throws -> String {
-        let key = summaryCacheKey(article: article, ai: settings.ai)
-        if let cached = SummaryLRUCache.shared.get(key) {
-            await onToken(cached)
-            return cached
-        }
-        let wordCount = summaryTargetWordCount(settings.ai)
-        let prompt = """
-        Article to summarize:
+        let publication = AIPublicationGate()
+        defer { publication.cancel() }
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            let key = summaryCacheKey(article: article, ai: settings.ai)
+            if let cached = SummaryLRUCache.shared.get(key) {
+                try Task.checkCancellation()
+                await MainActor.run { publication.publish { onToken(cached) } }
+                try Task.checkCancellation()
+                return cached
+            }
+            let wordCount = summaryTargetWordCount(settings.ai)
+            let prompt = """
+            Article to summarize:
 
-        \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
-        """
-        let instructions = summaryInstructions(settings.ai, wordCount: wordCount)
-        let maxTok = summaryMaxTokens(wordCount)
+            \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
+            """
+            let instructions = summaryInstructions(settings.ai, wordCount: wordCount)
+            let maxTok = summaryMaxTokens(wordCount)
 
-        let result: String
-        if settings.ai.provider == "mlx" {
-            result = try await NativeMLX.stream(
-                settings: settings.ai,
-                instructions: instructions,
-                prompt: prompt,
-                maxTokens: maxTok,
-                jsonMode: false,
-                onToken: { chunk in
-                    Task { @MainActor in onToken(chunk) }
-                }
-            )
-        } else {
-            result = try await complete(
-                settings: settings,
-                instructions: instructions,
-                prompt: prompt,
-                maxTokens: maxTok
-            )
-        }
+            let result: String
+            if settings.ai.provider == "mlx" {
+                result = try await NativeMLX.stream(
+                    settings: settings.ai,
+                    instructions: instructions,
+                    prompt: prompt,
+                    maxTokens: maxTok,
+                    jsonMode: false,
+                    onToken: { chunk in
+                        Task { @MainActor in publication.publish { onToken(chunk) } }
+                    }
+                )
+            } else {
+                result = try await complete(
+                    settings: settings,
+                    instructions: instructions,
+                    prompt: prompt,
+                    maxTokens: maxTok
+                )
+            }
 
-        SummaryLRUCache.shared.set(key, value: result)
-        return result
+            try Task.checkCancellation()
+            guard publication.publish({ SummaryLRUCache.shared.set(key, value: result) }) else { throw CancellationError() }
+            return result
+        } onCancel: { publication.cancel() }
     }
 
     /// Evicts the cached summary for the given article + settings combination.
@@ -2749,6 +2763,8 @@ private struct AnthropicResponse: Decodable {
 struct AIResultSheet: View {
     var request: AIResultRequest
     @Environment(\.dismiss) private var dismiss
+    @State private var publication: AIPublicationGate?
+    @State private var retryTask: Task<Void, Never>?
     @State private var isLoading = true
     @State private var result = ""
     @State private var referencedArticles: [Article] = []
@@ -2775,7 +2791,7 @@ struct AIResultSheet: View {
                         .padding(16)
                         .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     } else if let errorMessage {
-                        AIErrorBox(message: errorMessage, remedy: errorRemedy, onResolved: { Task { await run() } })
+                        AIErrorBox(message: errorMessage, remedy: errorRemedy, onResolved: { retryTask = Task { await run() } })
                     } else {
                         PrettyAIText(result)
 
@@ -2833,41 +2849,59 @@ struct AIResultSheet: View {
                             }
                             .disabled(isLoading)
                         } else {
-                            Button("Run Again") { Task { await run() } }
+                            Button("Run Again") { retryTask = Task { await run() } }
                                 .disabled(isLoading)
                         }
                     }
                 }
             }
             .task { await run() }
+            .onDisappear {
+                publication?.cancel()
+                retryTask?.cancel()
+            }
         }
     }
 
+    @MainActor
     private func run() async {
-        isLoading = true
-        errorMessage = nil
-        errorRemedy = .none
-        result = ""
-        referencedArticles = []
-        do {
-            let answer: AIResultAnswer
-            if let streamAction = request.streamAction {
-                // Streaming path: tokens arrive progressively; show them as they land.
-                answer = try await streamAction { @MainActor chunk in
-                    result += chunk
+        publication?.cancel()
+        let current = AIPublicationGate()
+        publication = current
+        defer { current.cancel() }
+        await withTaskCancellationHandler {
+            guard !Task.isCancelled else { return }
+            isLoading = true
+            errorMessage = nil
+            errorRemedy = .none
+            result = ""
+            referencedArticles = []
+            do {
+                let answer: AIResultAnswer
+                if let streamAction = request.streamAction {
+                    answer = try await streamAction { @MainActor chunk in
+                        current.publish { result += chunk }
+                    }
+                } else {
+                    answer = try await request.action()
                 }
-                // Use the canonical final text from the answer (sanitized by the runner).
-                result = answer.text
-            } else {
-                answer = try await request.action()
-                result = answer.text
+                try Task.checkCancellation()
+                current.publish {
+                    result = answer.text
+                    referencedArticles = ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles)
+                    isLoading = false
+                }
+            } catch is CancellationError {
+                current.cancel()
+            } catch {
+                guard !Task.isCancelled else { return }
+                current.publish {
+                    errorMessage = error.localizedDescription
+                    errorRemedy = AIErrorRemedy.classify(error)
+                    isLoading = false
+                }
             }
-            referencedArticles = ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles)
-        } catch {
-            errorMessage = error.localizedDescription
-            errorRemedy = AIErrorRemedy.classify(error)
-        }
-        isLoading = false
+        } onCancel: { current.cancel() }
     }
 }
 

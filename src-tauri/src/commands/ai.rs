@@ -8,7 +8,6 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use crate::AppHandle;
 use tauri::{Emitter, State};
@@ -19,8 +18,30 @@ use uuid::Uuid;
 
 const SUMMARY_CACHE_MAX: usize = 100;
 
-/// Monotonic counter — incrementing it cancels any in-flight summary.
-pub struct SummaryGeneration(pub AtomicU64);
+/// Cancellation and publication share one linearization point. Never hold
+/// this synchronous guard across an await (cache lock is acquired first).
+#[derive(Default)]
+pub struct SummaryGeneration(std::sync::Mutex<u64>);
+
+impl SummaryGeneration {
+    fn begin(&self) -> Result<u64, String> {
+        let mut current = self.0.lock().map_err(|e| e.to_string())?;
+        *current = current.checked_add(1).ok_or("Summary generation exhausted")?;
+        Ok(*current)
+    }
+
+    fn check(&self, id: u64) -> Result<(), String> {
+        self.with_current(id, || Ok(()))
+    }
+
+    fn with_current<T>(&self, id: u64, action: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+        let current = self.0.lock().map_err(|e| e.to_string())?;
+        if *current != id { return Err("Summary cancelled".into()); }
+        let result = action();
+        drop(current);
+        result
+    }
+}
 
 pub fn default_model(provider: &str) -> String {
     match provider {
@@ -83,9 +104,48 @@ impl SummaryCache {
 
 pub type SharedSummaryCache = Arc<Mutex<SummaryCache>>;
 
+/// Both cached responses and forced invalidation obey cancellation, including
+/// requests cancelled while waiting for the asynchronous memory-cache lock.
+async fn cached_summary(
+    db: &Database, cache: &SharedSummaryCache, generation: &SummaryGeneration,
+    id: u64, article_id: &str, key: &str, force: bool,
+) -> Result<Option<ArticleSummary>, String> {
+    let mut cache = cache.lock().await;
+    generation.with_current(id, || {
+        if !force {
+            if let Some(existing) = cache.get(key) { return Ok(Some(existing.clone())); }
+        }
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        if force {
+            queries::delete_article_summary(&conn, article_id, key).map_err(|e| e.to_string())?;
+            cache.remove(key);
+            return Ok(None);
+        }
+        let existing = queries::get_article_summary(&conn, article_id, key).map_err(|e| e.to_string())?;
+        if let Some(ref summary) = existing { cache.insert(key.to_string(), summary.clone()); }
+        Ok(existing)
+    })
+}
+
+/// Commit both caches and accept the result atomically with respect to cancel
+/// and newer summary requests. No inference or await occurs under the guard.
+async fn publish_summary(
+    db: &Database, cache: &SharedSummaryCache, generation: &SummaryGeneration,
+    id: u64, key: &str, summary: ArticleSummary,
+) -> Result<ArticleSummary, String> {
+    let mut cache = cache.lock().await;
+    generation.with_current(id, || {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        queries::upsert_article_summary(&conn, key, &summary).map_err(|e| e.to_string())?;
+        cache.insert(key.to_string(), summary.clone());
+        Ok(summary)
+    })
+}
+
 fn summary_cache_key(article_id: &str, title: &str, evidence: &str, ai: &AiSettings) -> String {
     #[derive(Serialize)]
     struct SummaryKey<'a> {
+        prompt_version: u32,
         article_id: &'a str,
         article_title: &'a str,
         source_fingerprint: String,
@@ -101,6 +161,7 @@ fn summary_cache_key(article_id: &str, title: &str, evidence: &str, ai: &AiSetti
     }
 
     let key = SummaryKey {
+        prompt_version: 2, // Compatible JSON schemas; no fictional summary examples.
         article_id,
         article_title: title,
         source_fingerprint: format!("{:x}", Sha256::digest(evidence.as_bytes())),
@@ -123,6 +184,72 @@ fn summary_cache_key(article_id: &str, title: &str, evidence: &str, ai: &AiSetti
 #[cfg(test)]
 mod summary_cache_tests {
     use super::*;
+
+    fn fixture() -> (Database, SharedSummaryCache, ArticleSummary) {
+        let db = Database::new(std::env::temp_dir().join(format!("skim-summary-cancel-{}", uuid::Uuid::new_v4()))).unwrap();
+        db.conn.lock().unwrap().execute_batch(
+            "INSERT INTO feeds (id,title,url,created_at,updated_at) VALUES ('feed','Feed','https://example.test',0,0);
+             INSERT INTO articles (id,feed_id,title,fetched_at) VALUES ('article','feed','Title',0);"
+        ).unwrap();
+        let cache = Arc::new(Mutex::new(SummaryCache::new()));
+        let summary = ArticleSummary {
+            article_id: "article".into(), bullet_summary: None,
+            full_summary: Some("Late model completion".into()), provider: Some("custom".into()),
+            model: Some("configured-model".into()), created_at: 1,
+        };
+        (db, cache, summary)
+    }
+
+    #[tokio::test]
+    async fn cancellation_while_publication_waits_cannot_write_either_cache() {
+        let (db, cache, summary) = fixture();
+        let generation = SummaryGeneration::default();
+        let id = generation.begin().unwrap();
+        generation.check(id).unwrap(); // Earlier cancellation check passed.
+        let held = cache.lock().await;
+        let publication = publish_summary(&db, &cache, &generation, id, "key", summary);
+        tokio::pin!(publication);
+        assert!(futures_util::poll!(&mut publication).is_pending());
+        generation.begin().unwrap(); // Cancel while awaiting the cache lock.
+        drop(held);
+        assert_eq!(publication.await.unwrap_err(), "Summary cancelled");
+        assert!(cache.lock().await.get("key").is_none());
+        assert!(queries::get_article_summary(&db.conn.lock().unwrap(), "article", "key").unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn newer_generation_survives_late_old_completion_and_can_reload_from_sqlite() {
+        let (db, cache, old) = fixture();
+        let generation = SummaryGeneration::default();
+        let old_id = generation.begin().unwrap();
+        let new_id = generation.begin().unwrap();
+        let mut current = old.clone();
+        current.full_summary = Some("Current result".into());
+        publish_summary(&db, &cache, &generation, new_id, "key", current).await.unwrap();
+        assert_eq!(publish_summary(&db, &cache, &generation, old_id, "key", old).await.unwrap_err(), "Summary cancelled");
+        assert_eq!(cache.lock().await.get("key").unwrap().full_summary.as_deref(), Some("Current result"));
+        cache.lock().await.clear();
+        let restored = cached_summary(&db, &cache, &generation, new_id, "article", "key", false).await.unwrap().unwrap();
+        assert_eq!(restored.full_summary.as_deref(), Some("Current result"));
+        assert_eq!(cache.lock().await.get("key").unwrap().full_summary.as_deref(), Some("Current result"));
+    }
+
+    #[tokio::test]
+    async fn cancelled_cache_hits_and_force_requests_do_not_return_or_delete_results() {
+        let (db, cache, summary) = fixture();
+        let generation = SummaryGeneration::default();
+        let id = generation.begin().unwrap();
+        publish_summary(&db, &cache, &generation, id, "key", summary).await.unwrap();
+        generation.begin().unwrap();
+        for force in [false, true] {
+            assert_eq!(cached_summary(&db, &cache, &generation, id, "article", "key", force).await.unwrap_err(), "Summary cancelled");
+        }
+        assert!(cache.lock().await.get("key").is_some());
+        cache.lock().await.clear();
+        assert_eq!(cached_summary(&db, &cache, &generation, id, "article", "key", false).await.unwrap_err(), "Summary cancelled");
+        assert!(cache.lock().await.get("key").is_none());
+        assert!(queries::get_article_summary(&db.conn.lock().unwrap(), "article", "key").unwrap().is_some());
+    }
 
     #[test]
     fn summary_cache_tracks_evidence_title_and_requested_detail() {
@@ -296,8 +423,7 @@ fn ios_local_summary_text(text: &str) -> String {
 
 #[tauri::command]
 pub async fn cancel_summarize(generation: State<'_, SummaryGeneration>) -> Result<(), String> {
-    generation.0.fetch_add(1, Ordering::SeqCst);
-    Ok(())
+    generation.begin().map(|_| ())
 }
 
 #[tauri::command]
@@ -315,7 +441,7 @@ pub async fn summarize_article(
     summary_custom_prompt: Option<String>,
     summary_custom_word_count: Option<i32>,
 ) -> Result<ArticleSummary, String> {
-    let gen_id = generation.0.fetch_add(1, Ordering::SeqCst) + 1;
+    let gen_id = generation.begin()?;
     // Get article content and settings
     let (article, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -380,33 +506,12 @@ pub async fn summarize_article(
     if text.trim().is_empty() {
         return Err("No article content to summarize.".to_string());
     }
-    if generation.0.load(Ordering::SeqCst) != gen_id {
-        return Err("Summary cancelled".to_string());
-    }
+    generation.check(gen_id)?;
     let cache_key = summary_cache_key(&article_id, &article.article.title, &text, &settings.ai);
-    {
-        let mut cache = summary_cache.lock().await;
-        if force.unwrap_or(false) {
-            cache.remove(&cache_key);
-        } else if let Some(existing) = cache.get(&cache_key) {
-            return Ok(existing.clone());
-        }
-    }
-
-    let cached_from_db = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        if force.unwrap_or(false) {
-            queries::delete_article_summary(&conn, &article_id, &cache_key)
-                .map_err(|e| e.to_string())?;
-            None
-        } else {
-            queries::get_article_summary(&conn, &article_id, &cache_key)
-                .map_err(|e| e.to_string())?
-        }
-    };
-    if let Some(existing) = cached_from_db {
-        let mut cache = summary_cache.lock().await;
-        cache.insert(cache_key.clone(), existing.clone());
+    if let Some(existing) = cached_summary(
+        db.inner(), summary_cache.inner(), generation.inner(), gen_id,
+        &article_id, &cache_key, force.unwrap_or(false),
+    ).await? {
         return Ok(existing);
     }
 
@@ -450,9 +555,7 @@ pub async fn summarize_article(
                 None
             };
 
-            if generation.0.load(Ordering::SeqCst) != gen_id {
-                return Err("Summary cancelled".to_string());
-            }
+            generation.check(gen_id)?;
 
             let full_prompt = prompts::article_full_summary_prompt(title, &text, &settings.ai);
             let full_text = if !full_prompt.is_empty() {
@@ -483,16 +586,8 @@ pub async fn summarize_article(
                 model: Some(provider_name.to_string()),
                 created_at: Utc::now().timestamp(),
             };
-            {
-                {
-                    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-                    queries::upsert_article_summary(&conn, &cache_key, &summary)
-                        .map_err(|e| e.to_string())?;
-                }
-                let mut cache = summary_cache.lock().await;
-                cache.insert(cache_key.clone(), summary.clone());
-            }
-            return Ok(summary);
+            return publish_summary(db.inner(), summary_cache.inner(), generation.inner(),
+                gen_id, &cache_key, summary).await;
         }
     }
 
@@ -536,9 +631,7 @@ pub async fn summarize_article(
     };
 
     // Check if cancelled between the two AI calls
-    if generation.0.load(Ordering::SeqCst) != gen_id {
-        return Err("Summary cancelled".to_string());
-    }
+    generation.check(gen_id)?;
 
     // Get full summary (skip if format is bullets-only)
     let full_prompt = prompts::article_full_summary_prompt(title, &text, &settings.ai);
@@ -585,18 +678,8 @@ pub async fn summarize_article(
         created_at: Utc::now().timestamp(),
     };
 
-    // Cache in SQLite and memory.
-    {
-        {
-            let conn = db.conn.lock().map_err(|e| e.to_string())?;
-            queries::upsert_article_summary(&conn, &cache_key, &summary)
-                .map_err(|e| e.to_string())?;
-        }
-        let mut cache = summary_cache.lock().await;
-        cache.insert(cache_key, summary.clone());
-    }
-
-    Ok(summary)
+    publish_summary(db.inner(), summary_cache.inner(), generation.inner(),
+        gen_id, &cache_key, summary).await
 }
 
 #[derive(Deserialize)]

@@ -6,11 +6,13 @@ import SkimStoryPolicy
 private let skimStoreLogger = Logger(subsystem: "com.skim.app", category: "skim-store")
 
 public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
-    private let db: SQLiteDatabase
+    let db: SQLiteDatabase
+    var preparationRequests: [String: UUID] = [:]
 
     public init(databaseURL: URL) throws {
         self.db = try SQLiteDatabase(url: databaseURL)
         try db.migrate()
+        try db.migratePreparation()
     }
 
     #if DEBUG
@@ -314,6 +316,8 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             endsAt: endsAt,
             storyLimit: storyLimit
         )
+        if let active = try db.preparationActiveEdition(startsAt: startsAt, endsAt: endsAt, storyLimit: storyLimit),
+           try db.edition(id: active) != nil { return try db.todayEditionSnapshot(id: active) }
         let existing = try db.edition(id: editionID) != nil
             ? db.todayEditionSnapshot(id: editionID) : nil
         if let existing, !existing.items.isEmpty { return existing }
@@ -490,7 +494,7 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
     }
 }
 
-private enum SQLiteValue {
+enum SQLiteValue {
     case text(String)
     case optionalText(String?)
     case int(Int)
@@ -500,7 +504,8 @@ private enum SQLiteValue {
     case date(Date?)
 }
 
-private final class SQLiteDatabase: @unchecked Sendable {
+final class SQLiteDatabase: @unchecked Sendable {
+    var preparationTemplates: [String: PreparationTemplate] = [:]
     private let url: URL
     private var handle: OpaquePointer
     private var lastErrorCode: Int32 = 0

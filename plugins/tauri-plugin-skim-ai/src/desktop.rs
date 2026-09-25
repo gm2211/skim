@@ -43,6 +43,27 @@ mod platform {
         worker: Mutex<Option<Worker>>,
     }
 
+    #[cfg(debug_assertions)]
+    pub(super) fn debug_bridge_path(
+        explicit: Option<std::ffi::OsString>,
+        sibling: Option<PathBuf>,
+        fallback: PathBuf,
+    ) -> PathBuf {
+        explicit
+            .map(PathBuf::from)
+            .or_else(|| {
+                // A copied debug executable alone cannot initialize MLX: its Metal
+                // library must be beside it. The development package contains both.
+                sibling.filter(|path| {
+                    path.is_file()
+                        && path
+                            .parent()
+                            .is_some_and(|dir| dir.join("mlx.metallib").is_file())
+                })
+            })
+            .unwrap_or(fallback)
+    }
+
     pub fn init<R: Runtime, C: DeserializeOwned>(
         app: &AppHandle<R>,
         _api: PluginApi<R, C>,
@@ -51,13 +72,12 @@ mod platform {
             .ok()
             .and_then(|path| path.parent().map(|dir| dir.join("skim-ai-macos-bridge")));
         #[cfg(debug_assertions)]
-        let bridge = std::env::var_os("SKIM_AI_MAC_BRIDGE_PATH")
-            .map(PathBuf::from)
-            .or_else(|| bundled.clone().filter(|path| path.exists()))
-            .unwrap_or_else(|| {
-                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("bin/skim-ai-macos-bridge-aarch64-apple-darwin")
-            });
+        let bridge = debug_bridge_path(
+            std::env::var_os("SKIM_AI_MAC_BRIDGE_PATH"),
+            bundled.clone(),
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("bin/skim-ai-macos-bridge-aarch64-apple-darwin"),
+        );
         #[cfg(not(debug_assertions))]
         let bridge = bundled.unwrap_or_else(|| PathBuf::from("skim-ai-macos-bridge"));
         Ok(SkimAi {
@@ -258,6 +278,43 @@ pub use platform::{init, SkimAi};
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::platform::Reply;
+    #[cfg(debug_assertions)]
+    #[test]
+    fn debug_helper_requires_its_metal_resource_but_explicit_override_wins() {
+        use super::platform::debug_bridge_path;
+        let dir = std::env::temp_dir().join(format!(
+            "skim-helper-selection-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let sibling = dir.join("skim-ai-macos-bridge");
+        let fallback = dir.join("package").join("helper");
+        std::fs::write(&sibling, b"test executable").unwrap();
+        assert_eq!(
+            debug_bridge_path(None, Some(sibling.clone()), fallback.clone()),
+            fallback
+        );
+        std::fs::write(dir.join("mlx.metallib"), b"test library").unwrap();
+        assert_eq!(
+            debug_bridge_path(None, Some(sibling.clone()), fallback.clone()),
+            sibling
+        );
+        let explicit = dir.join("explicit-helper");
+        assert_eq!(
+            debug_bridge_path(
+                Some(explicit.clone().into_os_string()),
+                Some(sibling),
+                fallback
+            ),
+            explicit
+        );
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn progress_envelope_does_not_require_final_reply_fields() {
         assert!(serde_json::from_str::<Reply>(r#"{"progress":0.25}"#).is_ok());

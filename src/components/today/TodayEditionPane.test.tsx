@@ -5,12 +5,16 @@ import userEvent from "@testing-library/user-event";
 import { listen } from "@tauri-apps/api/event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TodayEditionPane } from "./TodayEditionPane";
-import type { AppSettings, TodayEditionItem, TodayEditionView } from "../../services/types";
+import type { AppSettings, TodayEditionItem, TodayEditionView, TodayPreparationStatus } from "../../services/types";
 import { todayWindow } from "../../lib/todayEdition";
 import { useUiStore } from "../../stores/uiStore";
 
 vi.mock("../../services/commands", () => ({
   getOrGenerateTodayEdition: vi.fn(),
+  getTodayPreparationStatus: vi.fn(),
+  prepareTodaySlice: vi.fn(),
+  cancelTodayPreparation: vi.fn(),
+  publishPreparedTodayEdition: vi.fn(),
   refreshAllFeeds: vi.fn(),
   triageArticles: vi.fn(),
   listTodayEditionItems: vi.fn(),
@@ -117,6 +121,26 @@ function makeView(items: TodayEditionItem[]): TodayEditionView {
   };
 }
 
+function makePreparation(overrides: Partial<TodayPreparationStatus> = {}): TodayPreparationStatus {
+  return {
+    scope_key: "today-scope",
+    eligible_count: 12,
+    assessed_count: 0,
+    assessment_failed_count: 0,
+    proposal_window_count: 4,
+    proposal_completed_count: 0,
+    proposal_failed_count: 0,
+    proposed_pair_count: 0,
+    verified_pair_count: 0,
+    verification_failed_count: 0,
+    state: "preparing",
+    manifest: "manifest-1",
+    can_publish: false,
+    active_edition_id: "today-1-2-10",
+    ...overrides,
+  };
+}
+
 function renderPane(strict = false, cached?: TodayEditionView) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (cached) {
@@ -140,13 +164,21 @@ beforeEach(() => {
   useUiStore.setState({ isPhone: false, sidebarCollapsed: false });
   vi.mocked(commands.getSettings).mockResolvedValue(DEFAULT_SETTINGS);
   vi.mocked(commands.generateTodayLedes).mockImplementation((_id: string) => new Promise(() => {}));
+  vi.mocked(commands.getTodayPreparationStatus).mockResolvedValue(makePreparation({ state: "disabled" }));
+  vi.mocked(commands.prepareTodaySlice).mockResolvedValue(makePreparation({ state: "disabled" }));
+  vi.mocked(commands.cancelTodayPreparation).mockResolvedValue(undefined);
 });
 
 afterEach(() => {
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
   vi.mocked(commands.getOrGenerateTodayEdition).mockReset();
   vi.mocked(commands.setTodayEditionItemConsumed).mockReset();
   vi.mocked(commands.getSettings).mockReset();
   vi.mocked(commands.generateTodayLedes).mockReset();
+  vi.mocked(commands.getTodayPreparationStatus).mockReset();
+  vi.mocked(commands.prepareTodaySlice).mockReset();
+  vi.mocked(commands.cancelTodayPreparation).mockReset();
+  vi.mocked(commands.publishPreparedTodayEdition).mockReset();
 });
 
 describe("TodayEditionPane", () => {
@@ -547,5 +579,191 @@ describe("Today summary retries", () => {
     expect(await screen.findByText("All caught up")).toBeInTheDocument();
     expect(screen.getByText("Lede finished while save was pending")).toBeInTheDocument();
     await act(async () => finishLedes(latestLede));
+  });
+});
+
+describe("Today preparation lifecycle", () => {
+  it("keeps the frozen edition visible while bounded slices advance independent coverage", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({ snapshot_title: "Frozen edition" })]));
+    vi.mocked(commands.getTodayPreparationStatus).mockResolvedValue(makePreparation());
+    vi.mocked(commands.prepareTodaySlice)
+      .mockResolvedValueOnce(makePreparation({ assessed_count: 5, proposal_completed_count: 1, proposed_pair_count: 6, verified_pair_count: 2 }))
+      .mockResolvedValueOnce(makePreparation({ state: "ready", assessed_count: 12, proposal_completed_count: 4, proposed_pair_count: 20, verified_pair_count: 20, can_publish: true }));
+    renderPane();
+    expect(await screen.findByText("Frozen edition")).toBeInTheDocument();
+    expect(await screen.findByText("Updated edition ready")).toBeInTheDocument();
+    expect(commands.prepareTodaySlice).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/12 of 12 stories reviewed/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open updated edition" })).toBeInTheDocument();
+    expect(screen.getByText("Frozen edition")).toBeInTheDocument();
+    expect(commands.publishPreparedTodayEdition).not.toHaveBeenCalled();
+  });
+
+  it("resumes preparation after a successful edition refresh without replacing the current reading snapshot", async () => {
+    const frozen = makeView([makeItem({ snapshot_title: "Still reading this edition" })]);
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(frozen);
+    vi.mocked(commands.getTodayPreparationStatus)
+      .mockResolvedValueOnce(makePreparation({ state: "ready", can_publish: false }))
+      .mockResolvedValueOnce(makePreparation({ state: "preparing", assessed_count: 3 }));
+    vi.mocked(commands.prepareTodaySlice).mockResolvedValue(makePreparation({ state: "ready", can_publish: false, assessed_count: 12 }));
+    const { qc } = renderPane();
+    expect(await screen.findByText("Still reading this edition")).toBeInTheDocument();
+    await act(async () => { await qc.invalidateQueries({ queryKey: ["todayEdition"] }); });
+    await waitFor(() => expect(commands.getTodayPreparationStatus).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(commands.prepareTodaySlice).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("Still reading this edition")).toBeInTheDocument();
+    expect(commands.publishPreparedTodayEdition).not.toHaveBeenCalled();
+  });
+
+  it("rechecks preparation after AI settings change without changing the story-limit scope", async () => {
+    const frozen = makeView([makeItem({ snapshot_title: "Still reading this edition" })]);
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(frozen);
+    vi.mocked(commands.getTodayPreparationStatus)
+      .mockResolvedValueOnce(makePreparation({ state: "ready", can_publish: false }))
+      .mockResolvedValueOnce(makePreparation({ state: "preparing", assessed_count: 4 }));
+    vi.mocked(commands.prepareTodaySlice).mockResolvedValue(makePreparation({ state: "ready", can_publish: false }));
+    const { qc } = renderPane();
+    expect(await screen.findByText("Still reading this edition")).toBeInTheDocument();
+    await waitFor(() => expect(commands.getTodayPreparationStatus).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      qc.setQueryData(["settings"], { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama", model: "new-model" } }, { updatedAt: Date.now() + 1_000 });
+    });
+    await waitFor(() => expect(commands.getTodayPreparationStatus).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(commands.prepareTodaySlice).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("Still reading this edition")).toBeInTheDocument();
+  });
+
+  it("rechecks preparation after saving consumed state without replacing the frozen story", async () => {
+    const frozen = makeView([makeItem({ snapshot_title: "Current frozen story" })]);
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(frozen);
+    vi.mocked(commands.getTodayPreparationStatus)
+      .mockResolvedValueOnce(makePreparation({ state: "ready", can_publish: false }))
+      .mockResolvedValueOnce(makePreparation({ state: "ready", can_publish: false, eligible_count: 11 }));
+    vi.mocked(commands.setTodayEditionItemConsumed).mockResolvedValue(makeView([makeItem({ is_consumed: true, consumed_at: 99, snapshot_title: "Current frozen story" })]));
+    renderPane();
+    expect(await screen.findByText("Current frozen story")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Mark as read" }));
+    await waitFor(() => expect(commands.getTodayPreparationStatus).toHaveBeenCalledTimes(2));
+    expect(screen.getByText("Current frozen story")).toBeInTheDocument();
+  });
+
+  it("opens a prepared successor only after an explicit click", async () => {
+    const original = makeView([makeItem({ snapshot_title: "Current frozen edition" })]);
+    const successor = makeView([makeItem({ snapshot_title: "Prepared successor" })]);
+    successor.edition.id = "successor-edition";
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(original);
+    vi.mocked(commands.getTodayPreparationStatus).mockResolvedValue(makePreparation({ state: "ready", can_publish: true }));
+    vi.mocked(commands.publishPreparedTodayEdition).mockResolvedValue(successor);
+    renderPane();
+    expect(await screen.findByText("Current frozen edition")).toBeInTheDocument();
+    expect(commands.publishPreparedTodayEdition).not.toHaveBeenCalled();
+    await userEvent.click(await screen.findByRole("button", { name: "Open updated edition" }));
+    expect(await screen.findByText("Prepared successor")).toBeInTheDocument();
+    expect(screen.queryByText("Current frozen edition")).not.toBeInTheDocument();
+    expect(commands.publishPreparedTodayEdition).toHaveBeenCalledWith(expect.any(Number), expect.any(Number), expect.any(Number), 10, "manifest-1");
+  });
+
+  it("surfaces incomplete checks and retries failed work explicitly", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    vi.mocked(commands.getTodayPreparationStatus).mockResolvedValue(makePreparation({
+      state: "failed", assessed_count: 10, assessment_failed_count: 2, proposal_window_count: 4,
+      proposal_completed_count: 3, proposal_failed_count: 1, proposed_pair_count: 8,
+      verified_pair_count: 6, verification_failed_count: 2,
+    }));
+    vi.mocked(commands.prepareTodaySlice).mockResolvedValue(makePreparation({
+      state: "ready", assessed_count: 12, assessment_failed_count: 0, proposal_completed_count: 4,
+      proposal_failed_count: 0, proposed_pair_count: 8, verified_pair_count: 8,
+      verification_failed_count: 0, can_publish: true,
+    }));
+    renderPane();
+    expect(await screen.findByText("Some stories could not be reviewed")).toBeInTheDocument();
+    expect(screen.getByText("2 stories could not be reviewed.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Retry checks" }));
+    expect(await screen.findByText("Updated edition ready")).toBeInTheDocument();
+    expect(commands.prepareTodaySlice).toHaveBeenCalledWith(expect.any(Number), expect.any(Number), expect.any(Number), 10, expect.any(String), true);
+  });
+
+  it("does not imply stories were missed when only related-report checks failed", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    vi.mocked(commands.getTodayPreparationStatus).mockResolvedValue(makePreparation({
+      state: "failed", assessed_count: 12, proposal_window_count: 4,
+      proposal_completed_count: 3, proposal_failed_count: 1, proposed_pair_count: 8,
+      verified_pair_count: 6,
+    }));
+    renderPane();
+    expect(await screen.findByText("Related-report checks need another look")).toBeInTheDocument();
+    expect(screen.getByText(/Some related reports need another check/)).toBeInTheDocument();
+    expect(screen.queryByText(/stories could not be reviewed/)).not.toBeInTheDocument();
+  });
+
+  it("cancels the exact in-flight slice on unmount and ignores its late reply", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({ snapshot_title: "Frozen while waiting" })]));
+    vi.mocked(commands.getTodayPreparationStatus).mockResolvedValue(makePreparation());
+    let finish!: (status: TodayPreparationStatus) => void;
+    vi.mocked(commands.prepareTodaySlice).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const rendered = renderPane();
+    await screen.findByText("Frozen while waiting");
+    await waitFor(() => expect(commands.prepareTodaySlice).toHaveBeenCalledTimes(1));
+    const requestId = vi.mocked(commands.prepareTodaySlice).mock.calls[0][4];
+    rendered.unmount();
+    expect(commands.cancelTodayPreparation).toHaveBeenCalledWith(requestId);
+    await act(async () => finish(makePreparation({ state: "ready", can_publish: true })));
+    expect(commands.publishPreparedTodayEdition).not.toHaveBeenCalled();
+  });
+
+  it("cancels a retry when the story-limit scope changes and ignores its late status", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    vi.mocked(commands.getTodayPreparationStatus).mockResolvedValue(makePreparation({ state: "failed" }));
+    let finish!: (status: TodayPreparationStatus) => void;
+    vi.mocked(commands.prepareTodaySlice).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const { qc } = renderPane();
+    await userEvent.click(await screen.findByRole("button", { name: "Retry checks" }));
+    const requestId = vi.mocked(commands.prepareTodaySlice).mock.calls[0][4];
+    await act(async () => {
+      qc.setQueryData(["settings"], { ...DEFAULT_SETTINGS, sync: { ...DEFAULT_SETTINGS.sync, today_story_limit: 5 } });
+    });
+    await waitFor(() => expect(commands.cancelTodayPreparation).toHaveBeenCalledWith(requestId));
+    await act(async () => finish(makePreparation({ state: "ready", can_publish: true })));
+    expect(screen.queryByRole("button", { name: "Open updated edition" })).not.toBeInTheDocument();
+  });
+
+  it("cancels the active retry when the page becomes hidden", async () => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    vi.mocked(commands.getTodayPreparationStatus).mockResolvedValue(makePreparation({ state: "failed" }));
+    let finish!: (status: TodayPreparationStatus) => void;
+    vi.mocked(commands.prepareTodaySlice).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const rendered = renderPane();
+    await userEvent.click(await screen.findByRole("button", { name: "Retry checks" }));
+    const requestId = vi.mocked(commands.prepareTodaySlice).mock.calls[0][4];
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+    expect(commands.cancelTodayPreparation).toHaveBeenCalledWith(requestId);
+    await act(async () => finish(makePreparation({ state: "ready", can_publish: true })));
+    expect(screen.queryByRole("button", { name: "Open updated edition" })).not.toBeInTheDocument();
+    rendered.unmount();
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+  });
+
+  it("shows preparation transport failures and stops automatic retries", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    vi.mocked(commands.getTodayPreparationStatus).mockResolvedValue(makePreparation());
+    vi.mocked(commands.prepareTodaySlice).mockRejectedValue(new Error("Provider timeout"));
+    renderPane();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Provider timeout");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(commands.prepareTodaySlice).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a failed status read through the status query, not the slice retry action", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    vi.mocked(commands.getTodayPreparationStatus)
+      .mockRejectedValueOnce(new Error("Status unavailable"))
+      .mockResolvedValueOnce(makePreparation({ state: "ready", can_publish: true }));
+    renderPane();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load story coverage status");
+    await userEvent.click(screen.getByRole("button", { name: "Retry status" }));
+    expect(await screen.findByText("Updated edition ready")).toBeInTheDocument();
+    expect(commands.prepareTodaySlice).not.toHaveBeenCalled();
   });
 });

@@ -242,21 +242,17 @@ actor MLXRunner {
         loadingRepoId = nil
     }
 
-    func selectDownloadedModel(preferredRepoId: String) {
-        // Existing incomplete caches represent the user's chosen model. Keep
-        // it selected so ensureLoaded surfaces the repair error instead of
-        // silently switching models after an integrity-policy upgrade.
-        if FileManager.default.fileExists(atPath: MLXRunner.cacheDirectory(forRepo: preferredRepoId).path) {
-            setModel(repoId: preferredRepoId)
-            return
+    nonisolated static func resolvedRepoID(preferredRepoId: String) -> String {
+        // Keep incomplete preferred caches selected for repair, matching loading.
+        if FileManager.default.fileExists(atPath: cacheDirectory(forRepo: preferredRepoId).path) {
+            return preferredRepoId
         }
+        let fallbacks = [defaultRepoId] + downloadedRepoIds()
+        return fallbacks.first(where: { isRepoDownloaded($0) }) ?? preferredRepoId
+    }
 
-        let fallbacks = [MLXRunner.defaultRepoId] + MLXRunner.downloadedRepoIds()
-        if let fallback = fallbacks.first(where: { MLXRunner.isRepoDownloaded($0) }) {
-            setModel(repoId: fallback)
-        } else {
-            setModel(repoId: preferredRepoId)
-        }
+    func selectDownloadedModel(preferredRepoId: String) {
+        setModel(repoId: Self.resolvedRepoID(preferredRepoId: preferredRepoId))
     }
 
     func setProgressSink(_ sink: (@Sendable (Double) -> Void)?) {
@@ -471,7 +467,9 @@ actor MLXRunner {
         repetitionPenalty: Float? = nil,
         repetitionContextSize: Int? = nil
     ) async throws -> String {
+        try Task.checkCancellation()
         let container = try await ensureLoaded()
+        try Task.checkCancellation()
 
         // Resolve sampling params: caller override > per-model preset > hardcoded fallback
         let preset = MLXSamplingPreset.preset(for: currentRepoId)
@@ -493,11 +491,13 @@ actor MLXRunner {
 
         do {
             let raw = try await container.perform { (context: ModelContext) -> String in
+                try Task.checkCancellation()
                 let userInput = UserInput(
                     messages: LocalChatMessages.prepare(messages: messages.map { LocalChatMessage(role: $0["role"] ?? "user", content: $0["content"] ?? "") }),
                     additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
                 )
                 let lmInput = try await context.processor.prepare(input: userInput)
+                try Task.checkCancellation()
 
                 // Wrap in MLX.withError so C-layer errors (e.g. from MLXArray.eval during
                 // token sampling) become catchable Swift errors instead of calling fatalError
@@ -509,11 +509,14 @@ actor MLXRunner {
                         input: lmInput,
                         parameters: params,
                         context: context
-                    ) { (_: [Int]) in GenerateDisposition.more }
+                    ) { (_: [Int]) in Task.isCancelled ? GenerateDisposition.stop : GenerateDisposition.more }
                 }
                 return result.output
             }
+            try Task.checkCancellation()
             return LocalModelOutput.sanitize(raw, family: family)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as MLX.MLXError {
             // MLX C-layer runtime error surfaced via scoped withError handler.
             // MLX.MLXError is mlx-swift's type (distinct from Skim's local MLXError);
@@ -536,7 +539,9 @@ actor MLXRunner {
         repetitionContextSize: Int? = nil,
         onToken: @Sendable @escaping (String) -> Void
     ) async throws -> String {
+        try Task.checkCancellation()
         let container = try await ensureLoaded()
+        try Task.checkCancellation()
 
         // Resolve sampling params: caller override > per-model preset > hardcoded fallback
         let preset = MLXSamplingPreset.preset(for: currentRepoId)
@@ -556,34 +561,38 @@ actor MLXRunner {
 
         do {
             let raw = try await container.perform { (context: ModelContext) -> String in
+                try Task.checkCancellation()
                 let userInput = UserInput(
                     messages: LocalChatMessages.prepare(messages: messages.map { LocalChatMessage(role: $0["role"] ?? "user", content: $0["content"] ?? "") }),
                     additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
                 )
                 let lmInput = try await context.processor.prepare(input: userInput)
+                try Task.checkCancellation()
 
-                // Async withError wraps the streaming loop so any MLX C-layer error
-                // emitted during token sampling (MLXArray.item / MLXArray.eval) is thrown
-                // as a Swift error instead of aborting the process via fatalError.
-                // Placed inside container.perform to ensure the scoped handler is active
-                // on the same task where MLX evaluation actually runs.
-                return try await MLX.withError {
+                // The callback-based generator synchronizes its GPU work before
+                // returning. AsyncStream's hidden producer can outlive a cancelled
+                // consumer, which would release our inference permit too early.
+                return try MLX.withError {
                     var accumulated = ""
-                    for await item in try MLXLMCommon.generate(
-                        input: lmInput,
-                        cache: nil,
-                        parameters: params,
-                        context: context
-                    ) {
-                        if let chunk = item.chunk {
-                            accumulated += chunk
-                            onToken(chunk)
+                    var detokenizer = NaiveStreamingDetokenizer(tokenizer: context.tokenizer)
+                    let toolCallProcessor = ToolCallProcessor()
+                    _ = try MLXLMCommon.generate(input: lmInput, parameters: params, context: context) { (token: Int) -> GenerateDisposition in
+                        guard !Task.isCancelled else { return .stop }
+                        detokenizer.append(token: token)
+                        if let chunk = detokenizer.next(), let text = toolCallProcessor.processChunk(chunk) {
+                            accumulated += text
+                            onToken(text)
                         }
+                        _ = toolCallProcessor.toolCalls.popLast()
+                        return .more
                     }
                     return accumulated
                 }
             }
+            try Task.checkCancellation()
             return LocalModelOutput.sanitize(raw, family: family)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as MLX.MLXError {
             // MLX C-layer runtime error surfaced via scoped withError handler.
             // Map to Skim's error hierarchy for consistent error handling by callers.

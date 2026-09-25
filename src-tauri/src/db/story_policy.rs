@@ -54,13 +54,18 @@ extern "C" {
     fn skim_story_is_unique(sources: i64) -> i32;
     fn skim_story_identity_hash(bytes: *const u8, length: usize) -> u64;
     fn skim_semantic_pair_prompt() -> *const std::os::raw::c_char;
+    #[cfg(test)]
     fn skim_semantic_rating_prompt() -> *const std::os::raw::c_char;
+    #[cfg(test)]
     fn skim_semantic_rating_valid(importance: f64, confidence: f64) -> i32;
+    #[cfg(test)]
     fn skim_semantic_max_pairs() -> usize;
     fn skim_semantic_pair_verdict(text: *const u8, length: usize) -> i32;
     fn skim_semantic_evidence_characters() -> usize;
     fn skim_semantic_pair_output_tokens() -> usize;
+    #[cfg(test)]
     fn skim_semantic_pair_batch_length(pair_count: usize, offset: usize) -> usize;
+    #[cfg(test)]
     fn skim_semantic_partition(
         members: *const f64,
         member_count: usize,
@@ -70,8 +75,11 @@ extern "C" {
         labels: *mut i32,
         labels_count: usize,
     ) -> i32;
+    #[cfg(test)]
     fn skim_semantic_prompt() -> *const std::os::raw::c_char;
+    #[cfg(test)]
     fn skim_semantic_max_candidates() -> usize;
+    #[cfg(test)]
     fn skim_semantic_group_valid(
         members: *const f64,
         member_count: usize,
@@ -221,6 +229,7 @@ pub fn semantic_pair_prompt() -> &'static str {
         .expect("shared pair prompt is UTF-8")
 }
 
+#[cfg(test)]
 pub fn semantic_pair_batch_length(pair_count: usize, offset: usize) -> usize {
     unsafe { skim_semantic_pair_batch_length(pair_count, offset) }
 }
@@ -231,10 +240,12 @@ pub fn semantic_pair_verdict(response: &str) -> i32 {
 pub fn semantic_evidence_characters() -> usize { unsafe { skim_semantic_evidence_characters() } }
 pub fn semantic_pair_output_tokens() -> usize { unsafe { skim_semantic_pair_output_tokens() } }
 
+#[cfg(test)]
 pub fn semantic_max_pairs() -> usize {
     unsafe { skim_semantic_max_pairs() }
 }
 
+#[cfg(test)]
 pub fn semantic_rating_prompt() -> &'static str {
     // Static string owned by the shared C policy.
     unsafe { std::ffi::CStr::from_ptr(skim_semantic_rating_prompt()) }
@@ -242,10 +253,12 @@ pub fn semantic_rating_prompt() -> &'static str {
         .expect("shared rating prompt is UTF-8")
 }
 
+#[cfg(test)]
 pub fn valid_semantic_rating(importance: f64, confidence: f64) -> bool {
     unsafe { skim_semantic_rating_valid(importance, confidence) != 0 }
 }
 
+#[cfg(test)]
 pub fn semantic_partition(
     members: &[usize],
     candidate_count: usize,
@@ -278,6 +291,7 @@ pub fn semantic_partition(
     Some(groups)
 }
 
+#[cfg(test)]
 pub fn semantic_prompt() -> &'static str {
     // C returns a static, NUL-terminated UTF-8 string; ownership never transfers.
     unsafe { std::ffi::CStr::from_ptr(skim_semantic_prompt()) }
@@ -285,10 +299,12 @@ pub fn semantic_prompt() -> &'static str {
         .expect("shared semantic prompt is UTF-8")
 }
 
+#[cfg(test)]
 pub fn semantic_max_candidates() -> usize {
     unsafe { skim_semantic_max_candidates() }
 }
 
+#[cfg(test)]
 pub fn valid_semantic_group(
     members: &[f64],
     candidate_count: usize,

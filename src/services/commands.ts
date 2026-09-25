@@ -31,6 +31,7 @@ import type {
   SmartRules,
   TodayEditionView,
   TodayEditionItem,
+  TodayPreparationStatus,
   AggregatorDetails,
   Ds4Status,
 } from "./types";
@@ -425,6 +426,40 @@ export const getOrGenerateTodayEdition = (
     generatedAt,
     storyLimit,
   });
+
+export const getTodayPreparationStatus = (
+  startsAt: number,
+  endsAt: number,
+  generatedAt: number,
+  storyLimit: number,
+) => invoke<TodayPreparationStatus>("get_today_preparation_status", {
+  startsAt, endsAt, generatedAt, storyLimit,
+});
+
+export const prepareTodaySlice = (
+  startsAt: number,
+  endsAt: number,
+  generatedAt: number,
+  storyLimit: number,
+  requestId: string,
+  retryFailed = false,
+) => invoke<TodayPreparationStatus>("prepare_today_slice", {
+  startsAt, endsAt, generatedAt, storyLimit, requestId, retryFailed,
+});
+
+export const cancelTodayPreparation = (requestId: string) =>
+  invoke<void>("cancel_today_preparation", { requestId });
+
+export const publishPreparedTodayEdition = (
+  startsAt: number,
+  endsAt: number,
+  generatedAt: number,
+  storyLimit: number,
+  manifest: string,
+) => invoke<TodayEditionView>("publish_prepared_today_edition", {
+  startsAt, endsAt, generatedAt, storyLimit, manifest,
+});
+
 export const listTodayEditionItems = (editionId: string) =>
   invoke<TodayEditionItem[]>("list_today_edition_items", { editionId });
 export const setTodayEditionItemConsumed = (

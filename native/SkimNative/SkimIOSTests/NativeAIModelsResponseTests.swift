@@ -672,3 +672,39 @@ private func syntheticPipelineCandidates() throws -> [TodaySemanticCandidate] {
         #expect(!unknown.contains("1970-01-01"))
     }
 }
+
+@Test func nativePreparationIdentityTracksEffectiveModelAndSamplingOverrides() throws {
+    var settings = AppSettings()
+    settings.ai.provider = "mlx"
+    settings.ai.model = "cloud-model"
+    #expect(NativeMLX.preferredRepoID(settings: settings.ai) == NativeMLX.defaultRepoId)
+    settings.ai.model = "fixture/model"
+    #expect(NativeMLX.preferredRepoID(settings: settings.ai) == "fixture/model")
+    settings.ai.localModelPath = "preferred/local"
+    #expect(NativeMLX.preferredRepoID(settings: settings.ai) == "preferred/local")
+    let baseline = NativeAI.todayPreparationIdentity(settings: settings, resolveModel: { _ in "effective/fallback" })
+    let fields = try #require(JSONSerialization.jsonObject(with: Data(baseline.utf8)) as? [String: String])
+    #expect(fields["model"] == "effective/fallback")
+    #expect(fields["policyVersion"] == String(TodayPreparationPolicy.version))
+    #expect(fields["maxTokens"] == "shared-task-budget")
+    #expect(fields["temperature"] == "0")
+    for index in 0..<4 {
+        var changed = settings
+        switch index {
+        case 0: changed.ai.mlxMaxTokens = 987
+        case 1: changed.ai.mlxTopP = 0.123
+        case 2: changed.ai.mlxRepetitionPenalty = 1.987
+        default: changed.ai.mlxRepetitionContextSize = 321
+        }
+        #expect(NativeAI.todayPreparationIdentity(settings: changed, resolveModel: { _ in "effective/fallback" }) != baseline)
+    }
+    settings.ai.apiKey = "fixture-secret-not-a-real-key"
+    settings.ai.mlxTemperature = 0.876 // This operation always applies temperature zero.
+    #expect(NativeAI.todayPreparationIdentity(settings: settings, resolveModel: { _ in "effective/fallback" }) == baseline)
+    let preset = MLXSamplingPreset.preset(for: "effective/fallback")
+    settings.ai.mlxTopP = Double(preset.topP)
+    settings.ai.mlxRepetitionPenalty = Double(preset.repetitionPenalty)
+    settings.ai.mlxRepetitionContextSize = preset.repetitionContextSize
+    #expect(NativeAI.todayPreparationIdentity(settings: settings, resolveModel: { _ in "effective/fallback" }) == baseline)
+    #expect(NativeAI.todayPreparationIdentity(settings: settings, resolveModel: { _ in "new/model" }) != baseline)
+}

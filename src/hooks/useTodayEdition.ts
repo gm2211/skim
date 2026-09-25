@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import * as commands from "../services/commands";
 import type { TodayEditionView } from "../services/types";
+import type { TodayPreparationStatus } from "../services/types";
 import { msUntilWindowRollover, todayWindow, type TodayWindow } from "../lib/todayEdition";
 import { useSettings } from "./useSettings";
 
@@ -63,10 +64,15 @@ function useTodayWindow(): TodayWindow {
 export function useTodayEdition() {
   const qc = useQueryClient();
   const storyLimit = useTodayStoryLimit();
-  const { data: settings } = useSettings();
+  const settingsQuery = useSettings();
+  const settings = settingsQuery.data;
   const aiEnabled = !!settings && settings.ai.provider !== "none";
   const win = useTodayWindow();
   const queryKey = useMemo(() => ["todayEdition", win.startsAt, win.endsAt, storyLimit] as const, [win.startsAt, win.endsAt, storyLimit]);
+  const preparationKey = useMemo(() => ["todayPreparation", win.startsAt, win.endsAt, storyLimit] as const, [win.startsAt, win.endsAt, storyLimit]);
+  // Keep the request identity stable for this local-day scope so every status,
+  // slice, and publish call refers to the same preparation generation.
+  const generatedAt = useMemo(() => Math.floor(Date.now() / 1000), [win.startsAt, win.endsAt, storyLimit]);
 
   const query = useQuery({
     queryKey,
@@ -74,10 +80,144 @@ export function useTodayEdition() {
       commands.getOrGenerateTodayEdition(
         win.startsAt,
         win.endsAt,
-        Math.floor(Date.now() / 1000),
+        generatedAt,
         storyLimit,
       ),
   });
+
+  const preparation = useQuery({
+    queryKey: preparationKey,
+    queryFn: () => commands.getTodayPreparationStatus(win.startsAt, win.endsAt, generatedAt, storyLimit),
+    enabled: !!query.data && !query.isError,
+    staleTime: 0,
+  });
+  const previousPreparationInputs = useRef({ edition: query.dataUpdatedAt, settings: settingsQuery.dataUpdatedAt });
+  useEffect(() => {
+    const previous = previousPreparationInputs.current;
+    const changedAfterInitialLoad = (previous.edition > 0 && query.dataUpdatedAt !== previous.edition)
+      || (previous.settings > 0 && settingsQuery.dataUpdatedAt !== previous.settings);
+    previousPreparationInputs.current = { edition: query.dataUpdatedAt, settings: settingsQuery.dataUpdatedAt };
+    if (changedAfterInitialLoad && query.data) void preparation.refetch();
+  }, [query.dataUpdatedAt, settingsQuery.dataUpdatedAt, query.data, preparation.refetch]);
+  const [preparationEpoch, setPreparationEpoch] = useState(0);
+  const [preparationError, setPreparationError] = useState<string | null>(null);
+  const [retryingPreparation, setRetryingPreparation] = useState(false);
+  const [pageVisible, setPageVisible] = useState(() => typeof document === "undefined" || document.visibilityState !== "hidden");
+  const pageVisibleRef = useRef(pageVisible);
+  pageVisibleRef.current = pageVisible;
+  const preparationRequest = useRef<{ scope: string; requestId: string } | null>(null);
+  const mountedRef = useRef(false);
+  const editionLoaded = !!query.data && !query.isError;
+  const localScope = `${win.startsAt}:${win.endsAt}:${storyLimit}:${generatedAt}`;
+  const currentScope = useRef(localScope);
+  currentScope.current = localScope;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const updateVisibility = () => {
+      const visible = document.visibilityState !== "hidden";
+      pageVisibleRef.current = visible;
+      setPageVisible(visible);
+      if (visible) return;
+      const active = preparationRequest.current;
+      preparationRequest.current = null;
+      if (active) void commands.cancelTodayPreparation(active.requestId).catch(() => {});
+      setRetryingPreparation(false);
+    };
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => {
+      mountedRef.current = false;
+      document.removeEventListener("visibilitychange", updateVisibility);
+      const active = preparationRequest.current;
+      preparationRequest.current = null;
+      if (active) void commands.cancelTodayPreparation(active.requestId).catch(() => {});
+    };
+  }, []);
+
+  useEffect(() => {
+    const scope = localScope;
+    return () => {
+      const active = preparationRequest.current;
+      if (active?.scope !== scope) return;
+      preparationRequest.current = null;
+      void commands.cancelTodayPreparation(active.requestId).catch(() => {});
+    };
+  }, [localScope]);
+
+  useEffect(() => {
+    const status = preparation.data;
+    if (!status || status.state !== "preparing" || !pageVisible || retryingPreparation || !editionLoaded) return;
+    if (preparationRequest.current?.scope === localScope) return;
+    const requestId = globalThis.crypto?.randomUUID?.()
+      ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const active = { scope: localScope, requestId };
+    preparationRequest.current = active;
+    let current = true;
+    void commands.prepareTodaySlice(win.startsAt, win.endsAt, generatedAt, storyLimit, requestId).then((next) => {
+      if (!current || !pageVisibleRef.current || preparationRequest.current?.requestId !== requestId
+        || currentScope.current !== localScope || next.scope_key !== status.scope_key) return;
+      if (preparationRequest.current?.requestId === requestId) preparationRequest.current = null;
+      setPreparationError(null);
+      qc.setQueryData<TodayPreparationStatus>(preparationKey, next);
+      if (next.state === "preparing") setPreparationEpoch((epoch) => epoch + 1);
+    }).catch((error: unknown) => {
+      if (!current || currentScope.current !== localScope) return;
+      if (preparationRequest.current?.requestId === requestId) preparationRequest.current = null;
+      setPreparationError(error instanceof Error ? error.message : "Could not prepare today's coverage.");
+    }).finally(() => {
+      if (preparationRequest.current?.requestId === requestId) preparationRequest.current = null;
+    });
+    return () => {
+      current = false;
+      if (preparationRequest.current?.requestId === requestId) {
+        preparationRequest.current = null;
+        void commands.cancelTodayPreparation(requestId).catch(() => {});
+      }
+    };
+  }, [preparation.data?.state, preparation.data?.scope_key, pageVisible, retryingPreparation, editionLoaded, localScope, preparationEpoch, win.startsAt, win.endsAt, generatedAt, storyLimit, preparationKey, qc]);
+
+  const retryPreparation = useCallback(async () => {
+    if (!preparation.data || (preparation.data.state !== "failed" && !preparationError) || !pageVisible) return;
+    const requestId = globalThis.crypto?.randomUUID?.()
+      ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setPreparationError(null);
+    setRetryingPreparation(true);
+    preparationRequest.current = { scope: localScope, requestId };
+    try {
+      const next = await commands.prepareTodaySlice(win.startsAt, win.endsAt, generatedAt, storyLimit, requestId, true);
+      if (!mountedRef.current || preparationRequest.current?.requestId !== requestId
+        || currentScope.current !== localScope || next.scope_key !== preparation.data.scope_key) return;
+      preparationRequest.current = null;
+      qc.setQueryData<TodayPreparationStatus>(preparationKey, next);
+      if (next.state === "preparing") setPreparationEpoch((epoch) => epoch + 1);
+    } catch (error) {
+      if (mountedRef.current && preparationRequest.current?.requestId === requestId && currentScope.current === localScope) {
+        setPreparationError(error instanceof Error ? error.message : "Could not retry today's coverage.");
+      }
+    } finally {
+      if (preparationRequest.current?.requestId === requestId) preparationRequest.current = null;
+      if (mountedRef.current) setRetryingPreparation(false);
+    }
+  }, [preparation.data, preparationError, pageVisible, localScope, win.startsAt, win.endsAt, generatedAt, storyLimit, qc, preparationKey]);
+
+  const [publishingPreparation, setPublishingPreparation] = useState(false);
+  const openUpdatedEdition = useCallback(async () => {
+    const status = preparation.data;
+    if (!status?.can_publish || !status.manifest || publishingPreparation) return;
+    setPublishingPreparation(true);
+    try {
+      const successor = await commands.publishPreparedTodayEdition(win.startsAt, win.endsAt, generatedAt, storyLimit, status.manifest);
+      if (!mountedRef.current || currentScope.current !== localScope) return;
+      // Publication is the only preparation action that changes the reading
+      // snapshot. The currently displayed frozen edition stays put until click.
+      qc.setQueryData<TodayEditionView>(queryKey, successor);
+      await qc.invalidateQueries({ queryKey: preparationKey });
+    } catch (error) {
+      if (mountedRef.current && currentScope.current === localScope) setPreparationError(error instanceof Error ? error.message : "Could not open the updated edition.");
+    } finally {
+      if (mountedRef.current) setPublishingPreparation(false);
+    }
+  }, [preparation.data, publishingPreparation, win.startsAt, win.endsAt, generatedAt, storyLimit, localScope, qc, queryKey, preparationKey]);
 
   const setConsumed = useMutation({
     mutationFn: async ({ storyId, isConsumed }: { storyId: string; isConsumed: boolean }) => {
@@ -191,5 +331,14 @@ export function useTodayEdition() {
     isWritingLedes,
     canRetryLedes: aiEnabled && missingLedes && !isWritingLedes,
     retryLedes,
+    preparationStatus: preparation.data,
+    preparationLoading: preparation.isLoading,
+    preparationStatusError: preparation.isError,
+    preparationError,
+    retryPreparationStatus: preparation.refetch,
+    retryPreparation,
+    isRetryingPreparation: retryingPreparation,
+    openUpdatedEdition,
+    isPublishingPreparation: publishingPreparation,
   };
 }

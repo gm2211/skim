@@ -54,6 +54,7 @@ struct TodayEditionView: View {
                         }
                         if let edition = model.todayEdition {
                             editionHeader(edition)
+                            preparationStatus
                             if edition.items.isEmpty {
                                 emptyEdition
                             } else {
@@ -118,8 +119,52 @@ struct TodayEditionView: View {
             }
         }
         .onDisappear { model.cancelTodayWork() }
+        .onChange(of: NativeAI.todayPreparationIdentity(settings: model.settings)) { _, _ in
+            model.startTodayPreparation(storyLimit: storyLimit)
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await load() } }
+        }
+    }
+
+    @ViewBuilder private var preparationStatus: some View {
+        if let status = model.todayPreparation, status.state != "disabled", status.state != "empty" {
+            VStack(alignment: .leading, spacing: 8) {
+                if status.state == "preparing" {
+                    Label("Preparing today’s update", systemImage: "sparkles")
+                        .font(.subheadline.weight(.semibold))
+                } else if status.canPublish {
+                    Text("Updated edition ready").font(.subheadline.weight(.semibold))
+                }
+                if status.assessedCount < status.eligibleCount {
+                    Text("\(status.assessedCount) of \(status.eligibleCount) stories reviewed · Reviewing stories")
+                        .font(.footnote).foregroundStyle(SkimStyle.secondary)
+                } else if status.state == "preparing" {
+                    Text("\(status.assessedCount) of \(status.eligibleCount) stories reviewed · Checking related reports")
+                        .font(.footnote).foregroundStyle(SkimStyle.secondary)
+                }
+                if let error = model.todayPreparationError {
+                    Text(error).font(.footnote).foregroundStyle(SkimStyle.secondary)
+                }
+                if status.state == "failed" || model.todayPreparationError != nil {
+                    Text(status.assessmentFailedCount > 0 ? "Some stories could not be reviewed." : "Related-report checks need another look.").font(.footnote)
+                    Button("Retry preparation") { model.startTodayPreparation(storyLimit: storyLimit, retryFailed: true) }
+                        .frame(minHeight: 44)
+                }
+                if status.canPublish {
+                    Button("Open updated edition") { Task { await model.openPreparedTodayEdition() } }
+                        .frame(minHeight: 44).disabled(model.isUpdatingToday)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(SkimStyle.chrome, in: RoundedRectangle(cornerRadius: 14))
+        } else if let error = model.todayPreparationError {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(error).font(.footnote)
+                Button("Retry preparation") { model.startTodayPreparation(storyLimit: storyLimit, retryFailed: true) }
+                    .frame(minHeight: 44)
+            }
         }
     }
 

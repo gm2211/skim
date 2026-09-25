@@ -1,6 +1,9 @@
 //! Bounded, configured-provider planning. Invalid output never removes a story.
+#[cfg(test)]
 use super::story_policy;
+#[cfg(test)]
 use crate::ai::provider::{AiProvider, ChatMessage, ChatRequest};
+#[cfg(test)]
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -11,6 +14,7 @@ pub struct SemanticGroup {
     pub reason: String,
 }
 
+#[cfg(test)]
 pub fn parse(content: &str, count: usize) -> Option<Vec<SemanticGroup>> {
     let response = whole_json(content)?;
     let values = response.as_array().or_else(|| response.get("groups")?.as_array())?;
@@ -59,10 +63,12 @@ pub fn parse(content: &str, count: usize) -> Option<Vec<SemanticGroup>> {
     (!groups.is_empty()).then_some(groups)
 }
 
+#[cfg(test)]
 pub fn eligible_count(count: usize) -> bool {
     count > 0 && count <= story_policy::semantic_max_candidates()
 }
 
+#[cfg(test)]
 pub async fn plan(
     provider: Option<&dyn AiProvider>,
     model: &str,
@@ -72,6 +78,7 @@ pub async fn plan(
     plan_with_timeout(provider, model, listing, count, Duration::from_secs(30)).await
 }
 
+#[cfg(test)]
 async fn plan_with_timeout(
     provider: Option<&dyn AiProvider>,
     model: &str,
@@ -127,6 +134,7 @@ async fn plan_with_timeout(
     Some(rated)
 }
 
+#[cfg(test)]
 async fn request(
     provider: &dyn AiProvider,
     model: &str,
@@ -162,6 +170,7 @@ async fn request(
     Some(response.content)
 }
 
+#[cfg(test)]
 fn requested_pairs(groups: &[SemanticGroup]) -> Option<Vec<[usize; 2]>> {
     let mut pairs = std::collections::BTreeSet::new();
     for group in groups {
@@ -174,6 +183,7 @@ fn requested_pairs(groups: &[SemanticGroup]) -> Option<Vec<[usize; 2]>> {
     Some(pairs.into_iter().collect())
 }
 
+#[cfg(test)]
 fn report_listing(listing: &str, count: usize) -> Option<Vec<serde_json::Value>> {
     let candidates: Vec<serde_json::Value> = serde_json::from_str(listing).ok()?;
     if candidates.len() != count {
@@ -196,12 +206,14 @@ fn report_listing(listing: &str, count: usize) -> Option<Vec<serde_json::Value>>
     Some(reports)
 }
 
+#[cfg(test)]
 fn primary_listing(listing: &str) -> Option<String> {
     let mut rows: Vec<serde_json::Value> = serde_json::from_str(listing).ok()?;
     for row in &mut rows { row.as_object_mut()?.remove("evidence"); }
     serde_json::to_string(&rows).ok()
 }
 
+#[cfg(test)]
 fn pair_listing(listing: &str, count: usize, pairs: &[[usize; 2]]) -> Option<String> {
     let [pair] = pairs else { return None; };
     let reports = report_listing(listing, count)?;
@@ -218,6 +230,7 @@ fn pair_listing(listing: &str, count: usize, pairs: &[[usize; 2]]) -> Option<Str
     serde_json::to_string(&serde_json::json!({"report_a":report(pair[0])?,"report_b":report(pair[1])?})).ok()
 }
 
+#[cfg(test)]
 fn pair_verdict(content: &str, count: usize, pairs: &[[usize; 2]]) -> Option<Vec<u8>> {
     let [pair] = pairs else { return None; };
     let positive = match story_policy::semantic_pair_verdict(content) {
@@ -229,6 +242,7 @@ fn pair_verdict(content: &str, count: usize, pairs: &[[usize; 2]]) -> Option<Vec
     Some(matrix)
 }
 
+#[cfg(test)]
 fn whole_json(content: &str) -> Option<serde_json::Value> {
     let trimmed = content.trim();
     let unfenced = trimmed
@@ -240,6 +254,7 @@ fn whole_json(content: &str) -> Option<serde_json::Value> {
     serde_json::from_str(unfenced).ok()
 }
 
+#[cfg(test)]
 #[cfg(test)]
 fn pair_matrix(content: &str, count: usize, requested: &[[usize; 2]]) -> Option<Vec<u8>> {
     let decoded = whole_json(content)?;
@@ -284,11 +299,13 @@ fn pair_matrix(content: &str, count: usize, requested: &[[usize; 2]]) -> Option<
     (seen == expected).then_some(matrix)
 }
 
+#[cfg(test)]
 struct VerifiedPlan {
     groups: Vec<SemanticGroup>,
     rating_ids: Vec<usize>,
 }
 
+#[cfg(test)]
 fn rating_listing(listing: &str, count: usize, plan: &VerifiedPlan) -> Option<String> {
     let reports = report_listing(listing, count)?;
     let mut groups = Vec::new();
@@ -305,6 +322,7 @@ fn rating_listing(listing: &str, count: usize, plan: &VerifiedPlan) -> Option<St
     serde_json::to_string(&serde_json::json!({"groups":groups})).ok()
 }
 
+#[cfg(test)]
 fn apply_ratings(content: &str, plan: &VerifiedPlan) -> Option<Vec<SemanticGroup>> {
     let response = whole_json(content)?;
     let ratings = response.get("ratings")?.as_array()?;
@@ -343,6 +361,7 @@ fn apply_ratings(content: &str, plan: &VerifiedPlan) -> Option<Vec<SemanticGroup
     (seen == expected).then_some(result)
 }
 
+#[cfg(test)]
 async fn verify_memberships(
     provider: &dyn AiProvider,
     model: &str,
@@ -382,6 +401,7 @@ async fn verify_memberships(
     partition_groups(groups, count, &matrix)
 }
 
+#[cfg(test)]
 fn partition_groups(groups: Vec<SemanticGroup>, count: usize, matrix: &[u8]) -> Option<VerifiedPlan> {
     let mut verified = Vec::new();
     let mut rating_ids = Vec::new();

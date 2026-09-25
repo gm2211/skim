@@ -6,6 +6,7 @@ pub mod story_clustering;
 pub(crate) mod story_policy;
 pub mod today_edition;
 pub mod semantic_edition;
+pub mod today_preparation;
 
 use rusqlite::Connection;
 use std::path::PathBuf;

@@ -4,6 +4,27 @@ use tauri_plugin_skim_ai::{CompleteArgs, LocalChatMessage, SkimAiExt};
 
 use super::provider::{AiProvider, ChatMessage, ChatRequest, ChatResponse};
 
+// Native plugin calls can outlive a dropped async caller. Hold this permit in
+// the blocking closure, so cancellation never creates a queue of blocking workers.
+static NATIVE_WORK: std::sync::LazyLock<std::sync::Arc<tokio::sync::Semaphore>> =
+    std::sync::LazyLock::new(|| std::sync::Arc::new(tokio::sync::Semaphore::new(1)));
+
+async fn native_work<T: Send + 'static>(
+    gate: std::sync::Arc<tokio::sync::Semaphore>,
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    let permit = gate
+        .acquire_owned()
+        .await
+        .map_err(|_| "On-device AI worker is unavailable".to_string())?;
+    tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        work()
+    })
+    .await
+    .map_err(|error| format!("On-device AI task failed: {error}"))?
+}
+
 /// Adapter for the Apple-platform MLX and Foundation Models plugin. Keeping this
 /// behind `AiProvider` lets all normal command paths share provider routing.
 pub struct NativePluginProvider<R: Runtime> {
@@ -93,7 +114,7 @@ impl<R: Runtime> AiProvider for NativePluginProvider<R> {
         let args = complete_args(&self.provider, &request);
         let app = self.app.clone();
         let provider = self.provider.clone();
-        let raw = tokio::task::spawn_blocking(move || {
+        let raw = native_work(NATIVE_WORK.clone(), move || {
             let plugin = app.skim_ai();
             if provider == "mlx" {
                 plugin
@@ -105,8 +126,7 @@ impl<R: Runtime> AiProvider for NativePluginProvider<R> {
                     .map_err(|error| native_error("Foundation Models", error))
             }
         })
-        .await
-        .map_err(|error| format!("On-device AI task failed: {error}"))??;
+        .await?;
         Ok(ChatResponse {
             content: raw,
             model: request.model,
@@ -124,6 +144,61 @@ impl<R: Runtime> AiProvider for NativePluginProvider<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn cancelled_waiter_never_enqueues_behind_abandoned_native_work() {
+        use std::future::Future;
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        };
+        let gate = Arc::new(tokio::sync::Semaphore::new(1));
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let active_gate = gate.clone();
+        let active = tokio::spawn(async move {
+            native_work(active_gate, move || {
+                started_tx.send(()).unwrap();
+                release_rx.recv().unwrap();
+                Ok(())
+            })
+            .await
+        });
+        started_rx.await.unwrap();
+        active.abort();
+        assert!(active.await.unwrap_err().is_cancelled());
+        assert_eq!(
+            gate.available_permits(),
+            0,
+            "abandoned closure still owns native worker"
+        );
+        let runs = Arc::new(AtomicUsize::new(0));
+        let cancelled_runs = runs.clone();
+        let mut waiter = Box::pin(native_work(gate.clone(), move || {
+            cancelled_runs.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }));
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(waiter.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+        drop(waiter);
+        release_tx.send(()).unwrap();
+        let next_runs = runs.clone();
+        native_work(gate.clone(), move || {
+            next_runs.fetch_add(10, Ordering::SeqCst);
+            Ok(())
+        })
+        .await
+        .unwrap();
+        assert_eq!(
+            runs.load(Ordering::SeqCst),
+            10,
+            "cancelled waiter must never execute"
+        );
+        assert_eq!(gate.available_permits(), 1);
+    }
 
     #[test]
     fn builds_plugin_request_with_history_json_and_token_limit() {
@@ -187,11 +262,16 @@ mod tests {
     #[test]
     fn block_only_system_is_preserved_as_authoritative_instructions() {
         let mut system = ChatMessage::text("system", "");
-        system.content_blocks = Some(vec![serde_json::json!({"type": "text", "text": "Source policy"})]);
+        system.content_blocks = Some(vec![
+            serde_json::json!({"type": "text", "text": "Source policy"}),
+        ]);
         let request = ChatRequest {
             model: "foundation-model".into(),
             messages: vec![system, ChatMessage::text("user", "Final question")],
-            temperature: None, max_tokens: Some(650), json_mode: false, tools: None,
+            temperature: None,
+            max_tokens: Some(650),
+            json_mode: false,
+            tools: None,
         };
         for provider in ["foundation-models", "mlx"] {
             let args = complete_args(provider, &request);
@@ -213,15 +293,21 @@ mod tests {
                 ChatMessage::text("assistant", "Earlier answer"),
                 ChatMessage::text("user", "Latest question"),
             ],
-            temperature: Some(0.4), max_tokens: Some(2048), json_mode: false, tools: None,
+            temperature: Some(0.4),
+            max_tokens: Some(2048),
+            json_mode: false,
+            tools: None,
         };
         let wire = serde_json::to_value(complete_args("foundation-models", &request)).unwrap();
-        assert_eq!(wire["messages"], serde_json::json!([
-            {"role":"system", "content":"Source + instructions"},
-            {"role":"user", "content":"Earlier question"},
-            {"role":"assistant", "content":"Earlier answer"},
-            {"role":"user", "content":"Latest question"}
-        ]));
+        assert_eq!(
+            wire["messages"],
+            serde_json::json!([
+                {"role":"system", "content":"Source + instructions"},
+                {"role":"user", "content":"Earlier question"},
+                {"role":"assistant", "content":"Earlier answer"},
+                {"role":"user", "content":"Latest question"}
+            ])
+        );
         assert_eq!(wire["temperature"], 0.4);
         assert_eq!(wire["maxTokens"], 2048);
     }

@@ -16,7 +16,8 @@ function formatWindowDate(startsAtSeconds: number): string {
 
 export function TodayEditionPane() {
   const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane } = useUiStore();
-  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch } =
+  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch,
+    preparationStatus, preparationLoading, preparationError, preparationStatusError, retryPreparation, retryPreparationStatus, isRetryingPreparation, openUpdatedEdition, isPublishingPreparation } =
     useTodayEdition();
 
   const refreshFeeds = useRefreshAllFeeds();
@@ -100,6 +101,55 @@ export function TodayEditionPane() {
           </div>
         )}
       </div>
+
+      {preparationLoading && !preparationStatus && (
+        <div role="status" aria-live="polite" className="text-text-muted" style={{ fontSize: 12, padding: "8px 0 12px" }}>
+          Checking today&apos;s coverage…
+        </div>
+      )}
+      {preparationStatus && preparationStatus.state !== "disabled" && preparationStatus.state !== "empty" && (
+        <section aria-label="Today coverage preparation" aria-live="polite" className="border border-white/10 rounded-xl bg-white/[0.025]" style={{ padding: "10px 12px", marginBottom: 10 }}>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+            <div className="min-w-0">
+              <p className="text-text-secondary" style={{ fontSize: 12, fontWeight: 600 }}>
+                {preparationStatus.state === "ready" ? "Updated edition ready" : preparationStatus.state === "failed"
+                  ? preparationStatus.assessment_failed_count > 0 ? "Some stories could not be reviewed" : "Related-report checks need another look"
+                  : "Preparing today’s update"}
+              </p>
+              <p className="text-text-muted" style={{ fontSize: 11, lineHeight: 1.5, marginTop: 3 }}>
+                {preparationStatus.assessed_count} of {preparationStatus.eligible_count} stories reviewed
+                {" · "}{preparationStatus.state === "ready" ? "Related-report checks finished" : preparationStatus.state === "failed"
+                  ? preparationStatus.assessment_failed_count > 0 ? "Review is incomplete" : "Some related reports need another check"
+                  : preparationStatus.assessed_count < preparationStatus.eligible_count ? "Reviewing stories" : "Checking related reports"}
+              </p>
+              {preparationStatus.assessment_failed_count > 0 && (
+                <p className="text-text-muted" style={{ fontSize: 11, marginTop: 3 }}>
+                  {preparationStatus.assessment_failed_count} {preparationStatus.assessment_failed_count === 1 ? "story could" : "stories could"} not be reviewed.
+                </p>
+              )}
+            </div>
+            {preparationStatus.can_publish && (
+              <button type="button" className="today-story-control text-text-primary border border-white/10 bg-white/5 flex-shrink-0 w-full sm:w-auto"
+                disabled={isPublishingPreparation} onClick={() => void openUpdatedEdition()}>
+                {isPublishingPreparation ? "Opening…" : "Open updated edition"}
+              </button>
+            )}
+            {(preparationStatus.state === "failed" || preparationError) && (
+              <button type="button" className="today-story-control text-text-secondary border border-white/10 bg-white/5 flex-shrink-0 w-full sm:w-auto"
+                disabled={isRetryingPreparation} onClick={() => void retryPreparation()}>
+                {isRetryingPreparation ? "Retrying…" : "Retry checks"}
+              </button>
+            )}
+          </div>
+          {preparationStatus.state === "preparing" && <div className="story-rule-live" style={{ height: 2, borderRadius: 999, marginTop: 8 }} />}
+          {preparationError && <p role="alert" className="text-danger" style={{ fontSize: 11, marginTop: 6 }}>{preparationError}</p>}
+        </section>
+      )}
+      {preparationStatusError && (
+        <div role="alert" className="text-danger" style={{ fontSize: 12, padding: "8px 0 12px" }}>
+          Could not load story coverage status. <button className="today-story-control text-text-primary" onClick={() => void retryPreparationStatus()}>Retry status</button>
+        </div>
+      )}
 
       {/* Body */}
         {isLoading && (

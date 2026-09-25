@@ -302,6 +302,43 @@ enum NativeAI {
         return try TodaySemanticPolicy.verify(responses: responses, plan: plan)
     }
 
+    static func todayPreparationIdentity(
+        settings: AppSettings,
+        resolveModel: (String) -> String = { MLXRunner.resolvedRepoID(preferredRepoId: $0) }
+    ) -> String {
+        let ai = settings.ai
+        guard ai.provider != "none" else { return "disabled" }
+        let model = ai.provider == "mlx" ? resolveModel(NativeMLX.preferredRepoID(settings: ai))
+            : (ai.model?.nilIfEmpty ?? ai.provider)
+        // Match the actual transport; credentials never enter derived task keys.
+        var fields = ["provider": ai.provider, "model": model,
+            "endpoint": ai.endpoint?.nilIfEmpty ?? "", "policyVersion": String(TodayPreparationPolicy.version),
+            "temperature": "0"]
+        if ai.provider == "mlx" {
+            let preset = MLXSamplingPreset.preset(for: model)
+            fields["topP"] = String(ai.mlxTopP.map(Float.init) ?? preset.topP)
+            fields["repetitionPenalty"] = String(ai.mlxRepetitionPenalty.map(Float.init) ?? preset.repetitionPenalty)
+            fields["repetitionContextSize"] = String(ai.mlxRepetitionContextSize ?? preset.repetitionContextSize)
+            // Preserve the user's existing override; nil uses each shared task budget.
+            fields["maxTokens"] = ai.mlxMaxTokens.map(String.init) ?? "shared-task-budget"
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return String(decoding: (try? encoder.encode(fields)) ?? Data(), as: UTF8.self)
+    }
+
+    static func prepareTodayRequest(_ request: TodayPreparationRequest, settings: AppSettings) async throws -> String {
+        if settings.ai.provider == "foundation-models",
+           request.instructions.utf8.count + request.payload.utf8.count > 2400 {
+            throw NativeAIError.unavailable("Preparation exceeds the on-device context budget.")
+        }
+        try Task.checkCancellation()
+        let result = try await complete(settings: settings, instructions: request.instructions,
+            prompt: request.payload, maxTokens: request.maxTokens, jsonMode: true, temperature: 0)
+        try Task.checkCancellation()
+        return result
+    }
+
     static func evaluateToday(candidates: [TodaySemanticCandidate], settings: AppSettings) async throws -> [TodaySemanticGroup] {
         try await evaluateToday(candidates: candidates, provider: settings.ai.provider) { instructions, payload, maxTokens in
             try await complete(settings: settings, instructions: instructions, prompt: payload,

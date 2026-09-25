@@ -131,6 +131,42 @@ int32_t skim_semantic_partition(const double *members, size_t member_count,
                                 size_t verified_count, int32_t *labels,
                                 size_t labels_count);
 
+/* Resumable preparation policy. Storage and provider transport are adapters.
+   Window completion proves input co-presence, never pairwise judgment/recall. */
+uint32_t skim_preparation_version(void);
+size_t skim_preparation_block_size(void);
+size_t skim_preparation_assessment_output_tokens(void);
+size_t skim_preparation_proposal_output_tokens(void);
+const char *skim_preparation_assessment_prompt(void);
+/* Exact {"importance":0..5}, optionally inside a singleton array; -1 invalid.
+   At most 4096 bytes. No identities or generated text are accepted. */
+int32_t skim_preparation_assessment_verdict(const uint8_t *response, size_t length);
+const char *skim_preparation_proposal_prompt(void);
+/* Exact {"groups":[[0,1],[2]]}, optionally inside a singleton array.
+   Every local index occurs exactly once. count is 1..64; response <=16384 bytes.
+   Returns group count, or zero without changing labels on invalid input. */
+int32_t skim_preparation_proposal_labels(const uint8_t *response, size_t length,
+                                        size_t count, int32_t *labels, size_t labels_count);
+/* Within each block first, then every unordered pair of blocks. Stable slots
+   may contain tombstones; adapters remove them only from request inputs.
+   UINT64_MAX marks an unrepresentable window count. */
+uint64_t skim_preparation_window_count(size_t slot_count);
+int32_t skim_preparation_window_at(size_t slot_count, uint64_t ordinal,
+                                   size_t *first_start, size_t *first_count,
+                                   size_t *second_start, size_t *second_count);
+/* Sparse undirected positive edges, lexicographically sorted and unique,
+   with left < right. Stable first-fit cliques require every internal edge.
+   Uses checked O(candidate_count) temporary storage, freed before returning;
+   no dense matrix. Supports up to INT32_MAX candidates.
+   Returns group count, or zero without changing labels on invalid input. */
+int32_t skim_preparation_partition(size_t candidate_count, const size_t *left,
+                                    const size_t *right, size_t edge_count,
+                                    int32_t *labels, size_t labels_count);
+/* Maximum supported member importance, no report-count multiplier.
+   Missing (-1) ratings retain neutral three. Invalid input/missing group: -1. */
+int32_t skim_preparation_group_importance(const int32_t *ratings, const int32_t *labels,
+                                         size_t count, int32_t group);
+
 #ifdef __cplusplus
 }
 #endif

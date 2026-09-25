@@ -140,6 +140,10 @@ final class AppModel: ObservableObject {
     /// Non-nil while the lede pass is still working down the page.
     @Published var todayLedeStatus: String?
     @Published var todayLedeNeedsRetry = false
+    @Published var todayPreparation: TodayPreparationStatus?
+    @Published var todayPreparationError: String?
+    private var todayPreparationTask: Task<Void, Never>?
+    private var todayPreparationID = UUID()
     private var todayTask: Task<Void, Never>?
     private var todayLoadID = UUID()
 
@@ -165,6 +169,7 @@ final class AppModel: ObservableObject {
     // Edition generation, ranking, frozen content, and consumption live in SkimCore.
     func loadTodayEdition(storyLimit: Int) async {
         todayTask?.cancel()
+        cancelTodayPreparation()
         let requestID = UUID()
         todayLoadID = requestID
         todayLedeStatus = nil
@@ -179,6 +184,7 @@ final class AppModel: ObservableObject {
     }
 
     func cancelTodayWork() {
+        cancelTodayPreparation()
         todayTask?.cancel()
         todayTask = nil
         todayLoadID = UUID()
@@ -206,30 +212,96 @@ final class AppModel: ObservableObject {
         todayError = nil
         defer { if todayLoadID == requestID { isLoadingToday = false } }
         do {
-            let aiSettings = settings
-            var evaluator: TodaySemanticEvaluator?
-            if aiSettings.ai.provider != "none" {
-                evaluator = { [weak self] candidates in
-                    do {
-                        let result = try await NativeAI.evaluateToday(candidates: candidates, settings: aiSettings)
-                        guard await self?.todayLoadID == requestID else { throw CancellationError() }
-                        return result
-                    } catch {
-                        guard await self?.todayLoadID == requestID else { throw CancellationError() }
-                        throw error
-                    }
-                }
-            }
             let edition = try await store.getOrGenerateTodayEdition(
                 startsAt: start, endsAt: end, storyLimit: storyLimit,
                 generatedAt: now, preferences: tasteStore.todayRankingPreferences(),
-                semanticEvaluator: evaluator
+                semanticEvaluator: nil
             )
             guard !Task.isCancelled, todayLoadID == requestID else { return }
             todayEdition = edition
+            startTodayPreparation(storyLimit: storyLimit)
         } catch {
             guard !Task.isCancelled, todayLoadID == requestID else { return }
             todayError = error.localizedDescription
+        }
+    }
+
+    private func cancelTodayPreparation() {
+        todayPreparationTask?.cancel()
+        todayPreparationTask = nil
+        let oldID = todayPreparationID
+        todayPreparationID = UUID()
+        if let scope = todayPreparation?.scopeKey { Task { await store.cancelTodayPreparation(scope: scope, requestID: oldID) } }
+    }
+
+    private func isCurrentPreparation(requestID: UUID, identity: String, startsAt: Date) -> Bool {
+        todayPreparationID == requestID && NativeAI.todayPreparationIdentity(settings: settings) == identity
+            && Calendar.current.startOfDay(for: Date()) == startsAt
+    }
+
+    func startTodayPreparation(storyLimit: Int, retryFailed: Bool = false) {
+        cancelTodayPreparation()
+        let requestID = todayPreparationID
+        let captured = settings
+        let identity = NativeAI.todayPreparationIdentity(settings: captured)
+        let preferences = tasteStore.todayRankingPreferences()
+        let start = Calendar.current.startOfDay(for: Date())
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
+        todayPreparationError = nil
+        todayPreparation = nil
+        todayPreparationTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                var status = try await store.todayPreparationStatus(startsAt: start, endsAt: end, storyLimit: storyLimit, inference: identity, preferences: preferences)
+                guard !Task.isCancelled, todayPreparationID == requestID else { return }
+                todayPreparation = status
+                var retry = retryFailed
+                while status.state == "preparing" || (retry && status.state == "failed") {
+                    guard !Task.isCancelled, todayPreparationID == requestID,
+                          NativeAI.todayPreparationIdentity(settings: settings) == identity,
+                          Calendar.current.startOfDay(for: Date()) == start else { return }
+                    status = try await store.prepareTodaySlice(startsAt: start, endsAt: end, storyLimit: storyLimit,
+                        inference: identity, requestID: requestID, retryFailed: retry, preferences: preferences) { [weak self] request in
+                            try Task.checkCancellation()
+                            guard await self?.isCurrentPreparation(requestID: requestID, identity: identity, startsAt: start) == true else { throw CancellationError() }
+                            let response = try await NativeAI.prepareTodayRequest(request, settings: captured)
+                            guard await self?.isCurrentPreparation(requestID: requestID, identity: identity, startsAt: start) == true else { throw CancellationError() }
+                            return response
+                        }
+                    retry = false
+                    guard !Task.isCancelled, todayPreparationID == requestID else { return }
+                    todayPreparation = status
+                    await Task.yield()
+                }
+            } catch {
+                guard !Task.isCancelled, todayPreparationID == requestID, !(error is CancellationError) else { return }
+                todayPreparationError = error.localizedDescription
+            }
+        }
+    }
+
+    func openPreparedTodayEdition() async {
+        guard let status = todayPreparation, status.canPublish, let current = todayEdition, !isUpdatingToday else { return }
+        let captured = settings
+        let requestID = todayLoadID
+        let prepID = todayPreparationID
+        isUpdatingToday = true
+        defer { isUpdatingToday = false }
+        do {
+            let updated = try await store.publishPreparedTodayEdition(startsAt: current.edition.startsAt,
+                endsAt: current.edition.endsAt, storyLimit: current.edition.storyLimit,
+                inference: NativeAI.todayPreparationIdentity(settings: captured), manifest: status.manifest,
+                preferences: tasteStore.todayRankingPreferences())
+            guard todayLoadID == requestID, todayPreparationID == prepID, !Task.isCancelled,
+                  NativeAI.todayPreparationIdentity(settings: settings) == NativeAI.todayPreparationIdentity(settings: captured) else { return }
+            todayEdition = updated
+            todayLedeStatus = nil
+            todayLedeNeedsRetry = false
+            startTodayPreparation(storyLimit: updated.edition.storyLimit)
+            await writeTodayLedes()
+        } catch {
+            guard todayLoadID == requestID, !Task.isCancelled else { return }
+            todayPreparationError = error.localizedDescription
         }
     }
 
@@ -322,6 +394,7 @@ final class AppModel: ObservableObject {
             )
             if todayLoadID == requestID, todayEdition?.id == edition.id {
                 todayEdition = TodayEditionMerge.consumption(current: todayEdition, response: updated)
+                startTodayPreparation(storyLimit: edition.edition.storyLimit)
             }
             await reloadArticles()
         } catch {

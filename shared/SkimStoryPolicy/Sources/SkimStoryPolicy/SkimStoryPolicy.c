@@ -845,7 +845,7 @@ int32_t skim_today_lede_excerpt_valid(const uint8_t *source, size_t source_len,
     return 0;
 }
 
-int32_t skim_today_lede_evidence_version(void) { return 2; }
+int32_t skim_today_lede_evidence_version(void) { return 3; }
 
 #define TODAY_LEDE_SELECTION_INSTRUCTIONS \
     "Select a concise source excerpt to appear under this newspaper headline. Choose a contiguous passage of one to " \
@@ -1084,4 +1084,17 @@ int32_t skim_semantic_partition(const double *members, size_t member_count,
         labels[position] = group;
     }
     return group_count;
+}
+
+int32_t skim_today_lede_source_index(const uint8_t *sources, size_t sources_len,
+    const size_t *offsets, size_t source_count, const uint8_t *excerpt, size_t excerpt_len) {
+    if (!sources || !offsets || !excerpt || source_count == 0 || source_count > INT32_MAX || offsets[0] != 0) return -1;
+    for (size_t i = 0; i < source_count; ++i) {
+        if (offsets[i] > offsets[i+1] || offsets[i+1] > sources_len) return -1;
+    }
+    if (offsets[source_count] != sources_len) return -1;
+    for (size_t i = 0; i < source_count; ++i) {
+        if (skim_today_lede_excerpt_valid(sources + offsets[i], offsets[i+1] - offsets[i], excerpt, excerpt_len)) return (int32_t)i;
+    }
+    return -1;
 }

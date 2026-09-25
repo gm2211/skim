@@ -7,6 +7,7 @@ use crate::db::Database;
 use crate::db::{queries, story_policy};
 use crate::AppHandle;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tauri::{Emitter, State};
 
 #[tauri::command]
@@ -223,11 +224,10 @@ pub async fn generate_today_ledes(
             continue;
         }
 
-        let lede = verified_preview(provider.as_ref(), &model, headline, &evidence).await.unwrap_or_default();
-
-        if !lede.is_empty() {
+        if let Some(preview) = verified_preview(provider.as_ref(), &model, headline, &evidence).await {
             let conn = db.conn.lock().map_err(|error| error.to_string())?;
-            queries::set_verified_edition_item_lede(&conn, &edition_id, story_id, &lede)
+            queries::set_verified_edition_item_lede(&conn, &edition_id, story_id, &preview.excerpt,
+                &preview.source_article_id, &preview.source_evidence_hash)
                 .map_err(|error| error.to_string())?;
         }
 
@@ -257,9 +257,28 @@ pub async fn generate_today_ledes(
 
 /// Read only this story's selected reports, release the DB lock before network
 /// work, and reuse the reader/chat resolver's cache, deadlines, and fallback.
+struct LedeSource {
+    article_id: String,
+    body: String,
+}
 struct LedeEvidence {
     prompt_text: String,
-    bodies: Vec<String>,
+    sources: Vec<LedeSource>,
+}
+#[derive(Debug, PartialEq)]
+struct VerifiedPreview {
+    excerpt: String,
+    source_article_id: String,
+    source_evidence_hash: String,
+}
+impl LedeEvidence {
+    fn preview(&self, index: usize, excerpt: String) -> Option<VerifiedPreview> {
+        let source = self.sources.get(index)?;
+        Some(VerifiedPreview {
+            excerpt, source_article_id: source.article_id.clone(),
+            source_evidence_hash: format!("{:x}", Sha256::digest(source.body.as_bytes())),
+        })
+    }
 }
 
 async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<LedeEvidence, String> {
@@ -280,9 +299,10 @@ async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<LedeE
         .collect();
     let bodies = super::article_body::resolve_selected_article_texts(db, &sources).await;
     let mut text = String::new();
-    let mut bounded_bodies = Vec::new();
+    let mut bounded_sources = Vec::new();
     for (article, body) in articles.iter().zip(bodies) {
         let body: String = body
+            .trim()
             .chars()
             .take(story_policy::today_lede_text_characters())
             .collect();
@@ -298,24 +318,26 @@ async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<LedeE
             ),
             body.trim()
         ));
-        bounded_bodies.push(body);
+        bounded_sources.push(LedeSource { article_id: article.article.id.clone(), body });
     }
-    Ok(LedeEvidence { prompt_text: text, bodies: bounded_bodies })
+    Ok(LedeEvidence { prompt_text: text, sources: bounded_sources })
 }
 
-async fn verified_preview(provider: &dyn AiProvider, model: &str, headline: &str, evidence: &LedeEvidence) -> Option<String> {
+async fn verified_preview(provider: &dyn AiProvider, model: &str, headline: &str, evidence: &LedeEvidence) -> Option<VerifiedPreview> {
+    let bodies: Vec<String> = evidence.sources.iter().map(|source| source.body.clone()).collect();
     let make_request = |system: String, user: String, json_mode| ChatRequest {
         model: model.into(), messages: vec![ChatMessage::text("system", system), ChatMessage::text("user", user)],
         temperature: Some(0.0), max_tokens: Some(300), json_mode, tools: None,
     };
     let response = provider.chat(make_request(prompts::catchup_lede_system_prompt(),
         prompts::catchup_lede_user_prompt(headline, &evidence.prompt_text), true)).await.ok()?;
-    if let Some(excerpt) = parse_excerpt(&response.content, &evidence.bodies) { return Some(excerpt); }
+    if let Some((index, excerpt)) = parse_excerpt(&response.content, &bodies) { return evidence.preview(index, excerpt); }
     // One retry for invalid output only. Transport/model errors remain missing,
     // and the entire plaintext reply must still pass the source validator.
     let response = provider.chat(make_request(story_policy::today_lede_retry_prompt().into(),
         prompts::catchup_lede_retry_user_prompt(headline, &evidence.prompt_text), false)).await.ok()?;
-    evidence.bodies.iter().find_map(|body| story_policy::validated_today_excerpt(body, &response.content))
+    let (index, excerpt) = story_policy::validated_today_excerpt_source(&bodies, &response.content)?;
+    evidence.preview(index, excerpt)
 }
 
 #[derive(Deserialize)]
@@ -324,13 +346,13 @@ struct ExcerptRaw {
     excerpt: String,
 }
 
-fn parse_excerpt(content: &str, bodies: &[String]) -> Option<String> {
+fn parse_excerpt(content: &str, bodies: &[String]) -> Option<(usize, String)> {
     let trimmed = content.trim();
     let json = if let Some(body) = trimmed.strip_prefix("```json").or_else(|| trimmed.strip_prefix("```")) {
         body.trim().strip_suffix("```")?.trim()
     } else { trimmed };
     let raw: ExcerptRaw = serde_json::from_str(json).ok()?;
-    bodies.iter().find_map(|body| story_policy::validated_today_excerpt(body, &raw.excerpt))
+    story_policy::validated_today_excerpt_source(bodies, &raw.excerpt)
 }
 
 #[cfg(test)]
@@ -356,7 +378,7 @@ mod tests {
     #[tokio::test]
     async fn invalid_json_gets_one_source_verified_plaintext_retry_only() {
         let evidence = LedeEvidence { prompt_text: "--- A report\nThe event happened in June.".into(),
-            bodies: vec!["The event happened in June.".into()] };
+            sources: vec![LedeSource { article_id: "article-a".into(), body: "The event happened in June.".into() }] };
         let valid = "The event happened in June.";
         for (replies, expected, calls) in [
             (vec![Ok(serde_json::json!({"excerpt":valid}).to_string())], Some(valid), 1),
@@ -367,7 +389,7 @@ mod tests {
             (vec![Err("model unavailable".into())], None, 1),
         ] {
             let provider = PreviewProvider { replies: std::sync::Mutex::new(replies.into()), requests: Default::default() };
-            assert_eq!(verified_preview(&provider, "configured-model", "Headline", &evidence).await.as_deref(), expected);
+            assert_eq!(verified_preview(&provider, "configured-model", "Headline", &evidence).await.map(|preview| preview.excerpt).as_deref(), expected);
             let requests = provider.requests.lock().unwrap();
             assert_eq!(requests.len(), calls);
             assert!(requests[0].json_mode);
@@ -384,11 +406,30 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn preview_preserves_nonrepresentative_source_and_exact_evidence_hash() {
+        let body = "The hearing ended on Thursday. The court reserved its decision.";
+        let evidence = LedeEvidence { prompt_text: "both sources".into(), sources: vec![
+            LedeSource { article_id: "representative".into(), body: "The hearing starts tomorrow.".into() },
+            LedeSource { article_id: "outcome".into(), body: body.into() },
+        ] };
+        let provider = PreviewProvider {
+            replies: std::sync::Mutex::new(vec![Ok(serde_json::json!({
+                "excerpt":"The hearing ended on Thursday."}).to_string())].into()),
+            requests: Default::default(),
+        };
+        let preview = verified_preview(&provider, "test", "Hearing preview", &evidence).await.unwrap();
+        assert_eq!(preview.source_article_id, "outcome");
+        assert_eq!(preview.excerpt, "The hearing ended on Thursday.");
+        assert_eq!(preview.source_evidence_hash, format!("{:x}", Sha256::digest(body.as_bytes())));
+        assert_ne!(preview.source_evidence_hash, format!("{:x}", Sha256::digest(evidence.sources[0].body.as_bytes())));
+    }
+
     #[test]
     fn preview_requires_one_exact_source_passage_and_strict_object() {
         let bodies = vec!["The breach happened in June. OpenAI discovered it in August.".into(),
             "The report did not establish causation. Officials are investigating.".into()];
-        assert_eq!(parse_excerpt("```json\n{\"excerpt\":\"The breach  happened\\n in June.\"}\n```", &bodies), Some("The breach happened in June.".into()));
+        assert_eq!(parse_excerpt("```json\n{\"excerpt\":\"The breach  happened\\n in June.\"}\n```", &bodies), Some((0, "The breach happened in June.".into())));
         for excerpt in ["The breach happened in August.", "establish causation.",
             "The breach happened in June. Officials are investigating.", "Headline only."] {
             assert!(parse_excerpt(&serde_json::json!({"excerpt":excerpt}).to_string(), &bodies).is_none(), "{excerpt}");
@@ -431,7 +472,10 @@ mod tests {
         }
         let ids = ["cached", "html", "long", "empty", "excluded"].map(str::to_string);
         let evidence = lede_source_text(&db, &ids).await.unwrap();
-        assert_eq!(evidence.bodies.len(), 3);
+        assert_eq!(evidence.sources.len(), 3);
+        assert_eq!(evidence.sources.iter().map(|s| s.article_id.as_str()).collect::<Vec<_>>(), vec!["cached", "html", "long"]);
+        let sparse = lede_source_text(&db, &["missing".into(), "empty".into(), "html".into(), "cached".into()]).await.unwrap();
+        assert_eq!(sparse.sources.iter().map(|source| source.article_id.as_str()).collect::<Vec<_>>(), vec!["html", "cached"]);
         let text = evidence.prompt_text;
         assert!(text.contains("Reader extraction with details absent from RSS."));
         assert!(text.contains("Full feed body with its supporting evidence."));

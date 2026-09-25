@@ -8,19 +8,46 @@ public enum TodayLedePolicy {
     public static var textCharacters: Int { Int(skim_today_lede_text_characters()) }
     public static var evidenceVersion: Int { Int(skim_today_lede_evidence_version()) }
 
-    public static func validatedExcerpt(candidate: String, sources: [String]) -> String? {
+    public struct Selection: Sendable, Equatable {
+        public let excerpt: String
+        public let sourceIndex: Int
+        public let evidenceHash: String
+    }
+
+    public static func selection(candidate: String, sources: [String]) -> Selection? {
         let excerpt = candidate.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-        let excerptBytes = Array(excerpt.utf8)
-        for source in sources {
-            let sourceBytes = Array(source.utf8)
-            let valid = sourceBytes.withUnsafeBufferPointer { body in
-                excerptBytes.withUnsafeBufferPointer { passage in
-                    skim_today_lede_excerpt_valid(body.baseAddress, body.count, passage.baseAddress, passage.count) != 0
+        let bytes = Array(excerpt.utf8)
+        var joined: [UInt8] = []
+        var offsets = [0]
+        for source in sources { joined.append(contentsOf: source.utf8); offsets.append(joined.count) }
+        let index = joined.withUnsafeBufferPointer { body in
+            offsets.withUnsafeBufferPointer { spans in
+                bytes.withUnsafeBufferPointer { passage in
+                    skim_today_lede_source_index(body.baseAddress, body.count, spans.baseAddress, sources.count, passage.baseAddress, passage.count)
                 }
             }
-            if valid { return excerpt }
         }
-        return nil
+        guard index >= 0, sources.indices.contains(Int(index)) else { return nil }
+        return Selection(excerpt: excerpt, sourceIndex: Int(index), evidenceHash: StoryClusterer.sha256(sources[Int(index)]))
+    }
+
+    public static func validatedExcerpt(candidate: String, sources: [String]) -> String? {
+        selection(candidate: candidate, sources: sources)?.excerpt
+    }
+
+    public static func generateSelection(
+        sources: [String],
+        request: @Sendable (_ instructions: String, _ jsonMode: Bool) async throws -> String
+    ) async throws -> Selection? {
+        try Task.checkCancellation()
+        let primary = try await request(instructions, true)
+        try Task.checkCancellation()
+        if let excerpt = excerpt(from: primary, sources: sources) {
+            return selection(candidate: excerpt, sources: sources)
+        }
+        let plain = try await request(retryInstructions, false)
+        try Task.checkCancellation()
+        return selection(candidate: plain, sources: sources)
     }
 
     /// Retry only a returned but invalid selection, never a failed provider request.
@@ -28,13 +55,7 @@ public enum TodayLedePolicy {
         sources: [String],
         request: @Sendable (_ instructions: String, _ jsonMode: Bool) async throws -> String
     ) async throws -> String {
-        try Task.checkCancellation()
-        let primary = try await request(instructions, true)
-        try Task.checkCancellation()
-        if let excerpt = excerpt(from: primary, sources: sources) { return excerpt }
-        let plain = try await request(retryInstructions, false)
-        try Task.checkCancellation()
-        return validatedExcerpt(candidate: plain, sources: sources) ?? ""
+        try await generateSelection(sources: sources, request: request)?.excerpt ?? ""
     }
 
     public static func excerpt(from response: String, sources: [String]) -> String? {

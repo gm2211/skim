@@ -316,6 +316,15 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         ",
     )?;
 
+    for column in ["lede_source_article_id", "lede_source_evidence_hash"] {
+        let exists = conn.prepare("PRAGMA table_info(edition_items)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(Result::ok).any(|name| name == column);
+        if !exists {
+            conn.execute_batch(&format!("ALTER TABLE edition_items ADD COLUMN {column} TEXT;"))?;
+        }
+    }
+
     // Written ledes for Today's stories. Deliberately not named `snapshot_*`:
     // the snapshot fields are frozen by the trigger above, this one is filled
     // in after the edition exists and may be rewritten on a re-run.

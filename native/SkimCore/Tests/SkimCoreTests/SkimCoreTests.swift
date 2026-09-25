@@ -1836,12 +1836,26 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     sqlite3_finalize(statement)
     let source = "The mission launched on 10 September."
     let excerpt = try #require(TodayLedePolicy.validatedExcerpt(candidate: source, sources: [source]))
-    let written = try await migrated.setTodayEditionItemLede(editionID: edition.id, storyID: storyID, lede: excerpt)
+    let written = try await migrated.setTodayEditionItemLede(editionID: edition.id, storyID: storyID, lede: excerpt, sourceArticleID: try #require(before.items.first?.sourceArticles.last?.articleID), sourceEvidenceHash: StoryClusterer.sha256(source))
     #expect(written.items.first?.snapshot.lede == source)
+    #expect(written.items.first?.snapshot.ledeSourceArticleID == before.items.first?.sourceArticles.last?.articleID)
+    #expect(written.items.first?.snapshot.ledeSourceEvidenceHash == StoryClusterer.sha256(source))
+    #expect(await operationThrows { try await migrated.setTodayEditionItemLede(editionID: edition.id, storyID: storyID, lede: source, sourceArticleID: "outside", sourceEvidenceHash: StoryClusterer.sha256(source)) })
     #expect(written.consumedItemCount == before.consumedItemCount)
     #expect(written.items.first?.memberArticleIDs == before.items.first?.memberArticleIDs)
     let reopened = try SkimStore(databaseURL: url)
     #expect(try await reopened.todayEdition(id: edition.id) == written)
+    // Current-version cache with missing/foreign provenance cannot become visible.
+    for corruption in ["lede_source_article_id='outside'", "lede_source_article_id=NULL", "lede_source_evidence_hash='bad'", "lede_evidence_version=2"] {
+        try #require(sqlite3_exec(database, "UPDATE edition_items SET \(corruption)", nil, nil, nil) == SQLITE_OK)
+        let invalid = try #require(try await reopened.todayEdition(id: edition.id))
+        #expect(invalid.items.first?.snapshot.lede == nil)
+        #expect(invalid.items.first?.snapshot.ledeSourceArticleID == nil)
+        #expect(invalid.items.first?.snapshot.isConsumed == true)
+        #expect(invalid.items.first?.memberArticleIDs == before.items.first?.memberArticleIDs)
+        _ = try await reopened.setTodayEditionItemLede(editionID: edition.id, storyID: storyID, lede: source,
+            sourceArticleID: try #require(before.items.first?.sourceArticles.last?.articleID), sourceEvidenceHash: StoryClusterer.sha256(source))
+    }
 }
 
 
@@ -1853,7 +1867,7 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     let storyID = try #require(original.items.first?.snapshot.storyID)
     let source = "The mission launched on 10 September."
     let excerpt = try #require(TodayLedePolicy.validatedExcerpt(candidate: source, sources: [source]))
-    let written = try await store.setTodayEditionItemLede(editionID: original.id, storyID: storyID, lede: excerpt)
+    let written = try await store.setTodayEditionItemLede(editionID: original.id, storyID: storyID, lede: excerpt, sourceArticleID: try #require(original.items.first?.sourceArticles.last?.articleID), sourceEvidenceHash: StoryClusterer.sha256(source))
     try await store.persistEdition(original.edition, items: original.items.map(\.snapshot))
     try await store.persistEdition(written.edition, items: written.items.map(\.snapshot))
     #expect(try await store.todayEdition(id: original.id) == written)

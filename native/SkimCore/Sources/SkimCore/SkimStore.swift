@@ -420,7 +420,9 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
     public func setTodayEditionItemLede(
         editionID: String,
         storyID: String,
-        lede: String
+        lede: String,
+        sourceArticleID: String,
+        sourceEvidenceHash: String
     ) async throws -> TodayEditionSnapshot {
         guard try db.edition(id: editionID) != nil,
               try db.editionItem(editionID: editionID, storyID: storyID) != nil
@@ -429,7 +431,7 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
                 "Today edition item \(editionID):\(storyID) does not exist"
             )
         }
-        try db.setEditionItemLede(editionID: editionID, storyID: storyID, lede: lede)
+        try db.setEditionItemLede(editionID: editionID, storyID: storyID, lede: lede, sourceArticleID: sourceArticleID, sourceEvidenceHash: sourceEvidenceHash)
         return try db.todayEditionSnapshot(id: editionID)
     }
 
@@ -785,6 +787,9 @@ private final class SQLiteDatabase: @unchecked Sendable {
         // CREATE TABLE so first-launch databases receive it too.
         try? execute("ALTER TABLE edition_items ADD COLUMN lede TEXT")
         let editionColumns = try query("PRAGMA table_info(edition_items)") { columnText($0, 1) }
+        for column in ["lede_source_article_id", "lede_source_evidence_hash"] where !editionColumns.contains(column) {
+            try execute("ALTER TABLE edition_items ADD COLUMN \(column) TEXT")
+        }
         if !editionColumns.contains("lede_evidence_version") {
             try execute("ALTER TABLE edition_items ADD COLUMN lede_evidence_version INTEGER NOT NULL DEFAULT 0")
         }
@@ -1842,7 +1847,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
             SELECT edition_id, story_id, story_revision_number, position, section,
                    snapshot_title, snapshot_summary, snapshot_delta_summary,
                    snapshot_source_count, snapshot_reason, is_unique_find,
-                   CASE WHEN lede_evidence_version = \(TodayLedePolicy.evidenceVersion) THEN lede ELSE NULL END AS lede, is_consumed, consumed_at
+                   CASE WHEN lede_evidence_version = \(TodayLedePolicy.evidenceVersion) AND length(lede_source_evidence_hash) = 64 AND lede_source_evidence_hash NOT GLOB '*[^0-9a-f]*' AND EXISTS (SELECT 1 FROM edition_item_articles p WHERE p.edition_id=edition_items.edition_id AND p.story_id=edition_items.story_id AND p.article_id=edition_items.lede_source_article_id) THEN lede ELSE NULL END AS lede, is_consumed, consumed_at, lede_source_article_id, lede_source_evidence_hash
             FROM edition_items
             WHERE edition_id = ? AND story_id = ?
             LIMIT 1
@@ -2092,6 +2097,10 @@ private final class SQLiteDatabase: @unchecked Sendable {
         // Derived preview cache is not part of snapshot identity.
         item.lede = nil
         stored.lede = nil
+        item.ledeSourceArticleID = nil
+        stored.ledeSourceArticleID = nil
+        item.ledeSourceEvidenceHash = nil
+        stored.ledeSourceEvidenceHash = nil
         guard stored == item else {
             throw SkimCoreError.database(
                 "Conflicting edition item \(item.editionID):\(item.storyID)"
@@ -2109,7 +2118,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
             SELECT edition_id, story_id, story_revision_number, position, section,
                    snapshot_title, snapshot_summary, snapshot_delta_summary,
                    snapshot_source_count, snapshot_reason, is_unique_find,
-                   CASE WHEN lede_evidence_version = \(TodayLedePolicy.evidenceVersion) THEN lede ELSE NULL END AS lede, is_consumed, consumed_at
+                   CASE WHEN lede_evidence_version = \(TodayLedePolicy.evidenceVersion) AND length(lede_source_evidence_hash) = 64 AND lede_source_evidence_hash NOT GLOB '*[^0-9a-f]*' AND EXISTS (SELECT 1 FROM edition_item_articles p WHERE p.edition_id=edition_items.edition_id AND p.story_id=edition_items.story_id AND p.article_id=edition_items.lede_source_article_id) THEN lede ELSE NULL END AS lede, is_consumed, consumed_at, lede_source_article_id, lede_source_evidence_hash
             FROM edition_items
             WHERE edition_id = ?
             ORDER BY position ASC, story_id ASC
@@ -2282,17 +2291,22 @@ private final class SQLiteDatabase: @unchecked Sendable {
     /// Store the written lede for one story on the page. Kept apart from the
     /// snapshot columns, which stay frozen for the life of the edition.
     func setEditionItemLede(
-        editionID: String,
-        storyID: String,
-        lede: String
+        editionID: String, storyID: String, lede: String,
+        sourceArticleID: String, sourceEvidenceHash: String
     ) throws {
+        let members = try todayEditionSnapshot(id: editionID).items.first { $0.snapshot.storyID == storyID }?.sourceArticles ?? []
+        guard members.contains(where: { $0.articleID == sourceArticleID }),
+              sourceEvidenceHash.count == 64, sourceEvidenceHash.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }),
+              !lede.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw SkimCoreError.database("Preview source must belong to the frozen edition item")
+        }
         try execute(
             """
-            UPDATE edition_items
-            SET lede = ?, lede_evidence_version = ?
+            UPDATE edition_items SET lede = ?, lede_evidence_version = ?,
+                lede_source_article_id = ?, lede_source_evidence_hash = ?
             WHERE edition_id = ? AND story_id = ?
             """,
-            [.text(lede), .int(TodayLedePolicy.evidenceVersion), .text(editionID), .text(storyID)]
+            [.text(lede), .int(TodayLedePolicy.evidenceVersion), .text(sourceArticleID), .text(sourceEvidenceHash), .text(editionID), .text(storyID)]
         )
     }
 
@@ -2562,6 +2576,8 @@ private func makeEditionItem(from statement: OpaquePointer) -> EditionItem {
         snapshotReason: columnOptionalText(statement, 9),
         isUniqueFind: sqlite3_column_int(statement, 10) != 0,
         lede: columnOptionalText(statement, 11),
+        ledeSourceArticleID: columnOptionalText(statement, 11) == nil ? nil : columnOptionalText(statement, 14),
+        ledeSourceEvidenceHash: columnOptionalText(statement, 11) == nil ? nil : columnOptionalText(statement, 15),
         isConsumed: sqlite3_column_int(statement, 12) != 0,
         consumedAt: columnDate(statement, 13)
     )

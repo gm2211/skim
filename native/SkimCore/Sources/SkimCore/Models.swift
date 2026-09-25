@@ -562,6 +562,8 @@ public struct EditionItem: Identifiable, Codable, Hashable, Sendable {
     /// Written after the edition is generated, so unlike the snapshot fields
     /// it can be absent and can be rewritten.
     public var lede: String?
+    public var ledeSourceArticleID: String?
+    public var ledeSourceEvidenceHash: String?
     public var isConsumed: Bool
     public var consumedAt: Date?
 
@@ -582,6 +584,8 @@ public struct EditionItem: Identifiable, Codable, Hashable, Sendable {
         snapshotReason: String? = nil,
         isUniqueFind: Bool = false,
         lede: String? = nil,
+        ledeSourceArticleID: String? = nil,
+        ledeSourceEvidenceHash: String? = nil,
         isConsumed: Bool = false,
         consumedAt: Date? = nil
     ) {
@@ -597,6 +601,8 @@ public struct EditionItem: Identifiable, Codable, Hashable, Sendable {
         self.snapshotReason = snapshotReason
         self.isUniqueFind = isUniqueFind
         self.lede = lede
+        self.ledeSourceArticleID = ledeSourceArticleID
+        self.ledeSourceEvidenceHash = ledeSourceEvidenceHash
         self.isConsumed = isConsumed
         self.consumedAt = consumedAt
     }
@@ -614,6 +620,8 @@ public struct EditionItem: Identifiable, Codable, Hashable, Sendable {
         case snapshotReason = "snapshot_reason"
         case isUniqueFind = "is_unique_find"
         case lede
+        case ledeSourceArticleID = "lede_source_article_id"
+        case ledeSourceEvidenceHash = "lede_source_evidence_hash"
         case isConsumed = "is_consumed"
         case consumedAt = "consumed_at"
     }

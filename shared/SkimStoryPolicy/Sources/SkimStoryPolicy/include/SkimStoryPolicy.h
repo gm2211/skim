@@ -93,6 +93,8 @@ const char *skim_today_lede_retry_prompt(void);
 int32_t skim_today_lede_excerpt_valid(const uint8_t *source, size_t source_len,
                                     const uint8_t *excerpt, size_t excerpt_len);
 int32_t skim_today_lede_evidence_version(void);
+/* offsets has source_count+1 monotonic offsets into sources. First strict match, or -1. */
+int32_t skim_today_lede_source_index(const uint8_t *sources, size_t sources_len, const size_t *offsets, size_t source_count, const uint8_t *excerpt, size_t excerpt_len);
 
 size_t skim_today_lede_max_articles(void);
 size_t skim_today_lede_text_characters(void);

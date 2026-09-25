@@ -26,3 +26,35 @@ import Testing
         )
     )
 }
+
+@Test func publicationGluedToAHeadlineIsStripped() {
+    // Verbatim from the page Giulio sent back.
+    #expect(CatchUpText.stripPublicationPrefix(
+        "Hacker News back-and-shoulder surgery is often worse than useless",
+        publications: ["Hacker News"]) == "Back-and-shoulder surgery is often worse than useless")
+    #expect(CatchUpText.stripPublicationPrefix("Lobsters: SourceHut fixes XSS in build logs", publications: [])
+        == "SourceHut fixes XSS in build logs")
+}
+
+@Test func publicationThatIsTheSubjectStays() {
+    #expect(CatchUpText.stripPublicationPrefix("Daemonology.net launches FreeBSD/EC2 desktop AMIs",
+        publications: ["daemonology.net"]) == "Daemonology.net launches FreeBSD/EC2 desktop AMIs")
+    #expect(CatchUpText.stripPublicationPrefix("Reddit bans third-party API clients", publications: [])
+        == "Reddit bans third-party API clients")
+    #expect(CatchUpText.stripPublicationPrefix("Redditors revolt over API pricing", publications: [])
+        == "Redditors revolt over API pricing")
+}
+
+@Test func secondPostingsOfALinkShareAKey() {
+    #expect(CatchUpText.sameStoryKey("Show HN: Launching FreeBSD/EC2 desktop AMIs")
+        == CatchUpText.sameStoryKey("Launching FreeBSD/EC2 desktop AMIs"))
+    #expect(CatchUpText.sameStoryURL(URL(string: "https://www.daemonology.net/blog/amis/?utm=x"))
+        == CatchUpText.sameStoryURL(URL(string: "http://daemonology.net/blog/amis")))
+}
+
+@Test func fallbackLedeNeverPrintsLinkReferences() {
+    let hn = "[Comments][1]\n\n[1]: https://news.ycombinator.com/item?id=49837473"
+    #expect(CatchUpText.fallbackLede([hn]) == "")
+    let real = "FreeBSD now publishes desktop images for EC2, so a graphical system is one launch away."
+    #expect(CatchUpText.fallbackLede([hn, real]) == real)
+}

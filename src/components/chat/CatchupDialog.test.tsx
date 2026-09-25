@@ -215,6 +215,24 @@ describe("CatchupDialog", () => {
     expect(screen.getByText("Grafana ships a self-hosted analytics bundle.")).toBeInTheDocument();
   });
 
+  it("cites every article a story gathers, numbered, with the outlets over the headline", async () => {
+    const lobsters = { ...source, id: "a2", publication: "Lobsters", title: "verl 1.0 released" };
+    const hn = { ...source, id: "a3", publication: "Hacker News", title: "verl 1.0: RL for LLMs at scale" };
+    vi.mocked(generateCatchupReport).mockResolvedValueOnce({
+      ...report,
+      stories: [{ ...report.stories[0], article_ids: ["a1", "a2", "a3"] }],
+      briefs: [],
+      sources: [source, lobsters, hn],
+    });
+    render(<CatchupDialog onClose={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+
+    expect(await screen.findByText("3 sources")).toBeInTheDocument();
+    expect(screen.getByText("theverge.com · Lobsters · Hacker News")).toBeInTheDocument();
+    expect(screen.getByTitle("verl 1.0 released")).toBeInTheDocument();
+    expect(screen.getByTitle("verl 1.0: RL for LLMs at scale")).toBeInTheDocument();
+  });
+
   it("names the publication rather than the feed's own format title", async () => {
     render(<CatchupDialog onClose={vi.fn()} />);
 

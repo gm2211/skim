@@ -129,6 +129,19 @@ const FEEDS = [
         ],
       },
       {
+        // A link-only aggregator post, the way Hacker News and Lobsters
+        // really publish them: the body is a markdown link reference and the
+        // item links to the story it is about.
+        id: "hn-4",
+        title: "EU opens probe into AWS, Azure and Google Cloud egress fees",
+        author: "throwaway_cloud",
+        hours: 3,
+        linkTo: "at-1",
+        rawDescription: "[Comments][1]\n\n[1]: https://news.ycombinator.com/item?id=49837473",
+        summary: "",
+        body: [],
+      },
+      {
         id: "hn-3",
         title: "Why your on-call rotation is too small",
         author: "sredebt",
@@ -187,11 +200,11 @@ function rss(feed) {
     .map(
       (item) => `    <item>
       <title>${escape(item.title)}</title>
-      <link>${ORIGIN}/article/${item.id}</link>
+      <link>${ORIGIN}/article/${item.linkTo ?? item.id}</link>
       <guid isPermaLink="false">${ORIGIN}/article/${item.id}</guid>
       <dc:creator>${escape(item.author)}</dc:creator>
       <pubDate>${hoursAgo(item.hours).toUTCString()}</pubDate>
-      <description>${escape(item.summary)}</description>
+      <description>${escape(item.rawDescription ?? item.summary)}</description>
     </item>`,
     )
     .join("\n");

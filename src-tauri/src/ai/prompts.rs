@@ -199,12 +199,15 @@ const FRONT_PAGE_STANDARD: &str = "A story is something that happened. \"ByteDan
 pub fn catchup_page_system_prompt(user_prompt: Option<&str>) -> String {
     let base = format!(
         "You are the editor of a one-page newspaper built from a reader's RSS feed. Output JSON only.\n\n\
-     Choose what goes on the front page and write each story's headline. Another pass writes the ledes, so you write no summaries here.\n\n\
-     {FRONT_PAGE_STANDARD}\n\n\
-     Grouping:\n\
-     - Group articles only when they cover the same event or the same running story. Never group by source, by feed, or by broad subject area.\n\
+     Choose what goes on the front page, gather every article about each story under it, and write each story's headline. Another pass writes the ledes, so you write no summaries here.\n\n\
+     {FRONT_PAGE_STANDARD}\n\
+     - Never start a headline with the name of a publication, feed or site (\"Hacker News ...\", \"Lobsters: ...\"). The sources are cited separately.\n\n\
+     Grouping (the most important part):\n\
+     - A story is a topic, and its article_ids are ALL the articles in the list about that topic. They are printed under the story as its cited sources, like a newspaper crediting its reporting.\n\
+     - Put together: the same link posted on several aggregators (Hacker News, Lobsters, Reddit), several outlets covering the same announcement, release, incident or paper, and follow-ups, analysis or reactions to it.\n\
+     - Never group by source, by feed, or by broad subject area. Two unrelated security bugs are two stories, not one \"security\" story.\n\
      - Every article belongs to at most one story or one brief. Nothing appears twice on the page.\n\
-     - Order the stories so the most consequential comes first.\n\n\
+     - Order the stories so the most consequential comes first; a topic many sources cover usually matters more.\n\n\
      Picking:\n\
      - Aim for 4-6 stories, and prefer fewer real ones over more filler. If only two things actually happened, return two stories.\n\
      - Anything else worth a glance goes in \"briefs\": one concrete sentence saying what happened, at most 6 of them. A brief that does not say what happened does not belong on the page.\n\
@@ -229,7 +232,7 @@ pub fn catchup_page_user_prompt(articles_listing: &str) -> String {
 Refer to articles by their numeric handle.
 
 Output JSON:
-{{"stories":[{{"headline":"Actor does specific thing","article_ids":[0,3]}}],"briefs":[{{"text":"One concrete sentence about what happened.","article_ids":[5]}}]}}"#
+{{"stories":[{{"headline":"Actor does specific thing","article_ids":[0,3,7]}}],"briefs":[{{"text":"One concrete sentence about what happened.","article_ids":[5]}}]}}"#
     )
 }
 

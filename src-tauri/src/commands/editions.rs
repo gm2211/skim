@@ -257,17 +257,17 @@ pub async fn generate_today_ledes(
 
 /// Read only this story's selected reports, release the DB lock before network
 /// work, and reuse the reader/chat resolver's cache, deadlines, and fallback.
-struct LedeSource {
+pub(crate) struct LedeSource {
     article_id: String,
-    body: String,
+    pub(crate) body: String,
 }
-struct LedeEvidence {
+pub(crate) struct LedeEvidence {
     prompt_text: String,
-    sources: Vec<LedeSource>,
+    pub(crate) sources: Vec<LedeSource>,
 }
 #[derive(Debug, PartialEq)]
-struct VerifiedPreview {
-    excerpt: String,
+pub(crate) struct VerifiedPreview {
+    pub(crate) excerpt: String,
     source_article_id: String,
     source_evidence_hash: String,
 }
@@ -281,7 +281,7 @@ impl LedeEvidence {
     }
 }
 
-async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<LedeEvidence, String> {
+pub(crate) async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<LedeEvidence, String> {
     let articles = {
         let conn = db.conn.lock().map_err(|error| error.to_string())?;
         article_ids
@@ -323,7 +323,7 @@ async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<LedeE
     Ok(LedeEvidence { prompt_text: text, sources: bounded_sources })
 }
 
-async fn verified_preview(provider: &dyn AiProvider, model: &str, headline: &str, evidence: &LedeEvidence) -> Option<VerifiedPreview> {
+pub(crate) async fn verified_preview(provider: &dyn AiProvider, model: &str, headline: &str, evidence: &LedeEvidence) -> Option<VerifiedPreview> {
     let bodies: Vec<String> = evidence.sources.iter().map(|source| source.body.clone()).collect();
     let make_request = |system: String, user: String, json_mode| ChatRequest {
         model: model.into(), messages: vec![ChatMessage::text("system", system), ChatMessage::text("user", user)],

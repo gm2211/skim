@@ -1637,12 +1637,6 @@ struct CatchupBriefRaw {
     article_ids: serde_json::Value,
 }
 
-#[derive(Deserialize)]
-struct CatchupLedeRaw {
-    #[serde(default, alias = "summary", alias = "text")]
-    lede: String,
-}
-
 fn resolve_handles(
     v: &serde_json::Value,
     articles: &[crate::db::models::ArticleWithFeed],
@@ -1692,14 +1686,11 @@ const CATCHUP_MAX_BRIEFS: usize = 6;
 /// 3 let the whole middle of the scale through and catch-up on "Priority inbox"
 /// read exactly like catch-up on everything.
 const CATCHUP_INBOX_MIN_PRIORITY: i32 = 4;
-/// Articles cited under one story. The model occasionally hands a single item
-/// every handle it was given; the byline is a citation, not a manifest.
-const CATCHUP_MAX_CITATIONS_PER_STORY: usize = 4;
+/// Articles cited under one story. A story gathers every article on its
+/// topic, so this is generous; it only stops a model that hands one story
+/// every handle it was given from turning the source list into a manifest.
+const CATCHUP_MAX_CITATIONS_PER_STORY: usize = 8;
 const CATCHUP_MAX_CITATIONS_PER_BRIEF: usize = 2;
-/// Articles read in full when writing one story's lede.
-const CATCHUP_ARTICLES_PER_LEDE: usize = 4;
-/// Characters of each of those articles handed to the model.
-const CATCHUP_LEDE_TEXT_CHARS: usize = 3000;
 /// Characters of each article in the first pass, which only picks and groups.
 const CATCHUP_PICK_EXCERPT_CHARS: usize = 400;
 
@@ -1767,18 +1758,179 @@ fn claim_citations(
     kept
 }
 
-/// A short fallback lede for when the second pass fails for one story, so a
-/// story never renders with nothing under it.
-fn excerpt_lede(text: &str) -> String {
-    let cleaned = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    if cleaned.chars().count() <= 240 {
-        return cleaned;
+/// A title reduced to what two postings of the same link share, so the copy on
+/// Hacker News and the copy on Lobsters compare equal.
+fn same_story_key(title: &str) -> String {
+    let normalized = normalize_for_dedup(title);
+    ["show hn ", "ask hn ", "launch hn ", "tell hn "]
+        .iter()
+        .find_map(|prefix| normalized.strip_prefix(prefix))
+        .unwrap_or(&normalized)
+        .to_string()
+}
+
+/// The article's link with scheme, `www.`, query and trailing slash dropped.
+fn same_story_url(url: Option<&str>) -> Option<String> {
+    let url = url?.trim();
+    let rest = url.split_once("://").map(|(_, r)| r).unwrap_or(url);
+    let rest = rest.strip_prefix("www.").unwrap_or(rest);
+    let rest = rest.split(['?', '#']).next().unwrap_or(rest).trim_end_matches('/');
+    (!rest.is_empty()).then(|| rest.to_lowercase())
+}
+
+/// Whether two articles are plainly the same piece: the same link, or the same
+/// title posted on another aggregator.
+fn same_story(a: &crate::db::models::ArticleWithFeed, b: &crate::db::models::ArticleWithFeed) -> bool {
+    let key = same_story_key(&a.article.title);
+    if key.split(' ').count() >= 3 && key == same_story_key(&b.article.title) {
+        return true;
     }
-    let clipped: String = cleaned.chars().take(240).collect();
-    match clipped.rfind(['.', '!', '?']) {
-        Some(end) if end > 80 => clipped[..=end].to_string(),
-        _ => format!("{}…", clipped.trim_end()),
+    match (
+        same_story_url(a.article.url.as_deref()),
+        same_story_url(b.article.url.as_deref()),
+    ) {
+        (Some(x), Some(y)) => x == y,
+        _ => false,
     }
+}
+
+/// Folds a later story into an earlier one when they cite the same piece. A
+/// model will sometimes run the Hacker News posting of a link as its own story
+/// under a reworded headline; the page then prints the same news twice.
+fn merge_same_story_stories(
+    stories: &mut Vec<CatchupStory>,
+    pool: &[crate::db::models::ArticleWithFeed],
+) {
+    let by_id: HashMap<&str, &crate::db::models::ArticleWithFeed> =
+        pool.iter().map(|a| (a.article.id.as_str(), a)).collect();
+    let articles = |story: &CatchupStory| -> Vec<&crate::db::models::ArticleWithFeed> {
+        story.article_ids.iter().filter_map(|id| by_id.get(id.as_str()).copied()).collect()
+    };
+    let mut i = 0;
+    while i < stories.len() {
+        let mut j = i + 1;
+        while j < stories.len() {
+            let earlier = articles(&stories[i]);
+            let overlaps = articles(&stories[j])
+                .iter()
+                .any(|b| earlier.iter().any(|a| same_story(a, b)));
+            if overlaps {
+                let later = stories.remove(j);
+                for id in later.article_ids {
+                    if stories[i].article_ids.len() < CATCHUP_MAX_CITATIONS_PER_STORY {
+                        stories[i].article_ids.push(id);
+                    }
+                }
+            } else {
+                j += 1;
+            }
+        }
+        i += 1;
+    }
+}
+
+/// Adds to each story the unclaimed articles that are plainly the same piece:
+/// the same link, or the same title posted on another aggregator. The model is
+/// asked to do this and usually does, but a front page that cites one of two
+/// identical postings looks like it missed the obvious.
+fn attach_same_story_articles(
+    stories: &mut [CatchupStory],
+    pool: &[crate::db::models::ArticleWithFeed],
+    claimed: &mut std::collections::HashSet<String>,
+) {
+    for story in stories.iter_mut() {
+        let cited: Vec<&crate::db::models::ArticleWithFeed> = pool
+            .iter()
+            .filter(|a| story.article_ids.contains(&a.article.id))
+            .collect();
+        for a in pool {
+            if story.article_ids.len() >= CATCHUP_MAX_CITATIONS_PER_STORY {
+                break;
+            }
+            if claimed.contains(&a.article.id) {
+                continue;
+            }
+            if cited.iter().any(|c| same_story(c, a)) {
+                claimed.insert(a.article.id.clone());
+                story.article_ids.push(a.article.id.clone());
+            }
+        }
+    }
+}
+
+/// Feeds whose name a model likes to glue onto the front of a headline.
+const AGGREGATOR_NAMES: &[&str] = &["hacker news", "lobsters", "lobste.rs", "reddit", "slashdot"];
+
+/// The headline without a publication's name stuck to its front
+/// ("Hacker News back-and-shoulder surgery is often worse than useless"). The
+/// sources are cited under the story; the name adds nothing to the headline and
+/// reads as though the publication were the subject.
+fn strip_publication_prefix(headline: &str, publications: &[String]) -> String {
+    let trimmed = headline.trim();
+    let lower = trimmed.to_lowercase();
+    let mut names: Vec<String> = publications
+        .iter()
+        .map(|p| p.trim().to_lowercase())
+        .filter(|p| !p.is_empty())
+        .collect();
+    names.extend(AGGREGATOR_NAMES.iter().map(|n| n.to_string()));
+    names.sort_by_key(|n| std::cmp::Reverse(n.len()));
+    for name in names {
+        let Some(rest) = lower.strip_prefix(&name) else {
+            continue;
+        };
+        // A whole-word match only: "Reddit" must not eat "Redditors".
+        if !rest.starts_with([' ', ':', '-', '|', '\u{2013}', '\u{2014}']) {
+            continue;
+        }
+        let Some(after) = trimmed.get(name.len()..) else {
+            continue;
+        };
+        let remainder = after
+            .trim_start_matches(|c: char| c.is_whitespace() || matches!(c, ':' | '-' | '|' | '\u{2013}' | '\u{2014}'));
+        // A headline that is only the name, or whose subject is the name
+        // ("Reddit bans ..."), keeps it: stripping would leave a fragment.
+        if remainder.split_whitespace().count() < 3 || starts_with_verb(remainder) {
+            return trimmed.to_string();
+        }
+        let mut chars = remainder.chars();
+        return match chars.next() {
+            Some(first) => first.to_uppercase().chain(chars).collect(),
+            None => trimmed.to_string(),
+        };
+    }
+    trimmed.to_string()
+}
+
+/// Whether the text opens with a common headline verb, meaning the name before
+/// it was the story's subject rather than a label.
+fn starts_with_verb(text: &str) -> bool {
+    let first = text
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .trim_matches(|c: char| !c.is_alphanumeric())
+        .to_lowercase();
+    const VERBS: &[&str] = &[
+        "is", "was", "has", "adds", "bans", "launches", "releases", "ships", "announces", "buys",
+        "sues", "cuts", "raises", "removes", "changes", "shuts", "goes", "gets", "says", "blocks",
+        "introduces", "updates", "drops", "wins", "loses", "hires", "fires", "faces", "plans",
+    ];
+    VERBS.contains(&first.as_str())
+}
+
+/// A lede for when no verified passage could be selected: the first clean
+/// excerpt among the story's articles, with markdown, link references and bare
+/// URLs stripped. Empty when every body is link-only, so the story prints its
+/// headline and sources and nothing else, rather than `[Comments][1]`.
+fn fallback_lede<'a>(bodies: impl IntoIterator<Item = &'a str>) -> String {
+    bodies
+        .into_iter()
+        .map(crate::db::story_text::excerpt)
+        // What survives stripping a link-only post is its link label
+        // ("Comments"), which is not a lede either.
+        .find(|text| text.split_whitespace().count() >= 6)
+        .unwrap_or_default()
 }
 
 /// The cutoff, in unix seconds, for a "catch up on the last N hours" request.
@@ -1924,15 +2076,16 @@ async fn build_catchup_report(
 
     let mut listing = String::new();
     for (i, a) in pool.iter().enumerate() {
-        let excerpt: String = a
-            .article
-            .content_text
-            .as_deref()
-            .unwrap_or("")
-            .chars()
-            .take(CATCHUP_PICK_EXCERPT_CHARS)
-            .collect();
-        let clean = excerpt.replace(['\n', '\t'], " ");
+        // Markup stripped first: a link-only aggregator post is otherwise
+        // listed as `[Comments][1] [1]: https://…`, which tells the editor
+        // nothing about what it links to.
+        let clean: String = crate::db::story_text::excerpt(
+            a.article.content_text.as_deref().unwrap_or(""),
+        )
+        .chars()
+        .take(CATCHUP_PICK_EXCERPT_CHARS)
+        .collect::<String>()
+        .replace(['\n', '\t'], " ");
         let publication = crate::ai::publication::publication_name(
             &a.feed_title,
             a.article.url.as_deref(),
@@ -1963,7 +2116,7 @@ async fn build_catchup_report(
             },
         ],
         temperature: Some(0.3),
-        max_tokens: Some(1500),
+        max_tokens: Some(2000),
         json_mode: true,
         tools: None,
     };
@@ -2005,6 +2158,14 @@ async fn build_catchup_report(
             // Every article behind it already ran under an earlier story.
             continue;
         }
+        let publications: Vec<String> = pool
+            .iter()
+            .filter(|a| article_ids.contains(&a.article.id))
+            .map(|a| {
+                crate::ai::publication::publication_name(&a.feed_title, a.article.url.as_deref())
+            })
+            .collect();
+        let headline = strip_publication_prefix(&headline, &publications);
         let lede = story.lede.trim();
         report.stories.push(CatchupStory {
             headline,
@@ -2016,6 +2177,11 @@ async fn build_catchup_report(
             article_ids,
         });
     }
+
+    // Before the briefs claim anything: a second posting of a story's link
+    // belongs under that story, not beside it or below the fold as its own item.
+    merge_same_story_stories(&mut report.stories, &pool);
+    attach_same_story_articles(&mut report.stories, &pool, &mut claimed);
 
     for brief in raw.briefs {
         if report.briefs.len() >= CATCHUP_MAX_BRIEFS {
@@ -2070,12 +2236,11 @@ async fn build_catchup_report(
         run_id,
     );
 
-    // --- Pass two: write each lede from the articles behind it --------------
-
-    let by_id: HashMap<&str, &crate::db::models::ArticleWithFeed> = pool
-        .iter()
-        .map(|a| (a.article.id.as_str(), a))
-        .collect();
+    // --- Pass two: pick each lede from the articles behind it ---------------
+    //
+    // The same source-verified passage Today prints: the reader resolver turns
+    // a link-only aggregator post into the page it links to, and the lede is a
+    // passage copied from one of those reports, checked against its text.
 
     for index in 0..report.stories.len() {
         let (headline, article_ids) = {
@@ -2083,83 +2248,22 @@ async fn build_catchup_report(
             (story.headline.clone(), story.article_ids.clone())
         };
 
-        let mut articles_text = String::new();
-        for id in article_ids.iter().take(CATCHUP_ARTICLES_PER_LEDE) {
-            let Some(a) = by_id.get(id.as_str()) else {
-                continue;
-            };
-            let body: String = a
-                .article
-                .content_text
-                .as_deref()
-                .unwrap_or("")
-                .chars()
-                .take(CATCHUP_LEDE_TEXT_CHARS)
-                .collect();
-            articles_text.push_str(&format!(
-                "--- {} [{}]\n{}\n\n",
-                a.article.title.trim(),
-                crate::ai::publication::publication_name(
-                    &a.feed_title,
-                    a.article.url.as_deref()
-                ),
-                body.trim()
-            ));
-        }
-
-        let lede = if articles_text.trim().is_empty() {
-            String::new()
-        } else {
-            let lede_request = ChatRequest {
-                model: model.clone(),
-                messages: vec![
-                    ChatMessage {
-                        role: "system".to_string(),
-                        content: prompts::catchup_lede_system_prompt(),
-                        content_blocks: None,
-                    },
-                    ChatMessage {
-                        role: "user".to_string(),
-                        content: prompts::catchup_lede_user_prompt(&headline, &articles_text),
-                        content_blocks: None,
-                    },
-                ],
-                temperature: Some(0.3),
-                max_tokens: Some(300),
-                json_mode: true,
-                tools: None,
-            };
-
-            match provider.chat(lede_request).await {
-                Ok(lede_response) => {
-                    let text = lede_response.content.trim().to_string();
-                    let parsed = extract_json_object(&text)
-                        .and_then(|json| serde_json::from_str::<CatchupLedeRaw>(json).ok())
-                        .map(|raw| raw.lede.trim().to_string())
-                        .filter(|lede| !lede.is_empty() && !is_placeholder_text(lede));
-                    // A provider that ignored json_mode still gave us prose.
-                    parsed.unwrap_or_else(|| {
-                        if text.starts_with('{') || is_placeholder_text(&text) {
-                            String::new()
-                        } else {
-                            text
-                        }
-                    })
+        let evidence = super::editions::lede_source_text(&db, &article_ids).await;
+        let lede = match &evidence {
+            Ok(evidence) if !evidence.sources.is_empty() => {
+                match super::editions::verified_preview(provider.as_ref(), &model, &headline, evidence).await {
+                    Some(preview) => preview.excerpt,
+                    None => fallback_lede(evidence.sources.iter().map(|s| s.body.as_str())),
                 }
-                Err(_) => String::new(),
             }
+            _ => fallback_lede(
+                pool.iter()
+                    .filter(|a| article_ids.contains(&a.article.id))
+                    .filter_map(|a| a.article.content_text.as_deref()),
+            ),
         };
 
-        let fallback = || {
-            article_ids
-                .first()
-                .and_then(|id| by_id.get(id.as_str()))
-                .and_then(|a| a.article.content_text.as_deref())
-                .map(excerpt_lede)
-                .unwrap_or_default()
-        };
-
-        report.stories[index].lede = if lede.is_empty() { fallback() } else { lede };
+        report.stories[index].lede = lede;
 
         let completed = index as u32 + 1;
         emit_catchup(
@@ -2279,6 +2383,114 @@ mod catchup_runs_tests {
 #[cfg(test)]
 mod catchup_tests {
     use super::*;
+
+    fn article(id: &str, title: &str, url: &str, feed: &str) -> crate::db::models::ArticleWithFeed {
+        crate::db::models::ArticleWithFeed {
+            article: crate::db::models::Article {
+                id: id.into(),
+                feed_id: feed.into(),
+                title: title.into(),
+                url: Some(url.into()),
+                author: None,
+                content_html: None,
+                content_text: None,
+                published_at: None,
+                fetched_at: 0,
+                is_read: false,
+                is_starred: false,
+                feedly_entry_id: None,
+                comments_url: None,
+            },
+            feed_title: feed.into(),
+            feed_icon_url: None,
+        }
+    }
+
+    #[test]
+    fn publication_glued_to_a_headline_is_stripped() {
+        // Verbatim from the page Giulio sent back.
+        assert_eq!(
+            strip_publication_prefix(
+                "Hacker News back-and-shoulder surgery is often worse than useless",
+                &["hacker news".into()]
+            ),
+            "Back-and-shoulder surgery is often worse than useless"
+        );
+        assert_eq!(
+            strip_publication_prefix("Lobsters: SourceHut fixes XSS in build logs", &[]),
+            "SourceHut fixes XSS in build logs"
+        );
+    }
+
+    #[test]
+    fn publication_that_is_the_subject_stays() {
+        assert_eq!(
+            strip_publication_prefix(
+                "Daemonology.net launches FreeBSD/EC2 desktop AMIs",
+                &["daemonology.net".into()]
+            ),
+            "Daemonology.net launches FreeBSD/EC2 desktop AMIs"
+        );
+        assert_eq!(
+            strip_publication_prefix("Reddit bans third-party API clients", &[]),
+            "Reddit bans third-party API clients"
+        );
+        assert_eq!(
+            strip_publication_prefix("Redditors revolt over API pricing", &[]),
+            "Redditors revolt over API pricing"
+        );
+    }
+
+    #[test]
+    fn second_posting_of_a_link_joins_its_story() {
+        let pool = vec![
+            article("a", "Launching FreeBSD/EC2 desktop AMIs", "https://www.daemonology.net/blog/amis/", "Lobsters"),
+            article("b", "Launching FreeBSD/EC2 desktop AMIs", "https://daemonology.net/blog/amis", "Hacker News"),
+            article("c", "Show HN: Launching FreeBSD/EC2 desktop AMIs", "https://example.com/x", "Hacker News"),
+            article("d", "SourceHut account takeover via build logs", "https://blog.arusekk.pl/x", "Lobsters"),
+        ];
+        let mut stories = vec![CatchupStory {
+            headline: "FreeBSD ships desktop AMIs on EC2".into(),
+            lede: String::new(),
+            article_ids: vec!["a".into()],
+        }];
+        let mut claimed: std::collections::HashSet<String> = ["a".to_string()].into();
+        attach_same_story_articles(&mut stories, &pool, &mut claimed);
+        assert_eq!(stories[0].article_ids, vec!["a", "b", "c"]);
+        assert!(!claimed.contains("d"));
+    }
+
+    #[test]
+    fn story_citing_the_same_link_folds_into_the_earlier_one() {
+        let pool = vec![
+            article("a", "EU regulators open formal probe into cloud egress fees", "http://x/article/at-1", "Ars Technica"),
+            article("b", "Cloud providers race to publish egress fee schedules", "http://x/article/tv-1", "The Verge"),
+            article("c", "EU opens probe into AWS, Azure and Google Cloud egress fees", "http://x/article/at-1", "Hacker News"),
+            article("d", "Rust 1.94 lands with a faster trait solver", "http://x/article/at-2", "Ars Technica"),
+        ];
+        let story = |headline: &str, ids: &[&str]| CatchupStory {
+            headline: headline.into(),
+            lede: String::new(),
+            article_ids: ids.iter().map(|s| s.to_string()).collect(),
+        };
+        let mut stories = vec![
+            story("EU probes cloud egress fees", &["a", "b"]),
+            story("Rust 1.94 ships a faster trait solver", &["d"]),
+            story("EU opens egress probe into AWS, Azure and Google", &["c"]),
+        ];
+        merge_same_story_stories(&mut stories, &pool);
+        assert_eq!(stories.len(), 2);
+        assert_eq!(stories[0].article_ids, vec!["a", "b", "c"]);
+        assert_eq!(stories[1].article_ids, vec!["d"]);
+    }
+
+    #[test]
+    fn fallback_lede_never_prints_link_references() {
+        let hn = "[Comments][1]\n\n[1]: https://news.ycombinator.com/item?id=49837473";
+        assert_eq!(fallback_lede([hn]), "");
+        let real = "FreeBSD now publishes desktop images for EC2, so a graphical system is one launch away.";
+        assert_eq!(fallback_lede([hn, real]), real);
+    }
 
     #[test]
     fn placeholder_text_catches_prompt_examples_the_model_echoed() {

@@ -163,6 +163,15 @@ private struct CatchUpStoryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: lead ? 10 : 7) {
+            if outlets.count > 1 {
+                // A story many outlets carried reads as such at a glance.
+                Text(outlets.joined(separator: " · ").uppercased())
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(SkimStyle.accent)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Text(story.headline)
                 .font(.system(size: lead ? 26 : 18, weight: lead ? .bold : .semibold))
                 .foregroundStyle(SkimStyle.text)
@@ -179,9 +188,14 @@ private struct CatchUpStoryView: View {
                     .transition(.opacity)
             }
 
-            CatchUpByline(articles: behind)
+            CatchUpSources(articles: behind)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var outlets: [String] {
+        var seen = Set<String>()
+        return behind.map { PublicationName.of(article: $0) }.filter { seen.insert($0).inserted }
     }
 
     private var behind: [Article] {
@@ -219,6 +233,32 @@ private struct CatchUpBriefView: View {
         brief.articleIndexes.prefix(2).compactMap { handle -> Article? in
             let zeroBased = handle - 1
             return articles.indices.contains(zeroBased) ? articles[zeroBased] : nil
+        }
+    }
+}
+
+/// Every article a story gathers, cited under it like a newspaper crediting
+/// its reporting: a count, then each source numbered, each one opening the article.
+private struct CatchUpSources: View {
+    var articles: [Article]
+
+    var body: some View {
+        if !articles.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(articles.count == 1 ? "SOURCE" : "\(articles.count) SOURCES")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundStyle(SkimStyle.secondary.opacity(0.7))
+                ForEach(Array(articles.enumerated()), id: \.element.id) { index, article in
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("\(index + 1)")
+                            .font(.system(size: 12, weight: .regular).monospacedDigit())
+                            .foregroundStyle(SkimStyle.secondary.opacity(0.7))
+                        CatchUpByline(articles: [article])
+                    }
+                }
+            }
+            .padding(.top, 3)
         }
     }
 }

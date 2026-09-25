@@ -505,8 +505,10 @@ enum NativeAI {
 
     static let catchUpMaxStories = 6
     static let catchUpMaxBriefs = 6
-    /// Articles cited under one item. The byline is a citation, not a manifest.
-    static let catchUpMaxCitationsPerStory = 4
+    /// Articles cited under one story. A story gathers every article on its
+    /// topic, so this is generous; it only stops a model that hands one story
+    /// every handle it was given from turning the sources into a manifest.
+    static let catchUpMaxCitationsPerStory = 8
     static let catchUpMaxCitationsPerBrief = 2
     /// Articles read in full when writing one story's lede.
     static let catchUpArticlesPerLede = 4
@@ -542,15 +544,18 @@ enum NativeAI {
             You are the editor of a one-page newspaper built from a reader's RSS feed. Output ONLY valid JSON. No prose. No markdown fences. The format is exactly:
             {"stories":[{"headline":"...","articleIndexes":[1,4]}],"briefs":[{"text":"...","articleIndexes":[7]}]}
 
-            Choose what goes on the front page and write each story's headline. Another pass writes the ledes, so you write no summaries here.
+            Choose what goes on the front page, gather every article about each story under it, and write each story's headline. Another pass writes the ledes, so you write no summaries here.
 
             \(frontPageStandard)
+            - Never start a headline with the name of a publication, feed or site ("Hacker News ...", "Lobsters: ..."). The sources are cited separately.
 
-            Grouping:
+            Grouping (the most important part):
             - "articleIndexes" are the 1-based [N] tags from the article list.
-            - Group articles only when they cover the same event or the same running story. Never group by source, by feed, or by broad subject area.
+            - A story is a topic, and its articleIndexes are ALL the articles in the list about that topic. They are printed under the story as its cited sources, like a newspaper crediting its reporting.
+            - Put together: the same link posted on several aggregators (Hacker News, Lobsters, Reddit), several outlets covering the same announcement, release, incident or paper, and follow-ups, analysis or reactions to it.
+            - Never group by source, by feed, or by broad subject area. Two unrelated security bugs are two stories, not one "security" story.
             - Every article belongs to at most one story or one brief. Nothing appears twice on the page.
-            - Order the stories so the most consequential comes first.
+            - Order the stories so the most consequential comes first; a topic many sources cover usually matters more.
 
             Picking:
             - Aim for 4-6 stories, and prefer fewer real ones over more filler. If only two things actually happened, return two stories.
@@ -567,7 +572,7 @@ enum NativeAI {
         )
 
         if let page = parseFrontPage(raw, articleCount: articles.count), !page.isEmpty {
-            return page
+            return tidied(page, articles: articles)
         }
         // The model may have answered in the shape catch-up used to ask for.
         if let items = parseCatchUpItems(raw) {
@@ -584,8 +589,25 @@ enum NativeAI {
         let sourceEvidenceHash: String
     }
 
+    /// The lede under one story: a verified passage from the reports behind
+    /// it, read through the same resolver Today uses, so a link-only aggregator
+    /// post contributes the page it links to rather than "[Comments][1]".
     static func catchUpLede(headline: String, articles: [Article], settings: AppSettings) async throws -> String {
-        try await catchUpPreview(headline: headline, articles: articles, settings: settings)?.excerpt ?? ""
+        let feedArticles = articles.prefix(TodayLedePolicy.maxArticles).map { article in
+            var copy = article
+            copy.contentText = ArticleReaderContentLoader.displayBody(for: article)
+            return copy
+        }
+        let resolved = (try? await TodayReaderEvidence.resolve(
+            articles: Array(feedArticles), limit: TodayLedePolicy.maxArticles,
+            cached: { article in ArticleReaderContentLoader.sanitizedText(ExtractedContentCache.shared.get(article.id)) },
+            fetch: { article in try await ArticleReaderContentLoader.loadText(for: article).text }
+        )) ?? Array(feedArticles)
+        try Task.checkCancellation()
+        if let preview = try await catchUpPreview(headline: headline, articles: resolved, settings: settings) {
+            return preview.excerpt
+        }
+        return CatchUpText.fallbackLede(resolved.map(\.plainBody))
     }
 
     static func catchUpPreview(
@@ -646,7 +668,9 @@ enum NativeAI {
             return "No articles are available."
         }
         return selected.enumerated().map { index, article in
-            let text = article.plainBody.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Markup stripped first: a link-only aggregator post is otherwise
+            // listed as "[Comments][1] [1]: https://…".
+            let text = StoryText.excerpt(article.plainBody)
             let excerpt = text.isEmpty ? "No reader text available." : text.prefixWords(60)
             return """
             [\(index + 1)] \(article.title)
@@ -752,6 +776,68 @@ enum NativeAI {
             kept.append(index)
         }
         return kept
+    }
+
+    /// The page after the checks the model is asked for but not trusted with:
+    /// a second posting of a story's link joins that story instead of running
+    /// as its own brief, and no headline opens with a publication's name.
+    private static func tidied(_ page: CatchUpPage, articles: [Article]) -> CatchUpPage {
+        var page = page
+        func article(_ handle: Int) -> Article? {
+            articles.indices.contains(handle - 1) ? articles[handle - 1] : nil
+        }
+        func sameStory(_ a: Article, _ b: Article) -> Bool {
+            let key = CatchUpText.sameStoryKey(a.title)
+            if key.split(separator: " ").count >= 3, key == CatchUpText.sameStoryKey(b.title) { return true }
+            guard let x = CatchUpText.sameStoryURL(a.externalURL ?? a.url),
+                  let y = CatchUpText.sameStoryURL(b.externalURL ?? b.url) else { return false }
+            return x == y
+        }
+
+        // A later story citing the same piece folds into the earlier one: a
+        // model will sometimes run the Hacker News posting of a link as its
+        // own story under a reworded headline.
+        var i = 0
+        while i < page.stories.count {
+            var j = i + 1
+            while j < page.stories.count {
+                let earlier = page.stories[i].articleIndexes.compactMap(article)
+                let overlaps = page.stories[j].articleIndexes.compactMap(article)
+                    .contains { later in earlier.contains { sameStory($0, later) } }
+                if overlaps {
+                    let later = page.stories.remove(at: j)
+                    for handle in later.articleIndexes where page.stories[i].articleIndexes.count < catchUpMaxCitationsPerStory {
+                        page.stories[i].articleIndexes.append(handle)
+                    }
+                } else {
+                    j += 1
+                }
+            }
+            i += 1
+        }
+
+        var claimed = Set(page.stories.flatMap(\.articleIndexes))
+        let briefClaimed = Set(page.briefs.flatMap(\.articleIndexes))
+        for index in page.stories.indices {
+            let cited = page.stories[index].articleIndexes.compactMap(article)
+            for handle in 1...max(1, articles.count) where page.stories[index].articleIndexes.count < catchUpMaxCitationsPerStory {
+                guard !claimed.contains(handle), let candidate = article(handle) else { continue }
+                guard cited.contains(where: { sameStory($0, candidate) }) else { continue }
+                claimed.insert(handle)
+                page.stories[index].articleIndexes.append(handle)
+            }
+            let publications = page.stories[index].articleIndexes.compactMap(article).map { PublicationName.of(article: $0) }
+            page.stories[index].headline = CatchUpText.stripPublicationPrefix(page.stories[index].headline, publications: publications)
+        }
+        // A brief whose articles all moved under a story has nothing left to cite.
+        if !briefClaimed.isDisjoint(with: claimed) {
+            page.briefs = page.briefs.compactMap { brief in
+                var brief = brief
+                brief.articleIndexes.removeAll { claimed.contains($0) }
+                return brief.articleIndexes.isEmpty ? nil : brief
+            }
+        }
+        return page
     }
 
     /// Reshape the older item list into a front page, keeping its headlines.

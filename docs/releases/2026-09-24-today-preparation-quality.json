@@ -230,5 +230,29 @@
     "observed": "Copied debug helper was selected without its adjacent mlx.metallib; all requests failed before inference.",
     "fix": "Debug sibling selection requires both executable and adjacent Metal resource; explicit override retains precedence. Release selection is unchanged.",
     "boundary": "Failed unconfigured run was retained separately and is not model-quality evidence."
+  },
+  "followup_diagnostics": {
+    "record": "2026-09-24-related-report-lookup-quality.json",
+    "result": "One-reference lookup fixes response shape in both full108 probes but fails semantic recall/precision and latency acceptance; not adopted."
+  },
+  "post_rebase_validation": {
+    "base_commit": "f0abf47ba750277d3f3e50b27b3c9b604e37c72a",
+    "tested_commit": "19a9830364174576c938ee938ea67832e2b014af",
+    "rust_library_passed": 191,
+    "rust_exact_smoke_filtered": "ai::local_provider::tests::test_summarize_local_model",
+    "native_core_passed": 156,
+    "native_ios_app_passed": 46,
+    "frontend_passed": 168,
+    "frontend_test_files": 25,
+    "typescript": "passed",
+    "production_frontend_build": "passed; existing chunk-size warnings",
+    "rerun_total": 561,
+    "unchanged_prior_checks": {
+      "shared_swift_inference": 19,
+      "rust_plugin": 4,
+      "helper_packaging_python": 3
+    },
+    "combined_checks": 587,
+    "boundary": "Automated validation only; configured-model and installed interaction acceptance remain open."
   }
 }

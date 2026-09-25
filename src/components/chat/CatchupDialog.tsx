@@ -220,32 +220,73 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     if (source?.url) openUrl(source.url);
   };
 
-  // The articles a story was built from, printed as a byline under it.
+  const renderSourceLink = (source: CatchupSource, index?: number) => (
+    <button
+      key={source.id}
+      onClick={(e) => {
+        e.stopPropagation();
+        openArticle(source.id);
+      }}
+      className="text-left min-w-0 group flex items-baseline"
+      style={{ fontSize: 11.5, lineHeight: 1.5, gap: 6 }}
+      title={source.title}
+    >
+      {index !== undefined && (
+        <span className="text-text-muted flex-shrink-0" style={{ fontVariantNumeric: "tabular-nums", minWidth: 12 }}>
+          {index + 1}
+        </span>
+      )}
+      <span className="min-w-0">
+        <span className="text-accent" style={{ fontWeight: 600 }}>
+          {source.publication}
+        </span>
+        <span className="text-text-muted group-hover:text-text-primary transition-colors">
+          {"  "}
+          {source.title}
+        </span>
+      </span>
+    </button>
+  );
+
+  const citedSources = (articleIds: string[]) =>
+    articleIds.map((id) => sourcesById.get(id)).filter((s): s is CatchupSource => !!s);
+
+  // Every article the story gathers, cited under it like a newspaper crediting
+  // its reporting: numbered, publication first, each one opening the article.
+  const renderSources = (articleIds: string[]) => {
+    const cited = citedSources(articleIds);
+    if (cited.length === 0) return null;
+    return (
+      <div style={{ marginTop: 10 }}>
+        <div className="text-text-muted" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
+          {cited.length === 1 ? "Source" : `${cited.length} sources`}
+        </div>
+        <div className="flex flex-col" style={{ marginTop: 4, gap: 2 }}>
+          {cited.map((source, index) => renderSourceLink(source, index))}
+        </div>
+      </div>
+    );
+  };
+
+  // The article a brief came from, printed as a byline under it.
   const renderByline = (articleIds: string[]) => {
-    const cited = articleIds.map((id) => sourcesById.get(id)).filter((s): s is CatchupSource => !!s);
+    const cited = citedSources(articleIds);
     if (cited.length === 0) return null;
     return (
       <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
-        {cited.map((source) => (
-          <button
-            key={source.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              openArticle(source.id);
-            }}
-            className="text-left min-w-0 group"
-            style={{ fontSize: 11.5, lineHeight: 1.5 }}
-            title={source.title}
-          >
-            <span className="text-accent" style={{ fontWeight: 600 }}>
-              {source.publication}
-            </span>
-            <span className="text-text-muted group-hover:text-text-primary transition-colors">
-              {"  "}
-              {source.title}
-            </span>
-          </button>
-        ))}
+        {cited.map((source) => renderSourceLink(source))}
+      </div>
+    );
+  };
+
+  // Publications behind a story, printed over its headline when it has more
+  // than one, so a story many outlets carried reads as such at a glance.
+  const renderKicker = (articleIds: string[]) => {
+    const names = [...new Set(citedSources(articleIds).map((s) => s.publication))];
+    if (names.length < 2) return null;
+    return (
+      <div className="text-accent" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 6 }}>
+        {names.join(" · ")}
       </div>
     );
   };
@@ -275,6 +316,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
           marginTop: lead ? 0 : 18,
         }}
       >
+        {renderKicker(story.article_ids)}
         <h4
           onClick={story.article_ids[0] ? () => openArticle(story.article_ids[0]) : undefined}
           className={`text-text-primary ${story.article_ids[0] ? "cursor-pointer hover:text-accent transition-colors" : ""}`}
@@ -302,7 +344,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
         ) : loading ? (
           renderLedeSkeleton(lead)
         ) : null}
-        {renderByline(story.article_ids)}
+        {renderSources(story.article_ids)}
       </article>
     );
   };

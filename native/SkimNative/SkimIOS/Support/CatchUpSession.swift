@@ -118,10 +118,6 @@ final class CatchUpSession: ObservableObject {
     }
 
     private static func excerptLede(_ articles: [Article]) -> String {
-        guard let text = articles.first?.contentText?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !text.isEmpty else { return "" }
-        let words = text.split(whereSeparator: \.isWhitespace)
-        let clipped = words.prefix(40).joined(separator: " ")
-        return words.count > 40 ? clipped + "…" : clipped
+        CatchUpText.fallbackLede(articles.compactMap(\.contentText))
     }
 }

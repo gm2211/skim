@@ -102,6 +102,60 @@ function catchupFor(rows) {
   return JSON.stringify({ takeaways, notable_mentions });
 }
 
+/**
+ * The front page's first pass: group rows that share a distinctive word
+ * ("egress") into one story, the way a real editor gathers coverage of the
+ * same event, and put what is left in briefs.
+ */
+function frontPageFor(rows) {
+  const words = (row) =>
+    new Set(
+      row.title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w.length >= 6 && !["comments", "article", "without"].includes(w)),
+    );
+  const sets = rows.map(words);
+  const groups = [];
+  const taken = new Set();
+  rows.forEach((row, i) => {
+    if (taken.has(i)) return;
+    const group = [i];
+    taken.add(i);
+    rows.forEach((_, j) => {
+      if (taken.has(j)) return;
+      const shared = [...sets[i]].filter((w) => sets[j].has(w));
+      if (shared.length >= 1) {
+        group.push(j);
+        taken.add(j);
+      }
+    });
+    groups.push(group);
+  });
+  groups.sort((a, b) => b.length - a.length);
+  const stories = groups.slice(0, 4).map((g) => ({
+    headline: rows[g[0]].title.replace(/^Show HN:\s*/, ""),
+    article_ids: g.map((i) => rows[i].id),
+  }));
+  const briefs = groups.slice(4, 8).map((g) => ({
+    text: `${rows[g[0]].title}.`,
+    article_ids: g.map((i) => rows[i].id),
+  }));
+  return JSON.stringify({ stories, briefs });
+}
+
+/** The lede pass: a verbatim sentence from the first report that has one. */
+function excerptFor(user) {
+  const text = user.split("Article text behind it:")[1] ?? "";
+  for (const line of text.split("\n")) {
+    if (line.startsWith("--- ")) continue;
+    const sentence = line.split(/(?<=\.)\s/).find((s) => s.split(/\s+/).length >= 12 && s.split(/\s+/).length <= 60);
+    if (sentence) return JSON.stringify({ excerpt: sentence.trim() });
+  }
+  return JSON.stringify({ excerpt: "" });
+}
+
 function summaryFor(userPrompt, wantBullets) {
   const title = (userPrompt.match(/Article title:\s*(.+)/) || [])[1] || "the article";
   const bodyMatch = userPrompt.match(/Article text:\s*([\s\S]+?)\n\n(?:Write|Respond)/);
@@ -157,6 +211,8 @@ function respond(messages) {
   if (/"themes"\s*:/.test(user)) return themesFor(parseListing(user));
   if (/"triage"\s*:/.test(user)) return triageFor(parseListing(user));
   if (/"takeaways"\s*:/.test(user)) return catchupFor(parseListing(user));
+  if (/"stories"\s*:/.test(user)) return frontPageFor(parseListing(user));
+  if (/Article text behind it:/.test(user)) return excerptFor(user);
   if (/"bullets"/.test(user)) return summaryFor(user, true);
   if (/"summary"/.test(user) && /"notes"/.test(all)) return summaryFor(user, false);
   return chatReply(messages);

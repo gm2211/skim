@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { TodayEditionItem, TodayEditionMemberArticle } from "../../services/types";
 
 export type StoryRank = "lead" | "story" | "brief";
@@ -16,15 +17,83 @@ function Reference({ member, onOpenArticle }: {
   member: TodayEditionMemberArticle;
   onOpenArticle: (articleId: string) => void;
 }) {
+  const isDeleted = member.is_read === null;
+  const activate = () => {
+    if (isDeleted) {
+      if (member.url) void openUrl(member.url);
+    } else {
+      onOpenArticle(member.article_id);
+    }
+  };
+  const content = <>
+    <span className="text-accent font-semibold">{member.publication || member.feed_title}</span>
+    <span className="text-text-secondary group-hover:text-text-primary">{member.title}</span>
+    <span className="text-text-secondary">{member.published_at == null
+      ? "Published: unknown"
+      : `Published ${new Date(member.published_at * 1000).toLocaleString()}`}</span>
+    {member.membership_type === "duplicate" && <span className="text-text-muted">Syndicated report</span>}
+  </>;
+
+  if (isDeleted && !member.url) {
+    return <div className="today-reference" title={member.title}>{content}</div>;
+  }
+
   return (
     <button
-      onClick={() => onOpenArticle(member.article_id)}
+      onClick={activate}
       className="today-reference group"
       title={member.title}
     >
-      <span className="text-accent font-semibold">{member.publication || member.feed_title}</span>
-      <span className="text-text-secondary group-hover:text-text-primary">{member.title}</span>
-      {member.membership_type === "duplicate" && <span className="text-text-muted">Syndicated report</span>}
+      {content}
+    </button>
+  );
+}
+
+function PreviewAttribution({ member, onOpenArticle }: {
+  member: TodayEditionMemberArticle;
+  onOpenArticle: (articleId: string) => void;
+}) {
+  const isDeleted = member.is_read === null;
+  const activate = () => {
+    if (isDeleted) {
+      if (member.url) void openUrl(member.url);
+    } else {
+      onOpenArticle(member.article_id);
+    }
+  };
+  const content = <>
+    <span>Report preview · {member.publication || member.feed_title}</span>
+    <span className="underline">{member.title}</span>
+      <span className="text-text-secondary">{member.published_at == null
+      ? "Published: unknown"
+      : `Published ${new Date(member.published_at * 1000).toLocaleString()}`}</span>
+  </>;
+  const label = `Report preview from ${member.publication || member.feed_title}: ${member.title}${member.published_at == null ? ", published time unknown" : `, published ${new Date(member.published_at * 1000).toLocaleString()}`}`;
+  const style = {
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    flexWrap: "nowrap" as const,
+    gap: 3,
+    width: "100%",
+    minHeight: 44,
+    padding: 0,
+    textAlign: "left" as const,
+  };
+
+  if (isDeleted && !member.url) {
+    return <div className="today-story-control text-accent" style={style} aria-label={label}>{content}</div>;
+  }
+
+  return (
+    <button
+      className="today-story-control text-accent hover:text-text-primary"
+      style={style}
+      onClick={activate}
+      aria-label={label}
+    >
+      {content}
     </button>
   );
 }
@@ -40,6 +109,10 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
   const lead = rank === "lead";
   const brief = rank === "brief";
   const body = item.lede?.trim() || (brief ? "" : item.snapshot_summary);
+  const ledeSourceArticleId = item.lede_source_article_id;
+  const ledeSource = item.lede?.trim() && ledeSourceArticleId
+    ? members.find((member) => member.article_id === ledeSourceArticleId)
+    : undefined;
   const awaitingLede = !brief && !item.lede && isWritingLede;
 
   return (
@@ -56,6 +129,9 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
       </h3>
 
       {body && <p className={`text-text-secondary ${lead ? "today-lead-summary" : ""}`} style={{ marginTop: 8, fontSize: lead ? undefined : 13, lineHeight: 1.65 }}>{body}</p>}
+      {ledeSource && item.lede?.trim() && (
+        <PreviewAttribution member={ledeSource} onOpenArticle={onOpenArticle} />
+      )}
       {awaitingLede && (
         <div role="status" className="text-text-muted" style={{ fontSize: 12, marginTop: 8 }}>
           Preparing summary…

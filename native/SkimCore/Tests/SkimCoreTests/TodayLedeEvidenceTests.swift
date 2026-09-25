@@ -103,3 +103,28 @@ private actor ExcerptRequests {
     catch is CancellationError {}
     #expect(await cancelled.calls.count == 1)
 }
+
+@Test func todayPreviewProvenanceMatchesSecondSourceAndExactBoundedEvidence() throws {
+    let first = "The hearing is scheduled for next week."
+    let second = "The hearing ended on Thursday. The court reserved its decision."
+    let passage = "The hearing ended on Thursday."
+    let selection = try #require(TodayLedePolicy.selection(candidate: passage, sources: ["", first, second]))
+    #expect(selection.sourceIndex == 2)
+    #expect(selection.excerpt == passage)
+    #expect(selection.evidenceHash == StoryClusterer.sha256(second))
+    #expect(selection.evidenceHash != StoryClusterer.sha256(passage))
+    #expect(TodayLedePolicy.selection(candidate: passage, sources: [second, second])?.sourceIndex == 0)
+    #expect(TodayLedePolicy.selection(candidate: "The hearing ended on Friday.", sources: [first, second]) == nil)
+    #expect(TodayLedePolicy.selection(candidate: passage, sources: []) == nil)
+    #expect(TodayLedePolicy.evidenceVersion == 3)
+}
+
+@Test func todayPreviewSourceSelectionMatchesSharedCorpus() throws {
+    struct Fixture: Decodable { let name: String; let sources: [String]; let excerpt: String; let index: Int }
+    var root = URL(fileURLWithPath: #filePath)
+    for _ in 0..<5 { root.deleteLastPathComponent() }
+    let fixtures = try JSONDecoder().decode([Fixture].self, from: Data(contentsOf: root.appendingPathComponent("shared/fixtures/today-excerpt-sources.json")))
+    for fixture in fixtures {
+        #expect((TodayLedePolicy.selection(candidate: fixture.excerpt, sources: fixture.sources)?.sourceIndex ?? -1) == fixture.index, Comment(rawValue: fixture.name))
+    }
+}

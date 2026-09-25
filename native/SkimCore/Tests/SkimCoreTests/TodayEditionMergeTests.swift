@@ -17,6 +17,8 @@ private func mergeEdition() -> TodayEditionSnapshot {
     let original = mergeEdition()
     var summary = original
     summary.items[0].snapshot.lede = "New written summary"
+    summary.items[0].snapshot.ledeSourceArticleID = "article"
+    summary.items[0].snapshot.ledeSourceEvidenceHash = String(repeating: "a", count: 64)
     var consumed = original
     consumed.items[0].snapshot.isConsumed = true
     consumed.items[0].snapshot.consumedAt = Date(timeIntervalSince1970: 200)
@@ -28,6 +30,8 @@ private func mergeEdition() -> TodayEditionSnapshot {
     let consumedLast = TodayEditionMerge.consumption(current: summary, response: consumed)
     for result in [summaryLast, consumedLast] {
         #expect(result.items[0].snapshot.lede == "New written summary")
+        #expect(result.items[0].snapshot.ledeSourceArticleID == "article")
+        #expect(result.items[0].snapshot.ledeSourceEvidenceHash == summary.items[0].snapshot.ledeSourceEvidenceHash)
         #expect(result.items[0].snapshot.isConsumed)
         #expect(result.items[0].snapshot.consumedAt == consumed.items[0].snapshot.consumedAt)
         #expect(result.consumedItemCount == 1)

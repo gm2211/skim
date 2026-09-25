@@ -1174,18 +1174,32 @@ pub fn insert_edition_items(
     Ok(())
 }
 
-/// Store a source excerpt already accepted by validated_today_excerpt.
-/// The version stamp is separate from the immutable snapshot and reading state.
+/// Persist verified preview provenance separately from immutable snapshots/read state.
+/// A source must belong to this frozen item; live source deletion does not erase provenance.
 pub fn set_verified_edition_item_lede(
     conn: &Connection,
     edition_id: &str,
     story_id: &str,
     lede: &str,
+    source_article_id: &str,
+    source_evidence_hash: &str,
 ) -> Result<(), rusqlite::Error> {
-    conn.execute(
-        "UPDATE edition_items SET lede = ?3, lede_evidence_version = ?4 WHERE edition_id = ?1 AND story_id = ?2",
-        params![edition_id, story_id, lede, super::story_policy::today_lede_evidence_version()],
+    if lede.trim().is_empty() || source_evidence_hash.len() != 64
+        || !source_evidence_hash.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        return Err(rusqlite::Error::InvalidParameterName("Invalid preview evidence".into()));
+    }
+    let changed = conn.execute(
+        "UPDATE edition_items SET lede = ?3, lede_evidence_version = ?4,
+            lede_source_article_id = ?5, lede_source_evidence_hash = ?6
+         WHERE edition_id = ?1 AND story_id = ?2 AND EXISTS (
+            SELECT 1 FROM edition_item_articles
+            WHERE edition_id = ?1 AND story_id = ?2 AND article_id = ?5)",
+        params![edition_id, story_id, lede, super::story_policy::today_lede_evidence_version(),
+            source_article_id, source_evidence_hash],
     )?;
+    if changed != 1 {
+        return Err(rusqlite::Error::InvalidParameterName("Preview source is not a frozen item member".into()));
+    }
     Ok(())
 }
 
@@ -1195,13 +1209,22 @@ pub fn list_edition_items(
     edition_id: &str,
 ) -> Result<Vec<EditionItem>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT edition_id, story_id, story_revision_number, position, section,
+        "WITH previews AS (
+            SELECT item.*, lede_evidence_version = ?2
+                AND length(lede_source_evidence_hash) = 64
+                AND lede_source_evidence_hash NOT GLOB '*[^0-9a-f]*'
+                AND EXISTS (SELECT 1 FROM edition_item_articles member
+                    WHERE member.edition_id = item.edition_id AND member.story_id = item.story_id
+                      AND member.article_id = item.lede_source_article_id) AS verified
+            FROM edition_items item WHERE item.edition_id = ?1
+         )
+         SELECT edition_id, story_id, story_revision_number, position, section,
                 snapshot_title, snapshot_summary, snapshot_delta_summary,
                 snapshot_source_count, snapshot_reason, is_unique_find,
-                CASE WHEN lede_evidence_version = ?2 THEN lede ELSE NULL END, is_consumed, consumed_at
-         FROM edition_items
-         WHERE edition_id = ?1
-         ORDER BY position",
+                CASE WHEN verified THEN lede ELSE NULL END, is_consumed, consumed_at,
+                CASE WHEN verified THEN lede_source_article_id ELSE NULL END,
+                CASE WHEN verified THEN lede_source_evidence_hash ELSE NULL END
+         FROM previews ORDER BY position",
     )?;
     let items = stmt
         .query_map(params![edition_id, super::story_policy::today_lede_evidence_version()], |row| {
@@ -1220,6 +1243,8 @@ pub fn list_edition_items(
                 lede: row.get(11)?,
                 is_consumed: row.get::<_, i32>(12)? != 0,
                 consumed_at: row.get(13)?,
+                lede_source_article_id: row.get(14)?,
+                lede_source_evidence_hash: row.get(15)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -2459,6 +2484,8 @@ mod story_persistence_tests {
             snapshot_reason: Some("Widely covered".into()),
             is_unique_find: false,
             lede: None,
+            lede_source_article_id: None,
+            lede_source_evidence_hash: None,
             is_consumed: false,
             consumed_at: None,
         };
@@ -2500,18 +2527,31 @@ mod story_persistence_tests {
         // Simulate a pre-validation cache, then rerun migrations without losing
         // its bytes, frozen source snapshot or consumed state.
         conn.execute("UPDATE edition_items SET lede='Unverified legacy preview', lede_evidence_version=0 WHERE edition_id=?1", [&edition.id]).unwrap();
-        conn.execute_batch("ALTER TABLE edition_items DROP COLUMN lede_evidence_version").unwrap();
+        conn.execute_batch("ALTER TABLE edition_items DROP COLUMN lede_evidence_version; ALTER TABLE edition_items DROP COLUMN lede_source_article_id; ALTER TABLE edition_items DROP COLUMN lede_source_evidence_hash;").unwrap();
         migrations::run_migrations(&conn).unwrap();
         migrations::run_migrations(&conn).unwrap();
         let hidden = list_edition_items(&conn, &edition.id).unwrap().remove(0);
         assert!(hidden.lede.is_none());
         let raw: String = conn.query_row("SELECT lede FROM edition_items WHERE edition_id=?1", [&edition.id], |row| row.get(0)).unwrap();
         assert_eq!(raw, "Unverified legacy preview");
+        conn.execute("INSERT INTO edition_item_articles (edition_id, story_id, article_id,
+            snapshot_order, feed_id, snapshot_feed_title, snapshot_article_title, membership_type,
+            confidence, is_representative) VALUES (?1, ?2, 'article-2', 0, 'feed-1', 'News', 'Original title', 'coverage', 1, 1)",
+            params![edition.id, story.id]).unwrap();
+        let evidence_hash = "a".repeat(64);
+        assert!(set_verified_edition_item_lede(&conn, &edition.id, &story.id, "Foreign preview.", "article-3", &evidence_hash).is_err());
+        assert!(set_verified_edition_item_lede(&conn, &edition.id, &story.id, "Source preview.", "article-2", "bad hash").is_err());
         let verified = super::super::story_policy::validated_today_excerpt("The source confirmed the result.", "The source confirmed the result.").unwrap();
-        set_verified_edition_item_lede(&conn, &edition.id, &story.id, &verified).unwrap();
+        set_verified_edition_item_lede(&conn, &edition.id, &story.id, &verified, "article-2", &evidence_hash).unwrap();
         migrations::run_migrations(&conn).unwrap();
         let fresh = list_edition_items(&conn, &edition.id).unwrap().remove(0);
         assert_eq!(fresh.lede.as_deref(), Some(verified.as_str()));
+        assert_eq!(fresh.lede_source_article_id.as_deref(), Some("article-2"));
+        assert_eq!(fresh.lede_source_evidence_hash.as_deref(), Some(evidence_hash.as_str()));
+        // Even a current-version cache without attributable evidence is not shown.
+        conn.execute("UPDATE edition_items SET lede_source_article_id = NULL WHERE edition_id=?1", [&edition.id]).unwrap();
+        assert!(list_edition_items(&conn, &edition.id).unwrap()[0].lede.is_none());
+        set_verified_edition_item_lede(&conn, &edition.id, &story.id, &verified, "article-2", &evidence_hash).unwrap();
         assert_eq!(fresh.snapshot_title, consumed.snapshot_title);
         assert_eq!(fresh.snapshot_summary, consumed.snapshot_summary);
         assert_eq!(fresh.story_revision_number, consumed.story_revision_number);

@@ -8,6 +8,7 @@ import Testing
         ("mlx-community/Qwen3-1.7B-4bit", .qwen, ["<|im_end|>", "<|endoftext|>"], true),
         ("mlx-community/Phi-4-mini-instruct-4bit", .phi, ["<|end|>", "<|endoftext|>"], false),
         ("mlx-community/SmolLM3-3B-4bit", .smol, ["<|im_end|>", "<|endoftext|>"], true),
+        ("mlx-community/LFM2-1.2B-4bit", .lfm, ["<|im_end|>", "<|endoftext|>"], false),
         ("other/unknown", .unknown, [], false)
     ]
     for (repo, expected, terminators, thinking) in cases {
@@ -29,7 +30,10 @@ import Testing
         ("Qwen3-4B-Instruct-2507-4bit", 0.3, 0.9, 1.05),
         ("SmolLM3-3B-4bit", 0.3, 0.95, 1.1),
         ("Phi-4-mini-instruct-4bit", 0.3, 0.95, 1.1),
-        ("gemma-3n-E2B-it-lm-4bit", 0.35, 0.95, 1.1)
+        ("gemma-3n-E2B-it-lm-4bit", 0.35, 0.95, 1.1),
+        ("Qwen3-8B-4bit", 0.3, 0.9, 1.05),
+        ("Qwen3-30B-A3B-4bit", 0.3, 0.9, 1.05),
+        ("LFM2-1.2B-4bit", 0.3, 0.95, 1.05)
     ]
     #expect(MLXSamplingPreset.presets.count == cases.count)
     for (repo, temperature, topP, repetition) in cases {

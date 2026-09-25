@@ -936,9 +936,9 @@ function OnDeviceTierSection({
   const [error, setError] = useState<string | null>(null);
 
   const isPhone = useUiStore((s) => s.isPhone);
-  const availableModels = mlxModelsFor(isPhone);
   const defaultModel = defaultMlxModel(isPhone);
   const selectedRepoId = resolveMlxRepoId(ai, isPhone);
+  const availableModels = mlxModelsFor(isPhone, selectedRepoId);
   const selectedModel =
     availableModels.find((m) => m.repoId === selectedRepoId) ?? defaultModel;
   const commitSelectedModel = (repoId: string) => {

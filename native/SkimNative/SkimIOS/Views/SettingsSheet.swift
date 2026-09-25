@@ -769,7 +769,7 @@ private struct MLXSettingsPanel: View {
     // selected repo id has been removed from the catalog — otherwise the Picker
     // would show a blank selection for users who picked a since-removed model.
     private var pickerOptions: [MLXModelOption] {
-        var options = NativeMLX.modelOptions
+        var options = NativeMLX.offeredOptions
         if !options.contains(where: { $0.repoId == selectedRepoId }) {
             let legacy = NativeMLX.option(for: selectedRepoId)
             options.append(

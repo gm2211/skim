@@ -18,23 +18,39 @@ export const AI_PROVIDERS = [
 
 export type MlxModel = { repoId: string; label: string; sizeGb: number; phoneFriendly?: boolean };
 
-// Sorted ascending by size — smallest models first so phone users see the
-// recommended (small) options at the top of the dropdown.
+// Sorted ascending by size. Every repo id here is either one Skim already
+// shipped or one listed in the pinned mlx-swift-examples LLMRegistry, and every
+// architecture is one that release's LLMModelFactory can load.
 export const MLX_MODELS: MlxModel[] = [
-  { repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (recommended for iPhone)", sizeGb: 0.7, phoneFriendly: true },
-  { repoId: "mlx-community/Llama-3.2-1B-Instruct-4bit", label: "Llama 3.2 1B", sizeGb: 0.8, phoneFriendly: true },
-  { repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B", sizeGb: 1.0, phoneFriendly: true },
-  { repoId: "mlx-community/SmolLM3-3B-4bit", label: "SmolLM3 3B", sizeGb: 1.8 },
-  { repoId: "mlx-community/Llama-3.2-3B-Instruct-4bit", label: "Llama 3.2 3B", sizeGb: 1.8 },
-  { repoId: "mlx-community/Phi-4-mini-instruct-4bit", label: "Phi-4 Mini", sizeGb: 2.2 },
-  { repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: "Qwen3 4B Instruct (2507)", sizeGb: 2.3 },
-  { repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B", sizeGb: 2.4 },
-  { repoId: "mlx-community/gemma-3n-E2B-it-lm-4bit", label: "Gemma 3n E2B", sizeGb: 2.6 },
+  { repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (iPhone, fastest)", sizeGb: 0.7, phoneFriendly: true },
+  { repoId: "mlx-community/LFM2-1.2B-4bit", label: "LFM2 1.2B (iPhone, fast)", sizeGb: 0.7, phoneFriendly: true },
+  { repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B (iPhone, best quality)", sizeGb: 1.0, phoneFriendly: true },
+  { repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: "Qwen3 4B Instruct (Mac, recommended)", sizeGb: 2.3 },
+  { repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B (Mac)", sizeGb: 2.4 },
+  { repoId: "mlx-community/Qwen3-8B-4bit", label: "Qwen3 8B (Mac, 16 GB+)", sizeGb: 4.6 },
+  { repoId: "mlx-community/Qwen3-30B-A3B-4bit", label: "Qwen3 30B-A3B (Mac, 32 GB+, best quality)", sizeGb: 17.2 },
 ];
 
-/** MLX models offered on this device — phones only see the phone-friendly tier. */
-export function mlxModelsFor(isPhone: boolean): MlxModel[] {
-  return MLX_MODELS.filter((m) => !isPhone || m.phoneFriendly);
+// Models Skim used to offer. Not listed for new picks, but a saved selection
+// keeps working (and stays visible in the picker) so nobody is silently moved
+// to a different model and made to re-download.
+export const RETIRED_MLX_MODELS: MlxModel[] = [
+  { repoId: "mlx-community/Llama-3.2-1B-Instruct-4bit", label: "Llama 3.2 1B (retired)", sizeGb: 0.8, phoneFriendly: true },
+  { repoId: "mlx-community/SmolLM3-3B-4bit", label: "SmolLM3 3B (retired)", sizeGb: 1.8 },
+  { repoId: "mlx-community/Llama-3.2-3B-Instruct-4bit", label: "Llama 3.2 3B (retired)", sizeGb: 1.8 },
+  { repoId: "mlx-community/Phi-4-mini-instruct-4bit", label: "Phi-4 Mini (retired)", sizeGb: 2.2 },
+  { repoId: "mlx-community/gemma-3n-E2B-it-lm-4bit", label: "Gemma 3n E2B (retired)", sizeGb: 2.6 },
+];
+
+/**
+ * MLX models offered on this device — phones only see the phone-friendly tier.
+ * A retired model stays in the list while it is the saved selection.
+ */
+export function mlxModelsFor(isPhone: boolean, selectedRepoId?: string | null): MlxModel[] {
+  const fits = (m: MlxModel) => !isPhone || !!m.phoneFriendly;
+  const models = MLX_MODELS.filter(fits);
+  const retired = RETIRED_MLX_MODELS.find((m) => m.repoId === selectedRepoId && fits(m));
+  return retired ? [...models, retired] : models;
 }
 
 /** The model an MLX picker preselects before the user has chosen one. */
@@ -49,9 +65,9 @@ export function resolveMlxRepoId(
   ai: Pick<AiSettings, "model" | "local_model_path">,
   isPhone: boolean,
 ): string {
-  const models = mlxModelsFor(isPhone);
   const defaultModel = defaultMlxModel(isPhone);
   const savedRepoId = ai.model ?? ai.local_model_path ?? defaultModel.repoId;
+  const models = mlxModelsFor(isPhone, savedRepoId);
   const selectedModel = models.find((m) => m.repoId === savedRepoId) ?? defaultModel;
   return selectedModel.repoId;
 }

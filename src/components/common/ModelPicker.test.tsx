@@ -96,7 +96,7 @@ describe("ModelPicker", () => {
 
     const combo = await screen.findByRole("combobox", { name: "AI model" });
     await waitFor(() => {
-      const notDownloaded = screen.getByRole("option", { name: /Llama 3\.2 1B/ }) as HTMLOptionElement;
+      const notDownloaded = screen.getByRole("option", { name: /LFM2 1\.2B/ }) as HTMLOptionElement;
       expect(notDownloaded.disabled).toBe(true);
     });
 

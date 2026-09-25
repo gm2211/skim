@@ -60,7 +60,7 @@
         "-disableAutomaticPackageResolution",
         "DEVELOPMENT_TEAM=6KQV68SJ5P"
       ],
-      "release_status": "Local signed archive only. Build74 export/upload requires its own approval; approval for73 does not apply.",
+      "release_status": "Local signed archive only. Build74 is superseded and will not be uploaded; the earlier build73 upload request remains unapproved.",
       "status": "superseded local artifact; lacks final stopped-sheet width fix"
     },
     {
@@ -165,6 +165,6 @@
     ],
     "boundary": "Eight copied SwiftUI fixture states; not installed-app or real provider interaction acceptance. Fixture width guard matches final production5c448a55."
   },
-  "authorization_boundary": "No export, upload, App Store Connect mutation, installation or real UI launch. Prior approval for73 does not authorize74 or75. Separate final-build approval is required before external submission.",
+  "authorization_boundary": "No export, upload, App Store Connect mutation, installation or real UI launch. The earlier pending build73 upload request does not cover74 or75. Separate final-build approval is required before external submission.",
   "preserved": "Build73 and superseded74 artifacts remain untouched; desktop0.1.37 and native macOSbuild73 unchanged."
 }

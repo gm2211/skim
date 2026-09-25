@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useUiStore } from "../../stores/uiStore";
 import type { AppSettings, FeedlyConnectionStatus } from "../../services/types";
@@ -31,38 +32,13 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 import { isIOS, isMacOS } from "../../utils/platform";
 import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
-
-const AI_PROVIDERS = [
-  { value: "none", label: "None", description: "AI features disabled" },
-  { value: "local", label: "Local (Embedded)", description: "Run AI locally with llama.cpp — no server needed" },
-  { value: "mlx", label: "On-device (MLX)", description: "Run a downloaded MLX model on-device. Offline. iOS/macOS only." },
-  { value: "foundation-models", label: "Apple Intelligence", description: "Apple's on-device model. Requires macOS 26+ or iOS 26+ on Apple Intelligence hardware." },
-  { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
-  { value: "claude-subscription", label: "Claude Pro/Max (OAuth)", description: "Sign in with your Claude.ai account — no API key, no CLI. Works on desktop and iOS." },
-  { value: "claude-cli", label: "Claude via CLI (legacy)", description: "Uses the local 'claude' CLI binary. Legacy path — prefer 'Claude Pro/Max (OAuth)'." },
-  { value: "anthropic", label: "Claude (API Key)", description: "api.anthropic.com — requires API key with usage-based billing" },
-  { value: "openai", label: "OpenAI", description: "api.openai.com" },
-  { value: "xai", label: "Grok (xAI)", description: "api.x.ai — requires an xAI API key" },
-  { value: "ds4", label: "DeepSeek (DS4)", description: "Dedicated local DeepSeek V4 Flash runtime — Mac with 96 GB+ recommended" },
-  { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
-  { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
-];
-
-type MlxModel = { repoId: string; label: string; sizeGb: number; phoneFriendly?: boolean };
-
-// Sorted ascending by size — smallest models first so phone users see the
-// recommended (small) options at the top of the dropdown.
-const MLX_MODELS: MlxModel[] = [
-  { repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (recommended for iPhone)", sizeGb: 0.7, phoneFriendly: true },
-  { repoId: "mlx-community/Llama-3.2-1B-Instruct-4bit", label: "Llama 3.2 1B", sizeGb: 0.8, phoneFriendly: true },
-  { repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B", sizeGb: 1.0, phoneFriendly: true },
-  { repoId: "mlx-community/SmolLM3-3B-4bit", label: "SmolLM3 3B", sizeGb: 1.8 },
-  { repoId: "mlx-community/Llama-3.2-3B-Instruct-4bit", label: "Llama 3.2 3B", sizeGb: 1.8 },
-  { repoId: "mlx-community/Phi-4-mini-instruct-4bit", label: "Phi-4 Mini", sizeGb: 2.2 },
-  { repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: "Qwen3 4B Instruct (2507)", sizeGb: 2.3 },
-  { repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B", sizeGb: 2.4 },
-  { repoId: "mlx-community/gemma-3n-E2B-it-lm-4bit", label: "Gemma 3n E2B", sizeGb: 2.6 },
-];
+import {
+  AI_PROVIDERS,
+  REMOTE_LIST_PROVIDERS,
+  defaultMlxModel,
+  mlxModelsFor,
+  resolveMlxRepoId,
+} from "../../lib/aiModels";
 
 const needsApiKey = (provider: string) =>
   ["openai", "xai", "openrouter", "anthropic", "custom", "claude-cli"].includes(provider);
@@ -135,6 +111,7 @@ function InputField({
 export function SettingsDialog() {
   const { data: settings, error: loadError, refetch } = useSettings();
   const updateSettings = useUpdateSettings();
+  const qc = useQueryClient();
   const setShowSettings = useUiStore((s) => s.setShowSettings);
   const isPhone = useUiStore((s) => s.isPhone);
 
@@ -173,6 +150,9 @@ export function SettingsDialog() {
   const handleSave = async () => {
     try {
       await updateSettings.mutateAsync(local);
+      // A saved provider/key/endpoint change invalidates any cached remote
+      // model list fetched under the old credentials.
+      qc.invalidateQueries({ queryKey: ["remote-models"] });
       setShowSettings(false);
     } catch {
       // The mutation error is shown beside Save; retain the user's edits.
@@ -410,7 +390,7 @@ export function SettingsDialog() {
                     label="Model"
                     description="Leave blank for default model"
                   >
-                    {["openai", "xai", "openrouter", "anthropic", "custom"].includes(local.ai.provider) ? <RemoteModelPicker
+                    {(REMOTE_LIST_PROVIDERS as readonly string[]).includes(local.ai.provider) ? <RemoteModelPicker
                       provider={local.ai.provider}
                       apiKey={local.ai.api_key}
                       endpoint={local.ai.endpoint}
@@ -947,6 +927,7 @@ function OnDeviceTierSection({
   ai: AppSettings["ai"];
   updateAi: (patch: Partial<AppSettings["ai"]>) => void;
 }) {
+  const qc = useQueryClient();
   const [available, setAvailable] = useState<boolean | null>(null);
   const [downloaded, setDownloaded] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -955,14 +936,11 @@ function OnDeviceTierSection({
   const [error, setError] = useState<string | null>(null);
 
   const isPhone = useUiStore((s) => s.isPhone);
-  const availableModels = MLX_MODELS.filter((m) => !isPhone || m.phoneFriendly);
-  const defaultModel = isPhone
-    ? MLX_MODELS.find((m) => m.phoneFriendly) ?? MLX_MODELS[0]
-    : MLX_MODELS.find((m) => m.repoId === "mlx-community/Qwen3-4B-Instruct-2507-4bit") ?? MLX_MODELS[0];
-  const savedRepoId = ai.model ?? ai.local_model_path ?? defaultModel.repoId;
+  const availableModels = mlxModelsFor(isPhone);
+  const defaultModel = defaultMlxModel(isPhone);
+  const selectedRepoId = resolveMlxRepoId(ai, isPhone);
   const selectedModel =
-    availableModels.find((m) => m.repoId === savedRepoId) ?? defaultModel;
-  const selectedRepoId = selectedModel.repoId;
+    availableModels.find((m) => m.repoId === selectedRepoId) ?? defaultModel;
   const commitSelectedModel = (repoId: string) => {
     const patch = { provider: "mlx", model: repoId, local_model_path: repoId };
     updateAi(patch);
@@ -1034,6 +1012,7 @@ function OnDeviceTierSection({
       updateAi({ provider: "mlx", model: selectedRepoId, local_model_path: selectedRepoId });
       setDownloaded(true);
       setProgress(null);
+      qc.invalidateQueries({ queryKey: ["mlx-downloaded"] });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
       setProgress(null);
@@ -1048,6 +1027,7 @@ function OnDeviceTierSection({
     try {
       await mlxDeleteModel(selectedRepoId);
       setDownloaded(false);
+      qc.invalidateQueries({ queryKey: ["mlx-downloaded"] });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

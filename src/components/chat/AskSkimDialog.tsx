@@ -12,6 +12,7 @@ import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 import { useSettings } from "../../hooks/useSettings";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
+import { ModelPicker } from "../common/ModelPicker";
 
 type Scope = "inbox" | "unread" | "all";
 
@@ -153,6 +154,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
             <option value="unread">Unread</option>
             <option value="all">All</option>
           </select>
+          <ModelPicker surface="chat" compact disabled={loading} />
           <button
             onClick={onClose}
             className="tap-target text-text-muted hover:text-text-primary transition-colors flex-shrink-0 rounded-lg hover:bg-white/10"

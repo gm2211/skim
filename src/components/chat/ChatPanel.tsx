@@ -5,6 +5,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { AIDisclaimer } from "../common/AIDisclaimer";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { useSettings } from "../../hooks/useSettings";
+import { ModelPicker } from "../common/ModelPicker";
 
 interface ChatMessage {
   role: "user" | "assistant" | "search";
@@ -281,6 +282,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
           <span className="text-text-muted" style={{ fontSize: 10 }}>ephemeral</span>
         </div>
         <div className="flex items-center gap-2">
+          <ModelPicker surface="chat" compact disabled={loading || searchLoading} />
           {messages.length > 0 && (
             <button
               onClick={() => setMessages([])}

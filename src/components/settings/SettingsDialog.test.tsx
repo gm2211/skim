@@ -1,9 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SettingsDialog } from "./SettingsDialog";
 import { useUiStore } from "../../stores/uiStore";
 import { listRemoteModels } from "../../services/commands";
+
+function renderDialog() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={qc}>
+      <SettingsDialog />
+    </QueryClientProvider>,
+  );
+}
 
 const { saveSettings } = vi.hoisted(() => ({ saveSettings: vi.fn() }));
 vi.mock("../../utils/platform", () => ({ isIOS: false, isMacOS: true }));
@@ -30,7 +40,7 @@ beforeEach(() => {
 describe("Settings provider drafts", () => {
   it("keeps on-device model changes in the draft until Save", async () => {
     const user = userEvent.setup();
-    render(<SettingsDialog />);
+    renderDialog();
     await user.selectOptions(await screen.findByRole("combobox", { name: "Provider" }), "mlx");
     await screen.findByText("On-device MLX runtime detected");
     await user.selectOptions(screen.getByRole("combobox", { name: "On-device model" }), "mlx-community/gemma-3-1b-it-4bit");
@@ -41,7 +51,7 @@ describe("Settings provider drafts", () => {
   });
   it("does not send another provider's key and restores its draft on return", async () => {
     const user = userEvent.setup();
-    render(<SettingsDialog />);
+    renderDialog();
     await user.selectOptions(await screen.findByRole("combobox", { name: "Provider" }), "xai");
     expect(screen.queryByDisplayValue("test-openai-secret")).not.toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Model" })).toHaveValue("");

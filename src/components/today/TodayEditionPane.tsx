@@ -5,6 +5,7 @@ import { useTodayEdition } from "../../hooks/useTodayEdition";
 import { useUiStore } from "../../stores/uiStore";
 import { rankFor, LEAD_COUNT } from "../../lib/todayEdition";
 import { TodayStory } from "./TodayStory";
+import { ModelPicker } from "../common/ModelPicker";
 
 function formatWindowDate(startsAtSeconds: number): string {
   return new Date(startsAtSeconds * 1000).toLocaleDateString("en-US", {
@@ -66,6 +67,7 @@ export function TodayEditionPane() {
           </button>
         )}
         <div className="flex-1" />
+        <ModelPicker surface="today" compact disabled={isWritingLedes} />
         <button className="today-story-control text-text-secondary hover:text-text-primary" disabled={refreshFeeds.isPending} onClick={() => refreshFeeds.mutate(undefined)}>
           {refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
         </button>

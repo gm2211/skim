@@ -918,5 +918,49 @@
     "Directions, evidence allocation and proposed-edge closure differ between the two runs; their timings are not an isolated benchmark.",
     "Append-stable lookup needs 4144 windows for 500 reports; no fast full-library acceptance claim.",
     "PR156 retains the original strict-partition implementation and remains draft; none of these experiments changed production policy."
-  ]
+  ],
+  "bounded_reference_negative_control": {
+    "scope": "Experimental optional references for one fixed story, no application integration, ranking changes or full-edition readiness claim.",
+    "reference": 3,
+    "source_sha256": "9e8a46fbe81917babefda2ef6ccee728c6ecafd9360e8e103d9c0d69293f638a",
+    "labels_sha256": "04ef15b468c24a2de6f9a389ebedffe3a149e14a831311a2b4f4a3372d49cb98",
+    "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+    "budget_seconds": 30,
+    "reference_limit": 4,
+    "ranking": "Original baseScore descending, stable story-ID tie; no new importance assessment.",
+    "retries": 0,
+    "proposed": [],
+    "selected": [],
+    "truncated": false,
+    "completed": true,
+    "group": [
+      3
+    ],
+    "elapsed_seconds": 9.378955999971367,
+    "evaluation": {
+      "expected_same_event": [],
+      "returned_references": [],
+      "missed_same_event": [],
+      "negative_or_uncertain_references": [],
+      "all_107_candidates_exposed": true
+    },
+    "acceptance_passed": true,
+    "lookup_count": 4,
+    "positive_labels": 0,
+    "negative_labels": 107,
+    "uncertain_labels": 0,
+    "label_selection": "Highest base score among reports absent from prior independent pair labels; stable story-ID tie. Selected before this run.",
+    "raw_artifact_sha256": "321206ad0a92859016bc4649802b257558ea9a77c62becf8c3126ef589576462",
+    "script_sha256": "aefb01c939b47c8f9a462bfc2293ce792af9e455cf76ab3bd03c91f982032968",
+    "positive_case_search": "Independent source-only review found no identifiable same-event positive among remaining unlabeled references; no substitute positive case was run.",
+    "positive_case_search_sha256": "122af6846aafa8f6a04444f68da4550225950c39c36e2bc039177c70c1267cf3",
+    "boundary": "This passing negative control establishes no positive recall, whole-library latency, ranking correctness or production readiness; not adopted."
+  },
+  "ranking_bound_review": {
+    "group_score": "max(member base) + max(member importance adjustment), adjustment = 3 * (importance - 3), range [-9, 6]",
+    "bound": "For descending-base anchors, U(i) = base(i) + maximum adjustment among i and later reports, no greater than base(i) + 6.",
+    "safe_pruning_condition": "U(i) strictly below a certified lower bound for the kth distinct final group; singleton kth score is not certified because future merges can collapse candidates. Equality must retain tie-breaking consideration.",
+    "reference_constraint": "Reports skipped as anchors must remain possible references and importance contributors to retained anchors.",
+    "limit": "Worst-case equal or close scores do not prune. This is a mathematical review, not an implemented or benchmarked scheduler."
+  }
 }

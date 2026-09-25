@@ -153,6 +153,142 @@ pub fn load_model(path: &Path, gpu_layers: i32) -> Result<LoadedModel, String> {
 }
 
 
+/// Largest context window we open for a local model. The KV cache grows
+/// linearly with it, so this keeps an 8B model's cache around 2 GB while
+/// still fitting a full Catch-up listing on most models.
+const MAX_LOCAL_CTX: u32 = 16_384;
+/// Smallest window we bother opening; short prompts stay cheap.
+const MIN_LOCAL_CTX: u32 = 2_048;
+/// Tokens submitted to llama.cpp per decode call while reading the prompt.
+const PROMPT_BATCH: u32 = 512;
+/// Slack for tokens the chat template or tokenizer adds that our count misses.
+const CTX_SLACK: u32 = 16;
+
+/// The window this model can take: its training length, capped for memory.
+fn ctx_limit(model: &LlamaModel) -> u32 {
+    ctx_limit_for(model.n_ctx_train())
+}
+
+fn ctx_limit_for(n_ctx_train: u32) -> u32 {
+    if n_ctx_train == 0 {
+        MAX_LOCAL_CTX
+    } else {
+        n_ctx_train.min(MAX_LOCAL_CTX)
+    }
+}
+
+/// Tokens set aside for the answer when a prompt has to be trimmed: the
+/// caller's max_tokens, but never more than a quarter of the window.
+fn answer_reserve(limit: u32, max_tokens: u32) -> u32 {
+    max_tokens.min(limit / 4).max(max_tokens.min(256))
+}
+
+/// Context size for a prompt of `prompt_tokens` expecting up to
+/// `max_tokens` back, rounded up to a multiple of 256 and kept within limit.
+fn ctx_size_for(prompt_tokens: u32, max_tokens: u32, limit: u32) -> u32 {
+    let wanted = prompt_tokens.saturating_add(max_tokens).saturating_add(CTX_SLACK);
+    let rounded = wanted.div_ceil(256).saturating_mul(256);
+    rounded.max(MIN_LOCAL_CTX).min(limit)
+}
+
+fn too_long_error(prompt_tokens: u32, limit: u32) -> String {
+    format!(
+        "This is too much text for the on-device model ({prompt_tokens} tokens, it reads at most {limit}). \
+         Narrow the time range or pick fewer articles, or use a cloud provider for long requests."
+    )
+}
+
+/// Cut `content` down to about `keep_chars`, dropping text from the middle so
+/// the start and the closing instructions (the JSON format a prompt ends
+/// with) both survive. Cuts land on line breaks when there are any, so a
+/// listing loses whole entries rather than half of one.
+fn shrink_middle(content: &str, keep_chars: usize) -> String {
+    const MARKER: &str = "\n[... trimmed to fit the on-device model ...]\n";
+    let total = content.chars().count();
+    if total <= keep_chars {
+        return content.to_string();
+    }
+    let keep = keep_chars.saturating_sub(MARKER.len());
+    let tail_chars = (keep / 4).min(1_200);
+    let head_chars = keep - tail_chars;
+
+    let head_end = content.char_indices().nth(head_chars).map(|(i, _)| i).unwrap_or(content.len());
+    let tail_start = content
+        .char_indices()
+        .nth(total - tail_chars)
+        .map(|(i, _)| i)
+        .unwrap_or(content.len());
+
+    let mut head = &content[..head_end];
+    if let Some(nl) = head.rfind('\n') {
+        if nl > head.len() / 2 {
+            head = &head[..nl];
+        }
+    }
+    let mut tail = &content[tail_start..];
+    if let Some(nl) = tail.find('\n') {
+        if nl < tail.len() / 2 {
+            tail = &tail[nl + 1..];
+        }
+    }
+    format!("{}{}{}", head.trim_end(), MARKER, tail)
+}
+
+/// Format `messages` into a prompt that fits this model's window with room
+/// for the answer, trimming the longest message if it does not.
+fn fit_prompt(
+    model: &LlamaModel,
+    messages: &[ChatMessage],
+    max_tokens: u32,
+) -> Result<String, String> {
+    let limit = ctx_limit(model);
+    let budget = limit.saturating_sub(answer_reserve(limit, max_tokens) + CTX_SLACK);
+    let mut messages = messages.to_vec();
+
+    for _ in 0..6 {
+        let prompt = format_chat_messages(model, &messages)?;
+        let count = model
+            .str_to_token(&prompt, AddBos::Always)
+            .map_err(|e| format!("Failed to tokenize prompt: {}", e))?
+            .len() as u32;
+        if count <= budget {
+            return Ok(prompt);
+        }
+
+        // Shrink the longest message by the overshoot, plus a little so the
+        // next pass lands under budget instead of just over it. Tokens per
+        // character vary, so this is estimated and re-checked on the next pass.
+        let Some(longest) = messages
+            .iter_mut()
+            .max_by_key(|m| m.content.chars().count())
+        else {
+            break;
+        };
+        let chars = longest.content.chars().count();
+        let prompt_chars = prompt.chars().count().max(1);
+        let cut = (((count - budget) as f64 / count as f64) * prompt_chars as f64 * 1.1).ceil() as usize + 64;
+        let keep = chars.saturating_sub(cut);
+        if keep < 400 {
+            return Err(too_long_error(count, limit));
+        }
+        log::info!(
+            "LocalLlmProvider: prompt is {count} tokens, window {limit}; trimming {cut} of {chars} chars"
+        );
+        longest.content = shrink_middle(&longest.content, keep);
+    }
+
+    let prompt = format_chat_messages(model, &messages)?;
+    let count = model
+        .str_to_token(&prompt, AddBos::Always)
+        .map_err(|e| format!("Failed to tokenize prompt: {}", e))?
+        .len() as u32;
+    if count <= budget {
+        Ok(prompt)
+    } else {
+        Err(too_long_error(count, limit))
+    }
+}
+
 fn run_inference(
     loaded: &LoadedModel,
     prompt: &str,
@@ -160,8 +296,28 @@ fn run_inference(
     temperature: f64,
     n_threads: i32,
 ) -> Result<(String, u32, u32), String> {
+    // Tokenize the prompt
+    let tokens = loaded
+        .model
+        .str_to_token(prompt, AddBos::Always)
+        .map_err(|e| format!("Failed to tokenize prompt: {}", e))?;
+    if tokens.is_empty() {
+        return Err("Empty prompt".to_string());
+    }
+
+    let prompt_token_count = tokens.len() as u32;
+    let limit = ctx_limit(&loaded.model);
+    if prompt_token_count + CTX_SLACK >= limit {
+        return Err(too_long_error(prompt_token_count, limit));
+    }
+    let n_ctx = ctx_size_for(prompt_token_count, max_tokens, limit);
+    // Never generate past the end of the window.
+    let max_tokens = max_tokens.min(n_ctx.saturating_sub(prompt_token_count + 1));
+
     let ctx_params = LlamaContextParams::default()
-        .with_n_ctx(NonZeroU32::new(4096))
+        .with_n_ctx(NonZeroU32::new(n_ctx))
+        .with_n_batch(PROMPT_BATCH)
+        .with_n_ubatch(PROMPT_BATCH)
         .with_n_threads(n_threads)
         .with_n_threads_batch(n_threads);
 
@@ -171,27 +327,23 @@ fn run_inference(
         .new_context(backend, ctx_params)
         .map_err(|e| format!("Failed to create context: {}", e))?;
 
-    // Tokenize the prompt
-    let tokens = loaded
-        .model
-        .str_to_token(prompt, AddBos::Always)
-        .map_err(|e| format!("Failed to tokenize prompt: {}", e))?;
-
-    let prompt_token_count = tokens.len() as u32;
-
-    // Create batch and add prompt tokens
-    let mut batch = LlamaBatch::new(4096, 1);
+    // Feed the prompt in chunks no larger than the context's batch size;
+    // one batch holding the whole prompt overflows on long requests.
+    let n_batch = ctx.n_batch().max(1) as usize;
+    let mut batch = LlamaBatch::new(n_batch, 1);
     let last_index = (tokens.len() - 1) as i32;
-    for (i, token) in (0_i32..).zip(tokens.into_iter()) {
-        let is_last = i == last_index;
-        batch
-            .add(token, i, &[0], is_last)
-            .map_err(|e| format!("Failed to add token to batch: {}", e))?;
+    for (chunk_no, chunk) in tokens.chunks(n_batch).enumerate() {
+        batch.clear();
+        let offset = (chunk_no * n_batch) as i32;
+        for (j, token) in chunk.iter().enumerate() {
+            let pos = offset + j as i32;
+            batch
+                .add(*token, pos, &[0], pos == last_index)
+                .map_err(|e| format!("Failed to add token to batch: {}", e))?;
+        }
+        ctx.decode(&mut batch)
+            .map_err(|e| format!("Failed to decode prompt: {}", e))?;
     }
-
-    // Process the prompt
-    ctx.decode(&mut batch)
-        .map_err(|e| format!("Failed to decode prompt: {}", e))?;
 
     // Build sampler chain: penalties → temperature → selection.
     let n_vocab = loaded.model.n_vocab();
@@ -211,7 +363,7 @@ fn run_inference(
     // Generate tokens
     let mut output = String::new();
     let mut n_decoded = 0u32;
-    let mut n_cur = batch.n_tokens();
+    let mut n_cur = prompt_token_count as i32;
     let mut decoder = encoding_rs::UTF_8.new_decoder();
 
     loop {
@@ -329,7 +481,7 @@ impl AiProvider for LocalLlmProvider {
             }
 
             let loaded = guard.as_ref().unwrap();
-            let prompt = format_chat_messages(&loaded.model, &messages)?;
+            let prompt = fit_prompt(&loaded.model, &messages, max_tokens)?;
             let out = run_inference(loaded, &prompt, max_tokens, temperature, n_threads);
             mark_used();
             out
@@ -400,6 +552,77 @@ mod tests {
                             .to_lowercase()
                             .contains(pattern))
             })
+    }
+
+    #[test]
+    fn window_grows_with_the_prompt_up_to_the_model_limit() {
+        assert_eq!(ctx_limit_for(131_072), MAX_LOCAL_CTX);
+        assert_eq!(ctx_limit_for(4_096), 4_096);
+        assert_eq!(ctx_limit_for(0), MAX_LOCAL_CTX);
+
+        assert_eq!(ctx_size_for(100, 200, MAX_LOCAL_CTX), MIN_LOCAL_CTX);
+        // The Catch-up case: a listing well past the old fixed 4096 window.
+        let n = ctx_size_for(9_000, 2_000, MAX_LOCAL_CTX);
+        assert!(n >= 11_000 && n % 256 == 0 && n <= MAX_LOCAL_CTX);
+        assert_eq!(ctx_size_for(20_000, 2_000, MAX_LOCAL_CTX), MAX_LOCAL_CTX);
+    }
+
+    #[test]
+    fn answer_reserve_leaves_most_of_a_small_window_to_the_prompt() {
+        assert_eq!(answer_reserve(16_384, 2_000), 2_000);
+        assert_eq!(answer_reserve(4_096, 2_000), 1_024);
+        assert_eq!(answer_reserve(4_096, 100), 100);
+    }
+
+    #[test]
+    fn shrink_middle_keeps_the_start_and_the_closing_instructions() {
+        let mut listing = String::from("Articles:\n");
+        for i in 0..200 {
+            listing.push_str(&format!("{i}\tSome headline number {i}\t[Pub]\texcerpt text here\n"));
+        }
+        listing.push_str("Output JSON:\n{\"stories\":[]}");
+
+        let out = shrink_middle(&listing, 2_000);
+        assert!(out.chars().count() <= 2_000);
+        assert!(out.starts_with("Articles:\n0\t"));
+        assert!(out.ends_with("Output JSON:\n{\"stories\":[]}"));
+        assert!(out.contains("trimmed to fit"));
+        // Whole lines only: every listing line still has all four fields.
+        for line in out.lines().filter(|l| l.contains("\t")) {
+            assert_eq!(line.split('\t').count(), 4, "cut mid-line: {line:?}");
+        }
+
+        assert_eq!(shrink_middle("short", 100), "short");
+    }
+
+    /// Runs a Catch-up-sized prompt through a real model. Set SKIM_TEST_GGUF
+    /// to any GGUF file to run it; skipped otherwise.
+    #[test]
+    fn long_prompt_fits_and_runs_on_a_real_model() {
+        let Ok(path) = std::env::var("SKIM_TEST_GGUF") else {
+            println!("SKIM_TEST_GGUF not set; skipping");
+            return;
+        };
+        let loaded = load_model(Path::new(&path), 0).expect("load model");
+
+        let mut listing = String::new();
+        for i in 0..150 {
+            listing.push_str(&format!(
+                "{i}\tHeadline number {i} about something that happened\t[Pub]\t{}\n",
+                &ARTICLE_TEXT[..300]
+            ));
+        }
+        let messages = vec![
+            ChatMessage { role: "system".into(), content: "Output JSON only.".into(), content_blocks: None },
+            ChatMessage { role: "user".into(), content: crate::ai::prompts::catchup_page_user_prompt(&listing), content_blocks: None },
+        ];
+
+        let prompt = fit_prompt(&loaded.model, &messages, 2_000).expect("fit prompt");
+        assert!(prompt.contains("trimmed to fit"), "a 60k-char listing must be trimmed");
+        assert!(prompt.contains("Output JSON:"));
+        let (_, prompt_tokens, _) =
+            run_inference(&loaded, &prompt, 32, 0.0, 4).expect("inference on a long prompt");
+        assert!(prompt_tokens > 4_096, "prompt should exceed the old fixed window, got {prompt_tokens}");
     }
 
     const ARTICLE_TEXT: &str = "Scientists at CERN have announced the discovery of a new \

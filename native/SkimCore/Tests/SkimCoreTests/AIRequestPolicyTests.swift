@@ -131,3 +131,10 @@ import Testing
         #expect(edited.summaryLength == "short" && edited.summaryCustomWordCount == 30)
     }
 }
+
+@Test func publicationContextUsesUTCAndKeepsUnknownExplicit() throws {
+    let date = try #require(ISO8601DateFormatter().date(from: "2026-09-24T00:30:00Z"))
+    #expect(AIRequestPolicy.publicationContext(date) == "Publication date (UTC): 2026-09-24 (article metadata, not the event date)")
+    #expect(AIRequestPolicy.publicationContext(nil).contains("unknown"))
+    #expect(AIRequestPolicy.publicationContext(Date(timeIntervalSince1970: .nan)).contains("unknown"))
+}

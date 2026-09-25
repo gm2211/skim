@@ -4,6 +4,22 @@ import SkimStoryPolicy
 
 /// Provider-independent settings and context policy used by native AI entry points.
 public enum AIRequestPolicy {
+    /// Publication is supplied by the feed; it does not date the reported event.
+    public static func publicationContext(_ publishedAt: Date?) -> String {
+        let date: String
+        if let publishedAt, publishedAt.timeIntervalSince1970.isFinite {
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = "yyyy-MM-dd"
+            date = formatter.string(from: publishedAt)
+        } else {
+            date = "unknown"
+        }
+        return "Publication date (UTC): \(date) (article metadata, not the event date)"
+    }
+
     public static func chatSettings(_ base: AISettings) -> AISettings {
         var resolved = base
         if let provider = base.chatProvider, !provider.isEmpty, provider != "same" {

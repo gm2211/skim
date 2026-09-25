@@ -1310,7 +1310,7 @@ enum NativeAI {
         let excerpt = body.isEmpty ? "No reader text available."
             : ChatEvidencePolicy.excerpt(text: body, query: query, maxCharacters: maxCharacters)
         try validateChatEvidence(source: body, excerpt: excerpt)
-        return "[1] \(article.title)\nFeed: \(article.feedTitle)\nAuthor: \(article.author ?? "unknown")\nExcerpt: \(excerpt)"
+        return "[1] \(article.title)\nFeed: \(article.feedTitle)\nAuthor: \(article.author ?? "unknown")\n\(AIRequestPolicy.publicationContext(article.publishedAt))\nExcerpt: \(excerpt)"
     }
 
     static func libraryChatHandleRegistry(articles: [Article], conversation: AIChatConversation) -> [String: Int] {
@@ -1342,7 +1342,7 @@ enum NativeAI {
             let excerpt = LibraryChatPolicy.queryExcerpt(text: article.plainBody,
                 query: (topic.terms + LibraryChatPolicy.topicKeywords(conversation.latestQuestion)).joined(separator: " "), maxCharacters: index < 3 ? 2400 : 800)
             try validateChatEvidence(source: article.plainBody, excerpt: excerpt)
-            return "[\(handle)] \(article.title)\nFeed: \(article.feedTitle)\nURL: \(article.externalURL?.absoluteString ?? article.url?.absoluteString ?? "")\nExcerpt: \(excerpt)"
+            return "[\(handle)] \(article.title)\nFeed: \(article.feedTitle)\nURL: \(article.externalURL?.absoluteString ?? article.url?.absoluteString ?? "")\n\(AIRequestPolicy.publicationContext(article.publishedAt))\nExcerpt: \(excerpt)"
         }.joined(separator: "\n\n")
     }
 

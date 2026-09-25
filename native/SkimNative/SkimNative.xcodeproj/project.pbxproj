@@ -18,6 +18,7 @@
 		31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89737FFF993802E562860605 /* AIDisclaimerLabel.swift */; };
 		434D05C938D50201696ECD5A /* TodayEditionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9B482B07ABFB0BD983D016 /* TodayEditionView.swift */; };
 		436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */; };
+		5119041EEA8B375CC712D499 /* CatchUpSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FA5DDC14791E13B92C1525F /* CatchUpSessionTests.swift */; };
 		568EFC6280529AB7F91222BD /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8734D4E26C300D1AD49D4262 /* SkimCore */; };
 		6048C096F85B46DFAF8590AF /* Style.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038284DEE00F91A360324653 /* Style.swift */; };
 		61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */; };
@@ -30,6 +31,7 @@
 		8B797999B22B89495C05CA39 /* AquireBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */; };
 		8ED4B358481AC4273C225054 /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474BA38A4E522DB5D3ECB21 /* WebView.swift */; };
 		949AEC33EE8019F0584D6253 /* ArticleExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */; };
+		95446AAA3D78AA5861C2B0FF /* CatchUpSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74ABDAB8FC2EB5BC6017B9D7 /* CatchUpSession.swift */; };
 		96F49A7819D5D167616F137F /* LegalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8387834F563CFA86721EBF1D /* LegalView.swift */; };
 		9A48EFF3F29B3477E0CE9120 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = C72D1637C2C2401209468AAB /* MLXLLM */; };
 		A20D6777CCE9FF23884FB7F1 /* NativeClaudeOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */; };
@@ -77,8 +79,10 @@
 		5AD1C797EBFBB9448A83E919 /* ClaudeReauthSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeReauthSheet.swift; sourceTree = "<group>"; };
 		63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = AquireBold.otf; sourceTree = "<group>"; };
 		6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleListView.swift; sourceTree = "<group>"; };
+		74ABDAB8FC2EB5BC6017B9D7 /* CatchUpSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchUpSession.swift; sourceTree = "<group>"; };
 		7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleExtractor.swift; sourceTree = "<group>"; };
 		7F972FCF70051CCDDFB99F04 /* hackernoon-9m0.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = "hackernoon-9m0.html"; sourceTree = "<group>"; };
+		7FA5DDC14791E13B92C1525F /* CatchUpSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchUpSessionTests.swift; sourceTree = "<group>"; };
 		8387834F563CFA86721EBF1D /* LegalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegalView.swift; sourceTree = "<group>"; };
 		839B1584F0E39B5A14D96C79 /* CatchUpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchUpView.swift; sourceTree = "<group>"; };
 		89737FFF993802E562860605 /* AIDisclaimerLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDisclaimerLabel.swift; sourceTree = "<group>"; };
@@ -200,6 +204,7 @@
 			children = (
 				7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */,
 				09444431BA1054837AA91213 /* ArticleReaderContentLoader.swift */,
+				74ABDAB8FC2EB5BC6017B9D7 /* CatchUpSession.swift */,
 				E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */,
 				A1BCD3DD03D305C558D07614 /* NativeAI.swift */,
 				B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */,
@@ -216,6 +221,7 @@
 			isa = PBXGroup;
 			children = (
 				3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */,
+				7FA5DDC14791E13B92C1525F /* CatchUpSessionTests.swift */,
 				BFC1D459A8E191D2264A703F /* NativeAIDegenerateRepetitionTests.swift */,
 				1D15E5B261AE4E05EEAE52DC /* NativeAIGuardrailRefusalTests.swift */,
 				13F4F0168DBE15FBFB319E12 /* NativeAIModelsResponseTests.swift */,
@@ -414,6 +420,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				949AEC33EE8019F0584D6253 /* ArticleExtractorTests.swift in Sources */,
+				5119041EEA8B375CC712D499 /* CatchUpSessionTests.swift in Sources */,
 				BCE83B6AED9AC4923D1F9A6D /* NativeAIDegenerateRepetitionTests.swift in Sources */,
 				AFD473138D9923FB717FE9E2 /* NativeAIGuardrailRefusalTests.swift in Sources */,
 				86AFEB9F2A2239BCDF6EFDF1 /* NativeAIModelsResponseTests.swift in Sources */,
@@ -433,6 +440,7 @@
 				751B168D630209B01DAFF073 /* ArticleExtractor.swift in Sources */,
 				E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */,
 				77DA3EA9CDD533959D7EBE99 /* ArticleReaderContentLoader.swift in Sources */,
+				95446AAA3D78AA5861C2B0FF /* CatchUpSession.swift in Sources */,
 				D575AB676AA07786E29C32A0 /* CatchUpView.swift in Sources */,
 				D357B98D7AFF8B7E71A67F2A /* ClaudeReauthSheet.swift in Sources */,
 				96F49A7819D5D167616F137F /* LegalView.swift in Sources */,
@@ -624,7 +632,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 75;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkimIOS/Info.plist;
@@ -658,7 +666,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 73;
+				CURRENT_PROJECT_VERSION = 75;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkimIOS/Info.plist;

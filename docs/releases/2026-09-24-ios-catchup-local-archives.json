@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "status": "local_archive_only",
+  "current_build": 75,
+  "version": "0.1.13",
+  "issues": [
+    "skim-ln8r",
+    "skim-do2h.2",
+    "skim-cg5e.1"
+  ],
+  "merged_fix": {
+    "pull_request": "https://github.com/gm2211/skim/pull/166",
+    "reviewed_head": "5c448a552505d8813aa3df524fc73b78deb248a4",
+    "main_merge": "3ccdcf5bfeacfc274c1806ee1e1b809eb913bebb"
+  },
+  "archives": [
+    {
+      "schema_version": 1,
+      "scope": "Local archive only; no export/upload/install/device UI acceptance",
+      "created_at_utc": "2026-09-25T02:22:04.350336+00:00",
+      "archive_path": "/tmp/skim-ios-build74-evidence/Skim-0.1.13-74.xcarchive",
+      "source_commit": "4380e4bbacbf78e4aeebe8eb91b048a8dd3958c3",
+      "source_tree": "c3ec3a6d1a9bac0a87d7d98531794c767e171462",
+      "base_fix_commit": "9dcdced38ee8e2f989840c70ba01bc279d1fcfdd",
+      "version": "0.1.13",
+      "build": "74",
+      "bundle_identifier": "com.gm2211.skim",
+      "executable_sha256": "8ee0bc3f1c024d8c83c846b0c9cd6b9352c7f363b76c4e6111c91f78674ad310",
+      "executable_uuid": "UUID: 45B4AF32-9BD2-344A-A034-5ECFADEAF4FB (arm64) /tmp/skim-ios-build74-evidence/Skim-0.1.13-74.xcarchive/Products/Applications/Skim.app/Skim",
+      "dsym_uuid": "UUID: 45B4AF32-9BD2-344A-A034-5ECFADEAF4FB (arm64) /tmp/skim-ios-build74-evidence/Skim-0.1.13-74.xcarchive/dSYMs/Skim.app.dSYM/Contents/Resources/DWARF/Skim",
+      "signature_verification": "/tmp/skim-ios-build74-evidence/Skim-0.1.13-74.xcarchive/Products/Applications/Skim.app: valid on disk\n/tmp/skim-ios-build74-evidence/Skim-0.1.13-74.xcarchive/Products/Applications/Skim.app: satisfies its Designated Requirement",
+      "signature_details": "Executable=/private/tmp/skim-ios-build74-evidence/Skim-0.1.13-74.xcarchive/Products/Applications/Skim.app/Skim\nIdentifier=com.gm2211.skim\nFormat=app bundle with Mach-O thin (arm64)\nCodeDirectory v=20400 size=33683 flags=0x0(none) hashes=1042+7 location=embedded\nVersionPlatform=2\nVersionMin=1703936\nVersionSDK=1769472\nHash type=sha256 size=32\nCandidateCDHash sha256=eef785e099e71a56ea3ef4a3a4d5fb012e8f607f\nCandidateCDHashFull sha256=eef785e099e71a56ea3ef4a3a4d5fb012e8f607fd4844cc724981c9dd7f12bfc\nHash choices=sha256\nCMSDigest=eef785e099e71a56ea3ef4a3a4d5fb012e8f607fd4844cc724981c9dd7f12bfc\nCMSDigestType=2\nExecutable Segment base=0\nExecutable Segment limit=15237120\nExecutable Segment flags=0x11\nPage size=16384\nCDHash=eef785e099e71a56ea3ef4a3a4d5fb012e8f607f\nSignature size=4785\nAuthority=Apple Development: Giulio Mecocci (LY9A6TF8TM)\nAuthority=Apple Worldwide Developer Relations Certification Authority\nAuthority=Apple Root CA\nSigned Time=Sep 24, 2026 at 10:20:46 PM\nInfo.plist entries=34\nTeamIdentifier=6KQV68SJ5P\nSealed Resources version=2 rules=10 files=10\nInternal requirements count=1 size=180",
+      "archive_log_sha256": "5e53169667f54a63ac7954b44050c1abb6febb662a3333bb055c9fe4897abd1e",
+      "xcode_version": "Xcode 27.0\nBuild version 27A266a",
+      "native_macos_build_preserved": "73",
+      "desktop_version_preserved": "0.1.37",
+      "build73_artifact_preserved": true,
+      "exported": false,
+      "uploaded": false,
+      "installed": false,
+      "quality_checks": "Parent reported51 native tests passed for source fix; not repeated by archive worker.",
+      "subsequent_review_commit": "7e145da0 (two comment-only wording corrections; not part of archived source)",
+      "archive_command": [
+        "xcodebuild",
+        "archive",
+        "-project",
+        "/tmp/skim-ios-build74/native/SkimNative/SkimNative.xcodeproj",
+        "-scheme",
+        "Skim iOS",
+        "-configuration",
+        "Release",
+        "-destination",
+        "generic/platform=iOS",
+        "-archivePath",
+        "/tmp/skim-ios-build74-evidence/Skim-0.1.13-74.xcarchive",
+        "-derivedDataPath",
+        "/tmp/skim-ios-build74-evidence/DerivedData",
+        "-clonedSourcePackagesDirPath",
+        "/tmp/skim-chat-publication-evidence/.build/testflight/DerivedData/SourcePackages",
+        "-disableAutomaticPackageResolution",
+        "DEVELOPMENT_TEAM=6KQV68SJ5P"
+      ],
+      "release_status": "Local signed archive only. Build74 is superseded and will not be uploaded; the earlier build73 upload request remains unapproved.",
+      "status": "superseded local artifact; lacks final stopped-sheet width fix"
+    },
+    {
+      "schema_version": 1,
+      "scope": "Local archive only; no export/upload/install/device UI acceptance",
+      "created_at_utc": "2026-09-25T02:27:39.769814+00:00",
+      "archive_path": "/tmp/skim-ios-build75-evidence/Skim-0.1.13-75.xcarchive",
+      "source_commit": "53424a44eb7f1659c5f0159d9dafb89bc5b2620b",
+      "source_tree": "cb73dfbc098f380a8cd7dd901b7e19df76d84cc9",
+      "base_fix_commit": "5c448a552505d8813aa3df524fc73b78deb248a4",
+      "version": "0.1.13",
+      "build": "75",
+      "bundle_identifier": "com.gm2211.skim",
+      "executable_sha256": "1696990c09dbe9b590ff1ae8a38f7a18adc7c98c7b696890cdc2943090e4199f",
+      "executable_uuid": "UUID: 35FBCE66-883C-3682-ACDD-D2491927E8F6 (arm64) /tmp/skim-ios-build75-evidence/Skim-0.1.13-75.xcarchive/Products/Applications/Skim.app/Skim",
+      "dsym_uuid": "UUID: 35FBCE66-883C-3682-ACDD-D2491927E8F6 (arm64) /tmp/skim-ios-build75-evidence/Skim-0.1.13-75.xcarchive/dSYMs/Skim.app.dSYM/Contents/Resources/DWARF/Skim",
+      "signature_verification": "/tmp/skim-ios-build75-evidence/Skim-0.1.13-75.xcarchive/Products/Applications/Skim.app: valid on disk\n/tmp/skim-ios-build75-evidence/Skim-0.1.13-75.xcarchive/Products/Applications/Skim.app: satisfies its Designated Requirement",
+      "signature_details": "Executable=/private/tmp/skim-ios-build75-evidence/Skim-0.1.13-75.xcarchive/Products/Applications/Skim.app/Skim\nIdentifier=com.gm2211.skim\nFormat=app bundle with Mach-O thin (arm64)\nCodeDirectory v=20400 size=33683 flags=0x0(none) hashes=1042+7 location=embedded\nVersionPlatform=2\nVersionMin=1703936\nVersionSDK=1769472\nHash type=sha256 size=32\nCandidateCDHash sha256=17cee00ed3d0b1f391aa6585d798c8008168fe38\nCandidateCDHashFull sha256=17cee00ed3d0b1f391aa6585d798c8008168fe38c643ca413b406f21b7fc97f1\nHash choices=sha256\nCMSDigest=17cee00ed3d0b1f391aa6585d798c8008168fe38c643ca413b406f21b7fc97f1\nCMSDigestType=2\nExecutable Segment base=0\nExecutable Segment limit=15237120\nExecutable Segment flags=0x11\nPage size=16384\nCDHash=17cee00ed3d0b1f391aa6585d798c8008168fe38\nSignature size=4785\nAuthority=Apple Development: Giulio Mecocci (LY9A6TF8TM)\nAuthority=Apple Worldwide Developer Relations Certification Authority\nAuthority=Apple Root CA\nSigned Time=Sep 24, 2026 at 10:27:31 PM\nInfo.plist entries=34\nTeamIdentifier=6KQV68SJ5P\nSealed Resources version=2 rules=10 files=10\nInternal requirements count=1 size=180",
+      "archive_log_sha256": "f99b1138138b0687f74f79730658723aefc619117bd467dd8ac2b7193197ebf0",
+      "xcode_version": "Xcode 27.0\nBuild version 27A266a",
+      "native_macos_build_preserved": "73",
+      "desktop_version_preserved": "0.1.37",
+      "build73_artifact_preserved": true,
+      "exported": false,
+      "uploaded": false,
+      "installed": false,
+      "quality_checks": "See functional_tests and visual_fixture below; exact stages/source boundaries retained.",
+      "status": "current local archive; export/upload/install not authorized by this preparation",
+      "archive_command": [
+        "xcodebuild",
+        "archive",
+        "-project",
+        "/tmp/skim-ios-build74/native/SkimNative/SkimNative.xcodeproj",
+        "-scheme",
+        "Skim iOS",
+        "-configuration",
+        "Release",
+        "-destination",
+        "generic/platform=iOS",
+        "-archivePath",
+        "/tmp/skim-ios-build75-evidence/Skim-0.1.13-75.xcarchive",
+        "-derivedDataPath",
+        "/tmp/skim-ios-build74-evidence/DerivedData",
+        "-clonedSourcePackagesDirPath",
+        "/tmp/skim-chat-publication-evidence/.build/testflight/DerivedData/SourcePackages",
+        "-disableAutomaticPackageResolution",
+        "DEVELOPMENT_TEAM=6KQV68SJ5P"
+      ]
+    }
+  ],
+  "functional_tests": {
+    "source_commit": "9dcdced38ee8e2f989840c70ba01bc279d1fcfdd",
+    "log_path": "/tmp/skim-cancel-ios-final.log",
+    "log_sha256": "589dd67bef6550a070bb4581c90ca7ed4649f21fa60fb2784f3cd794cfb12099",
+    "result": "51 tests in 6 suites passed after0.143seconds",
+    "boundary": "Functional cancellation/session checks before comment cleanup7e145da0 and layout-only5c448a55; final layout compiled in75 archive and rendered in isolated fixture."
+  },
+  "visual_fixture": {
+    "provenance": {
+      "source_commit": "9dcdced38ee8e2f989840c70ba01bc279d1fcfdd",
+      "copies": "CatchUpView, CatchUpSession, Style, AIDisclaimerLabel; exact source bytes except test-only session-injection init in copied view",
+      "stubs": "NativeAI transports never called; injected synthetic picks/ledes, static article metadata; AIErrorBox/detail destination stubbed and not exercised",
+      "captures": "UIHostingController actual native rendering at390x844/390x568, loading, stopped, partial-writing, partial-stopped",
+      "boundary": "Not installed app visual or end-to-end interaction acceptance. No Terms, model calls, user library/settings access. No production edits.",
+      "layout_experiment": "Copied outer content VStack now has .frame(maxWidth: .infinity, alignment: .leading) before padding24. This fixes confirmed stopped-empty horizontal shrink/clipped navigation title. Root notified to apply production guard; screenshots reflect this one-line guard.",
+      "review": "All eight loading/stopped/partial-writing/partial-stopped captures at390x568 and390x844 visually reviewed. Titles and controls fit; short content continues in ScrollView; partial results retained; stopped state has no pending skeleton."
+    },
+    "provenance_sha256": "32dee67beb35bfe194374e2ef3b74f69532c6f01286b805acdcefa93fe26557d",
+    "captures": [
+      {
+        "file": "/tmp/skim-catchup-render/loading-390x568.png",
+        "sha256": "a52b74e749235d5e162434a2d26939bafe33c669bc7378fab6bbbf68d4d99210"
+      },
+      {
+        "file": "/tmp/skim-catchup-render/loading-390x844.png",
+        "sha256": "b41eb08c30d5f1c9bca2d9c02aea6ab1f00b1f1d2cc2c09a470b5e3ba55c69e9"
+      },
+      {
+        "file": "/tmp/skim-catchup-render/partial-390x568.png",
+        "sha256": "b03ddc0a2cc422480a302020060460a46dd20d0ddb044dc93ac38fa2b8dec654"
+      },
+      {
+        "file": "/tmp/skim-catchup-render/partial-390x844.png",
+        "sha256": "a8479cf590246c6d0a8c6617910297f2c404aaac619080325cb2060a6e31ce4c"
+      },
+      {
+        "file": "/tmp/skim-catchup-render/partial-stopped-390x568.png",
+        "sha256": "760df58b3f9d9f8aa229f77c8919f59985e417891d4ffeb0aa1893547862fe0e"
+      },
+      {
+        "file": "/tmp/skim-catchup-render/partial-stopped-390x844.png",
+        "sha256": "3bbc56ded63603b1bc41e6c71b081e2fa95d4dea940ef7fb7d1a22239434053e"
+      },
+      {
+        "file": "/tmp/skim-catchup-render/stopped-390x568.png",
+        "sha256": "53cf282806f210ae9cea938e99ae39c165557e96030339436e3945dec0733e53"
+      },
+      {
+        "file": "/tmp/skim-catchup-render/stopped-390x844.png",
+        "sha256": "e905ad75615a269765882663c4e6d76566a4f200f3a85efa3e0ded92b1c3d833"
+      }
+    ],
+    "boundary": "Eight copied SwiftUI fixture states; not installed-app or real provider interaction acceptance. Fixture width guard matches final production5c448a55."
+  },
+  "authorization_boundary": "No export, upload, App Store Connect mutation, installation or real UI launch. The earlier pending build73 upload request does not cover74 or75. Separate final-build approval is required before external submission.",
+  "preserved": "Build73 and superseded74 artifacts remain untouched; desktop0.1.37 and native macOSbuild73 unchanged."
+}

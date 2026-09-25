@@ -1,6 +1,18 @@
 use rusqlite::Connection;
 
 pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute_batch("CREATE TABLE IF NOT EXISTS today_preparation_scopes (
+        scope_key TEXT PRIMARY KEY, inference_key TEXT NOT NULL, active_edition_id TEXT,
+        active_manifest TEXT, updated_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS today_preparation_slots (
+        scope_key TEXT NOT NULL, story_id TEXT NOT NULL, slot INTEGER NOT NULL,
+        PRIMARY KEY(scope_key,story_id), UNIQUE(scope_key,slot));
+        CREATE TABLE IF NOT EXISTS today_preparation_tasks (
+        task_key TEXT PRIMARY KEY, kind TEXT NOT NULL, payload TEXT NOT NULL,
+        result TEXT, error TEXT, updated_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS today_edition_preparation (
+        edition_id TEXT PRIMARY KEY REFERENCES editions(id) ON DELETE CASCADE,
+        scope_key TEXT NOT NULL, manifest TEXT NOT NULL, coverage TEXT NOT NULL);")?;
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS feeds (

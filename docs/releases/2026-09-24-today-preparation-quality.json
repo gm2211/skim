@@ -1,0 +1,258 @@
+{
+  "created_at_utc": "2026-09-25T00:26:05.743664+00:00",
+  "release_status": "unreleased; do not merge or archive as accepted full-pool preparation",
+  "issue": "skim-do2h.1",
+  "source_corpus_sha256": "9e8a46fbe81917babefda2ef6ccee728c6ecafd9360e8e103d9c0d69293f638a",
+  "implementation": {
+    "shared_c": [
+      "original-evidence importance request and strict parser",
+      "within-block and cross-block co-presence schedule",
+      "strict complete proposal parser",
+      "sparse complete-clique partition",
+      "group importance without source-count multiplier"
+    ],
+    "adapters": [
+      "SQLite checkpoints by exact input and effective inference identity",
+      "one uncached request per slice with a 30-second inference deadline",
+      "cancellation/source/config guards",
+      "explicit immutable successor publication",
+      "same-day consumed-revision filtering",
+      "separate preparation status and frozen reader"
+    ],
+    "scope_boundaries": [
+      "Co-presence is proposal opportunity, not proof of direct pair comparison or recall.",
+      "Only independently verified same-event edges can form merged groups.",
+      "Native explicit MLX output/sampling overrides remain; their effective values now enter cache identity.",
+      "Remaining domain engines and persistence adapters are separate."
+    ]
+  },
+  "protocol_experiments": [
+    {
+      "name": "contract",
+      "candidate_count": 108,
+      "proposal_windows": 10,
+      "valid_proposal_responses": 0,
+      "valid_assessments": 108,
+      "assessment_calls": 108,
+      "elapsed_seconds": 169.378,
+      "artifact_sha256": "4ec164ed938f80e157c6a68ddb19c021c6dd825da28bd0d655ee7c6b4557e064",
+      "local_artifact": "/tmp/skim-preparation-contract-probe.json",
+      "adopted": "unreleased implementation; quality gate failed",
+      "retries": 0
+    },
+    {
+      "name": "label",
+      "candidate_count": 108,
+      "proposal_windows": 10,
+      "valid_proposal_responses": 6,
+      "valid_assessments": 0,
+      "assessment_calls": 0,
+      "elapsed_seconds": 77.902,
+      "artifact_sha256": "3a3f1a6a1f6673dd9a7f9c0796cfd657ef3ce027e6f9f78534b1ec59c14e1501",
+      "local_artifact": "/tmp/skim-preparation-label-probe.json",
+      "adopted": false,
+      "retries": 0
+    },
+    {
+      "name": "small-window",
+      "candidate_count": 108,
+      "proposal_windows": 105,
+      "valid_proposal_responses": 34,
+      "valid_assessments": 0,
+      "assessment_calls": 0,
+      "elapsed_seconds": 283.444,
+      "artifact_sha256": "1a09ebe31933898f770a057fbb1642cf6d5a1283091dd10b1c5235d3098a1e8c",
+      "local_artifact": "/tmp/skim-preparation-small-window-probe.json",
+      "adopted": false,
+      "retries": 0
+    },
+    {
+      "name": "sparse",
+      "candidate_count": 108,
+      "proposal_windows": 10,
+      "valid_proposal_responses": 4,
+      "valid_assessments": 0,
+      "assessment_calls": 0,
+      "elapsed_seconds": 88.708,
+      "artifact_sha256": "6bfced8de531ff8498acc691bbda9cef9764cd926fb1c7a19d93ae6af8981f5d",
+      "local_artifact": "/tmp/skim-preparation-sparse-probe.json",
+      "adopted": false,
+      "retries": 0
+    }
+  ],
+  "deterministic_ipc_proof": {
+    "passed": true,
+    "scope": "Actual Tauri mock-runtime IPC command bridge, deterministic localhost HTTP provider; not native webview or model quality acceptance",
+    "command_invocations": 134,
+    "provider_calls": 120,
+    "initial_load_seconds": 0.0435,
+    "ready_status": {
+      "active_edition_id": "today-1790222459-1790289529-20",
+      "assessed_count": 108,
+      "assessment_failed_count": 0,
+      "can_publish": true,
+      "eligible_count": 108,
+      "manifest": "cffb69e45fd7e6b30af8bb8f9c85a5fe65a540d800a9feb0311f09595675563b",
+      "proposal_completed_count": 10,
+      "proposal_failed_count": 0,
+      "proposal_window_count": 10,
+      "proposed_pair_count": 0,
+      "scope_key": "today-1790222459-1790289529-20",
+      "state": "ready",
+      "verification_failed_count": 0,
+      "verified_pair_count": 0
+    },
+    "artifact_sha256": "31168afdb4528933cade81d7abdedce72244d5beff5b0a064576435b7f202c09",
+    "binary_sha256": "a800f3d852b55c3a071bab88b71cbad041b41eda34f627c74f08e990cc844b57"
+  },
+  "adapter_request_parity": {
+    "reports": 108,
+    "assessments": 108,
+    "proposal_windows": 10,
+    "compared_fields": [
+      "kind",
+      "payload",
+      "prompt"
+    ],
+    "byte_equal": true,
+    "rust_export_sha256": "c68d914b4476c79ef9471386cad9e1a5ce6f03de22bbd4e87cf23304512d7f7d",
+    "swift_export_sha256": "ab6861ab26abf7016850ffa83ae0d708c3f4a1ebb9916bff3b7c17c9605bf512",
+    "boundary": "Default production task builders only; not actual native transport with custom overrides or iOS model execution.",
+    "token_budgets_numerically_equal": true,
+    "export_normalization": "Swift export represents token budgets as strings, Rust as numbers. Actual shared task budgets are integers and match."
+  },
+  "shared_c_validation": {
+    "fixtures": {
+      "assessment": 21,
+      "proposal": 22,
+      "windows": 10,
+      "partition": 8,
+      "importance": 6
+    },
+    "random_sparse_graphs": 500,
+    "sanitizer_malformed_input_probes": 300000,
+    "clang_warnings_as_errors": true,
+    "artifact_sha256": "e07dae6b1967341a7e520dea039ce9b1e982f87851f18a9266583fd31f3f18df"
+  },
+  "rendered_review": {
+    "implementation": "Actual TodayEditionPane and production globals.css; real QueryClient and UI store, deterministic synthetic command provider. Temporary harness removed.",
+    "viewports": [
+      "1280x720",
+      "390x844",
+      "390x568"
+    ],
+    "states": [
+      "preparing",
+      "assessment failure",
+      "related-report failure",
+      "ready",
+      "opening",
+      "explicit successor selected"
+    ],
+    "result": "Aligned controls, legible hierarchy and no visible horizontal overflow in inspected states. Stage copy corrected after review.",
+    "limits": [
+      "Isolated component proof only; does not establish full app or native SwiftUI appearance.",
+      "Mac remains locked and actual localhost onboarding still awaits Terms approval."
+    ]
+  },
+  "remaining_acceptance": [
+    "Reliable complete grouping proposals on actual configured local model",
+    "Actual complete prepared edition on public RSS, including cross-block recall and hard negatives",
+    "Native GPU cancellation and streaming behavior on hardware",
+    "Installed desktop/native interaction and TestFlight release verification"
+  ],
+  "actual_model_ipc": {
+    "scope": "Actual Tauri mock-runtime IPC with configured cached MLX model, isolated public RSS; no native webview acceptance",
+    "source_sha256": "9e8a46fbe81917babefda2ef6ccee728c6ecafd9360e8e103d9c0d69293f638a",
+    "binary_sha256": "9940447899dcdc017cf45f91ac4fd41300823129af011f1b18245e35cfb3c16a",
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "elapsed_seconds": 170.618,
+    "published": false,
+    "frozen_edition_unchanged": true,
+    "completed_without_retry": true,
+    "final_state": "failed",
+    "artifact_sha256": "0af409e92868f40bd3e8a6e59e8ede775c19ebf9f2cdc485baceb6a316d7f080",
+    "assessment_successes": 108,
+    "proposal_successes": 1,
+    "proposal_invalid": 8,
+    "proposal_timeouts": 1,
+    "verified_pairs": 1,
+    "slice_count": 119,
+    "boundary": "Completed the finite no-retry audit; preparation remained failed, not complete.",
+    "max_slice_command_seconds": 30.135,
+    "timing_boundary": "30-second inference deadline; observed command wall time includes checkpoint and IPC overhead."
+  },
+  "validation": {
+    "rust_library": {
+      "passed": 190,
+      "skipped_exact_test": "ai::local_provider::tests::test_summarize_local_model",
+      "reason": "Existing unavailable local GGUF fixture"
+    },
+    "native_core": {
+      "passed": 155,
+      "execution": "154-test full suite plus one subsequently added in-flight source/config race regression"
+    },
+    "native_ios_app": {
+      "passed": 45
+    },
+    "frontend": {
+      "passed": 168,
+      "test_files": 25,
+      "typescript": "passed",
+      "production_build": "passed; existing chunk-size/opener warnings"
+    },
+    "shared_swift_inference": {
+      "passed": 19,
+      "execution": "2 XCTest cases and 17 Swift Testing cases"
+    },
+    "rust_plugin": {
+      "passed": 4
+    },
+    "helper_packaging_python": {
+      "passed": 3
+    },
+    "desktop_helper_build": "passed",
+    "aggregate_tests_passed": 584
+  },
+  "updated_helper_smoke": {
+    "scope": "Updated desktop helper and shared inference gate, three sequential public-report assessments; not native streaming/GPU cancellation acceptance",
+    "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+    "exit_code": 0,
+    "responses": 3,
+    "valid": [
+      true,
+      true,
+      true
+    ],
+    "elapsed_seconds": 2.431
+  },
+  "debug_transport_finding": {
+    "observed": "Copied debug helper was selected without its adjacent mlx.metallib; all requests failed before inference.",
+    "fix": "Debug sibling selection requires both executable and adjacent Metal resource; explicit override retains precedence. Release selection is unchanged.",
+    "boundary": "Failed unconfigured run was retained separately and is not model-quality evidence."
+  },
+  "followup_diagnostics": {
+    "record": "2026-09-24-related-report-lookup-quality.json",
+    "result": "One-reference lookup fixes response shape in both full108 probes but fails semantic recall/precision and latency acceptance; not adopted."
+  },
+  "post_rebase_validation": {
+    "base_commit": "f0abf47ba750277d3f3e50b27b3c9b604e37c72a",
+    "tested_commit": "19a9830364174576c938ee938ea67832e2b014af",
+    "rust_library_passed": 191,
+    "rust_exact_smoke_filtered": "ai::local_provider::tests::test_summarize_local_model",
+    "native_core_passed": 156,
+    "native_ios_app_passed": 46,
+    "frontend_passed": 168,
+    "frontend_test_files": 25,
+    "typescript": "passed",
+    "production_frontend_build": "passed; existing chunk-size warnings",
+    "rerun_total": 561,
+    "unchanged_prior_checks": {
+      "shared_swift_inference": 19,
+      "rust_plugin": 4,
+      "helper_packaging_python": 3
+    },
+    "combined_checks": 587,
+    "boundary": "Automated validation only; configured-model and installed interaction acceptance remain open."
+  }
+}

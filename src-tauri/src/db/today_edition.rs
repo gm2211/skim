@@ -59,18 +59,18 @@ pub struct TodayEditionView {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Candidate {
-    rank: story_clustering::RankedStory,
-    revision: StoryRevision,
-    is_update: bool,
-    constituents: Vec<(String, i64)>,
-    semantic_reason: Option<String>,
-    timestamp: i64,
-    evidence: String,
-    sources: Vec<MemberSnapshot>,
+    pub(crate) rank: story_clustering::RankedStory,
+    pub(crate) revision: StoryRevision,
+    pub(crate) is_update: bool,
+    pub(crate) constituents: Vec<(String, i64)>,
+    pub(crate) semantic_reason: Option<String>,
+    pub(crate) timestamp: i64,
+    pub(crate) evidence: String,
+    pub(crate) sources: Vec<MemberSnapshot>,
 }
 
 #[derive(Debug, Clone, Serialize)]
-struct MemberSnapshot {
+pub(crate) struct MemberSnapshot {
     article_id: String,
     feed_id: String,
     feed_title: String,
@@ -218,6 +218,7 @@ pub fn collect_candidates(
     Ok(candidates)
 }
 
+#[cfg(test)]
 pub fn semantic_listing(candidates: &[Candidate]) -> String {
     serde_json::to_string(
         &candidates
@@ -312,7 +313,7 @@ fn generate(
     transaction.commit()
 }
 
-fn persist_candidates(
+pub(crate) fn persist_candidates(
     conn: &Connection,
     id: &str,
     starts_at: i64,

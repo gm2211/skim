@@ -6,7 +6,7 @@ import MLX
 import MLXLMCommon
 import MLXLLM
 
-struct Request: Decodable {
+struct Request: Decodable, Sendable {
     let command: String
     let repoId: String?
     let system: String?
@@ -81,10 +81,16 @@ func emitProgress(_ fraction: Double) {
 }
 
 actor MLXWorker {
+    private let generationGate = LocalInferenceGate()
     private var repoId: String?
     private var container: ModelContainer?
 
     func complete(_ request: Request) async throws -> String {
+      try await generationGate.run { try await self.completeUngated(request) }
+    }
+
+    private func completeUngated(_ request: Request) async throws -> String {
+      try Task.checkCancellation()
       let repo = try validatedRepoId(request.repoId ?? "mlx-community/gemma-3-1b-it-4bit")
       guard ModelChatTemplate.isUsable(in: cacheDirectory(repo)) else {
           throw NSError(domain: "SkimAI", code: 12, userInfo: [NSLocalizedDescriptionKey: "Model chat template missing or invalid — re-download this model."])
@@ -100,6 +106,7 @@ actor MLXWorker {
         container = try await LLMModelFactory.shared.loadContainer(configuration: configuration) { emitProgress($0.fractionCompleted) }
         repoId = repo
       }
+      try Task.checkCancellation()
       let container = container!
       let family = MLXModelFamily.detect(from: repo)
       let preset = MLXSamplingPreset.preset(for: repo)
@@ -115,10 +122,13 @@ actor MLXWorker {
           repetitionContextSize: preset.repetitionContextSize
       )
       let raw = try await container.perform { context in
+        try Task.checkCancellation()
         let prepared = try await context.processor.prepare(input: input)
-        let result = try MLXLMCommon.generate(input: prepared, parameters: parameters, context: context) { (_: [Int]) in GenerateDisposition.more }
+        try Task.checkCancellation()
+        let result = try MLXLMCommon.generate(input: prepared, parameters: parameters, context: context) { (_: [Int]) in Task.isCancelled ? GenerateDisposition.stop : GenerateDisposition.more }
         return result.output
       }
+      try Task.checkCancellation()
       return LocalModelOutput.sanitize(raw, family: family)
     }
 

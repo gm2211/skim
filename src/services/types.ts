@@ -377,3 +377,23 @@ export interface TodayEditionView {
   consumed_count: number;
   total_count: number;
 }
+
+export type TodayPreparationState = "disabled" | "empty" | "preparing" | "ready" | "failed";
+
+/** Mutable preparation coverage kept separate from the frozen Today edition. */
+export interface TodayPreparationStatus {
+  scope_key: string;
+  eligible_count: number;
+  assessed_count: number;
+  assessment_failed_count: number;
+  proposal_window_count: number;
+  proposal_completed_count: number;
+  proposal_failed_count: number;
+  proposed_pair_count: number;
+  verified_pair_count: number;
+  verification_failed_count: number;
+  state: TodayPreparationState;
+  manifest: string;
+  can_publish: boolean;
+  active_edition_id: string | null;
+}

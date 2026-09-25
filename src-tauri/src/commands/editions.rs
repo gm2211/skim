@@ -12,6 +12,87 @@ use tauri::{Emitter, State};
 
 #[tauri::command]
 pub async fn get_or_generate_today_edition(
+    db: State<'_, Database>,
+    starts_at: i64,
+    ends_at: i64,
+    generated_at: i64,
+    story_limit: i64,
+) -> Result<TodayEditionView, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let w = preparation_window(starts_at, ends_at, generated_at, story_limit);
+    if let Some(view) = crate::db::today_preparation::active(&conn, w)? {
+        return Ok(view);
+    }
+    let id = today_edition::edition_id(starts_at, ends_at, story_limit);
+    if let Some(view) = today_edition::frozen(&conn, &id).map_err(|e| e.to_string())? {
+        return Ok(view);
+    }
+    let candidates =
+        today_edition::collect_candidates(&conn, starts_at, ends_at, generated_at, story_limit)
+            .map_err(|e| e.to_string())?;
+    today_edition::finish_semantic(
+        &conn,
+        starts_at,
+        ends_at,
+        generated_at,
+        story_limit,
+        &today_edition::candidate_fingerprint(&candidates),
+        None,
+    )
+    .map_err(|e| e.to_string())
+}
+
+fn preparation_window(
+    starts: i64,
+    ends: i64,
+    generated: i64,
+    limit: i64,
+) -> crate::db::today_preparation::Window {
+    crate::db::today_preparation::Window {
+        starts,
+        ends,
+        generated,
+        limit,
+    }
+}
+#[derive(Default)]
+struct PreparationGate {
+    active: std::collections::HashMap<String, String>,
+    cancelled: std::collections::HashSet<String>,
+}
+static PREPARATION_GATE: std::sync::LazyLock<std::sync::Mutex<PreparationGate>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(PreparationGate::default()));
+fn check_preparation(gate: &PreparationGate, scope: &str, id: &str) -> Result<(), String> {
+    if gate.cancelled.contains(id) || gate.active.get(scope).map(String::as_str) != Some(id) {
+        Err("Today preparation cancelled".into())
+    } else {
+        Ok(())
+    }
+}
+#[tauri::command]
+pub async fn cancel_today_preparation(request_id: String) -> Result<(), String> {
+    let mut gate = PREPARATION_GATE.lock().map_err(|e| e.to_string())?;
+    gate.cancelled.insert(request_id);
+    Ok(())
+}
+#[tauri::command]
+pub async fn get_today_preparation_status(
+    db: State<'_, Database>,
+    starts_at: i64,
+    ends_at: i64,
+    generated_at: i64,
+    story_limit: i64,
+) -> Result<crate::db::today_preparation::TodayPreparationStatus, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    Ok(crate::db::today_preparation::snapshot(
+        &conn,
+        preparation_window(starts_at, ends_at, generated_at, story_limit),
+        false,
+    )?
+    .status)
+}
+#[tauri::command]
+pub async fn prepare_today_slice(
     app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
@@ -19,59 +100,99 @@ pub async fn get_or_generate_today_edition(
     ends_at: i64,
     generated_at: i64,
     story_limit: i64,
-) -> Result<TodayEditionView, String> {
-    let (candidates, settings) = {
-        let conn = db.conn.lock().map_err(|error| error.to_string())?;
-        today_edition::validate_window_and_limit(starts_at, ends_at, generated_at, story_limit)
-            .map_err(|error| error.to_string())?;
-        let id = today_edition::edition_id(starts_at, ends_at, story_limit);
-        if let Some(view) = today_edition::frozen(&conn, &id).map_err(|error| error.to_string())? {
-            return Ok(view);
-        }
-        let candidates =
-            today_edition::collect_candidates(&conn, starts_at, ends_at, generated_at, story_limit)
-                .map_err(|error| error.to_string())?;
-        let settings: crate::db::models::AppSettings = queries::get_setting(&conn, "app_settings")
-            .map_err(|error| error.to_string())?
-            .as_deref()
-            .and_then(|value| serde_json::from_str(value).ok())
-            .unwrap_or_default();
-        (candidates, settings)
-    };
-    let fingerprint = today_edition::candidate_fingerprint(&candidates);
-    let mut groups = None;
-    if settings.ai.provider != "none"
-        && crate::db::semantic_edition::eligible_count(candidates.len())
+    request_id: String,
+    retry_failed: Option<bool>,
+) -> Result<crate::db::today_preparation::TodayPreparationStatus, String> {
+    use crate::db::today_preparation;
+    let w = preparation_window(starts_at, ends_at, generated_at, story_limit);
+    let scope = w.key();
     {
-        let mut ai_settings = settings.ai.clone();
-        ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
-        if let Ok(provider) =
-            create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)
+        let mut gate = PREPARATION_GATE.lock().map_err(|e| e.to_string())?;
+        if gate.cancelled.contains(&request_id) {
+            return Err("Today preparation cancelled".into());
+        }
+        gate.active.clear();
+        gate.active.insert(scope.clone(), request_id.clone());
+    }
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+    // One uncached request per slice: never give a new task only the previous task's leftover budget.
+    for call in 0..1 {
+        let snapshot = {
+            let gate = PREPARATION_GATE.lock().map_err(|e| e.to_string())?;
+            check_preparation(&gate, &scope, &request_id)?;
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            today_preparation::snapshot(&conn, w, call == 0 && retry_failed.unwrap_or(false))?
+        };
+        if snapshot.status.state != "preparing" || tokio::time::Instant::now() >= deadline {
+            return Ok(snapshot.status);
+        }
+        let Some(task) = snapshot.pending.first().cloned() else {
+            return Ok(snapshot.status);
+        };
+        let mut ai = snapshot.settings.ai.clone();
+        ai.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+        let result = match create_provider_with_app(&ai, Some(model_state.inner().clone()), &app) {
+            Ok(provider) => {
+                if provider.name() == "foundation-models"
+                    && task.prompt.len() + task.payload.len() > 2400
+                {
+                    Err("Preparation exceeds the on-device context budget".into())
+                } else {
+                    let request = ChatRequest {
+                        model: snapshot.model.clone(),
+                        messages: vec![
+                            ChatMessage::text("system", task.prompt.clone()),
+                            ChatMessage::text("user", task.payload.clone()),
+                        ],
+                        temperature: Some(0.0),
+                        max_tokens: Some(task.tokens),
+                        json_mode: true,
+                        tools: None,
+                    };
+                    let call = provider.chat(request);
+                    tokio::pin!(call);
+                    loop {
+                        tokio::select! {
+                            response=&mut call => break response.and_then(|response|today_preparation::validate(&task,&response.content)),
+                            _=tokio::time::sleep_until(deadline)=>{
+                                {let gate=PREPARATION_GATE.lock().map_err(|e|e.to_string())?;check_preparation(&gate,&scope,&request_id)?;}
+                                break Err("Preparation request timed out. Retry incomplete preparation.".into());
+                            },
+                            _=tokio::time::sleep(std::time::Duration::from_millis(25))=>{
+                                let gate=PREPARATION_GATE.lock().map_err(|e|e.to_string())?;check_preparation(&gate,&scope,&request_id)?;
+                            }
+                        }
+                    }
+                }
+            }
+            Err(error) => Err(error.to_string()),
+        };
         {
-            let model = ai_settings
-                .model
-                .clone()
-                .unwrap_or_else(|| default_model(&ai_settings.provider));
-            groups = crate::db::semantic_edition::plan(
-                Some(provider.as_ref()),
-                &model,
-                today_edition::semantic_listing(&candidates),
-                candidates.len(),
-            )
-            .await;
+            let gate = PREPARATION_GATE.lock().map_err(|e| e.to_string())?;
+            check_preparation(&gate, &scope, &request_id)?;
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            if !today_preparation::commit(&conn, w, &snapshot.inference, &task, result)? {
+                return Ok(today_preparation::snapshot(&conn, w, false)?.status);
+            }
         }
     }
-    let conn = db.conn.lock().map_err(|error| error.to_string())?;
-    today_edition::finish_semantic(
+    get_today_preparation_status(db, starts_at, ends_at, generated_at, story_limit).await
+}
+#[tauri::command]
+pub async fn publish_prepared_today_edition(
+    db: State<'_, Database>,
+    starts_at: i64,
+    ends_at: i64,
+    generated_at: i64,
+    story_limit: i64,
+    manifest: String,
+) -> Result<TodayEditionView, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    crate::db::today_preparation::publish(
         &conn,
-        starts_at,
-        ends_at,
-        generated_at,
-        story_limit,
-        &fingerprint,
-        groups,
+        preparation_window(starts_at, ends_at, generated_at, story_limit),
+        &manifest,
     )
-    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -224,11 +345,19 @@ pub async fn generate_today_ledes(
             continue;
         }
 
-        if let Some(preview) = verified_preview(provider.as_ref(), &model, headline, &evidence).await {
+        if let Some(preview) =
+            verified_preview(provider.as_ref(), &model, headline, &evidence).await
+        {
             let conn = db.conn.lock().map_err(|error| error.to_string())?;
-            queries::set_verified_edition_item_lede(&conn, &edition_id, story_id, &preview.excerpt,
-                &preview.source_article_id, &preview.source_evidence_hash)
-                .map_err(|error| error.to_string())?;
+            queries::set_verified_edition_item_lede(
+                &conn,
+                &edition_id,
+                story_id,
+                &preview.excerpt,
+                &preview.source_article_id,
+                &preview.source_evidence_hash,
+            )
+            .map_err(|error| error.to_string())?;
         }
 
         let updated = {
@@ -251,7 +380,15 @@ pub async fn generate_today_ledes(
         let conn = db.conn.lock().map_err(|error| error.to_string())?;
         today_edition::load(&conn, &edition_id).map_err(|error| error.to_string())?
     };
-    emit_lede_progress(&app, &edition_id, request_id.as_deref(), total, total, "", &final_view);
+    emit_lede_progress(
+        &app,
+        &edition_id,
+        request_id.as_deref(),
+        total,
+        total,
+        "",
+        &final_view,
+    );
     Ok(final_view)
 }
 
@@ -275,7 +412,8 @@ impl LedeEvidence {
     fn preview(&self, index: usize, excerpt: String) -> Option<VerifiedPreview> {
         let source = self.sources.get(index)?;
         Some(VerifiedPreview {
-            excerpt, source_article_id: source.article_id.clone(),
+            excerpt,
+            source_article_id: source.article_id.clone(),
             source_evidence_hash: format!("{:x}", Sha256::digest(source.body.as_bytes())),
         })
     }
@@ -318,25 +456,62 @@ async fn lede_source_text(db: &Database, article_ids: &[String]) -> Result<LedeE
             ),
             body.trim()
         ));
-        bounded_sources.push(LedeSource { article_id: article.article.id.clone(), body });
+        bounded_sources.push(LedeSource {
+            article_id: article.article.id.clone(),
+            body,
+        });
     }
-    Ok(LedeEvidence { prompt_text: text, sources: bounded_sources })
+    Ok(LedeEvidence {
+        prompt_text: text,
+        sources: bounded_sources,
+    })
 }
 
-async fn verified_preview(provider: &dyn AiProvider, model: &str, headline: &str, evidence: &LedeEvidence) -> Option<VerifiedPreview> {
-    let bodies: Vec<String> = evidence.sources.iter().map(|source| source.body.clone()).collect();
+async fn verified_preview(
+    provider: &dyn AiProvider,
+    model: &str,
+    headline: &str,
+    evidence: &LedeEvidence,
+) -> Option<VerifiedPreview> {
+    let bodies: Vec<String> = evidence
+        .sources
+        .iter()
+        .map(|source| source.body.clone())
+        .collect();
     let make_request = |system: String, user: String, json_mode| ChatRequest {
-        model: model.into(), messages: vec![ChatMessage::text("system", system), ChatMessage::text("user", user)],
-        temperature: Some(0.0), max_tokens: Some(300), json_mode, tools: None,
+        model: model.into(),
+        messages: vec![
+            ChatMessage::text("system", system),
+            ChatMessage::text("user", user),
+        ],
+        temperature: Some(0.0),
+        max_tokens: Some(300),
+        json_mode,
+        tools: None,
     };
-    let response = provider.chat(make_request(prompts::catchup_lede_system_prompt(),
-        prompts::catchup_lede_user_prompt(headline, &evidence.prompt_text), true)).await.ok()?;
-    if let Some((index, excerpt)) = parse_excerpt(&response.content, &bodies) { return evidence.preview(index, excerpt); }
+    let response = provider
+        .chat(make_request(
+            prompts::catchup_lede_system_prompt(),
+            prompts::catchup_lede_user_prompt(headline, &evidence.prompt_text),
+            true,
+        ))
+        .await
+        .ok()?;
+    if let Some((index, excerpt)) = parse_excerpt(&response.content, &bodies) {
+        return evidence.preview(index, excerpt);
+    }
     // One retry for invalid output only. Transport/model errors remain missing,
     // and the entire plaintext reply must still pass the source validator.
-    let response = provider.chat(make_request(story_policy::today_lede_retry_prompt().into(),
-        prompts::catchup_lede_retry_user_prompt(headline, &evidence.prompt_text), false)).await.ok()?;
-    let (index, excerpt) = story_policy::validated_today_excerpt_source(&bodies, &response.content)?;
+    let response = provider
+        .chat(make_request(
+            story_policy::today_lede_retry_prompt().into(),
+            prompts::catchup_lede_retry_user_prompt(headline, &evidence.prompt_text),
+            false,
+        ))
+        .await
+        .ok()?;
+    let (index, excerpt) =
+        story_policy::validated_today_excerpt_source(&bodies, &response.content)?;
     evidence.preview(index, excerpt)
 }
 
@@ -348,9 +523,14 @@ struct ExcerptRaw {
 
 fn parse_excerpt(content: &str, bodies: &[String]) -> Option<(usize, String)> {
     let trimmed = content.trim();
-    let json = if let Some(body) = trimmed.strip_prefix("```json").or_else(|| trimmed.strip_prefix("```")) {
+    let json = if let Some(body) = trimmed
+        .strip_prefix("```json")
+        .or_else(|| trimmed.strip_prefix("```"))
+    {
         body.trim().strip_suffix("```")?.trim()
-    } else { trimmed };
+    } else {
+        trimmed
+    };
     let raw: ExcerptRaw = serde_json::from_str(json).ok()?;
     story_policy::validated_today_excerpt_source(bodies, &raw.excerpt)
 }
@@ -359,37 +539,123 @@ fn parse_excerpt(content: &str, bodies: &[String]) -> Option<(usize, String)> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn cancelled_or_replaced_preparation_cannot_publish_late_checkpoint() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute("CREATE TABLE checkpoints(result TEXT)", [])
+            .unwrap();
+        let mut gate = PreparationGate::default();
+        gate.active.insert("today".into(), "old".into());
+        gate.cancelled.insert("old".into());
+        let publish = |gate: &PreparationGate, id: &str| -> Result<(), String> {
+            check_preparation(gate, "today", id)?;
+            conn.execute("INSERT INTO checkpoints VALUES('done')", [])
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        };
+        assert!(publish(&gate, "old").is_err());
+        gate.cancelled.clear();
+        gate.active.insert("today".into(), "new".into());
+        assert!(publish(&gate, "old").is_err());
+        assert_eq!(
+            conn.query_row("SELECT count(*) FROM checkpoints", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        publish(&gate, "new").unwrap();
+        assert_eq!(
+            conn.query_row("SELECT count(*) FROM checkpoints", [], |r| r
+                .get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+    }
+
     struct PreviewProvider {
         replies: std::sync::Mutex<std::collections::VecDeque<Result<String, String>>>,
         requests: std::sync::Mutex<Vec<ChatRequest>>,
     }
     #[async_trait::async_trait]
     impl AiProvider for PreviewProvider {
-        async fn chat(&self, request: ChatRequest) -> Result<crate::ai::provider::ChatResponse, String> {
+        async fn chat(
+            &self,
+            request: ChatRequest,
+        ) -> Result<crate::ai::provider::ChatResponse, String> {
             self.requests.lock().unwrap().push(request);
             Ok(crate::ai::provider::ChatResponse {
-                content: self.replies.lock().unwrap().pop_front().expect("no third attempt")?,
-                model: "test".into(), usage: None, tool_uses: vec![], stop_reason: None,
+                content: self
+                    .replies
+                    .lock()
+                    .unwrap()
+                    .pop_front()
+                    .expect("no third attempt")?,
+                model: "test".into(),
+                usage: None,
+                tool_uses: vec![],
+                stop_reason: None,
             })
         }
-        fn name(&self) -> &str { "test" }
+        fn name(&self) -> &str {
+            "test"
+        }
     }
 
     #[tokio::test]
     async fn invalid_json_gets_one_source_verified_plaintext_retry_only() {
-        let evidence = LedeEvidence { prompt_text: "--- A report\nThe event happened in June.".into(),
-            sources: vec![LedeSource { article_id: "article-a".into(), body: "The event happened in June.".into() }] };
+        let evidence = LedeEvidence {
+            prompt_text: "--- A report\nThe event happened in June.".into(),
+            sources: vec![LedeSource {
+                article_id: "article-a".into(),
+                body: "The event happened in June.".into(),
+            }],
+        };
         let valid = "The event happened in June.";
         for (replies, expected, calls) in [
-            (vec![Ok(serde_json::json!({"excerpt":valid}).to_string())], Some(valid), 1),
-            (vec![Ok("{malformed".into()), Ok(format!("  {valid}\n"))], Some(valid), 2),
-            (vec![Ok("{malformed".into()), Ok("The event happened in August.".into())], None, 2),
-            (vec![Ok("{malformed".into()), Ok(format!("Here is the excerpt: {valid}"))], None, 2),
-            (vec![Ok("{malformed".into()), Err("model unavailable".into())], None, 2),
+            (
+                vec![Ok(serde_json::json!({"excerpt":valid}).to_string())],
+                Some(valid),
+                1,
+            ),
+            (
+                vec![Ok("{malformed".into()), Ok(format!("  {valid}\n"))],
+                Some(valid),
+                2,
+            ),
+            (
+                vec![
+                    Ok("{malformed".into()),
+                    Ok("The event happened in August.".into()),
+                ],
+                None,
+                2,
+            ),
+            (
+                vec![
+                    Ok("{malformed".into()),
+                    Ok(format!("Here is the excerpt: {valid}")),
+                ],
+                None,
+                2,
+            ),
+            (
+                vec![Ok("{malformed".into()), Err("model unavailable".into())],
+                None,
+                2,
+            ),
             (vec![Err("model unavailable".into())], None, 1),
         ] {
-            let provider = PreviewProvider { replies: std::sync::Mutex::new(replies.into()), requests: Default::default() };
-            assert_eq!(verified_preview(&provider, "configured-model", "Headline", &evidence).await.map(|preview| preview.excerpt).as_deref(), expected);
+            let provider = PreviewProvider {
+                replies: std::sync::Mutex::new(replies.into()),
+                requests: Default::default(),
+            };
+            assert_eq!(
+                verified_preview(&provider, "configured-model", "Headline", &evidence)
+                    .await
+                    .map(|preview| preview.excerpt)
+                    .as_deref(),
+                expected
+            );
             let requests = provider.requests.lock().unwrap();
             assert_eq!(requests.len(), calls);
             assert!(requests[0].json_mode);
@@ -400,7 +666,10 @@ mod tests {
             }
             if calls == 2 {
                 assert!(!requests[1].json_mode);
-                assert_eq!(requests[1].messages[0].content, story_policy::today_lede_retry_prompt());
+                assert_eq!(
+                    requests[1].messages[0].content,
+                    story_policy::today_lede_retry_prompt()
+                );
                 assert_eq!(requests[1].messages[1].content, "Headline: Headline\n\nArticle text behind it:\n--- A report\nThe event happened in June.");
             }
         }
@@ -409,33 +678,74 @@ mod tests {
     #[tokio::test]
     async fn preview_preserves_nonrepresentative_source_and_exact_evidence_hash() {
         let body = "The hearing ended on Thursday. The court reserved its decision.";
-        let evidence = LedeEvidence { prompt_text: "both sources".into(), sources: vec![
-            LedeSource { article_id: "representative".into(), body: "The hearing starts tomorrow.".into() },
-            LedeSource { article_id: "outcome".into(), body: body.into() },
-        ] };
+        let evidence = LedeEvidence {
+            prompt_text: "both sources".into(),
+            sources: vec![
+                LedeSource {
+                    article_id: "representative".into(),
+                    body: "The hearing starts tomorrow.".into(),
+                },
+                LedeSource {
+                    article_id: "outcome".into(),
+                    body: body.into(),
+                },
+            ],
+        };
         let provider = PreviewProvider {
-            replies: std::sync::Mutex::new(vec![Ok(serde_json::json!({
-                "excerpt":"The hearing ended on Thursday."}).to_string())].into()),
+            replies: std::sync::Mutex::new(
+                vec![Ok(serde_json::json!({
+                "excerpt":"The hearing ended on Thursday."})
+                .to_string())]
+                .into(),
+            ),
             requests: Default::default(),
         };
-        let preview = verified_preview(&provider, "test", "Hearing preview", &evidence).await.unwrap();
+        let preview = verified_preview(&provider, "test", "Hearing preview", &evidence)
+            .await
+            .unwrap();
         assert_eq!(preview.source_article_id, "outcome");
         assert_eq!(preview.excerpt, "The hearing ended on Thursday.");
-        assert_eq!(preview.source_evidence_hash, format!("{:x}", Sha256::digest(body.as_bytes())));
-        assert_ne!(preview.source_evidence_hash, format!("{:x}", Sha256::digest(evidence.sources[0].body.as_bytes())));
+        assert_eq!(
+            preview.source_evidence_hash,
+            format!("{:x}", Sha256::digest(body.as_bytes()))
+        );
+        assert_ne!(
+            preview.source_evidence_hash,
+            format!("{:x}", Sha256::digest(evidence.sources[0].body.as_bytes()))
+        );
     }
 
     #[test]
     fn preview_requires_one_exact_source_passage_and_strict_object() {
-        let bodies = vec!["The breach happened in June. OpenAI discovered it in August.".into(),
-            "The report did not establish causation. Officials are investigating.".into()];
-        assert_eq!(parse_excerpt("```json\n{\"excerpt\":\"The breach  happened\\n in June.\"}\n```", &bodies), Some((0, "The breach happened in June.".into())));
-        for excerpt in ["The breach happened in August.", "establish causation.",
-            "The breach happened in June. Officials are investigating.", "Headline only."] {
-            assert!(parse_excerpt(&serde_json::json!({"excerpt":excerpt}).to_string(), &bodies).is_none(), "{excerpt}");
+        let bodies = vec![
+            "The breach happened in June. OpenAI discovered it in August.".into(),
+            "The report did not establish causation. Officials are investigating.".into(),
+        ];
+        assert_eq!(
+            parse_excerpt(
+                "```json\n{\"excerpt\":\"The breach  happened\\n in June.\"}\n```",
+                &bodies
+            ),
+            Some((0, "The breach happened in June.".into()))
+        );
+        for excerpt in [
+            "The breach happened in August.",
+            "establish causation.",
+            "The breach happened in June. Officials are investigating.",
+            "Headline only.",
+        ] {
+            assert!(
+                parse_excerpt(&serde_json::json!({"excerpt":excerpt}).to_string(), &bodies)
+                    .is_none(),
+                "{excerpt}"
+            );
         }
-        for raw in ["The breach happened in June.", "prefix {\"excerpt\":\"The breach happened in June.\"}",
-            "{\"lede\":\"The breach happened in June.\"}", "{\"excerpt\":\"The breach happened in June.\",\"other\":true}"] {
+        for raw in [
+            "The breach happened in June.",
+            "prefix {\"excerpt\":\"The breach happened in June.\"}",
+            "{\"lede\":\"The breach happened in June.\"}",
+            "{\"excerpt\":\"The breach happened in June.\",\"other\":true}",
+        ] {
             assert!(parse_excerpt(raw, &bodies).is_none(), "{raw}");
         }
         let long = format!("{}ends.", "word ".repeat(61));
@@ -473,9 +783,33 @@ mod tests {
         let ids = ["cached", "html", "long", "empty", "excluded"].map(str::to_string);
         let evidence = lede_source_text(&db, &ids).await.unwrap();
         assert_eq!(evidence.sources.len(), 3);
-        assert_eq!(evidence.sources.iter().map(|s| s.article_id.as_str()).collect::<Vec<_>>(), vec!["cached", "html", "long"]);
-        let sparse = lede_source_text(&db, &["missing".into(), "empty".into(), "html".into(), "cached".into()]).await.unwrap();
-        assert_eq!(sparse.sources.iter().map(|source| source.article_id.as_str()).collect::<Vec<_>>(), vec!["html", "cached"]);
+        assert_eq!(
+            evidence
+                .sources
+                .iter()
+                .map(|s| s.article_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["cached", "html", "long"]
+        );
+        let sparse = lede_source_text(
+            &db,
+            &[
+                "missing".into(),
+                "empty".into(),
+                "html".into(),
+                "cached".into(),
+            ],
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            sparse
+                .sources
+                .iter()
+                .map(|source| source.article_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["html", "cached"]
+        );
         let text = evidence.prompt_text;
         assert!(text.contains("Reader extraction with details absent from RSS."));
         assert!(text.contains("Full feed body with its supporting evidence."));

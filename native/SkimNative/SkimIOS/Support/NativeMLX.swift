@@ -1,5 +1,6 @@
 import Foundation
 import SkimCore
+import SkimInferencePolicy
 
 struct MLXModelOption: Identifiable, Hashable {
     var repoId: String
@@ -11,6 +12,7 @@ struct MLXModelOption: Identifiable, Hashable {
 }
 
 enum NativeMLX {
+    private static let generationGate = LocalInferenceGate()
     static let defaultRepoId = MLXRunner.defaultRepoId
 
     static let modelOptions: [MLXModelOption] = [
@@ -77,6 +79,11 @@ enum NativeMLX {
         return false
     }
 
+    static func preferredRepoID(settings: AISettings) -> String {
+        let modelRepo = settings.model?.nilIfEmpty.flatMap { $0.contains("/") ? $0 : nil }
+        return settings.localModelPath?.nilIfEmpty ?? modelRepo ?? defaultRepoId
+    }
+
     static func complete(
         settings: AISettings,
         instructions: String,
@@ -84,28 +91,25 @@ enum NativeMLX {
         maxTokens: Int,
         jsonMode: Bool
     ) async throws -> String {
-        // Only use settings.model as a repo id when it actually looks like one (contains "/").
-        // A leaked cloud model id (e.g. "claude-sonnet-4-5") must not be passed to MLX.
-        let modelRepo = settings.model?.nilIfEmpty.flatMap { $0.contains("/") ? $0 : nil }
-        let repoId = settings.localModelPath?.nilIfEmpty
-            ?? modelRepo
-            ?? defaultRepoId
-        await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
+        return try await generationGate.run {
+            let repoId = preferredRepoID(settings: settings)
+            await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
 
-        // Use caller's maxTokens unless user has overridden it in settings
-        let resolvedMaxTokens = settings.mlxMaxTokens ?? maxTokens
+            // Use caller's maxTokens unless user has overridden it in settings
+            let resolvedMaxTokens = settings.mlxMaxTokens ?? maxTokens
 
-        return try await MLXRunner.shared.complete(
-            systemPrompt: instructions,
-            userPrompt: prompt,
-            jsonMode: jsonMode,
-            maxTokens: resolvedMaxTokens,
-            temperature: settings.mlxTemperature.map { Float($0) },
-            topP: settings.mlxTopP.map { Float($0) },
-            repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) },
-            repetitionContextSize: settings.mlxRepetitionContextSize
-        )
-        .trimmingCharacters(in: .whitespacesAndNewlines)
+            return try await MLXRunner.shared.complete(
+                systemPrompt: instructions,
+                userPrompt: prompt,
+                jsonMode: jsonMode,
+                maxTokens: resolvedMaxTokens,
+                temperature: settings.mlxTemperature.map { Float($0) },
+                topP: settings.mlxTopP.map { Float($0) },
+                repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) },
+                repetitionContextSize: settings.mlxRepetitionContextSize
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 
     /// Multi-turn completion from an arbitrary messages array. Used by local MLX chat
@@ -115,25 +119,22 @@ enum NativeMLX {
         messages: [[String: String]],
         maxTokens: Int
     ) async throws -> String {
-        // Only use settings.model as a repo id when it actually looks like one (contains "/").
-        // A leaked cloud model id (e.g. "claude-sonnet-4-5") must not be passed to MLX.
-        let modelRepo = settings.model?.nilIfEmpty.flatMap { $0.contains("/") ? $0 : nil }
-        let repoId = settings.localModelPath?.nilIfEmpty
-            ?? modelRepo
-            ?? defaultRepoId
-        await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
+        return try await generationGate.run {
+            let repoId = preferredRepoID(settings: settings)
+            await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
 
-        let resolvedMaxTokens = settings.mlxMaxTokens ?? maxTokens
+            let resolvedMaxTokens = settings.mlxMaxTokens ?? maxTokens
 
-        return try await MLXRunner.shared.complete(
-            messages: messages,
-            maxTokens: resolvedMaxTokens,
-            temperature: settings.mlxTemperature.map { Float($0) },
-            topP: settings.mlxTopP.map { Float($0) },
-            repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) },
-            repetitionContextSize: settings.mlxRepetitionContextSize
-        )
-        .trimmingCharacters(in: .whitespacesAndNewlines)
+            return try await MLXRunner.shared.complete(
+                messages: messages,
+                maxTokens: resolvedMaxTokens,
+                temperature: settings.mlxTemperature.map { Float($0) },
+                topP: settings.mlxTopP.map { Float($0) },
+                repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) },
+                repetitionContextSize: settings.mlxRepetitionContextSize
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 
     /// Streaming variant of `complete`. Calls `onToken` with each decoded chunk as it is generated,
@@ -147,28 +148,25 @@ enum NativeMLX {
         jsonMode: Bool = false,
         onToken: @Sendable @escaping (String) -> Void
     ) async throws -> String {
-        // Only use settings.model as a repo id when it actually looks like one (contains "/").
-        // A leaked cloud model id (e.g. "claude-sonnet-4-5") must not be passed to MLX.
-        let modelRepo = settings.model?.nilIfEmpty.flatMap { $0.contains("/") ? $0 : nil }
-        let repoId = settings.localModelPath?.nilIfEmpty
-            ?? modelRepo
-            ?? defaultRepoId
-        await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
+        return try await generationGate.run {
+            let repoId = preferredRepoID(settings: settings)
+            await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
 
-        let resolvedMaxTokens = settings.mlxMaxTokens ?? maxTokens
+            let resolvedMaxTokens = settings.mlxMaxTokens ?? maxTokens
 
-        return try await MLXRunner.shared.stream(
-            systemPrompt: instructions,
-            userPrompt: prompt,
-            jsonMode: jsonMode,
-            maxTokens: resolvedMaxTokens,
-            temperature: settings.mlxTemperature.map { Float($0) },
-            topP: settings.mlxTopP.map { Float($0) },
-            repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) },
-            repetitionContextSize: settings.mlxRepetitionContextSize,
-            onToken: onToken
-        )
-        .trimmingCharacters(in: .whitespacesAndNewlines)
+            return try await MLXRunner.shared.stream(
+                systemPrompt: instructions,
+                userPrompt: prompt,
+                jsonMode: jsonMode,
+                maxTokens: resolvedMaxTokens,
+                temperature: settings.mlxTemperature.map { Float($0) },
+                topP: settings.mlxTopP.map { Float($0) },
+                repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) },
+                repetitionContextSize: settings.mlxRepetitionContextSize,
+                onToken: onToken
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 }
 

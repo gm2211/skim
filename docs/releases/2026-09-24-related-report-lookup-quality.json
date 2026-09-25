@@ -1,0 +1,966 @@
+{
+  "created_at_utc": "2026-09-25T01:17:50.542727+00:00",
+  "status": "Experimental only; not adopted or accepted for production",
+  "issue": "skim-do2h.1",
+  "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+  "source_corpus_sha256": "9e8a46fbe81917babefda2ef6ccee728c6ecafd9360e8e103d9c0d69293f638a",
+  "source_candidate_count": 108,
+  "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+  "helper_scope": "Rebuilt PR156 helper consumed by direct local stdin/stdout probes, not installed released helper or native iOS runtime.",
+  "request_audit": {
+    "input_truncation_found": false,
+    "conversation_role_loss_found": false,
+    "cross_request_kv_reuse_found": false,
+    "json_mode": "System instruction only; no constrained JSON decoding",
+    "temperature": 0,
+    "repetition_penalty": 1.05,
+    "repetition_context_size": 64,
+    "model_context_config_positions": 262144,
+    "token_count_measured": false
+  },
+  "independent_labels": {
+    "frozen_before_full_replays": true,
+    "counts": {
+      "same_event": 12,
+      "different_event": 7,
+      "uncertain": 3
+    },
+    "labels_artifact_sha256": "40265351dea0b6b65be7f5487a9930a31299ea25ae73dc7bc258b7601661a7ea",
+    "pairs": [
+      {
+        "pair": [
+          4,
+          16
+        ],
+        "label": "same_event",
+        "rationale": "Both reports concern the same alleged dinghy slashing in the English Channel on Tuesday and the charge against Daniel Thomas."
+      },
+      {
+        "pair": [
+          15,
+          30
+        ],
+        "label": "same_event",
+        "rationale": "Both cover the same Netanyahu UN General Assembly speech and the walkout by delegates during/before that address."
+      },
+      {
+        "pair": [
+          1,
+          32
+        ],
+        "label": "same_event",
+        "rationale": "The live report describes the Australian-government AI-agent hack and Albanese’s reaction; the explainer says Australia announced that OpenAI hack at the UN. The snippets point to the same breach, though the live report is broader."
+      },
+      {
+        "pair": [
+          32,
+          55
+        ],
+        "label": "same_event",
+        "rationale": "Both refer to the same Australian government/OpenAI AI-agent breach; one describes its announcement and the other says it occurred in June."
+      },
+      {
+        "pair": [
+          55,
+          64
+        ],
+        "label": "same_event",
+        "rationale": "The BBC item calls it an OpenAI agent infiltration of an Australian government website; the Guardian item identifies the contemporaneous Australian AI-agent breach as affecting Medicare/internal government systems and cites the breach report. Same breach coverage is supported by the text/link context."
+      },
+      {
+        "pair": [
+          64,
+          72
+        ],
+        "label": "same_event",
+        "rationale": "Both concern the Australian Medicare/government-system hack by an automated OpenAI agent; one is a Guardian follow-up and the other a BBC explainer about that hack."
+      },
+      {
+        "pair": [
+          72,
+          100
+        ],
+        "label": "same_event",
+        "rationale": "Both are explainers about the OpenAI Australian-government/Medicare hack; the BBC copy explicitly identifies the Medicare breach."
+      },
+      {
+        "pair": [
+          5,
+          10
+        ],
+        "label": "uncertain",
+        "rationale": "The snippets suggest a shared contaminated lagoon: one identifies Michael Phillips as having played at a toxic lagoon, the other says nearby residents seek testing. Neither gives the place name or enough incident details to prove the reports concern the same site."
+      },
+      {
+        "pair": [
+          10,
+          94
+        ],
+        "label": "uncertain",
+        "rationale": "Both concern possible cancer-causing chemical exposure among UK residents, but the supplied excerpts omit the locations/chemical identities needed to establish whether the lagoon and Lancashire-factory reports are the same incident or distinct contamination cases."
+      },
+      {
+        "pair": [
+          21,
+          35
+        ],
+        "label": "same_event",
+        "rationale": "Both report the same bail decision involving Zafer/Zapher Dogan and a flat overlooking a children’s playground; the spelling differs but the surrounding case details align."
+      },
+      {
+        "pair": [
+          28,
+          51
+        ],
+        "label": "same_event",
+        "rationale": "Both concern the same Trump–Xi White House summit: one describes Trump welcoming Xi, the other reports Xi’s terms at the start of their summit."
+      },
+      {
+        "pair": [
+          51,
+          61
+        ],
+        "label": "same_event",
+        "rationale": "Both refer to the same Xi visit/Trump welcome at the White House: the Guardian reports remarks made at their summit; the BBC video asks why Trump was eager to welcome Xi."
+      },
+      {
+        "pair": [
+          48,
+          49
+        ],
+        "label": "different_event",
+        "rationale": "The Danish intelligence warning concerns a possible future Russian military attack on NATO; the Poland item concerns an already-reported fire/sabotage at a Starlink station. The lead links timing, not event identity."
+      },
+      {
+        "pair": [
+          58,
+          59
+        ],
+        "label": "uncertain",
+        "rationale": "Both describe renewed Ethiopian army/rebel fighting, but the BBC excerpt does not identify the attackers or region. The Guardian identifies Tigrayan fighters and Afar/Amhara, so the snippets alone do not prove this is the same particular attack."
+      },
+      {
+        "pair": [
+          68,
+          70
+        ],
+        "label": "same_event",
+        "rationale": "Both concern German prosecutors investigating a 105-year-old over alleged crimes/accessory involvement at the same Nazi POW camp; the Guardian names Stalag 326 and the BBC says Stalag 326."
+      },
+      {
+        "pair": [
+          2,
+          38
+        ],
+        "label": "different_event",
+        "rationale": "These are separate steps in the same broader press-access dispute: index 38 reports the access-restoration/order and an emergency hearing over violations; index 2 reports journalists being turned away Thursday despite that order. Same dispute does not make the discrete developments one event."
+      },
+      {
+        "pair": [
+          14,
+          17
+        ],
+        "label": "different_event",
+        "rationale": "The first is Côte d’Ivoire signing the Artemis Accords; the second is NASA naming Crew-14 astronauts for an ISS mission. Shared NASA/space context only."
+      },
+      {
+        "pair": [
+          34,
+          45
+        ],
+        "label": "different_event",
+        "rationale": "NASA’s Mars-to-Table food-systems challenge and a report about repurposing Mars-derived CO2 capture technology for breweries are separate programs/events. Shared Mars/NASA terminology is topical only."
+      },
+      {
+        "pair": [
+          73,
+          17
+        ],
+        "label": "different_event",
+        "rationale": "Crew-13 biomedical research and Crew-14 astronaut assignments are distinct missions with different crew numbers and research/assignment events."
+      },
+      {
+        "pair": [
+          25,
+          26
+        ],
+        "label": "different_event",
+        "rationale": "Index 25 is a UK family’s testimony at a hearing about a poison-seller victim; index 26 is Taliban-reported civilian deaths in Pakistani strikes in Afghanistan. Different people, countries, and incidents."
+      },
+      {
+        "pair": [
+          0,
+          16
+        ],
+        "label": "different_event",
+        "rationale": "Index 0 reports the later death of James Copenhaver, wounded in the 2024 Trump assassination attempt; index 16 reports Daniel Thomas charged over an alleged Channel dinghy slashing. No shared incident despite “Trump”/crime phrasing."
+      },
+      {
+        "pair": [
+          93,
+          15
+        ],
+        "label": "same_event",
+        "rationale": "Index 93 previews Netanyahu’s Thursday UN speech; index 15 reports what he said after delegates walked out at that same UN General Assembly address. This is one speech event at different reporting stages."
+      }
+    ]
+  },
+  "experiments": [
+    {
+      "name": "title-only-partition",
+      "requests": 10,
+      "valid_responses": 1,
+      "elapsed_seconds": 20.244,
+      "assessment_requests": 0,
+      "retries": 0,
+      "adopted": false,
+      "artifact_sha256": "204a585a6da3f3a341e682d5d3ab806b08d782a46ed0a958198fb8d76346c2f3",
+      "local_artifact": "/tmp/skim-preparation-title-probe.json",
+      "boundary": "Task-shape diagnosis; valid output is not semantic quality or full-pool readiness."
+    },
+    {
+      "name": "four-reference-original-text",
+      "requests": 16,
+      "valid_responses": 16,
+      "elapsed_seconds": 58.85491804196499,
+      "assessment_requests": 0,
+      "retries": 0,
+      "adopted": false,
+      "artifact_sha256": "8597cca763f7e3954c23d5917d0db285fdf315bfa6ce48453840b80463a56fba",
+      "local_artifact": "/tmp/skim-preparation-anchor-probe.json",
+      "boundary": "Task-shape diagnosis; valid output is not semantic quality or full-pool readiness."
+    },
+    {
+      "name": "four-reference-candidate-titles",
+      "requests": 16,
+      "valid_responses": 16,
+      "elapsed_seconds": 13.82709391694516,
+      "assessment_requests": 0,
+      "retries": 0,
+      "adopted": false,
+      "artifact_sha256": "5a08f3aa07dd77caf50fdc212609c893f9d1d4280a041b2e5aea3b51c3a3be20",
+      "local_artifact": "/tmp/skim-preparation-anchor-titles-probe.json",
+      "boundary": "Task-shape diagnosis; valid output is not semantic quality or full-pool readiness."
+    },
+    {
+      "name": "one-reference-full",
+      "reference_direction": "earlier slot against later slots",
+      "reference_excerpt_scalars": 2048,
+      "candidate_excerpt_scalars": 512,
+      "candidate_batch_max": 32,
+      "pair_excerpt_scalars": 2048,
+      "proposal_output_tokens": 256,
+      "pair_output_tokens": 160,
+      "candidate_count": 108,
+      "lookup_requests": 296,
+      "valid_lookup_responses": 296,
+      "pair_opportunities": 5778,
+      "duplicate_opportunities": 0,
+      "proposal_semantics": "reference-to-match edges only",
+      "proposed_pairs": 30,
+      "verified_pairs": 30,
+      "valid_verdicts": 30,
+      "positive_verdicts": 20,
+      "grouped_pair_count": 15,
+      "final_groups": [
+        [
+          28,
+          51
+        ],
+        [
+          70,
+          68
+        ],
+        [
+          30,
+          15,
+          93
+        ],
+        [
+          100,
+          64,
+          72,
+          55
+        ],
+        [
+          58,
+          59
+        ],
+        [
+          4,
+          16
+        ],
+        [
+          10,
+          94
+        ],
+        [
+          38,
+          2
+        ]
+      ],
+      "independent_pair_counts": {
+        "same_event": 12,
+        "different_event": 7,
+        "uncertain": 3,
+        "positive_proposed": 11,
+        "positive_grouped": 8,
+        "negative_grouped": 1,
+        "uncertain_grouped": 2
+      },
+      "independent_pairs": [
+        {
+          "pair": [
+            4,
+            16
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            15,
+            30
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            1,
+            32
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 0,
+          "grouped": false
+        },
+        {
+          "pair": [
+            32,
+            55
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": false
+        },
+        {
+          "pair": [
+            55,
+            64
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            64,
+            72
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            72,
+            100
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            5,
+            10
+          ],
+          "label": "uncertain",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            10,
+            94
+          ],
+          "label": "uncertain",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            21,
+            35
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 0,
+          "grouped": false
+        },
+        {
+          "pair": [
+            28,
+            51
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            51,
+            61
+          ],
+          "label": "same_event",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            48,
+            49
+          ],
+          "label": "different_event",
+          "proposed": true,
+          "verdict": 0,
+          "grouped": false
+        },
+        {
+          "pair": [
+            58,
+            59
+          ],
+          "label": "uncertain",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            68,
+            70
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            2,
+            38
+          ],
+          "label": "different_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            14,
+            17
+          ],
+          "label": "different_event",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            34,
+            45
+          ],
+          "label": "different_event",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            17,
+            73
+          ],
+          "label": "different_event",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            25,
+            26
+          ],
+          "label": "different_event",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            0,
+            16
+          ],
+          "label": "different_event",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            15,
+            93
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        }
+      ],
+      "elapsed_seconds": 655.8719900420401,
+      "assessment_requests": 0,
+      "retries": 0,
+      "adopted": false,
+      "strict_duplicate_key_revalidation_passed": true,
+      "artifact_sha256": "462defcb21049b07572b892cf25980a9349973b7557d6aad88afaa2638c1bfed",
+      "local_artifact": "/tmp/skim-preparation-anchor-full-probe.json",
+      "evaluation_sha256": "242563119227a28749075cad0db3ba1d97a58fa919e9ab7183dc17c501228cf0",
+      "probe_script_sha256": "76af74a43ad2c25d12bb4bfb68c28b2e5e3af8a5e67ea47189810a0d6915749a"
+    },
+    {
+      "name": "one-reference-incremental",
+      "reference_direction": "later slot against earlier slots",
+      "reference_excerpt_scalars": 2048,
+      "candidate_excerpt_scalars": 512,
+      "candidate_batch_max": 32,
+      "pair_excerpt_scalars": 2048,
+      "proposal_output_tokens": 256,
+      "pair_output_tokens": 160,
+      "candidate_count": 108,
+      "lookup_requests": 236,
+      "valid_lookup_responses": 236,
+      "pair_opportunities": 5778,
+      "duplicate_opportunities": 0,
+      "proposal_semantics": "all pairs within each reference-plus-matches set",
+      "proposed_pairs": 39,
+      "verified_pairs": 39,
+      "valid_verdicts": 39,
+      "positive_verdicts": 17,
+      "grouped_pair_count": 14,
+      "final_groups": [
+        [
+          28,
+          51
+        ],
+        [
+          70,
+          68
+        ],
+        [
+          30,
+          15,
+          93
+        ],
+        [
+          32,
+          64,
+          72,
+          55
+        ],
+        [
+          4,
+          16
+        ],
+        [
+          10,
+          94
+        ],
+        [
+          38,
+          2
+        ]
+      ],
+      "independent_pair_counts": {
+        "same_event": 12,
+        "different_event": 7,
+        "uncertain": 3,
+        "positive_proposed": 11,
+        "positive_grouped": 8,
+        "negative_grouped": 1,
+        "uncertain_grouped": 1
+      },
+      "independent_pairs": [
+        {
+          "pair": [
+            4,
+            16
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            15,
+            30
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            1,
+            32
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 0,
+          "grouped": false
+        },
+        {
+          "pair": [
+            32,
+            55
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            55,
+            64
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            64,
+            72
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            72,
+            100
+          ],
+          "label": "same_event",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            5,
+            10
+          ],
+          "label": "uncertain",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            10,
+            94
+          ],
+          "label": "uncertain",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            21,
+            35
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 0,
+          "grouped": false
+        },
+        {
+          "pair": [
+            28,
+            51
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            51,
+            61
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 0,
+          "grouped": false
+        },
+        {
+          "pair": [
+            48,
+            49
+          ],
+          "label": "different_event",
+          "proposed": true,
+          "verdict": 0,
+          "grouped": false
+        },
+        {
+          "pair": [
+            58,
+            59
+          ],
+          "label": "uncertain",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            68,
+            70
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            2,
+            38
+          ],
+          "label": "different_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        },
+        {
+          "pair": [
+            14,
+            17
+          ],
+          "label": "different_event",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            34,
+            45
+          ],
+          "label": "different_event",
+          "proposed": true,
+          "verdict": 0,
+          "grouped": false
+        },
+        {
+          "pair": [
+            17,
+            73
+          ],
+          "label": "different_event",
+          "proposed": true,
+          "verdict": 0,
+          "grouped": false
+        },
+        {
+          "pair": [
+            25,
+            26
+          ],
+          "label": "different_event",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            0,
+            16
+          ],
+          "label": "different_event",
+          "proposed": false,
+          "verdict": null,
+          "grouped": false
+        },
+        {
+          "pair": [
+            15,
+            93
+          ],
+          "label": "same_event",
+          "proposed": true,
+          "verdict": 1,
+          "grouped": true
+        }
+      ],
+      "elapsed_seconds": 608.0466945420485,
+      "assessment_requests": 0,
+      "retries": 0,
+      "adopted": false,
+      "strict_duplicate_key_revalidation_passed": true,
+      "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+      "local_artifact": "/tmp/skim-preparation-anchor-incremental-probe.json",
+      "evaluation_sha256": "89d261f174e36e8fff3872fd427941aa6761273d7a50f23aae3da511971e5d14",
+      "probe_script_sha256": "fcf63748d87d44bce9a16448a10371d6b0b9ee97f9b528957f66bbc208c46aea"
+    }
+  ],
+  "identical_pair_request_comparison": {
+    "scope": "Identical serialized direct-helper requests at temperature0 across two independently seeded runs; not a controlled isolated reproducibility experiment. No KV reuse found in source audit.",
+    "common_exact_requests": 23,
+    "verdict_differences": []
+  },
+  "proposed_incremental_schedule": {
+    "scope": "Independent proposed scheduler simulation; not production implementation or C overflow proof.",
+    "results": [
+      {
+        "slots": 0,
+        "windows": 0,
+        "pairs": 0,
+        "append_preserves_prior_windows": true
+      },
+      {
+        "slots": 1,
+        "windows": 0,
+        "pairs": 0,
+        "append_preserves_prior_windows": true
+      },
+      {
+        "slots": 2,
+        "windows": 1,
+        "pairs": 1,
+        "append_preserves_prior_windows": true
+      },
+      {
+        "slots": 31,
+        "windows": 30,
+        "pairs": 465,
+        "append_preserves_prior_windows": true
+      },
+      {
+        "slots": 32,
+        "windows": 31,
+        "pairs": 496,
+        "append_preserves_prior_windows": true
+      },
+      {
+        "slots": 33,
+        "windows": 32,
+        "pairs": 528,
+        "append_preserves_prior_windows": true
+      },
+      {
+        "slots": 64,
+        "windows": 94,
+        "pairs": 2016,
+        "append_preserves_prior_windows": true
+      },
+      {
+        "slots": 65,
+        "windows": 96,
+        "pairs": 2080,
+        "append_preserves_prior_windows": true
+      },
+      {
+        "slots": 108,
+        "windows": 236,
+        "pairs": 5778,
+        "append_preserves_prior_windows": true
+      },
+      {
+        "slots": 500,
+        "windows": 4144,
+        "pairs": 124750,
+        "append_preserves_prior_windows": true
+      }
+    ]
+  },
+  "editorial_boundary": {
+    "strict_labels_changed": false,
+    "separate_review_artifact_sha256": "065f5479a43ef150d6599cc74ed2c013fd7aa28e0ed5d2d5e831b3074ead5510",
+    "conclusion": "Pairs 2-38 are distinct events in one developing press-access dispute; 15-93 is one speech preview/outcome; 48-49 lacks evidence connecting separate events. Optional related-story references and strict event identity are different product contracts. This review does not turn either failed same-event evaluation into a pass."
+  },
+  "limitations": [
+    "No application preparation/persistence or native GPU proof for these experimental protocols.",
+    "Lookup co-presence is not a direct pair verdict. Every report was exposed but independent importance assessments were not rerun in these lookup-only experiments.",
+    "The 22 labeled pairs do not establish corpus-wide precision or recall. Uncertain labels remain separate from known negatives.",
+    "Both complete 108-report experiments grouped only eight of twelve labeled matches and merged one of seven labeled negatives.",
+    "Directions, evidence allocation and proposed-edge closure differ between the two runs; their timings are not an isolated benchmark.",
+    "Append-stable lookup needs 4144 windows for 500 reports; no fast full-library acceptance claim.",
+    "PR156 retains the original strict-partition implementation and remains draft; none of these experiments changed production policy."
+  ],
+  "bounded_reference_negative_control": {
+    "scope": "Experimental optional references for one fixed story, no application integration, ranking changes or full-edition readiness claim.",
+    "reference": 3,
+    "source_sha256": "9e8a46fbe81917babefda2ef6ccee728c6ecafd9360e8e103d9c0d69293f638a",
+    "labels_sha256": "04ef15b468c24a2de6f9a389ebedffe3a149e14a831311a2b4f4a3372d49cb98",
+    "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+    "budget_seconds": 30,
+    "reference_limit": 4,
+    "ranking": "Original baseScore descending, stable story-ID tie; no new importance assessment.",
+    "retries": 0,
+    "proposed": [],
+    "selected": [],
+    "truncated": false,
+    "completed": true,
+    "group": [
+      3
+    ],
+    "elapsed_seconds": 9.378955999971367,
+    "evaluation": {
+      "expected_same_event": [],
+      "returned_references": [],
+      "missed_same_event": [],
+      "negative_or_uncertain_references": [],
+      "all_107_candidates_exposed": true
+    },
+    "acceptance_passed": true,
+    "lookup_count": 4,
+    "positive_labels": 0,
+    "negative_labels": 107,
+    "uncertain_labels": 0,
+    "label_selection": "Highest base score among reports absent from prior independent pair labels; stable story-ID tie. Selected before this run.",
+    "raw_artifact_sha256": "321206ad0a92859016bc4649802b257558ea9a77c62becf8c3126ef589576462",
+    "script_sha256": "aefb01c939b47c8f9a462bfc2293ce792af9e455cf76ab3bd03c91f982032968",
+    "positive_case_search": "Independent source-only review found no identifiable same-event positive among remaining unlabeled references; no substitute positive case was run.",
+    "positive_case_search_sha256": "122af6846aafa8f6a04444f68da4550225950c39c36e2bc039177c70c1267cf3",
+    "boundary": "This passing negative control establishes no positive recall, whole-library latency, ranking correctness or production readiness; not adopted."
+  },
+  "ranking_bound_review": {
+    "group_score": "max(member base) + max(member importance adjustment), adjustment = 3 * (importance - 3), range [-9, 6]",
+    "bound": "For descending-base anchors, U(i) = base(i) + maximum adjustment among i and later reports, no greater than base(i) + 6.",
+    "safe_pruning_condition": "U(i) strictly below a certified lower bound for the kth distinct final group; singleton kth score is not certified because future merges can collapse candidates. Equality must retain tie-breaking consideration.",
+    "reference_constraint": "Reports skipped as anchors must remain possible references and importance contributors to retained anchors.",
+    "limit": "Worst-case equal or close scores do not prune. This is a mathematical review, not an implemented or benchmarked scheduler."
+  }
+}

@@ -1,0 +1,1731 @@
+{
+  "schema_version": 2,
+  "contract": "developing_story_v2",
+  "source_file": "/tmp/skim-semantic-full-evidence-candidates.json",
+  "source_sha256": "9e8a46fbe81917babefda2ef6ccee728c6ecafd9360e8e103d9c0d69293f638a",
+  "strict_labels_file": "/tmp/skim-preparation-independent-pair-labels.json",
+  "strict_labels_sha256_unchanged": "40265351dea0b6b65be7f5487a9930a31299ea25ae73dc7bc258b7601661a7ea",
+  "provenance": "Independent source-only review. No model responses read for these judgments, no model run, no earlier labels rewritten. Some judgments deliberately uncertain. New-contract labels are not scores for prior strict-event tasks.",
+  "relations": {
+    "related_story": "Evidence identifies a common concrete episode/proceeding/incident or explicit response/preview/outcome/analysis thereof; not necessarily identical event.",
+    "different_story": "Concrete anchors are distinct; shared actor/topic alone does not connect them.",
+    "uncertain": "Supplied evidence cannot establish shared or distinct episode identity; keep separate pending evidence."
+  },
+  "pairs": [
+    {
+      "members": [
+        4,
+        16
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "Both identify Daniel Thomas charged after the Tuesday Channel dinghy-slashing incident; Guardian supplies the criminal-damage and phone-PIN charges.",
+      "must_preserve": "Charges and allegations remain allegations; additional charge detail is not a second unrelated story.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 4,
+          "story_id": "story-754a8c9ca7dbb639",
+          "title": "Anti-migrant activist charged after dinghy slashed in Channel",
+          "original_excerpt": "Activist Daniel Thomas is charged in connection with an incident in the English\nChannel on Tuesday.\n",
+          "source_metadata": [
+            {
+              "article_id": "9e15fef1-ee8e-4663-98c1-af79545e86ef",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790288183,
+              "title": "Anti-migrant activist charged after dinghy slashed in Channel",
+              "url": "https://www.bbc.co.uk/news/articles/crkgwe3egpzgo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "a1fc4891-53e6-473e-829d-1dcae25a9aec",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "08be875d-11a2-4d8e-9225-09ad61b6a967",
+              "feed_title": "BBC UK",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790288183,
+              "title": "Anti-migrant activist charged after dinghy slashed in Channel",
+              "url": "https://www.bbc.co.uk/news/articles/crkgwe3egpzgo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        },
+        {
+          "index": 16,
+          "story_id": "story-fb9ae923ad43c597",
+          "title": "Far-right activist Daniel Thomas charged over alleged dinghy slashing in Channel",
+          "original_excerpt": "Thirty-seven-year-old charged with one count of criminal damage and failing to\ndisclose his phone pin to police\n\nThe far-right agitator and anti-migrant activist Daniel Thomas has been charged\nwith criminal damage and failing to disclose his phone pin to police following\nan incident in the Channel on Tuesday, where he allegedly slashed a dinghy while\na French rescuer was on board.\n\nThomas, 37, of no fixed abode, has been charged with one count of criminal\ndamage along with an offence under section 53 of the Regulation of Investigatory\nPowers Act 2000 (Ripa), for allegedly failing to comply with a notice to\ndisclose a phone pin to police.\n\n[Continue reading...][1]\n\n[1]: https://www.theguardian.com/uk-news/2026/sep/24/police-arrest-far-right-act\nivist-daniel-thomas-after-dinghy-slashed-channel\n",
+          "source_metadata": [
+            {
+              "article_id": "5cc48840-8e72-4d34-a528-653a29e11fb4",
+              "author": "Amelia Gentleman and Diane Taylor",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790284836,
+              "title": "Far-right activist Daniel Thomas charged over alleged dinghy slashing in Channel",
+              "url": "https://www.theguardian.com/uk-news/2026/sep/24/police-arrest-far-right-activist-daniel-thomas-after-dinghy-slashed-channel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        15,
+        30
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "Both titles describe delegates walking out of Netanyahu’s UN speech; the text adds his reaction and the Israeli delegation’s response.",
+      "must_preserve": "Do not convert before-speech versus during-speech wording into a resolved exact event time.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 15,
+          "story_id": "story-675e769225d24ab9",
+          "title": "Netanyahu defends Israeli military action as delegates walk out before UN speech",
+          "original_excerpt": "The Israeli leader labels those who left his speech at the UN General Assembly\nas \"moral cowards\".\n",
+          "source_metadata": [
+            {
+              "article_id": "863d5e02-bdc4-458c-84df-ed82f1babd5b",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790284907,
+              "title": "Netanyahu defends Israeli military action as delegates walk out before UN speech",
+              "url": "https://www.bbc.co.uk/news/articles/c3y0z7kxlegdo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "62e98975-3de5-433f-972b-f1b3b7d6ad5c",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790284907,
+              "title": "Netanyahu defends Israeli military action as delegates walk out before UN speech",
+              "url": "https://www.bbc.co.uk/news/articles/c3y0z7kxlegdo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        },
+        {
+          "index": 30,
+          "story_id": "story-1d7b68ded8925d65",
+          "title": "Watch: UN delegates walk out of Netanyahu speech",
+          "original_excerpt": "The Israeli delegation could be be seen cheering in support during Netanyahu's\nspeech.\n",
+          "source_metadata": [
+            {
+              "article_id": "f83db275-96b3-47f1-bb91-d2f33313fdc3",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790274569,
+              "title": "Watch: UN delegates walk out of Netanyahu speech",
+              "url": "https://www.bbc.co.uk/news/videos/cqwyzmpm3pgdo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        1,
+        32
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "The live-blog excerpt reports Albanese’s reaction to the first Australian government AI-agent hack; its original URL identifies OpenAI. The other title specifically explains Australia’s UN disclosure of the OpenAI hack.",
+      "must_preserve": "The live-blog title also mentions a killed police officer. Relatedness applies to the supplied hack segment, not every live-blog entry.",
+      "whole_report_deduplication_safe": false,
+      "sources": [
+        {
+          "index": 1,
+          "story_id": "story-b4448f41ad192081",
+          "title": "Australia news live: Paterson says PM’s AI hack timing not a coincidence; police officer killed in Sydney crash",
+          "original_excerpt": "Follow the day’s news live\n\n* Get our [breaking news email][1], [free app][2] or [daily news podcast][3]\n\n**AI government website hack a ‘wake-up call’, Albanese says**\n\nThe first reported artificial intelligence agent hack into an Australian\ngovernment website is a “wake-up call” of the dangers of the technology,\n**Anthony Albanese** says.\n\nThis was an AI agent acting independently of its instructions, that is learning\nby itself. So it’s a bit of a wake-up call … about the risks.\n\nThis technology is moving very very fast, and we need to make sure that we have\na responsibility to keep on top of it.\n\nIn this type of situation, you know, you would expect for an incident which is\nas serious as this, you would expect that disclosure to be delivered in a very\nserious way. It was not delivered in a very serious way, it was delivered via an\nemail to a public inbox.\n\n[Continue reading...][4]\n\n[1]: https://www.theguardian.com/email-newsletters?CMP=cvau_sfl\n[2]: https://app.adjust.com/w4u7jx3\n[3]: https://www.theguardian.com/australia-news/series/full-story?CMP=cvau_sfl\n[4]: https://www.theguardian.com/australia-news/live/2026/sep/25/anthony-albanes\ne-open-ai-hack-united-nations-angus-taylor-coalition-ntwnfb\n",
+          "source_metadata": [
+            {
+              "article_id": "34fb19a8-05b1-44c4-9a3e-bb88ef087aff",
+              "author": "Nick Visser",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790289238,
+              "title": "Australia news live: Paterson says PM’s AI hack timing not a coincidence; police officer killed in Sydney crash",
+              "url": "https://www.theguardian.com/australia-news/live/2026/sep/25/anthony-albanese-open-ai-hack-united-nations-angus-taylor-coalition-ntwnfb"
+            }
+          ]
+        },
+        {
+          "index": 32,
+          "story_id": "story-677a6820d4c88c04",
+          "title": "Why Australia chose the world's biggest political stage to reveal OpenAI hack",
+          "original_excerpt": "Australia, which has strict social media restrictions and has proposed controls\non algorithms and smart glasses, announced the breach at the UN.\n",
+          "source_metadata": [
+            {
+              "article_id": "721453e0-84fc-40a1-b7c7-c7d95d8b8ec1",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790273200,
+              "title": "Why Australia chose the world's biggest political stage to reveal OpenAI hack",
+              "url": "https://www.bbc.co.uk/news/articles/cr3eqk15ld14o?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "7237ebe1-2bbf-47b9-a6f3-0fe4beab04a1",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "aa34fb19-3611-499a-976c-9bae432cdf25",
+              "feed_title": "BBC Technology",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790273200,
+              "title": "Why Australia chose the world's biggest political stage to reveal OpenAI hack",
+              "url": "https://www.bbc.co.uk/news/articles/cr3eqk15ld14o?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "f52e0be6-7242-4a8a-9de6-e76db9fa94a7",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790273200,
+              "title": "Why Australia chose the world's biggest political stage to reveal OpenAI hack",
+              "url": "https://www.bbc.co.uk/news/articles/cr3eqk15ld14o?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        32,
+        55
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "Australia’s disclosure of the OpenAI hack at the UN and the delayed notification of that Australian government intrusion are developments in the identified breach story.",
+      "must_preserve": "June breach time, later company notification and UN announcement must not be collapsed.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 32,
+          "story_id": "story-677a6820d4c88c04",
+          "title": "Why Australia chose the world's biggest political stage to reveal OpenAI hack",
+          "original_excerpt": "Australia, which has strict social media restrictions and has proposed controls\non algorithms and smart glasses, announced the breach at the UN.\n",
+          "source_metadata": [
+            {
+              "article_id": "721453e0-84fc-40a1-b7c7-c7d95d8b8ec1",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790273200,
+              "title": "Why Australia chose the world's biggest political stage to reveal OpenAI hack",
+              "url": "https://www.bbc.co.uk/news/articles/cr3eqk15ld14o?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "7237ebe1-2bbf-47b9-a6f3-0fe4beab04a1",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "aa34fb19-3611-499a-976c-9bae432cdf25",
+              "feed_title": "BBC Technology",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790273200,
+              "title": "Why Australia chose the world's biggest political stage to reveal OpenAI hack",
+              "url": "https://www.bbc.co.uk/news/articles/cr3eqk15ld14o?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "f52e0be6-7242-4a8a-9de6-e76db9fa94a7",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790273200,
+              "title": "Why Australia chose the world's biggest political stage to reveal OpenAI hack",
+              "url": "https://www.bbc.co.uk/news/articles/cr3eqk15ld14o?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        },
+        {
+          "index": 55,
+          "story_id": "story-f4dc2420425b6360",
+          "title": "Rogue OpenAI agent 'infiltrated' Australian government website in world first",
+          "original_excerpt": "Australia criticised OpenAI for taking \"too long\" to tell them about the breach\nwhich happened in June.\n",
+          "source_metadata": [
+            {
+              "article_id": "139d5b3e-6bca-4ca6-aaf9-e76f28a4afae",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "6c648aed-2c7a-4a06-9eb2-7938d7d83797",
+              "feed_title": "BBC Business",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790264527,
+              "title": "Rogue OpenAI agent 'infiltrated' Australian government website in world first",
+              "url": "https://www.bbc.co.uk/news/articles/c6vgy0333dppo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "19ffdafb-d236-40f1-827c-dad7d95033bd",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790264527,
+              "title": "Rogue OpenAI agent 'infiltrated' Australian government website in world first",
+              "url": "https://www.bbc.co.uk/news/articles/c6vgy0333dppo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "96f98687-6e63-4dd6-99f5-953b30e00521",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "aa34fb19-3611-499a-976c-9bae432cdf25",
+              "feed_title": "BBC Technology",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790264527,
+              "title": "Rogue OpenAI agent 'infiltrated' Australian government website in world first",
+              "url": "https://www.bbc.co.uk/news/articles/c6vgy0333dppo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        55,
+        64
+      ],
+      "sets": [
+        "frozen22",
+        "diagnostic6"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "Both identify the OpenAI intrusion into Australian government systems; the expert-reaction report names Medicare and agencies affected by the company’s agent.",
+      "must_preserve": "June incident is distinct from September reaction. Expert prediction of further breaches is not proof of another actual breach.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 55,
+          "story_id": "story-f4dc2420425b6360",
+          "title": "Rogue OpenAI agent 'infiltrated' Australian government website in world first",
+          "original_excerpt": "Australia criticised OpenAI for taking \"too long\" to tell them about the breach\nwhich happened in June.\n",
+          "source_metadata": [
+            {
+              "article_id": "139d5b3e-6bca-4ca6-aaf9-e76f28a4afae",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "6c648aed-2c7a-4a06-9eb2-7938d7d83797",
+              "feed_title": "BBC Business",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790264527,
+              "title": "Rogue OpenAI agent 'infiltrated' Australian government website in world first",
+              "url": "https://www.bbc.co.uk/news/articles/c6vgy0333dppo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "19ffdafb-d236-40f1-827c-dad7d95033bd",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790264527,
+              "title": "Rogue OpenAI agent 'infiltrated' Australian government website in world first",
+              "url": "https://www.bbc.co.uk/news/articles/c6vgy0333dppo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "96f98687-6e63-4dd6-99f5-953b30e00521",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "aa34fb19-3611-499a-976c-9bae432cdf25",
+              "feed_title": "BBC Technology",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790264527,
+              "title": "Rogue OpenAI agent 'infiltrated' Australian government website in world first",
+              "url": "https://www.bbc.co.uk/news/articles/c6vgy0333dppo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        },
+        {
+          "index": 64,
+          "story_id": "story-a01dd0ba0f785de9",
+          "title": "AI hack of Medicare exposes Australia’s vulnerabilities and experts warn ‘there is more of this to come’",
+          "original_excerpt": "Council on AI Strategy chief says incident unlikely to be isolated and country\nshould enhance capability to detect and report incidents\n\n* Get our [breaking news email][1], [free app][2] or [daily news podcast][3]\n\nTechnology experts have warned revelations an [artificial intelligence agent\nhacked Medicare’s internal systems][4] will not be the only dangerous breach of\ngovernment data and have called for Australia to boost its protections against\nthe growing risk.\n\nThe prime minister, Anthony Albanese, challenged the OpenAI boss, Sam Altman, on\nThursday after the company’s agent infiltrated systems run by the Australian\nInstitute of Health and Welfare, Victoria’s Department of Health, the New South\nWales Bureau of Crime Statistics and Research, and the Medicare statistics\nreporting service portal of Services Australia.\n\n[Continue reading...][5]\n\n[1]: https://www.theguardian.com/email-newsletters?CMP=cvau_sfl\n[2]: https://app.adjust.com/w4u7jx3\n[3]: https://www.theguardian.com/australia-news/series/full-story?CMP=cvau_sfl\n[4]: https://www.theguardian.com/australia-news/2026/sep/24/anthony-albanese-say\ns-openai-agent-hacked-medicare-extreme-concern-sam-altman\n[5]: https://www.theguardian.com/australia-news/2026/sep/25/ai-hack-medicare-aus\ntralia-vulnerabilities\n",
+          "source_metadata": [
+            {
+              "article_id": "be8f0d7c-1547-4cc5-a5e2-2369546e72d2",
+              "author": "Tom McIlroy and Krishani Dhanji",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790262021,
+              "title": "AI hack of Medicare exposes Australia’s vulnerabilities and experts warn ‘there is more of this to come’",
+              "url": "https://www.theguardian.com/australia-news/2026/sep/25/ai-hack-medicare-australia-vulnerabilities"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        64,
+        72
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "Expert reaction to the Medicare/OpenAI government intrusion and the explainer explicitly about why OpenAI hacked Australia’s health system share that incident anchor.",
+      "must_preserve": "Regulation concerns and future possibilities are analysis, not verified further incidents.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 64,
+          "story_id": "story-a01dd0ba0f785de9",
+          "title": "AI hack of Medicare exposes Australia’s vulnerabilities and experts warn ‘there is more of this to come’",
+          "original_excerpt": "Council on AI Strategy chief says incident unlikely to be isolated and country\nshould enhance capability to detect and report incidents\n\n* Get our [breaking news email][1], [free app][2] or [daily news podcast][3]\n\nTechnology experts have warned revelations an [artificial intelligence agent\nhacked Medicare’s internal systems][4] will not be the only dangerous breach of\ngovernment data and have called for Australia to boost its protections against\nthe growing risk.\n\nThe prime minister, Anthony Albanese, challenged the OpenAI boss, Sam Altman, on\nThursday after the company’s agent infiltrated systems run by the Australian\nInstitute of Health and Welfare, Victoria’s Department of Health, the New South\nWales Bureau of Crime Statistics and Research, and the Medicare statistics\nreporting service portal of Services Australia.\n\n[Continue reading...][5]\n\n[1]: https://www.theguardian.com/email-newsletters?CMP=cvau_sfl\n[2]: https://app.adjust.com/w4u7jx3\n[3]: https://www.theguardian.com/australia-news/series/full-story?CMP=cvau_sfl\n[4]: https://www.theguardian.com/australia-news/2026/sep/24/anthony-albanese-say\ns-openai-agent-hacked-medicare-extreme-concern-sam-altman\n[5]: https://www.theguardian.com/australia-news/2026/sep/25/ai-hack-medicare-aus\ntralia-vulnerabilities\n",
+          "source_metadata": [
+            {
+              "article_id": "be8f0d7c-1547-4cc5-a5e2-2369546e72d2",
+              "author": "Tom McIlroy and Krishani Dhanji",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790262021,
+              "title": "AI hack of Medicare exposes Australia’s vulnerabilities and experts warn ‘there is more of this to come’",
+              "url": "https://www.theguardian.com/australia-news/2026/sep/25/ai-hack-medicare-australia-vulnerabilities"
+            }
+          ]
+        },
+        {
+          "index": 72,
+          "story_id": "story-d1f4b6c4eaa693ad",
+          "title": "Why did an OpenAI system hack Australia's health system - and can it be stopped in the future?",
+          "original_excerpt": "News that an automated AI agent hacked a government IT system raises big\nquestions about regulating the tech.\n",
+          "source_metadata": [
+            {
+              "article_id": "ac9b27d4-80c0-453a-82d2-699764a7c28d",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790258918,
+              "title": "Why did an OpenAI system hack Australia's health system - and can it be stopped in the future?",
+              "url": "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "7fb52e84-26ca-42e4-92aa-7e6a75770e8d",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "aa34fb19-3611-499a-976c-9bae432cdf25",
+              "feed_title": "BBC Technology",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790258918,
+              "title": "Why did an OpenAI system hack Australia's health system - and can it be stopped in the future?",
+              "url": "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        72,
+        100
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "Both explain the OpenAI Australian government/health-system hack; the second snippet expressly calls it the Medicare breach.",
+      "must_preserve": "An explanation should not turn missing causal detail into a confirmed mechanism.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 72,
+          "story_id": "story-d1f4b6c4eaa693ad",
+          "title": "Why did an OpenAI system hack Australia's health system - and can it be stopped in the future?",
+          "original_excerpt": "News that an automated AI agent hacked a government IT system raises big\nquestions about regulating the tech.\n",
+          "source_metadata": [
+            {
+              "article_id": "ac9b27d4-80c0-453a-82d2-699764a7c28d",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790258918,
+              "title": "Why did an OpenAI system hack Australia's health system - and can it be stopped in the future?",
+              "url": "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "7fb52e84-26ca-42e4-92aa-7e6a75770e8d",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "aa34fb19-3611-499a-976c-9bae432cdf25",
+              "feed_title": "BBC Technology",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790258918,
+              "title": "Why did an OpenAI system hack Australia's health system - and can it be stopped in the future?",
+              "url": "https://www.bbc.co.uk/news/articles/cw24jm9rryy3o?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        },
+        {
+          "index": 100,
+          "story_id": "story-61ef81e2015c564b",
+          "title": "What you need to know about the OpenAI Australian government hack",
+          "original_excerpt": "The BBC’s North America technology correspondent Lily Jamali explains how the\nMedicare breach happened, and why it matters.\n",
+          "source_metadata": [
+            {
+              "article_id": "8ca394a4-ffb7-4e84-90bf-627f2b04b50f",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "aa34fb19-3611-499a-976c-9bae432cdf25",
+              "feed_title": "BBC Technology",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790227106,
+              "title": "What you need to know about the OpenAI Australian government hack",
+              "url": "https://www.bbc.co.uk/news/videos/cwe8ekyzdjvlo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        5,
+        10
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "uncertain",
+      "source_uncertainty": true,
+      "reason": "Both discuss a toxic lagoon and exposed residents, but the supplied snippets identify no common place, company or study. Michael Phillips appears only in the first; PCBs only in the second.",
+      "must_preserve": "Likely editorial connection cannot replace a shared identifiable site. Full report/site evidence could resolve this.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 5,
+          "story_id": "story-cb942ffed32f88f5",
+          "title": "Toxic waste: 'Every person that played in the pool is dead'",
+          "original_excerpt": "Michael Phillips played at a lagoon as a child, oblivious to the toxic chemicals\nwithin.\n",
+          "source_metadata": [
+            {
+              "article_id": "d7c688fb-2398-43e3-9c4d-98ba35ff2186",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "22a49be6-6d67-4449-836e-e16171a7d28c",
+              "feed_title": "BBC Science",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790287835,
+              "title": "Toxic waste: 'Every person that played in the pool is dead'",
+              "url": "https://www.bbc.co.uk/news/videos/cqkgv3dr5gjeo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        },
+        {
+          "index": 10,
+          "story_id": "story-7a04ce3677c20d7c",
+          "title": "What are my children exposed to? Why I want testing for cancer-causing chemicals",
+          "original_excerpt": "People living near a lagoon branded \"a shame on Britain\" want to be tested for\ncancer-causing PCBs.\n",
+          "source_metadata": [
+            {
+              "article_id": "42f541a1-aa55-493c-931a-ce0cc3c40bbe",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "08be875d-11a2-4d8e-9225-09ad61b6a967",
+              "feed_title": "BBC UK",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790286872,
+              "title": "What are my children exposed to? Why I want testing for cancer-causing chemicals",
+              "url": "https://www.bbc.co.uk/news/articles/cw05rym38gdqo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "c7f02ad0-bb7e-49f2-9d2a-d0e92d3adc65",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "22a49be6-6d67-4449-836e-e16171a7d28c",
+              "feed_title": "BBC Science",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790286872,
+              "title": "What are my children exposed to? Why I want testing for cancer-causing chemicals",
+              "url": "https://www.bbc.co.uk/news/articles/cw05rym38gdqo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        10,
+        94
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "uncertain",
+      "source_uncertainty": true,
+      "reason": "One concerns PCB testing sought near an unnamed lagoon; the other reports blood-test results near a Lancashire chemical factory. Neither supplied excerpt identifies the other site or an explicit common investigation.",
+      "must_preserve": "Do not equate requests for tests with completed results, or assume the unnamed lagoon is the factory site. Generic pollution overlap is insufficient.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 10,
+          "story_id": "story-7a04ce3677c20d7c",
+          "title": "What are my children exposed to? Why I want testing for cancer-causing chemicals",
+          "original_excerpt": "People living near a lagoon branded \"a shame on Britain\" want to be tested for\ncancer-causing PCBs.\n",
+          "source_metadata": [
+            {
+              "article_id": "42f541a1-aa55-493c-931a-ce0cc3c40bbe",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "08be875d-11a2-4d8e-9225-09ad61b6a967",
+              "feed_title": "BBC UK",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790286872,
+              "title": "What are my children exposed to? Why I want testing for cancer-causing chemicals",
+              "url": "https://www.bbc.co.uk/news/articles/cw05rym38gdqo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "c7f02ad0-bb7e-49f2-9d2a-d0e92d3adc65",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "22a49be6-6d67-4449-836e-e16171a7d28c",
+              "feed_title": "BBC Science",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790286872,
+              "title": "What are my children exposed to? Why I want testing for cancer-causing chemicals",
+              "url": "https://www.bbc.co.uk/news/articles/cw05rym38gdqo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        },
+        {
+          "index": 94,
+          "story_id": "story-d986bca258ef7cc8",
+          "title": "Blood tests find high level of cancer-causing forever chemical in residents near factory",
+          "original_excerpt": "People living near a major chemical factory in Lancashire are told they could be\nat risk of serious health conditions.\n",
+          "source_metadata": [
+            {
+              "article_id": "24acfc60-72df-4315-aa70-30a4f43319d0",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "08be875d-11a2-4d8e-9225-09ad61b6a967",
+              "feed_title": "BBC UK",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790233819,
+              "title": "Blood tests find high level of cancer-causing forever chemical in residents near factory",
+              "url": "https://www.bbc.co.uk/news/articles/cjly4rv0q3l0o?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "b86aa8f7-2a33-4f47-b941-771115b034a4",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "22a49be6-6d67-4449-836e-e16171a7d28c",
+              "feed_title": "BBC Science",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790233819,
+              "title": "Blood tests find high level of cancer-causing forever chemical in residents near factory",
+              "url": "https://www.bbc.co.uk/news/articles/cjly4rv0q3l0o?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        21,
+        35
+      ],
+      "sets": [
+        "frozen22",
+        "diagnostic6"
+      ],
+      "relation": "uncertain",
+      "source_uncertainty": true,
+      "reason": "Both mention a sex offender bailed to a playground-facing flat, but supplied names differ (Zafer Dogan versus Zapher Dogen) and the shorter source omits matching court/charges. Identity is not established solely by this distinctive resemblance.",
+      "must_preserve": "If corroborated, bail, sentencing and police remarks could share a proceeding card. Do not silently correct names or treat sentencing as the earlier bail event.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 21,
+          "story_id": "story-33f95ab58e690708",
+          "title": "Met chief criticises court system after paedophile granted bail",
+          "original_excerpt": "Officers left feeling ‘hamstrung’, says Mark Rowley after offender allowed to\nreturn to flat overlooking playground\n\nPressure to cut the number of prisoners on remand has led to “dangerous and\nprolific offenders” being granted bail, the country’s most senior police officer\nsaid after a paedophile was allowed to return to his flat that overlooked a\nchildren’s playground.\n\nZafer Dogan was jailed on Thursday for two years and four months after he was\nconvicted of taking thousands of pictures of women and girls before using AI\ntechnology to turn them into nude images for his sexual gratification.\n\n[Continue reading...][1]\n\n[1]: https://www.theguardian.com/uk-news/2026/sep/24/met-chief-criticises-court-\nsystem-after-paedophile-granted-bail\n",
+          "source_metadata": [
+            {
+              "article_id": "66cf940b-5e63-4938-a7a5-afecfa6608b3",
+              "author": "PA Media",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790279864,
+              "title": "Met chief criticises court system after paedophile granted bail",
+              "url": "https://www.theguardian.com/uk-news/2026/sep/24/met-chief-criticises-court-system-after-paedophile-granted-bail"
+            }
+          ]
+        },
+        {
+          "index": 35,
+          "story_id": "story-2e06b851c2a18c94",
+          "title": "Sex offender bailed to flat overlooking playground",
+          "original_excerpt": "Victims of Zapher Dogen were living close to the 32-year-old, who admitted\nmultiple offences.\n",
+          "source_metadata": [
+            {
+              "article_id": "c87c3788-6c40-4693-8536-8a1f3a5a919d",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790272672,
+              "title": "Sex offender bailed to flat overlooking playground",
+              "url": "https://www.bbc.co.uk/news/articles/c62kw7pqjw0zo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "d1caa978-83fb-4abe-81a8-721b67645032",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "08be875d-11a2-4d8e-9225-09ad61b6a967",
+              "feed_title": "BBC UK",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790272672,
+              "title": "Sex offender bailed to flat near playground",
+              "url": "https://www.bbc.co.uk/news/articles/c62kw7pqjw0zo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        28,
+        51
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "Both originals explicitly locate Trump and Xi’s visit/meeting at the White House on the captured Thursday; one is commentary on the welcome and the other reports Xi’s proposed terms.",
+      "must_preserve": "Commentary characterizations remain attributed opinion; proposals are not an agreed settlement.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 28,
+          "story_id": "story-02b66471bcd1bc04",
+          "title": "Trump swoons over strongman soulmate Xi – are you feeling jealous, Vladimir?",
+          "original_excerpt": "Deference was deafening as US president rolled out red carpet for world’s\nbiggest jailer of journalists – perhaps he was seeking tips\n\nOne is an authoritarian who represses the media with a strong allergy to\ndemocratic elections. The other is head of the Chinese Communist party.\n\nDonald Trump welcomed the Chinese president, Xi Jinping, to the White House on\nThursday, setting the stage for a scene quite unlike anything the august old\nbuilding has seen over more than two centuries.\n\n[Continue reading...][1]\n\n[1]: https://www.theguardian.com/us-news/2026/sep/24/trump-xi-jinping-meeting-wh\nite-house\n",
+          "source_metadata": [
+            {
+              "article_id": "7e9d2b48-6f8e-45d9-9c54-fac8e6ed6b34",
+              "author": "David Smith in Washington",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790274654,
+              "title": "Trump swoons over strongman soulmate Xi – are you feeling jealous, Vladimir?",
+              "url": "https://www.theguardian.com/us-news/2026/sep/24/trump-xi-jinping-meeting-white-house"
+            }
+          ]
+        },
+        {
+          "index": 51,
+          "story_id": "story-28c38a79cdb5a5b6",
+          "title": "At Trump meeting, Xi Jinping lays out terms to avoid US-China military conflict",
+          "original_excerpt": "Chinese president’s proposals for lessening tensions come amid period of intense\ncompetition between the two countries over AI and trade\n\n* [Trump-Xi summit – latest updates][1]\n\nXi Jinping has called for extensive cooperation with Washington to avoid the\n“Thucydides trap” that could put the US and China on a military collision course\namid rising tensions over artificial intelligence, trade and Taiwan.\n\nAt the start of his summit meeting with Donald Trump in the White House, the\nChinese president laid out terms for a mutual understanding that he said could\nsteer the two competing superpowers away from future military conflict and on to\na road of mutual gain.\n\n[Continue reading...][2]\n\n[1]: https://www.theguardian.com/us-news/live/2026/sep/24/trump-xi-jinping-china\n-ai-trade-summit-latest-news-updates\n[2]: https://www.theguardian.com/us-news/2026/sep/24/xi-jinping-trump-china-coop\neration-thucydides-trap\n",
+          "source_metadata": [
+            {
+              "article_id": "c6416315-09ad-4093-8af4-94be36e14484",
+              "author": "Robert Tait in Washington",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790265133,
+              "title": "At Trump meeting, Xi Jinping lays out terms to avoid US-China military conflict",
+              "url": "https://www.theguardian.com/us-news/2026/sep/24/xi-jinping-trump-china-cooperation-thucydides-trap"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        51,
+        61
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "The summit report and BBC explanation of why Trump welcomed Xi concern the same identified visit in the captured reporting context.",
+      "must_preserve": "Reasons suggested in analysis and announced terms remain distinct from a signed agreement.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 51,
+          "story_id": "story-28c38a79cdb5a5b6",
+          "title": "At Trump meeting, Xi Jinping lays out terms to avoid US-China military conflict",
+          "original_excerpt": "Chinese president’s proposals for lessening tensions come amid period of intense\ncompetition between the two countries over AI and trade\n\n* [Trump-Xi summit – latest updates][1]\n\nXi Jinping has called for extensive cooperation with Washington to avoid the\n“Thucydides trap” that could put the US and China on a military collision course\namid rising tensions over artificial intelligence, trade and Taiwan.\n\nAt the start of his summit meeting with Donald Trump in the White House, the\nChinese president laid out terms for a mutual understanding that he said could\nsteer the two competing superpowers away from future military conflict and on to\na road of mutual gain.\n\n[Continue reading...][2]\n\n[1]: https://www.theguardian.com/us-news/live/2026/sep/24/trump-xi-jinping-china\n-ai-trade-summit-latest-news-updates\n[2]: https://www.theguardian.com/us-news/2026/sep/24/xi-jinping-trump-china-coop\neration-thucydides-trap\n",
+          "source_metadata": [
+            {
+              "article_id": "c6416315-09ad-4093-8af4-94be36e14484",
+              "author": "Robert Tait in Washington",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790265133,
+              "title": "At Trump meeting, Xi Jinping lays out terms to avoid US-China military conflict",
+              "url": "https://www.theguardian.com/us-news/2026/sep/24/xi-jinping-trump-china-cooperation-thucydides-trap"
+            }
+          ]
+        },
+        {
+          "index": 61,
+          "story_id": "story-7db1a40de89fd993",
+          "title": "Watch: Why has Trump been so eager to welcome Xi?",
+          "original_excerpt": "President Donald Trump has been talking about Chinese President Xi Jinping's\nvisit for months, the BBC's Sarah Smith looks at why.\n",
+          "source_metadata": [
+            {
+              "article_id": "bf14d81b-4c36-41c3-a994-0eeb90a43635",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790262987,
+              "title": "Watch: Why has Trump been so eager to welcome Xi?",
+              "url": "https://www.bbc.co.uk/news/videos/c914d17zn6kxo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        48,
+        49
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "The Danish intelligence warning is explicitly present in both titles; report48 also expressly mentions the Polish Starlink fire described in report49. There is actual shared-report content, not merely Russia/NATO topic overlap.",
+      "must_preserve": "This grouping cannot imply Russia caused the fire or that the warning was issued because of it. Fire attribution and forecast remain distinct claims.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 48,
+          "story_id": "story-d054e3a39b669b84",
+          "title": "Russia could attack a Nato country within months, Danish intelligence says",
+          "original_excerpt": "Warning comes hours after Poland says fire at Starlink satellite station was\n‘act of sabotage’\n\nRussia could launch a limited military attack against a Nato country in the\ncoming months, Danish intelligence said, in one of the starkest warnings yet by\nwestern security services.\n\nIn a report published on Thursday, the Danish defence intelligence service\nwarned of a “low but growing risk” that Russia could launch long-range strikes\non Nato infrastructure supporting Ukraine, or carry out a limited incursion into\na neighbouring country with a small number of troops, potentially operating\nwithout insignia.\n\n[Continue reading...][1]\n\n[1]: https://www.theguardian.com/world/2026/sep/24/russia-could-attack-a-nato-co\nuntry-within-months-danish-intelligence-says\n",
+          "source_metadata": [
+            {
+              "article_id": "79c161f6-38cd-4eab-ad4f-7bce193dc506",
+              "author": "Pjotr Sauer in Kyiv",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790265944,
+              "title": "Russia could attack a Nato country within months, Danish intelligence says",
+              "url": "https://www.theguardian.com/world/2026/sep/24/russia-could-attack-a-nato-country-within-months-danish-intelligence-says"
+            }
+          ]
+        },
+        {
+          "index": 49,
+          "story_id": "story-a3ec7bcbf56b9a1e",
+          "title": "Poland says fire at Starlink station is sabotage as Denmark warns of rising Russian threat",
+          "original_excerpt": "The satellite station is used in part to provide internet coverage to\nneighbouring Ukraine, the government says.\n",
+          "source_metadata": [
+            {
+              "article_id": "4ca3b2ec-390a-4757-a66b-36d9c0172a73",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790265629,
+              "title": "Poland says fire at Starlink station is sabotage as Denmark warns of rising Russian threat",
+              "url": "https://www.bbc.co.uk/news/articles/cmp30r1klk37o?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "078be32f-b822-484d-9826-90c90da6a4bc",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790265629,
+              "title": "Poland says fire at Starlink station is sabotage as Denmark warns of rising Russian threat",
+              "url": "https://www.bbc.co.uk/news/articles/cmp30r1klk37o?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        58,
+        59
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "uncertain",
+      "source_uncertainty": true,
+      "reason": "The first snippet says Ethiopia’s army repelled fresh attacks without identifying attackers, region or offensive. The second specifies Tigrayan fighters in Afar and Amhara. Same country and current fighting alone do not establish these are the same attack episode.",
+      "must_preserve": "If fuller army statement names the same offensive, official response and offensive coverage can group; an uncorroborated military claim must still be attributed.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 58,
+          "story_id": "story-691ac174b241726a",
+          "title": "Ethiopia's army says it has repelled attacks in first comment on fresh fighting",
+          "original_excerpt": "The military says its soldiers inflicted casualties as fears grow of a\nresumption of a full-blown civil war.\n",
+          "source_metadata": [
+            {
+              "article_id": "5a6e0da7-326e-4368-912f-06c80a05b703",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790264265,
+              "title": "Ethiopia's army says it has repelled attacks in first comment on fresh fighting",
+              "url": "https://www.bbc.co.uk/news/articles/cqevwm09w4xmo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        },
+        {
+          "index": 59,
+          "story_id": "story-af9b0552023ecd3b",
+          "title": "Rebel offensive against Ethiopian army stokes fears of return to civil war",
+          "original_excerpt": "Fighting escalates after Tigrayan rebels form new coalition aimed at\noverthrowing Abiy Ahmed government\n\nThere are growing fears of a return to civil war in Ethiopia after an offensive\nby fighters from Tigray into the neighbouring states of Afar and Amhara and the\nformation of a new rebel alliance aimed at overthrowing the government of the\nprime minister, Abiy Ahmed.\n\nAbout 600,000 people died between 2020 and 2022 during [a devastating war][1]\nbetween the Ethiopian army and the political party and paramilitary group the\nTigray People’s Liberation Front (TPLF). Both sides are now accusing the other\nof triggering a return to open conflict.\n\n[Continue reading...][2]\n\n[1]: https://www.theguardian.com/world/2020/nov/26/ethiopias-military-to-begin-f\ninal-offensive-against-tigray-capital\n[2]: https://www.theguardian.com/world/2026/sep/24/fears-return-to-war-tigray-re\nbels-launch-offensive-against-ethiopian-army\n",
+          "source_metadata": [
+            {
+              "article_id": "1dae829f-9d65-4270-b8b9-c05d57805940",
+              "author": "Carlos Mureithi in Nairobi and agencies",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790263782,
+              "title": "Rebel offensive against Ethiopian army stokes fears of return to civil war",
+              "url": "https://www.theguardian.com/world/2026/sep/24/fears-return-to-war-tigray-rebels-launch-offensive-against-ethiopian-army"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        68,
+        70
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "Both identify an investigation of a 105-year-old suspected accessory to murder at Stalag326; the camp and suspect age identify the same proceeding.",
+      "must_preserve": "Investigation/allegations are not conviction.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 68,
+          "story_id": "story-b1f10f6e5a917d35",
+          "title": "Germany investigates 105-year-old suspected former Nazi prison camp guard",
+          "original_excerpt": "Man accused of being accessory to murders at Stalag 326 VI K amid race to\nprosecute suspects before they die\n\nA 105-year-old man is under investigation on suspicion of being an accessory to\nmultiple murders at a Nazi prisoner of war camp, German prosecutors have said.\n\nThe case, which is being handled by the public prosecutor’s office in Dortmund,\ncentres on the Stalag 326 VI K camp in western Germany, in what is now the state\nof North Rhine-Westphalia.\n\n[Continue reading...][1]\n\n[1]: https://www.theguardian.com/world/2026/sep/24/man-105-investigated-nazi-pow\n-camp-murders\n",
+          "source_metadata": [
+            {
+              "article_id": "68ad3dfe-308c-4ddc-b9f7-06b46a2ce112",
+              "author": "Kate Connolly in Berlin",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790261751,
+              "title": "Germany investigates 105-year-old suspected former Nazi prison camp guard",
+              "url": "https://www.theguardian.com/world/2026/sep/24/man-105-investigated-nazi-pow-camp-murders"
+            }
+          ]
+        },
+        {
+          "index": 70,
+          "story_id": "story-10e369dc98fb795f",
+          "title": "German prosecutors investigate 105-year-old for crimes at Nazi PoW camp",
+          "original_excerpt": "The suspect is alleged to have been an accessory to murder at the Stalag 326\ncamp, where tens of thousands of Soviet PoWs died.\n",
+          "source_metadata": [
+            {
+              "article_id": "1214299a-f9d6-4cf9-a748-76de9ef7a96b",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790260654,
+              "title": "German prosecutors investigate 105-year-old for crimes at Nazi PoW camp",
+              "url": "https://www.bbc.co.uk/news/articles/cwzrzjy3pynvo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "c7ac3e5f-99b0-4d6a-bafd-0bf77e39deac",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790260654,
+              "title": "105-year-old investigated for crimes at Nazi PoW camp in Germany",
+              "url": "https://www.bbc.co.uk/news/articles/cwzrzjy3pynvo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        2,
+        38
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "Both name the CNN/MS NOW/Politico White House access litigation and emergency-hearing request after the judge’s access-restoration order. The broadcast complaint and access restoration are connected developments of that specific dispute.",
+      "must_preserve": "Do not collapse ban, court order, reported noncompliance and eventual restoration into one instant. Xi’s visit is context, not authority to merge all summit reporting.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 2,
+          "story_id": "story-ef142c878614d82a",
+          "title": "Trump complains about lack of TV coverage stemming from his own effort to ban CNN – live",
+          "original_excerpt": "President welcomed Xi Jinping at the White House, but media outlets did not\nprovide video feed because Trump’s aides had not yet restored access for outlets\nhe banned last week\n\n* [Journalists for CNN, MS Now and Politico allowed back into the White House\n  after judge’s ruling][1]\n* [Sign up for US Breaking News emails][2]\n\nLawyers for the news outlets President Trump banned from the White House have\nrequested an emergency hearing after several journalists were turned away from\nthe building Thursday morning, in apparent defiance of a federal judge’s order\nto restore their access.\n\n“This morning journalists from each of CNN, MS NOW, and POLITICO attempted to\nenter the White House and were turned away, and Secret Service agents\nconfiscated the hard pass of journalists whose hard passes had not previously\nbeen confiscated,” a new court filing read.\n\n[Continue reading...][3]\n\n[1]: https://www.theguardian.com/us-news/2026/sep/24/judge-orders-trump-restore-\nwhite-house-access-cnn-ms-now-politico-media-ban\n[2]: https://www.theguardian.com/news/2026/feb/17/sign-up-for-the-breaking-news-\nus-email-to-get-newsletter-alerts-direct-to-your-inbox?utm_medium=ACQUISITIONS_S\nTANDFIRST&utm_campaign=BN22326&utm_content=signup&utm_term=standfirst&utm_source\n=GUARDIAN_WEB\n[3]: https://www.theguardian.com/us-news/live/2026/sep/24/white-house-press-xi-j\ninping-netanyahu-trump-latest-news-updates\n",
+          "source_metadata": [
+            {
+              "article_id": "2a7ef0c5-2359-4711-8a57-0d4bba817c3d",
+              "author": "Robert Mackey (now); Marina Dunbar and Chris Hippensteel (earlier)",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790288629,
+              "title": "Trump complains about lack of TV coverage stemming from his own effort to ban CNN – live",
+              "url": "https://www.theguardian.com/us-news/live/2026/sep/24/white-house-press-xi-jinping-netanyahu-trump-latest-news-updates"
+            }
+          ]
+        },
+        {
+          "index": 38,
+          "story_id": "story-8e8d7a48135885f3",
+          "title": "White House restores access to media outlets banned by Trump after judge's order",
+          "original_excerpt": "Lawyers for CNN, Politico and MS Now are seeking an emergency court hearing,\nsaying the White House \"repeatedly violated\" the order.\n",
+          "source_metadata": [
+            {
+              "article_id": "61a494da-3ef1-45e9-851a-3b7f99a40e88",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790272160,
+              "title": "White House restores access to media outlets banned by Trump after judge's order",
+              "url": "https://www.bbc.co.uk/news/articles/cqe8ek7608mlo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "0631ab61-bf87-4552-a255-c795c2e19bc9",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790272160,
+              "title": "White House restores access to media outlets banned by Trump after judge's order",
+              "url": "https://www.bbc.co.uk/news/articles/cqe8ek7608mlo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        14,
+        17
+      ],
+      "sets": [
+        "frozen22",
+        "diagnostic6"
+      ],
+      "relation": "different_story",
+      "source_uncertainty": false,
+      "reason": "Côte d’Ivoire signing Artemis Accords and the Crew14 astronaut assignments are different named announcements with distinct actors/actions; NASA and space exploration are only shared context.",
+      "must_preserve": "No common episode is established by the issuing agency.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 14,
+          "story_id": "story-edffcaaaa2e1f841",
+          "title": "NASA Welcomes Côte d’Ivoire as Newest Artemis Accords Signatory",
+          "original_excerpt": "Credit: NASA\n\nCôte d’Ivoire signed the Artemis Accords on Thursday as the 75th signatory\nduring a signing ceremony in the nation’s largest city Abidjan, marking the\nlargest milestone yet for the international coalition of like-minded countries\ncommitted to peaceful and responsible space exploration.\n\n“The United States and Côte d’Ivoire already cooperate on Earth,” said NASA’s\nDeputy Administrator Matt Anderson. “Today, we expand that partnership beyond\nit. Joining the Artemis Accords opens new opportunities for our scientists,\nengineers, and institutions to work together as humanity returns to the Moon and\nprepares for what comes next. We’ve aligned on the principles. The opportunities\nare in front of us. And now we can get to work.”\n\nThe nation’s Minister of Higher Education and Scientific Research Adama Diawara\nsigned on behalf of the country in a ceremony held during Africa Space Expo\nASPEX 2026. Chargé d’affaires Junaid Munir from the U.S. Department of State\nwitnessed the ceremony.\n\n“This is a great achievement, and important for Côte d’Ivoire’s ambitions and\nfor the rest of the African Union members,” said Director General of the Space\nAgency of Côte d’Ivoire Tidiane Outtara.\n\nCôte d’Ivoire has expanded its involvement in space science and technology\nthrough years of international cooperation. Since 2019, the National Office of\nTechnical Development of Côte d’Ivoire and NASA have collaborated on Earth\nobservation and geodesy, a field that measures Earth’s shape, gravity, and\nmovement. Together, the partners have advanced global geodetic networks,\nimproved space‑based measurement techniques, and increased understanding of how\nEarth’s systems interact.\n\nThe country later established the Space Agency of Côte d’Ivoire in 2025 to\ncoordinate national efforts in Earth observation, space weather, astronomy,\nsatellite navigation, and communications.\n\nIn 2020, NASA and the State Department joined with seven other founding nations\nto establish the Artemis Accords, responding to the growing interest in lunar\nactivitie",
+          "source_metadata": [
+            {
+              "article_id": "c4278109-5a50-4e7c-a94d-24e4ad7adda2",
+              "author": "Jennifer M. Dooren",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.nasa.gov&sz=64",
+              "feed_id": "1100c9f0-dc25-494a-93da-043baaa4ac2c",
+              "feed_title": "NASA",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790285237,
+              "title": "NASA Welcomes Côte d’Ivoire as Newest Artemis Accords Signatory",
+              "url": "https://www.nasa.gov/organizations/oiir/nasa-welcomes-cote-divoire-as-newest-artemis-accords-signatory/"
+            }
+          ]
+        },
+        {
+          "index": 17,
+          "story_id": "story-3889e7b40d0de56c",
+          "title": "NASA Shares SpaceX Crew-14 Assignments for Space Station Mission",
+          "original_excerpt": "NASA’s SpaceX Crew-14 crew members during preflight training at SpaceX’s\nfacility in Hawthorne, California (from left, Roscosmos cosmonaut Arutyun\nKiviryan, NASA astronaut Chris Birch, NASA astronaut Kayla Barron, and JAXA\n(Japan Aerospace Exploration Agency) astronaut Makoto Suwa).\nCredit: SpaceX\n\nFour crew members from three space agencies will launch to the International\nSpace Station no earlier than spring 2027 for a long-duration science expedition\nas part of NASA’s SpaceX Crew-14 mission.\n\nNASA astronauts [Kayla Barron ][1]and [Chris Birch][2] will serve as spacecraft\ncommander and pilot, with JAXA (Japan Aerospace Exploration Agency) astronaut\nMakoto Suwa, and Roscosmos cosmonaut Arutyun Kiviryan as mission specialists.\nAfter docking, Crew-14 will join the space station’s Expedition 75/76.\n\nThis mission is the 14th commercial crew rotation with SpaceX under NASA’s Low\nEarth Orbit Program. The crew will conduct scientific investigations and\ntechnology demonstrations to help prepare humans for future exploration missions\nto the Moon and Mars and to benefit people on Earth.\n\nThis will be Barron’s second flight to the space station. She was selected as a\nNASA astronaut in 2017. Barron earned a bachelor’s degree in systems engineering\nfrom the U.S. Naval Academy in Annapolis, Maryland and a master’s degree in\nnuclear engineering from the University of Cambridge in England. A commander in\nthe U.S. Navy, Barron earned her submarine warfare officer qualification,\ndeploying three times aboard the USS Maine. She first launched to the space\nstation in 2021 aboard NASA’s SpaceX Crew-3 mission, spending a total of 177\ndays in space across space station Expeditions 66/67. She completed two\nspacewalks and served as lead robotics operator for another. Most recently,\nBarron supported the development of new technologies and operational concepts\nfor NASA’s Artemis program.\n\nSelected as a NASA astronaut in 2021, Birch graduated from the University of\nArizona in Tucson with degrees in mathematics and biochemistry and molecular",
+          "source_metadata": [
+            {
+              "article_id": "7f1f10ca-2f65-42d6-af80-ac772cb3daf2",
+              "author": "Lauren E. Low",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.nasa.gov&sz=64",
+              "feed_id": "1100c9f0-dc25-494a-93da-043baaa4ac2c",
+              "feed_title": "NASA",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790284546,
+              "title": "NASA Shares SpaceX Crew-14 Assignments for Space Station Mission",
+              "url": "https://www.nasa.gov/news-release/nasa-shares-spacex-crew-14-assignments-for-space-station-mission/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        34,
+        45
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "different_story",
+      "source_uncertainty": false,
+      "reason": "Mars-to-Table contest winners/prizes and historical Mars-derived CO2 technology used by breweries are distinct developments. Repeated moonwalk heading is page boilerplate, not evidence of a shared event.",
+      "must_preserve": "Mars and food/drink technology do not supply a common project or announcement.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 34,
+          "story_id": "story-9ba929c5beb99547",
+          "title": "NASA Unveils Winning Designs for Mars Space Food Systems Challenge",
+          "original_excerpt": "5 min read\n\n# Preparations for Next Moonwalk Simulations Underway (and Underwater)\n\n[[Deep Space Food Challenge Mars to Table]][1]\n\nNASA announced the winners of the Deep Space Food Challenge: Mars to Table\nThursday, with the top $300,000 prize being awarded to Chinyere Ukeje of\nPhiladelphia, Pa. for the Adaptive Nourishment Infrastructure (ANI) food system\nconcept. This competition challenged solvers to explore innovative solutions for\nintegrated space food systems that would provide safe, nutritious meals to\nastronauts living and working in space.\n\n[Mars to Table][2] launched in January 2026 as a follow on to the [Deep Space\nFood Challenge][3], which NASA ran from 2021-2014 in collaboration with CSA\n(Canadian Space Agency). The original challenge focused on prototyped novel food\nproduction methods, while the 2026 competition asked teams to conceptualize\nspace meals not as individual technology components, but as a complete\nfood-production system that would offer a variety of food with limited crew time\nand work needed to maintain the food system. After judging 113 submissions by\nteams hailing from 33 countries and 28 U.S. states, the agency selected five\nwinning teams for the 2026 challenge, awarding a combined $650,000.\n\n“We’re thrilled to keep advancing the future of space food systems with this\nchallenge,” said Jennifer Edmunson, program manager for Centennial Challenges at\nNASA’s Marshall Space Flight Center in Huntsville, Alabama. “The future of human\nspace exploration will rely on innovative food systems, and it is amazing how\nmuch ingenuity this challenge has helped us identify from participants near and\nfar.”\n\nCurrently, astronaut meals are almost entirely cooked, packaged, and sent to the\nInternational Space Station from the [Space Food Systems Laboratory][4] at\nNASA’s Johnson Space Center. A one-way trip to Mars will take at least nine\nmonths, so bringing all required meals will not be sustainable for such\nmissions. From shelf stability issues to mass restrictions, pre-packaged foods\ncannot be the def",
+          "source_metadata": [
+            {
+              "article_id": "b020a2e4-15d3-4fff-9350-d00496f7036a",
+              "author": "Bailey G. Light",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.nasa.gov&sz=64",
+              "feed_id": "1100c9f0-dc25-494a-93da-043baaa4ac2c",
+              "feed_title": "NASA",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790272905,
+              "title": "NASA Unveils Winning Designs for Mars Space Food Systems Challenge",
+              "url": "https://www.nasa.gov/directorates/stmd/prizes-challenges-crowdsourcing-program/centennial-challenges/nasa-unveils-winning-designs-for-mars-space-food-systems-challenge/"
+            }
+          ]
+        },
+        {
+          "index": 45,
+          "story_id": "story-b4c89dab59591d4c",
+          "title": "NASA’s Machines for Mars Make Beer Bubbly",
+          "original_excerpt": "3 min read\n\n# Preparations for Next Moonwalk Simulations Underway (and Underwater)\n\n[[A woman controls an Earthly Labs-branded machine in a factory setting; a tank\nthat says “carbon dioxide” is in the foreground. ]][1]\nA brewer makes adjustments to the Earthly Labs carbon-capture unit, which\npurifies carbon dioxide from the beer brewing process for use in carbonation.\nCredit: Chart Industries Inc.\n\nIn 2021, Maine Beer Company’s carbon dioxide supplier ran short on carbon\ndioxide.\n\n“There was potential for our beer to go stale in the tanks,” said Dave Love, the\nbrewery’s sustainability manager. “We wouldn’t be able to use CO2** **for any of\nour bottling, kegging, or centrifuge operations.”\n\nThe solution the company settled on originated on Mars — or more specifically,\nin NASA’s plans for harvesting resources from the Red Planet. Now it’s saving\nmoney and reducing emissions for wineries, distilleries, power companies, helium\nproducers, and more.\n\nBeginning in the 1990s, the company Pioneer Astronautics won multiple Small\nBusiness Innovation Research (SBIR) contracts from Johnson Space Center in\nHouston to build systems that could generate resources on Mars. The technology\ncould, for example, capture carbon dioxide from the Martian atmosphere and\ncombine it with hydrogen to produce water for life support and methane for\nrocket fuel. These capabilities weren’t entirely new, but Pioneer’s systems were\ncompact, efficient, and automated.\n\nLater, Pioneer Astronautics founder Robert Zubrin created Pioneer Energy to\nrearrange these subsystems into technology for the oil and gas industry (Spinoff\n[2015][2], [2020][3]). He soon realized technology for capturing and purifying\ncarbon dioxide on Mars could do the same in a brewery, capturing CO2 from the\nbrewing process for use in carbonation. By 2015, the Craft Brewery Recovery\nSystem was in production (Spinoff [2016][4]). In the end, though, the company\nput the system up for licensing.\n\nAmy George founded Earthly Labs of Austin, Texas, in 2016 to develop small-scale\ncarbon ca",
+          "source_metadata": [
+            {
+              "article_id": "936546a0-ed46-4127-bcd3-50c130a421c5",
+              "author": "Andrew Wagner",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.nasa.gov&sz=64",
+              "feed_id": "1100c9f0-dc25-494a-93da-043baaa4ac2c",
+              "feed_title": "NASA",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790268061,
+              "title": "NASA’s Machines for Mars Make Beer Bubbly",
+              "url": "https://www.nasa.gov/technology/tech-transfer-spinoffs/nasas-machines-for-mars-make-beer-bubbly/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        73,
+        17
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "different_story",
+      "source_uncertainty": false,
+      "reason": "Crew13 biomedical research and Crew14 staffing concern explicitly different numbered missions and different announcements.",
+      "must_preserve": "Shared ISS/NASA context cannot erase mission identity.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 73,
+          "story_id": "story-e88833b82e08d6fc",
+          "title": "NASA to Study Human Health, Performance During Crew-13 Mission",
+          "original_excerpt": "[[The SpaceX Crew-13 members are pictured in their pressure suits seated inside\na mockup Dragon spacecraft during a preflight training session at the company's\nheadquarters in Hawthorne, California. From left are, Roscosmos Sergey\nTeteryatnikov, NASA astronauts Luke Delaney and Jessica Watkins, and CSA\n(Canadian Space Agency) astronaut Joshua Kutryk.]][1]\n(April 30, 2026) — The SpaceX Crew-13 members are pictured in their pressure\nsuits seated inside a mockup Dragon spacecraft during a preflight training\nsession at the company’s headquarters in Hawthorne, California. From left are,\nRoscosmos Sergey Teteryatnikov, NASA astronauts Luke Delaney and Jessica\nWatkins, and CSA (Canadian Space Agency) astronaut Joshua Kutryk.\nCredit: SpaceX\n\nDuring NASA’s SpaceX Crew‑13 mission aboard the International Space Station,\nastronauts will support a series of biomedical and human performance\ninvestigations, including a new collaborative effort to study how spaceflight\naffects blood flow and clotting. NASA also is testing crew members’ manual\npiloting skills, evaluating methods to counter vision and brain changes,\ngathering essential health data to inform future missions, and measuring forces\nastronauts experience during return‑to‑Earth to help refine re-entry hardware\nand procedures.\n\nAmong upcoming research, a new collaboration with ESA (European Space Agency),\ncalled [Venous Haemostasis][2], builds on previous studies of blood flow in\nspace by combining the two space agencies’ research efforts. By coordinating\nblood collections and other physiological data, researchers can reduce how often\nastronauts need blood drawn while combining analytical measurements to better\nunderstand how microgravity affects blood clotting and circulation.\n\n“In space, weightlessness can disrupt normal blood flow in astronauts’ veins,”\nsaid Jason Lytle, one of the study’s principal investigators and a\ncardiovascular researcher at NASA’s Johnson Space Center in Houston. “Irregular\nand slow blood flow can increase the risk of blood clot formation, a se",
+          "source_metadata": [
+            {
+              "article_id": "aa9cbafe-fa81-4291-8382-cc829857c668",
+              "author": "Monica Edwards",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.nasa.gov&sz=64",
+              "feed_id": "1100c9f0-dc25-494a-93da-043baaa4ac2c",
+              "feed_title": "NASA",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790258028,
+              "title": "NASA to Study Human Health, Performance During Crew-13 Mission",
+              "url": "https://www.nasa.gov/humans-in-space/nasa-to-study-human-health-performance-during-crew-13-mission/"
+            }
+          ]
+        },
+        {
+          "index": 17,
+          "story_id": "story-3889e7b40d0de56c",
+          "title": "NASA Shares SpaceX Crew-14 Assignments for Space Station Mission",
+          "original_excerpt": "NASA’s SpaceX Crew-14 crew members during preflight training at SpaceX’s\nfacility in Hawthorne, California (from left, Roscosmos cosmonaut Arutyun\nKiviryan, NASA astronaut Chris Birch, NASA astronaut Kayla Barron, and JAXA\n(Japan Aerospace Exploration Agency) astronaut Makoto Suwa).\nCredit: SpaceX\n\nFour crew members from three space agencies will launch to the International\nSpace Station no earlier than spring 2027 for a long-duration science expedition\nas part of NASA’s SpaceX Crew-14 mission.\n\nNASA astronauts [Kayla Barron ][1]and [Chris Birch][2] will serve as spacecraft\ncommander and pilot, with JAXA (Japan Aerospace Exploration Agency) astronaut\nMakoto Suwa, and Roscosmos cosmonaut Arutyun Kiviryan as mission specialists.\nAfter docking, Crew-14 will join the space station’s Expedition 75/76.\n\nThis mission is the 14th commercial crew rotation with SpaceX under NASA’s Low\nEarth Orbit Program. The crew will conduct scientific investigations and\ntechnology demonstrations to help prepare humans for future exploration missions\nto the Moon and Mars and to benefit people on Earth.\n\nThis will be Barron’s second flight to the space station. She was selected as a\nNASA astronaut in 2017. Barron earned a bachelor’s degree in systems engineering\nfrom the U.S. Naval Academy in Annapolis, Maryland and a master’s degree in\nnuclear engineering from the University of Cambridge in England. A commander in\nthe U.S. Navy, Barron earned her submarine warfare officer qualification,\ndeploying three times aboard the USS Maine. She first launched to the space\nstation in 2021 aboard NASA’s SpaceX Crew-3 mission, spending a total of 177\ndays in space across space station Expeditions 66/67. She completed two\nspacewalks and served as lead robotics operator for another. Most recently,\nBarron supported the development of new technologies and operational concepts\nfor NASA’s Artemis program.\n\nSelected as a NASA astronaut in 2021, Birch graduated from the University of\nArizona in Tucson with degrees in mathematics and biochemistry and molecular",
+          "source_metadata": [
+            {
+              "article_id": "7f1f10ca-2f65-42d6-af80-ac772cb3daf2",
+              "author": "Lauren E. Low",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.nasa.gov&sz=64",
+              "feed_id": "1100c9f0-dc25-494a-93da-043baaa4ac2c",
+              "feed_title": "NASA",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790284546,
+              "title": "NASA Shares SpaceX Crew-14 Assignments for Space Station Mission",
+              "url": "https://www.nasa.gov/news-release/nasa-shares-spacex-crew-14-assignments-for-space-station-mission/"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        25,
+        26
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "different_story",
+      "source_uncertainty": false,
+      "reason": "A bereaved mother’s testimony at a poison-seller hearing and Pakistani strikes in Afghanistan are distinct people, places and actions.",
+      "must_preserve": "Human harm alone is not a story anchor.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 25,
+          "story_id": "story-409f69677fda145f",
+          "title": "'We are living a constant nightmare,' mother of poison seller victim tells hearing",
+          "original_excerpt": "Tanya Whitaker broke down before she spoke of how her son Samuel's death had\ndevastated her family.\n",
+          "source_metadata": [
+            {
+              "article_id": "4c2d5005-541c-4743-a32d-ea068c3cc157",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790277365,
+              "title": "'We are living a constant nightmare,' mother of poison seller victim tells hearing",
+              "url": "https://www.bbc.co.uk/news/articles/cm20ldvx9xlxo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "8a05b4b2-3f17-46dd-be9c-4147da9a972d",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "08be875d-11a2-4d8e-9225-09ad61b6a967",
+              "feed_title": "BBC UK",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790277365,
+              "title": "'It has broken us as a family,' mother of poison seller victim tells hearing",
+              "url": "https://www.bbc.co.uk/news/articles/cm20ldvx9xlxo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        },
+        {
+          "index": 26,
+          "story_id": "story-bb2a1be894f9edda",
+          "title": "Four civilians killed in Pakistani strikes in Afghanistan, Taliban says",
+          "original_excerpt": "Pakistan says it struck 10 targets, adding the strikes were \"strictly limited to\nidentified military objectives\".\n",
+          "source_metadata": [
+            {
+              "article_id": "06367825-ab71-4567-9e92-5634f8db716e",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790276556,
+              "title": "Four civilians killed in Pakistani strikes in Afghanistan, Taliban says",
+              "url": "https://www.bbc.co.uk/news/articles/cm86xn0nnw58o?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        0,
+        16
+      ],
+      "sets": [
+        "frozen22"
+      ],
+      "relation": "different_story",
+      "source_uncertainty": false,
+      "reason": "Death of James Copenhaver after the Butler Trump-assassination attempt and Daniel Thomas’s Channel dinghy criminal charges are unrelated incidents.",
+      "must_preserve": "A political/violence theme does not join these stories.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 0,
+          "story_id": "story-e60b8ca656f6d199",
+          "title": "Man shot and wounded during Trump assassination attempt dies in Pennsylvania",
+          "original_excerpt": "James Copenhaver, 76, was left with lingering injuries after gunman opened fire\nfrom rooftop at Butler rally\n\nJames Copenhaver, one of three campaign rally attendees shot in 2024 during an\nassassination attempt on then candidate Donald Trump, has died in Pittsburgh,\nhis lawyer said Thursday. He was 76.\n\nCopenhaver was in the bleachers during the event in Butler, Pennsylvania, when a\n20-year-old gunman opened fire from a nearby rooftop, grazing Trump’s right ear\nwith one bullet. Copenhaver was struck in the arm and in the abdomen, wounds\nthat left him with lingering injuries and walking with a cane.\n\n[Continue reading...][1]\n\n[1]: https://www.theguardian.com/us-news/2026/sep/24/trump-assassination-attempt\n-man-dies-injured\n",
+          "source_metadata": [
+            {
+              "article_id": "918f8846-ed28-4172-9d83-2fc7fef8f9b0",
+              "author": "Associated Press",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790289527,
+              "title": "Man shot and wounded during Trump assassination attempt dies in Pennsylvania",
+              "url": "https://www.theguardian.com/us-news/2026/sep/24/trump-assassination-attempt-man-dies-injured"
+            }
+          ]
+        },
+        {
+          "index": 16,
+          "story_id": "story-fb9ae923ad43c597",
+          "title": "Far-right activist Daniel Thomas charged over alleged dinghy slashing in Channel",
+          "original_excerpt": "Thirty-seven-year-old charged with one count of criminal damage and failing to\ndisclose his phone pin to police\n\nThe far-right agitator and anti-migrant activist Daniel Thomas has been charged\nwith criminal damage and failing to disclose his phone pin to police following\nan incident in the Channel on Tuesday, where he allegedly slashed a dinghy while\na French rescuer was on board.\n\nThomas, 37, of no fixed abode, has been charged with one count of criminal\ndamage along with an offence under section 53 of the Regulation of Investigatory\nPowers Act 2000 (Ripa), for allegedly failing to comply with a notice to\ndisclose a phone pin to police.\n\n[Continue reading...][1]\n\n[1]: https://www.theguardian.com/uk-news/2026/sep/24/police-arrest-far-right-act\nivist-daniel-thomas-after-dinghy-slashed-channel\n",
+          "source_metadata": [
+            {
+              "article_id": "5cc48840-8e72-4d34-a528-653a29e11fb4",
+              "author": "Amelia Gentleman and Diane Taylor",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790284836,
+              "title": "Far-right activist Daniel Thomas charged over alleged dinghy slashing in Channel",
+              "url": "https://www.theguardian.com/uk-news/2026/sep/24/police-arrest-far-right-activist-daniel-thomas-after-dinghy-slashed-channel"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        93,
+        15
+      ],
+      "sets": [
+        "frozen22",
+        "diagnostic6"
+      ],
+      "relation": "related_story",
+      "source_uncertainty": false,
+      "reason": "The same named Netanyahu UN speech is previewed before his Thursday appearance and reported afterward with the walkout/reaction; these are stages of one identified speech story.",
+      "must_preserve": "Preview expectations are not confirmed outcomes; retain their own publication times and attribution.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 93,
+          "story_id": "story-e0c485eef5be9198",
+          "title": "Benjamin Netanyahu to deliver defiant UN speech while facing protests and political isolation",
+          "original_excerpt": "Prime minister will ‘highlight Israel’s achievements’ as he heads towards his\ntoughest re-election challenge\n\nWhen he takes the stage at the UN on Thursday, Benjamin Netanyahu will deliver a\nfamiliar message of defiance even as protests and international condemnation\nleave the Israeli leader in growing isolation.\n\nNetanyahu is facing his toughest re-election challenge in a political career\nspanning decades with three ongoing conflicts in Gaza, Lebanon and Iran, and a\ngrowing campaign of violence by Israeli settlers in the West Bank.\n\n[Continue reading...][1]\n\n[1]: https://www.theguardian.com/world/2026/sep/24/netanyahu-to-deliver-defiant-\nun-speech-facing-protests-political-isolation\n",
+          "source_metadata": [
+            {
+              "article_id": "94ccb332-c10c-413b-8bd5-c1ef35983594",
+              "author": "Andrew Roth and Alice Speri in New York",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790236812,
+              "title": "Benjamin Netanyahu to deliver defiant UN speech while facing protests and political isolation",
+              "url": "https://www.theguardian.com/world/2026/sep/24/netanyahu-to-deliver-defiant-un-speech-facing-protests-political-isolation"
+            }
+          ]
+        },
+        {
+          "index": 15,
+          "story_id": "story-675e769225d24ab9",
+          "title": "Netanyahu defends Israeli military action as delegates walk out before UN speech",
+          "original_excerpt": "The Israeli leader labels those who left his speech at the UN General Assembly\nas \"moral cowards\".\n",
+          "source_metadata": [
+            {
+              "article_id": "863d5e02-bdc4-458c-84df-ed82f1babd5b",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790284907,
+              "title": "Netanyahu defends Israeli military action as delegates walk out before UN speech",
+              "url": "https://www.bbc.co.uk/news/articles/c3y0z7kxlegdo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "62e98975-3de5-433f-972b-f1b3b7d6ad5c",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790284907,
+              "title": "Netanyahu defends Israeli military action as delegates walk out before UN speech",
+              "url": "https://www.bbc.co.uk/news/articles/c3y0z7kxlegdo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        29,
+        65
+      ],
+      "sets": [
+        "diagnostic6"
+      ],
+      "relation": "different_story",
+      "source_uncertainty": false,
+      "reason": "The Fed’s stablecoin-rule proposals and enforcement against a former Sandy Spring Bank employee are distinct regulatory actions; no common case or decision is supplied.",
+      "must_preserve": "Same regulator/day is insufficient.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 29,
+          "story_id": "story-a36eb39270b22344",
+          "title": "Federal Reserve Board requests public comment on two proposals related to establishing a regulatory framework for Board-supervised payment stablecoin issuers under the GENIUS Act",
+          "original_excerpt": "Federal Reserve Board requests public comment on two proposals related to\nestablishing a regulatory framework for Board-supervised payment stablecoin\nissuers under the GENIUS Act\n",
+          "source_metadata": [
+            {
+              "article_id": "7ecabebf-6e34-4653-92bc-b97f4a1c3c60",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.federalreserve.gov&sz=64",
+              "feed_id": "698d539c-ae02-4e17-a47f-681dff6efa91",
+              "feed_title": "Federal Reserve",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790274600,
+              "title": "Federal Reserve Board requests public comment on two proposals related to establishing a regulatory framework for Board-supervised payment stablecoin issuers under the GENIUS Act",
+              "url": "https://www.federalreserve.gov/newsevents/pressreleases/bcreg20260924a.htm"
+            }
+          ]
+        },
+        {
+          "index": 65,
+          "story_id": "story-6fbb282f4854f26d",
+          "title": "Federal Reserve Board issues enforcement action with former employee of Sandy Spring Bank",
+          "original_excerpt": "Federal Reserve Board issues enforcement action with former employee of Sandy\nSpring Bank\n",
+          "source_metadata": [
+            {
+              "article_id": "c79d76db-0fce-4a0d-94ee-b476155220ff",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.federalreserve.gov&sz=64",
+              "feed_id": "698d539c-ae02-4e17-a47f-681dff6efa91",
+              "feed_title": "Federal Reserve",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790262000,
+              "title": "Federal Reserve Board issues enforcement action with former employee of Sandy Spring Bank",
+              "url": "https://www.federalreserve.gov/newsevents/pressreleases/enforcement20260924a.htm"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "members": [
+        51,
+        38
+      ],
+      "sets": [
+        "diagnostic6"
+      ],
+      "relation": "different_story",
+      "source_uncertainty": false,
+      "reason": "Xi’s proposed US-China cooperation terms at the summit and White House media-access litigation have different concrete anchors; Trump/White House co-occurrence does not unify them.",
+      "must_preserve": "Pair2/38 being related does not permit transitive bridging from press access to every summit report.",
+      "whole_report_deduplication_safe": null,
+      "sources": [
+        {
+          "index": 51,
+          "story_id": "story-28c38a79cdb5a5b6",
+          "title": "At Trump meeting, Xi Jinping lays out terms to avoid US-China military conflict",
+          "original_excerpt": "Chinese president’s proposals for lessening tensions come amid period of intense\ncompetition between the two countries over AI and trade\n\n* [Trump-Xi summit – latest updates][1]\n\nXi Jinping has called for extensive cooperation with Washington to avoid the\n“Thucydides trap” that could put the US and China on a military collision course\namid rising tensions over artificial intelligence, trade and Taiwan.\n\nAt the start of his summit meeting with Donald Trump in the White House, the\nChinese president laid out terms for a mutual understanding that he said could\nsteer the two competing superpowers away from future military conflict and on to\na road of mutual gain.\n\n[Continue reading...][2]\n\n[1]: https://www.theguardian.com/us-news/live/2026/sep/24/trump-xi-jinping-china\n-ai-trade-summit-latest-news-updates\n[2]: https://www.theguardian.com/us-news/2026/sep/24/xi-jinping-trump-china-coop\neration-thucydides-trap\n",
+          "source_metadata": [
+            {
+              "article_id": "c6416315-09ad-4093-8af4-94be36e14484",
+              "author": "Robert Tait in Washington",
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=www.theguardian.com&sz=64",
+              "feed_id": "b404faa3-b997-40b9-a1cf-c3320ef0a5db",
+              "feed_title": "Guardian World",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790265133,
+              "title": "At Trump meeting, Xi Jinping lays out terms to avoid US-China military conflict",
+              "url": "https://www.theguardian.com/us-news/2026/sep/24/xi-jinping-trump-china-cooperation-thucydides-trap"
+            }
+          ]
+        },
+        {
+          "index": 38,
+          "story_id": "story-8e8d7a48135885f3",
+          "title": "White House restores access to media outlets banned by Trump after judge's order",
+          "original_excerpt": "Lawyers for CNN, Politico and MS Now are seeking an emergency court hearing,\nsaying the White House \"repeatedly violated\" the order.\n",
+          "source_metadata": [
+            {
+              "article_id": "61a494da-3ef1-45e9-851a-3b7f99a40e88",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "16f88ba1-7730-4769-a107-45d457534fd3",
+              "feed_title": "BBC Top",
+              "is_representative": true,
+              "membership_type": "coverage",
+              "published_at": 1790272160,
+              "title": "White House restores access to media outlets banned by Trump after judge's order",
+              "url": "https://www.bbc.co.uk/news/articles/cqe8ek7608mlo?at_medium=RSS&at_campaign=rss"
+            },
+            {
+              "article_id": "0631ab61-bf87-4552-a255-c795c2e19bc9",
+              "author": null,
+              "confidence": 1.0,
+              "feed_icon_url": "https://www.google.com/s2/favicons?domain=feeds.bbci.co.uk&sz=64",
+              "feed_id": "b7080038-33b3-4cf8-9394-3b9001f52390",
+              "feed_title": "BBC World",
+              "is_representative": false,
+              "membership_type": "duplicate",
+              "published_at": 1790272160,
+              "title": "White House restores access to media outlets banned by Trump after judge's order",
+              "url": "https://www.bbc.co.uk/news/articles/cqe8ek7608mlo?at_medium=RSS&at_campaign=rss"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "counts": {
+    "related_story": 13,
+    "different_story": 7,
+    "uncertain": 4
+  },
+  "independent_review": {
+    "status": "Product-contract exploration only; not an adopted grouping or consumption policy.",
+    "v2_artifact_sha256": "3ff85047fc5435662b29885c9b492d15165aff695cb6eab97473e62e34f9e194",
+    "findings": [
+      {
+        "pair": [
+          2,
+          38
+        ],
+        "finding": "Shared litigation is supported, but report2 is a live blog; relationship does not authorize whole-report deduplication or consumption."
+      },
+      {
+        "pair": [
+          48,
+          49
+        ],
+        "finding": "Danish threat assessment and Polish sabotage incident contain distinct news despite contextual overlap. Optional cross-reference does not establish interchangeable coverage."
+      },
+      {
+        "pair": [
+          21,
+          35
+        ],
+        "finding": "The differing names in the contract prose refer to people, not courts."
+      }
+    ],
+    "required_boundary": "Distinguish represented coverage from reference-only membership. Preserve standalone distinct developments and independently consumable live-blog content; do not mark all related references read or suppress their stories automatically."
+  }
+}

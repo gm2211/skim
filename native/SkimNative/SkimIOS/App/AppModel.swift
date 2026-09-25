@@ -738,6 +738,16 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Applies an in-place edit to the AI settings alone (e.g. an inline
+    /// model pick from Quick Catch-up, chat, Today, or a summary
+    /// configuration sheet) and persists the result through the same path
+    /// as `SettingsSheet`.
+    func updateAISettings(_ mutate: (inout AISettings) -> Void) async {
+        var next = settings
+        mutate(&next.ai)
+        await saveSettings(next)
+    }
+
     /// Applies an auto-group proposal: creates missing folders, assigns feeds, persists all.
     /// `proposal` maps folder name → array of feed IDs to assign.
     func applyOrganization(proposal: [(folderName: String, feedIDs: [String])]) async {

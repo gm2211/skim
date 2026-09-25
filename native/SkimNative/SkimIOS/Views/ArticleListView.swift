@@ -240,6 +240,10 @@ struct ArticleListView: View {
                 dismissTextEntry()
             }
         }
+        .onChange(of: model.settings) { _, next in
+            activeCatchUp?.settings = next
+            activeCatchUp?.statusLabel = NativeAI.loadingStatusLabel(for: next.ai)
+        }
         .onChange(of: activeAIChat?.id) { _, requestID in
             if requestID != nil {
                 dismissTextEntry()

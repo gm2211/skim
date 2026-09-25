@@ -15,6 +15,7 @@
 		214DC26687D7CFE6647B4E3C /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */; };
 		25F3EE8A8FEBDA2FC33DB56E /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 8B0DFA296F4A48F6B090AFBC /* Hub */; };
 		2A601923CBA16F4DD268D2C9 /* NativeKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B69429F0218849C4A4E655 /* NativeKeychain.swift */; };
+		2AB0CE0EC7CED2383AD2A4EC /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1751E6AA54B6FF0B8F3606F3 /* ModelCatalog.swift */; };
 		31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89737FFF993802E562860605 /* AIDisclaimerLabel.swift */; };
 		434D05C938D50201696ECD5A /* TodayEditionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9B482B07ABFB0BD983D016 /* TodayEditionView.swift */; };
 		436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */; };
@@ -26,9 +27,11 @@
 		7487CDA38AA993612EB4880B /* AIBootDisclaimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959A59B5B27E8C969D084B8F /* AIBootDisclaimerView.swift */; };
 		751B168D630209B01DAFF073 /* ArticleExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */; };
 		77DA3EA9CDD533959D7EBE99 /* ArticleReaderContentLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09444431BA1054837AA91213 /* ArticleReaderContentLoader.swift */; };
+		78A8ACE709B6B0AA1990258D /* ModelCatalogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6785D2075A65E843FF20D6D3 /* ModelCatalogTests.swift */; };
 		7C87C81EDE030A9459473E8D /* TasteModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FA32ECFFFAF834236FDF04E /* TasteModel.swift */; };
 		86AFEB9F2A2239BCDF6EFDF1 /* NativeAIModelsResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13F4F0168DBE15FBFB319E12 /* NativeAIModelsResponseTests.swift */; };
 		8B797999B22B89495C05CA39 /* AquireBold.otf in Resources */ = {isa = PBXBuildFile; fileRef = 63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */; };
+		8DB43A8F615498A6A7797D8E /* ModelPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A322079492B7E2B99DBEB26 /* ModelPicker.swift */; };
 		8ED4B358481AC4273C225054 /* WebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1474BA38A4E522DB5D3ECB21 /* WebView.swift */; };
 		949AEC33EE8019F0584D6253 /* ArticleExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */; };
 		95446AAA3D78AA5861C2B0FF /* CatchUpSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74ABDAB8FC2EB5BC6017B9D7 /* CatchUpSession.swift */; };
@@ -66,10 +69,12 @@
 		038284DEE00F91A360324653 /* Style.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Style.swift; sourceTree = "<group>"; };
 		093BD7166E85CDD2AC4F89C7 /* Skim iOS Tests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = "Skim iOS Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		09444431BA1054837AA91213 /* ArticleReaderContentLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleReaderContentLoader.swift; sourceTree = "<group>"; };
+		0A322079492B7E2B99DBEB26 /* ModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPicker.swift; sourceTree = "<group>"; };
 		0C79E51007F91AE5C8286F40 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderEditor.swift; sourceTree = "<group>"; };
 		13F4F0168DBE15FBFB319E12 /* NativeAIModelsResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIModelsResponseTests.swift; sourceTree = "<group>"; };
 		1474BA38A4E522DB5D3ECB21 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
+		1751E6AA54B6FF0B8F3606F3 /* ModelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalog.swift; sourceTree = "<group>"; };
 		1D15E5B261AE4E05EEAE52DC /* NativeAIGuardrailRefusalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIGuardrailRefusalTests.swift; sourceTree = "<group>"; };
 		3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleExtractorTests.swift; sourceTree = "<group>"; };
 		4B61709B52E5986EFC1C3ECB /* AIErrorBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIErrorBox.swift; sourceTree = "<group>"; };
@@ -78,6 +83,7 @@
 		55C58C12B9B2AB383B4BA89C /* SkimCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimCore; path = ../SkimCore; sourceTree = SOURCE_ROOT; };
 		5AD1C797EBFBB9448A83E919 /* ClaudeReauthSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeReauthSheet.swift; sourceTree = "<group>"; };
 		63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = AquireBold.otf; sourceTree = "<group>"; };
+		6785D2075A65E843FF20D6D3 /* ModelCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalogTests.swift; sourceTree = "<group>"; };
 		6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleListView.swift; sourceTree = "<group>"; };
 		74ABDAB8FC2EB5BC6017B9D7 /* CatchUpSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchUpSession.swift; sourceTree = "<group>"; };
 		7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleExtractor.swift; sourceTree = "<group>"; };
@@ -206,6 +212,7 @@
 				09444431BA1054837AA91213 /* ArticleReaderContentLoader.swift */,
 				74ABDAB8FC2EB5BC6017B9D7 /* CatchUpSession.swift */,
 				E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */,
+				1751E6AA54B6FF0B8F3606F3 /* ModelCatalog.swift */,
 				A1BCD3DD03D305C558D07614 /* NativeAI.swift */,
 				B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */,
 				B1B69429F0218849C4A4E655 /* NativeKeychain.swift */,
@@ -222,6 +229,7 @@
 			children = (
 				3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */,
 				7FA5DDC14791E13B92C1525F /* CatchUpSessionTests.swift */,
+				6785D2075A65E843FF20D6D3 /* ModelCatalogTests.swift */,
 				BFC1D459A8E191D2264A703F /* NativeAIDegenerateRepetitionTests.swift */,
 				1D15E5B261AE4E05EEAE52DC /* NativeAIGuardrailRefusalTests.swift */,
 				13F4F0168DBE15FBFB319E12 /* NativeAIModelsResponseTests.swift */,
@@ -261,6 +269,7 @@
 				839B1584F0E39B5A14D96C79 /* CatchUpView.swift */,
 				5AD1C797EBFBB9448A83E919 /* ClaudeReauthSheet.swift */,
 				8387834F563CFA86721EBF1D /* LegalView.swift */,
+				0A322079492B7E2B99DBEB26 /* ModelPicker.swift */,
 				A9AD11F7D9C976F34C0C9347 /* RootView.swift */,
 				B9167BE3C78659C05031D238 /* SettingsSheet.swift */,
 				1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */,
@@ -421,6 +430,7 @@
 			files = (
 				949AEC33EE8019F0584D6253 /* ArticleExtractorTests.swift in Sources */,
 				5119041EEA8B375CC712D499 /* CatchUpSessionTests.swift in Sources */,
+				78A8ACE709B6B0AA1990258D /* ModelCatalogTests.swift in Sources */,
 				BCE83B6AED9AC4923D1F9A6D /* NativeAIDegenerateRepetitionTests.swift in Sources */,
 				AFD473138D9923FB717FE9E2 /* NativeAIGuardrailRefusalTests.swift in Sources */,
 				86AFEB9F2A2239BCDF6EFDF1 /* NativeAIModelsResponseTests.swift in Sources */,
@@ -445,6 +455,8 @@
 				D357B98D7AFF8B7E71A67F2A /* ClaudeReauthSheet.swift in Sources */,
 				96F49A7819D5D167616F137F /* LegalView.swift in Sources */,
 				436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */,
+				2AB0CE0EC7CED2383AD2A4EC /* ModelCatalog.swift in Sources */,
+				8DB43A8F615498A6A7797D8E /* ModelPicker.swift in Sources */,
 				C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */,
 				A20D6777CCE9FF23884FB7F1 /* NativeClaudeOAuth.swift in Sources */,
 				2A601923CBA16F4DD268D2C9 /* NativeKeychain.swift in Sources */,

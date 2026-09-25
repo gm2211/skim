@@ -1,0 +1,7 @@
+[
+ {"name":"second report", "sources":["The hearing starts tomorrow.","The hearing ended on Thursday. The court reserved its decision."],"excerpt":"The hearing ended on Thursday.","index":1},
+ {"name":"empty source preserves indices", "sources":["","The hearing starts tomorrow.","The hearing ended on Thursday."],"excerpt":"The hearing ended on Thursday.","index":2},
+ {"name":"identical passages choose first", "sources":["The hearing ended on Thursday.","The hearing ended on Thursday."],"excerpt":"The hearing ended on Thursday.","index":0},
+ {"name":"rewritten date rejected", "sources":["The hearing ended on Thursday."],"excerpt":"The hearing ended on Friday.","index":-1},
+ {"name":"no sources", "sources":[],"excerpt":"The hearing ended on Thursday.","index":-1}
+]

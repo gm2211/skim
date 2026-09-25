@@ -36,6 +36,8 @@ extern "C" {
     fn skim_summary_custom_words_valid(words: i64) -> i32;
     fn skim_summary_style_prompt(tone: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
     fn skim_today_lede_excerpt_valid(source: *const u8, source_len: usize, excerpt: *const u8, excerpt_len: usize) -> i32;
+    fn skim_today_lede_source_index(sources: *const u8, sources_len: usize,
+        offsets: *const usize, source_count: usize, excerpt: *const u8, excerpt_len: usize) -> i32;
     fn skim_today_lede_evidence_version() -> i32;
     fn skim_today_lede_retry_prompt() -> *const std::os::raw::c_char;
     fn skim_today_lede_prompt() -> *const std::os::raw::c_char;
@@ -200,6 +202,23 @@ pub fn validated_today_excerpt(source: &str, excerpt: &str) -> Option<String> {
     // Owned UTF-8 buffers remain alive for the synchronous, read-only C call.
     let valid = unsafe { skim_today_lede_excerpt_valid(source.as_ptr(), source.len(), excerpt.as_ptr(), excerpt.len()) };
     (valid != 0).then_some(excerpt)
+}
+
+/// The shared matcher owns passage validation and deterministic source selection.
+pub fn validated_today_excerpt_source(sources: &[String], excerpt: &str) -> Option<(usize, String)> {
+    let excerpt = excerpt.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut bytes = Vec::new();
+    let mut offsets = Vec::with_capacity(sources.len() + 1);
+    offsets.push(0);
+    for source in sources {
+        bytes.extend_from_slice(source.as_bytes());
+        offsets.push(bytes.len());
+    }
+    let index = unsafe {
+        skim_today_lede_source_index(bytes.as_ptr(), bytes.len(), offsets.as_ptr(),
+            sources.len(), excerpt.as_ptr(), excerpt.len())
+    };
+    (index >= 0 && (index as usize) < sources.len()).then_some((index as usize, excerpt))
 }
 
 pub fn today_lede_retry_prompt() -> &'static str {
@@ -413,6 +432,16 @@ mod tests {
             assert_eq!(summary_style_prompt(case["tone"].as_str()),
                 format!("{} {}", case["style"].as_str().unwrap(), fixture["common"].as_str().unwrap()),
                 "tone: {:?}", case["tone"]);
+        }
+    }
+
+    #[test]
+    fn preview_source_identity_crosses_shared_c_fixture() {
+        let cases: serde_json::Value = serde_json::from_str(include_str!("../../../shared/fixtures/today-excerpt-sources.json")).unwrap();
+        for case in cases.as_array().unwrap() {
+            let sources: Vec<String> = case["sources"].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_owned()).collect();
+            let result = validated_today_excerpt_source(&sources, case["excerpt"].as_str().unwrap());
+            assert_eq!(result.map_or(-1, |(index, _)| index as i64), case["index"].as_i64().unwrap(), "{case}");
         }
     }
 

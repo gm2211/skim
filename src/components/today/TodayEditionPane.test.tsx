@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TodayEditionPane } from "./TodayEditionPane";
 import type { AppSettings, TodayEditionItem, TodayEditionView, TodayPreparationStatus } from "../../services/types";
@@ -28,6 +29,8 @@ vi.mock("../../services/commands", () => ({
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(async () => () => {}),
 }));
+
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 
 import * as commands from "../../services/commands";
 
@@ -157,6 +160,7 @@ function renderPane(strict = false, cached?: TodayEditionView) {
 }
 
 beforeEach(() => {
+  vi.mocked(openUrl).mockReset();
   vi.mocked(listen).mockClear();
   useUiStore.setState({ selectedArticleId: null });
   vi.mocked(commands.refreshAllFeeds).mockResolvedValue(1);
@@ -226,6 +230,96 @@ describe("TodayEditionPane", () => {
       await screen.findByText("Congress passed the bill on Friday after a four-hour debate."),
     ).toBeInTheDocument();
     expect(screen.queryByText(/news\.ycombinator\.com/)).not.toBeInTheDocument();
+  });
+
+  it("links a written lede to its source and shows source publication times explicitly", async () => {
+    const preview = {
+      ...makeItem({ lede: "A reported preview of the outcome." }),
+      lede_source_article_id: "preview-source",
+      member_articles: [
+        {
+          ...makeItem({}).member_articles[0],
+          article_id: "preview-source",
+          title: "The source report title",
+          publication: "The Daily Example",
+          published_at: 1_000,
+        },
+        {
+          ...makeItem({}).member_articles[0],
+          article_id: "unknown-time",
+          title: "A report without a publication time",
+          published_at: null,
+          is_representative: false,
+        },
+      ],
+    } as TodayEditionItem;
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([preview]));
+
+    renderPane();
+
+    const sourcePreview = await screen.findByRole("button", {
+      name: /Report preview from The Daily Example: The source report title, published/,
+    });
+    expect(sourcePreview).toHaveTextContent("The source report title");
+    expect(sourcePreview).toHaveTextContent(/Published/);
+    fireEvent.click(sourcePreview);
+    expect(useUiStore.getState().selectedArticleId).toBe("preview-source");
+
+    fireEvent.click(screen.getByRole("button", { name: "2 reports" }));
+    expect(screen.getByText(/Published: unknown/)).toBeInTheDocument();
+  });
+
+  it("opens a deleted preview source URL without selecting a missing article", async () => {
+    const item = {
+      ...makeItem({ lede: "A reported preview." }),
+      lede_source_article_id: "deleted-source",
+      member_articles: [{
+        ...makeItem({}).member_articles[0],
+        article_id: "deleted-source",
+        title: "Deleted source report",
+        url: "https://example.com/deleted-source",
+        is_read: null,
+      }],
+    } as TodayEditionItem;
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([item]));
+
+    const { container } = renderPane();
+
+    fireEvent.click(await screen.findByRole("button", { name: /Report preview from example.com: Deleted source report/ }));
+    expect(openUrl).toHaveBeenCalledWith("https://example.com/deleted-source");
+    expect(useUiStore.getState().selectedArticleId).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "1 report" }));
+    fireEvent.click(container.querySelector(".today-reference") as HTMLElement);
+    expect(openUrl).toHaveBeenCalledTimes(2);
+    expect(useUiStore.getState().selectedArticleId).toBeNull();
+  });
+
+  it("keeps deleted source attribution readable and non-clickable without a URL", async () => {
+    const item = {
+      ...makeItem({ lede: "A reported preview." }),
+      lede_source_article_id: "deleted-source",
+      member_articles: [{
+        ...makeItem({}).member_articles[0],
+        article_id: "deleted-source",
+        title: "Deleted source report",
+        url: null,
+        is_read: null,
+      }],
+    } as TodayEditionItem;
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([item]));
+
+    const { container } = renderPane();
+
+    const preview = await screen.findByText("A reported preview.");
+    const attribution = preview.parentElement?.querySelector(".today-story-control");
+    expect(attribution).toHaveTextContent(/Report preview · example.com/);
+    expect(attribution).toHaveTextContent("Deleted source report");
+    expect(attribution?.tagName).toBe("DIV");
+    fireEvent.click(screen.getByRole("button", { name: "1 report" }));
+    const reference = container.querySelector(".today-reference");
+    expect(reference).toHaveTextContent("Deleted source report");
+    expect(reference?.tagName).toBe("DIV");
+    expect(openUrl).not.toHaveBeenCalled();
   });
 
   it.each([false, true])("shows update copy only for a material frozen revision (%s)", async (material) => {

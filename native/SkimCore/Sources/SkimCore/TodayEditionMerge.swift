@@ -10,6 +10,8 @@ public enum TodayEditionMerge {
                   let index = current.items.firstIndex(where: { $0.id == incoming.id }),
                   nonempty(current.items[index].snapshot.lede) == nil else { continue }
             current.items[index].snapshot.lede = lede
+            current.items[index].snapshot.ledeSourceArticleID = incoming.snapshot.ledeSourceArticleID
+            current.items[index].snapshot.ledeSourceEvidenceHash = incoming.snapshot.ledeSourceEvidenceHash
         }
         return current
     }
@@ -22,6 +24,8 @@ public enum TodayEditionMerge {
             guard let lede = nonempty(existing.snapshot.lede),
                   let index = result.items.firstIndex(where: { $0.id == existing.id }) else { continue }
             result.items[index].snapshot.lede = lede
+            result.items[index].snapshot.ledeSourceArticleID = existing.snapshot.ledeSourceArticleID
+            result.items[index].snapshot.ledeSourceEvidenceHash = existing.snapshot.ledeSourceEvidenceHash
         }
         return result
     }

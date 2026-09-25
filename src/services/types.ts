@@ -362,6 +362,8 @@ export interface TodayEditionItem {
   /** Written after the edition is generated, so it fills in rather than being
    *  part of the frozen snapshot. Null until the lede pass reaches this story. */
   lede: string | null;
+  lede_source_article_id?: string | null;
+  lede_source_evidence_hash?: string | null;
   is_consumed: boolean;
   consumed_at: number | null;
   representative_article_id: string | null;

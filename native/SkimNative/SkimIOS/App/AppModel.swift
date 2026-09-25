@@ -363,17 +363,19 @@ final class AppModel: ObservableObject {
             guard !Task.isCancelled, todayLoadID == requestID else { return }
 
             // One story failing to write is not worth losing the page over.
-            guard let lede = try? await NativeAI.catchUpLede(
+            guard let preview = try? await NativeAI.catchUpPreview(
                 headline: item.snapshot.snapshotTitle,
                 articles: articles,
                 settings: settings
-            ), !lede.isEmpty else { continue }
+            ) else { continue }
 
             guard !Task.isCancelled, todayLoadID == requestID, todayEdition?.id == editionID else { return }
             if let updated = try? await store.setTodayEditionItemLede(
                 editionID: editionID,
                 storyID: item.snapshot.storyID,
-                lede: lede
+                lede: preview.excerpt,
+                sourceArticleID: preview.sourceArticleID,
+                sourceEvidenceHash: preview.sourceEvidenceHash
             ) {
                 guard !Task.isCancelled, todayLoadID == requestID else { return }
                 todayEdition = TodayEditionMerge.ledes(current: todayEdition, response: updated)

@@ -254,6 +254,10 @@ pub struct EditionItem {
     /// Written after the edition is generated, so unlike the snapshot fields
     /// it can be absent and can be rewritten.
     pub lede: Option<String>,
+    #[serde(default)]
+    pub lede_source_article_id: Option<String>,
+    #[serde(default)]
+    pub lede_source_evidence_hash: Option<String>,
     pub is_consumed: bool,
     pub consumed_at: Option<i64>,
 }

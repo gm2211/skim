@@ -247,6 +247,12 @@ private struct TodayStoryView: View {
             ?? item.sourceArticles.first(where: { $0.liveArticle != nil })
     }
 
+    private var ledeSource: TodayEditionSourceArticle? {
+        guard !(item.snapshot.lede?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
+              let sourceID = item.snapshot.ledeSourceArticleID else { return nil }
+        return item.sourceArticles.first(where: { $0.articleID == sourceID })
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: lead ? 10 : 7) {
             Divider().overlay(SkimStyle.separator.opacity(0.6))
@@ -262,6 +268,10 @@ private struct TodayStoryView: View {
                     .foregroundStyle(SkimStyle.secondary)
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let source = ledeSource {
+                sourceLink(source)
             }
 
             if let delta = item.materialDelta, !brief {
@@ -329,6 +339,41 @@ private struct TodayStoryView: View {
             headlineText
         }
     }
+
+    @ViewBuilder
+    private func sourceLink(_ source: TodayEditionSourceArticle) -> some View {
+        let publication = PublicationName.of(feedTitle: source.feedTitle, url: source.url)
+        let published = source.publishedAt.map { "Published \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "Published: unknown"
+        let label = VStack(alignment: .leading, spacing: 3) {
+            Text("Report preview · \(publication)")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(SkimStyle.accent)
+            Text(source.articleTitle)
+                .font(.system(size: 12, weight: .medium))
+                .underline()
+                .foregroundStyle(SkimStyle.accent)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(published)
+                .font(.system(size: 11))
+                .foregroundStyle(SkimStyle.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityLabel("Report preview from \(publication): \(source.articleTitle), \(source.publishedAt.map { "published \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "published time unknown")")
+
+        if source.liveArticle != nil {
+            NavigationLink {
+                ArticleDetailView(articleID: source.articleID)
+            } label: {
+                label
+            }
+            .buttonStyle(.plain)
+        } else if let url = source.url {
+            Link(destination: url) { label }
+        } else {
+            label
+        }
+    }
 }
 
 /// The articles a story was built from, printed the way a byline is.
@@ -351,16 +396,22 @@ private struct TodayByline: View {
     }
 
     private var label: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(PublicationName.of(feedTitle: source.feedTitle, url: source.url))
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(SkimStyle.accent)
-                .fixedSize()
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(PublicationName.of(feedTitle: source.feedTitle, url: source.url))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(SkimStyle.accent)
+                    .fixedSize()
 
-            Text(source.articleTitle)
-                .font(.system(size: 13))
-                .foregroundStyle(SkimStyle.secondary.opacity(0.9))
-                .lineLimit(1)
+                Text(source.articleTitle)
+                    .font(.system(size: 13))
+                    .foregroundStyle(SkimStyle.secondary.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(source.publishedAt.map { "Published \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "Published: unknown")
+                .font(.system(size: 11))
+                .foregroundStyle(SkimStyle.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .contentShape(Rectangle())

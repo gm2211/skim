@@ -615,15 +615,25 @@ enum NativeAI {
 
     /// Select a source passage under one headline; only an exact, bounded
     /// excerpt from an individual supplied article may be shown.
-    static func catchUpLede(
+    struct TodayPreview: Sendable {
+        let excerpt: String
+        let sourceArticleID: String
+        let sourceEvidenceHash: String
+    }
+
+    static func catchUpLede(headline: String, articles: [Article], settings: AppSettings) async throws -> String {
+        try await catchUpPreview(headline: headline, articles: articles, settings: settings)?.excerpt ?? ""
+    }
+
+    static func catchUpPreview(
         headline: String,
         articles: [Article],
         settings: AppSettings
-    ) async throws -> String {
-        guard !articles.isEmpty else { return "" }
+    ) async throws -> TodayPreview? {
+        guard !articles.isEmpty else { return nil }
 
         let selected = Array(articles.prefix(TodayLedePolicy.maxArticles))
-        let bodies = selected.map { String($0.plainBody.trimmingCharacters(in: .whitespacesAndNewlines).prefix(TodayLedePolicy.textCharacters)) }
+        let bodies = selected.map { String(String.UnicodeScalarView($0.plainBody.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars.prefix(TodayLedePolicy.textCharacters))) }
         let text = zip(selected, bodies).map { article, body in
             "--- \(article.title) [\(PublicationName.of(article: article))]\n\(body)"
         }.joined(separator: "\n\n")
@@ -635,10 +645,14 @@ enum NativeAI {
         \(text)
         """
         // Both attempts use the same evidence; the plain retry cannot authorize rewrites.
-        return try await TodayLedePolicy.generateExcerpt(sources: bodies) { instructions, jsonMode in
+        let selection = try await TodayLedePolicy.generateSelection(sources: bodies) { instructions, jsonMode in
             try await complete(settings: settings, instructions: instructions, prompt: prompt,
                 maxTokens: 300, jsonMode: jsonMode, temperature: 0)
         }
+        guard let selection else { return nil }
+        return TodayPreview(excerpt: selection.excerpt,
+            sourceArticleID: selected[selection.sourceIndex].id,
+            sourceEvidenceHash: selection.evidenceHash)
     }
 
     /// Strip the wrappers models put around a bare paragraph.

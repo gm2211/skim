@@ -87,16 +87,8 @@ pub async fn chat_with_article(
     let mut system_prompt = format!(
         "You are a helpful assistant discussing a news article. Answer questions about the article, \
          provide context, and help the user understand the topic better. Be concise and direct. \
-         No emoji.\n\n{tool_hint}\
-         Article Title: {title}\n\
-         Source: {source}\n\
-         Author: {author}\n\n\
-         Article Content:\n{body}",
-        tool_hint = tool_hint,
-        title = article.article.title,
-        source = article.feed_title,
-        author = article.article.author.as_deref().unwrap_or("Unknown"),
-        body = article_text,
+         No emoji.\n\n{tool_hint}{context}",
+        context = article_chat_context(&article, &article_text),
     );
 
     system_prompt.push_str(&generated_summary_context(summary_context.as_deref()));
@@ -182,6 +174,22 @@ pub struct WebCitation {
     /// The query the model issued to produce this citation. Useful in the UI
     /// if several searches happen across tool iterations.
     pub query: String,
+}
+
+/// Feed publication metadata must not be mistaken for an event or fetch date.
+fn publication_context(published_at: Option<i64>) -> String {
+    let date = published_at
+        .and_then(|timestamp| chrono::DateTime::from_timestamp(timestamp, 0))
+        .map(|date| date.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+        .unwrap_or_else(|| "unknown".into());
+    format!("Publication time (UTC): {date} (article metadata, not the event time)")
+}
+
+fn article_chat_context(article: &crate::db::models::ArticleWithFeed, body: &str) -> String {
+    format!("Article Title: {}\nSource: {}\nAuthor: {}\n{}\n\nArticle Content:\n{}",
+        article.article.title, article.feed_title,
+        article.article.author.as_deref().unwrap_or("Unknown"),
+        publication_context(article.article.published_at), body)
 }
 
 /// The visible summary is conversational context, never independent evidence.
@@ -526,24 +534,16 @@ pub async fn chat_with_articles(
     let mut context = String::new();
     context.push_str("Relevant articles from the user's RSS feed:\n\n");
     for (i, a) in selected.iter().enumerate() {
-        let date = a
-            .article
-            .published_at
-            .map(|ts| {
-                chrono::DateTime::from_timestamp(ts, 0)
-                    .map(|d| d.format("%Y-%m-%d").to_string())
-                    .unwrap_or_default()
-            })
-            .unwrap_or_default();
         let excerpt_topic = evidence_query(&trimmed_query, &messages, Some(&source_texts[i]));
         let excerpt = query_excerpt(&source_texts[i], &excerpt_topic, if i < 3 { 2400 } else { 800 });
         require_selected_evidence(&source_texts[i], &excerpt)?;
         context.push_str(&format!(
-            "[{i}] Title: {title}\nSource: {source}\nAuthor: {author}\nDate: {date}\nURL: {url}\nExcerpt: {excerpt}\n\n",
+            "[{i}] Title: {title}\nSource: {source}\nAuthor: {author}\n{publication}\nURL: {url}\nExcerpt: {excerpt}\n\n",
             i = i + 1,
             title = a.article.title,
             source = a.feed_title,
             author = a.article.author.as_deref().unwrap_or(""),
+            publication = publication_context(a.article.published_at),
             url = a.article.url.as_deref().unwrap_or(""),
             excerpt = excerpt,
         ));
@@ -1071,6 +1071,34 @@ fn resolve_chat_settings(ai: &AiSettings) -> AiSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn publication_metadata_survives_body_selection_without_inventing_event_or_fetch_dates() {
+        let conn = retrieval_database();
+        let timestamp = chrono::DateTime::parse_from_rfc3339("2026-09-24T00:30:00Z").unwrap().timestamp();
+        conn.execute("UPDATE articles SET published_at=?1, fetched_at=0 WHERE id='old'", [timestamp]).unwrap();
+        let mut article = queries::get_article_by_id(&conn, "old").unwrap().unwrap();
+        let source = format!("{} The event happened on September 20.", "Background. ".repeat(2000));
+        let messages = vec![ChatMessageInput { role: "user".into(), content: "When was this published?".into() }];
+        let selected = article_chat_evidence(&source, &messages, 80);
+        let context = article_chat_context(&article, &selected);
+        assert!(context.contains("Publication time (UTC): 2026-09-24T00:30:00Z (article metadata, not the event time)"));
+        assert!(context.ends_with(&selected));
+        require_selected_evidence("", "").unwrap();
+        assert!(article_chat_context(&article, "").contains("Publication time (UTC): 2026-09-24T00:30:00Z"));
+        assert!(selected.chars().count() <= 80);
+        let earlier = article_chat_context(&article, "");
+        article.article.published_at = Some(timestamp + 3600);
+        let later = article_chat_context(&article, "");
+        assert!(earlier.contains("2026-09-24T00:30:00Z"));
+        assert!(later.contains("2026-09-24T01:30:00Z"));
+        assert_ne!(publication_context(Some(timestamp)), publication_context(Some(timestamp + 3600)));
+        article.article.published_at = None;
+        let unknown = article_chat_context(&article, &selected);
+        assert!(unknown.contains("Publication time (UTC): unknown"));
+        assert!(!unknown.contains("1970-01-01"));
+        assert!(publication_context(Some(i64::MAX)).contains("unknown"));
+    }
 
     fn retrieval_database() -> rusqlite::Connection {
         let conn = rusqlite::Connection::open_in_memory().unwrap();

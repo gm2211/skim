@@ -1,0 +1,61 @@
+{
+  "source_merge": "c69e89ad06c4242734bea86f38811e57a2951f48",
+  "reviewed_source": "3272c19b7da2f8f67d57090240cac7086f7438e2",
+  "merged_tree_equals_reviewed": true,
+  "build_source_commit": "31c514ff3421e19a5cdac781c4cce15a90fdc3b7",
+  "desktop_version": "0.1.37",
+  "desktop_build": "0.1.37",
+  "bundle_path": "/tmp/skim-today-preview-provenance/src-tauri/target/release/bundle/macos/Skim.app",
+  "desktop_sha256": "ad9af4a722083d3f7c2119341e1f9fde5f4c1cf8064ac7f863537f54982d195f",
+  "bundled_helper_sha256": "094e89576dcb1455c232e0f8ba420e965d04510deb21e4e05f1efdb20d132327",
+  "compiled_helper_sha256": "b357a35a132947cf1f3c7b1363fcc9ed0dc56160c6f0e2a1de087dc0835b9b7a",
+  "helper_text_matches_fresh_compiled": true,
+  "helper_contains_unmerged_LocalInferenceGate": false,
+  "bundled_ds4_sha256": "72fa6ef11f3da1fae4d465a02fbb4e532752ba61c1e071bfa227ad72aac86a0d",
+  "ds4_revision": "bd66c402070042bf0a79ad6ece8242de4c93680c",
+  "shared_c_source_sha256": "983c790922fa1f76ea958814d59025b2cb9888c633e00b4a94a653aa0b7245ab",
+  "helper_source_sha256": "14472bbc9f4c7917d009108d7e8a7af94c30f7f94018c01a360f8da183e4bbfa",
+  "strict_signature_verified": true,
+  "signing": "ad hoc; existing local desktop release workflow",
+  "shared_c_source_index_symbol_linked": true,
+  "checks": {
+    "source_pr_application_tests": 539,
+    "rust_policy_after_release_build_fix": 10,
+    "helper_packaging": 3,
+    "shared_inference_policy": 16,
+    "production_frontend_and_tauri_build": "passed"
+  },
+  "release_build_fix": "Legacy Rust single-source validation wrapper/declaration marked cfg(test), resolving production -Ddead-code after source-index policy migration. No runtime logic change.",
+  "native_status": "Native implementation compiled/tested and merged, but not released in this task. Existing archive73 predates PR161 and its upload remains awaiting approval. No native74 archive or upload.",
+  "verification_boundary": "Signed synthetic MLX arithmetic completions passed through signed parent/helper (4 and 6). Foundation Models unavailable because Apple Intelligence is off; not an inference pass. Root actual-component fixture review passed desktop1280, narrow390, short390 and loading. Installed app UI and native visual remain unverified; no UI launch or Terms bypass. No claim of general factual model accuracy.",
+  "signed_smoke": {
+    "command": "signed Skim.app/Contents/MacOS/skim --check-on-device-ai",
+    "version": "0.1.37",
+    "exit_code": 0,
+    "timed_out": false,
+    "seconds": 4.799,
+    "stdout": "\"fm_availability\": {\"availability\":{\"available\":false,\"message\":\"Apple Intelligence is off. Enable it in System Settings, then relaunch Skim.\",\"status\":\"apple-intelligence-disabled\"},\"ok\":true}\n\"mlx_complete\": {\"ok\":true,\"value\":\"4\"}\n\"mlx_complete\": {\"ok\":true,\"value\":\"6\"}\n",
+    "stderr": ""
+  },
+  "installation": {
+    "version": "0.1.37",
+    "installed_path": "/Applications/Skim.app",
+    "rollback_path": "/private/tmp/skim-before-preview37-tn287j6m/Skim.app",
+    "installed_sha256": "ad9af4a722083d3f7c2119341e1f9fde5f4c1cf8064ac7f863537f54982d195f",
+    "strict_signature_verified": true,
+    "helper_sha256": "094e89576dcb1455c232e0f8ba420e965d04510deb21e4e05f1efdb20d132327",
+    "ds4_sha256": "72fa6ef11f3da1fae4d465a02fbb4e532752ba61c1e071bfa227ad72aac86a0d",
+    "launched_ui": false
+  },
+  "status": "DESKTOP_0.1.37_INSTALLED_VERIFIED",
+  "logs_sha256": {
+    "/tmp/skim-preview37-helper.log": "02e7798de127531c6ca97d0964d9625f90fce1300b6fb298fe9a4d471bf3a0d5",
+    "/tmp/skim-preview37-ds4.log": "8e70bbfbcb51f0de38fb10d258501ab5fd48b94fc976a256a45befb33c55d921",
+    "/tmp/skim-preview37-packaging-tests.log": "886940f18e666429fdfc4ad5e9e1029cfee0e49f87206c7605740bbe9938f289",
+    "/tmp/skim-preview37-inference-tests.log": "db90a3c41a36183cb59a7a6cc85f7a32dca904085941c053bbcb07f70352c801",
+    "/tmp/skim-preview37-policy-tests.log": "f909e4a552e68d76e95b281b40b383c368ed2e055a6369d3dbf6879332e933dc",
+    "/tmp/skim-preview37-desktop-build.log": "eb09d076e2ed71329b5a08f719c68c872d10d8cbc9076351408f9b7f75421aee",
+    "/tmp/skim-preview37-sign.log": "957029075e1adcb54172e6060e5725956f75323cef8a04c48edf90eeb2969f1c"
+  },
+  "source_isolation": "Merged PR161 plus desktop version bump and cfg(test) build fix only. No root draft PR156 full-pool preparation code or binaries."
+}

@@ -3247,6 +3247,9 @@ struct AIChatSheet: View {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { dismiss() }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    AppModelPicker(isDisabled: isSending, forChat: true)
+                }
             }
             .onAppear {
                 seedInitialMessageIfNeeded()

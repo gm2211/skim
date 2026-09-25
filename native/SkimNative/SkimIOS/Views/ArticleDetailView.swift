@@ -371,6 +371,7 @@ struct SummaryConfigurationSheet: View {
     @State private var style: String
     @State private var wordCount: Int
     @State private var customPrompt: String
+    @State private var ai: AISettings
 
     init(article: Article, defaults: AISettings, onRun: @escaping (AISettings) -> Void) {
         self.article = article
@@ -379,6 +380,7 @@ struct SummaryConfigurationSheet: View {
         _style = State(initialValue: defaults.summaryTone ?? "concise")
         _wordCount = State(initialValue: AIRequestPolicy.summaryWordCount(defaults))
         _customPrompt = State(initialValue: defaults.summaryCustomPrompt ?? "")
+        _ai = State(initialValue: defaults)
     }
 
     var body: some View {
@@ -393,6 +395,12 @@ struct SummaryConfigurationSheet: View {
                             .font(.system(size: 15, weight: .regular))
                             .foregroundStyle(SkimStyle.secondary)
                             .lineLimit(3)
+                    }
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Model")
+                            .summaryControlLabel()
+                        ModelPickerMenu(ai: $ai, onOpenSettings: nil)
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
@@ -434,7 +442,7 @@ struct SummaryConfigurationSheet: View {
                             }
                     }
 
-                    Text("These choices are saved as your new summary defaults when you run.")
+                    Text("These choices, including the model, are saved as your new defaults when you run.")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -458,7 +466,7 @@ struct SummaryConfigurationSheet: View {
     }
 
     private var configuredSettings: AISettings {
-        var next = AIRequestPolicy.summarySettings(defaults, wordCount: wordCount)
+        var next = AIRequestPolicy.summarySettings(ai, wordCount: wordCount)
         next.summaryTone = style
         next.summaryCustomPrompt = customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         return next

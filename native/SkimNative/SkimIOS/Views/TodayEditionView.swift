@@ -22,6 +22,7 @@ struct TodayEditionView: View {
                 Spacer()
                 Text("Today").font(.headline)
                 Spacer()
+                AppModelPicker(isDisabled: model.isUpdatingToday || model.todayLedeStatus != nil)
                 Menu {
                     Picker("Stories per edition", selection: $storyLimit) {
                         Text("5 stories").tag(5)

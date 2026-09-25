@@ -32,14 +32,20 @@ struct CatchUpSheet: View {
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
 
-                    Picker("Going back", selection: $range) {
-                        ForEach(CatchUpRange.allCases) { option in
-                            Text(option.label).tag(option)
+                    HStack(spacing: 12) {
+                        Picker("Going back", selection: $range) {
+                            ForEach(CatchUpRange.allCases) { option in
+                                Text(option.label).tag(option)
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .accessibilityIdentifier("catch-up-range")
+                        .onChange(of: range) { _, selected in session.start(request: request, range: selected) }
+
+                        Spacer()
+
+                        AppModelPicker(isDisabled: session.isLoading)
                     }
-                    .pickerStyle(.menu)
-                    .accessibilityIdentifier("catch-up-range")
-                    .onChange(of: range) { _, selected in session.start(request: request, range: selected) }
 
                     if session.wasStopped {
                         Text("Stopped. Change the range or run again.")

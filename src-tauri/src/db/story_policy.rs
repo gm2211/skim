@@ -35,6 +35,7 @@ extern "C" {
     fn skim_summary_max_words() -> i32;
     fn skim_summary_custom_words_valid(words: i64) -> i32;
     fn skim_summary_style_prompt(tone: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
+    #[cfg(test)]
     fn skim_today_lede_excerpt_valid(source: *const u8, source_len: usize, excerpt: *const u8, excerpt_len: usize) -> i32;
     fn skim_today_lede_source_index(sources: *const u8, sources_len: usize,
         offsets: *const usize, source_count: usize, excerpt: *const u8, excerpt_len: usize) -> i32;
@@ -197,6 +198,7 @@ pub fn today_lede_evidence_version() -> i32 {
     unsafe { skim_today_lede_evidence_version() }
 }
 
+#[cfg(test)]
 pub fn validated_today_excerpt(source: &str, excerpt: &str) -> Option<String> {
     let excerpt = excerpt.split_whitespace().collect::<Vec<_>>().join(" ");
     // Owned UTF-8 buffers remain alive for the synchronous, read-only C call.

@@ -7,10 +7,10 @@ struct CatchUpRequest: Identifiable {
     let id = UUID()
     var subtitle: String
     var statusLabel: String
-    /// Resolves the articles the page is built from.
+    /// Resolves the session.articles the session.page is built from.
     var loadArticles: () async throws -> [Article]
     /// What the sheet's own model calls run under. The sheet drives the two
-    /// passes itself so the page can fill in as it is written.
+    /// passes itself so the session.page can fill in as it is written.
     var settings: AppSettings
 }
 
@@ -20,14 +20,9 @@ struct CatchUpSheet: View {
     var request: CatchUpRequest
     @Environment(\.dismiss) private var dismiss
 
-    @State private var isLoading = true
-    @State private var statusMessage = ""
-    @State private var page = NativeAI.CatchUpPage()
-    @State private var fallbackText: String?
-    @State private var articles: [Article] = []
-    @State private var errorMessage: String?
-    @State private var errorRemedy: AIErrorRemedy = .none
+    @StateObject private var session = CatchUpSession()
     @State private var range: CatchUpRange = .anything
+    @State private var startedRequestID: UUID?
 
     var body: some View {
         NavigationStack {
@@ -43,31 +38,38 @@ struct CatchUpSheet: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .disabled(isLoading)
-                    .onChange(of: range) { _, _ in Task { await run() } }
+                    .accessibilityIdentifier("catch-up-range")
+                    .onChange(of: range) { _, selected in session.start(request: request, range: selected) }
 
-                    if let errorMessage {
-                        AIErrorBox(message: errorMessage, remedy: errorRemedy, onResolved: { Task { await run() } })
+                    if session.wasStopped {
+                        Text("Stopped. Change the range or run again.")
+                            .font(.subheadline)
+                            .foregroundStyle(SkimStyle.secondary)
+                            .accessibilityIdentifier("catch-up-stopped")
+                    }
 
-                    } else if !page.isEmpty {
-                        if isLoading {
-                            CatchUpWritingRule(status: statusMessage)
+                    if let errorMessage = session.errorMessage {
+                        AIErrorBox(message: errorMessage, remedy: session.errorRemedy, onResolved: { session.start(request: request, range: range) })
+
+                    } else if !session.page.isEmpty {
+                        if session.isLoading {
+                            CatchUpWritingRule(status: session.statusMessage)
                         }
 
-                        CatchUpFrontPage(page: page, articles: articles)
+                        CatchUpFrontPage(page: session.page, articles: session.articles, isLoading: session.isLoading)
 
                         AIDisclaimerLabel()
                             .padding(.top, 8)
 
-                    } else if let fallbackText {
+                    } else if let fallbackText = session.fallbackText {
                         // Structured parse failed — render plain AI text as before
                         CatchUpFallbackText(fallbackText)
 
                         AIDisclaimerLabel()
                             .padding(.top, 8)
 
-                    } else if isLoading {
-                        CatchUpPlaceholder(status: statusMessage.isEmpty ? request.statusLabel : statusMessage)
+                    } else if session.isLoading {
+                        CatchUpPlaceholder(status: session.statusMessage.isEmpty ? request.statusLabel : session.statusMessage)
                     }
                 }
                 .padding(24)
@@ -80,89 +82,27 @@ struct CatchUpSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { dismiss() }
+                    Button("Close") { session.cancel(); dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Run Again") { Task { await run() } }
-                        .disabled(isLoading)
+                    if session.isLoading {
+                        Button("Stop", role: .cancel) { session.cancel() }
+                            .accessibilityIdentifier("catch-up-stop")
+                    } else {
+                        Button("Run Again") { session.start(request: request, range: range) }
+                            .accessibilityIdentifier("catch-up-run-again")
+                    }
                 }
             }
-            .task { await run() }
         }
-    }
-
-    /// The page is built in two passes: pick the stories, then write each
-    /// lede. State is published between every step, so headlines appear while
-    /// their ledes are still being written.
-    private func run() async {
-        isLoading = true
-        errorMessage = nil
-        errorRemedy = .none
-        page = NativeAI.CatchUpPage()
-        fallbackText = nil
-        articles = []
-        statusMessage = request.statusLabel
-
-        do {
-            let loaded = try await request.loadArticles()
-            let context = range.filter(loaded)
-            articles = context
-            guard !context.isEmpty else {
-                errorMessage = "Nothing published in the \(range.label.lowercased()). Pick a wider range."
-                errorRemedy = .none
-                isLoading = false
-                return
-            }
-            statusMessage = "Reading \(context.count) \(context.count == 1 ? "article" : "articles")…"
-
-            guard let picks = try await NativeAI.catchUpPicks(articles: context, settings: request.settings) else {
-                fallbackText = try await NativeAI.quickCatchUp(articles: context, settings: request.settings)
-                isLoading = false
-                return
-            }
-
-            withAnimation(.easeOut(duration: 0.3)) {
-                page = picks
-            }
-
-            for index in page.stories.indices {
-                let story = page.stories[index]
-                statusMessage = page.stories.count == 1
-                    ? "Writing the lead story…"
-                    : "Writing story \(index + 1) of \(page.stories.count)…"
-
-                let behind = story.articleIndexes.compactMap { handle -> Article? in
-                    let zeroBased = handle - 1
-                    return context.indices.contains(zeroBased) ? context[zeroBased] : nil
-                }
-                let written = (try? await NativeAI.catchUpLede(
-                    headline: story.headline,
-                    articles: behind,
-                    settings: request.settings
-                )) ?? ""
-
-                withAnimation(.easeOut(duration: 0.25)) {
-                    page.stories[index].lede = written.isEmpty ? Self.excerptLede(behind) : written
-                }
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-            errorRemedy = AIErrorRemedy.classify(error)
+        .task(id: request.id) {
+            guard startedRequestID != request.id else { return }
+            startedRequestID = request.id
+            session.start(request: request, range: range)
         }
-
-        isLoading = false
+        .onDisappear { session.cancel() }
     }
 
-    /// A short fallback for when one story's second pass fails, so a headline
-    /// never sits over nothing.
-    private static func excerptLede(_ articles: [Article]) -> String {
-        guard let text = articles.first?.contentText?
-            .trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty
-        else { return "" }
-        let words = text.split(whereSeparator: \.isWhitespace)
-        let clipped = words.prefix(40).joined(separator: " ")
-        return words.count > 40 ? clipped + "…" : clipped
-    }
 }
 
 // MARK: - The page
@@ -170,6 +110,7 @@ struct CatchUpSheet: View {
 private struct CatchUpFrontPage: View {
     var page: NativeAI.CatchUpPage
     var articles: [Article]
+    var isLoading: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -179,7 +120,7 @@ private struct CatchUpFrontPage: View {
                         .overlay(SkimStyle.separator.opacity(0.6))
                         .padding(.vertical, 18)
                 }
-                CatchUpStoryView(story: story, lead: index == 0, articles: articles)
+                CatchUpStoryView(story: story, lead: index == 0, articles: articles, isWriting: isLoading)
             }
 
             if !page.briefs.isEmpty {
@@ -211,6 +152,7 @@ private struct CatchUpStoryView: View {
     var story: NativeAI.CatchUpStory
     var lead: Bool
     var articles: [Article]
+    var isWriting: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: lead ? 10 : 7) {
@@ -220,7 +162,7 @@ private struct CatchUpStoryView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if story.lede.isEmpty {
-                CatchUpLedeSkeleton(lead: lead)
+                if isWriting { CatchUpLedeSkeleton(lead: lead) }
             } else {
                 Text(story.lede)
                     .font(.system(size: lead ? 16 : 15, weight: .regular))

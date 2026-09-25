@@ -471,7 +471,9 @@ actor MLXRunner {
         repetitionPenalty: Float? = nil,
         repetitionContextSize: Int? = nil
     ) async throws -> String {
+        try Task.checkCancellation()
         let container = try await ensureLoaded()
+        try Task.checkCancellation()
 
         // Resolve sampling params: caller override > per-model preset > hardcoded fallback
         let preset = MLXSamplingPreset.preset(for: currentRepoId)
@@ -493,11 +495,13 @@ actor MLXRunner {
 
         do {
             let raw = try await container.perform { (context: ModelContext) -> String in
+                try Task.checkCancellation()
                 let userInput = UserInput(
                     messages: LocalChatMessages.prepare(messages: messages.map { LocalChatMessage(role: $0["role"] ?? "user", content: $0["content"] ?? "") }),
                     additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
                 )
                 let lmInput = try await context.processor.prepare(input: userInput)
+                try Task.checkCancellation()
 
                 // Wrap in MLX.withError so C-layer errors (e.g. from MLXArray.eval during
                 // token sampling) become catchable Swift errors instead of calling fatalError
@@ -509,11 +513,14 @@ actor MLXRunner {
                         input: lmInput,
                         parameters: params,
                         context: context
-                    ) { (_: [Int]) in GenerateDisposition.more }
+                    ) { (_: [Int]) in Task.isCancelled ? GenerateDisposition.stop : GenerateDisposition.more }
                 }
                 return result.output
             }
+            try Task.checkCancellation()
             return LocalModelOutput.sanitize(raw, family: family)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as MLX.MLXError {
             // MLX C-layer runtime error surfaced via scoped withError handler.
             // MLX.MLXError is mlx-swift's type (distinct from Skim's local MLXError);

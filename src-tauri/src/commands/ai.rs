@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use crate::AppHandle;
+use futures_util::future::{AbortHandle, AbortRegistration, Abortable, Aborted};
 use tauri::{Emitter, State};
 #[cfg(target_os = "ios")]
 use tauri_plugin_skim_ai::{CompleteArgs, SkimAiExt};
@@ -40,6 +41,55 @@ impl SummaryGeneration {
         let result = action();
         drop(current);
         result
+    }
+}
+
+/// The message a cancelled Quick Catch-up run resolves with, so the frontend
+/// can tell an explicit stop apart from a real failure.
+pub const CATCHUP_CANCELLED: &str = "Catch-up cancelled";
+
+/// Tracks the single in-flight Quick Catch-up run. The backend only ever runs
+/// one at a time: starting a new run aborts whatever was running before it,
+/// and an explicit stop aborts the current one. Never hold this synchronous
+/// guard across an await.
+#[derive(Default)]
+pub struct CatchupRuns(std::sync::Mutex<Option<(String, AbortHandle)>>);
+
+impl CatchupRuns {
+    /// Registers `run_id` as the current run, aborting whatever run held the
+    /// slot before it.
+    fn begin(&self, run_id: &str) -> AbortRegistration {
+        let (handle, registration) = AbortHandle::new_pair();
+        let mut slot = self.0.lock().unwrap();
+        if let Some((_, previous)) = slot.take() {
+            previous.abort();
+        }
+        *slot = Some((run_id.to_string(), handle));
+        registration
+    }
+
+    /// Aborts the run named by `run_id`, or whichever run is current when
+    /// `run_id` is `None`.
+    fn cancel(&self, run_id: Option<&str>) {
+        let slot = self.0.lock().unwrap();
+        if let Some((current_id, handle)) = slot.as_ref() {
+            let matches_current = match run_id {
+                Some(id) => id == current_id,
+                None => true,
+            };
+            if matches_current {
+                handle.abort();
+            }
+        }
+    }
+
+    /// Clears the slot, but only if it still holds `run_id` — a finished run
+    /// must never clear the slot a newer run has since claimed.
+    fn finish(&self, run_id: &str) {
+        let mut slot = self.0.lock().unwrap();
+        if slot.as_ref().map(|(id, _)| id.as_str()) == Some(run_id) {
+            *slot = None;
+        }
     }
 }
 
@@ -1534,6 +1584,9 @@ struct CatchupProgress {
     total: u32,
     message: String,
     report: CatchupReport,
+    /// Which run this progress belongs to, so a UI that started a newer run
+    /// (or stopped this one) can ignore progress from a run it no longer owns.
+    run_id: String,
 }
 
 fn emit_catchup(
@@ -1543,6 +1596,7 @@ fn emit_catchup(
     total: u32,
     message: &str,
     report: &CatchupReport,
+    run_id: &str,
 ) {
     let _ = app.emit(
         CATCHUP_PROGRESS_EVENT,
@@ -1552,6 +1606,7 @@ fn emit_catchup(
             total,
             message: message.to_string(),
             report: report.clone(),
+            run_id: run_id.to_string(),
         },
     );
 }
@@ -1741,9 +1796,46 @@ pub async fn generate_catchup_report(
     app: AppHandle,
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
+    runs: State<'_, CatchupRuns>,
     scope: Option<String>,
     since_hours: Option<i64>,
+    run_id: Option<String>,
 ) -> Result<CatchupReport, String> {
+    let id = run_id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let registration = runs.begin(&id);
+    let result = Abortable::new(
+        build_catchup_report(app, db, model_state, scope, since_hours, id.clone()),
+        registration,
+    )
+    .await;
+    runs.finish(&id);
+    match result {
+        Ok(inner) => inner,
+        Err(Aborted) => Err(CATCHUP_CANCELLED.to_string()),
+    }
+}
+
+/// Cancels the Quick Catch-up run named by `run_id`, or whichever run is
+/// current when `run_id` is omitted (closing the dialog mid-run, for example,
+/// where the caller may not have kept track of the id).
+#[tauri::command]
+pub async fn cancel_catchup_report(
+    runs: State<'_, CatchupRuns>,
+    run_id: Option<String>,
+) -> Result<(), String> {
+    runs.cancel(run_id.as_deref());
+    Ok(())
+}
+
+async fn build_catchup_report(
+    app: AppHandle,
+    db: State<'_, Database>,
+    model_state: State<'_, SharedModelState>,
+    scope: Option<String>,
+    since_hours: Option<i64>,
+    run_id: String,
+) -> Result<CatchupReport, String> {
+    let run_id = run_id.as_str();
     let now = chrono::Utc::now().timestamp();
     let published_after = catchup_cutoff(since_hours, now);
     let scoped_to_inbox = scope.as_deref() == Some("inbox");
@@ -1797,7 +1889,7 @@ pub async fn generate_catchup_report(
             (false, true) => "Nothing unread in that time range.",
             (false, false) => "Nothing unread to catch up on.",
         };
-        emit_catchup(&app, "done", 0, 0, message, &report);
+        emit_catchup(&app, "done", 0, 0, message, &report, run_id);
         return Ok(report);
     }
 
@@ -1825,6 +1917,7 @@ pub async fn generate_catchup_report(
         pool.len() as u32,
         &format!("Reading {} articles…", pool.len()),
         &report,
+        run_id,
     );
 
     // --- Pass one: pick the stories and write their headlines ---------------
@@ -1974,6 +2067,7 @@ pub async fn generate_catchup_report(
             n => format!("Writing {n} stories…"),
         },
         &report,
+        run_id,
     );
 
     // --- Pass two: write each lede from the articles behind it --------------
@@ -2075,10 +2169,11 @@ pub async fn generate_catchup_report(
             story_count,
             &format!("Writing story {completed} of {story_count}…"),
             &report,
+            run_id,
         );
     }
 
-    emit_catchup(&app, "done", story_count, story_count, "", &report);
+    emit_catchup(&app, "done", story_count, story_count, "", &report, run_id);
 
     Ok(report)
 }
@@ -2132,6 +2227,53 @@ pub async fn get_article_interaction(
 ) -> Result<Option<crate::db::models::ArticleInteraction>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     queries::get_article_interaction(&conn, &article_id).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod catchup_runs_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn cancel_by_id_aborts_the_matching_run() {
+        let runs = CatchupRuns::default();
+        let reg = runs.begin("run-1");
+        let fut = Abortable::new(std::future::pending::<()>(), reg);
+        runs.cancel(Some("run-1"));
+        assert_eq!(fut.await, Err(Aborted));
+    }
+
+    #[tokio::test]
+    async fn beginning_a_second_run_aborts_the_first() {
+        let runs = CatchupRuns::default();
+        let reg1 = runs.begin("run-1");
+        let fut1 = Abortable::new(std::future::pending::<()>(), reg1);
+        let _reg2 = runs.begin("run-2");
+        assert_eq!(fut1.await, Err(Aborted));
+    }
+
+    #[tokio::test]
+    async fn cancelling_a_stale_id_leaves_the_current_run_alone() {
+        let runs = CatchupRuns::default();
+        let reg = runs.begin("run-2");
+        // "run-1" already finished (or never existed); this must not touch
+        // the run that currently holds the slot.
+        runs.cancel(Some("run-1"));
+        let fut = Abortable::new(async { 42 }, reg);
+        assert_eq!(fut.await, Ok(42));
+    }
+
+    #[tokio::test]
+    async fn finish_does_not_clear_a_newer_runs_slot() {
+        let runs = CatchupRuns::default();
+        let _reg1 = runs.begin("run-1");
+        let reg2 = runs.begin("run-2");
+        // A late cleanup call from the first run's own `finish` must not
+        // clear the slot the second run has since claimed.
+        runs.finish("run-1");
+        runs.cancel(Some("run-2"));
+        let fut2 = Abortable::new(std::future::pending::<()>(), reg2);
+        assert_eq!(fut2.await, Err(Aborted));
+    }
 }
 
 #[cfg(test)]

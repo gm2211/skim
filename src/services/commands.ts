@@ -389,15 +389,24 @@ export interface CatchupProgress {
   total: number;
   message: string;
   report: CatchupReport;
+  /** Which run this progress belongs to; ignore progress from a stale run. */
+  run_id: string;
 }
 export const CATCHUP_PROGRESS_EVENT = "catchup_progress";
 export type CatchupScope = "inbox" | "unread";
 /** Hours back to catch up on. `null` is the whole unread backlog. */
 export type CatchupSinceHours = number | null;
+/** What a cancelled Quick Catch-up run rejects with, so the UI can tell an
+ * explicit stop apart from a real failure. */
+export const CATCHUP_CANCELLED = "Catch-up cancelled";
 export const generateCatchupReport = (
   scope: CatchupScope = "inbox",
-  sinceHours: CatchupSinceHours = null
-) => invoke<CatchupReport>("generate_catchup_report", { scope, sinceHours });
+  sinceHours: CatchupSinceHours = null,
+  runId?: string
+) => invoke<CatchupReport>("generate_catchup_report", { scope, sinceHours, runId });
+/** Stops the run named by `runId`, or whichever run is current when omitted. */
+export const cancelCatchupReport = (runId?: string) =>
+  invoke<void>("cancel_catchup_report", { runId });
 
 // Today edition
 /** The page as it stands while the lede pass runs. */

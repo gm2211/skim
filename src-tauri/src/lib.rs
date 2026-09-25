@@ -8,7 +8,7 @@ mod feed;
 use ai::local_provider::SharedModelState;
 #[cfg(not(target_os = "ios"))]
 use ai::local_provider::{self, LAST_USED_AT};
-use commands::ai::{SharedSummaryCache, SummaryCache, SummaryGeneration};
+use commands::ai::{CatchupRuns, SharedSummaryCache, SummaryCache, SummaryGeneration};
 use commands::models::DownloadCancelFlag;
 use db::models::AppSettings;
 use db::{queries, Database};
@@ -171,6 +171,7 @@ pub fn init_state<R: tauri::Runtime>(app: &tauri::AppHandle<R>, app_dir: std::pa
     app.manage(DownloadCancelFlag(Arc::new(AtomicBool::new(false))));
     app.manage(Arc::new(Mutex::new(SummaryCache::new())) as SharedSummaryCache);
     app.manage(SummaryGeneration::default());
+    app.manage(CatchupRuns::default());
     app.manage(commands::claude_oauth::PasteFlowState::default());
 }
 
@@ -251,6 +252,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::ai::remove_recent_article,
             commands::ai::count_read_matches,
             commands::ai::generate_catchup_report,
+            commands::ai::cancel_catchup_report,
             commands::ai::set_article_feedback,
             commands::ai::set_priority_override,
             commands::ai::get_preference_profile,

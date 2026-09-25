@@ -509,11 +509,18 @@ actor MLXRunner {
                         input: lmInput,
                         parameters: params,
                         context: context
-                    ) { (_: [Int]) in GenerateDisposition.more }
+                    ) { (_: [Int]) in Task.isCancelled ? .stop : .more }
                 }
                 return result.output
             }
+            // The callback above only stops generation early; it can't throw
+            // out of `generate`'s synchronous closure. Check afterward so a
+            // cancelled task actually surfaces a CancellationError instead of
+            // silently returning whatever was generated before the cancel.
+            try Task.checkCancellation()
             return LocalModelOutput.sanitize(raw, family: family)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as MLX.MLXError {
             // MLX C-layer runtime error surfaced via scoped withError handler.
             // MLX.MLXError is mlx-swift's type (distinct from Skim's local MLXError);
@@ -575,6 +582,7 @@ actor MLXRunner {
                         parameters: params,
                         context: context
                     ) {
+                        if Task.isCancelled { break }
                         if let chunk = item.chunk {
                             accumulated += chunk
                             onToken(chunk)
@@ -583,7 +591,13 @@ actor MLXRunner {
                     return accumulated
                 }
             }
+            // Breaking out of the for-await loop above only stops consuming
+            // tokens; check afterward so a cancelled task actually surfaces a
+            // CancellationError instead of silently returning partial output.
+            try Task.checkCancellation()
             return LocalModelOutput.sanitize(raw, family: family)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as MLX.MLXError {
             // MLX C-layer runtime error surfaced via scoped withError handler.
             // Map to Skim's error hierarchy for consistent error handling by callers.

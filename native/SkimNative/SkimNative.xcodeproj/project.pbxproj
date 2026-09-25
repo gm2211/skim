@@ -16,6 +16,7 @@
 		25F3EE8A8FEBDA2FC33DB56E /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 8B0DFA296F4A48F6B090AFBC /* Hub */; };
 		2A601923CBA16F4DD268D2C9 /* NativeKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B69429F0218849C4A4E655 /* NativeKeychain.swift */; };
 		31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89737FFF993802E562860605 /* AIDisclaimerLabel.swift */; };
+		38FFE7A20DB15773E4DF33B6 /* CatchUpRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C48EFCE8BF368EAAEFF78D1 /* CatchUpRunner.swift */; };
 		434D05C938D50201696ECD5A /* TodayEditionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9B482B07ABFB0BD983D016 /* TodayEditionView.swift */; };
 		436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */; };
 		568EFC6280529AB7F91222BD /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8734D4E26C300D1AD49D4262 /* SkimCore */; };
@@ -41,6 +42,7 @@
 		D357B98D7AFF8B7E71A67F2A /* ClaudeReauthSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AD1C797EBFBB9448A83E919 /* ClaudeReauthSheet.swift */; };
 		D575AB676AA07786E29C32A0 /* CatchUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 839B1584F0E39B5A14D96C79 /* CatchUpView.swift */; };
 		D5D2795C99FD3003AA0F056B /* NativeWebSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1B88832F456973EA297F0F /* NativeWebSearch.swift */; };
+		D76B2E985C428580059A4E0B /* CatchUpRunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6EFF92484E48E3287105570 /* CatchUpRunnerTests.swift */; };
 		D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A483594667B890576E4D368D /* SkimNativeApp.swift */; };
 		DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BA45434D97C1ACA953B839 /* NativeMLX.swift */; };
 		DFC1782BE965DCD3BBEAFEC9 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = A6EF4FD219591BC7A9787950 /* MLX */; };
@@ -68,6 +70,7 @@
 		1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderEditor.swift; sourceTree = "<group>"; };
 		13F4F0168DBE15FBFB319E12 /* NativeAIModelsResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIModelsResponseTests.swift; sourceTree = "<group>"; };
 		1474BA38A4E522DB5D3ECB21 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
+		1C48EFCE8BF368EAAEFF78D1 /* CatchUpRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchUpRunner.swift; sourceTree = "<group>"; };
 		1D15E5B261AE4E05EEAE52DC /* NativeAIGuardrailRefusalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIGuardrailRefusalTests.swift; sourceTree = "<group>"; };
 		3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleExtractorTests.swift; sourceTree = "<group>"; };
 		4B61709B52E5986EFC1C3ECB /* AIErrorBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIErrorBox.swift; sourceTree = "<group>"; };
@@ -99,6 +102,7 @@
 		CAB966C027C845488FBAF8FD /* SkimInferencePolicy */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimInferencePolicy; path = ../../shared/SkimInferencePolicy; sourceTree = SOURCE_ROOT; };
 		D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleDetailView.swift; sourceTree = "<group>"; };
 		D60276D39C8ED76452B2EB26 /* Skim iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Skim iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D6EFF92484E48E3287105570 /* CatchUpRunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatchUpRunnerTests.swift; sourceTree = "<group>"; };
 		E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXRunner.swift; sourceTree = "<group>"; };
 		F6BA45434D97C1ACA953B839 /* NativeMLX.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMLX.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -200,6 +204,7 @@
 			children = (
 				7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */,
 				09444431BA1054837AA91213 /* ArticleReaderContentLoader.swift */,
+				1C48EFCE8BF368EAAEFF78D1 /* CatchUpRunner.swift */,
 				E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */,
 				A1BCD3DD03D305C558D07614 /* NativeAI.swift */,
 				B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */,
@@ -216,6 +221,7 @@
 			isa = PBXGroup;
 			children = (
 				3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */,
+				D6EFF92484E48E3287105570 /* CatchUpRunnerTests.swift */,
 				BFC1D459A8E191D2264A703F /* NativeAIDegenerateRepetitionTests.swift */,
 				1D15E5B261AE4E05EEAE52DC /* NativeAIGuardrailRefusalTests.swift */,
 				13F4F0168DBE15FBFB319E12 /* NativeAIModelsResponseTests.swift */,
@@ -414,6 +420,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				949AEC33EE8019F0584D6253 /* ArticleExtractorTests.swift in Sources */,
+				D76B2E985C428580059A4E0B /* CatchUpRunnerTests.swift in Sources */,
 				BCE83B6AED9AC4923D1F9A6D /* NativeAIDegenerateRepetitionTests.swift in Sources */,
 				AFD473138D9923FB717FE9E2 /* NativeAIGuardrailRefusalTests.swift in Sources */,
 				86AFEB9F2A2239BCDF6EFDF1 /* NativeAIModelsResponseTests.swift in Sources */,
@@ -433,6 +440,7 @@
 				751B168D630209B01DAFF073 /* ArticleExtractor.swift in Sources */,
 				E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */,
 				77DA3EA9CDD533959D7EBE99 /* ArticleReaderContentLoader.swift in Sources */,
+				38FFE7A20DB15773E4DF33B6 /* CatchUpRunner.swift in Sources */,
 				D575AB676AA07786E29C32A0 /* CatchUpView.swift in Sources */,
 				D357B98D7AFF8B7E71A67F2A /* ClaudeReauthSheet.swift in Sources */,
 				96F49A7819D5D167616F137F /* LegalView.swift in Sources */,

@@ -565,6 +565,7 @@ enum NativeAI {
             """,
             maxTokens: 1400
         )
+        try Task.checkCancellation()
 
         if let page = parseFrontPage(raw, articleCount: articles.count), !page.isEmpty {
             return page
@@ -1547,6 +1548,7 @@ enum NativeAI {
                     return try await attempt(instructions: instructions)
                 } catch {
                     guard isGuardrailRefusal(error) else { throw error }
+                    try Task.checkCancellation()
                     print("[NativeAI] Foundation Models refused content (guardrail); retrying once with neutralized instructions.")
                     do {
                         return try await attempt(instructions: instructions + "\n\n" + guardrailNeutralizingInstructions)
@@ -1561,6 +1563,7 @@ enum NativeAI {
             let (firstTrimmed, firstDegenerate) = degenerateRepetitionTrim(first)
             guard firstDegenerate else { return first }
 
+            try Task.checkCancellation()
             print("[NativeAI] Foundation Models output looked degenerate (repetitive); retrying once.")
             let second = try await attemptWithGuardrailRetry()
             let (secondTrimmed, secondDegenerate) = degenerateRepetitionTrim(second)
@@ -1657,6 +1660,22 @@ enum NativeAI {
 #endif
         let description = error.localizedDescription.lowercased()
         return description.contains("unsafe") || description.contains("guardrail")
+    }
+
+    /// Detects cancellation across every AI path Skim can call into: Swift's
+    /// own `CancellationError` (raised by `Task.checkCancellation()`),
+    /// `URLSession`'s `.cancelled` code (cloud providers via `URLSession.data`),
+    /// and MLX's own `.cancelled` case (on-device generation, see
+    /// `NativeMLX.isCancellation`). A cancelled run should end quietly rather
+    /// than surface as a user-facing error.
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+        if let urlError = error as? URLError, urlError.code == .cancelled {
+            return true
+        }
+        return NativeMLX.isCancellation(error)
     }
 
     // MARK: - Degenerate-output guard (Foundation Models only)
@@ -2753,6 +2772,7 @@ enum NativeAI {
                 return try await attempt(instructions: baseInstructions)
             } catch {
                 guard isGuardrailRefusal(error) else { throw error }
+                try Task.checkCancellation()
                 print("[NativeAI] Quick catch-up (Foundation Models) refused content (guardrail); retrying once with neutralized instructions.")
                 do {
                     return try await attempt(instructions: baseInstructions + "\n\n" + guardrailNeutralizingInstructions)
@@ -2788,6 +2808,7 @@ enum NativeAI {
         let (_, firstDegenerate) = degenerateRepetitionTrim(digestText(first))
         guard firstDegenerate else { return first }
 
+        try Task.checkCancellation()
         print("[NativeAI] Quick catch-up (Foundation Models) output looked degenerate; retrying once.")
         let second = try await attemptWithGuardrailRetry()
         let (_, secondDegenerate) = degenerateRepetitionTrim(digestText(second))

@@ -9,6 +9,11 @@ let settings = { ai: { provider: "none", chat_provider: "same" } };
 vi.mock("../../hooks/useSettings", () => ({ useSettings: () => ({ data: settings }) }));
 vi.mock("../../services/commands", () => ({ chatWithArticles: vi.fn() }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
+vi.mock("../common/ModelPicker", () => ({
+  ModelPicker: (p: { surface: string; disabled?: boolean }) => (
+    <div data-testid="model-picker" data-surface={p.surface} data-disabled={String(!!p.disabled)} />
+  ),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -146,6 +151,30 @@ describe("AskSkimDialog setup recovery", () => {
     settings = { ai: { provider: "none", chat_provider: "openai" } };
     render(<AskSkimDialog onClose={vi.fn()} />);
     expect(screen.queryByRole("button", { name: "Open AI settings" })).not.toBeInTheDocument();
+  });
+
+  it("mounts the chat model picker, disabled while a question is in flight", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    let finish: (value: Awaited<ReturnType<typeof chatWithArticles>>) => void = () => {};
+    vi.mocked(chatWithArticles).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const user = userEvent.setup();
+    render(<AskSkimDialog onClose={vi.fn()} />);
+
+    const picker = screen.getByTestId("model-picker");
+    expect(picker).toHaveAttribute("data-surface", "chat");
+    expect(picker).toHaveAttribute("data-disabled", "false");
+
+    await user.type(screen.getByRole("textbox"), "Question");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "true");
+
+    await act(async () => {
+      finish({ content: "Answer", sources: [], provider: "openai", model: "test", article_ids: [] });
+    });
   });
 
   it("keeps failed question and offers settings for authentication errors", async () => {

@@ -24,6 +24,7 @@ import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { useSettings } from "../../hooks/useSettings";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { Select } from "../ui/Select";
+import { ModelPicker } from "../common/ModelPicker";
 
 interface Props {
   onClose: () => void;
@@ -397,6 +398,10 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
               row aligns on its end, so the button cannot drift against the
               selects the way it did when only the selects were sized. */}
           <div className="flex flex-wrap items-end" style={{ gap: 12 }}>
+            <label className="flex min-w-0 flex-1 flex-col" style={{ gap: 6, minWidth: 150 }}>
+              <span style={CONTROL_LABEL_STYLE}>Model</span>
+              <ModelPicker surface="catchup" disabled={loading} />
+            </label>
             <label className="flex min-w-0 flex-1 flex-col" style={{ gap: 6, minWidth: 150 }}>
               <span className="text-text-muted" style={CONTROL_LABEL_STYLE}>Include</span>
               <Select

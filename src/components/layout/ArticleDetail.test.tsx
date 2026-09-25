@@ -52,6 +52,11 @@ vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 vi.mock("../article/ArticleLearningActions", () => ({ ArticleLearningActions: () => null }));
 vi.mock("../article/AggregatorDetails", () => ({ AggregatorDetails: () => null }));
 vi.mock("../common/AIDisclaimer", () => ({ AIDisclaimer: () => null }));
+vi.mock("../common/ModelPicker", () => ({
+  ModelPicker: (p: { surface: string; disabled?: boolean }) => (
+    <div data-testid="model-picker" data-surface={p.surface} data-disabled={String(!!p.disabled)} />
+  ),
+}));
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -110,6 +115,21 @@ describe("ArticleDetail reader loading", () => {
       articleId: "a", force: true, summaryCustomWordCount: 650,
       summaryCustomPrompt: "Explain the evidence and tradeoffs",
     }));
+  });
+
+  it("mounts the summarize model picker, disabled while a summary is generating", async () => {
+    aiSettings.provider = "anthropic";
+    vi.mocked(getOrFetchReaderContent).mockResolvedValue({ html: "<p>Article</p>", raw_html: "" });
+    const user = userEvent.setup();
+    const view = render(<ArticleDetail />);
+    await user.click(screen.getByRole("button", { name: "Summary options" }));
+
+    expect(screen.getByTestId("model-picker")).toHaveAttribute("data-surface", "summarize");
+    expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "false");
+
+    summarizeMutation.isPending = true;
+    view.rerender(<ArticleDetail />);
+    expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "true");
   });
 
   it("opens the same article chat from the toolbar and bottom toggle", async () => {

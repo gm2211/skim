@@ -28,6 +28,12 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 
+vi.mock("../common/ModelPicker", () => ({
+  ModelPicker: (p: { surface: string; disabled?: boolean }) => (
+    <div data-testid="model-picker" data-surface={p.surface} data-disabled={String(!!p.disabled)} />
+  ),
+}));
+
 import * as commands from "../../services/commands";
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -154,6 +160,25 @@ afterEach(() => {
 });
 
 describe("TodayEditionPane", () => {
+  it("mounts the today model picker for this surface", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    await screen.findByText("Default snapshot title");
+    expect(screen.getByTestId("model-picker")).toHaveAttribute("data-surface", "today");
+    expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "false");
+  });
+
+  it("disables the today model picker while ledes are being written", async () => {
+    vi.mocked(commands.getSettings).mockResolvedValue({
+      ...DEFAULT_SETTINGS,
+      ai: { ...DEFAULT_SETTINGS.ai, provider: "openai" },
+    });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    await screen.findByText("Default snapshot title");
+    await waitFor(() => expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "true"));
+  });
+
   it("keeps Skim branding visible while the sidebar is collapsed", async () => {
     useUiStore.setState({ isPhone: false, sidebarCollapsed: true });
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([]));

@@ -27,6 +27,12 @@ vi.mock("../../services/commands", () => ({
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 
+vi.mock("../common/ModelPicker", () => ({
+  ModelPicker: (p: { surface: string; disabled?: boolean }) => (
+    <div data-testid="model-picker" data-surface={p.surface} data-disabled={String(!!p.disabled)} />
+  ),
+}));
+
 // Capture the progress listener so tests can push the page in mid-run, the way
 // the backend does between its two passes.
 const progressListeners = new Set<(event: { payload: CatchupProgress }) => void>();
@@ -260,6 +266,27 @@ describe("CatchupDialog", () => {
 
     expect(screen.getByText(/ByteDance released verl 1\.0/)).toBeInTheDocument();
     expect(screen.queryByLabelText("Writing this story")).not.toBeInTheDocument();
+
+    await act(async () => {
+      finish(report);
+    });
+  });
+
+  it("mounts the model picker for this surface, disabled while a run is in progress", async () => {
+    let finish: (value: CatchupReport) => void = () => {};
+    vi.mocked(generateCatchupReport).mockReturnValueOnce(
+      new Promise<CatchupReport>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    render(<CatchupDialog onClose={vi.fn()} />);
+
+    const picker = screen.getByTestId("model-picker");
+    expect(picker).toHaveAttribute("data-surface", "catchup");
+    expect(picker).toHaveAttribute("data-disabled", "false");
+
+    await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+    expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "true");
 
     await act(async () => {
       finish(report);

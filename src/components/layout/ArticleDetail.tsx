@@ -10,6 +10,7 @@ import { useReadingTimeTracker } from "../../hooks/useLearning";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { NumberInput } from "../ui/NumberInput";
 import { AIDisclaimer } from "../common/AIDisclaimer";
+import { ModelPicker } from "../common/ModelPicker";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { ArticleLearningActions } from "../article/ArticleLearningActions";
 import { AggregatorDetails } from "../article/AggregatorDetails";
@@ -989,6 +990,11 @@ export function ArticleDetail() {
 
   const renderSummarizeMenuBody = () => (
     <>
+      <div style={{ marginBottom: 8 }}>
+        <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Model</label>
+        <ModelPicker surface="summarize" disabled={summarize.isPending} />
+        <p className="text-text-muted" style={{ fontSize: 10, marginTop: 4 }}>Saved as your default model.</p>
+      </div>
       <div style={{ marginBottom: 8 }}>
         <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Length</label>
         <select

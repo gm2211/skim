@@ -1,10 +1,14 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { LEAD_COUNT, msUntilWindowRollover, rankFor, todayWindow } from "./todayEdition";
 
 // Pin the timezone so local-midnight math (and the DST case below) is
 // deterministic regardless of the machine/CI runner's own TZ.
 beforeAll(() => {
-  process.env.TZ = "America/New_York";
+  vi.stubEnv("TZ", "America/New_York");
+});
+
+afterAll(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("todayWindow", () => {

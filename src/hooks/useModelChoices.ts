@@ -46,7 +46,7 @@ export function useModelChoices(
   const chatOverrideActive = surface === "chat" && hasChatOverride(ai);
   const provider = ai.provider;
 
-  const mlxModels = mlxModelsFor(isPhone);
+  const mlxModels = mlxModelsFor(isPhone, resolveMlxRepoId(ai, isPhone));
   const isMlx = !chatOverrideActive && provider === "mlx";
   const isLocal = !chatOverrideActive && provider === "local";
   const isRemote =

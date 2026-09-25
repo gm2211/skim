@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 import SkimCore
 
 struct MLXModelOption: Identifiable, Hashable {
@@ -13,17 +16,30 @@ struct MLXModelOption: Identifiable, Hashable {
 enum NativeMLX {
     static let defaultRepoId = MLXRunner.defaultRepoId
 
+    // Sorted ascending by size; mirrors MLX_MODELS in src/lib/aiModels.ts.
+    // Models dropped from this list still work for anyone who saved them:
+    // pickers add a "(legacy)" entry for the current selection.
     static let modelOptions: [MLXModelOption] = [
-        MLXModelOption(repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (recommended for iPhone)", sizeGB: 0.7, isPhoneFriendly: true),
-        MLXModelOption(repoId: "mlx-community/Llama-3.2-1B-Instruct-4bit", label: "Llama 3.2 1B", sizeGB: 0.8, isPhoneFriendly: true),
-        MLXModelOption(repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B", sizeGB: 1.0, isPhoneFriendly: true),
-        MLXModelOption(repoId: "mlx-community/SmolLM3-3B-4bit", label: "SmolLM3 3B", sizeGB: 1.8, isPhoneFriendly: false),
-        MLXModelOption(repoId: "mlx-community/Llama-3.2-3B-Instruct-4bit", label: "Llama 3.2 3B", sizeGB: 1.8, isPhoneFriendly: false),
-        MLXModelOption(repoId: "mlx-community/Phi-4-mini-instruct-4bit", label: "Phi-4 Mini", sizeGB: 2.2, isPhoneFriendly: false),
-        MLXModelOption(repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: "Qwen3 4B Instruct (2507)", sizeGB: 2.3, isPhoneFriendly: false),
-        MLXModelOption(repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B", sizeGB: 2.4, isPhoneFriendly: false),
-        MLXModelOption(repoId: "mlx-community/gemma-3n-E2B-it-lm-4bit", label: "Gemma 3n E2B", sizeGB: 2.6, isPhoneFriendly: false)
+        MLXModelOption(repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (iPhone, fastest)", sizeGB: 0.7, isPhoneFriendly: true),
+        MLXModelOption(repoId: "mlx-community/LFM2-1.2B-4bit", label: "LFM2 1.2B (iPhone, fast)", sizeGB: 0.7, isPhoneFriendly: true),
+        MLXModelOption(repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B (iPhone, best quality)", sizeGB: 1.0, isPhoneFriendly: true),
+        MLXModelOption(repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: "Qwen3 4B Instruct (Mac, recommended)", sizeGB: 2.3, isPhoneFriendly: false),
+        MLXModelOption(repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B (Mac)", sizeGB: 2.4, isPhoneFriendly: false),
+        MLXModelOption(repoId: "mlx-community/Qwen3-8B-4bit", label: "Qwen3 8B (Mac, 16 GB+)", sizeGB: 4.6, isPhoneFriendly: false),
+        MLXModelOption(repoId: "mlx-community/Qwen3-30B-A3B-4bit", label: "Qwen3 30B-A3B (Mac, 32 GB+, best quality)", sizeGB: 17.2, isPhoneFriendly: false)
     ]
+
+    /// Models offered in pickers on this device. iPhones skip the Mac-sized
+    /// tier (4 GB+), which does not fit in phone memory.
+    @MainActor
+    static var offeredOptions: [MLXModelOption] {
+        #if canImport(UIKit)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            return modelOptions.filter { $0.sizeGB < 4 }
+        }
+        #endif
+        return modelOptions
+    }
 
     static var isAvailable: Bool {
         MLXRunner.isAvailableOnThisRuntime

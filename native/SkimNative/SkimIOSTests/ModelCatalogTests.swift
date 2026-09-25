@@ -47,9 +47,9 @@ struct ModelCatalogTests {
         let downloaded: Set<String> = ["mlx-community/gemma-3-1b-it-4bit"]
         let choices = ModelCatalog.mlxChoices(downloaded: downloaded, current: "mlx-community/gemma-3-1b-it-4bit")
         let gemma = choices.first { $0.id == "mlx-community/gemma-3-1b-it-4bit" }
-        let llama = choices.first { $0.id == "mlx-community/Llama-3.2-1B-Instruct-4bit" }
+        let qwen = choices.first { $0.id == "mlx-community/Qwen3-1.7B-4bit" }
         #expect(gemma?.isAvailable == true)
-        #expect(llama?.isAvailable == false)
+        #expect(qwen?.isAvailable == false)
     }
 
     @Test func testMLXChoicesAppendsLegacyEntryForUnknownCurrent() {

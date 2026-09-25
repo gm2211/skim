@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MLX_MODELS,
+  RETIRED_MLX_MODELS,
   hasChatOverride,
   mlxModelsFor,
   modelPatch,
@@ -58,6 +59,30 @@ describe("resolveMlxRepoId", () => {
     // A desktop-only model was saved, but the device is now a phone.
     const repoId = resolveMlxRepoId({ model: "mlx-community/gemma-3-4b-it-4bit", local_model_path: null }, true);
     expect(repoId).toBe("mlx-community/gemma-3-1b-it-4bit");
+  });
+});
+
+describe("retired MLX models", () => {
+  const smol = "mlx-community/SmolLM3-3B-4bit";
+
+  it("keeps a saved retired model selected and listed", () => {
+    expect(resolveMlxRepoId({ model: smol, local_model_path: smol }, false)).toBe(smol);
+    expect(mlxModelsFor(false, smol).map((m) => m.repoId)).toContain(smol);
+  });
+
+  it("does not offer retired models to new picks", () => {
+    expect(mlxModelsFor(false).map((m) => m.repoId)).not.toContain(smol);
+  });
+
+  it("falls back on phone when the retired model is not phone-friendly", () => {
+    expect(resolveMlxRepoId({ model: smol, local_model_path: null }, true)).toBe(
+      "mlx-community/gemma-3-1b-it-4bit",
+    );
+  });
+
+  it("never overlaps the live catalog", () => {
+    const live = new Set(MLX_MODELS.map((m) => m.repoId));
+    expect(RETIRED_MLX_MODELS.some((m) => live.has(m.repoId))).toBe(false);
   });
 });
 

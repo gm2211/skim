@@ -8,6 +8,7 @@ public enum MLXModelFamily: Sendable {
     case qwen
     case phi
     case smol
+    case lfm
     case unknown
 
     /// Stop strings that mark end-of-turn for this model family.
@@ -22,6 +23,8 @@ public enum MLXModelFamily: Sendable {
         case .phi:
             return ["<|end|>", "<|endoftext|>"]
         case .smol:
+            return ["<|im_end|>", "<|endoftext|>"]
+        case .lfm:
             return ["<|im_end|>", "<|endoftext|>"]
         case .unknown:
             return []
@@ -42,6 +45,7 @@ public enum MLXModelFamily: Sendable {
     public static func detect(from repoId: String) -> MLXModelFamily {
         let lower = repoId.lowercased()
         if lower.contains("smollm") { return .smol }
+        if lower.contains("lfm2") { return .lfm }
         if lower.contains("gemma") { return .gemma }
         if lower.contains("llama") { return .llama }
         if lower.contains("qwen") { return .qwen }
@@ -90,6 +94,18 @@ public struct MLXSamplingPreset: Sendable, Equatable {
         // Qwen3 4B Instruct (2507)
         "mlx-community/Qwen3-4B-Instruct-2507-4bit": MLXSamplingPreset(
             temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
+        // Qwen3 8B
+        "mlx-community/Qwen3-8B-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
+        // Qwen3 30B-A3B
+        "mlx-community/Qwen3-30B-A3B-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
+        // LFM2 1.2B (Liquid AI recommends a low temperature and light repetition penalty)
+        "mlx-community/LFM2-1.2B-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.95, repetitionPenalty: 1.05, repetitionContextSize: 64
         ),
         // SmolLM3 3B
         "mlx-community/SmolLM3-3B-4bit": MLXSamplingPreset(

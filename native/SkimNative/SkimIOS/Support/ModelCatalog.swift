@@ -55,8 +55,12 @@ enum ModelCatalog {
     /// Pure MLX catalog builder: the shipped model list, marked by download
     /// state, plus a synthesized "(legacy)" entry when `current` has fallen
     /// out of the catalog. Mirrors `MLXSettingsPanel.pickerOptions`.
-    static func mlxChoices(downloaded: Set<String>, current: String) -> [ModelChoice] {
-        var choices = NativeMLX.modelOptions.map { option in
+    static func mlxChoices(
+        options: [MLXModelOption] = NativeMLX.modelOptions,
+        downloaded: Set<String>,
+        current: String
+    ) -> [ModelChoice] {
+        var choices = options.map { option in
             ModelChoice(
                 id: option.repoId,
                 label: option.label,
@@ -96,7 +100,7 @@ enum ModelCatalog {
         case "mlx":
             let downloaded = Set(NativeMLX.downloadedRepoIds())
             let current = currentID(ai) ?? NativeMLX.defaultRepoId
-            return .list(mlxChoices(downloaded: downloaded, current: current))
+            return .list(mlxChoices(options: NativeMLX.offeredOptions, downloaded: downloaded, current: current))
 
         case "claude-subscription", "xai", "openai":
             let current = currentID(ai)

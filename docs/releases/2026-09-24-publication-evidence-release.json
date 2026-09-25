@@ -96,7 +96,15 @@
   },
   "native_upload_status": "not attempted after automatic approval rejection",
   "native_upload_rejection": "Automatic approval review rejected archive/upload because authorization for the exact TestFlight destination and build73 payload was not recognized. A separate local-only archive succeeded; no export/upload ran.",
-  "desktop_installation": "not attempted; existing installed app unchanged, root owns installation with rollback",
+  "desktop_installation": {
+    "installed_version": "0.1.36",
+    "installed_sha256": "74931d3b4dd94d2748eb506ea6dc96267911102e64587b9857d3161fa3f2d341",
+    "backup": "/private/tmp/skim-before-publication73-ftk1ovil/Skim.app",
+    "stopped_pre_main_pid": null,
+    "launched": false,
+    "interaction": "Mac locked; interactive acceptance pending",
+    "strict_signature_verified": true
+  },
   "limits": [
     "No live model factual-accuracy claim",
     "No installed UI interaction; Mac locked",

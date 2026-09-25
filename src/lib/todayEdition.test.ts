@@ -4,7 +4,6 @@ import { LEAD_COUNT, msUntilWindowRollover, rankFor, todayWindow } from "./today
 // Pin the timezone so local-midnight math (and the DST case below) is
 // deterministic regardless of the machine/CI runner's own TZ.
 beforeAll(() => {
-  // @ts-expect-error process is a nodejs global (vitest runs under node)
   process.env.TZ = "America/New_York";
 });
 

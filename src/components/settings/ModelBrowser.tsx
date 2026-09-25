@@ -391,11 +391,6 @@ export function ModelBrowser({
                     title={m.filename}
                   >
                     {friendlyModelName(m.filename).name}
-                    {friendlyModelName(m.filename).quant && (
-                      <span className="text-text-muted" style={{ fontSize: 11, marginLeft: 8 }}>
-                        {friendlyModelName(m.filename).quant}
-                      </span>
-                    )}
                     {m.is_partial && (
                       <span className="text-warning" style={{ fontSize: 11 }}> (incomplete)</span>
                     )}

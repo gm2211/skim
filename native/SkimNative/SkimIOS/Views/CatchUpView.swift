@@ -72,6 +72,7 @@ struct CatchUpSheet: View {
                         CatchUpPlaceholder(status: session.statusMessage.isEmpty ? request.statusLabel : session.statusMessage)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(24)
             }
             .background(SkimStyle.chrome.ignoresSafeArea())

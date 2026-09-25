@@ -93,6 +93,33 @@ pub fn resolve_power_profile(mode: &str, user_layers: Option<i32>) -> (i32, i32)
     (final_layers, threads)
 }
 
+/// Qwen3 checkpoints that think by default and honour the `/no_think` switch.
+/// The 2507 Instruct/Thinking releases are single-mode and ignore it.
+fn is_hybrid_thinking_model(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    name.contains("qwen3") && !name.contains("2507")
+}
+
+/// Drop `<think>…</think>` reasoning from a completion. Qwen3 emits an empty
+/// block even with `/no_think`; an unterminated block means the model ran out
+/// of tokens while thinking, so nothing after it is an answer.
+fn strip_think_blocks(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find("<think>") {
+        out.push_str(&rest[..start]);
+        match rest[start..].find("</think>") {
+            Some(end) => rest = &rest[start + end + "</think>".len()..],
+            None => return out,
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 fn format_chat_messages(model: &LlamaModel, messages: &[ChatMessage]) -> Result<String, String> {
     // Try to use the model's built-in chat template
     if let Ok(tmpl) = model.chat_template(None) {
@@ -419,9 +446,8 @@ fn run_inference(
     // Clean up trailing ChatML markers
     let output = output
         .trim_end_matches("<|im_end|>")
-        .trim_end_matches("<|im_end")
-        .trim()
-        .to_string();
+        .trim_end_matches("<|im_end");
+    let output = strip_think_blocks(output).trim().to_string();
 
     Ok((output, prompt_token_count, n_decoded))
 }
@@ -455,11 +481,13 @@ impl AiProvider for LocalLlmProvider {
         // When using grammar-constrained JSON output, disable thinking mode
         // for models that support it (Qwen 3.x, DeepSeek, etc.).
         // Thinking tokens like <think> break grammar sampling because
-        // the grammar expects JSON from the first token.
-        if request.json_mode {
+        // the grammar expects JSON from the first token. Hybrid Qwen3 models
+        // get the same switch on every request: a summary never needs a
+        // reasoning trace, and it would double the wait on a laptop.
+        if request.json_mode || is_hybrid_thinking_model(&model_path) {
             if let Some(last) = messages.last_mut() {
                 if last.role == "user" {
-                    last.content.push_str(" /nothink");
+                    last.content.push_str(" /no_think");
                 }
             }
         }
@@ -520,6 +548,22 @@ impl AiProvider for LocalLlmProvider {
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[test]
+    fn strips_think_blocks() {
+        assert_eq!(strip_think_blocks("<think>\n\n</think>\n\nHello"), "\n\nHello");
+        assert_eq!(strip_think_blocks("a<think>x</think>b<think>y</think>c"), "abc");
+        assert_eq!(strip_think_blocks("Answer<think>ran out"), "Answer");
+        assert_eq!(strip_think_blocks("no reasoning here"), "no reasoning here");
+    }
+
+    #[test]
+    fn only_hybrid_qwen3_gets_no_think() {
+        assert!(is_hybrid_thinking_model(Path::new("/m/Qwen_Qwen3-8B-Q4_K_M.gguf")));
+        assert!(is_hybrid_thinking_model(Path::new("/m/Qwen_Qwen3-30B-A3B-Q4_K_M.gguf")));
+        assert!(!is_hybrid_thinking_model(Path::new("/m/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf")));
+        assert!(!is_hybrid_thinking_model(Path::new("/m/google_gemma-3-4b-it-Q4_K_M.gguf")));
+    }
 
     /// Find the Qwen 3.5 model in the app's models directory.
     fn find_qwen_model() -> Option<PathBuf> {

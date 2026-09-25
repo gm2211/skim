@@ -7,10 +7,10 @@ struct CatchUpRequest: Identifiable {
     let id = UUID()
     var subtitle: String
     var statusLabel: String
-    /// Resolves the session.articles the session.page is built from.
+    /// Resolves the articles the page is built from.
     var loadArticles: () async throws -> [Article]
     /// What the sheet's own model calls run under. The sheet drives the two
-    /// passes itself so the session.page can fill in as it is written.
+    /// passes itself so the page can fill in as it is written.
     var settings: AppSettings
 }
 
@@ -72,6 +72,7 @@ struct CatchUpSheet: View {
                         CatchUpPlaceholder(status: session.statusMessage.isEmpty ? request.statusLabel : session.statusMessage)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(24)
             }
             .background(SkimStyle.chrome.ignoresSafeArea())

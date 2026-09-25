@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  CATCHUP_CANCELLED,
   CATCHUP_PROGRESS_EVENT,
+  cancelCatchupReport,
   generateCatchupReport,
   type CatchupBrief,
   type CatchupProgress,
@@ -102,6 +104,11 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     () => catchupErrors.get(catchupCacheKey(catchupSelection.scope, catchupSelection.sinceHours)) ?? null
   );
   const [progress, setProgress] = useState<CatchupProgress | null>(null);
+  // The run currently in flight, so a stale response or a stopped run cannot
+  // clobber a newer one — and so an unmount or a scope change mid-run knows
+  // what to tell the backend to cancel.
+  const activeRun = useRef<string | null>(null);
+  const [stopped, setStopped] = useState(false);
   const previousSettings = useRef(settings);
 
   useEffect(() => {
@@ -121,28 +128,47 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     const c = catchupCache.get(cacheKey);
     setReport(c && Date.now() - c.ts < CACHE_TTL_MS ? c.report : null);
     setError(catchupErrors.get(cacheKey) ?? null);
+    setStopped(false);
   }, [cacheKey, scope, sinceHours]);
 
   const run = async () => {
     const runKey = cacheKey;
     const runScope = scope;
     const runSinceHours = sinceHours;
+    const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    activeRun.current = id;
+    setStopped(false);
     setLoading(true);
     setError(null);
     setProgress(null);
     catchupErrors.delete(runKey);
     setReport(null);
     try {
-      const nextReport = await generateCatchupReport(runScope, runSinceHours);
+      const nextReport = await generateCatchupReport(runScope, runSinceHours, id);
+      if (activeRun.current !== id) return;
       setReport(nextReport);
       catchupCache.set(runKey, { report: nextReport, ts: Date.now() });
     } catch (caught) {
+      if (activeRun.current !== id) return;
       const message = String(caught instanceof Error ? caught.message : caught);
+      if (message === CATCHUP_CANCELLED) return;
       setError(message);
       catchupErrors.set(runKey, message);
     } finally {
-      setLoading(false);
+      if (activeRun.current === id) {
+        setLoading(false);
+        activeRun.current = null;
+      }
     }
+  };
+
+  const stop = () => {
+    const id = activeRun.current;
+    activeRun.current = null;
+    setLoading(false);
+    setProgress(null);
+    setStopped(true);
+    void cancelCatchupReport(id ?? undefined);
   };
 
   useEffect(() => {
@@ -158,6 +184,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     let unlisten: (() => void) | null = null;
     let cancelled = false;
     listen<CatchupProgress>(CATCHUP_PROGRESS_EVENT, (event) => {
+      if (event.payload.run_id !== activeRun.current) return;
       setProgress(event.payload);
       const partial = event.payload.report;
       if (partial.stories.length > 0 || partial.briefs.length > 0) setReport(partial);
@@ -168,6 +195,14 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     return () => {
       cancelled = true;
       if (unlisten) unlisten();
+    };
+  }, []);
+
+  // Closing the dialog (or its parent unmounting) mid-run must not leave
+  // backend work running unattended.
+  useEffect(() => {
+    return () => {
+      if (activeRun.current) void cancelCatchupReport(activeRun.current);
     };
   }, []);
 
@@ -263,9 +298,9 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
           >
             {story.lede}
           </p>
-        ) : (
+        ) : loading ? (
           renderLedeSkeleton(lead)
-        )}
+        ) : null}
         {renderByline(story.article_ids)}
       </article>
     );
@@ -368,8 +403,10 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 aria-label="Include"
                 fullWidth
                 value={scope}
-                onChange={(e) => setScope(e.target.value as CatchupScope)}
-                disabled={loading}
+                onChange={(e) => {
+                  if (loading) stop();
+                  setScope(e.target.value as CatchupScope);
+                }}
                 style={{ height: CONTROL_HEIGHT, minHeight: CONTROL_HEIGHT }}
               >
                 <option value="inbox">Priority inbox</option>
@@ -382,10 +419,10 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 aria-label="Going back"
                 fullWidth
                 value={sinceHours === null ? "all" : String(sinceHours)}
-                onChange={(e) =>
-                  setSinceHours(e.target.value === "all" ? null : Number(e.target.value))
-                }
-                disabled={loading}
+                onChange={(e) => {
+                  if (loading) stop();
+                  setSinceHours(e.target.value === "all" ? null : Number(e.target.value));
+                }}
                 style={{ height: CONTROL_HEIGHT, minHeight: CONTROL_HEIGHT }}
               >
                 {CATCHUP_RANGES.map((range) => (
@@ -398,19 +435,35 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 ))}
               </Select>
             </label>
-            <button
-              onClick={run}
-              disabled={loading || providerUnavailable}
-              className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium flex-shrink-0 whitespace-nowrap"
-              style={{
-                padding: "0 16px",
-                fontSize: 13,
-                height: CONTROL_HEIGHT,
-                minHeight: CONTROL_HEIGHT,
-              }}
-            >
-              {loading ? "Working…" : report ? "Run again" : "Run catch-up"}
-            </button>
+            {loading ? (
+              <button
+                onClick={stop}
+                className="border border-white/10 hover:bg-white/10 text-text-primary rounded-lg transition-colors font-medium flex-shrink-0 whitespace-nowrap"
+                style={{
+                  padding: "0 16px",
+                  fontSize: 13,
+                  height: CONTROL_HEIGHT,
+                  minHeight: CONTROL_HEIGHT,
+                }}
+                aria-label="Stop catch-up"
+              >
+                Stop
+              </button>
+            ) : (
+              <button
+                onClick={run}
+                disabled={providerUnavailable}
+                className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium flex-shrink-0 whitespace-nowrap"
+                style={{
+                  padding: "0 16px",
+                  fontSize: 13,
+                  height: CONTROL_HEIGHT,
+                  minHeight: CONTROL_HEIGHT,
+                }}
+              >
+                {report ? "Run again" : "Run catch-up"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -419,12 +472,18 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
 
           {!providerUnavailable && !report && !loading && !error && (
             <div style={{ padding: "24px 0" }}>
-              <h4 className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>Ready when you are</h4>
-              <p className="text-text-muted" style={{ marginTop: 6, fontSize: 13, lineHeight: 1.6 }}>
-                Choose which articles to include and how far back to go, then run a catch-up. Skim
-                reads them and writes you a front page: the few stories that actually happened,
-                biggest first.
-              </p>
+              {stopped ? (
+                <h4 className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>Catch-up stopped.</h4>
+              ) : (
+                <>
+                  <h4 className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>Ready when you are</h4>
+                  <p className="text-text-muted" style={{ marginTop: 6, fontSize: 13, lineHeight: 1.6 }}>
+                    Choose which articles to include and how far back to go, then run a catch-up. Skim
+                    reads them and writes you a front page: the few stories that actually happened,
+                    biggest first.
+                  </p>
+                </>
+              )}
             </div>
           )}
 
@@ -499,7 +558,13 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 </div>
               )}
 
-              {!loading && report.article_count > 0 && (
+              {!loading && stopped && (
+                <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 18 }}>
+                  Stopped. Run again to finish the page.
+                </p>
+              )}
+
+              {!loading && !stopped && report.article_count > 0 && (
                 <p
                   className="text-text-muted"
                   style={{ fontSize: 11.5, marginBottom: 18, letterSpacing: 0.1 }}
@@ -508,7 +573,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 </p>
               )}
 
-              {report.stories.length === 0 && report.briefs.length === 0 && !loading && (
+              {report.stories.length === 0 && report.briefs.length === 0 && !loading && !stopped && (
                 <p className="text-text-muted" style={{ fontSize: 13, lineHeight: 1.6 }}>
                   {report.article_count === 0
                     ? scope === "inbox"

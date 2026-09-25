@@ -3,7 +3,13 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { CatchupDialog, catchupScopeSummary, catchupSelection } from "./CatchupDialog";
 import { useUiStore } from "../../stores/uiStore";
-import { generateCatchupReport, type CatchupProgress, type CatchupReport } from "../../services/commands";
+import {
+  cancelCatchupReport,
+  generateCatchupReport,
+  CATCHUP_CANCELLED,
+  type CatchupProgress,
+  type CatchupReport,
+} from "../../services/commands";
 
 let provider = "openai";
 let settings = { ai: { provider } };
@@ -14,7 +20,9 @@ vi.mock("../../hooks/useSettings", () => ({
 
 vi.mock("../../services/commands", () => ({
   generateCatchupReport: vi.fn(),
+  cancelCatchupReport: vi.fn(),
   CATCHUP_PROGRESS_EVENT: "catchup_progress",
+  CATCHUP_CANCELLED: "Catch-up cancelled",
 }));
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
@@ -107,7 +115,9 @@ describe("CatchupDialog", () => {
 
     expect(generateCatchupReport).not.toHaveBeenCalled();
     await userEvent.setup().click(screen.getByRole("button", { name: "Run catch-up" }));
-    await waitFor(() => expect(generateCatchupReport).toHaveBeenCalledWith("unread", null));
+    await waitFor(() =>
+      expect(generateCatchupReport).toHaveBeenCalledWith("unread", null, expect.any(String)),
+    );
 
     await userEvent.setup().selectOptions(screen.getByLabelText("Include"), "inbox");
     await waitFor(() => expect(screen.getByRole("button", { name: "Run catch-up" })).toBeInTheDocument());
@@ -122,7 +132,9 @@ describe("CatchupDialog", () => {
     await user.selectOptions(screen.getByLabelText("Going back"), "24");
     await user.click(screen.getByRole("button", { name: "Run catch-up" }));
 
-    await waitFor(() => expect(generateCatchupReport).toHaveBeenCalledWith("inbox", 24));
+    await waitFor(() =>
+      expect(generateCatchupReport).toHaveBeenCalledWith("inbox", 24, expect.any(String)),
+    );
   });
 
   it("keeps the reader's scope and range when the dialog is reopened", async () => {
@@ -217,6 +229,7 @@ describe("CatchupDialog", () => {
     );
     render(<CatchupDialog onClose={vi.fn()} />);
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+    const runId = vi.mocked(generateCatchupReport).mock.calls[0][2] as string;
 
     const headlineOnly: CatchupReport = {
       ...report,
@@ -229,6 +242,7 @@ describe("CatchupDialog", () => {
       total: 1,
       message: "Writing the lead story…",
       report: headlineOnly,
+      run_id: runId,
     });
 
     expect(screen.getByText("ByteDance open-sources its RL training stack")).toBeInTheDocument();
@@ -241,6 +255,7 @@ describe("CatchupDialog", () => {
       total: 1,
       message: "Writing story 1 of 1…",
       report,
+      run_id: runId,
     });
 
     expect(screen.getByText(/ByteDance released verl 1\.0/)).toBeInTheDocument();
@@ -260,5 +275,159 @@ describe("CatchupDialog", () => {
     expect(
       await screen.findByText(/there was no real news in these articles/),
     ).toBeInTheDocument();
+  });
+
+  it("keeps both selects enabled and offers a Stop button while a run is in progress", async () => {
+    let finish: (value: CatchupReport) => void = () => {};
+    vi.mocked(generateCatchupReport).mockReturnValueOnce(
+      new Promise<CatchupReport>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    render(<CatchupDialog onClose={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+
+    expect(await screen.findByRole("button", { name: "Stop catch-up" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Include")).toBeEnabled();
+    expect(screen.getByLabelText("Going back")).toBeEnabled();
+
+    await act(async () => {
+      finish(report);
+    });
+  });
+
+  it("stops the run in place, keeps the partial page and swallows a late cancellation rejection", async () => {
+    let reject: (reason: unknown) => void = () => {};
+    vi.mocked(generateCatchupReport).mockReturnValueOnce(
+      new Promise<CatchupReport>((_resolve, rej) => {
+        reject = rej;
+      }),
+    );
+    render(<CatchupDialog onClose={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+    const runId = vi.mocked(generateCatchupReport).mock.calls[0][2] as string;
+
+    const headlineOnly: CatchupReport = {
+      ...report,
+      stories: [{ ...report.stories[0], lede: "" }],
+      briefs: [],
+    };
+    emitProgress({
+      stage: "picking",
+      completed: 0,
+      total: 1,
+      message: "Writing the lead story…",
+      report: headlineOnly,
+      run_id: runId,
+    });
+
+    await user.click(screen.getByRole("button", { name: "Stop catch-up" }));
+
+    expect(cancelCatchupReport).toHaveBeenCalledWith(runId);
+    expect(screen.getByText("Stopped. Run again to finish the page.")).toBeInTheDocument();
+    expect(screen.getByText("ByteDance open-sources its RL training stack")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Writing this story")).not.toBeInTheDocument();
+
+    await act(async () => {
+      reject(new Error(CATCHUP_CANCELLED));
+    });
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("Stopped. Run again to finish the page.")).toBeInTheDocument();
+  });
+
+  it("ignores catch-up progress that belongs to a run that is no longer current", async () => {
+    vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
+    render(<CatchupDialog onClose={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+
+    emitProgress({
+      stage: "picking",
+      completed: 0,
+      total: 1,
+      message: "Writing the lead story…",
+      report,
+      run_id: "a-run-this-dialog-never-started",
+    });
+
+    expect(
+      screen.queryByText("ByteDance open-sources its RL training stack"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("changing the range mid-run stops the run instead of starting a new one", async () => {
+    vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
+    render(<CatchupDialog onClose={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+
+    await user.selectOptions(screen.getByLabelText("Going back"), "24");
+
+    expect(cancelCatchupReport).toHaveBeenCalledTimes(1);
+    expect(generateCatchupReport).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Run catch-up" })).toBeInTheDocument();
+  });
+
+  it("runs again with the new range and a fresh run id after a stop", async () => {
+    vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
+    render(<CatchupDialog onClose={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+    const firstRunId = vi.mocked(generateCatchupReport).mock.calls[0][2] as string;
+
+    await user.click(screen.getByRole("button", { name: "Stop catch-up" }));
+    await user.selectOptions(screen.getByLabelText("Going back"), "168");
+    await user.click(screen.getByRole("button", { name: "Run catch-up" }));
+
+    expect(generateCatchupReport).toHaveBeenCalledTimes(2);
+    const secondCall = vi.mocked(generateCatchupReport).mock.calls[1];
+    expect(secondCall[0]).toBe("unread");
+    expect(secondCall[1]).toBe(168);
+    expect(secondCall[2]).not.toBe(firstRunId);
+
+    await screen.findByText("ByteDance open-sources its RL training stack");
+  });
+
+  it("cancels the in-flight run when the dialog unmounts", async () => {
+    vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
+    const { unmount } = render(<CatchupDialog onClose={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+    const runId = vi.mocked(generateCatchupReport).mock.calls[0][2] as string;
+
+    unmount();
+
+    expect(cancelCatchupReport).toHaveBeenCalledWith(runId);
+  });
+
+  it("does not cache a stopped run's partial page", async () => {
+    vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
+    const first = render(<CatchupDialog onClose={vi.fn()} />);
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText("Include"), "inbox");
+    await user.selectOptions(screen.getByLabelText("Going back"), "6");
+    await user.click(screen.getByRole("button", { name: "Run catch-up" }));
+    const runId = vi.mocked(generateCatchupReport).mock.calls[0][2] as string;
+
+    emitProgress({
+      stage: "picking",
+      completed: 0,
+      total: 1,
+      message: "Writing the lead story…",
+      report,
+      run_id: runId,
+    });
+    expect(screen.getByText("ByteDance open-sources its RL training stack")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Stop catch-up" }));
+    first.unmount();
+
+    render(<CatchupDialog onClose={vi.fn()} />);
+    expect(screen.getByLabelText("Include")).toHaveValue("inbox");
+    expect(screen.getByLabelText("Going back")).toHaveValue("6");
+    expect(
+      screen.queryByText("ByteDance open-sources its RL training stack"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Ready when you are")).toBeInTheDocument();
   });
 });

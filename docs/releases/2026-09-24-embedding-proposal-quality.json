@@ -623,5 +623,544 @@
     "No generative proposal/verification, persistent app cache, native-device lifecycle, production delivery or full-pool latency proof.",
     "At k8 all12 known positive pairs are proposed but669 pairs still require further discrimination. No k chosen for production."
   ],
-  "next_constraint": "Retain every report eligibility and independent importance assessment; measure relatedness and verification cost with fresh evidence before adopting a proposal replacement."
+  "next_constraint": "Retain every report eligibility and independent importance assessment; measure relatedness and verification cost with fresh evidence before adopting a proposal replacement.",
+  "retrospective_verifier_reuse": {
+    "scope": "Bounded retrospective evaluation; stopped without new generation because18 identical request recordings already establish failure. No threshold/prompt/model changes; no production adoption/fullpool proof. Two retrieved labels remain untested,649/669 retrieved unlabeled proposals are not assessed.",
+    "plan_sha256": "b23d0a1d73946e8cad4ae8debb184e02a054f8dbb8059ff24869676a80e756be",
+    "new_model_calls": 0,
+    "retrieved_total_pairs": 669,
+    "retrieved_labeled_pairs": 20,
+    "reused_exact_requests": 18,
+    "untested_cases": [
+      "pair-5-10",
+      "pair-14-17"
+    ],
+    "retrieval_misses": [
+      {
+        "pair": [
+          25,
+          26
+        ],
+        "label": "different_event",
+        "cosine": 0.7894875596060273,
+        "rank_a_to_b": 55,
+        "rank_b_to_a": 79
+      },
+      {
+        "pair": [
+          0,
+          16
+        ],
+        "label": "different_event",
+        "cosine": 0.8547877026309271,
+        "rank_a_to_b": 12,
+        "rank_b_to_a": 12
+      }
+    ],
+    "metrics_on_recorded_subset": {
+      "true_positive": 9,
+      "false_positive": 3,
+      "false_negative": 3,
+      "same_event_precision": 0.75,
+      "same_event_recall": 0.75,
+      "exact_three_way_correct": 12,
+      "evaluated": 18,
+      "per_pair_latency_count": 18,
+      "recorded_latency_min_seconds": 0.329,
+      "recorded_latency_median_seconds": 0.6125,
+      "recorded_latency_max_seconds": 1.523,
+      "recorded_latency_sum_seconds": 11.751
+    },
+    "conclusion": "E5 top8 recalls all12 frozen positives but the unchanged verifier retains only9; it wrongly accepts1 known different-event and2 uncertain pairs. Retrieval improvement alone cannot safely produce groups. Existing recordings suffice; remaining2 calls omitted as redundant.",
+    "rows": [
+      {
+        "id": "pair-4-16",
+        "pair": [
+          4,
+          16
+        ],
+        "label": "same_event",
+        "payload_sha256": "19744e44935ffc3e2d691be6b561cb4f8220f453c4603359536fcba538cfc574",
+        "request_sha256": "484645dd572c7f2c7fdeb23ac1a5691522e24fa67e532ee72f1eb78f874ae7a2",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 244,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"same_event\"}",
+            "ok": true
+          },
+          "seconds": 0.533
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": true
+      },
+      {
+        "id": "pair-15-30",
+        "pair": [
+          30,
+          15
+        ],
+        "label": "same_event",
+        "payload_sha256": "b8af80f745dbc7c1307f575fb817c43429cbe4470d17c97d5f9cd6f07f8fa477",
+        "request_sha256": "692c155ab275b1ad953bbd426b24c3b8c340dc430c6298c3444fba6415e6b4bb",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 249,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"same_event\"}",
+            "ok": true
+          },
+          "seconds": 0.355
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": true
+      },
+      {
+        "id": "pair-1-32",
+        "pair": [
+          32,
+          1
+        ],
+        "label": "same_event",
+        "payload_sha256": "b05e13eddcd7aa0fae849e173ea696aa65352cfda8ccb4c9d2d7cb98d343d64c",
+        "request_sha256": "885d8c5b49496ac2e635955f0fb66d16151d7da7c458fe803b6e35dc2ccd589b",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 236,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"different_event\"}",
+            "ok": true
+          },
+          "seconds": 0.639
+        },
+        "verdict": 0,
+        "relation": "different_event",
+        "correct": false
+      },
+      {
+        "id": "pair-32-55",
+        "pair": [
+          32,
+          55
+        ],
+        "label": "same_event",
+        "payload_sha256": "4959dd73893a4112b9abe11e64b9e8a383c41940076acca31b23ba027dba4441",
+        "request_sha256": "4af4942f5a0316962b303fce4b0cb63175b29e3bf678457f948a28e0c5112cb7",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 259,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"same_event\"}",
+            "ok": true
+          },
+          "seconds": 0.496
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": true
+      },
+      {
+        "id": "pair-55-64",
+        "pair": [
+          64,
+          55
+        ],
+        "label": "same_event",
+        "payload_sha256": "1e504840e51a77c63ff765d2a0bf7b06c3ebc86a9e6376dfe6e3f8b7d6ffa630",
+        "request_sha256": "7a9f11d704899f867a2c54b5fe5490c945bfea994df9274f381b363747cb3fcc",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 269,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"same_event\"}",
+            "ok": true
+          },
+          "seconds": 0.545
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": true
+      },
+      {
+        "id": "pair-64-72",
+        "pair": [
+          64,
+          72
+        ],
+        "label": "same_event",
+        "payload_sha256": "fe21707765cd8098d7410af251c628687c4190f5a5d6dc18a8f91e562208cbeb",
+        "request_sha256": "2e83e4e8ee3d968c84ce11e76443348681c4bc4d744b0c32216f37d413a847b3",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 271,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"same_event\"}",
+            "ok": true
+          },
+          "seconds": 0.628
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": true
+      },
+      {
+        "id": "pair-72-100",
+        "pair": [
+          100,
+          72
+        ],
+        "label": "same_event",
+        "payload_sha256": "b7cde8e83d46b6a0e7c7b45c91a08383c6f0411f75880ba3a173a69ce5b990c3",
+        "request_sha256": "091688b1c0c3143a4af129f3293cc2302df0f007f437ac84b9181a0ae9c98085",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-full-probe.json",
+          "row": 325,
+          "artifact_sha256": "462defcb21049b07572b892cf25980a9349973b7557d6aad88afaa2638c1bfed",
+          "helper_sha256": null,
+          "response": {
+            "ok": true,
+            "value": "{\"relation\": \"same_event\"}"
+          },
+          "seconds": 0.329
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": true
+      },
+      {
+        "id": "pair-5-10",
+        "pair": [
+          10,
+          5
+        ],
+        "label": "uncertain",
+        "payload_sha256": "a08bd188e33cd53cdf917e8a7628bb43cd0cc410fb0d5381294a9c6328d6451c",
+        "request_sha256": "4bcb3fb157f453defa4c55bf1ddf50504088437742987f5bc039347c61619fd7",
+        "reused": false,
+        "status": "not_run_redundant_acceptance_already_failed"
+      },
+      {
+        "id": "pair-10-94",
+        "pair": [
+          10,
+          94
+        ],
+        "label": "uncertain",
+        "payload_sha256": "b096b86f83436af41bb0461c5f844d6e81a44deda01f746e7eca99b8cc4ab09f",
+        "request_sha256": "04584f6900909cea8b53c4871f55d112796252f015034740ea29c45f1b446df7",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 247,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"same_event\"}",
+            "ok": true
+          },
+          "seconds": 0.354
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": false
+      },
+      {
+        "id": "pair-21-35",
+        "pair": [
+          35,
+          21
+        ],
+        "label": "same_event",
+        "payload_sha256": "e682a30784ea3809dfce5eb513a17596b41d6d6cafe273d075d708b772676dab",
+        "request_sha256": "175bf3a54af438b5e1e1de9b8245a833f49e10bf96a7bdd08d49752813ed0bb6",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 253,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"different_event\"}",
+            "ok": true
+          },
+          "seconds": 0.743
+        },
+        "verdict": 0,
+        "relation": "different_event",
+        "correct": false
+      },
+      {
+        "id": "pair-28-51",
+        "pair": [
+          28,
+          51
+        ],
+        "label": "same_event",
+        "payload_sha256": "3914865145c5223b2f59428d0c4446caaf0fe8c51d635713ef7b8940d47db81b",
+        "request_sha256": "54a7114b7dfd8c629953abe34763ba83f4f48a1c1e1444ba6eabac68417b2ae7",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 256,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"same_event\"}",
+            "ok": true
+          },
+          "seconds": 0.805
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": true
+      },
+      {
+        "id": "pair-51-61",
+        "pair": [
+          51,
+          61
+        ],
+        "label": "same_event",
+        "payload_sha256": "e0f1790923b4064a0f4b5d9d2b23f75b31794ec6eef15c790e97b9db5a840773",
+        "request_sha256": "eaf173a40896a45957613f7fae8db401c21cff37d9bd5bb91c17f7f5c1b3f180",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 267,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"different_event\"}",
+            "ok": true
+          },
+          "seconds": 0.727
+        },
+        "verdict": 0,
+        "relation": "different_event",
+        "correct": false
+      },
+      {
+        "id": "pair-48-49",
+        "pair": [
+          49,
+          48
+        ],
+        "label": "different_event",
+        "payload_sha256": "c37dfdc085f6a27e0bbf16387b7112d65e5a3e852db8392147ba86bbc33ede6d",
+        "request_sha256": "53c1dd4e01657a78e4f4489ab901399ffaa3211e9d174ef473f0a167b9a25188",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 266,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"different_event\"}",
+            "ok": true
+          },
+          "seconds": 0.597
+        },
+        "verdict": 0,
+        "relation": "different_event",
+        "correct": true
+      },
+      {
+        "id": "pair-58-59",
+        "pair": [
+          58,
+          59
+        ],
+        "label": "uncertain",
+        "payload_sha256": "bb78597cba04edd3dcf8396ad1afc3391081249b94140058a89aed52a96276e7",
+        "request_sha256": "0d21f3cd8e835f02f88c4e18d203ccb6fcd84657675d5927221199f77f722c0e",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-full-probe.json",
+          "row": 320,
+          "artifact_sha256": "462defcb21049b07572b892cf25980a9349973b7557d6aad88afaa2638c1bfed",
+          "helper_sha256": null,
+          "response": {
+            "ok": true,
+            "value": "{\"relation\": \"same_event\"}"
+          },
+          "seconds": 0.486
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": false
+      },
+      {
+        "id": "pair-68-70",
+        "pair": [
+          70,
+          68
+        ],
+        "label": "same_event",
+        "payload_sha256": "8678f9054d11fcdfbc016e447e28f21333f3779490a8f9781fe68d925e43de95",
+        "request_sha256": "b17dd2b512e6ba8d5375effa81d19b68b04c79e91d8438a6f0dcbf7cbb72bb78",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 273,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"same_event\"}",
+            "ok": true
+          },
+          "seconds": 0.72
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": true
+      },
+      {
+        "id": "pair-2-38",
+        "pair": [
+          38,
+          2
+        ],
+        "label": "different_event",
+        "payload_sha256": "1051d247e13805b3323c4dcbdb0f2e3648adef962ffa54019df4ff80ec8037b3",
+        "request_sha256": "230bd7c807a00a998aba08c52a0910806c10f9595e6f5664dc2480785fc89f9d",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 242,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"same_event\"}",
+            "ok": true
+          },
+          "seconds": 0.671
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": false
+      },
+      {
+        "id": "pair-14-17",
+        "pair": [
+          17,
+          14
+        ],
+        "label": "different_event",
+        "payload_sha256": "02f1a7d815e3b3cda2edc02a05803533d1c11872966a0b9233a7da404ed9c669",
+        "request_sha256": "149b7ba52bb4f7156f1dd09279236aec7d7ae64c79b805d76815b70692027bf0",
+        "reused": false,
+        "status": "not_run_redundant_acceptance_already_failed"
+      },
+      {
+        "id": "pair-34-45",
+        "pair": [
+          34,
+          45
+        ],
+        "label": "different_event",
+        "payload_sha256": "6c37cd63c56778c67a6ba03f3b2a6f36ce646cc6f36e6c25cc189fe5c66b3afc",
+        "request_sha256": "56452480a2634edde393fc4ec972052565676a8aa8f3ddee1b443b00d401b7bb",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 264,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"different_event\"}",
+            "ok": true
+          },
+          "seconds": 1.523
+        },
+        "verdict": 0,
+        "relation": "different_event",
+        "correct": true
+      },
+      {
+        "id": "pair-17-73",
+        "pair": [
+          17,
+          73
+        ],
+        "label": "different_event",
+        "payload_sha256": "244cea6a42dc0f62336544fba6a142e0c7d7e047b60858c26e87a3fe9b1c7fc6",
+        "request_sha256": "105223ea82745703f9b24df1703adaba083d166df77d4f6dc1e749e6cc160902",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 251,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"different_event\"}",
+            "ok": true
+          },
+          "seconds": 1.141
+        },
+        "verdict": 0,
+        "relation": "different_event",
+        "correct": true
+      },
+      {
+        "id": "pair-15-93",
+        "pair": [
+          15,
+          93
+        ],
+        "label": "same_event",
+        "payload_sha256": "06cf519767fc52100c5bfffe3e9c6a444be9aff5f26d7d4786081a5686663d55",
+        "request_sha256": "0912db7dbf537de4bd0b9b75f1b9819f7265b88332976deabffa7873b2d250fe",
+        "reused": true,
+        "recording": {
+          "file": "/tmp/skim-preparation-anchor-incremental-probe.json",
+          "row": 250,
+          "artifact_sha256": "204479871788a06e801851b9480b4ac601f01ffaf6c5841c0cc092bee72e2695",
+          "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+          "response": {
+            "value": "{\"relation\": \"same_event\"}",
+            "ok": true
+          },
+          "seconds": 0.459
+        },
+        "verdict": 1,
+        "relation": "same_event",
+        "correct": true
+      }
+    ],
+    "selection_bias": "Metrics cover only18 frozen labeled pairs with exact historical requests, selected from E5 top8 union. Historical anchor proposals affect recording availability.2 retrieved labeled pairs are untested and649 unlabeled retrieved pairs unassessed; these figures are not full proposal precision or generalization estimates.",
+    "reuse_proof": "Canonical complete request JSON equality required, including repoId, both ordered messages with exact UTF8 payload strings, temperature0, maxTokens160 and jsonMode true. Each case records canonical request SHA256, exact user payload SHA256, original artifact SHA256 and row. C prompt matched current source literal; raw prior responses were reparsed by strict shared C. Available helper hashes equal current helper; two full-probe records lack helper hash, explicitly retained as unrecorded rather than inferred.",
+    "provenance": {
+      "created_at_utc": "2026-09-25T01:59:07.357664+00:00",
+      "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+      "corpus_sha256": "9e8a46fbe81917babefda2ef6ccee728c6ecafd9360e8e103d9c0d69293f638a",
+      "labels_sha256": "40265351dea0b6b65be7f5487a9930a31299ea25ae73dc7bc258b7601661a7ea",
+      "vectors_sha256": "564cc44247734fabe83735b2620e7af000bea34a78c165748fae12d29c188a06",
+      "prompt_sha256": "e7ee3c0706b95cd8ff26371fef100692d0300b451a1b5011f96fe64b05d52c8f",
+      "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+      "shared_parser_library_sha256": "6be60d4619c3b8e68789bae727956c785dea4e69ede5f9ac0c19dab4f386d482"
+    },
+    "evaluation_sha256": "5853ac74b0d6a16bedb1d585657a50ec1081ab1488c2012432c1e14525b2cb96",
+    "frozen_label_identity_check": "Normalized pair index and label values agree with the original E5 evaluation; wrapper-file hashes differ."
+  }
 }

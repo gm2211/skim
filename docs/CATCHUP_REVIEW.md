@@ -2,6 +2,12 @@
 
 The acceptance target is a fast, attractive newspaper that groups related coverage, supports deeper summaries and article/library questions, and lets chat find relevant articles. This review does not claim that the full target or shared-core migration is complete.
 
+## Publication timestamps in chat evidence
+
+Merged PR #157 supplies labeled ISO8601 UTC publication timestamps in native and desktop article/library chat, outside selected body limits. Unknown publication times remain unknown; fetch times are never substituted and publication metadata is explicitly distinguished from event time. Regressions cover two reports published an hour apart on the same day, metadata-only articles and bounded excerpts. All 148 Swift core, 23 Rust chat, 45 iOS simulator and 156 frontend checks pass; these establish input coverage rather than factual model accuracy.
+
+Desktop **0.1.36** is independently built, signed, installed and strictly verified, with a preserved rollback copy. It was not launched; the Mac remains locked. Native **0.1.13 (73)** is locally archived with verified metadata and matching executable/dSYM UUIDs. TestFlight upload was rejected by automatic approval review because it did not recognize authorization for the exact destination/build payload; no upload was attempted afterward. The [release evidence](releases/2026-09-24-publication-evidence-release.json) records artifact hashes and boundaries. These artifacts exclude the unmerged full-pool preparation work. General factual accuracy remains open under `skim-cg5e`.
+
 ## Original evidence and shared single-pair verdicts
 
 The pair verifier previously received a short card summary, which could omit the actors needed to recognize follow-up coverage. Rust and native Swift now supply up to 2,048 Unicode scalars of the original representative article body, with a stored-summary fallback. One shared C policy owns the prompt, one-pair request budget, 160-token output budget and strict whole-response parser. Code retains report identities; model output can only say `same_event`, `different_event` or `uncertain`. The parser rejects duplicate/extra keys and ambiguous output. Pending plans invalidate when their source evidence changes. Primary proposal inputs, ratings, existing snapshots and the total 30-second deadline retain their existing behavior.

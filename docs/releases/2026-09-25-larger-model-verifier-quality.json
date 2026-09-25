@@ -1,0 +1,652 @@
+{
+  "scope": "One frozen22-pair diagnostic with the already cached larger model. No settings change, model promotion, downloads, prompt tuning, retries or production adoption. Original strict labels unchanged.",
+  "model_provenance": {
+    "model": "mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit",
+    "model_files": [
+      {
+        "name": "added_tokens.json",
+        "bytes": 707,
+        "sha256": "c0284b582e14987fbd3d5a2cb2bd139084371ed9acbae488829a1c900833c680"
+      },
+      {
+        "name": "chat_template.jinja",
+        "bytes": 4040,
+        "sha256": "40c21f34cf67d8c760ef72f8ad3ae5afad514299d4b06e91dd9a8d705af7b541"
+      },
+      {
+        "name": "config.json",
+        "bytes": 10866,
+        "sha256": "e1caf81b25b71686af871f1147290a81cbcb81283b638f98957293990e031417"
+      },
+      {
+        "name": "generation_config.json",
+        "bytes": 239,
+        "sha256": "19d306dd769db12a9d710b44cf7f83b635efbe5166b84fb4358a08fb7d88bb53"
+      },
+      {
+        "name": "model-00001-of-00004.safetensors",
+        "bytes": 5321473414,
+        "sha256": "70919a0f0b7d86c3100e30dfc2c72eb29909b841f9414b9c5ae3e8673ec9ff8c"
+      },
+      {
+        "name": "model-00002-of-00004.safetensors",
+        "bytes": 5366644780,
+        "sha256": "1a0387973b19b0bac1201358d1f56989deaf595da34f307ec29777fa6f8469b8"
+      },
+      {
+        "name": "model-00003-of-00004.safetensors",
+        "bytes": 5276887419,
+        "sha256": "d1a627729b2791dba7db5cda5dd0d24ea4c44c5131981c258598d5d0c80e0df3"
+      },
+      {
+        "name": "model-00004-of-00004.safetensors",
+        "bytes": 1216066381,
+        "sha256": "b02f0e9f626bd2f5bb41e057216c9d6f594ddeac91cc3f2161cc935d050a12c6"
+      },
+      {
+        "name": "model.safetensors.index.json",
+        "bytes": 119598,
+        "sha256": "c100efb419233c6be585014ebd9f5a8c2a4fe9de63be6271172f0f70f1c315ea"
+      },
+      {
+        "name": "special_tokens_map.json",
+        "bytes": 613,
+        "sha256": "76862e765266b85aa9459767e33cbaf13970f327a0e88d1c65846c2ddd3a1ecd"
+      },
+      {
+        "name": "tokenizer.json",
+        "bytes": 11422654,
+        "sha256": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
+      },
+      {
+        "name": "tokenizer_config.json",
+        "bytes": 5404,
+        "sha256": "355f2b4e5bad7b01f11ef6cb68ebc176f61b95c3276092ea225b1bea0e01e95c"
+      },
+      {
+        "name": "vocab.json",
+        "bytes": 2776833,
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+      }
+    ],
+    "helper_sha256": "9a2ccdd00ebc1a76fab2e2176c231b2679e5005b68959593e990ddf256762eff",
+    "prompt_sha256": "e7ee3c0706b95cd8ff26371fef100692d0300b451a1b5011f96fe64b05d52c8f",
+    "corpus_sha256": "9e8a46fbe81917babefda2ef6ccee728c6ecafd9360e8e103d9c0d69293f638a",
+    "labels_sha256": "40265351dea0b6b65be7f5487a9930a31299ea25ae73dc7bc258b7601661a7ea",
+    "parser_sha256": "6be60d4619c3b8e68789bae727956c785dea4e69ede5f9ac0c19dab4f386d482",
+    "limits": {
+      "total_seconds": 300,
+      "calls_per_case": 1,
+      "retries": 0,
+      "downloads": false,
+      "settings_changes": false
+    },
+    "prior_identical_run_found": false
+  },
+  "plan_sha256": "9996f51148e865a6d310cb76e2e31bf153dc2fd7fb575ecb286c84ada07d2621",
+  "summary": {
+    "evaluated": 22,
+    "correct": 15,
+    "errors": [
+      {
+        "id": "5-10",
+        "truth": "uncertain",
+        "response": "same_event"
+      },
+      {
+        "id": "10-94",
+        "truth": "uncertain",
+        "response": "same_event"
+      },
+      {
+        "id": "48-49",
+        "truth": "different_event",
+        "response": "same_event"
+      },
+      {
+        "id": "58-59",
+        "truth": "uncertain",
+        "response": "same_event"
+      },
+      {
+        "id": "2-38",
+        "truth": "different_event",
+        "response": "same_event"
+      },
+      {
+        "id": "14-17",
+        "truth": "different_event",
+        "response": "uncertain"
+      },
+      {
+        "id": "34-45",
+        "truth": "different_event",
+        "response": "uncertain"
+      }
+    ],
+    "elapsed_seconds": 12.782352542039007,
+    "latency_min": 0.2877814999083057,
+    "latency_median": 0.4021209380007349,
+    "latency_max": 2.3862617920385674,
+    "true_positive": 12,
+    "false_positive": 5,
+    "false_negative": 0,
+    "scope": "Frozen22 label diagnostic, unchanged strict prompt/parser, cached30B model only. No product adoption or generalization claim. Initial sandbox launch failed Metal before any verdict; preserved separately."
+  },
+  "cases": [
+    {
+      "id": "4-16",
+      "pair": [
+        4,
+        16
+      ],
+      "label": "same_event",
+      "request_sha256": "4296ea056bd93c6cd322d7a886afa1401d34a481bfdca9f249f989663d39f138"
+    },
+    {
+      "id": "15-30",
+      "pair": [
+        30,
+        15
+      ],
+      "label": "same_event",
+      "request_sha256": "66dc2192e1a7c0dcd3543ddd2cf3f81e3406825661ac68b6c50447bb4a7e97eb"
+    },
+    {
+      "id": "1-32",
+      "pair": [
+        32,
+        1
+      ],
+      "label": "same_event",
+      "request_sha256": "480be81818256b5897325b2909830a2e755af0a803431a387c35b5f2d65f6e9e"
+    },
+    {
+      "id": "32-55",
+      "pair": [
+        32,
+        55
+      ],
+      "label": "same_event",
+      "request_sha256": "83be02029da4054de034f8f49015a3dc28f18b52e15efacb839a4115060b5091"
+    },
+    {
+      "id": "55-64",
+      "pair": [
+        64,
+        55
+      ],
+      "label": "same_event",
+      "request_sha256": "b4a94bc9aff24dea9b8a76e2812d8ae4c362712d9f63fd465e901b4d6bfa07cb"
+    },
+    {
+      "id": "64-72",
+      "pair": [
+        64,
+        72
+      ],
+      "label": "same_event",
+      "request_sha256": "e0bef283cb6853a3ae2ac66dbc0d651d1566f5635fb1695c3a4686329df186f2"
+    },
+    {
+      "id": "72-100",
+      "pair": [
+        100,
+        72
+      ],
+      "label": "same_event",
+      "request_sha256": "da3188450f94a6d0a5d30397592ee9841ec9ac7138030595ca1cc3b7cafe43bf"
+    },
+    {
+      "id": "5-10",
+      "pair": [
+        10,
+        5
+      ],
+      "label": "uncertain",
+      "request_sha256": "755d9ce6e1cacf3b427589d9666ff6723838a71154d602b80cd7ef0df34cd36d"
+    },
+    {
+      "id": "10-94",
+      "pair": [
+        10,
+        94
+      ],
+      "label": "uncertain",
+      "request_sha256": "3cc60b7572ee33a9cb3111c01749c3ddeaebcf8a56eac113575e8dd5e061b7b7"
+    },
+    {
+      "id": "21-35",
+      "pair": [
+        35,
+        21
+      ],
+      "label": "same_event",
+      "request_sha256": "80e8625d32b09b6f371c79e52202e24ed46c47663fa86f168df28bd70d189920"
+    },
+    {
+      "id": "28-51",
+      "pair": [
+        28,
+        51
+      ],
+      "label": "same_event",
+      "request_sha256": "fcca9c0a0f523f3b55a61d91f1d73307f8863379b9d2eea73db2fee2d574bd10"
+    },
+    {
+      "id": "51-61",
+      "pair": [
+        51,
+        61
+      ],
+      "label": "same_event",
+      "request_sha256": "0266860284806e17c10ef0a281f14902d6b8af1d234158c70d316d4cded1ee9d"
+    },
+    {
+      "id": "48-49",
+      "pair": [
+        49,
+        48
+      ],
+      "label": "different_event",
+      "request_sha256": "70689faf362e46d1152befee6a09dc5db930d569e5ce1d5c02624824a4a104a1"
+    },
+    {
+      "id": "58-59",
+      "pair": [
+        58,
+        59
+      ],
+      "label": "uncertain",
+      "request_sha256": "db53d13b31db10c7a6611879de9c8f7189f5d598edae285c111cc4a8bbac3c9b"
+    },
+    {
+      "id": "68-70",
+      "pair": [
+        70,
+        68
+      ],
+      "label": "same_event",
+      "request_sha256": "57cac59889fb4e9595d1bdbc7d78fdb57ceb73da25b576a20123ef0ca4816291"
+    },
+    {
+      "id": "2-38",
+      "pair": [
+        38,
+        2
+      ],
+      "label": "different_event",
+      "request_sha256": "a4f87d674a82d1f7aa754b26fccef6f2b2850e40679bf7365e9eb213fdcac535"
+    },
+    {
+      "id": "14-17",
+      "pair": [
+        17,
+        14
+      ],
+      "label": "different_event",
+      "request_sha256": "8eae8f5a0bb22620e809fa8a97fcda9d18f94af6e20846160f219720aa8a74d0"
+    },
+    {
+      "id": "34-45",
+      "pair": [
+        34,
+        45
+      ],
+      "label": "different_event",
+      "request_sha256": "c7b38bd3b27f01635f74f8d4fddfb235a4dce60492c7fcf4b415ba973ffe8770"
+    },
+    {
+      "id": "73-17",
+      "pair": [
+        17,
+        73
+      ],
+      "label": "different_event",
+      "request_sha256": "9bdaa7bc7e78d7770dcb99f845cd7d172bc3aead7a49bbbdaa45e2f0e7e765d8"
+    },
+    {
+      "id": "25-26",
+      "pair": [
+        25,
+        26
+      ],
+      "label": "different_event",
+      "request_sha256": "b1802f2a63e7ed60f95caf3103f0d23eda17dd2f6fc63427bab1379f0912a6a0"
+    },
+    {
+      "id": "0-16",
+      "pair": [
+        0,
+        16
+      ],
+      "label": "different_event",
+      "request_sha256": "18cb1a9d25801d6ec653c89f41f8eebe6e56b9654cb03cf3dd72dcd82c5a5100"
+    },
+    {
+      "id": "93-15",
+      "pair": [
+        15,
+        93
+      ],
+      "label": "same_event",
+      "request_sha256": "ba055d7551c07f0d2afcdcd2cb8cbe71ef9f5eceb180514f633d65ef2b4518d5"
+    }
+  ],
+  "results": {
+    "plan_sha256": "9996f51148e865a6d310cb76e2e31bf153dc2fd7fb575ecb286c84ada07d2621",
+    "rows": [
+      {
+        "id": "4-16",
+        "pair": [
+          4,
+          16
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 2.3862617920385674
+      },
+      {
+        "id": "15-30",
+        "pair": [
+          30,
+          15
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.31597391702234745
+      },
+      {
+        "id": "1-32",
+        "pair": [
+          32,
+          1
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.5769918330479413
+      },
+      {
+        "id": "32-55",
+        "pair": [
+          32,
+          55
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.2880391249200329
+      },
+      {
+        "id": "55-64",
+        "pair": [
+          64,
+          55
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.5170362920034677
+      },
+      {
+        "id": "64-72",
+        "pair": [
+          64,
+          72
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.5204366670222953
+      },
+      {
+        "id": "72-100",
+        "pair": [
+          100,
+          72
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.2902682919520885
+      },
+      {
+        "id": "5-10",
+        "pair": [
+          10,
+          5
+        ],
+        "label": "uncertain",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.2884247920010239
+      },
+      {
+        "id": "10-94",
+        "pair": [
+          10,
+          94
+        ],
+        "label": "uncertain",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.2896930000279099
+      },
+      {
+        "id": "21-35",
+        "pair": [
+          35,
+          21
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.3750191249419004
+      },
+      {
+        "id": "28-51",
+        "pair": [
+          28,
+          51
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.5413727919803932
+      },
+      {
+        "id": "51-61",
+        "pair": [
+          51,
+          61
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.40857816708739847
+      },
+      {
+        "id": "48-49",
+        "pair": [
+          49,
+          48
+        ],
+        "label": "different_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.37456195801496506
+      },
+      {
+        "id": "58-59",
+        "pair": [
+          58,
+          59
+        ],
+        "label": "uncertain",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.3956637089140713
+      },
+      {
+        "id": "68-70",
+        "pair": [
+          70,
+          68
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.37275424995459616
+      },
+      {
+        "id": "2-38",
+        "pair": [
+          38,
+          2
+        ],
+        "label": "different_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.544315000064671
+      },
+      {
+        "id": "14-17",
+        "pair": [
+          17,
+          14
+        ],
+        "label": "different_event",
+        "response": {
+          "value": "{\"relation\":\"uncertain\"}",
+          "ok": true
+        },
+        "verdict": 2,
+        "seconds": 0.9460742499213666
+      },
+      {
+        "id": "34-45",
+        "pair": [
+          34,
+          45
+        ],
+        "label": "different_event",
+        "response": {
+          "value": "{\"relation\":\"uncertain\"}",
+          "ok": true
+        },
+        "verdict": 2,
+        "seconds": 0.9002188330050558
+      },
+      {
+        "id": "73-17",
+        "pair": [
+          17,
+          73
+        ],
+        "label": "different_event",
+        "response": {
+          "value": "{\"relation\":\"different_event\"}",
+          "ok": true
+        },
+        "verdict": 0,
+        "seconds": 0.8855566249694675
+      },
+      {
+        "id": "25-26",
+        "pair": [
+          25,
+          26
+        ],
+        "label": "different_event",
+        "response": {
+          "value": "{\"relation\":\"different_event\"}",
+          "ok": true
+        },
+        "verdict": 0,
+        "seconds": 0.2877814999083057
+      },
+      {
+        "id": "0-16",
+        "pair": [
+          0,
+          16
+        ],
+        "label": "different_event",
+        "response": {
+          "value": "{\"relation\":\"different_event\"}",
+          "ok": true
+        },
+        "verdict": 0,
+        "seconds": 0.5468613340053707
+      },
+      {
+        "id": "93-15",
+        "pair": [
+          15,
+          93
+        ],
+        "label": "same_event",
+        "response": {
+          "value": "{\"relation\":\"same_event\"}",
+          "ok": true
+        },
+        "verdict": 1,
+        "seconds": 0.36615641706157476
+      }
+    ],
+    "elapsed_seconds": 12.782352542039007,
+    "stop": null
+  },
+  "infrastructure": "Initial restricted-sandbox run failed Metal initialization before any verdict. Same fixed diagnostic then ran with Metal access; initial failure retained in temporary artifacts."
+}

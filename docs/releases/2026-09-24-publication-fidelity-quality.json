@@ -1,0 +1,314 @@
+{
+  "created_at_utc": "2026-09-25T01:29:07.434786+00:00",
+  "issue": "skim-cg5e.1",
+  "parent_issue": "skim-cg5e",
+  "status": "Publication evidence supplied; general chronology/factual fidelity remains unaccepted",
+  "frozen_cases": {
+    "schema_version": 1,
+    "status": "FROZEN_PROPOSAL_NOT_RUN",
+    "prior_corpus_audit": "No eligible existing question depends on external publication timestamp metadata. The 22-case corpus lacks published_at fields. Its ferry publication question already states the bulletin date in body text, so replaying it would not test the newly added evidence.",
+    "source": "New synthetic fixtures with source-supported labels frozen before any model output; not reused historical independent labels.",
+    "protocol": {
+      "model": "configured Qwen4B",
+      "arms": [
+        "actual pre-PR157 context builder",
+        "actual merged PR157 context builder"
+      ],
+      "calls": 6,
+      "retries": 0,
+      "settings_mutations": false,
+      "sampling": "identical configured values in both arms",
+      "grading": "All required facts covered, no forbidden or additional unsupported factual inference; reasonable paraphrase accepted. Report uncertainty as appropriate; baseline lacks metadata by construction."
+    },
+    "cases": [
+      {
+        "id": "publication-vs-event",
+        "kind": "article",
+        "sources": [
+          {
+            "id": "gate-report",
+            "title": "Canal gate inspection completed",
+            "published_at": "2026-09-24T08:15:00Z",
+            "fetched_at": "2026-09-25T12:00:00Z",
+            "body": "The Halden canal gate inspection finished on September 20, 2026 at 16:00 UTC. Engineers found no cracks in the inspected outer panel. The inspection did not cover the submerged hinges."
+          }
+        ],
+        "question": "When was this article published, and was that the date the gate inspection finished?",
+        "required_facts": [
+          "Article published September 24, 2026 at 08:15 UTC.",
+          "No; inspection finished September 20, 2026 at 16:00 UTC."
+        ],
+        "forbidden_inferences": [
+          "September 20 is the publication date.",
+          "September 25 fetch time is the publication time.",
+          "The submerged hinges passed inspection."
+        ]
+      },
+      {
+        "id": "same-day-publication-order",
+        "kind": "library",
+        "sources": [
+          {
+            "id": "earlier-report",
+            "title": "Neral weather mast calibration report",
+            "published_at": "2026-09-24T07:15:00Z",
+            "fetched_at": "2026-09-25T12:00:00Z",
+            "body": "The Neral weather mast was recalibrated on September 23 at 18:00 UTC. Routine readings resumed afterward."
+          },
+          {
+            "id": "later-report",
+            "title": "Orven weather mast calibration report",
+            "published_at": "2026-09-24T11:40:00Z",
+            "fetched_at": "2026-09-25T10:00:00Z",
+            "body": "The Orven weather mast was recalibrated on September 22 at 09:00 UTC. Its audit remains open."
+          }
+        ],
+        "question": "Which report was published first, and by how much? Keep publication order separate from the calibration dates.",
+        "required_facts": [
+          "Neral report published first at 07:15 UTC on September 24.",
+          "Orven report published at 11:40 UTC that day, 4 hours 25 minutes later.",
+          "Orven calibration happened earlier, September 22 versus Neral September 23; this does not reverse report publication order."
+        ],
+        "forbidden_inferences": [
+          "Orven report was published first because its calibration happened earlier.",
+          "Fetch timestamps determine publication order.",
+          "Same-day reports have identical publication time."
+        ]
+      },
+      {
+        "id": "relative-utc-day",
+        "kind": "article",
+        "sources": [
+          {
+            "id": "reservoir-bulletin",
+            "title": "Brindle reservoir sampling bulletin",
+            "published_at": "2026-09-24T00:30:00Z",
+            "fetched_at": "2026-09-26T09:00:00Z",
+            "body": "All calendar references in this bulletin use UTC and are relative to its publication time. Water sampling finished yesterday at 16:00. Laboratory analysis has not yet been completed. A result date has not been announced."
+          }
+        ],
+        "question": "On what calendar date and UTC time did sampling finish, and do we know when laboratory results will be ready?",
+        "required_facts": [
+          "Sampling finished September 23, 2026 at 16:00 UTC, the day before publication.",
+          "No result date has been announced; analysis is incomplete."
+        ],
+        "forbidden_inferences": [
+          "Sampling finished September 25 based on fetch time.",
+          "Sampling finished September 24.",
+          "Any invented result completion date or claim results are ready."
+        ]
+      }
+    ]
+  },
+  "provenance": {
+    "baseline_commit": "0fd8b411",
+    "merged_commit": "4851e4012eeff2b61f8254a055fd48dd10f7ffc3",
+    "test_command": "cargo test --manifest-path src-tauri/Cargo.toml temporary_export_publication_contexts --lib",
+    "test_result": "1 passed; 184 filtered out",
+    "builder_provenance": "Temporary Rust test executed merged article_chat_context; pre-PR157 article formatter and pre/post library formatter blocks were copied verbatim automatically from Git sources into test. Actual shared selector executed; short bodies remain whole. Not actual Tauri handlers: provider/search/DB retrieval and UI bypassed. Test removed afterward.",
+    "metadata": "Synthetic fixture source, author missing, URL missing in both arms. Published timestamps are case data; fetched timestamps deliberately not passed.",
+    "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    "sampling": "Production article temperature0.5/library0.4, max2048,jsonModefalse, other helper defaults unchanged; no saved settings writes",
+    "artifacts": {
+      "/tmp/skim-publication-fidelity-proposed-cases.json": "c5a1947b45328169415e3bb31661819d597809d14b21d8b4db14370d78769ed2",
+      "/tmp/skim-publication-fidelity-inputs.json": "94ebdf5f7e0f5eebd11bd942fea300a75b4a6b301d6b2903862eeff95ca29b95",
+      "/tmp/skim-export-publication-contexts.py": "8a8526957d4a2b48635993f6ca3135490686dd576fed659a789f28791670614e"
+    },
+    "helper_sha256": "339ec95f59b0656f2d5422f5d2bc7d933cba983bbd44c12cc55c62f14daad881",
+    "limitations": [
+      "Three new synthetic cases approved/frozen before responses, not historical independent labels.",
+      "Model completion boundary only; no web routing, application UI, native runtime or broad factual-accuracy claim.",
+      "Initial sandbox Metal initialization failed before responses; recorded separately; identical inputs rerun with Metal access."
+    ]
+  },
+  "outputs": [
+    {
+      "case_id": "publication-vs-event",
+      "arm": "before",
+      "text": "The article states that the canal gate inspection finished on September 20, 2026, at 16:00 UTC. However, the article itself does not provide a publication date. Therefore, we cannot confirm when the article was published — only that the inspection concluded on September 20, 2026. The article's content suggests it was written after or around that date, but no specific publication date is given.",
+      "seconds": 2.826,
+      "packet": {
+        "command": "mlx_complete",
+        "repoId": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+        "maxTokens": 2048,
+        "temperature": 0.5,
+        "jsonMode": false,
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a helpful assistant discussing a news article. Answer questions about the article, provide context, and help the user understand the topic better. Be concise and direct. No emoji.\n\nArticle Title: Canal gate inspection completed\nSource: Synthetic fixture\nAuthor: Unknown\n\nArticle Content:\nThe Halden canal gate inspection finished on September 20, 2026 at 16:00 UTC. Engineers found no cracks in the inspected outer panel. The inspection did not cover the submerged hinges."
+          },
+          {
+            "role": "user",
+            "content": "When was this article published, and was that the date the gate inspection finished?"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "publication-vs-event",
+      "arm": "after",
+      "text": "The article was published on September 24, 2026, at 08:15 UTC. This is **not** the date the gate inspection finished.\n\nThe gate inspection finished on **September 20, 2026, at 16:00 UTC**, as stated in the article content. The publication date (September 24) is later than the inspection completion date.",
+      "seconds": 0.743,
+      "packet": {
+        "command": "mlx_complete",
+        "repoId": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+        "maxTokens": 2048,
+        "temperature": 0.5,
+        "jsonMode": false,
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a helpful assistant discussing a news article. Answer questions about the article, provide context, and help the user understand the topic better. Be concise and direct. No emoji.\n\nArticle Title: Canal gate inspection completed\nSource: Synthetic fixture\nAuthor: Unknown\nPublication time (UTC): 2026-09-24T08:15:00Z (article metadata, not the event time)\n\nArticle Content:\nThe Halden canal gate inspection finished on September 20, 2026 at 16:00 UTC. Engineers found no cracks in the inspected outer panel. The inspection did not cover the submerged hinges."
+          },
+          {
+            "role": "user",
+            "content": "When was this article published, and was that the date the gate inspection finished?"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "same-day-publication-order",
+      "arm": "before",
+      "text": "The Orven weather mast report was published first.  \n\nPublication dates:  \n- Orven report: September 24, 2026  \n- Neral report: September 24, 2026  \n\nBoth reports were published on the same date, so there is no difference in publication order. The calibration dates are not relevant to the publication order as per the query.  \n\nTherefore, neither report was published first—both were published on the same day.",
+      "seconds": 0.841,
+      "packet": {
+        "command": "mlx_complete",
+        "repoId": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+        "maxTokens": 2048,
+        "temperature": 0.4,
+        "jsonMode": false,
+        "messages": [
+          {
+            "role": "system",
+            "content": "You answer the user's questions about articles from their RSS feed. Prefer the articles below as evidence and cite them with their bracket number like [2]. Be concise. No emoji.\n\nRelevant articles from the user's RSS feed:\n\n[1] Title: Neral weather mast calibration report\nSource: Synthetic fixture\nAuthor: \nDate: 2026-09-24\nURL: \nExcerpt: The Neral weather mast was recalibrated on September 23 at 18:00 UTC. Routine readings resumed afterward.\n\n[2] Title: Orven weather mast calibration report\nSource: Synthetic fixture\nAuthor: \nDate: 2026-09-24\nURL: \nExcerpt: The Orven weather mast was recalibrated on September 22 at 09:00 UTC. Its audit remains open.\n\n"
+          },
+          {
+            "role": "user",
+            "content": "Which report was published first, and by how much? Keep publication order separate from the calibration dates."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "same-day-publication-order",
+      "arm": "after",
+      "text": "The Neral weather mast report was published first.  \n\nIt was published at 07:15 UTC on September 24, 2026.  \nThe Orven weather mast report was published at 11:40 UTC on September 24, 2026.  \n\nDifference: 4 hours 25 minutes.",
+      "seconds": 0.704,
+      "packet": {
+        "command": "mlx_complete",
+        "repoId": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+        "maxTokens": 2048,
+        "temperature": 0.4,
+        "jsonMode": false,
+        "messages": [
+          {
+            "role": "system",
+            "content": "You answer the user's questions about articles from their RSS feed. Prefer the articles below as evidence and cite them with their bracket number like [2]. Be concise. No emoji.\n\nRelevant articles from the user's RSS feed:\n\n[1] Title: Neral weather mast calibration report\nSource: Synthetic fixture\nAuthor: \nPublication time (UTC): 2026-09-24T07:15:00Z (article metadata, not the event time)\nURL: \nExcerpt: The Neral weather mast was recalibrated on September 23 at 18:00 UTC. Routine readings resumed afterward.\n\n[2] Title: Orven weather mast calibration report\nSource: Synthetic fixture\nAuthor: \nPublication time (UTC): 2026-09-24T11:40:00Z (article metadata, not the event time)\nURL: \nExcerpt: The Orven weather mast was recalibrated on September 22 at 09:00 UTC. Its audit remains open.\n\n"
+          },
+          {
+            "role": "user",
+            "content": "Which report was published first, and by how much? Keep publication order separate from the calibration dates."
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "relative-utc-day",
+      "arm": "before",
+      "text": "Sampling finished on the calendar date corresponding to the publication time of the bulletin (relative to UTC), at 16:00 UTC.  \n\nHowever, the exact calendar date is not specified in the article, as it depends on when the bulletin was published.  \n\nLaboratory results have not yet been completed, and a result date has not been announced. Therefore, we do not know when the laboratory results will be ready.",
+      "seconds": 0.711,
+      "packet": {
+        "command": "mlx_complete",
+        "repoId": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+        "maxTokens": 2048,
+        "temperature": 0.5,
+        "jsonMode": false,
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a helpful assistant discussing a news article. Answer questions about the article, provide context, and help the user understand the topic better. Be concise and direct. No emoji.\n\nArticle Title: Brindle reservoir sampling bulletin\nSource: Synthetic fixture\nAuthor: Unknown\n\nArticle Content:\nAll calendar references in this bulletin use UTC and are relative to its publication time. Water sampling finished yesterday at 16:00. Laboratory analysis has not yet been completed. A result date has not been announced."
+          },
+          {
+            "role": "user",
+            "content": "On what calendar date and UTC time did sampling finish, and do we know when laboratory results will be ready?"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "relative-utc-day",
+      "arm": "after",
+      "text": "Sampling finished on September 24, 2026, at 16:00 UTC.\n\nWe do not know when the laboratory results will be ready. The article states that laboratory analysis has not yet been completed and a result date has not been announced.",
+      "seconds": 0.523,
+      "packet": {
+        "command": "mlx_complete",
+        "repoId": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+        "maxTokens": 2048,
+        "temperature": 0.5,
+        "jsonMode": false,
+        "messages": [
+          {
+            "role": "system",
+            "content": "You are a helpful assistant discussing a news article. Answer questions about the article, provide context, and help the user understand the topic better. Be concise and direct. No emoji.\n\nArticle Title: Brindle reservoir sampling bulletin\nSource: Synthetic fixture\nAuthor: Unknown\nPublication time (UTC): 2026-09-24T00:30:00Z (article metadata, not the event time)\n\nArticle Content:\nAll calendar references in this bulletin use UTC and are relative to its publication time. Water sampling finished yesterday at 16:00. Laboratory analysis has not yet been completed. A result date has not been announced."
+          },
+          {
+            "role": "user",
+            "content": "On what calendar date and UTC time did sampling finish, and do we know when laboratory results will be ready?"
+          }
+        ]
+      }
+    }
+  ],
+  "independent_review": {
+    "before": {
+      "faithful": 1,
+      "complete": 0,
+      "total": 3
+    },
+    "after": {
+      "faithful": 2,
+      "complete": 1,
+      "total": 3
+    },
+    "cases": [
+      {
+        "id": "publication-vs-event",
+        "before_faithful": true,
+        "before_complete": false,
+        "after_faithful": true,
+        "after_complete": true,
+        "finding": "Before correctly abstains from unknown publication date; after supplies publication time and separates event time."
+      },
+      {
+        "id": "same-day-publication-order",
+        "before_faithful": false,
+        "before_complete": false,
+        "after_faithful": true,
+        "after_complete": false,
+        "finding": "Before contradicts itself and invents order. After gives correct publication times/order and 4h25m interval, but omits frozen required comparison with calibration chronology. It also omits production bracket citations."
+      },
+      {
+        "id": "relative-utc-day",
+        "before_faithful": false,
+        "before_complete": false,
+        "after_faithful": false,
+        "after_complete": false,
+        "finding": "Before loses day-before relation while admitting exact date unavailable. After incorrectly says September24 rather than September23. Both preserve unknown result availability."
+      }
+    ],
+    "grading_boundary": "Fidelity and complete answer coverage are separate. Faithful abstention with unavailable metadata is not hallucination. Omitted predeclared facts remain incomplete."
+  },
+  "infrastructure_attempt": {
+    "result": "Metal initialization failed before any generation in default sandbox; zero model answers",
+    "artifact_sha256": "9b2a7503ead4448224c57bce4d1b2fdb32eb51250b51d88022fd2aa24e60966f",
+    "correction": "Identical frozen inputs executed once with required local Metal access. No answer-quality retries."
+  },
+  "limits": [
+    "Three newly authored synthetic cases, one stochastic output per arm, no statistical/general factual-accuracy claim.",
+    "Article helper executed; historical and library inline formatter blocks copied verbatim from Git into a temporary Rust export test. Full Tauri handlers, retrieval, UI and native runtime were not exercised.",
+    "Temporary test removed; isolated release worktree clean. No source, saved settings, archive or upload changes.",
+    "Source fix remains merged and desktop0.1.36 installed; native73 is only locally archived pending exact TestFlight approval."
+  ]
+}

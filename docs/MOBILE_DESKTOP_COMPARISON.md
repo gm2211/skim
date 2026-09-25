@@ -12,7 +12,7 @@ Follow-up one-reference lookup probes returned valid responses in all 296 and 23
 
 ## Latest release: publication timestamps in chat
 
-Merged PR #157 adds labeled ISO8601 UTC publication timestamps to all four native/desktop article and library chat contexts, preserving same-day chronology without treating publication time as event time. Unknown dates remain unknown. Desktop 0.1.36 is built, signed, installed and verified; iOS 0.1.13 (73) is archived locally, awaiting exact TestFlight upload approval. Neither artifact includes draft PR #156. [Release evidence](releases/2026-09-24-publication-evidence-release.json) records hashes, tests and the unverified interaction boundary. PR #159 separately fixes timezone-test isolation from ambient Node types; it does not change application artifacts.
+Merged PR #157 adds labeled ISO8601 UTC publication timestamps to all four native/desktop article and library chat contexts, preserving same-day chronology without treating publication time as event time. Unknown dates remain unknown. Desktop 0.1.36 is built, signed, installed and verified; iOS 0.1.13 (73) is archived locally, awaiting exact TestFlight upload approval. Neither artifact includes draft PR #156. [Release evidence](releases/2026-09-24-publication-evidence-release.json) records hashes, tests and the unverified interaction boundary. PR #159 separately fixes timezone-test isolation from ambient Node types; it does not change application artifacts. A limited [synthetic chronology replay](releases/2026-09-24-publication-fidelity-quality.json) improves direct publication answers but still gets a relative date wrong; it does not establish general factual accuracy.
 
 ## Previous verification: shared original-evidence pair verdicts
 

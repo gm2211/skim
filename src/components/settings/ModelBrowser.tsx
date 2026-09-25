@@ -11,6 +11,8 @@ import {
 } from "../../hooks/useModels";
 import type { AiSettings, HfModelFile } from "../../services/types";
 import { NumberInput } from "../ui/NumberInput";
+import { Select } from "../ui/Select";
+import { friendlyModelName, localModelPresetsFor } from "../../lib/localModels";
 
 function formatBytes(bytes: number | null): string {
   if (!bytes) return "";
@@ -50,28 +52,6 @@ const ALL_QUANTS: { pattern: string; label: string; recommended?: boolean; defau
 ];
 
 const DEFAULT_QUANTS = new Set(ALL_QUANTS.filter((q) => q.defaultOn).map((q) => q.pattern));
-
-// Larger Q4 presets are offered on Macs with enough unified memory to leave
-// room for the reader and OS. These are pinned files from the model cards,
-// rather than arbitrary search results.
-const STRONG_PRESETS = [
-  {
-    repo: "bartowski/Qwen_Qwen3-30B-A3B-GGUF",
-    file: "Qwen_Qwen3-30B-A3B-Q4_K_M.gguf",
-    name: "Qwen3 30B A3B",
-    size: "17.4 GiB",
-    minMemoryGb: 32,
-    desc: "Sparse 30B model with a larger memory footprint.",
-  },
-  {
-    repo: "bartowski/Qwen_Qwen3-32B-GGUF",
-    file: "Qwen_Qwen3-32B-Q4_K_M.gguf",
-    name: "Qwen3 32B",
-    size: "18.4 GiB",
-    minMemoryGb: 32,
-    desc: "Higher-capacity local model; plan for a larger download.",
-  },
-] as const;
 
 function filterAndSortFiles(files: HfModelFile[], enabledQuants: Set<string>) {
   const results: (HfModelFile & { tier: typeof ALL_QUANTS[0] })[] = [];
@@ -366,7 +346,7 @@ export function ModelBrowser({
         >
           <span className="text-text-muted">Active model: </span>
           <span className="text-accent font-medium">
-            {ai.local_model_path.split("/").pop()}
+            {friendlyModelName(ai.local_model_path).name}
           </span>
         </div>
       )}
@@ -408,8 +388,14 @@ export function ModelBrowser({
                   <div
                     className="text-text-primary truncate"
                     style={{ fontSize: 13 }}
+                    title={m.filename}
                   >
-                    {m.filename}
+                    {friendlyModelName(m.filename).name}
+                    {friendlyModelName(m.filename).quant && (
+                      <span className="text-text-muted" style={{ fontSize: 11, marginLeft: 8 }}>
+                        {friendlyModelName(m.filename).quant}
+                      </span>
+                    )}
                     {m.is_partial && (
                       <span className="text-warning" style={{ fontSize: 11 }}> (incomplete)</span>
                     )}
@@ -485,7 +471,7 @@ export function ModelBrowser({
             style={{ marginBottom: 8 }}
           >
             <span className="text-text-secondary" style={{ fontSize: 13 }}>
-              Downloading {progress.filename}
+              Downloading {friendlyModelName(progress.filename).name}
             </span>
             <div className="flex items-center gap-2">
               <span className="text-text-muted" style={{ fontSize: 12 }}>
@@ -528,32 +514,36 @@ export function ModelBrowser({
           Recommended Models
         </label>
         <div className="flex flex-col gap-2">
-          {[
-            { repo: "bartowski/Llama-3.2-1B-Instruct-GGUF", file: "Llama-3.2-1B-Instruct-Q4_K_M.gguf", name: "Llama 3.2 1B", size: "0.8 GB", desc: "Lightweight option for smaller Macs and lower power use." },
-            { repo: "bartowski/google_gemma-4-E2B-it-GGUF", file: "google_gemma-4-E2B-it-Q4_K_M.gguf", name: "Gemma 4 E2B", size: "3.5 GB", desc: "Balanced small model with a moderate memory footprint." },
-            { repo: "bartowski/google_gemma-4-E4B-it-GGUF", file: "google_gemma-4-E4B-it-Q4_K_M.gguf", name: "Gemma 4 E4B", size: "5.4 GB", desc: "Balanced mid-size model for Macs with more memory." },
-            { repo: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF", file: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", name: "Llama 3.1 8B", size: "4.9 GB", desc: "Larger general-purpose model with a higher memory footprint." },
-          ].map((preset) => {
-            const installed = localModels.data?.some((m) => m.filename === preset.file);
-            const isDownloading = downloadModel.isPending;
+          {localModelPresetsFor(sysInfo.data?.total_memory_gb).map((preset) => {
+            const installed = localModels.data?.some((m) => m.filename === preset.file && !m.is_partial);
             return (
               <div
                 key={preset.file}
-                className="flex items-center justify-between rounded-lg border border-white/10"
-                style={{ padding: "8px 12px" }}
+                className="flex items-center justify-between gap-3 rounded-xl border border-white/10"
+                style={{ padding: "10px 14px", background: "rgba(255,255,255,0.02)" }}
               >
-                <div>
-                  <span className="text-text-primary" style={{ fontSize: 13 }}>{preset.name}</span>
-                  <span className="text-text-muted" style={{ fontSize: 11, marginLeft: 8 }}>{preset.size}</span>
-                  <p className="text-text-muted" style={{ fontSize: 11 }}>{preset.desc}</p>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-text-primary" style={{ fontSize: 13, fontWeight: 500 }}>{preset.name}</span>
+                    <span className="text-text-muted" style={{ fontSize: 11 }}>{preset.sizeGb.toFixed(1)} GB</span>
+                    {preset.recommended && (
+                      <span
+                        className="text-accent rounded-full border border-accent/30"
+                        style={{ fontSize: 10, fontWeight: 600, padding: "1px 7px" }}
+                      >
+                        Recommended
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-text-muted" style={{ fontSize: 11, marginTop: 2 }}>{preset.desc}</p>
                 </div>
                 {installed ? (
-                  <span className="text-accent" style={{ fontSize: 11 }}>Installed</span>
+                  <span className="text-text-muted flex-shrink-0" style={{ fontSize: 11 }}>Downloaded</span>
                 ) : (
                   <button
                     onClick={() => downloadModel.mutate({ repoId: preset.repo, filename: preset.file })}
-                    disabled={isDownloading}
-                    className="text-accent border border-accent/20 hover:bg-accent/10 rounded-lg transition-colors disabled:opacity-40"
+                    disabled={downloadModel.isPending}
+                    className="text-accent border border-accent/20 hover:bg-accent/10 rounded-lg transition-colors disabled:opacity-40 flex-shrink-0"
                     style={{ padding: "4px 12px", fontSize: 11 }}
                   >
                     Download
@@ -564,43 +554,6 @@ export function ModelBrowser({
           })}
         </div>
       </div>
-
-      {sysInfo.data && sysInfo.data.total_memory_gb >= 32 && (
-        <div style={{ marginBottom: 16 }}>
-          <label className="block text-text-primary" style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>
-            Higher-capacity models
-          </label>
-          <p className="text-text-muted" style={{ fontSize: 11, marginBottom: 8 }}>
-            Shown for Macs with 32 GB+ unified memory. Larger models leave less room for other apps.
-          </p>
-          <div className="flex flex-col gap-2">
-            {STRONG_PRESETS.filter((preset) => sysInfo.data!.total_memory_gb >= preset.minMemoryGb).map((preset) => {
-              const installed = localModels.data?.some((m) => m.filename === preset.file);
-              return (
-                <div key={preset.file} className="flex items-center justify-between rounded-lg border border-white/10" style={{ padding: "8px 12px" }}>
-                  <div>
-                    <span className="text-text-primary" style={{ fontSize: 13 }}>{preset.name}</span>
-                    <span className="text-text-muted" style={{ fontSize: 11, marginLeft: 8 }}>{preset.size}</span>
-                    <p className="text-text-muted" style={{ fontSize: 11 }}>{preset.desc}</p>
-                  </div>
-                  {installed ? (
-                    <span className="text-accent" style={{ fontSize: 11 }}>Installed</span>
-                  ) : (
-                    <button
-                      onClick={() => downloadModel.mutate({ repoId: preset.repo, filename: preset.file })}
-                      disabled={downloadModel.isPending}
-                      className="text-accent border border-accent/20 hover:bg-accent/10 rounded-lg transition-colors disabled:opacity-40"
-                      style={{ padding: "4px 12px", fontSize: 11 }}
-                    >
-                      Download
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Browse Models — hidden by default */}
       <div>
@@ -903,16 +856,16 @@ export function ModelBrowser({
         >
           Power mode
         </label>
-        <select
+        <Select
+          aria-label="Power mode"
           value={ai.local_power_mode ?? "balanced"}
           onChange={(e) => updateAi({ local_power_mode: e.target.value })}
-          className={inputClass}
-          style={{ ...inputStyle, width: 220 }}
+          style={{ fontSize: 14 }}
         >
           <option value="cool">Cool — CPU only, 2 threads</option>
           <option value="balanced">Balanced — mixed GPU/CPU (default)</option>
           <option value="performance">Performance — all GPU, all threads</option>
-        </select>
+        </Select>
         <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
           <strong>Cool</strong>: laptop stays quiet and cool. Inference is slow (~10-30s per summary).
           <br />
@@ -932,15 +885,15 @@ export function ModelBrowser({
         >
           Model preload
         </label>
-        <select
+        <Select
+          aria-label="Model preload"
           value={ai.local_preload ?? "off"}
           onChange={(e) => updateAi({ local_preload: e.target.value })}
-          className={inputClass}
-          style={{ ...inputStyle, width: 220 }}
+          style={{ fontSize: 14 }}
         >
           <option value="off">Off — load on first use (default)</option>
           <option value="on">On — load at startup</option>
-        </select>
+        </Select>
         <p className="text-text-muted" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>
           <strong>Off</strong>: coolest at rest. First summary pays a 1-5s load cost.
           <br />

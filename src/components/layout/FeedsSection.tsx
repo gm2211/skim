@@ -23,6 +23,7 @@ import {
 import type { Feed, Folder, SidebarView, SmartRules } from "../../services/types";
 import { feedsForFolder } from "../../lib/smartFolder";
 import { SmartFolderEditor } from "./SmartFolderEditor";
+import { Select } from "../ui/Select";
 
 type FeedContextMenu = { feedId: string; x: number; y: number } | null;
 type FolderContextMenu = { folderId: string; x: number; y: number } | null;
@@ -1329,11 +1330,11 @@ function AutoOrganizeDialog({
 
             <div className="flex items-center gap-2" style={{ marginTop: 10 }}>
               <span className="text-text-muted" style={{ fontSize: 12 }}>Folder name case:</span>
-              <select
+              <Select
+                aria-label="Folder name case"
                 value={caseStyle}
                 onChange={(e) => setCaseStyle(e.target.value as CaseStyle)}
-                className="border border-white/10 rounded-lg text-text-primary"
-                style={{ background: "rgba(255,255,255,0.05)", padding: "4px 8px", fontSize: 12 }}
+                style={{ fontSize: 12, minHeight: 32, padding: "5px 30px 5px 10px" }}
               >
                 <option value="title">Title Case</option>
                 <option value="sentence">Sentence case</option>
@@ -1343,7 +1344,7 @@ function AutoOrganizeDialog({
                 <option value="camel">camelCase</option>
                 <option value="kebab">kebab-case</option>
                 <option value="snake">snake_case</option>
-              </select>
+              </Select>
               <button
                 onClick={() => setRunSeq((n) => n + 1)}
                 disabled={loading}

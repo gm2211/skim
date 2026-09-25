@@ -3,6 +3,7 @@ import { previewSmartFolder } from "../../services/commands";
 import type { Feed, Folder, SmartRule, SmartRules } from "../../services/types";
 import { parseRules } from "../../lib/smartFolder";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
+import { Select } from "../ui/Select";
 
 type Props = {
   feeds: Feed[];
@@ -161,20 +162,20 @@ export function SmartFolderEditor({
 
           <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
             <span className="text-text-primary" style={{ fontSize: 13, fontWeight: 500 }}>Match rules</span>
-            <select aria-label="Rule matching mode" value={rules.mode} onChange={(event) => setRules((current) => ({ ...current, mode: event.target.value as SmartRules["mode"] }))} className="border border-white/10 rounded-lg text-text-primary" style={{ background: "rgba(255,255,255,0.05)", padding: "6px 8px", fontSize: 12 }}>
+            <Select aria-label="Rule matching mode" value={rules.mode} onChange={(event) => setRules((current) => ({ ...current, mode: event.target.value as SmartRules["mode"] }))}>
               <option value="any">Match any rule</option>
               <option value="all">Match all rules</option>
-            </select>
+            </Select>
           </div>
 
           <div className="flex flex-col gap-2">
             {rules.rules.map((rule, index) => (
               <div key={index} className="flex items-center gap-2">
-                <select aria-label={`Rule ${index + 1} type`} value={rule.type} onChange={(event) => updateRule(index, event.target.value === "regex_title" ? { type: "regex_title", pattern: "" } : event.target.value === "regex_url" ? { type: "regex_url", pattern: "" } : { type: "opml_category", value: "" })} className="border border-white/10 rounded-lg text-text-primary" style={{ background: "rgba(255,255,255,0.05)", padding: "9px 8px", fontSize: 12, minWidth: 150 }}>
+                <Select aria-label={`Rule ${index + 1} type`} value={rule.type} onChange={(event) => updateRule(index, event.target.value === "regex_title" ? { type: "regex_title", pattern: "" } : event.target.value === "regex_url" ? { type: "regex_url", pattern: "" } : { type: "opml_category", value: "" })} style={{ minWidth: 150 }}>
                   <option value="regex_title">{ruleLabel({ type: "regex_title", pattern: "" })}</option>
                   <option value="regex_url">{ruleLabel({ type: "regex_url", pattern: "" })}</option>
                   <option value="opml_category">{ruleLabel({ type: "opml_category", value: "" })}</option>
-                </select>
+                </Select>
                 <input aria-label={`Rule ${index + 1} value`} value={"pattern" in rule ? rule.pattern : rule.value} onChange={(event) => updateRule(index, "pattern" in rule ? { ...rule, pattern: event.target.value } : { ...rule, value: event.target.value })} placeholder={rulePlaceholder(rule)} className="flex-1 min-w-0 border border-white/10 rounded-lg text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50" style={{ background: "rgba(255,255,255,0.05)", padding: "9px 10px", fontSize: 13 }} />
                 <button onClick={() => setRules((current) => ({ ...current, rules: current.rules.filter((_, ruleIndex) => ruleIndex !== index) }))} disabled={rules.rules.length === 1} className="tap-target text-text-muted hover:text-danger disabled:opacity-30" aria-label={`Remove rule ${index + 1}`}>×</button>
               </div>

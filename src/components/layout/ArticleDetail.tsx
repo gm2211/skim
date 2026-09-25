@@ -9,6 +9,7 @@ import { ChatDrawer } from "../chat/ChatPanel";
 import { useReadingTimeTracker } from "../../hooks/useLearning";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { NumberInput } from "../ui/NumberInput";
+import { Select } from "../ui/Select";
 import { AIDisclaimer } from "../common/AIDisclaimer";
 import { ModelPicker } from "../common/ModelPicker";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
@@ -997,17 +998,18 @@ export function ArticleDetail() {
       </div>
       <div style={{ marginBottom: 8 }}>
         <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Length</label>
-        <select
+        <Select
+          aria-label="Summary length"
+          fullWidth
           value={perArticleLength ?? settings?.ai.summary_length ?? "short"}
           onChange={(e) => setPerArticleLength(e.target.value)}
-          className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
-          style={{ padding: "4px 8px", fontSize: 12 }}
+          style={{ fontSize: 12, minHeight: 32, padding: "5px 30px 5px 10px" }}
         >
           <option value="short">Short (~30 words)</option>
           <option value="medium">Medium (~150 words)</option>
           <option value="long">Long (~300 words)</option>
           <option value="custom">Custom...</option>
-        </select>
+        </Select>
         {(perArticleLength ?? settings?.ai.summary_length) === "custom" && (
           <NumberInput
             min={20}
@@ -1022,17 +1024,18 @@ export function ArticleDetail() {
       </div>
       <div style={{ marginBottom: 8 }}>
         <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Tone</label>
-        <select
+        <Select
+          aria-label="Summary tone"
+          fullWidth
           value={perArticleTone ?? settings?.ai.summary_tone ?? "concise"}
           onChange={(e) => setPerArticleTone(e.target.value)}
-          className="w-full border border-white/10 rounded-lg text-text-primary bg-white/5"
-          style={{ padding: "4px 8px", fontSize: 12 }}
+          style={{ fontSize: 12, minHeight: 32, padding: "5px 30px 5px 10px" }}
         >
           <option value="concise">Concise</option>
           <option value="detailed">Detailed</option>
           <option value="casual">Casual</option>
           <option value="technical">Technical</option>
-        </select>
+        </Select>
       </div>
       <div style={{ marginBottom: 10 }}>
         <label className="text-text-muted block" style={{ fontSize: 11, marginBottom: 4 }}>Custom prompt</label>

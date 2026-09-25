@@ -28,6 +28,7 @@ import { Ds4Settings } from "./Ds4Settings";
 import { RemoteModelPicker } from "./RemoteModelPicker";
 import { OfflineReaderSettings } from "./OfflineReaderSettings";
 import { NumberInput } from "../ui/NumberInput";
+import { Select } from "../ui/Select";
 import { AIDisclaimer } from "../common/AIDisclaimer";
 import { isIOS, isMacOS } from "../../utils/platform";
 import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
@@ -275,12 +276,12 @@ export function SettingsDialog() {
                 </div>
 
                 <InputField label="Provider">
-                  <select
+                  <Select
                     aria-label="Provider"
+                    fullWidth
                     value={local.ai.provider}
                     onChange={(e) => selectProvider(e.target.value)}
-                    className={inputClass}
-                    style={inputStyle}
+                    style={{ fontSize: 14 }}
                   >
                     {AI_PROVIDERS.filter((p) => {
                       if (p.value === "ds4" && !isMacOS) return false;
@@ -294,7 +295,7 @@ export function SettingsDialog() {
                         {p.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                   <p className="text-text-muted" style={{ fontSize: 12, marginTop: 6 }}>
                     {AI_PROVIDERS.find((p) => p.value === local.ai.provider)?.description}
                   </p>
@@ -426,17 +427,17 @@ export function SettingsDialog() {
 
                     <div className="flex gap-4" style={{ marginBottom: 24 }}>
                       <InputField label="Length">
-                        <select
+                        <Select
+                          aria-label="Summary length"
                           value={local.ai.summary_length ?? "short"}
                           onChange={(e) => updateAi({ summary_length: e.target.value })}
-                          className={inputClass}
-                          style={{ ...inputStyle, width: 140 }}
+                          style={{ fontSize: 14, width: 170 }}
                         >
                           <option value="short">Short (~30 words)</option>
                           <option value="medium">Medium (~150 words)</option>
                           <option value="long">Long (~300 words)</option>
                           <option value="custom">Custom...</option>
-                        </select>
+                        </Select>
                         {local.ai.summary_length === "custom" && (
                           <NumberInput
                             min={20}
@@ -451,17 +452,17 @@ export function SettingsDialog() {
                       </InputField>
 
                       <InputField label="Tone">
-                        <select
+                        <Select
+                          aria-label="Summary tone"
                           value={local.ai.summary_tone ?? "concise"}
                           onChange={(e) => updateAi({ summary_tone: e.target.value })}
-                          className={inputClass}
-                          style={{ ...inputStyle, width: 140 }}
+                          style={{ fontSize: 14, width: 170 }}
                         >
                           <option value="concise">Concise</option>
                           <option value="detailed">Detailed</option>
                           <option value="casual">Casual</option>
                           <option value="technical">Technical</option>
-                        </select>
+                        </Select>
                       </InputField>
 
                     </div>
@@ -1071,17 +1072,12 @@ function OnDeviceTierSection({
         >
           Model
         </label>
-        <select
+        <Select
           aria-label="On-device model"
+          fullWidth
           value={selectedRepoId}
           onChange={(e) => void commitSelectedModel(e.target.value)}
-          className="w-full border border-white/10 rounded text-text-primary focus:outline-none focus:border-accent/50"
-          style={{
-            background: "rgba(255, 255, 255, 0.05)",
-            padding: isPhone ? "10px 12px" : "6px 10px",
-            fontSize: isPhone ? 16 : 12,
-            minHeight: isPhone ? 48 : undefined,
-          }}
+          style={isPhone ? { fontSize: 16, minHeight: 48 } : undefined}
           disabled={!available || busy}
         >
           {availableModels.map((m) => (
@@ -1089,7 +1085,7 @@ function OnDeviceTierSection({
               {m.label} — ~{m.sizeGb.toFixed(1)} GB
             </option>
           ))}
-        </select>
+        </Select>
         <p className="text-text-muted" style={{ fontSize: 12, marginTop: 4 }}>
           Storage estimate: ~{selectedModel.sizeGb.toFixed(1)} GB on disk.
           {" "}Interrupted downloads are cleaned up before the next attempt.

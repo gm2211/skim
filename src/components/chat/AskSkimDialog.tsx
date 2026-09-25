@@ -13,6 +13,7 @@ import { useSettings } from "../../hooks/useSettings";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { ModelPicker } from "../common/ModelPicker";
+import { Select } from "../ui/Select";
 
 type Scope = "inbox" | "unread" | "all";
 
@@ -143,17 +144,16 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
           <h3 id="ask-skim-title" className="text-text-primary flex-1" style={{ fontSize: 20, fontWeight: 600 }}>
             Ask Skim
           </h3>
-          <select
+          <Select
             aria-label="Articles to search"
             value={scope}
             onChange={(e) => setScope(e.target.value as Scope)}
-            className="border border-white/10 rounded-lg text-text-primary flex-1 min-w-0"
-            style={{ background: "var(--color-bg-tertiary)", padding: "8px 12px", fontSize: 14, minHeight: 40, maxWidth: 160 }}
+            style={{ fontSize: 14 }}
           >
             <option value="inbox">Inbox</option>
             <option value="unread">Unread</option>
             <option value="all">All</option>
-          </select>
+          </Select>
           <ModelPicker surface="chat" compact disabled={loading} />
           <button
             onClick={onClose}

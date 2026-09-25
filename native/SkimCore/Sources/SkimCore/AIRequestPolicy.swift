@@ -12,12 +12,12 @@ public enum AIRequestPolicy {
             formatter.calendar = Calendar(identifier: .gregorian)
             formatter.locale = Locale(identifier: "en_US_POSIX")
             formatter.timeZone = TimeZone(secondsFromGMT: 0)
-            formatter.dateFormat = "yyyy-MM-dd"
+            formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss'Z'"
             date = formatter.string(from: publishedAt)
         } else {
             date = "unknown"
         }
-        return "Publication date (UTC): \(date) (article metadata, not the event date)"
+        return "Publication time (UTC): \(date) (article metadata, not the event time)"
     }
 
     public static func chatSettings(_ base: AISettings) -> AISettings {

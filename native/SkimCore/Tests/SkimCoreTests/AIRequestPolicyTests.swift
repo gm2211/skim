@@ -134,7 +134,7 @@ import Testing
 
 @Test func publicationContextUsesUTCAndKeepsUnknownExplicit() throws {
     let date = try #require(ISO8601DateFormatter().date(from: "2026-09-24T00:30:00Z"))
-    #expect(AIRequestPolicy.publicationContext(date) == "Publication date (UTC): 2026-09-24 (article metadata, not the event date)")
+    #expect(AIRequestPolicy.publicationContext(date) == "Publication time (UTC): 2026-09-24T00:30:00Z (article metadata, not the event time)")
     #expect(AIRequestPolicy.publicationContext(nil).contains("unknown"))
     #expect(AIRequestPolicy.publicationContext(Date(timeIntervalSince1970: .nan)).contains("unknown"))
 }

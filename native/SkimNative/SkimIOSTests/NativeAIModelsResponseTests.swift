@@ -649,7 +649,7 @@ private func syntheticPipelineCandidates() throws -> [TodaySemanticCandidate] {
         contentText: String(repeating: "Background. ", count: 2000) + "The event happened on September 20.",
         publishedAt: date, fetchedAt: Date(timeIntervalSince1970: 0))
     let conversation = AIChatConversation(latestQuestion: "When was this published?")
-    let known = "Publication date (UTC): 2026-09-24 (article metadata, not the event date)"
+    let known = "Publication time (UTC): 2026-09-24T00:30:00Z (article metadata, not the event time)"
     let context = try NativeAI.singleArticleChatContext(article: article, conversation: conversation, maxCharacters: 80)
     #expect(context.contains(known))
     #expect((context.components(separatedBy: "Excerpt: ").last ?? "").unicodeScalars.count <= 80)
@@ -658,10 +658,17 @@ private func syntheticPipelineCandidates() throws -> [TodaySemanticCandidate] {
     metadataOnly.contentText = nil
     #expect(try NativeAI.singleArticleChatContext(article: metadataOnly, conversation: conversation).contains(known))
     #expect(try NativeAI.libraryChatContext(articles: [metadataOnly], conversation: conversation).contains(known))
+    var later = article
+    later.id = "later"
+    later.publishedAt = date.addingTimeInterval(3600)
+    let pair = try NativeAI.libraryChatContext(articles: [article, later], conversation: conversation)
+    #expect(pair.contains("2026-09-24T00:30:00Z"))
+    #expect(pair.contains("2026-09-24T01:30:00Z"))
+    #expect(try NativeAI.singleArticleChatContext(article: later, conversation: conversation).contains("2026-09-24T01:30:00Z"))
     article.publishedAt = nil
     for unknown in [try NativeAI.singleArticleChatContext(article: article, conversation: conversation),
                     try NativeAI.libraryChatContext(articles: [article], conversation: conversation)] {
-        #expect(unknown.contains("Publication date (UTC): unknown"))
+        #expect(unknown.contains("Publication time (UTC): unknown"))
         #expect(!unknown.contains("1970-01-01"))
     }
 }

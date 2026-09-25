@@ -180,9 +180,9 @@ pub struct WebCitation {
 fn publication_context(published_at: Option<i64>) -> String {
     let date = published_at
         .and_then(|timestamp| chrono::DateTime::from_timestamp(timestamp, 0))
-        .map(|date| date.format("%Y-%m-%d").to_string())
+        .map(|date| date.format("%Y-%m-%dT%H:%M:%SZ").to_string())
         .unwrap_or_else(|| "unknown".into());
-    format!("Publication date (UTC): {date} (article metadata, not the event date)")
+    format!("Publication time (UTC): {date} (article metadata, not the event time)")
 }
 
 fn article_chat_context(article: &crate::db::models::ArticleWithFeed, body: &str) -> String {
@@ -1082,14 +1082,20 @@ mod tests {
         let messages = vec![ChatMessageInput { role: "user".into(), content: "When was this published?".into() }];
         let selected = article_chat_evidence(&source, &messages, 80);
         let context = article_chat_context(&article, &selected);
-        assert!(context.contains("Publication date (UTC): 2026-09-24 (article metadata, not the event date)"));
+        assert!(context.contains("Publication time (UTC): 2026-09-24T00:30:00Z (article metadata, not the event time)"));
         assert!(context.ends_with(&selected));
         require_selected_evidence("", "").unwrap();
-        assert!(article_chat_context(&article, "").contains("Publication date (UTC): 2026-09-24"));
+        assert!(article_chat_context(&article, "").contains("Publication time (UTC): 2026-09-24T00:30:00Z"));
         assert!(selected.chars().count() <= 80);
+        let earlier = article_chat_context(&article, "");
+        article.article.published_at = Some(timestamp + 3600);
+        let later = article_chat_context(&article, "");
+        assert!(earlier.contains("2026-09-24T00:30:00Z"));
+        assert!(later.contains("2026-09-24T01:30:00Z"));
+        assert_ne!(publication_context(Some(timestamp)), publication_context(Some(timestamp + 3600)));
         article.article.published_at = None;
         let unknown = article_chat_context(&article, &selected);
-        assert!(unknown.contains("Publication date (UTC): unknown"));
+        assert!(unknown.contains("Publication time (UTC): unknown"));
         assert!(!unknown.contains("1970-01-01"));
         assert!(publication_context(Some(i64::MAX)).contains("unknown"));
     }

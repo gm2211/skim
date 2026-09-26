@@ -72,6 +72,37 @@ export function resolveMlxRepoId(
   return selectedModel.repoId;
 }
 
+/**
+ * The AI settings after switching the active provider to `provider`.
+ *
+ * Only the active provider's key, endpoint and model live in the top-level
+ * fields, so the outgoing provider's are filed under `provider_credentials`
+ * and the incoming provider's are restored from there. A key therefore never
+ * reaches a different service, and trying a local model does not cost every
+ * cloud provider its API key.
+ */
+export function switchProvider(ai: AiSettings, provider: string): AiSettings {
+  if (provider === ai.provider) return ai;
+  const saved = { ...(ai.provider_credentials ?? {}) };
+  const { api_key, endpoint, model, local_model_path } = ai;
+  if (api_key || endpoint || model || local_model_path) {
+    saved[ai.provider] = { api_key, endpoint, model, local_model_path };
+  } else {
+    delete saved[ai.provider];
+  }
+  const restored = saved[provider];
+  delete saved[provider];
+  return {
+    ...ai,
+    provider,
+    api_key: restored?.api_key ?? null,
+    endpoint: restored?.endpoint ?? null,
+    model: restored?.model ?? null,
+    local_model_path: restored?.local_model_path ?? null,
+    provider_credentials: saved,
+  };
+}
+
 /** Human-readable label for a provider value, falling back to the raw value. */
 export function providerLabel(provider: string): string {
   return AI_PROVIDERS.find((p) => p.value === provider)?.label ?? provider;

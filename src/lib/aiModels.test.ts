@@ -6,7 +6,9 @@ import {
   mlxModelsFor,
   modelPatch,
   resolveMlxRepoId,
+  switchProvider,
 } from "./aiModels";
+import type { AiSettings } from "../services/types";
 
 describe("modelPatch", () => {
   it("mlx sets both model and local_model_path to the repo id", () => {
@@ -95,5 +97,40 @@ describe("hasChatOverride", () => {
 
   it("is true for a distinct chat provider", () => {
     expect(hasChatOverride({ chat_provider: "openai" })).toBe(true);
+  });
+});
+
+describe("switchProvider", () => {
+  const anthropic = {
+    provider: "anthropic",
+    api_key: "sk-ant-1",
+    endpoint: null,
+    model: "claude-sonnet-5",
+    local_model_path: null,
+  } as AiSettings;
+
+  it("keeps a cloud key through a trip to a local model and back", () => {
+    const local = switchProvider(anthropic, "local");
+    expect(local.api_key).toBeNull();
+    expect(local.model).toBeNull();
+    const withModel = { ...local, local_model_path: "/models/qwen.gguf" };
+    const back = switchProvider(withModel, "anthropic");
+    expect(back.api_key).toBe("sk-ant-1");
+    expect(back.model).toBe("claude-sonnet-5");
+    expect(back.local_model_path).toBeNull();
+    expect(switchProvider(back, "local").local_model_path).toBe("/models/qwen.gguf");
+  });
+
+  it("never hands one provider's key to another", () => {
+    const openai = switchProvider(anthropic, "openai");
+    expect(openai.api_key).toBeNull();
+    const withKey = { ...openai, api_key: "sk-openai" };
+    expect(switchProvider(withKey, "anthropic").api_key).toBe("sk-ant-1");
+    expect(switchProvider(switchProvider(withKey, "anthropic"), "openai").api_key).toBe("sk-openai");
+  });
+
+  it("does not file the active provider's values under provider_credentials", () => {
+    const back = switchProvider(switchProvider(anthropic, "local"), "anthropic");
+    expect(back.provider_credentials).toEqual({});
   });
 });

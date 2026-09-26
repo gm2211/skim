@@ -39,6 +39,7 @@ import {
   defaultMlxModel,
   mlxModelsFor,
   resolveMlxRepoId,
+  switchProvider,
 } from "../../lib/aiModels";
 
 const needsApiKey = (provider: string) =>
@@ -119,7 +120,6 @@ export function SettingsDialog() {
   const [local, setLocal] = useState<AppSettings | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("ai");
   const dialogRef = useRef<HTMLDivElement>(null);
-  const providerDrafts = useRef<Record<string, Partial<AppSettings["ai"]>>>({});
   useDialogFocus(dialogRef, () => setShowSettings(false));
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(
     isPhone,
@@ -163,15 +163,8 @@ export function SettingsDialog() {
   const updateAi = (patch: Partial<AppSettings["ai"]>) =>
     setLocal({ ...local, ai: { ...local.ai, ...patch } });
 
-  const selectProvider = (provider: string) => {
-    if (provider === local.ai.provider) return;
-    const { api_key, endpoint, model, local_model_path } = local.ai;
-    providerDrafts.current[local.ai.provider] = { api_key, endpoint, model, local_model_path };
-    // Keep each provider's credentials in its own draft; changing provider must
-    // never send the previous provider's key to a different service.
-    updateAi({ provider, api_key: null, endpoint: null, model: null, local_model_path: null,
-      ...providerDrafts.current[provider] });
-  };
+  const selectProvider = (provider: string) =>
+    setLocal({ ...local, ai: switchProvider(local.ai, provider) });
 
   const inputStyle = {
     background: "rgba(255, 255, 255, 0.05)",

@@ -126,6 +126,18 @@ export interface AiSettings {
   chat_endpoint: string | null;
   local_chat_web_search?: boolean | null;
   triage_user_prompt?: string | null;
+  /**
+   * Key, endpoint and model of every provider other than the active one, so
+   * switching provider and back keeps each provider's credentials.
+   */
+  provider_credentials?: Record<string, ProviderCredentials>;
+}
+
+export interface ProviderCredentials {
+  api_key: string | null;
+  endpoint: string | null;
+  model: string | null;
+  local_model_path: string | null;
 }
 
 export interface ChatMessageInput {

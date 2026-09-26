@@ -346,6 +346,24 @@ pub struct AiSettings {
     /// `claude_oauth_*` commands — not persisted in the AppSettings JSON blob.
     #[serde(default, skip_serializing)]
     pub oauth_access_token: Option<String>,
+    /// Key, endpoint and model of every provider other than the active one,
+    /// keyed by provider. Settings keeps only the active provider's values in
+    /// `api_key`/`endpoint`/`model`, so without this a trip to a local model
+    /// and back erased every cloud provider's API key.
+    #[serde(default)]
+    pub provider_credentials: std::collections::HashMap<String, ProviderCredentials>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProviderCredentials {
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub local_model_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -471,6 +489,7 @@ impl Default for AppSettings {
                 local_chat_web_search: None,
                 triage_user_prompt: None,
                 oauth_access_token: None,
+                provider_credentials: Default::default(),
             },
             appearance: AppearanceSettings {
                 theme: "dark".to_string(),

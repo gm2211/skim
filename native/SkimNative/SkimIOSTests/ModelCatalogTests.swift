@@ -73,15 +73,15 @@ struct ModelCatalogTests {
         #expect(ModelCatalog.currentLabel(ai) == "Apple Intelligence")
     }
 
-    @Test func testCurrentLabelMLXUsesCatalogOptionLabel() {
+    @Test func testCurrentLabelMLXUsesShortCatalogName() {
         let ai = AISettings(provider: "mlx", model: "mlx-community/gemma-3-1b-it-4bit")
-        #expect(ModelCatalog.currentLabel(ai) == NativeMLX.option(for: "mlx-community/gemma-3-1b-it-4bit").label)
+        #expect(ModelCatalog.currentLabel(ai) == "Gemma 3 1B")
     }
 
     @Test func testCurrentLabelMLXFallsBackToDefaultRepoWhenModelNil() {
         let ai = AISettings(provider: "mlx")
         #expect(ModelCatalog.currentID(ai) == NativeMLX.defaultRepoId)
-        #expect(ModelCatalog.currentLabel(ai) == NativeMLX.option(for: NativeMLX.defaultRepoId).label)
+        #expect(ModelCatalog.currentLabel(ai) == NativeMLX.option(for: NativeMLX.defaultRepoId).shortLabel)
     }
 
     @Test func testCurrentLabelRemoteProviderNilModelShowsDefaultPlaceholder() {

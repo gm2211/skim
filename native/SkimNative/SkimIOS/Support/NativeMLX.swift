@@ -11,6 +11,13 @@ struct MLXModelOption: Identifiable, Hashable {
     var isPhoneFriendly: Bool
 
     var id: String { repoId }
+
+    /// The model's name without the "(iPhone, fastest)" hint, for compact
+    /// chips where the full label would truncate.
+    var shortLabel: String {
+        guard let paren = label.range(of: " (") else { return label }
+        return String(label[..<paren.lowerBound])
+    }
 }
 
 enum NativeMLX {

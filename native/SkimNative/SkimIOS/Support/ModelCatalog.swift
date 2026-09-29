@@ -42,7 +42,7 @@ enum ModelCatalog {
         switch ai.provider {
         case "mlx":
             let repoId = currentID(ai) ?? NativeMLX.defaultRepoId
-            return NativeMLX.option(for: repoId).label
+            return NativeMLX.option(for: repoId).shortLabel
         case "foundation-models":
             return "Apple Intelligence"
         default:

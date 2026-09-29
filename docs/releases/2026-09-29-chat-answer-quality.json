@@ -1,0 +1,613 @@
+{
+  "decision_bar": "iPhone default switches from Gemma 3 1B to Qwen3 1.7B if Qwen3 1.7B (new prompt) scores >=7/8 and beats Gemma 3 1B (new prompt) by >=2; stays on Gemma 3 1B if it scores >=5/8 with no mustNotContain (preamble/Summary-header) failures.",
+  "decision_bar_evaluation": {
+    "gemma_meets_ge_5_of_8_no_preamble_failures": true,
+    "gemma_mustNotContain_preamble_failures": 0,
+    "gemma_new_prompt_pass_count": 5,
+    "note": "Both the switch bar (Qwen3 1.7B) and the keep bar (Gemma 3 1B) happen to be satisfied in this run; per the stated decision rule, the switch bar governs. See the accompanying PR report for the qualitative reasoning (legacy-prompt hallucination example, one-shot regression, etc.).",
+    "qwen3_1_7b_beats_gemma_by_ge_2": true,
+    "qwen3_1_7b_meets_ge_7_of_8": true,
+    "qwen3_1_7b_new_prompt_pass_count": 8,
+    "switch_bar_met": true
+  },
+  "fixture": "shared/fixtures/chat-answer-quality.json",
+  "fixture_note": "All article bodies, publishers, named researchers, and quoted facts in this fixture are synthetic test material invented for evaluation purposes. They do not describe real people, institutions, or events.",
+  "runs": [
+    {
+      "avgSeconds": 2.675073891878128,
+      "caseCount": 8,
+      "cases": [
+        {
+          "cleanedAnswer": "Making nozzles out of dead things. The article states that the team used a mosquito’s proboscis to create a nozzle for printing thin lines with a UV-curable resin.",
+          "cleanedPassed": false,
+          "firstFailingDetail": "first sentence \"Making nozzles out of dead things.\" contains none of [\"mosquito\", \"proboscis\", \"yes\"]",
+          "firstFailingRule": "firstSentenceMustContainAny",
+          "name": "necroprinting",
+          "passed": false,
+          "rawAnswer": "Making nozzles out of dead things. The article states that the team used a mosquito’s proboscis to create a nozzle for printing thin lines with a UV-curable resin.",
+          "rawPassed": false,
+          "seconds": 5.194171071052551
+        },
+        {
+          "cleanedAnswer": "Making nozzles out of dead things? The article states that the team is experimenting with “necroprinting,” which involves mounting and printing lines from a dead mosquito’s proboscis onto glass slides.",
+          "cleanedPassed": false,
+          "firstFailingDetail": "first sentence \"Making nozzles out of dead things?\" contains none of [\"mosquito\", \"proboscis\", \"yes\"]",
+          "firstFailingRule": "firstSentenceMustContainAny",
+          "name": "necroprinting_from_summary",
+          "passed": false,
+          "rawAnswer": "Making nozzles out of dead things? The article states that the team is experimenting with “necroprinting,” which involves mounting and printing lines from a dead mosquito’s proboscis onto glass slides.",
+          "rawPassed": false,
+          "seconds": 2.408511996269226
+        },
+        {
+          "cleanedAnswer": "The article states that the rehabilitation was completed 11 weeks *ahead* of the revised schedule. \n\n---",
+          "cleanedPassed": true,
+          "name": "bridge_late_numeric_fact",
+          "passed": true,
+          "rawAnswer": "The article states that the rehabilitation was completed 11 weeks *ahead* of the revised schedule. \n\n---",
+          "rawPassed": true,
+          "seconds": 1.9774459600448608
+        },
+        {
+          "cleanedAnswer": "Dr. Naomi Castellanos, the ecologist who led the analysis, spearheaded the research. \n\n---",
+          "cleanedPassed": true,
+          "name": "owls_named_person_fact",
+          "passed": true,
+          "rawAnswer": "Dr. Naomi Castellanos, the ecologist who led the analysis, spearheaded the research. \n\n---",
+          "rawPassed": true,
+          "seconds": 1.866990089416504
+        },
+        {
+          "cleanedAnswer": "The article doesn’t mention how much funding the project received or who paid for it. The researchers said the project “relied on a mix of institutional and volunteer support” without elaborating further in the released report.",
+          "cleanedPassed": true,
+          "name": "owls_fact_not_in_article",
+          "passed": true,
+          "rawAnswer": "The article doesn’t mention how much funding the project received or who paid for it. The researchers said the project “relied on a mix of institutional and volunteer support” without elaborating further in the released report.",
+          "rawPassed": true,
+          "seconds": 2.1664249897003174
+        },
+        {
+          "cleanedAnswer": "The articles states that the lines printed were as narrow as 400 nanometers across – about half the width of the previous record, which had been set by a machined tungsten nozzle that took a specialty shop nearly three weeks to produce and cost several thousand dollars.",
+          "cleanedPassed": true,
+          "name": "necroprinting_followup_pronoun",
+          "passed": true,
+          "rawAnswer": "The articles states that the lines printed were as narrow as 400 nanometers across – about half the width of the previous record, which had been set by a machined tungsten nozzle that took a specialty shop nearly three weeks to produce and cost several thousand dollars.",
+          "rawPassed": true,
+          "seconds": 2.644149899482727
+        },
+        {
+          "cleanedAnswer": "Yes. The article states that the crew finished the rehabilitation \"eleven weeks ahead of the revised schedule\" and that the bridge is expected to remain in service for at least another forty years. \n\nThe article doesn't say “they” did not finish it ahead of the revised schedule. It says they “finished it” eleven weeks ahead.",
+          "cleanedPassed": true,
+          "name": "bridge_yes_no",
+          "passed": true,
+          "rawAnswer": "Yes. The article states that the crew finished the rehabilitation \"eleven weeks ahead of the revised schedule\" and that the bridge is expected to remain in service for at least another forty years. \n\nThe article doesn't say “they” did not finish it ahead of the revised schedule. It says they “finished it” eleven weeks ahead.",
+          "rawPassed": true,
+          "seconds": 2.662545084953308
+        },
+        {
+          "cleanedAnswer": "The article states that the team anesthetized and preserved the mosquitoes, dissected out the proboscis from each one, and mounted the mouthpart into a custom-machined steel collar.",
+          "cleanedPassed": false,
+          "firstFailingDetail": "none of [\"calibrat\", \"align\", \"alignment\"] found in answer",
+          "firstFailingRule": "mustContainAny",
+          "name": "necroprinting_list_steps",
+          "passed": false,
+          "rawAnswer": "The article states that the team anesthetized and preserved the mosquitoes, dissected out the proboscis from each one, and mounted the mouthpart into a custom-machined steel collar.",
+          "rawPassed": false,
+          "seconds": 2.48035204410553
+        }
+      ],
+      "model": "mlx-community/gemma-3-1b-it-4bit",
+      "oneShot": false,
+      "passCount": 5,
+      "prompt": "new"
+    },
+    {
+      "avgSeconds": 1.5224513709545135,
+      "caseCount": 8,
+      "cases": [
+        {
+          "cleanedAnswer": "Yes, the article mentions that the team used a dead mosquito's proboscis to create a nozzle. The mosquito's proboscis tapers to about 400 nanometers, and the nozzle was made from the cleanest specimens mounted in a custom collar. The technique is called \"necroprinting\" and costs essentially nothing beyond the insects themselves.",
+          "cleanedPassed": true,
+          "name": "necroprinting",
+          "passed": true,
+          "rawAnswer": "Yes, the article mentions that the team used a dead mosquito's proboscis to create a nozzle. The mosquito's proboscis tapers to about 400 nanometers, and the nozzle was made from the cleanest specimens mounted in a custom collar. The technique is called \"necroprinting\" and costs essentially nothing beyond the insects themselves.",
+          "rawPassed": true,
+          "seconds": 3.208871006965637
+        },
+        {
+          "cleanedAnswer": "Yes, making nozzles out of dead things is part of the project described in the article. The lab used preserved mosquito proboscises mounted in steel collars to create ultra-fine 3D-printing nozzles. The nozzles can print lines as narrow as 400 nanometers, and the process costs essentially nothing beyond the insects themselves and a few hours of dissection work.",
+          "cleanedPassed": true,
+          "name": "necroprinting_from_summary",
+          "passed": true,
+          "rawAnswer": "Yes, making nozzles out of dead things is part of the project described in the article. The lab used preserved mosquito proboscises mounted in steel collars to create ultra-fine 3D-printing nozzles. The nozzles can print lines as narrow as 400 nanometers, and the process costs essentially nothing beyond the insects themselves and a few hours of dissection work.",
+          "rawPassed": true,
+          "seconds": 2.51568603515625
+        },
+        {
+          "cleanedAnswer": "The crews finished eleven weeks ahead of the revised schedule.",
+          "cleanedPassed": true,
+          "name": "bridge_late_numeric_fact",
+          "passed": true,
+          "rawAnswer": "The crews finished eleven weeks ahead of the revised schedule.",
+          "rawPassed": true,
+          "seconds": 0.8482539653778076
+        },
+        {
+          "cleanedAnswer": "Dr. Naomi Castellanos led the research.",
+          "cleanedPassed": true,
+          "name": "owls_named_person_fact",
+          "passed": true,
+          "rawAnswer": "Dr. Naomi Castellanos led the research.",
+          "rawPassed": true,
+          "seconds": 0.7744179964065552
+        },
+        {
+          "cleanedAnswer": "The article does not say.",
+          "cleanedPassed": true,
+          "name": "owls_fact_not_in_article",
+          "passed": true,
+          "rawAnswer": "The article does not say.",
+          "rawPassed": true,
+          "seconds": 0.7215479612350464
+        },
+        {
+          "cleanedAnswer": "The lines printed by the mosquito-derived nozzle measured as narrow as 400 nanometers.",
+          "cleanedPassed": true,
+          "name": "necroprinting_followup_pronoun",
+          "passed": true,
+          "rawAnswer": "The lines printed by the mosquito-derived nozzle measured as narrow as 400 nanometers.",
+          "rawPassed": true,
+          "seconds": 1.0722910165786743
+        },
+        {
+          "cleanedAnswer": "Yes, the crews finished the rehabilitation eleven weeks ahead of the revised schedule.",
+          "cleanedPassed": true,
+          "name": "bridge_yes_no",
+          "passed": true,
+          "rawAnswer": "Yes, the crews finished the rehabilitation eleven weeks ahead of the revised schedule.",
+          "rawPassed": true,
+          "seconds": 0.9147260189056396
+        },
+        {
+          "cleanedAnswer": "The team first anesthetized and preserved mosquitoes, then carefully dissected their proboscis under a stereo microscope. They mounted the cleanest specimens in a custom-machined steel collar. Next, they ran UV-curable resin through the nozzle at low pressure and printed test lines on glass slides using a handheld UV lamp. Finally, they calibrated each nozzle individually before use.",
+          "cleanedPassed": true,
+          "name": "necroprinting_list_steps",
+          "passed": true,
+          "rawAnswer": "The team first anesthetized and preserved mosquitoes, then carefully dissected their proboscis under a stereo microscope. They mounted the cleanest specimens in a custom-machined steel collar. Next, they ran UV-curable resin through the nozzle at low pressure and printed test lines on glass slides using a handheld UV lamp. Finally, they calibrated each nozzle individually before use.",
+          "rawPassed": true,
+          "seconds": 2.123816967010498
+        }
+      ],
+      "model": "mlx-community/Qwen3-1.7B-4bit",
+      "oneShot": false,
+      "passCount": 8,
+      "prompt": "new"
+    },
+    {
+      "avgSeconds": 3.816871255636215,
+      "caseCount": 8,
+      "cases": [
+        {
+          "cleanedAnswer": "Making nozzles out of dead mosquitoes. Engineers used the proboscis (mouthpart) of dead mosquitoes to create a 3D-printing nozzle that prints lines as narrow as 400 nanometers. The proboscis was dissected, mounted in a custom steel collar, and connected to a syringe-pump extruder; each nozzle required calibration and typically lasted only three to five print runs before fracturing.",
+          "cleanedPassed": true,
+          "name": "necroprinting",
+          "passed": true,
+          "rawAnswer": "Making nozzles out of dead mosquitoes. Engineers used the proboscis (mouthpart) of dead mosquitoes to create a 3D-printing nozzle that prints lines as narrow as 400 nanometers. The proboscis was dissected, mounted in a custom steel collar, and connected to a syringe-pump extruder; each nozzle required calibration and typically lasted only three to five print runs before fracturing.",
+          "rawPassed": true,
+          "seconds": 5.782925963401794
+        },
+        {
+          "cleanedAnswer": "Making nozzles out of dead things: A team of engineers created ultra-fine 3D-printing nozzles by mounting the proboscises (mouthparts) of dead mosquitoes into custom steel collars. The nozzles printed lines as narrow as 400 nanometers, and the researchers referred to their method internally as \"necroprint.\" Each mosquito proboscis is fragile and typically lasts only a few print runs, requiring three to five backup specimens for serious use.",
+          "cleanedPassed": true,
+          "name": "necroprinting_from_summary",
+          "passed": true,
+          "rawAnswer": "Making nozzles out of dead things: A team of engineers created ultra-fine 3D-printing nozzles by mounting the proboscises (mouthparts) of dead mosquitoes into custom steel collars. The nozzles printed lines as narrow as 400 nanometers, and the researchers referred to their method internally as \"necroprint.\" Each mosquito proboscis is fragile and typically lasts only a few print runs, requiring three to five backup specimens for serious use.",
+          "rawPassed": true,
+          "seconds": 5.108208060264587
+        },
+        {
+          "cleanedAnswer": "The crews finished eleven weeks ahead of the revised schedule.",
+          "cleanedPassed": true,
+          "name": "bridge_late_numeric_fact",
+          "passed": true,
+          "rawAnswer": "The crews finished eleven weeks ahead of the revised schedule.",
+          "rawPassed": true,
+          "seconds": 2.0945299863815308
+        },
+        {
+          "cleanedAnswer": "Dr. Naomi Castellanos led the research. She described the team's analysis and stated that the project \"relied on a mix of institutional and volunteer support.\" The study focused on barn owls and screech owls across a dozen midsize cities over five breeding seasons.",
+          "cleanedPassed": true,
+          "name": "owls_named_person_fact",
+          "passed": true,
+          "rawAnswer": "Dr. Naomi Castellanos led the research. She described the team's analysis and stated that the project \"relied on a mix of institutional and volunteer support.\" The study focused on barn owls and screech owls across a dozen midsize cities over five breeding seasons.",
+          "rawPassed": true,
+          "seconds": 3.0321450233459473
+        },
+        {
+          "cleanedAnswer": "The article doesn't say.",
+          "cleanedPassed": true,
+          "name": "owls_fact_not_in_article",
+          "passed": true,
+          "rawAnswer": "The article doesn't say.",
+          "rawPassed": true,
+          "seconds": 2.1057980060577393
+        },
+        {
+          "cleanedAnswer": "The lines were as narrow as 400 nanometers across.",
+          "cleanedPassed": true,
+          "name": "necroprinting_followup_pronoun",
+          "passed": true,
+          "rawAnswer": "The lines were as narrow as 400 nanometers across.",
+          "rawPassed": true,
+          "seconds": 2.446087956428528
+        },
+        {
+          "cleanedAnswer": "Yes, the crews finished the rehabilitation eleven weeks ahead of the revised schedule. The project's general contractor said they made up the lost time by running two shifts during the final phase of deck pouring. The bridge reopened to vehicles after a fourteen-month rehabilitation project that was delayed by four months due to unexpected corrosion but ultimately completed eleven weeks earlier than the revised schedule.",
+          "cleanedPassed": true,
+          "name": "bridge_yes_no",
+          "passed": true,
+          "rawAnswer": "Yes, the crews finished the rehabilitation eleven weeks ahead of the revised schedule. The project's general contractor said they made up the lost time by running two shifts during the final phase of deck pouring. The bridge reopened to vehicles after a fourteen-month rehabilitation project that was delayed by four months due to unexpected corrosion but ultimately completed eleven weeks earlier than the revised schedule.",
+          "rawPassed": true,
+          "seconds": 3.5356709957122803
+        },
+        {
+          "cleanedAnswer": "They anesthetized and preserved lab-reared mosquitoes, carefully dissected out the proboscis from each one under a stereo microscope, mounted the cleanest specimens into a custom-machined steel collar to hold the base rigidly in place, and then used the mounted proboscis as a nozzle by running UV-curable resin through it at low pressure while curing each line with a handheld UV lamp. The entire setup was attached to a standard syringe-pump extruder via the threaded fitting on the collar. Each nozzle required individual calibration under a microscope, with the operator adjusting alignment screws while monitoring resin flow at the tip. The process produced test lines as narrow as 400 nanometers, printed onto glass slides.",
+          "cleanedPassed": true,
+          "name": "necroprinting_list_steps",
+          "passed": true,
+          "rawAnswer": "They anesthetized and preserved lab-reared mosquitoes, carefully dissected out the proboscis from each one under a stereo microscope, mounted the cleanest specimens into a custom-machined steel collar to hold the base rigidly in place, and then used the mounted proboscis as a nozzle by running UV-curable resin through it at low pressure while curing each line with a handheld UV lamp. The entire setup was attached to a standard syringe-pump extruder via the threaded fitting on the collar. Each nozzle required individual calibration under a microscope, with the operator adjusting alignment screws while monitoring resin flow at the tip. The process produced test lines as narrow as 400 nanometers, printed onto glass slides.",
+          "rawPassed": true,
+          "seconds": 6.4296040534973145
+        }
+      ],
+      "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+      "oneShot": false,
+      "passCount": 8,
+      "prompt": "new"
+    },
+    {
+      "avgSeconds": 2.7024880200624466,
+      "caseCount": 8,
+      "cases": [
+        {
+          "cleanedAnswer": "The latest question is:\n\nWhat are the limitations of the “necroprinting” technique described in the article?",
+          "cleanedPassed": false,
+          "firstFailingDetail": "none of [\"mosquito\", \"proboscis\"] found in answer",
+          "firstFailingRule": "mustContainAny",
+          "name": "necroprinting",
+          "passed": false,
+          "rawAnswer": "The latest question is:\n\nWhat are the limitations of the “necroprinting” technique described in the article?",
+          "rawPassed": false,
+          "seconds": 5.775559067726135
+        },
+        {
+          "cleanedAnswer": "A materials lab is using preserved mosquito proboscises, mounted in steel collars, as ultra-fine 3D-printing nozzles, printing lines as narrow as 400 nanometers for a fraction of the cost of custom-machined hardware.",
+          "cleanedPassed": true,
+          "name": "necroprinting_from_summary",
+          "passed": true,
+          "rawAnswer": "A materials lab is using preserved mosquito proboscises, mounted in steel collars, as ultra-fine 3D-printing nozzles, printing lines as narrow as 400 nanometers for a fraction of the cost of custom-machined hardware.",
+          "rawPassed": true,
+          "seconds": 2.9619849920272827
+        },
+        {
+          "cleanedAnswer": "Eleven weeks ahead of the revised schedule.",
+          "cleanedPassed": true,
+          "name": "bridge_late_numeric_fact",
+          "passed": true,
+          "rawAnswer": "Eleven weeks ahead of the revised schedule.",
+          "rawPassed": true,
+          "seconds": 1.5854640007019043
+        },
+        {
+          "cleanedAnswer": "The researchers were Dr. Naomi Castellanos and her team.",
+          "cleanedPassed": true,
+          "name": "owls_named_person_fact",
+          "passed": true,
+          "rawAnswer": "The researchers were Dr. Naomi Castellanos and her team.",
+          "rawPassed": true,
+          "seconds": 1.6397639513015747
+        },
+        {
+          "cleanedAnswer": "The article does not specify how much funding the survey received or who paid for it. It only states that the project relied on a \"mix of institutional and volunteer support.\"",
+          "cleanedPassed": true,
+          "name": "owls_fact_not_in_article",
+          "passed": true,
+          "rawAnswer": "The article does not specify how much funding the survey received or who paid for it. It only states that the project relied on a \"mix of institutional and volunteer support.\"",
+          "rawPassed": true,
+          "seconds": 1.9086370468139648
+        },
+        {
+          "cleanedAnswer": "The text states that the printed lines measured as “narrow as 400 nanometers across — about half the width of the previous record.”",
+          "cleanedPassed": true,
+          "name": "necroprinting_followup_pronoun",
+          "passed": true,
+          "rawAnswer": "The text states that the printed lines measured as “narrow as 400 nanometers across — about half the width of the previous record.”",
+          "rawPassed": true,
+          "seconds": 2.419385075569153
+        },
+        {
+          "cleanedAnswer": "Yes, the crews finished the rehabilitation ahead of the revised schedule. They completed the entire project 11 weeks ahead of the original timeline.",
+          "cleanedPassed": true,
+          "name": "bridge_yes_no",
+          "passed": true,
+          "rawAnswer": "Yes, the crews finished the rehabilitation ahead of the revised schedule. They completed the entire project 11 weeks ahead of the original timeline.",
+          "rawPassed": true,
+          "seconds": 1.9450969696044922
+        },
+        {
+          "cleanedAnswer": "Here are the steps the team took to turn the mosquito proboscis into a working nozzle:\n\n1.  Anesthetize and preserve a small batch of lab-reared mosquitoes.\n2.  Carefully dissect out the proboscis from each specimen under a stereo microscope.\n3.  Mount the cleanest specimens into a custom-machined steel collar sized to hold the base of the mouthpart rigidly in place.\n4.  The only exotic part of the whole assembly was the dead insect's mouth.",
+          "cleanedPassed": false,
+          "firstFailingDetail": "none of [\"calibrat\", \"align\", \"alignment\"] found in answer",
+          "firstFailingRule": "mustContainAny",
+          "name": "necroprinting_list_steps",
+          "passed": false,
+          "rawAnswer": "Here are the steps the team took to turn the mosquito proboscis into a working nozzle:\n\n1.  Anesthetize and preserve a small batch of lab-reared mosquitoes.\n2.  Carefully dissect out the proboscis from each specimen under a stereo microscope.\n3.  Mount the cleanest specimens into a custom-machined steel collar sized to hold the base of the mouthpart rigidly in place.\n4.  The only exotic part of the whole assembly was the dead insect's mouth.",
+          "rawPassed": false,
+          "seconds": 3.384013056755066
+        }
+      ],
+      "model": "mlx-community/gemma-3-1b-it-4bit",
+      "oneShot": false,
+      "passCount": 6,
+      "prompt": "legacy"
+    },
+    {
+      "avgSeconds": 1.6175832599401474,
+      "caseCount": 8,
+      "cases": [
+        {
+          "cleanedAnswer": "Yes, the article discusses using a dead mosquito's proboscis as a nozzle for 3D printing. The team from a materials-engineering lab in Portland used the tapered tip of a mosquito's mouth to create a fine nozzle for 3D printing. This approach is described as unconventional and cost-effective compared to custom-machined nozzles.",
+          "cleanedPassed": true,
+          "name": "necroprinting",
+          "passed": true,
+          "rawAnswer": "Yes, the article discusses using a dead mosquito's proboscis as a nozzle for 3D printing. The team from a materials-engineering lab in Portland used the tapered tip of a mosquito's mouth to create a fine nozzle for 3D printing. This approach is described as unconventional and cost-effective compared to custom-machined nozzles.",
+          "rawPassed": true,
+          "seconds": 3.243584990501404
+        },
+        {
+          "cleanedAnswer": "Yes, the generated summary is correct. The materials lab is using preserved mosquito proboscises mounted in steel collars as ultra-fine 3D-printing nozzles, printing lines as narrow as 400 nanometers for a fraction of the cost of custom-machined hardware.",
+          "cleanedPassed": true,
+          "name": "necroprinting_from_summary",
+          "passed": true,
+          "rawAnswer": "Yes, the generated summary is correct. The materials lab is using preserved mosquito proboscises mounted in steel collars as ultra-fine 3D-printing nozzles, printing lines as narrow as 400 nanometers for a fraction of the cost of custom-machined hardware.",
+          "rawPassed": true,
+          "seconds": 1.8684580326080322
+        },
+        {
+          "cleanedAnswer": "The crews finished the entire rehabilitation eleven weeks ahead of the revised schedule.",
+          "cleanedPassed": true,
+          "name": "bridge_late_numeric_fact",
+          "passed": true,
+          "rawAnswer": "The crews finished the entire rehabilitation eleven weeks ahead of the revised schedule.",
+          "rawPassed": true,
+          "seconds": 0.9660229682922363
+        },
+        {
+          "cleanedAnswer": "Dr. Naomi Castellanos.",
+          "cleanedPassed": true,
+          "name": "owls_named_person_fact",
+          "passed": true,
+          "rawAnswer": "Dr. Naomi Castellanos.",
+          "rawPassed": true,
+          "seconds": 0.8301010131835938
+        },
+        {
+          "cleanedAnswer": "The survey did not track or estimate the project's funding sources in its published methodology, and the research team's public summary does not mention who paid for the monitoring equipment or the volunteer coordination effort.",
+          "cleanedPassed": true,
+          "name": "owls_fact_not_in_article",
+          "passed": true,
+          "rawAnswer": "The survey did not track or estimate the project's funding sources in its published methodology, and the research team's public summary does not mention who paid for the monitoring equipment or the volunteer coordination effort.",
+          "rawPassed": true,
+          "seconds": 1.2598539590835571
+        },
+        {
+          "cleanedAnswer": "The lines printed were as narrow as 400 nanometers across.",
+          "cleanedPassed": true,
+          "name": "necroprinting_followup_pronoun",
+          "passed": true,
+          "rawAnswer": "The lines printed were as narrow as 400 nanometers across.",
+          "rawPassed": true,
+          "seconds": 1.0470340251922607
+        },
+        {
+          "cleanedAnswer": "Yes, the crews finished the rehabilitation eleven weeks ahead of the revised schedule.",
+          "cleanedPassed": true,
+          "name": "bridge_yes_no",
+          "passed": true,
+          "rawAnswer": "Yes, the crews finished the rehabilitation eleven weeks ahead of the revised schedule.",
+          "rawPassed": true,
+          "seconds": 0.9670640230178833
+        },
+        {
+          "cleanedAnswer": "The steps they used to turn the mosquito into a working nozzle are as follows:\n\n1. Anesthetize and preserve a small batch of lab-reared mosquitoes.\n2. Dissect out the proboscis from each mosquito under a stereo microscope.\n3. Mount the cleanest specimens into a custom-machined steel collar sized to hold the base of the mouthpart rigidly in place.\n4. Run a UV-curable resin through the makeshift nozzle at low pressure and print a series of test lines onto glass slides, curing each line with a handheld UV lamp as it emerged.",
+          "cleanedPassed": false,
+          "firstFailingDetail": "none of [\"calibrat\", \"align\", \"alignment\"] found in answer",
+          "firstFailingRule": "mustContainAny",
+          "name": "necroprinting_list_steps",
+          "passed": false,
+          "rawAnswer": "The steps they used to turn the mosquito into a working nozzle are as follows:\n\n1. Anesthetize and preserve a small batch of lab-reared mosquitoes.\n2. Dissect out the proboscis from each mosquito under a stereo microscope.\n3. Mount the cleanest specimens into a custom-machined steel collar sized to hold the base of the mouthpart rigidly in place.\n4. Run a UV-curable resin through the makeshift nozzle at low pressure and print a series of test lines onto glass slides, curing each line with a handheld UV lamp as it emerged.",
+          "rawPassed": false,
+          "seconds": 2.758547067642212
+        }
+      ],
+      "model": "mlx-community/Qwen3-1.7B-4bit",
+      "oneShot": false,
+      "passCount": 7,
+      "prompt": "legacy"
+    },
+    {
+      "avgSeconds": 4.590369239449501,
+      "caseCount": 8,
+      "cases": [
+        {
+          "cleanedAnswer": "Yes, in this case, the researchers are making nozzles out of dead mosquitoes. They extracted the mosquito's proboscis (its feeding mouthpart) and used it as a natural, ultra-fine nozzle for 3D printing. This approach, which they call \"necroprinting,\" involves mounting the dead insect's proboscis into a custom steel collar and using it to print lines as narrow as 400 nanometers—narrower than any previously achieved with machined nozzles.\n\nThe idea is not to create a living or functional mosquito, but to use the biological structure of a dead one for its natural taper, which evolved to be extremely fine and precise. While fragile and limited in durability (only surviving a few print runs), this bio-inspired method offers a low-cost, accessible alternative for labs needing ultra-fine prints without investing in expensive custom machining.",
+          "cleanedPassed": true,
+          "name": "necroprinting",
+          "passed": true,
+          "rawAnswer": "Yes, in this case, the researchers are making nozzles out of dead mosquitoes. They extracted the mosquito's proboscis (its feeding mouthpart) and used it as a natural, ultra-fine nozzle for 3D printing. This approach, which they call \"necroprinting,\" involves mounting the dead insect's proboscis into a custom steel collar and using it to print lines as narrow as 400 nanometers—narrower than any previously achieved with machined nozzles.\n\nThe idea is not to create a living or functional mosquito, but to use the biological structure of a dead one for its natural taper, which evolved to be extremely fine and precise. While fragile and limited in durability (only surviving a few print runs), this bio-inspired method offers a low-cost, accessible alternative for labs needing ultra-fine prints without investing in expensive custom machining.",
+          "rawPassed": true,
+          "seconds": 8.35007095336914
+        },
+        {
+          "cleanedAnswer": "Yes, the article describes a method where researchers use preserved mosquito proboscises (the insect's feeding mouthparts) mounted in custom steel collars to create ultra-fine 3D-printing nozzles. This technique, referred to internally as \"necroprint,\" involves using the naturally tapered proboscis—evolved to be as narrow as a few hundred nanometers—to print lines as fine as 400 nanometers. The approach is unconventional and relies on biological structures rather than machined metal nozzles, offering a low-cost alternative for research settings that need only a few high-precision prints without investing in expensive custom tooling.\n\nSo, yes—making nozzles out of dead things (specifically, dead mosquitoes) is what the article describes, and it's grounded in the actual scientific work reported.",
+          "cleanedPassed": true,
+          "name": "necroprinting_from_summary",
+          "passed": true,
+          "rawAnswer": "Yes, the article describes a method where researchers use preserved mosquito proboscises (the insect's feeding mouthparts) mounted in custom steel collars to create ultra-fine 3D-printing nozzles. This technique, referred to internally as \"necroprint,\" involves using the naturally tapered proboscis—evolved to be as narrow as a few hundred nanometers—to print lines as fine as 400 nanometers. The approach is unconventional and relies on biological structures rather than machined metal nozzles, offering a low-cost alternative for research settings that need only a few high-precision prints without investing in expensive custom tooling.\n\nSo, yes—making nozzles out of dead things (specifically, dead mosquitoes) is what the article describes, and it's grounded in the actual scientific work reported.",
+          "rawPassed": true,
+          "seconds": 7.035517930984497
+        },
+        {
+          "cleanedAnswer": "The crews finished the rehabilitation **eleven weeks ahead** of the revised schedule.",
+          "cleanedPassed": true,
+          "name": "bridge_late_numeric_fact",
+          "passed": true,
+          "rawAnswer": "The crews finished the rehabilitation **eleven weeks ahead** of the revised schedule.",
+          "rawPassed": true,
+          "seconds": 2.0660760402679443
+        },
+        {
+          "cleanedAnswer": "Dr. Naomi Castellanos led the research.",
+          "cleanedPassed": true,
+          "name": "owls_named_person_fact",
+          "passed": true,
+          "rawAnswer": "Dr. Naomi Castellanos led the research.",
+          "rawPassed": true,
+          "seconds": 1.8039679527282715
+        },
+        {
+          "cleanedAnswer": "The article does not provide information on how much funding the survey received or who paid for it. The researchers mentioned that the project \"relied on a mix of institutional and volunteer support\" but did not specify funding sources or amounts in the published methodology or summary.",
+          "cleanedPassed": true,
+          "name": "owls_fact_not_in_article",
+          "passed": true,
+          "rawAnswer": "The article does not provide information on how much funding the survey received or who paid for it. The researchers mentioned that the project \"relied on a mix of institutional and volunteer support\" but did not specify funding sources or amounts in the published methodology or summary.",
+          "rawPassed": true,
+          "seconds": 3.020517945289612
+        },
+        {
+          "cleanedAnswer": "The lines printed using the mosquito-derived nozzle measured as narrow as 400 nanometers across. This is about half the width of the previous record.",
+          "cleanedPassed": true,
+          "name": "necroprinting_followup_pronoun",
+          "passed": true,
+          "rawAnswer": "The lines printed using the mosquito-derived nozzle measured as narrow as 400 nanometers across. This is about half the width of the previous record.",
+          "rawPassed": true,
+          "seconds": 3.0764139890670776
+        },
+        {
+          "cleanedAnswer": "Yes, the crews finished the rehabilitation eleven weeks ahead of the revised schedule. Despite a four-month delay caused by unexpected corrosion, the project's general contractor stated that the crew ultimately made up the lost time by running two shifts during the final phase and completed the work eleven weeks earlier than the revised schedule.",
+          "cleanedPassed": true,
+          "name": "bridge_yes_no",
+          "passed": true,
+          "rawAnswer": "Yes, the crews finished the rehabilitation eleven weeks ahead of the revised schedule. Despite a four-month delay caused by unexpected corrosion, the project's general contractor stated that the crew ultimately made up the lost time by running two shifts during the final phase and completed the work eleven weeks earlier than the revised schedule.",
+          "rawPassed": true,
+          "seconds": 3.3393540382385254
+        },
+        {
+          "cleanedAnswer": "The researchers used the following steps to turn a mosquito into a working nozzle:\n\n1. **Anesthetized and preserved** a batch of lab-reared mosquitoes.\n2. **Dissected out the proboscis** (the needle-like mouthpart) from each mosquito under a stereo microscope.\n3. **Mounted the proboscis** into a custom-machined steel collar, which held the base of the mouthpart securely and allowed it to be aligned with a syringe-pump extruder.\n4. **Used the mounted proboscis as a nozzle** to extrude UV-curable resin at low pressure.\n5. **Printed test lines** onto glass slides, curing each line with a handheld UV lamp as it emerged.\n\nThis process, referred to internally as \"necroprinting,\" leverages the natural, ultra-fine taper of the mosquito's proboscis—only a few hundred nanometers wide—to create an extremely narrow printing nozzle without requiring expensive machining.",
+          "cleanedPassed": true,
+          "name": "necroprinting_list_steps",
+          "passed": true,
+          "rawAnswer": "The researchers used the following steps to turn a mosquito into a working nozzle:\n\n1. **Anesthetized and preserved** a batch of lab-reared mosquitoes.\n2. **Dissected out the proboscis** (the needle-like mouthpart) from each mosquito under a stereo microscope.\n3. **Mounted the proboscis** into a custom-machined steel collar, which held the base of the mouthpart securely and allowed it to be aligned with a syringe-pump extruder.\n4. **Used the mounted proboscis as a nozzle** to extrude UV-curable resin at low pressure.\n5. **Printed test lines** onto glass slides, curing each line with a handheld UV lamp as it emerged.\n\nThis process, referred to internally as \"necroprinting,\" leverages the natural, ultra-fine taper of the mosquito's proboscis—only a few hundred nanometers wide—to create an extremely narrow printing nozzle without requiring expensive machining.",
+          "rawPassed": true,
+          "seconds": 8.03103506565094
+        }
+      ],
+      "model": "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+      "oneShot": false,
+      "passCount": 8,
+      "prompt": "legacy"
+    },
+    {
+      "avgSeconds": 2.883341357111931,
+      "caseCount": 8,
+      "cases": [
+        {
+          "cleanedAnswer": "Making nozzles out of dead things. The article states that the team used a mosquito’s proboscis to create a nozzle that was as narrow as 400 nanometers across – about half the width of the previous record – and then printed test lines onto glass slides, curing them with UV light.",
+          "cleanedPassed": false,
+          "firstFailingDetail": "first sentence \"Making nozzles out of dead things.\" contains none of [\"mosquito\", \"proboscis\", \"yes\"]",
+          "firstFailingRule": "firstSentenceMustContainAny",
+          "name": "necroprinting",
+          "passed": false,
+          "rawAnswer": "Making nozzles out of dead things. The article states that the team used a mosquito’s proboscis to create a nozzle that was as narrow as 400 nanometers across – about half the width of the previous record – and then printed test lines onto glass slides, curing them with UV light.",
+          "rawPassed": false,
+          "seconds": 6.536419034004211
+        },
+        {
+          "cleanedAnswer": "Making nozzles out of dead things? The article states that the team is experimenting with “necroprinting,” which involves mounting and printing lines from a dead mosquito’s proboscis onto glass slides.",
+          "cleanedPassed": false,
+          "firstFailingDetail": "first sentence \"Making nozzles out of dead things?\" contains none of [\"mosquito\", \"proboscis\", \"yes\"]",
+          "firstFailingRule": "firstSentenceMustContainAny",
+          "name": "necroprinting_from_summary",
+          "passed": false,
+          "rawAnswer": "Making nozzles out of dead things? The article states that the team is experimenting with “necroprinting,” which involves mounting and printing lines from a dead mosquito’s proboscis onto glass slides.",
+          "rawPassed": false,
+          "seconds": 2.829617977142334
+        },
+        {
+          "cleanedAnswer": "The article states that the rehabilitation was completed eleven weeks *ahead* of the revised schedule. \n\n---",
+          "cleanedPassed": true,
+          "name": "bridge_late_numeric_fact",
+          "passed": true,
+          "rawAnswer": "The article states that the rehabilitation was completed eleven weeks *ahead* of the revised schedule. \n\n---",
+          "rawPassed": true,
+          "seconds": 2.0874009132385254
+        },
+        {
+          "cleanedAnswer": "Dr. Naomi Castellanos led the research. \n\nThe article states “Dr. Naomi Castellanos, the ecologist who led the analysis, said.”",
+          "cleanedPassed": true,
+          "name": "owls_named_person_fact",
+          "passed": true,
+          "rawAnswer": "Dr. Naomi Castellanos led the research. \n\nThe article states “Dr. Naomi Castellanos, the ecologist who led the analysis, said.”",
+          "rawPassed": true,
+          "seconds": 2.0711768865585327
+        },
+        {
+          "cleanedAnswer": "The article doesn’t specify how much funding was received or who paid for the monitoring equipment. It only states that the project relied on a mix of institutional and volunteer support. \n\nEND OF ARTICLE",
+          "cleanedPassed": true,
+          "name": "owls_fact_not_in_article",
+          "passed": true,
+          "rawAnswer": "The article doesn’t specify how much funding was received or who paid for the monitoring equipment. It only states that the project relied on a mix of institutional and volunteer support. \n\nEND OF ARTICLE",
+          "rawPassed": true,
+          "seconds": 2.2022520303726196
+        },
+        {
+          "cleanedAnswer": "The article states that the lines printed were as narrow as 400 nanometers across – about half the width of the previous record, which had been set by a machined tungsten nozzle that took a specialty shop nearly three weeks to produce and cost several thousand dollars.",
+          "cleanedPassed": true,
+          "name": "necroprinting_followup_pronoun",
+          "passed": true,
+          "rawAnswer": "The article states that the lines printed were as narrow as 400 nanometers across – about half the width of the previous record, which had been set by a machined tungsten nozzle that took a specialty shop nearly three weeks to produce and cost several thousand dollars.",
+          "rawPassed": true,
+          "seconds": 2.9143790006637573
+        },
+        {
+          "cleanedAnswer": "The article doesn't say.",
+          "cleanedPassed": false,
+          "firstFailingDetail": "none of [\"11 weeks\", \"eleven weeks\", \"ahead of schedule\", \"ahead of the revised schedule\"] found in answer",
+          "firstFailingRule": "mustContainAny",
+          "name": "bridge_yes_no",
+          "passed": false,
+          "rawAnswer": "The article doesn't say.",
+          "rawPassed": false,
+          "seconds": 1.993772029876709
+        },
+        {
+          "cleanedAnswer": "Engineers turned a small materials-engineering lab outside Portland by anesthetizing and preserving a few mosquitoes, dissecting their proboscis, and mounting it onto a custom-machined steel collar.",
+          "cleanedPassed": false,
+          "firstFailingDetail": "none of [\"calibrat\", \"align\", \"alignment\"] found in answer",
+          "firstFailingRule": "mustContainAny",
+          "name": "necroprinting_list_steps",
+          "passed": false,
+          "rawAnswer": "Engineers turned a small materials-engineering lab outside Portland by anesthetizing and preserving a few mosquitoes, dissecting their proboscis, and mounting it onto a custom-machined steel collar.",
+          "rawPassed": false,
+          "seconds": 2.4317129850387573
+        }
+      ],
+      "model": "mlx-community/gemma-3-1b-it-4bit",
+      "oneShot": true,
+      "passCount": 4,
+      "prompt": "new"
+    }
+  ],
+  "scope": "Real desktop MLX helper (plugins/tauri-plugin-skim-ai bin/skim-ai-macos-bridge-*) and real downloaded on-device models on this Mac (~/Documents/huggingface/models), run via tools/SkimChatEval against the isolated synthetic fixture shared/fixtures/chat-answer-quality.json. Greedy decoding (temperature 0). No user library/settings changed; no cloud inference; no app code touched.",
+  "verified_at": "2026-09-29T15:16:38.907472+00:00"
+}

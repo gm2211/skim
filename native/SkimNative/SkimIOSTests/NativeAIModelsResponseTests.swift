@@ -425,6 +425,95 @@ struct NativeLibraryChatTests {
         #expect(library.contains("call the `web_search` tool"))
         #expect(!library.contains("using only the provided article text"))
     }
+
+    // MARK: - skim-p9ol: grounded answer-first local chat
+
+    @Test func groundedMessagesForSummarySeededConversationContainNoSummaryText() {
+        let summary = "The article explains that dead mosquito proboscises were repurposed as biological 3D-printing nozzles for extruding polymer filament."
+        // Real usage seeds the chat with the generated summary as the opening
+        // assistant bubble; AIChatConversation.init drops that turn (comparing
+        // trimmed text on both sides), so priorTurns is empty here.
+        let conversation = AIChatConversation(
+            latestQuestion: "Making nozzles out of dead things?",
+            priorMessages: [AIChatMessage(role: .assistant, text: summary)],
+            generatedSummaryContext: summary
+        )
+        #expect(conversation.priorTurns.isEmpty)
+
+        let messages = NativeAI.buildGroundedLocalMessages(
+            conversation: conversation,
+            articleContext: "[1] Nozzles From Dead Things\nExcerpt: researchers repurposed dead mosquito proboscises as 3D-printing nozzles.",
+            webBlock: nil
+        )
+
+        #expect(messages.map { $0["role"] } == ["system", "user"])
+        let combinedContent = messages.compactMap { $0["content"] }.joined()
+        #expect(!combinedContent.contains(summary))
+        #expect(messages.last?["content"]?.contains("Question: Making nozzles out of dead things?") == true)
+        #expect(messages.last?["content"]?.hasSuffix("Answer the question above directly, using the article.") == true)
+    }
+
+    @Test func groundedMessagesFoldInSummaryOnlyForContextualFollowupWithNoPriorTurns() {
+        let summary = "The article explains that dead mosquito proboscises were repurposed as biological 3D-printing nozzles."
+        let conversation = AIChatConversation(
+            latestQuestion: "Why does that matter?",
+            priorMessages: [],
+            generatedSummaryContext: summary
+        )
+        #expect(conversation.priorTurns.isEmpty)
+
+        let messages = NativeAI.buildGroundedLocalMessages(
+            conversation: conversation,
+            articleContext: "[1] Nozzles From Dead Things\nExcerpt: researchers repurposed dead mosquito proboscises as 3D-printing nozzles.",
+            webBlock: nil
+        )
+
+        #expect(messages.map { $0["role"] } == ["system", "user"])
+        #expect(messages.last?["content"]?.contains("Earlier summary:") == true)
+        #expect(messages.last?["content"]?.hasSuffix("Answer the question above directly, using the article.") == true)
+    }
+
+    @Test func groundedMessagesToleratePriorFailedTurn() {
+        // History: a real user question, an error response (never real evidence, and
+        // filtered out of priorTurns by AIChatConversation.init), then a new question.
+        let conversation = AIChatConversation(
+            latestQuestion: "What happened, really?",
+            priorMessages: [
+                AIChatMessage(role: .user, text: "What happened?"),
+                AIChatMessage(role: .assistant, text: "Something went wrong.", isError: true),
+            ]
+        )
+        #expect(conversation.priorTurns.map(\.text) == ["What happened?"])
+
+        let messages = NativeAI.buildGroundedLocalMessages(
+            conversation: conversation,
+            articleContext: "[1] Story\nExcerpt: evidence text.",
+            webBlock: nil
+        )
+
+        #expect(messages.map { $0["role"] } == ["system", "user"])
+        #expect(!messages.contains { ($0["content"] ?? "").contains("Something went wrong.") })
+        #expect(messages.last?["content"]?.contains("Question: What happened, really?") == true)
+    }
+
+    @Test func groundedArticleContextScalesExcerptToModelTier() throws {
+        let filler = String(repeating: "Unrelated background covers ordinary office routines and daily operations in detail. ", count: 300)
+        let source = article("nozzle-tier", body: filler)
+        let conversation = AIChatConversation(latestQuestion: "What did they build?")
+
+        let compactBudget = ChatContextBudget.forTier(LocalModelTier.tier(for: "mlx-community/gemma-3-1b-it-4bit"))
+        let midBudget = ChatContextBudget.forTier(LocalModelTier.tier(for: "mlx-community/Skim-Test-4B-Instruct-4bit"))
+        #expect(compactBudget.evidenceChars == 5000)
+        #expect(midBudget.evidenceChars == 8000)
+
+        let compactContext = try NativeAI.groundedArticleContext(article: source, conversation: conversation, maxCharacters: compactBudget.evidenceChars)
+        let midContext = try NativeAI.groundedArticleContext(article: source, conversation: conversation, maxCharacters: midBudget.evidenceChars)
+
+        let compactExcerpt = compactContext.components(separatedBy: "Excerpt: ").last ?? ""
+        let midExcerpt = midContext.components(separatedBy: "Excerpt: ").last ?? ""
+        #expect(compactExcerpt.unicodeScalars.count <= compactBudget.evidenceChars)
+        #expect(midExcerpt.unicodeScalars.count <= midBudget.evidenceChars)
+    }
 }
 
 private final class NativeChatRequestCapture: @unchecked Sendable {

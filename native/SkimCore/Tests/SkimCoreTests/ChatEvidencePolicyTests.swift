@@ -69,3 +69,63 @@ import Testing
         for passage in result.components(separatedBy: "\n…\n") { #expect(source.contains(passage), "\(item.name)") }
     }
 }
+
+@Test func expandedQueryAddsPluralAndSingularVariantsWithinCap() {
+    let expanded = ChatEvidencePolicy.expandedQuery("Making nozzles out of dead things?")
+    let terms = expanded.split(separator: " ").map(String.init)
+    #expect(terms.contains("nozzles"))
+    #expect(terms.contains("nozzle"))
+    #expect(terms.count <= 32)
+    #expect(Set(terms).count == terms.count) // deduped
+}
+
+@Test func expandedQueryCapsAtThirtyTwoDistinctTerms() {
+    let manyWords = (1...20).map { "word\($0)" }.joined(separator: " ")
+    let expanded = ChatEvidencePolicy.expandedQuery(manyWords)
+    let terms = expanded.split(separator: " ").map(String.init)
+    #expect(terms.count == 32)
+    #expect(Set(terms).count == 32)
+}
+
+@Test func expandedQueryFindsFactStatedWithMismatchedPluralTerm() {
+    let fact = "a dead mosquito's proboscis served as the nozzle"
+    let filler = "Unrelated background covers ordinary manufacturing processes in fine detail.\n\n"
+    var body = "Lead sentence introducing the necroprinting article broadly.\n\n"
+    while body.utf8.count < 19_500 { body += filler }
+    body += fact
+    #expect(body.utf8.count >= 19_500) // roughly the ~20k-char body called for
+
+    let rawQuery = "Making nozzles out of dead things?"
+    let expanded = ChatEvidencePolicy.expandedQuery(rawQuery)
+    let result = ChatEvidencePolicy.excerpt(text: body, query: expanded, maxCharacters: 5000)
+    #expect(result.contains(fact))
+}
+
+@Test func articleContextMatchesTodaysNativeAIFormatByteForByte() {
+    let title = "Necroprinting Nozzles"
+    let feedTitle = "Fabrication Weekly"
+    let author = "J. Doe"
+    let publishedAt = Date(timeIntervalSince1970: 1_700_000_000)
+    let body = "A dead mosquito's proboscis served as the nozzle in a recent 3D-printing experiment."
+    let query = "nozzle"
+    let maxCharacters = 500
+
+    let expected = "[1] \(title)\nFeed: \(feedTitle)\nAuthor: \(author)\n\(AIRequestPolicy.publicationContext(publishedAt))\nExcerpt: \(ChatEvidencePolicy.excerpt(text: body, query: query, maxCharacters: maxCharacters))"
+
+    let actual = ChatEvidencePolicy.articleContext(title: title, feedTitle: feedTitle, author: author,
+        publishedAt: publishedAt, body: body, query: query, maxCharacters: maxCharacters)
+    #expect(actual == expected)
+}
+
+@Test func articleContextHandlesMissingAuthorAndEmptyBody() {
+    let title = "Untitled"
+    let feedTitle = "Some Feed"
+    let publishedAt: Date? = nil
+    let query = "anything"
+    let maxCharacters = 500
+
+    let expected = "[1] \(title)\nFeed: \(feedTitle)\nAuthor: unknown\n\(AIRequestPolicy.publicationContext(publishedAt))\nExcerpt: No reader text available."
+    let actual = ChatEvidencePolicy.articleContext(title: title, feedTitle: feedTitle, author: nil,
+        publishedAt: publishedAt, body: "", query: query, maxCharacters: maxCharacters)
+    #expect(actual == expected)
+}

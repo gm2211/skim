@@ -251,7 +251,7 @@ actor MLXRunner {
             return
         }
 
-        let fallbacks = [MLXRunner.defaultRepoId] + MLXRunner.downloadedRepoIds()
+        let fallbacks = [NativeMLX.effectiveDefaultRepoId] + MLXRunner.downloadedRepoIds()
         if let fallback = fallbacks.first(where: { MLXRunner.isRepoDownloaded($0) }) {
             setModel(repoId: fallback)
         } else {

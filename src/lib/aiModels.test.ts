@@ -53,14 +53,14 @@ describe("resolveMlxRepoId", () => {
       "mlx-community/Qwen3-4B-Instruct-2507-4bit",
     );
     expect(resolveMlxRepoId({ model: null, local_model_path: null }, true)).toBe(
-      "mlx-community/gemma-3-1b-it-4bit",
+      "mlx-community/Qwen3-1.7B-4bit",
     );
   });
 
   it("falls back to the device default when the saved model is not phone-friendly", () => {
     // A desktop-only model was saved, but the device is now a phone.
     const repoId = resolveMlxRepoId({ model: "mlx-community/gemma-3-4b-it-4bit", local_model_path: null }, true);
-    expect(repoId).toBe("mlx-community/gemma-3-1b-it-4bit");
+    expect(repoId).toBe("mlx-community/Qwen3-1.7B-4bit");
   });
 });
 
@@ -78,7 +78,7 @@ describe("retired MLX models", () => {
 
   it("falls back on phone when the retired model is not phone-friendly", () => {
     expect(resolveMlxRepoId({ model: smol, local_model_path: null }, true)).toBe(
-      "mlx-community/gemma-3-1b-it-4bit",
+      "mlx-community/Qwen3-1.7B-4bit",
     );
   });
 

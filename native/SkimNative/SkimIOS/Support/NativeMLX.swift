@@ -65,6 +65,17 @@ enum NativeMLX {
         MLXRunner.isRepoDownloaded(repoId)
     }
 
+    /// Resolves the repo id the given settings would run against, using the
+    /// existing precedence: an explicit local model path, then a repo-shaped
+    /// `settings.model`, then the runtime default. A leaked cloud model id
+    /// (e.g. "claude-sonnet-4-5") never contains "/" and is never returned.
+    static func resolvedRepoId(_ settings: AISettings) -> String {
+        let modelRepo = settings.model?.nilIfEmpty.flatMap { $0.contains("/") ? $0 : nil }
+        return settings.localModelPath?.nilIfEmpty
+            ?? modelRepo
+            ?? defaultRepoId
+    }
+
     static func downloadedRepoIds() -> [String] {
         MLXRunner.downloadedRepoIds()
     }
@@ -133,17 +144,20 @@ enum NativeMLX {
 
     /// Multi-turn completion from an arbitrary messages array. Used by local MLX chat
     /// to pass real system + prior-turn + final-user messages through the chat template.
+    ///
+    /// Sampling precedence for `temperature`/`topP`/`repetitionPenalty`: an explicit
+    /// user setting (`settings.mlx*`) wins, then the caller-supplied override (e.g. a
+    /// use-case-tuned preset like `GroundedChatPrompt.samplingPreset`), then the
+    /// per-model preset applied downstream in `MLXRunner`.
     static func complete(
         settings: AISettings,
         messages: [[String: String]],
-        maxTokens: Int
+        maxTokens: Int,
+        temperature: Double? = nil,
+        topP: Double? = nil,
+        repetitionPenalty: Double? = nil
     ) async throws -> String {
-        // Only use settings.model as a repo id when it actually looks like one (contains "/").
-        // A leaked cloud model id (e.g. "claude-sonnet-4-5") must not be passed to MLX.
-        let modelRepo = settings.model?.nilIfEmpty.flatMap { $0.contains("/") ? $0 : nil }
-        let repoId = settings.localModelPath?.nilIfEmpty
-            ?? modelRepo
-            ?? defaultRepoId
+        let repoId = resolvedRepoId(settings)
         await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
 
         let resolvedMaxTokens = settings.mlxMaxTokens ?? maxTokens
@@ -151,9 +165,9 @@ enum NativeMLX {
         return try await MLXRunner.shared.complete(
             messages: messages,
             maxTokens: resolvedMaxTokens,
-            temperature: settings.mlxTemperature.map { Float($0) },
-            topP: settings.mlxTopP.map { Float($0) },
-            repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) },
+            temperature: settings.mlxTemperature.map { Float($0) } ?? temperature.map { Float($0) },
+            topP: settings.mlxTopP.map { Float($0) } ?? topP.map { Float($0) },
+            repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) } ?? repetitionPenalty.map { Float($0) },
             repetitionContextSize: settings.mlxRepetitionContextSize
         )
         .trimmingCharacters(in: .whitespacesAndNewlines)

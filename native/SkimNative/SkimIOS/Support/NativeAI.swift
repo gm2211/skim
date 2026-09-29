@@ -69,8 +69,9 @@ struct AIChatConversation: Sendable {
         }
         self.articleHandleRegistry = registry
         self.latestQuestion = latestQuestion
+        let trimmedSummary = generatedSummaryContext?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.priorTurns = priorMessages
-            .filter { !$0.isError && !($0.role == .assistant && $0.text == generatedSummaryContext) }
+            .filter { !$0.isError && !($0.role == .assistant && $0.text.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedSummary) }
             .suffix(8)
             .map { message in
                 Turn(
@@ -1246,6 +1247,44 @@ enum NativeAI {
         return [systemMessage] + priorTurnMessages + [finalUser]
     }
 
+    /// Builds the grounded, answer-first local MLX chat-with-article prompt
+    /// (`GroundedChatPrompt.build`'s `[system, user]`, question last). Never
+    /// includes the raw generated-summary text as its own turn: the prior
+    /// exchange folded in is either the most recent real user/assistant pair
+    /// from `conversation.priorTurns`, or — only when there are no prior
+    /// turns and the new question reads as a contextual follow-up to the
+    /// summary (e.g. "why does that matter?") — the generated summary itself,
+    /// truncated by `GroundedChatPrompt.build` and labeled "Earlier summary"
+    /// rather than presented as something the model itself said.
+    static func buildGroundedLocalMessages(
+        conversation: AIChatConversation,
+        articleContext: String,
+        webBlock: String?
+    ) -> [[String: String]] {
+        let question = conversation.latestQuestion
+        let system = GroundedChatPrompt.systemPrompt(question: question)
+
+        var priorExchange: (question: String, answer: String, label: String)?
+        if let lastUser = conversation.priorTurns.last(where: { $0.role == .user }),
+           let lastAssistant = conversation.priorTurns.last(where: { $0.role == .assistant }) {
+            priorExchange = (question: lastUser.text, answer: lastAssistant.text, label: "A")
+        } else if conversation.priorTurns.isEmpty,
+                  let summary = conversation.generatedSummaryContext?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !summary.isEmpty,
+                  LibraryChatPolicy.isContextualFollowup(question, referenceTexts: [summary]) {
+            priorExchange = (question: question, answer: summary, label: "Earlier summary")
+        }
+
+        let messages = GroundedChatPrompt.build(
+            system: system,
+            articleContext: articleContext,
+            question: question,
+            priorExchange: priorExchange,
+            webBlock: webBlock
+        )
+        return messages.map { ["role": $0.role, "content": $0.content] }
+    }
+
     static func chatInstructions(isLibrary: Bool, enableWebSearch: Bool) -> String {
         let base = isLibrary
             ? "You answer questions across a set of RSS articles using the provided article list and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable. If the answer is not supported by the supplied articles or web results, say so."
@@ -1256,20 +1295,39 @@ enum NativeAI {
 
     /// Local MLX chat with optional web-search augmentation (2-pass: router + answer).
     /// Falls back to a plain local answer on any failure in the router or search step.
+    /// Grounded, answer-first prompting (skim-p9ol): context/token budgets scale with
+    /// the model's parameter-count tier, the prompt is built by `buildGroundedLocalMessages`,
+    /// sampling comes from `GroundedChatPrompt.samplingPreset`, and the raw completion is
+    /// run through `ChatAnswerCleanup` before it reaches the UI.
     private static func chatLocalWithSearch(
         conversation: AIChatConversation,
         article: Article,
-        instructions: String,
-        answerMaxTokens: Int,
         settings: AppSettings
     ) async throws -> (text: String, citations: [WebCitation]) {
-        let articleContext = try singleArticleChatContext(article: article, conversation: conversation)
+        let repoId = NativeMLX.resolvedRepoId(settings.ai)
+        let budget = ChatContextBudget.forTier(LocalModelTier.tier(for: repoId))
+        let sampling = GroundedChatPrompt.samplingPreset(basedOn: MLXSamplingPreset.preset(for: repoId))
+
+        func answer(articleContext: String, webBlock: String?) async throws -> String {
+            let msgs = buildGroundedLocalMessages(conversation: conversation, articleContext: articleContext, webBlock: webBlock)
+            let raw = try await NativeMLX.complete(
+                settings: settings.ai,
+                messages: msgs,
+                maxTokens: budget.maxTokens,
+                temperature: Double(sampling.temperature),
+                topP: Double(sampling.topP),
+                repetitionPenalty: Double(sampling.repetitionPenalty)
+            )
+            return ChatAnswerCleanup.clean(raw, question: conversation.latestQuestion)
+        }
+
+        let articleContext = try groundedArticleContext(article: article, conversation: conversation, maxCharacters: budget.evidenceChars)
         let skipRouter = canSkipRouter(conversation: conversation, articleCount: 1)
 
         let decision: LocalSearchDecision
         if skipRouter {
             decision = .answer
-        } else if let routerContext = try? singleArticleChatContext(article: article, conversation: conversation, maxCharacters: 2400) {
+        } else if let routerContext = try? groundedArticleContext(article: article, conversation: conversation, maxCharacters: budget.routerChars) {
             decision = await routeLocalChat(
                 conversation: conversation,
                 articleContext: routerContext,
@@ -1281,51 +1339,19 @@ enum NativeAI {
 
         switch decision {
         case .answer:
-            let msgs = buildLocalChatMessages(
-                instructions: instructions,
-                articleContext: articleContext,
-                conversation: conversation,
-                webBlock: nil
-            )
-            let text = try await NativeMLX.complete(
-                settings: settings.ai,
-                messages: msgs,
-                maxTokens: answerMaxTokens
-            )
-            return (text, [])
+            return (try await answer(articleContext: articleContext, webBlock: nil), [])
 
         case .search(let query):
             let results = (try? await NativeWebSearch.run(query: query, maxResults: 4)) ?? []
             guard !results.isEmpty else {
                 // Empty results: fall back to answering from article only (multi-turn, no web block)
-                let msgs = buildLocalChatMessages(
-                    instructions: instructions,
-                    articleContext: articleContext,
-                    conversation: conversation,
-                    webBlock: nil
-                )
-                let text = try await NativeMLX.complete(
-                    settings: settings.ai,
-                    messages: msgs,
-                    maxTokens: answerMaxTokens
-                )
-                return (text, [])
+                return (try await answer(articleContext: articleContext, webBlock: nil), [])
             }
-            let webBlock = formatWebResultsBlock(query: query, results: results)
+            let webBlock = "Web search results are provided below; use them for facts the article doesn't cover; if they don't help, say what you couldn't find.\n\n"
+                + formatWebResultsBlock(query: query, results: results)
             // Reselect from the full source at the smaller web-augmented budget.
-            let trimmedContext = try singleArticleChatContext(article: article, conversation: conversation, maxCharacters: 4200)
-            let answerInstructions = instructions + "\n\nWeb search results are provided below; use them for facts the article doesn't cover; if they don't help, say what you couldn't find."
-            let msgs = buildLocalChatMessages(
-                instructions: answerInstructions,
-                articleContext: trimmedContext,
-                conversation: conversation,
-                webBlock: webBlock
-            )
-            let text = try await NativeMLX.complete(
-                settings: settings.ai,
-                messages: msgs,
-                maxTokens: answerMaxTokens
-            )
+            let trimmedContext = try groundedArticleContext(article: article, conversation: conversation, maxCharacters: budget.webEvidenceChars)
+            let text = try await answer(articleContext: trimmedContext, webBlock: webBlock)
             return (text, results.map { WebCitation(title: $0.title, url: $0.url, snippet: $0.snippet, query: query) })
         }
     }
@@ -1352,26 +1378,28 @@ enum NativeAI {
             return try await chatLocalWithSearch(
                 conversation: conversation,
                 article: article,
-                instructions: chatInstructions(isLibrary: false, enableWebSearch: false),
-                answerMaxTokens: 650,
                 settings: settings
             )
         }
 
-        // MLX without web search: still use multi-turn messages for better instruct-model behavior
+        // MLX without web search: grounded, answer-first prompting (skim-p9ol) —
+        // context/token budgets scale with the model's tier, sampling comes from
+        // GroundedChatPrompt.samplingPreset, and the output is cleaned before display.
         if settings.ai.provider == "mlx" {
-            let articleContext = try singleArticleChatContext(article: article, conversation: conversation)
-            let msgs = buildLocalChatMessages(
-                instructions: instructions,
-                articleContext: articleContext,
-                conversation: conversation,
-                webBlock: nil
-            )
-            let text = try await NativeMLX.complete(
+            let repoId = NativeMLX.resolvedRepoId(settings.ai)
+            let budget = ChatContextBudget.forTier(LocalModelTier.tier(for: repoId))
+            let sampling = GroundedChatPrompt.samplingPreset(basedOn: MLXSamplingPreset.preset(for: repoId))
+            let articleContext = try groundedArticleContext(article: article, conversation: conversation, maxCharacters: budget.evidenceChars)
+            let msgs = buildGroundedLocalMessages(conversation: conversation, articleContext: articleContext, webBlock: nil)
+            let raw = try await NativeMLX.complete(
                 settings: settings.ai,
                 messages: msgs,
-                maxTokens: 650
+                maxTokens: budget.maxTokens,
+                temperature: Double(sampling.temperature),
+                topP: Double(sampling.topP),
+                repetitionPenalty: Double(sampling.repetitionPenalty)
             )
+            let text = ChatAnswerCleanup.clean(raw, question: conversation.latestQuestion)
             return (text, [])
         }
 
@@ -1411,6 +1439,32 @@ enum NativeAI {
             : ChatEvidencePolicy.excerpt(text: body, query: query, maxCharacters: maxCharacters)
         try validateChatEvidence(source: body, excerpt: excerpt)
         return "[1] \(article.title)\nFeed: \(article.feedTitle)\nAuthor: \(article.author ?? "unknown")\n\(AIRequestPolicy.publicationContext(article.publishedAt))\nExcerpt: \(excerpt)"
+    }
+
+    /// Grounded-chat successor to `singleArticleChatContext`: builds the same
+    /// `[1] title/feed/author/date/excerpt` header via `ChatEvidencePolicy.articleContext`
+    /// (byte-identical to the inline formatting above), but term-expands the retrieval
+    /// query first (`ChatEvidencePolicy.expandedQuery`) so plural/singular near-misses
+    /// (e.g. a question about "nozzles" against source text that only says "nozzle")
+    /// still match the shared selector's exact, unstemmed casefold matching.
+    static func groundedArticleContext(article: Article, conversation: AIChatConversation, maxCharacters: Int) throws -> String {
+        let body = article.plainBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        let query = ChatEvidencePolicy.expandedQuery(
+            ChatEvidencePolicy.retrievalQuery(query: conversation.latestQuestion,
+                priorUserQueries: conversation.priorTurns.filter { $0.role == .user }.map(\.text), referenceText: body)
+        )
+        let excerpt = body.isEmpty ? "No reader text available."
+            : ChatEvidencePolicy.excerpt(text: body, query: query, maxCharacters: maxCharacters)
+        try validateChatEvidence(source: body, excerpt: excerpt)
+        return ChatEvidencePolicy.articleContext(
+            title: article.title,
+            feedTitle: article.feedTitle,
+            author: article.author,
+            publishedAt: article.publishedAt,
+            body: body,
+            query: query,
+            maxCharacters: maxCharacters
+        )
     }
 
     static func libraryChatHandleRegistry(articles: [Article], conversation: AIChatConversation) -> [String: Int] {
@@ -1466,7 +1520,8 @@ enum NativeAI {
         if settings.ai.provider == "mlx" {
             let messages = buildLocalChatMessages(instructions: chatInstructions(isLibrary: true, enableWebSearch: false), articleContext: context,
                 conversation: conversation, webBlock: nil)
-            return (try await NativeMLX.complete(settings: settings.ai, messages: messages, maxTokens: 850), [])
+            let raw = try await NativeMLX.complete(settings: settings.ai, messages: messages, maxTokens: 850)
+            return (ChatAnswerCleanup.clean(raw, question: conversation.latestQuestion), [])
         }
         return try await completeWithCitations(
             settings: settings,
@@ -3231,10 +3286,7 @@ private struct PrettyAIText: View {
     }
 
     private var formattedText: AttributedString {
-        if let parsed = try? AttributedString(markdown: text) {
-            return parsed
-        }
-        return AttributedString(text)
+        ChatMarkdown.attributed(text)
     }
 }
 
@@ -3434,11 +3486,17 @@ private struct AIChatBubble: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                Text(message.text)
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(message.isError ? Color.red.opacity(0.95) : SkimStyle.text)
-                    .lineSpacing(4)
-                    .textSelection(.enabled)
+                Group {
+                    if message.role == .assistant, !message.isError {
+                        Text(ChatMarkdown.attributed(message.text))
+                    } else {
+                        Text(message.text)
+                    }
+                }
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(message.isError ? Color.red.opacity(0.95) : SkimStyle.text)
+                .lineSpacing(4)
+                .textSelection(.enabled)
 
                 if message.needsReauth, let onReauth {
                     Button {

@@ -28,24 +28,12 @@ struct CatchUpSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text(request.subtitle)
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(SkimStyle.secondary)
-
-                    HStack(spacing: 12) {
-                        Picker("Going back", selection: $range) {
-                            ForEach(CatchUpRange.allCases) { option in
-                                Text(option.label).tag(option)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .accessibilityIdentifier("catch-up-range")
-                        .onChange(of: range) { _, selected in session.start(request: request, range: selected) }
-
-                        Spacer()
-
-                        AppModelPicker(isDisabled: session.isLoading)
-                    }
+                    CatchUpControls(
+                        subtitle: request.subtitle,
+                        range: $range,
+                        isLoading: session.isLoading
+                    )
+                    .onChange(of: range) { _, selected in session.start(request: request, range: selected) }
 
                     if session.wasStopped {
                         Text("Stopped. Change the range or run again.")
@@ -84,6 +72,7 @@ struct CatchUpSheet: View {
             .background(SkimStyle.chrome.ignoresSafeArea())
             .scrollContentBackground(.hidden)
             .navigationTitle("Quick Catch-up")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: String.self) { articleID in
                 ArticleDetailView(articleID: articleID)
             }
@@ -110,6 +99,55 @@ struct CatchUpSheet: View {
         .onDisappear { session.cancel() }
     }
 
+}
+
+// MARK: - Controls
+
+/// Article count, then the range and model chips on one row. When the two
+/// chips don't fit side by side (a long remote model name, large Dynamic
+/// Type) they stack instead of wrapping or truncating.
+private struct CatchUpControls: View {
+    var subtitle: String
+    @Binding var range: CatchUpRange
+    var isLoading: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(subtitle.uppercased())
+                .font(.system(size: 11, weight: .bold))
+                .kerning(1.2)
+                .foregroundStyle(SkimStyle.secondary.opacity(0.8))
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    rangeMenu
+                    AppModelPicker(isDisabled: isLoading)
+                        .fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    rangeMenu
+                    AppModelPicker(isDisabled: isLoading)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var rangeMenu: some View {
+        Menu {
+            Picker("Going back", selection: $range) {
+                ForEach(CatchUpRange.allCases) { option in
+                    Text(option.label).tag(option)
+                }
+            }
+        } label: {
+            PickerChipLabel(title: range.label, systemImage: "clock")
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .accessibilityLabel("Going back: \(range.label)")
+        .accessibilityIdentifier("catch-up-range")
+    }
 }
 
 // MARK: - The page

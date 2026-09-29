@@ -46,13 +46,7 @@ struct ModelPickerMenu: View {
                 }
             }
         } label: {
-            Label(ModelCatalog.currentLabel(effectiveAI), systemImage: "cpu")
-                .font(.system(size: 13, weight: .semibold))
-                .lineLimit(1)
-                .foregroundStyle(SkimStyle.secondary)
-                .padding(.horizontal, 12)
-                .frame(minHeight: 44)
-                .background(SkimStyle.surface, in: Capsule())
+            PickerChipLabel(title: ModelCatalog.currentLabel(effectiveAI), systemImage: "cpu")
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
@@ -90,6 +84,32 @@ struct ModelPickerMenu: View {
         case .fixed(let label):
             Text(label)
         }
+    }
+}
+
+/// The capsule face shared by the inline pickers (model, Catch-up range):
+/// one line, a trailing chevron so it reads as tappable, never wrapping.
+struct PickerChipLabel: View {
+    var title: String
+    var systemImage: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .semibold))
+            Text(title)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 10, weight: .semibold))
+                .opacity(0.7)
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(SkimStyle.secondary)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 36)
+        .background(SkimStyle.surface, in: Capsule())
+        .contentShape(Capsule())
     }
 }
 

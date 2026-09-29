@@ -468,7 +468,7 @@ struct SettingsSheet: View {
     private var mlxSelectedRepoId: String {
         draft.ai.localModelPath?.nilIfEmpty
             ?? draft.ai.model?.nilIfEmpty
-            ?? NativeMLX.defaultRepoId
+            ?? NativeMLX.effectiveDefaultRepoId
     }
 
     private var aiProviderBinding: Binding<String> {
@@ -478,7 +478,7 @@ struct SettingsSheet: View {
                 updateAI {
                     $0.provider = value
                     if value == "mlx" {
-                        let repoId = $0.localModelPath?.nilIfEmpty ?? $0.model?.nilIfEmpty ?? NativeMLX.defaultRepoId
+                        let repoId = $0.localModelPath?.nilIfEmpty ?? $0.model?.nilIfEmpty ?? NativeMLX.effectiveDefaultRepoId
                         $0.localModelPath = repoId
                         $0.model = repoId
                     } else if value == "foundation-models" {
@@ -758,7 +758,7 @@ private struct MLXSettingsPanel: View {
     private var selectedRepoId: String {
         ai.localModelPath?.nilIfEmpty
             ?? ai.model?.nilIfEmpty
-            ?? NativeMLX.defaultRepoId
+            ?? NativeMLX.effectiveDefaultRepoId
     }
 
     private var selectedOption: MLXModelOption {

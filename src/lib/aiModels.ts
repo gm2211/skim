@@ -24,7 +24,7 @@ export type MlxModel = { repoId: string; label: string; sizeGb: number; phoneFri
 export const MLX_MODELS: MlxModel[] = [
   { repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (iPhone, fastest)", sizeGb: 0.7, phoneFriendly: true },
   { repoId: "mlx-community/LFM2-1.2B-4bit", label: "LFM2 1.2B (iPhone, fast)", sizeGb: 0.7, phoneFriendly: true },
-  { repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B (iPhone, best quality)", sizeGb: 1.0, phoneFriendly: true },
+  { repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B (iPhone, recommended)", sizeGb: 1.0, phoneFriendly: true },
   { repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: "Qwen3 4B Instruct (Mac, recommended)", sizeGb: 2.3 },
   { repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B (Mac)", sizeGb: 2.4 },
   { repoId: "mlx-community/Qwen3-8B-4bit", label: "Qwen3 8B (Mac, 16 GB+)", sizeGb: 4.6 },
@@ -56,7 +56,7 @@ export function mlxModelsFor(isPhone: boolean, selectedRepoId?: string | null): 
 /** The model an MLX picker preselects before the user has chosen one. */
 export function defaultMlxModel(isPhone: boolean): MlxModel {
   return isPhone
-    ? MLX_MODELS.find((m) => m.phoneFriendly) ?? MLX_MODELS[0]
+    ? MLX_MODELS.find((m) => m.repoId === "mlx-community/Qwen3-1.7B-4bit") ?? MLX_MODELS[0]
     : MLX_MODELS.find((m) => m.repoId === "mlx-community/Qwen3-4B-Instruct-2507-4bit") ?? MLX_MODELS[0];
 }
 

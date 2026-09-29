@@ -379,7 +379,7 @@ enum NativeAI {
         case "foundation-models":
             return "Asking Apple Intelligence..."
         case "mlx":
-            let repoId = ai.localModelPath?.nilIfEmpty ?? ai.model?.nilIfEmpty ?? NativeMLX.defaultRepoId
+            let repoId = ai.localModelPath?.nilIfEmpty ?? ai.model?.nilIfEmpty ?? NativeMLX.effectiveDefaultRepoId
             return "Running \(NativeMLX.option(for: repoId).label)..."
         case "claude-subscription":
             return "Asking Claude Pro/Max..."

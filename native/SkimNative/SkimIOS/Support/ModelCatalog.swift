@@ -30,7 +30,7 @@ enum ModelCatalog {
     static func currentID(_ ai: AISettings) -> String? {
         switch ai.provider {
         case "mlx":
-            return ai.localModelPath?.nilIfEmpty ?? ai.model?.nilIfEmpty ?? NativeMLX.defaultRepoId
+            return ai.localModelPath?.nilIfEmpty ?? ai.model?.nilIfEmpty ?? NativeMLX.effectiveDefaultRepoId
         default:
             return ai.model?.nilIfEmpty
         }
@@ -41,7 +41,7 @@ enum ModelCatalog {
     static func currentLabel(_ ai: AISettings) -> String {
         switch ai.provider {
         case "mlx":
-            let repoId = currentID(ai) ?? NativeMLX.defaultRepoId
+            let repoId = currentID(ai) ?? NativeMLX.effectiveDefaultRepoId
             return NativeMLX.option(for: repoId).shortLabel
         case "foundation-models":
             return "Apple Intelligence"
@@ -99,7 +99,7 @@ enum ModelCatalog {
         switch ai.provider {
         case "mlx":
             let downloaded = Set(NativeMLX.downloadedRepoIds())
-            let current = currentID(ai) ?? NativeMLX.defaultRepoId
+            let current = currentID(ai) ?? NativeMLX.effectiveDefaultRepoId
             return .list(mlxChoices(options: NativeMLX.offeredOptions, downloaded: downloaded, current: current))
 
         case "claude-subscription", "xai", "openai":

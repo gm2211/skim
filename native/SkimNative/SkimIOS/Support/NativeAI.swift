@@ -438,7 +438,7 @@ enum NativeAI {
             prompt: """
             Create a Super Quick Catch-up from these articles. Group related items into themes, name what matters, and keep it scannable.
 
-            \(articleDigest(articles, limit: catchUpArticleLimit))
+            \(articleDigest(articles, limit: catchUpArticleLimit, budget: catchUpDigestBudget(settings: settings)))
             """,
             maxTokens: 700
         )
@@ -567,7 +567,7 @@ enum NativeAI {
             prompt: """
             Build the front page from these articles.
 
-            \(frontPageDigest(articles, limit: catchUpArticleLimit))
+            \(frontPageDigest(articles, limit: catchUpArticleLimit, budget: catchUpDigestBudget(settings: settings)))
             """,
             maxTokens: 1400
         )
@@ -663,23 +663,57 @@ enum NativeAI {
 
     /// The article list handed to the first pass: enough to pick and group by,
     /// no more. The ledes get the full text later.
-    private static func frontPageDigest(_ articles: [Article], limit: Int) -> String {
+    private static func frontPageDigest(_ articles: [Article], limit: Int, budget: CatchUpDigestBudget? = nil) -> String {
         let selected = articles.prefix(limit)
         if selected.isEmpty {
             return "No articles are available."
         }
-        return selected.enumerated().map { index, article in
+        let entries: [String] = selected.enumerated().map { index, article in
             // Markup stripped first: a link-only aggregator post is otherwise
             // listed as "[Comments][1] [1]: https://…".
             let text = StoryText.excerpt(article.plainBody)
-            let excerpt = text.isEmpty ? "No reader text available." : text.prefixWords(60)
+            let excerpt = text.isEmpty ? "No reader text available." : text.prefixWords(budget?.wordsPerArticle ?? 60)
             return """
             [\(index + 1)] \(article.title)
             Publication: \(PublicationName.of(article: article))
             Excerpt: \(excerpt)
             """
         }
-        .joined(separator: "\n\n")
+        return fitted(entries, budget: budget)
+    }
+
+    /// Characters of article listing an on-device model is handed in one
+    /// catch-up prompt. MLX prefills the whole prompt at once, and a week of
+    /// unread articles (up to `catchUpArticleLimit` of them, tens of thousands
+    /// of tokens) grows the model's memory past what iOS allows an app: the
+    /// system kills Skim mid catch-up. Cloud providers and Apple's model are
+    /// not affected (the latter reports its own context error).
+    struct CatchUpDigestBudget {
+        var maxCharacters: Int
+        var wordsPerArticle: Int
+    }
+
+    static func catchUpDigestBudget(settings: AppSettings) -> CatchUpDigestBudget? {
+        guard settings.ai.provider == "mlx" else { return nil }
+        switch LocalModelTier.tier(for: NativeMLX.resolvedRepoId(settings.ai)) {
+        case .compact: return CatchUpDigestBudget(maxCharacters: 12_000, wordsPerArticle: 30)
+        case .mid: return CatchUpDigestBudget(maxCharacters: 16_000, wordsPerArticle: 30)
+        case .large: return CatchUpDigestBudget(maxCharacters: 24_000, wordsPerArticle: 40)
+        }
+    }
+
+    /// The listing entries joined, cut to the leading ones that fit `budget`.
+    /// Entries keep their [N] handles, so citations still resolve.
+    private static func fitted(_ entries: [String], budget: CatchUpDigestBudget?) -> String {
+        let separator = "\n\n"
+        guard let budget else { return entries.joined(separator: separator) }
+        let count = CatchUpText.entriesFitting(entries, separator: separator, maxCharacters: budget.maxCharacters)
+        if count < entries.count {
+            Logger(subsystem: "com.skim.app", category: "catchup").info(
+                "On-device catch-up reads \(count, privacy: .public) of \(entries.count, privacy: .public) articles to fit the model's memory"
+            )
+        }
+        return entries.prefix(count).joined(separator: separator)
     }
 
     private static func parseFrontPage(_ raw: String, articleCount: Int) -> CatchUpPage? {
@@ -2697,15 +2731,15 @@ enum NativeAI {
         AIRequestPolicy.summaryWordCount(settings)
     }
 
-    private static func articleDigest(_ articles: [Article], limit: Int, wordsPerArticle: Int = 95) -> String {
+    private static func articleDigest(_ articles: [Article], limit: Int, wordsPerArticle: Int = 95, budget: CatchUpDigestBudget? = nil) -> String {
         let selected = articles.prefix(limit)
         if selected.isEmpty {
             return "No articles are available."
         }
 
-        return selected.enumerated().map { index, article in
+        let entries: [String] = selected.enumerated().map { index, article in
             let text = article.plainBody.trimmingCharacters(in: .whitespacesAndNewlines)
-            let excerpt = text.isEmpty ? "No reader text available." : text.prefixWords(wordsPerArticle)
+            let excerpt = text.isEmpty ? "No reader text available." : text.prefixWords(budget?.wordsPerArticle ?? wordsPerArticle)
             return """
             [\(index + 1)] \(article.title)
             Feed: \(article.feedTitle)
@@ -2713,7 +2747,7 @@ enum NativeAI {
             Excerpt: \(excerpt)
             """
         }
-        .joined(separator: "\n\n")
+        return fitted(entries, budget: budget)
     }
 
 #if canImport(FoundationModels)

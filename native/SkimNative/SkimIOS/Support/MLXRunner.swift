@@ -395,11 +395,42 @@ actor MLXRunner {
         }
     }
 
+    /// The longest prompt handed to the model. MLX prefills the whole prompt
+    /// at once and its memory grows with the prompt; past this, an iPhone runs
+    /// out of the memory iOS allows an app and the system kills Skim outright,
+    /// so an over-long request fails with a message instead.
+    static let maxPromptTokens: Int = {
+        let memory = ProcessInfo.processInfo.physicalMemory
+        if memory < 15 * gigabyte / 2 { return 8_192 }      // 6 GB-class iPhones
+        if memory < 25 * gigabyte / 2 { return 12_288 }     // 8-12 GB iPhones
+        return 32_768
+    }()
+
+    /// On a phone-sized device, return freed GPU buffers to the system instead
+    /// of keeping them cached for reuse: after a long prefill the cache alone
+    /// can hold hundreds of megabytes, which counts against the app's limit.
+    private static let memoryConfigured: Void = {
+        if ProcessInfo.processInfo.physicalMemory < 25 * gigabyte / 2 {
+            MLX.GPU.set(cacheLimit: 64 * 1024 * 1024)
+        }
+    }()
+
+    private static let gigabyte = UInt64(1024 * 1024 * 1024)
+
+    private static func checkPromptFits(_ tokens: Int) throws {
+        guard tokens > maxPromptTokens else { return }
+        throw MLXError.unavailable(
+            "This is too much text for the on-device model (\(tokens) tokens, it reads at most \(maxPromptTokens)). "
+                + "Narrow the time range, or use a cloud provider for long requests."
+        )
+    }
+
     @discardableResult
     func ensureLoaded() async throws -> ModelContainer {
         guard MLXRunner.isAvailableOnThisRuntime else {
             throw MLXError.unavailable("MLX inference requires a real iPhone. The Simulator cannot run the MLX backend.")
         }
+        _ = MLXRunner.memoryConfigured
 
         let repoId = currentRepoId
         if let container = loadedContainer, loadedRepoId == repoId {
@@ -502,6 +533,7 @@ actor MLXRunner {
                 )
                 let lmInput = try await context.processor.prepare(input: userInput)
                 try Task.checkCancellation()
+                try MLXRunner.checkPromptFits(lmInput.text.tokens.size)
 
                 // Wrap in MLX.withError so C-layer errors (e.g. from MLXArray.eval during
                 // token sampling) become catchable Swift errors instead of calling fatalError
@@ -568,6 +600,7 @@ actor MLXRunner {
                     additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
                 )
                 let lmInput = try await context.processor.prepare(input: userInput)
+                try MLXRunner.checkPromptFits(lmInput.text.tokens.size)
 
                 // Async withError wraps the streaming loop so any MLX C-layer error
                 // emitted during token sampling (MLXArray.item / MLXArray.eval) is thrown

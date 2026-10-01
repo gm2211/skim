@@ -988,7 +988,7 @@ pub async fn generate_themes(
                             "Theme batch {} parse failed: {}. Raw: {}",
                             batch_num,
                             e,
-                            &content[..content.len().min(200)]
+                            content.chars().take(200).collect::<String>()
                         );
                     }
                 }
@@ -1327,7 +1327,7 @@ pub async fn triage_articles(
                             "Failed to parse triage batch {}: {}. Response: {}",
                             batch_count,
                             e,
-                            &content[..content.len().min(300)]
+                            content.chars().take(300).collect::<String>()
                         );
                         errors.push(format!("Batch {}: parse error: {}", batch_count, e));
                     }
@@ -2128,7 +2128,7 @@ async fn build_catchup_report(
         format!(
             "Failed to parse catchup response: {}. Raw: {}",
             e,
-            &content[..content.len().min(300)]
+            content.chars().take(300).collect::<String>()
         )
     })?;
 

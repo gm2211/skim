@@ -58,3 +58,14 @@ import Testing
     let real = "FreeBSD now publishes desktop images for EC2, so a graphical system is one launch away."
     #expect(CatchUpText.fallbackLede([hn, real]) == real)
 }
+
+@Test func onDeviceListingKeepsWholeEntriesWithinBudget() {
+    let entries = Array(repeating: String(repeating: "a", count: 100), count: 1000)
+    // 100 chars each plus a 2-char separator: 10 entries take 1018.
+    #expect(CatchUpText.entriesFitting(entries, separator: "\n\n", maxCharacters: 1020) == 10)
+    #expect(CatchUpText.entriesFitting(entries, separator: "\n\n", maxCharacters: 1017) == 9)
+    #expect(CatchUpText.entriesFitting(Array(entries.prefix(3)), separator: "\n\n", maxCharacters: 10_000) == 3)
+    // One article longer than the budget still gets a page.
+    #expect(CatchUpText.entriesFitting(entries, separator: "\n\n", maxCharacters: 10) == 1)
+    #expect(CatchUpText.entriesFitting([], separator: "\n\n", maxCharacters: 10) == 0)
+}

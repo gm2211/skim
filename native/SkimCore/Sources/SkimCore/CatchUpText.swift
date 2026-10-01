@@ -106,6 +106,25 @@ public enum CatchUpText {
         return ""
     }
 
+    // MARK: - On-device prompt budget
+
+    /// How many of `entries`, taken in order, fit in `maxCharacters` once
+    /// joined with `separator`. At least one when there is any entry, so a
+    /// single long article still gets a page.
+    ///
+    /// An on-device model prefills the whole prompt at once; on an iPhone a
+    /// listing of hundreds of articles grows the model's memory past what iOS
+    /// allows and the app is killed. The catch-up listing is cut to this many.
+    public static func entriesFitting(_ entries: [String], separator: String, maxCharacters: Int) -> Int {
+        var used = 0
+        for (index, entry) in entries.enumerated() {
+            let cost = entry.count + (index == 0 ? 0 : separator.count)
+            if index > 0, used + cost > maxCharacters { return index }
+            used += cost
+        }
+        return entries.count
+    }
+
     /// Lowercased, punctuation dropped, whitespace collapsed — so a trailing
     /// full stop cannot smuggle a placeholder past the check.
     private static func normalize(_ text: String) -> String {

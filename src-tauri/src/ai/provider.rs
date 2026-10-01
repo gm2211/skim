@@ -680,7 +680,7 @@ impl AiProvider for ClaudeCliProvider {
             }
 
             let cli_resp: ClaudeCliResponse = serde_json::from_str(&stdout)
-                .map_err(|e| format!("Failed to parse claude CLI output: {}. Output: {}", e, &stdout[..stdout.len().min(500)]))?;
+                .map_err(|e| format!("Failed to parse claude CLI output: {}. Output: {}", e, stdout.chars().take(500).collect::<String>()))?;
 
             if cli_resp.is_error.unwrap_or(false) {
                 if cli_resp.subtype.as_deref() == Some("error_max_turns") {
@@ -705,7 +705,7 @@ impl AiProvider for ClaudeCliProvider {
                             cli_resp.subtype,
                             cli_resp.resp_type,
                             cli_resp.stop_reason,
-                            &stdout[..stdout.len().min(800)]
+                            stdout.chars().take(800).collect::<String>()
                         )
                     });
                 return Err(format!("claude CLI error: {}", detail));
@@ -717,7 +717,7 @@ impl AiProvider for ClaudeCliProvider {
                     cli_resp.subtype,
                     cli_resp.resp_type,
                     cli_resp.result,
-                    &stdout[..stdout.len().min(500)]
+                    stdout.chars().take(500).collect::<String>()
                 ));
             }
 

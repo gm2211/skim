@@ -1345,7 +1345,7 @@ Output JSON:
     let content = response.content.trim();
     let json_str = extract_json_object(content).unwrap_or(content);
     let parsed: LlmOrganizeResponse = serde_json::from_str(json_str)
-        .map_err(|e| format!("Failed to parse AI response: {}. Raw: {}", e, &content[..content.len().min(300)]))?;
+        .map_err(|e| format!("Failed to parse AI response: {}. Raw: {}", e, content.chars().take(300).collect::<String>()))?;
 
     let mut seen = std::collections::HashSet::new();
     let proposals: Vec<FolderProposal> = parsed
@@ -1436,7 +1436,7 @@ Output JSON:
     let json_str = extract_json_object(content).unwrap_or(content);
 
     let val: serde_json::Value = serde_json::from_str(json_str)
-        .map_err(|e| format!("Failed to parse AI response: {}. Raw: {}", e, &content[..content.len().min(300)]))?;
+        .map_err(|e| format!("Failed to parse AI response: {}. Raw: {}", e, content.chars().take(300).collect::<String>()))?;
     let handles_val = val.get("feeds").or_else(|| val.get("feed_ids")).cloned().unwrap_or(serde_json::Value::Null);
     let ids: Vec<String> = parse_handles(&handles_val)
         .into_iter()

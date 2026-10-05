@@ -419,13 +419,43 @@ function App() {
         useUiStore.getState().setShowAddFeed(false);
         useUiStore.getState().setShowSettings(false);
       }
-      if (e.key === "[" && (e.metaKey || e.ctrlKey)) {
+      // Cmd+[ / Cmd+] step through previously opened articles, like a browser.
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.key === "[" || e.key === "]")) {
+        e.preventDefault();
+        const ui = useUiStore.getState();
+        if (e.key === "[") ui.goBackArticle();
+        else ui.goForwardArticle();
+        return;
+      }
+      // Cmd+Option+S toggles the sidebar (Finder's Show/Hide Sidebar).
+      if ((e.metaKey || e.ctrlKey) && e.altKey && e.code === "KeyS") {
         e.preventDefault();
         useUiStore.getState().toggleSidebar();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Mouse back/forward buttons step through article history.
+  useEffect(() => {
+    const isHistoryButton = (e: MouseEvent) => e.button === 3 || e.button === 4;
+    const swallow = (e: MouseEvent) => {
+      if (isHistoryButton(e)) e.preventDefault();
+    };
+    const handler = (e: MouseEvent) => {
+      if (!isHistoryButton(e)) return;
+      e.preventDefault();
+      const ui = useUiStore.getState();
+      if (e.button === 3) ui.goBackArticle();
+      else ui.goForwardArticle();
+    };
+    window.addEventListener("mousedown", swallow);
+    window.addEventListener("mouseup", handler);
+    return () => {
+      window.removeEventListener("mousedown", swallow);
+      window.removeEventListener("mouseup", handler);
+    };
   }, []);
 
   if (isPhone) {

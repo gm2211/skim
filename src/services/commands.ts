@@ -243,8 +243,11 @@ const FALLBACK_FM_AVAILABILITY: FoundationModelAvailability = {
 export const fmAvailability = async (): Promise<FoundationModelAvailability> => {
   try {
     return await invoke<FoundationModelAvailability>("plugin:skim-ai|fm_availability");
-  } catch {
-    return FALLBACK_FM_AVAILABILITY;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return isMissingCommand(msg)
+      ? FALLBACK_FM_AVAILABILITY
+      : { available: false, status: "runtime-error", message: `Apple Intelligence could not start: ${msg}` };
   }
 };
 

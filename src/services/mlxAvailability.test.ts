@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { mlxAvailability } from "./commands";
+import { fmAvailability, mlxAvailability } from "./commands";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
@@ -21,5 +21,16 @@ describe("mlxAvailability", () => {
   it("passes through a working runtime", async () => {
     vi.mocked(invoke).mockResolvedValueOnce(true);
     expect(await mlxAvailability()).toEqual({ available: true });
+  });
+});
+
+describe("fmAvailability", () => {
+  it("reports a helper failure instead of claiming the platform lacks support", async () => {
+    vi.mocked(invoke).mockRejectedValueOnce("macOS AI bridge exited before replying (killed by signal 5)");
+    expect(await fmAvailability()).toEqual({
+      available: false,
+      status: "runtime-error",
+      message: "Apple Intelligence could not start: macOS AI bridge exited before replying (killed by signal 5)",
+    });
   });
 });

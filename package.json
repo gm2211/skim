@@ -11,7 +11,7 @@
     "demo": "node scripts/screenshots/build-demo.mjs",
     "test": "vitest run",
     "testflight": "./scripts/upload-testflight.sh",
-    "tauri": "tauri"
+    "tauri": "node scripts/tauri.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.91.3",

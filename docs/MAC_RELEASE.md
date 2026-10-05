@@ -7,7 +7,11 @@ Foundation Models additionally requires macOS 26 and Apple Intelligence enabled.
 Tauri app. Set `APPLE_SIGNING_IDENTITY` and pass `--sign` for development or
 distribution signing. Local builds use an ad-hoc signature.
 
-For a direct `tauri build --no-sign`, run `sh scripts/sign-macos.sh` afterward.
+`pnpm tauri build` runs `scripts/sign-macos.sh` on the fresh bundle itself
+(see `scripts/tauri.mjs`): Tauri signs the helpers with the app's sandbox
+entitlements, and a sandboxed parent cannot launch a helper that asks for its own
+sandbox, so without the re-sign on-device MLX reports itself unavailable. For a
+direct `tauri build --no-sign`, run `sh scripts/sign-macos.sh` afterward.
 The signing script creates relative resource aliases and signs the helper with
 sandbox inheritance before signing the parent. Do not sign the whole tree with
 `--deep`: the parent and helper require different entitlements.

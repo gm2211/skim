@@ -153,13 +153,28 @@ export const claudeOauthRefresh = () =>
 // unavailable on platforms where it isn't present.
 const SKIM_AI_UNAVAILABLE = "On-device AI is not available on this platform.";
 
-export const mlxIsAvailable = async (): Promise<boolean> => {
+export type MlxAvailability = { available: boolean; reason?: string };
+
+// Platforms without the plugin reject with "plugin not found"; the macOS
+// bridge's own "bridge not found" error is a real failure worth showing.
+const isMissingCommand = (msg: string) => {
+  const m = msg.toLowerCase();
+  return m.includes("unregistered") || (m.includes("not found") && !m.includes("bridge"));
+};
+
+/// Like `mlxIsAvailable`, but keeps the runtime's failure message so the UI
+/// can say why on-device MLX did not start instead of blaming the hardware.
+export const mlxAvailability = async (): Promise<MlxAvailability> => {
   try {
-    return await invoke<boolean>("plugin:skim-ai|mlx_is_available");
-  } catch {
-    return false;
+    return { available: await invoke<boolean>("plugin:skim-ai|mlx_is_available") };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return isMissingCommand(msg) ? { available: false } : { available: false, reason: msg };
   }
 };
+
+export const mlxIsAvailable = async (): Promise<boolean> =>
+  (await mlxAvailability()).available;
 
 export const mlxIsModelDownloaded = async (repoId: string): Promise<boolean> => {
   try {

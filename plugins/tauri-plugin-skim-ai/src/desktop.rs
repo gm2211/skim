@@ -43,6 +43,21 @@ mod platform {
         worker: Mutex<Option<Worker>>,
     }
 
+    pub(super) fn exit_message(status: Option<std::process::ExitStatus>) -> String {
+        use std::os::unix::process::ExitStatusExt;
+        let detail = match status {
+            Some(s) if s.signal().is_some() => {
+                format!(" (killed by signal {})", s.signal().unwrap_or_default())
+            }
+            Some(s) => s
+                .code()
+                .map(|code| format!(" (exit code {code})"))
+                .unwrap_or_default(),
+            None => String::new(),
+        };
+        format!("macOS AI bridge exited before replying{detail}")
+    }
+
     pub fn init<R: Runtime, C: DeserializeOwned>(
         app: &AppHandle<R>,
         _api: PluginApi<R, C>,
@@ -117,9 +132,11 @@ mod platform {
                         .map_err(|e| crate::Error::Other(e.to_string()))?
                         == 0
                     {
-                        return Err(crate::Error::Other(
-                            "macOS AI bridge exited before replying".into(),
-                        ));
+                        // Name how the helper died: a launch-time kill (e.g. a
+                        // sandbox/signing mismatch) otherwise looks like
+                        // missing hardware support in the UI.
+                        let status = worker.child.wait().ok();
+                        return Err(crate::Error::Other(exit_message(status)));
                     }
                     let reply: Reply = serde_json::from_str(line.trim()).map_err(|e| {
                         crate::Error::Other(format!("Invalid macOS AI bridge response: {e}"))
@@ -257,7 +274,16 @@ pub use platform::{init, SkimAi};
 
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
-    use super::platform::Reply;
+    use super::platform::{exit_message, Reply};
+    use std::os::unix::process::ExitStatusExt;
+    #[test]
+    fn exit_message_names_the_signal_that_killed_the_helper() {
+        let status = std::process::ExitStatus::from_raw(5);
+        assert_eq!(
+            exit_message(Some(status)),
+            "macOS AI bridge exited before replying (killed by signal 5)"
+        );
+    }
     #[test]
     fn progress_envelope_does_not_require_final_reply_fields() {
         assert!(serde_json::from_str::<Reply>(r#"{"progress":0.25}"#).is_ok());

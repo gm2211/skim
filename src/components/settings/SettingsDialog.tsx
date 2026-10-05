@@ -17,7 +17,7 @@ import {
   getFeedlyStatus,
   mlxDeleteModel,
   mlxDownloadModel,
-  mlxIsAvailable,
+  mlxAvailability,
   mlxIsModelDownloaded,
   MLX_DOWNLOAD_PROGRESS_EVENT,
   type FoundationModelAvailability,
@@ -923,6 +923,7 @@ function OnDeviceTierSection({
 }) {
   const qc = useQueryClient();
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [unavailableReason, setUnavailableReason] = useState<string | null>(null);
   const [downloaded, setDownloaded] = useState(false);
   const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -941,7 +942,12 @@ function OnDeviceTierSection({
   };
 
   useEffect(() => {
-    mlxIsAvailable().then(setAvailable).catch(() => setAvailable(false));
+    mlxAvailability()
+      .then(({ available, reason }) => {
+        setAvailable(available);
+        setUnavailableReason(reason ?? null);
+      })
+      .catch(() => setAvailable(false));
   }, []);
 
   useEffect(() => {
@@ -1034,7 +1040,9 @@ function OnDeviceTierSection({
       ? "Checking availability…"
       : available
         ? "On-device MLX runtime detected"
-        : "MLX requires an Apple silicon Mac or a supported iPhone with a Metal GPU. Choose another provider on this device.";
+        : unavailableReason
+          ? `On-device MLX could not start: ${unavailableReason}`
+          : "MLX requires an Apple silicon Mac or a supported iPhone with a Metal GPU. Choose another provider on this device.";
 
   return (
     <div

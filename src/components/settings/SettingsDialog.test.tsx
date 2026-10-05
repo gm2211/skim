@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SettingsDialog } from "./SettingsDialog";
 import { useUiStore } from "../../stores/uiStore";
-import { listRemoteModels } from "../../services/commands";
+import { listRemoteModels, mlxAvailability } from "../../services/commands";
 
 function renderDialog() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -27,7 +27,7 @@ vi.mock("../../hooks/useSettings", () => ({
 vi.mock("../../services/commands", async (original) => ({
   ...await original<typeof import("../../services/commands")>(),
   listRemoteModels: vi.fn(),
-  mlxIsAvailable: vi.fn().mockResolvedValue(true),
+  mlxAvailability: vi.fn().mockResolvedValue({ available: true }),
   mlxIsModelDownloaded: vi.fn().mockResolvedValue(false),
 }));
 
@@ -48,6 +48,17 @@ describe("Settings provider drafts", () => {
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(saveSettings).not.toHaveBeenCalled();
     expect(useUiStore.getState().showSettings).toBe(false);
+  });
+  it("shows why the on-device runtime failed instead of blaming the hardware", async () => {
+    vi.mocked(mlxAvailability).mockResolvedValueOnce({
+      available: false,
+      reason: "macOS AI bridge exited before replying (killed by signal 5)",
+    });
+    const user = userEvent.setup();
+    renderDialog();
+    await user.selectOptions(await screen.findByRole("combobox", { name: "Provider" }), "mlx");
+    await screen.findByText("On-device MLX could not start: macOS AI bridge exited before replying (killed by signal 5)");
+    expect(screen.queryByText(/requires an Apple silicon Mac/)).toBeNull();
   });
   it("does not send another provider's key and restores its draft on return", async () => {
     const user = userEvent.setup();

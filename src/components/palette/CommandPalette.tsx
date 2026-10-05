@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useUiStore } from "../../stores/uiStore";
+import { canGoBackArticle, canGoForwardArticle, useUiStore } from "../../stores/uiStore";
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useFolders } from "../../hooks/useFolders";
 import { useArticle, useToggleRead, useToggleStar } from "../../hooks/useArticles";
@@ -72,6 +72,12 @@ function useCommands(): PaletteCommand[] {
 
   {
     const g = "Go to";
+    if (canGoBackArticle(ui)) {
+      add(g, { id: "go.back", title: "Back to previous article", keywords: ["history"], shortcut: ["mod", "["], run: () => useUiStore.getState().goBackArticle() });
+    }
+    if (canGoForwardArticle(ui)) {
+      add(g, { id: "go.forward", title: "Forward to next article", keywords: ["history"], shortcut: ["mod", "]"], run: () => useUiStore.getState().goForwardArticle() });
+    }
     add(g, { id: "go.today", title: "Today", keywords: ["edition", "front page"], run: () => ui.setSidebarView({ type: "today" }) });
     add(g, { id: "go.all", title: "All Articles", run: () => ui.setSidebarView({ type: "all" }) });
     add(g, { id: "go.starred", title: "Starred", keywords: ["favorites"], run: () => ui.setSidebarView({ type: "starred" }) });
@@ -103,7 +109,7 @@ function useCommands(): PaletteCommand[] {
       id: "view.sidebar",
       title: ui.sidebarCollapsed ? "Show sidebar" : "Hide sidebar",
       keywords: ["toggle", "collapse", "expand"],
-      shortcut: ["mod", "["],
+      shortcut: ["mod", "alt", "S"],
       run: () => ui.toggleSidebar(),
     });
     if (!isToday) {

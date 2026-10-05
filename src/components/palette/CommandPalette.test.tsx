@@ -101,6 +101,15 @@ describe("CommandPalette", () => {
     await waitFor(() => expect(events).toContain("summarize"));
   });
 
+  it("offers Back and Forward through article history with their shortcuts", async () => {
+    const user = userEvent.setup();
+    useUiStore.setState({ selectedArticleId: "a2", articleHistory: ["a1", "a2", "a3"], articleHistoryIndex: 1 });
+    renderPalette();
+    expect(screen.getByRole("option", { name: /Forward to next article/ })).toHaveTextContent("]");
+    await user.click(screen.getByRole("option", { name: /Back to previous article/ }));
+    await waitFor(() => expect(useUiStore.getState().selectedArticleId).toBe("a1"));
+  });
+
   it("moves the selection with the arrow keys", async () => {
     const user = userEvent.setup();
     renderPalette();

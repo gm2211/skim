@@ -68,6 +68,23 @@ describe("ChatDrawer", () => {
     await waitFor(() => expect(chatWithArticle).toHaveBeenLastCalledWith("article-2", [{ role: "user", content: "Explain this article" }], undefined));
   });
 
+  it("clears the AI setup card once settings change so the retry is reachable", async () => {
+    vi.mocked(chatWithArticle)
+      .mockRejectedValueOnce(new Error("[configure-ai] No local model selected. Go to Settings to download one."))
+      .mockResolvedValueOnce({ content: "Answer", web_citations: [], provider: "mlx", model: "test" });
+    settings = { ai: { provider: "local", chat_provider: "same" } };
+    const view = render(<ChatDrawer articleId="article-1" articleTitle="Article" />);
+    const user = await openAndType("Explain this");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    expect(await screen.findByText("AI needs attention")).toBeInTheDocument();
+
+    settings = { ai: { provider: "mlx", chat_provider: "same" } };
+    view.rerender(<ChatDrawer articleId="article-1" articleTitle="Article" />);
+    expect(screen.queryByText("AI needs attention")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    expect(await screen.findByText("Answer")).toBeInTheDocument();
+  });
+
   it("preserves a failed draft and keeps provider errors out of chat history", async () => {
     vi.mocked(chatWithArticle).mockRejectedValueOnce(new Error("Provider unavailable"));
     render(<ChatDrawer articleId="article-1" articleTitle="Article" />);

@@ -87,6 +87,12 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     setError(null);
   }, [articleId]);
 
+  // A setup error is stale once AI settings change: drop the card so the
+  // input is reachable again and the next send uses the new settings.
+  useEffect(() => {
+    setError((previous) => isAiSetupError(previous) ? null : previous);
+  }, [settings]);
+
   // Auto-scroll
   useEffect(() => {
     const pane = messagesRef.current;

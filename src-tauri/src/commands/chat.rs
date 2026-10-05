@@ -1052,10 +1052,26 @@ fn resolve_chat_settings(ai: &AiSettings) -> AiSettings {
     let mut settings = ai.clone();
 
     if let Some(ref chat_provider) = ai.chat_provider {
-        if !chat_provider.is_empty() && chat_provider != "same" {
+        if !chat_provider.is_empty() && chat_provider != "same" && chat_provider != &ai.provider {
+            // The top-level model fields belong to the main provider; the
+            // chat provider's own are filed under provider_credentials.
+            let saved = ai.provider_credentials.get(chat_provider);
             settings.provider = chat_provider.clone();
-            settings.api_key = ai.chat_api_key.clone().or(ai.api_key.clone());
-            settings.endpoint = ai.chat_endpoint.clone().or(ai.endpoint.clone());
+            settings.api_key = ai
+                .chat_api_key
+                .clone()
+                .or_else(|| saved.and_then(|c| c.api_key.clone()))
+                .or(ai.api_key.clone());
+            settings.endpoint = ai
+                .chat_endpoint
+                .clone()
+                .or_else(|| saved.and_then(|c| c.endpoint.clone()))
+                .or(ai.endpoint.clone());
+            if let Some(saved) = saved {
+                settings.model = saved.model.clone().or(settings.model);
+                settings.local_model_path =
+                    saved.local_model_path.clone().or(settings.local_model_path);
+            }
         }
     }
 
@@ -1071,6 +1087,25 @@ fn resolve_chat_settings(ai: &AiSettings) -> AiSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chat_override_uses_its_own_saved_local_model() {
+        let mut ai = crate::db::models::AppSettings::default().ai;
+        ai.provider = "mlx".into();
+        ai.model = Some("mlx-community/Qwen3-4B-Instruct-2507-4bit".into());
+        ai.local_model_path = Some("mlx-community/Qwen3-4B-Instruct-2507-4bit".into());
+        ai.chat_provider = Some("local".into());
+        ai.provider_credentials.insert(
+            "local".into(),
+            crate::db::models::ProviderCredentials {
+                local_model_path: Some("/models/qwen3-4b.gguf".into()),
+                ..Default::default()
+            },
+        );
+        let chat = resolve_chat_settings(&ai);
+        assert_eq!(chat.provider, "local");
+        assert_eq!(chat.local_model_path.as_deref(), Some("/models/qwen3-4b.gguf"));
+    }
 
     #[test]
     fn publication_metadata_survives_body_selection_without_inventing_event_or_fetch_dates() {

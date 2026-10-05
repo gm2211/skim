@@ -26,9 +26,13 @@ vi.mock("../../stores/uiStore", () => ({
     isPhone: false,
     phoneBack: vi.fn(),
     setShowSettings,
+    goBackArticle: vi.fn(),
+    goForwardArticle: vi.fn(),
   };
     return selector ? selector(state) : state;
   },
+  canGoBackArticle: () => false,
+  canGoForwardArticle: () => false,
 }));
 
 const articles: Record<string, Article> = {};

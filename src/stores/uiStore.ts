@@ -11,6 +11,11 @@ interface UiState {
   sidebarView: SidebarView;
   selectedArticleId: string | null;
   articleReturnTarget: ArticleReturnTarget | null;
+  // Browser-style history of opened articles. `articleHistoryIndex` points at
+  // the article currently shown (or, when the reader is closed, the last one
+  // shown, so Back reopens it).
+  articleHistory: string[];
+  articleHistoryIndex: number;
   showAddFeed: boolean;
   addFeedTab: AddFeedTab;
   showSettings: boolean;
@@ -30,6 +35,8 @@ interface UiState {
   openArticleFromCatchup: (id: string) => void;
   openArticleFromToday: (id: string) => void;
   closeArticleDetail: () => void;
+  goBackArticle: () => void;
+  goForwardArticle: () => void;
   setShowAddFeed: (show: boolean, tab?: AddFeedTab) => void;
   setShowSettings: (show: boolean) => void;
   setShowCatchup: (show: boolean) => void;
@@ -46,11 +53,34 @@ const LIST_COLLAPSE = 830;
 // Phone-class widths force the sidebar collapsed and let the article list
 // take the full viewport (single-pane mobile layout).
 const PHONE_BREAKPOINT = 600;
+const MAX_ARTICLE_HISTORY = 100;
+
+type ArticleHistory = Pick<UiState, "articleHistory" | "articleHistoryIndex">;
+
+/** Record `id` as the newest history entry, dropping any forward entries. */
+function pushArticleHistory(state: UiState, id: string | null): ArticleHistory {
+  const { articleHistory, articleHistoryIndex } = state;
+  if (!id || articleHistory[articleHistoryIndex] === id) {
+    return { articleHistory, articleHistoryIndex };
+  }
+  const next = [...articleHistory.slice(0, articleHistoryIndex + 1), id].slice(-MAX_ARTICLE_HISTORY);
+  return { articleHistory: next, articleHistoryIndex: next.length - 1 };
+}
+
+export function canGoBackArticle(state: Pick<UiState, "selectedArticleId" | "articleHistoryIndex">): boolean {
+  return state.selectedArticleId ? state.articleHistoryIndex > 0 : state.articleHistoryIndex >= 0;
+}
+
+export function canGoForwardArticle(state: Pick<UiState, "selectedArticleId" | "articleHistory" | "articleHistoryIndex">): boolean {
+  return !!state.selectedArticleId && state.articleHistoryIndex < state.articleHistory.length - 1;
+}
 
 export const useUiStore = create<UiState>((set, get) => ({
   sidebarView: { type: "all" },
   selectedArticleId: null,
   articleReturnTarget: null,
+  articleHistory: [],
+  articleHistoryIndex: -1,
   showAddFeed: false,
   addFeedTab: "url",
   showSettings: false,
@@ -74,12 +104,14 @@ export const useUiStore = create<UiState>((set, get) => ({
     })),
   setSelectedArticleId: (id) =>
     set((state) => ({
+      ...pushArticleHistory(state, id),
       selectedArticleId: id,
       articleReturnTarget: null,
       phonePane: state.isPhone && id ? "detail" : state.phonePane,
     })),
   openArticleFromCatchup: (id) =>
     set((state) => ({
+      ...pushArticleHistory(state, id),
       selectedArticleId: id,
       articleReturnTarget: "catchup",
       showCatchup: false,
@@ -87,6 +119,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     })),
   openArticleFromToday: (id) =>
     set((state) => ({
+      ...pushArticleHistory(state, id),
       selectedArticleId: id,
       articleReturnTarget: "today",
       phonePane: state.isPhone ? "detail" : state.phonePane,
@@ -105,6 +138,30 @@ export const useUiStore = create<UiState>((set, get) => ({
         selectedArticleId: null,
         articleReturnTarget: null,
         phonePane: state.isPhone ? "list" : state.phonePane,
+      };
+    }),
+  goBackArticle: () =>
+    set((state) => {
+      if (!canGoBackArticle(state)) return state;
+      const index = state.selectedArticleId ? state.articleHistoryIndex - 1 : state.articleHistoryIndex;
+      return {
+        articleHistoryIndex: index,
+        selectedArticleId: state.articleHistory[index],
+        articleReturnTarget: null,
+        showCatchup: false,
+        phonePane: state.isPhone ? "detail" : state.phonePane,
+      };
+    }),
+  goForwardArticle: () =>
+    set((state) => {
+      if (!canGoForwardArticle(state)) return state;
+      const index = state.articleHistoryIndex + 1;
+      return {
+        articleHistoryIndex: index,
+        selectedArticleId: state.articleHistory[index],
+        articleReturnTarget: null,
+        showCatchup: false,
+        phonePane: state.isPhone ? "detail" : state.phonePane,
       };
     }),
   setShowAddFeed: (show, tab) =>

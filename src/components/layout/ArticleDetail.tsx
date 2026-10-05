@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useArticle, useMarkRead, useToggleStar, useToggleRead } from "../../hooks/useArticles";
 import { useSummarizeArticle } from "../../hooks/useAi";
 import { useSettings } from "../../hooks/useSettings";
-import { useUiStore } from "../../stores/uiStore";
+import { canGoBackArticle, canGoForwardArticle, useUiStore } from "../../stores/uiStore";
 import { getOrFetchReaderContent, cancelSummarize } from "../../services/commands";
 import { ChatDrawer } from "../chat/ChatPanel";
 import { useReadingTimeTracker } from "../../hooks/useLearning";
@@ -327,6 +327,10 @@ function prepareFetchedArticle(result: FetchedArticleContent): {
 
 export function ArticleDetail() {
   const { selectedArticleId, closeArticleDetail, listCollapsed, sidebarCollapsed, sidebarView, isPhone, phoneBack } = useUiStore();
+  const goBackArticle = useUiStore((s) => s.goBackArticle);
+  const goForwardArticle = useUiStore((s) => s.goForwardArticle);
+  const canGoBack = useUiStore(canGoBackArticle);
+  const canGoForward = useUiStore(canGoForwardArticle);
   const { data: article, refetch: refetchArticle } = useArticle(selectedArticleId);
   const readerFocusRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1106,9 +1110,39 @@ export function ArticleDetail() {
             title={isPhone ? "Back" : "Close"}
           >
             <svg width={isPhone ? 24 : 16} height={isPhone ? 24 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
+              {/* Desktop: an X, so it doesn't read as the history Back arrow beside it. */}
+              <path d={isPhone ? "M19 12H5M12 19l-7-7 7-7" : "M18 6L6 18M6 6l12 12"} />
             </svg>
           </button>
+        )}
+
+        {!isPhone && (
+          <div className="flex items-center flex-shrink-0" role="group" aria-label="Article history">
+            <button
+              type="button"
+              onClick={goBackArticle}
+              disabled={!canGoBack}
+              aria-label="Back to previous article"
+              title="Back (⌘[)"
+              className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-text-muted"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={goForwardArticle}
+              disabled={!canGoForward}
+              aria-label="Forward to next article"
+              title="Forward (⌘])"
+              className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-text-muted"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
+          </div>
         )}
 
         {!isPhone && (
@@ -1577,6 +1611,9 @@ export function ArticleDetail() {
                             if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
                               e.preventDefault();
                               window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key }));
+                            } else if ((e.metaKey || e.ctrlKey) && (e.key === "[" || e.key === "]")) {
+                              e.preventDefault();
+                              window.dispatchEvent(new KeyboardEvent("keydown", { key: e.key, metaKey: e.metaKey, ctrlKey: e.ctrlKey }));
                             }
                           }) as EventListener);
                         } catch { /* cross-origin */ }

@@ -14,6 +14,7 @@ import { ArticleContextMenu } from "../article/ArticleContextMenu";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
 import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction, SidebarView } from "../../services/types";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
+import { useAppCommand } from "../../lib/appCommands";
 
 const PRIORITY_GROUP_LABELS: Record<number, string> = {
   5: "MUST READ",
@@ -476,6 +477,13 @@ export function ArticleList() {
       sidebarView, listFilter, searchQuery, folderFeedIds: selectedFolderFeedIds, activeThemeId,
     }), { onSuccess: clearStickyArticles });
   };
+
+  useAppCommand("mark-all-read", handleMarkAllRead);
+  useAppCommand("focus-search", () => {
+    if (useUiStore.getState().listCollapsed) useUiStore.getState().toggleList();
+    // Wait a frame so the palette has closed and handed focus back first.
+    window.requestAnimationFrame(() => document.getElementById("article-search")?.focus());
+  });
 
   const displayTitle = isSearchActive ? "Search Results" : title ?? feedTitle ?? "Articles";
 

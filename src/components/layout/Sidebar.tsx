@@ -8,6 +8,7 @@ import { FeedsSection } from "./FeedsSection";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
 import { CatchupDialog } from "../chat/CatchupDialog";
 import { SkimTitle } from "./SkimTitle";
+import { useAppCommand } from "../../lib/appCommands";
 
 export function Sidebar() {
   const askButtonRef = useRef<HTMLButtonElement>(null);
@@ -30,6 +31,11 @@ export function Sidebar() {
       setAskOpen(true);
     }
   }, [returnToAsk, selectedArticleId]);
+
+  useAppCommand("ask-skim", () => {
+    setAskVisited(true);
+    setAskOpen(true);
+  });
 
   const totalUnread = feeds?.reduce((sum, f) => sum + f.unread_count, 0) ?? 0;
 

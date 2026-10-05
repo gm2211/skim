@@ -3,6 +3,7 @@ import type { SidebarView } from "../services/types";
 
 type ListFilter = "all" | "unread" | "starred";
 export type AddFeedTab = "url" | "feedly";
+export type SettingsTab = "ai" | "sync" | "appearance" | "reading";
 
 type PhonePane = "sidebar" | "list" | "detail";
 type ArticleReturnTarget = "catchup" | "today";
@@ -19,6 +20,8 @@ interface UiState {
   showAddFeed: boolean;
   addFeedTab: AddFeedTab;
   showSettings: boolean;
+  settingsTab: SettingsTab;
+  showCommandPalette: boolean;
   showCatchup: boolean;
   sidebarCollapsed: boolean;
   sidebarManualCollapse: boolean;
@@ -38,7 +41,8 @@ interface UiState {
   goBackArticle: () => void;
   goForwardArticle: () => void;
   setShowAddFeed: (show: boolean, tab?: AddFeedTab) => void;
-  setShowSettings: (show: boolean) => void;
+  setShowSettings: (show: boolean, tab?: SettingsTab) => void;
+  setShowCommandPalette: (show: boolean) => void;
   setShowCatchup: (show: boolean) => void;
   toggleSidebar: () => void;
   toggleList: () => void;
@@ -84,6 +88,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   showAddFeed: false,
   addFeedTab: "url",
   showSettings: false,
+  settingsTab: "ai",
+  showCommandPalette: false,
   showCatchup: false,
   sidebarCollapsed: false,
   sidebarManualCollapse: false,
@@ -169,7 +175,13 @@ export const useUiStore = create<UiState>((set, get) => ({
       showAddFeed: show,
       addFeedTab: show ? tab ?? "url" : state.addFeedTab,
     })),
-  setShowSettings: (show) => set({ showSettings: show }),
+  setShowSettings: (show, tab) =>
+    set((state) => ({
+      showSettings: show,
+      // Each open starts on the AI tab unless a caller asks for another.
+      settingsTab: show ? tab ?? "ai" : state.settingsTab,
+    })),
+  setShowCommandPalette: (show) => set({ showCommandPalette: show }),
   setShowCatchup: (show) => set({ showCatchup: show }),
 
   toggleSidebar: () =>

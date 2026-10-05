@@ -15,6 +15,7 @@ import { ModelPicker } from "../common/ModelPicker";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { ArticleLearningActions } from "../article/ArticleLearningActions";
 import { AggregatorDetails } from "../article/AggregatorDetails";
+import { useAppCommand } from "../../lib/appCommands";
 
 type ViewMode = "reader" | "web";
 type SwipeTarget = "web" | "reader" | "list";
@@ -694,6 +695,11 @@ export function ArticleDetail() {
     viewModeRef.current = mode;
     setViewMode(mode);
   }, [article?.id, clearModeTransitionTimer, fetchFull, isPhone, settleMode]);
+
+  useAppCommand("summarize", () => doSummarize(false));
+  useAppCommand("toggle-chat", () => setChatOpen((value) => !value));
+  useAppCommand("reader-view", () => animateToMode("reader"));
+  useAppCommand("web-view", () => { if (article?.url) animateToMode("web"); });
 
   const handleReader = useCallback(async () => {
     animateToMode("reader");

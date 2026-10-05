@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
-import { useUiStore } from "../../stores/uiStore";
+import { useUiStore, type SettingsTab } from "../../stores/uiStore";
 import type { AppSettings, FeedlyConnectionStatus } from "../../services/types";
 import {
   claudeOauthBeginPaste,
@@ -48,7 +48,6 @@ const needsApiKey = (provider: string) =>
 const needsEndpoint = (provider: string) =>
   ["ollama", "custom"].includes(provider);
 
-type SettingsTab = "ai" | "sync" | "appearance" | "reading";
 
 const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
   {
@@ -118,7 +117,7 @@ export function SettingsDialog() {
   const isPhone = useUiStore((s) => s.isPhone);
 
   const [local, setLocal] = useState<AppSettings | null>(null);
-  const [activeTab, setActiveTab] = useState<SettingsTab>("ai");
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => useUiStore.getState().settingsTab);
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(dialogRef, () => setShowSettings(false));
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(

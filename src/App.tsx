@@ -5,6 +5,7 @@ import { ArticleDetail } from "./components/layout/ArticleDetail";
 import { TodayEditionPane } from "./components/today/TodayEditionPane";
 import { AddFeedDialog } from "./components/feed/AddFeedDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
+import { CommandPalette } from "./components/palette/CommandPalette";
 import { useUiStore } from "./stores/uiStore";
 import { useEffect, useRef, useState } from "react";
 import { triageArticles, refreshAllFeeds, importOpml } from "./services/commands";
@@ -31,7 +32,7 @@ const PHONE_SETTLE_EASING = "cubic-bezier(0.2, 0.9, 0.2, 1)";
 const ACTIVE_FEED_TOAST_MAX_MS = 35000;
 
 function App() {
-  const { showAddFeed, showSettings, selectedArticleId, listCollapsed, sidebarCollapsed, isPhone, phonePane, sidebarView } = useUiStore();
+  const { showAddFeed, showSettings, showCommandPalette, selectedArticleId, listCollapsed, sidebarCollapsed, isPhone, phonePane, sidebarView } = useUiStore();
   const isToday = sidebarView.type === "today";
   const qc = useQueryClient();
   const [showBootDisclaimer, setShowBootDisclaimer] = useState(() => !hasAcceptedAiDisclaimer());
@@ -403,6 +404,12 @@ function App() {
       }
 
       // Global shortcuts — work even when typing in inputs
+      if (key === "k" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        const state = useUiStore.getState();
+        state.setShowCommandPalette(!state.showCommandPalette);
+        return;
+      }
       if (e.key === "," && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         useUiStore.getState().setShowSettings(true);
@@ -517,6 +524,7 @@ function App() {
         {opmlToast}
         {showAddFeed && <AddFeedDialog />}
         {showSettings && <SettingsDialog />}
+        {showCommandPalette && <CommandPalette />}
         {showBootDisclaimer && <AIBootDisclaimer onDismiss={dismissBootDisclaimer} />}
       </div>
     );
@@ -563,6 +571,7 @@ function App() {
       {opmlToast}
       {showAddFeed && <AddFeedDialog />}
       {showSettings && <SettingsDialog />}
+      {showCommandPalette && <CommandPalette />}
       {showBootDisclaimer && <AIBootDisclaimer onDismiss={dismissBootDisclaimer} />}
     </div>
   );

@@ -100,7 +100,18 @@ fn is_hybrid_thinking_model(path: &Path) -> bool {
         .file_name()
         .map(|n| n.to_string_lossy().to_lowercase())
         .unwrap_or_default();
-    name.contains("qwen3") && !name.contains("2507")
+    name.contains("qwen3-") && !name.contains("2507")
+}
+
+/// Qwen 3.5/3.6 small models answer directly only when their Jinja template
+/// prefills an empty think block. llama.cpp's built-in ChatML formatting does
+/// not, so add the same prefill to keep summaries free of reasoning traces.
+fn needs_empty_think_prefill(path: &Path) -> bool {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    ["qwen3.5", "qwen3.6", "qwen3_5", "qwen3_6"].iter().any(|tag| name.contains(tag))
 }
 
 /// Drop `<think>…</think>` reasoning from a completion. Qwen3 emits an empty
@@ -509,7 +520,10 @@ impl AiProvider for LocalLlmProvider {
             }
 
             let loaded = guard.as_ref().unwrap();
-            let prompt = fit_prompt(&loaded.model, &messages, max_tokens)?;
+            let mut prompt = fit_prompt(&loaded.model, &messages, max_tokens)?;
+            if needs_empty_think_prefill(&model_path) {
+                prompt.push_str("<think>\n\n</think>\n\n");
+            }
             let out = run_inference(loaded, &prompt, max_tokens, temperature, n_threads);
             mark_used();
             out
@@ -563,6 +577,15 @@ mod tests {
         assert!(is_hybrid_thinking_model(Path::new("/m/Qwen_Qwen3-30B-A3B-Q4_K_M.gguf")));
         assert!(!is_hybrid_thinking_model(Path::new("/m/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf")));
         assert!(!is_hybrid_thinking_model(Path::new("/m/google_gemma-3-4b-it-Q4_K_M.gguf")));
+        assert!(!is_hybrid_thinking_model(Path::new("/m/Qwen_Qwen3.5-4B-Q4_K_M.gguf")));
+    }
+
+    #[test]
+    fn qwen35_gets_empty_think_prefill() {
+        assert!(needs_empty_think_prefill(Path::new("/m/Qwen_Qwen3.5-4B-Q4_K_M.gguf")));
+        assert!(needs_empty_think_prefill(Path::new("/m/Qwen_Qwen3.5-35B-A3B-Q4_K_M.gguf")));
+        assert!(!needs_empty_think_prefill(Path::new("/m/Qwen_Qwen3-8B-Q4_K_M.gguf")));
+        assert!(!needs_empty_think_prefill(Path::new("/m/google_gemma-4-E4B-it-Q4_K_M.gguf")));
     }
 
     /// Find the Qwen 3.5 model in the app's models directory.

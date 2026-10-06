@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 interface Props {
-  onDismiss: () => void;
+  onDismiss: (dontShowUntilUpdate: boolean) => void;
 }
 
 export function AIBootDisclaimer({ onDismiss }: Props) {
   const [mounted, setMounted] = useState(false);
+  const [dontShowAgain, setDontShowAgain] = useState(false);
 
   useEffect(() => {
     const id = window.setTimeout(() => setMounted(true), 30);
@@ -107,11 +108,21 @@ export function AIBootDisclaimer({ onDismiss }: Props) {
           </p>
         </div>
         <div
-          className="flex-shrink-0 border-t border-white/5 flex justify-end"
+          className="flex-shrink-0 border-t border-white/5 flex flex-wrap items-center justify-between gap-3"
           style={{ padding: "12px 16px" }}
         >
+          <label className="flex items-center gap-2 text-text-secondary cursor-pointer select-none" style={{ fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={dontShowAgain}
+              onChange={(e) => setDontShowAgain(e.target.checked)}
+              className="accent-accent"
+              style={{ width: 16, height: 16 }}
+            />
+            Don't show again until the next update
+          </label>
           <button
-            onClick={onDismiss}
+            onClick={() => onDismiss(dontShowAgain)}
             className="bg-accent text-white rounded-xl hover:bg-accent-hover font-medium transition-colors"
             style={{ padding: "10px 18px", fontSize: 13 }}
             autoFocus

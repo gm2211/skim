@@ -42,8 +42,8 @@ function App() {
   const [suppressNextPhonePaneTransition, setSuppressNextPhonePaneTransition] = useState(false);
   const lastRefreshRef = useRef<number>(Date.now());
 
-  const dismissBootDisclaimer = () => {
-    acceptAiDisclaimer();
+  const dismissBootDisclaimer = (dontShowUntilUpdate: boolean) => {
+    acceptAiDisclaimer(dontShowUntilUpdate);
     setShowBootDisclaimer(false);
   };
 

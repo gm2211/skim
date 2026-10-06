@@ -36,8 +36,17 @@ function devBridgePlugin(endpoint: string): Plugin {
   };
 }
 
+// The desktop app's version, so the AI disclaimer's "Don't show again until the
+// next update" can tell when an update happened.
+const appVersion: string = JSON.parse(
+  readFileSync(fileURLToPath(new URL("./src-tauri/tauri.conf.json", import.meta.url)), "utf8"),
+).version;
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [
     react(),
     tailwindcss(),

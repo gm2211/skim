@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChatDrawer } from "./ChatPanel";
 import { chatWithArticle, webSearch } from "../../services/commands";
+import { selectChatText } from "../../test/selectChatText";
 import { useUiStore } from "../../stores/uiStore";
 
 vi.mock("../../services/commands", () => ({
@@ -136,5 +137,51 @@ describe("ChatDrawer", () => {
 
     await waitFor(() => expect(screen.queryByText("Old article answer")).not.toBeInTheDocument());
     expect(screen.queryByText("Explain this")).not.toBeInTheDocument();
+  });
+});
+
+
+describe("ChatDrawer quoted replies", () => {
+  it("sends selected excerpt, retains it in history, and resets quote on article change", async () => {
+    vi.mocked(chatWithArticle)
+      .mockResolvedValueOnce({ content: "First sentence. Second sentence.", web_citations: [], provider: "openai", model: "test" })
+      .mockResolvedValue({ content: "Follow-up", web_citations: [], provider: "openai", model: "test" });
+    const view = render(<ChatDrawer articleId="article-1" articleTitle="Article" />);
+    const user = await openAndType("Explain");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    selectChatText((await screen.findByText("First sentence. Second sentence.")).firstChild!, 16);
+    await user.click(screen.getByRole("button", { name: "Reply to selection" }));
+    expect(screen.getByRole("note", { name: "Quoted text" })).toHaveTextContent("Second sentence.");
+    expect(screen.getByRole("textbox")).toHaveFocus();
+    await user.type(screen.getByRole("textbox"), "Why?{Enter}");
+    await screen.findByText("Follow-up");
+    const quoted = { role: "user", content: "Replying to Skim:\n> Second sentence.\n\nWhy?" };
+    expect(vi.mocked(chatWithArticle).mock.calls[1][1].slice(-1)[0]).toEqual(quoted);
+    await user.type(screen.getByRole("textbox"), "More{Enter}");
+    await waitFor(() => expect(vi.mocked(chatWithArticle).mock.calls[2][1]).toContainEqual(quoted));
+    selectChatText(screen.getByText("First sentence. Second sentence.").firstChild!, 0, 15);
+    await user.click(screen.getByRole("button", { name: "Reply to selection" }));
+    view.rerender(<ChatDrawer articleId="article-2" articleTitle="Other" />);
+    expect(screen.queryByRole("note", { name: "Quoted text" })).not.toBeInTheDocument();
+  });
+
+  it("restores quote and draft after failure, and permits removing quote before retry", async () => {
+    vi.mocked(chatWithArticle)
+      .mockResolvedValueOnce({ content: "Answer excerpt", web_citations: [], provider: "openai", model: "test" })
+      .mockRejectedValueOnce(new Error("Provider unavailable"))
+      .mockResolvedValueOnce({ content: "Retry answer", web_citations: [], provider: "openai", model: "test" });
+    render(<ChatDrawer articleId="article-1" articleTitle="Article" />);
+    const user = await openAndType("Explain");
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    selectChatText((await screen.findByText("Answer excerpt")).firstChild!);
+    await user.click(screen.getByRole("button", { name: "Reply to selection" }));
+    await user.type(screen.getByRole("textbox"), "Why?{Enter}");
+    await screen.findByRole("alert");
+    expect(screen.getByRole("textbox")).toHaveValue("Why?");
+    expect(screen.getByRole("note", { name: "Quoted text" })).toHaveTextContent("Answer excerpt");
+    await user.click(screen.getByRole("button", { name: "Remove quoted text" }));
+    await user.click(screen.getByRole("button", { name: "Send message" }));
+    await screen.findByText("Retry answer");
+    expect(vi.mocked(chatWithArticle).mock.calls[2][1].slice(-1)[0]).toEqual({ role: "user", content: "Why?" });
   });
 });

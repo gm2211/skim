@@ -14,12 +14,14 @@ import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { ModelPicker } from "../common/ModelPicker";
 import { Select } from "../ui/Select";
+import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./ChatMessageContent";
 
 type Scope = "inbox" | "unread" | "all";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
+  reply?: ChatReply;
   sources?: ChatSource[];
   articleIds?: string[];
 }
@@ -47,6 +49,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(open && isPhone, onClose);
   const [scope, setScope] = useState<Scope>("unread");
   const [input, setInput] = useState("");
+  const [reply, setReply] = useState<ChatReply | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [completedSends, setCompletedSends] = useState(0);
@@ -81,17 +84,18 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
     if (!query || loading || needsSetup) return;
     setError(null);
 
-    const userMsg: Message = { role: "user", content: query };
+    const userMsg: Message = { role: "user", content: query, reply: reply ?? undefined };
     const next = [...messages, userMsg];
     setMessages(next);
     setInput("");
+    setReply(null);
     focusAfterSend.current = true;
     setLoading(true);
 
-    const history: ChatMessageInput[] = messages.map((m) => ({ role: m.role, content: m.content }));
+    const history: ChatMessageInput[] = messages.map((m) => ({ role: m.role, content: chatPrompt(m.content, m.reply) }));
 
     try {
-      const resp: ArticleChatResponse = await chatWithArticles(scope, query, history, [...messages].reverse().find((message) => message.role === "assistant")?.articleIds);
+      const resp: ArticleChatResponse = await chatWithArticles(scope, chatPrompt(query, reply), history, [...messages].reverse().find((message) => message.role === "assistant")?.articleIds);
       setMessages((m) => [
         ...m,
         { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids },
@@ -100,6 +104,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
       setError(String(e instanceof Error ? e.message : e));
       setMessages((m) => m.slice(0, -1));
       setInput(query);
+      setReply(reply);
     } finally {
       setLoading(false);
       setCompletedSends((count) => count + 1);
@@ -198,11 +203,11 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
                     padding: "10px 14px",
                     fontSize: 13,
                     maxWidth: "88%",
-                    whiteSpace: "pre-wrap",
                     wordBreak: "break-word",
                   }}
                 >
-                  {m.content}
+                  {m.reply && <ReplyPreview reply={m.reply} />}
+                  <ChatMessageContent content={m.content} role={m.role} onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }} replyDisabled={loading} />
                 </div>
               </div>
               {m.role === "assistant" && m.sources && m.sources.length > 0 && (
@@ -246,6 +251,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
 
         {/* Input */}
         <div className="border-t border-white/5 min-w-0" style={{ padding: "12px 16px 8px" }}>
+          {reply && <ReplyPreview reply={reply} onRemove={() => setReply(null)} />}
           <div className="flex items-center gap-2 min-w-0">
             <textarea
               ref={inputRef}

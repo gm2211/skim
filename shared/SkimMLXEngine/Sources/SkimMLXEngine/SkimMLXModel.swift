@@ -230,7 +230,7 @@ public final class SkimMLXModel: @unchecked Sendable {
                     try Task.checkCancellation()
 
                     let end = Date()
-                    let prefillSeconds = (info?.promptTime ?? 0)
+                    let prefillSeconds = (info?.promptTime ?? 0) + plan.prefixPrefillSeconds
                     let prefilled = promptTokenCount - plan.reusedTokens
                     var metrics = SkimGenerationMetrics()
                     metrics.promptTokens = promptTokenCount
@@ -277,6 +277,9 @@ struct PrefixPlan {
     let reusedTokens: Int
     /// What to keep after generation, if anything.
     let keep: PrefixStore.Entry?
+    /// Time spent prefilling the prefix separately (pristine-copy path),
+    /// which the generation's own prompt time doesn't include.
+    var prefixPrefillSeconds: TimeInterval = 0
 
     /// A shorter shared run than this is not worth a cache rewind.
     static let minimumReuse = 64
@@ -372,13 +375,15 @@ struct PrefixPlan {
             cache: cache,
             parameters: parameters
         )
+        let prefillStart = Date()
         eval(cache.flatMap { $0.state })
         return PrefixPlan(
             input: LMInput(tokens: tokenArray(tokens[boundary...])),
             cache: cache,
             state: prefill.state,
             reusedTokens: 0,
-            keep: PrefixStore.Entry(tokens: prefix, cache: cache.map { $0.copy() }, state: prefill.state, isLive: false)
+            keep: PrefixStore.Entry(tokens: prefix, cache: cache.map { $0.copy() }, state: prefill.state, isLive: false),
+            prefixPrefillSeconds: prefill.promptPrefillTime + Date().timeIntervalSince(prefillStart)
         )
     }
 }

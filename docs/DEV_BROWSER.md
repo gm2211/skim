@@ -47,7 +47,11 @@ and set the endpoint to `http://127.0.0.1:4546`. That path backs `openai`,
 request shaping, JSON-mode parsing and error handling all five share.
 
 Responses from `dev-llm` are derived from the prompt rather than generated:
-deterministic, obviously synthetic, and useless as journalism.
+deterministic, obviously synthetic, and useless as journalism. Set
+`DEV_LLM_DELAY_MS` to make each answer take that long, to watch a page such as
+Quick Catch-up fill in story by story. Publisher feeds on the newsstand carry
+a stand-in picture per article (served from `/img/<id>`); the Hacker News feed
+carries none, like the real one.
 
 ## What it does not cover
 

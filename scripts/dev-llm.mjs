@@ -15,6 +15,8 @@
 import { createServer } from "node:http";
 
 const PORT = Number(process.env.DEV_LLM_PORT ?? 4546);
+/** Pretend each answer takes this long, to watch a page fill in. */
+const DELAY_MS = Number(process.env.DEV_LLM_DELAY_MS ?? 0);
 
 const MODELS = [
   "skim-dev-small",
@@ -256,6 +258,7 @@ createServer(async (req, res) => {
               .join("\n"),
     }));
     const content = respond(messages);
+    if (DELAY_MS > 0) await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
     console.log(
       `[dev-llm] ${body.model ?? "?"} json_mode=${!!body.response_format} -> ${content.slice(0, 70).replace(/\n/g, " ")}…`,
     );

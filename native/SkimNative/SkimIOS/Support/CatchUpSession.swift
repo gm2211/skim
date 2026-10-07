@@ -9,7 +9,9 @@ final class CatchUpSession: ObservableObject {
     @Published private(set) var wasStopped = false
     @Published private(set) var statusMessage = ""
     @Published private(set) var page = NativeAI.CatchUpPage()
-    @Published private(set) var fallbackText: String?
+    /// Stories whose lede is in. The sheet prints those, plus the one being
+    /// written, so each story lands as soon as it is ready.
+    @Published private(set) var written = 0
     @Published private(set) var articles: [Article] = []
     @Published private(set) var errorMessage: String?
     @Published private(set) var errorRemedy: AIErrorRemedy = .none
@@ -17,16 +19,16 @@ final class CatchUpSession: ObservableObject {
     private var task: Task<Void, Never>?
     private var generation = UUID()
     private let picks: ([Article], AppSettings) async throws -> NativeAI.CatchUpPage?
-    private let fallback: ([Article], AppSettings) async throws -> String
+    private let draft: ([Article]) -> NativeAI.CatchUpPage
     private let lede: (String, [Article], AppSettings) async throws -> String
 
     init(
         picks: @escaping ([Article], AppSettings) async throws -> NativeAI.CatchUpPage? = { try await NativeAI.catchUpPicks(articles: $0, settings: $1) },
-        fallback: @escaping ([Article], AppSettings) async throws -> String = { try await NativeAI.quickCatchUp(articles: $0, settings: $1) },
+        draft: @escaping ([Article]) -> NativeAI.CatchUpPage = { NativeAI.catchUpDraft(articles: $0) },
         lede: @escaping (String, [Article], AppSettings) async throws -> String = { try await NativeAI.catchUpLede(headline: $0, articles: $1, settings: $2) }
     ) {
         self.picks = picks
-        self.fallback = fallback
+        self.draft = draft
         self.lede = lede
     }
 
@@ -47,7 +49,7 @@ final class CatchUpSession: ObservableObject {
         errorMessage = nil
         errorRemedy = .none
         page = NativeAI.CatchUpPage()
-        fallbackText = nil
+        written = 0
         articles = []
         statusMessage = request.statusLabel
         let work = Task { await run(request: request, range: range, id: id) }
@@ -75,12 +77,12 @@ final class CatchUpSession: ObservableObject {
                 return
             }
             statusMessage = "Reading \(context.count) \(context.count == 1 ? "article" : "articles")…"
-            let selected = try await picks(context, request.settings)
+            // A model answer that cannot be read still gets a front page: the
+            // one drafted from the articles, never a wall of plain text.
+            let selected = try await picks(context, request.settings) ?? draft(context)
             try checkCurrent(id)
-            guard let selected else {
-                let text = try await fallback(context, request.settings)
-                try checkCurrent(id)
-                fallbackText = text
+            guard !selected.isEmpty else {
+                errorMessage = "Nothing on the page: there was no real news in these articles."
                 return
             }
             withAnimation(.easeOut(duration: 0.3)) { page = selected }
@@ -94,16 +96,17 @@ final class CatchUpSession: ObservableObject {
                     let offset = handle - 1
                     return context.indices.contains(offset) ? context[offset] : nil
                 }
-                let written: String
-                do { written = try await lede(story.headline, behind, request.settings) }
+                let text: String
+                do { text = try await lede(story.headline, behind, request.settings) }
                 catch {
                     try checkCurrent(id)
                     if error is CancellationError { throw error }
-                    written = ""
+                    text = ""
                 }
                 try checkCurrent(id)
                 withAnimation(.easeOut(duration: 0.25)) {
-                    page.stories[index].lede = written.isEmpty ? Self.excerptLede(behind) : written
+                    page.stories[index].lede = text.isEmpty ? Self.excerptLede(behind) : text
+                    self.written = index + 1
                 }
             }
         } catch {

@@ -1533,9 +1533,11 @@ pub async fn remove_recent_article(
 // --- Quick Catch-up ---------------------------------------------------------
 //
 // The front page is built in two passes so the reader sees it fill in rather
-// than watching a blank panel: the first picks and groups the stories and
-// writes their headlines, the second reads the articles behind each story and
-// writes its lede. Every pass emits the page so far on `catchup_progress`.
+// than watching a blank panel: the first picks and groups the stories (a cloud
+// model, or for on-device models a draft made straight from the articles), the
+// second reads the articles behind each story and writes its lede. The page is
+// emitted on `catchup_progress` after every step, and the dialog prints each
+// story as soon as its lede is in.
 
 /// A story on the front page. `lede` is empty between the two passes.
 #[derive(Serialize, Clone)]
@@ -1543,6 +1545,9 @@ pub struct CatchupStory {
     pub headline: String,
     pub lede: String,
     pub article_ids: Vec<String>,
+    /// The picture printed with the story, from the first of its articles
+    /// that has one.
+    pub image_url: Option<String>,
 }
 
 /// A one-line item below the fold.
@@ -1560,6 +1565,10 @@ pub struct CatchupSource {
     pub publication: String,
     pub url: Option<String>,
     pub published_at: Option<i64>,
+    /// The article's own picture, when its feed carried one.
+    pub image_url: Option<String>,
+    /// The publication's icon, printed in the row of related articles.
+    pub icon_url: Option<String>,
 }
 
 #[derive(Serialize, Clone, Default)]
@@ -1943,6 +1952,333 @@ fn catchup_cutoff(since_hours: Option<i64>, now: i64) -> Option<i64> {
     }
 }
 
+/// Providers that run the model on this machine. For these the one big
+/// picking prompt is the slow part of a catch-up, so the page is drafted
+/// without it (see `local_front_page`).
+fn runs_on_device(provider: &str) -> bool {
+    matches!(provider, "local" | "ollama" | "ds4" | "mlx" | "foundation-models")
+}
+
+/// Pass one on a model: pick the stories, group the articles under them and
+/// write the headlines. `Ok(None)` when the answer cannot be read, so the
+/// caller can draft the page itself; `Err` only when the model could not be
+/// reached at all (a missing key, a signed-out account), which the reader has
+/// to fix.
+async fn ai_front_page(
+    provider: &dyn crate::ai::provider::AiProvider,
+    model: &str,
+    interests: Option<&str>,
+    pool: &[crate::db::models::ArticleWithFeed],
+    claimed: &mut std::collections::HashSet<String>,
+) -> Result<Option<(Vec<CatchupStory>, Vec<CatchupBrief>)>, String> {
+    let mut listing = String::new();
+    for (i, a) in pool.iter().enumerate() {
+        // Markup stripped first: a link-only aggregator post is otherwise
+        // listed as `[Comments][1] [1]: https://…`, which tells the editor
+        // nothing about what it links to.
+        let clean: String = crate::db::story_text::excerpt(
+            a.article.content_text.as_deref().unwrap_or(""),
+        )
+        .chars()
+        .take(CATCHUP_PICK_EXCERPT_CHARS)
+        .collect::<String>()
+        .replace(['\n', '\t'], " ");
+        let publication = crate::ai::publication::publication_name(
+            &a.feed_title,
+            a.article.url.as_deref(),
+        );
+        listing.push_str(&format!(
+            "{}\t{}\t[{}]\t{}\n",
+            i,
+            a.article.title.trim(),
+            publication,
+            clean
+        ));
+    }
+
+    let page_request = ChatRequest {
+        model: model.to_string(),
+        messages: vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: prompts::catchup_page_system_prompt(interests),
+                content_blocks: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: prompts::catchup_page_user_prompt(&listing),
+                content_blocks: None,
+            },
+        ],
+        temperature: Some(0.3),
+        max_tokens: Some(2000),
+        json_mode: true,
+        tools: None,
+    };
+
+    let response = provider.chat(page_request).await?;
+    let content = response.content.trim();
+    let json_str = extract_json_object(content).unwrap_or(content);
+    let raw: CatchupPageRaw = match serde_json::from_str(json_str) {
+        Ok(raw) => raw,
+        Err(e) => {
+            log::warn!(
+                "Catch-up page unreadable ({e}); drafting it from the articles. Raw: {}",
+                content.chars().take(300).collect::<String>()
+            );
+            return Ok(None);
+        }
+    };
+
+    // The model is told each article belongs to one item only; hold it to that
+    // here so nothing appears twice on the page.
+    let mut seen_text: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut stories = Vec::new();
+    let mut briefs = Vec::new();
+
+    for story in raw.stories {
+        if stories.len() >= CATCHUP_MAX_STORIES {
+            break;
+        }
+        let headline = story.headline.trim().to_string();
+        if headline.is_empty()
+            || is_placeholder_text(&headline)
+            || !seen_text.insert(normalize_for_dedup(&headline))
+        {
+            continue;
+        }
+        let article_ids = claim_citations(
+            &story.article_ids,
+            pool,
+            claimed,
+            CATCHUP_MAX_CITATIONS_PER_STORY,
+        );
+        if article_ids.is_empty() {
+            // Every article behind it already ran under an earlier story.
+            continue;
+        }
+        let publications: Vec<String> = pool
+            .iter()
+            .filter(|a| article_ids.contains(&a.article.id))
+            .map(|a| {
+                crate::ai::publication::publication_name(&a.feed_title, a.article.url.as_deref())
+            })
+            .collect();
+        let headline = strip_publication_prefix(&headline, &publications);
+        let lede = story.lede.trim();
+        stories.push(CatchupStory {
+            headline,
+            lede: if is_placeholder_text(lede) {
+                String::new()
+            } else {
+                lede.to_string()
+            },
+            article_ids,
+            image_url: None,
+        });
+    }
+
+    // Before the briefs claim anything: a second posting of a story's link
+    // belongs under that story, not beside it or below the fold as its own item.
+    merge_same_story_stories(&mut stories, pool);
+    attach_same_story_articles(&mut stories, pool, claimed);
+
+    for brief in raw.briefs {
+        if briefs.len() >= CATCHUP_MAX_BRIEFS {
+            break;
+        }
+        let text = brief.text.trim().to_string();
+        if text.is_empty()
+            || is_placeholder_text(&text)
+            || !seen_text.insert(normalize_for_dedup(&text))
+        {
+            continue;
+        }
+        let article_ids = claim_citations(
+            &brief.article_ids,
+            pool,
+            claimed,
+            CATCHUP_MAX_CITATIONS_PER_BRIEF,
+        );
+        if article_ids.is_empty() {
+            continue;
+        }
+        briefs.push(CatchupBrief { text, article_ids });
+    }
+
+    Ok(Some((stories, briefs)))
+}
+
+/// Headline words too common to say two articles share a subject.
+const TOPIC_STOPWORDS: &[&str] = &[
+    "about", "after", "again", "against", "also", "back", "been", "before", "being", "best",
+    "better", "between", "could", "does", "doing", "down", "every", "first", "from", "have",
+    "here", "into", "just", "last", "like", "make", "makes", "more", "most", "much", "need",
+    "news", "only", "over", "says", "should", "show", "some", "still", "than", "that", "their",
+    "them", "then", "there", "these", "they", "this", "those", "through", "time", "today",
+    "under", "until", "update", "very", "want", "were", "what", "when", "where", "which",
+    "while", "will", "with", "without", "would", "year", "years", "your", "week", "really",
+    "using", "used", "uses", "ways", "why", "how", "new",
+];
+
+/// The words of a headline that say what it is about: lowercased, plurals
+/// folded, short and common words dropped. Numbers stay ("GPT 5", "M4").
+fn topic_terms(title: &str) -> std::collections::HashSet<String> {
+    normalize_for_dedup(title)
+        .split(' ')
+        .filter(|w| w.len() >= 4 || (w.len() >= 2 && w.chars().any(|c| c.is_ascii_digit())))
+        .filter(|w| !TOPIC_STOPWORDS.contains(w))
+        .map(|w| match w.strip_suffix('s') {
+            Some(stem) if stem.len() >= 4 && !stem.ends_with('s') => stem.to_string(),
+            _ => w.to_string(),
+        })
+        .collect()
+}
+
+/// Whether two headlines are about the same thing: at least three subject
+/// words in common, covering half of the shorter one. Deliberately strict;
+/// tech headlines share vocabulary, and two unrelated stories merged under one
+/// headline is worse than one story printed twice.
+fn same_topic(a: &std::collections::HashSet<String>, b: &std::collections::HashSet<String>) -> bool {
+    let shared = a.intersection(b).count();
+    shared >= 3 && shared * 2 >= a.len().min(b.len())
+}
+
+/// The first real picture in an article's HTML: an absolute http(s) image
+/// that is not a tracking pixel, badge or feed-service logo.
+fn lead_image(html: Option<&str>) -> Option<String> {
+    static IMG: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re = IMG.get_or_init(|| {
+        regex::Regex::new(r#"(?is)<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']"#).unwrap()
+    });
+    re.captures_iter(html?)
+        .map(|c| c[1].trim().replace("&amp;", "&"))
+        .find(|src| {
+            let lower = src.to_lowercase();
+            (lower.starts_with("https://") || lower.starts_with("http://"))
+                && !["feedburner", "pixel", "badge", "gravatar", "emoji", "/icon", "favicon", "1x1", "spacer", "tracking", ".svg"]
+                    .iter()
+                    .any(|bad| lower.contains(bad))
+        })
+}
+
+/// The picture printed with a story: the first of its articles that has one.
+fn story_image(article_ids: &[String], pool: &[crate::db::models::ArticleWithFeed]) -> Option<String> {
+    article_ids.iter().find_map(|id| {
+        pool.iter()
+            .find(|a| &a.article.id == id)
+            .and_then(|a| lead_image(a.article.content_html.as_deref()))
+    })
+}
+
+/// The front page drafted without a model: the same link on several
+/// aggregators, and headlines plainly about the same thing, grouped into one
+/// story; stories carried by more outlets first, then ones with a picture and
+/// real text to quote, then the order the articles came in (newest, or
+/// highest priority, first). Stories print their best article's own headline.
+fn local_front_page(
+    pool: &[crate::db::models::ArticleWithFeed],
+    claimed: &mut std::collections::HashSet<String>,
+) -> (Vec<CatchupStory>, Vec<CatchupBrief>) {
+    let terms: Vec<_> = pool.iter().map(|a| topic_terms(&a.article.title)).collect();
+    let mut group: Vec<usize> = (0..pool.len()).collect();
+    fn root(group: &mut [usize], mut i: usize) -> usize {
+        while group[i] != i {
+            group[i] = group[group[i]];
+            i = group[i];
+        }
+        i
+    }
+    for i in 0..pool.len() {
+        for j in (i + 1)..pool.len() {
+            if same_story(&pool[i], &pool[j]) || same_topic(&terms[i], &terms[j]) {
+                let (a, b) = (root(&mut group, i), root(&mut group, j));
+                if a != b {
+                    // The earlier article stays the root, so a group keeps the
+                    // position of its first member.
+                    group[a.max(b)] = a.min(b);
+                }
+            }
+        }
+    }
+    let mut clusters: Vec<Vec<usize>> = Vec::new();
+    let mut slot: HashMap<usize, usize> = HashMap::new();
+    for i in 0..pool.len() {
+        let r = root(&mut group, i);
+        let at = *slot.entry(r).or_insert_with(|| {
+            clusters.push(Vec::new());
+            clusters.len() - 1
+        });
+        clusters[at].push(i);
+    }
+
+    let has_text = |i: usize| {
+        crate::db::story_text::excerpt(pool[i].article.content_text.as_deref().unwrap_or(""))
+            .split_whitespace()
+            .count()
+            >= 12
+    };
+    let has_image = |i: usize| lead_image(pool[i].article.content_html.as_deref()).is_some();
+    let publication = |i: usize| {
+        crate::ai::publication::publication_name(&pool[i].feed_title, pool[i].article.url.as_deref())
+    };
+
+    // Within a story, the article that leads: one with a picture and text.
+    for cluster in clusters.iter_mut() {
+        cluster.sort_by_key(|&i| (!(has_image(i) && has_text(i)), !has_text(i), i));
+    }
+    let score = |cluster: &Vec<usize>| {
+        let outlets: std::collections::HashSet<String> = cluster.iter().map(|&i| publication(i)).collect();
+        outlets.len() * 3 + cluster.len().min(4) + has_image(cluster[0]) as usize * 2 + has_text(cluster[0]) as usize
+    };
+    let mut ranked: Vec<(usize, usize, Vec<usize>)> = clusters
+        .into_iter()
+        .map(|c| (score(&c), *c.iter().min().unwrap_or(&0), c))
+        .collect();
+    ranked.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+
+    let mut stories = Vec::new();
+    let mut briefs = Vec::new();
+    let mut seen_text: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (_, _, cluster) in ranked {
+        let lead = &pool[cluster[0]];
+        let title = lead.article.title.trim();
+        if title.is_empty() || !seen_text.insert(normalize_for_dedup(title)) {
+            continue;
+        }
+        if stories.len() < CATCHUP_MAX_STORIES {
+            let article_ids: Vec<String> = cluster
+                .iter()
+                .take(CATCHUP_MAX_CITATIONS_PER_STORY)
+                .map(|&i| pool[i].article.id.clone())
+                .collect();
+            let publications: Vec<String> = cluster.iter().map(|&i| publication(i)).collect();
+            claimed.extend(article_ids.iter().cloned());
+            stories.push(CatchupStory {
+                headline: strip_publication_prefix(title, &publications),
+                lede: String::new(),
+                article_ids,
+                image_url: None,
+            });
+        } else if briefs.len() < CATCHUP_MAX_BRIEFS {
+            let article_ids: Vec<String> = cluster
+                .iter()
+                .take(CATCHUP_MAX_CITATIONS_PER_BRIEF)
+                .map(|&i| pool[i].article.id.clone())
+                .collect();
+            let publications: Vec<String> = cluster.iter().map(|&i| publication(i)).collect();
+            claimed.extend(article_ids.iter().cloned());
+            briefs.push(CatchupBrief {
+                text: strip_publication_prefix(title, &publications),
+                article_ids,
+            });
+        } else {
+            break;
+        }
+    }
+    (stories, briefs)
+}
+
 #[tauri::command]
 pub async fn generate_catchup_report(
     app: AppHandle,
@@ -2072,138 +2408,51 @@ async fn build_catchup_report(
         run_id,
     );
 
-    // --- Pass one: pick the stories and write their headlines ---------------
+    // --- Pass one: decide what goes on the page -----------------------------
+    //
+    // A cloud model picks and groups the stories in one call and writes their
+    // headlines. An on-device model skips that call: one prompt over the whole
+    // listing is the slowest step of the run on a laptop or phone, and small
+    // models rarely answer it with JSON that can be read, so the page is drafted
+    // straight from the articles instead, which takes no time at all. The same
+    // draft stands in whenever a model's answer cannot be read.
 
-    let mut listing = String::new();
-    for (i, a) in pool.iter().enumerate() {
-        // Markup stripped first: a link-only aggregator post is otherwise
-        // listed as `[Comments][1] [1]: https://…`, which tells the editor
-        // nothing about what it links to.
-        let clean: String = crate::db::story_text::excerpt(
-            a.article.content_text.as_deref().unwrap_or(""),
-        )
-        .chars()
-        .take(CATCHUP_PICK_EXCERPT_CHARS)
-        .collect::<String>()
-        .replace(['\n', '\t'], " ");
-        let publication = crate::ai::publication::publication_name(
-            &a.feed_title,
-            a.article.url.as_deref(),
-        );
-        listing.push_str(&format!(
-            "{}\t{}\t[{}]\t{}\n",
-            i,
-            a.article.title.trim(),
-            publication,
-            clean
-        ));
-    }
-
-    let page_request = ChatRequest {
-        model: model.clone(),
-        messages: vec![
-            ChatMessage {
-                role: "system".to_string(),
-                content: prompts::catchup_page_system_prompt(
-                    ai_settings.triage_user_prompt.as_deref(),
-                ),
-                content_blocks: None,
-            },
-            ChatMessage {
-                role: "user".to_string(),
-                content: prompts::catchup_page_user_prompt(&listing),
-                content_blocks: None,
-            },
-        ],
-        temperature: Some(0.3),
-        max_tokens: Some(2000),
-        json_mode: true,
-        tools: None,
-    };
-
-    let response = provider.chat(page_request).await?;
-    let content = response.content.trim();
-    let json_str = extract_json_object(content).unwrap_or(content);
-    let raw: CatchupPageRaw = serde_json::from_str(json_str).map_err(|e| {
-        format!(
-            "Failed to parse catchup response: {}. Raw: {}",
-            e,
-            content.chars().take(300).collect::<String>()
-        )
-    })?;
-
-    // The model is told each article belongs to one item only; hold it to that
-    // here so nothing appears twice on the page.
     let mut claimed: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut seen_text: std::collections::HashSet<String> = std::collections::HashSet::new();
-
-    for story in raw.stories {
-        if report.stories.len() >= CATCHUP_MAX_STORIES {
-            break;
-        }
-        let headline = story.headline.trim().to_string();
-        if headline.is_empty()
-            || is_placeholder_text(&headline)
-            || !seen_text.insert(normalize_for_dedup(&headline))
-        {
-            continue;
-        }
-        let article_ids = claim_citations(
-            &story.article_ids,
+    let picked = if runs_on_device(&ai_settings.provider) {
+        None
+    } else {
+        emit_catchup(
+            &app,
+            "reading",
+            0,
+            pool.len() as u32,
+            &format!("Picking the stories from {} articles…", pool.len()),
+            &report,
+            run_id,
+        );
+        ai_front_page(
+            provider.as_ref(),
+            &model,
+            ai_settings.triage_user_prompt.as_deref(),
             &pool,
             &mut claimed,
-            CATCHUP_MAX_CITATIONS_PER_STORY,
-        );
-        if article_ids.is_empty() {
-            // Every article behind it already ran under an earlier story.
-            continue;
+        )
+        .await?
+    };
+    match picked {
+        Some((stories, briefs)) if !stories.is_empty() => {
+            report.stories = stories;
+            report.briefs = briefs;
         }
-        let publications: Vec<String> = pool
-            .iter()
-            .filter(|a| article_ids.contains(&a.article.id))
-            .map(|a| {
-                crate::ai::publication::publication_name(&a.feed_title, a.article.url.as_deref())
-            })
-            .collect();
-        let headline = strip_publication_prefix(&headline, &publications);
-        let lede = story.lede.trim();
-        report.stories.push(CatchupStory {
-            headline,
-            lede: if is_placeholder_text(lede) {
-                String::new()
-            } else {
-                lede.to_string()
-            },
-            article_ids,
-        });
+        _ => {
+            claimed.clear();
+            let (stories, briefs) = local_front_page(&pool, &mut claimed);
+            report.stories = stories;
+            report.briefs = briefs;
+        }
     }
-
-    // Before the briefs claim anything: a second posting of a story's link
-    // belongs under that story, not beside it or below the fold as its own item.
-    merge_same_story_stories(&mut report.stories, &pool);
-    attach_same_story_articles(&mut report.stories, &pool, &mut claimed);
-
-    for brief in raw.briefs {
-        if report.briefs.len() >= CATCHUP_MAX_BRIEFS {
-            break;
-        }
-        let text = brief.text.trim().to_string();
-        if text.is_empty()
-            || is_placeholder_text(&text)
-            || !seen_text.insert(normalize_for_dedup(&text))
-        {
-            continue;
-        }
-        let article_ids = claim_citations(
-            &brief.article_ids,
-            &pool,
-            &mut claimed,
-            CATCHUP_MAX_CITATIONS_PER_BRIEF,
-        );
-        if article_ids.is_empty() {
-            continue;
-        }
-        report.briefs.push(CatchupBrief { text, article_ids });
+    for story in report.stories.iter_mut() {
+        story.image_url = story_image(&story.article_ids, &pool);
     }
 
     report.sources = pool
@@ -2218,6 +2467,8 @@ async fn build_catchup_report(
             ),
             url: a.article.url.clone(),
             published_at: a.article.published_at,
+            image_url: lead_image(a.article.content_html.as_deref()),
+            icon_url: a.feed_icon_url.clone(),
         })
         .collect();
 
@@ -2227,11 +2478,7 @@ async fn build_catchup_report(
         "picking",
         0,
         story_count,
-        &match story_count {
-            0 => "Nothing on the page yet…".to_string(),
-            1 => "Writing the lead story…".to_string(),
-            n => format!("Writing {n} stories…"),
-        },
+        if story_count == 0 { "Nothing on the page yet…" } else { "Writing the lead story…" },
         &report,
         run_id,
     );
@@ -2271,7 +2518,11 @@ async fn build_catchup_report(
             "writing",
             completed,
             story_count,
-            &format!("Writing story {completed} of {story_count}…"),
+            &if completed < story_count {
+                format!("Writing story {} of {story_count}…", completed + 1)
+            } else {
+                "Finishing the page…".to_string()
+            },
             &report,
             run_id,
         );
@@ -2453,6 +2704,7 @@ mod catchup_tests {
             headline: "FreeBSD ships desktop AMIs on EC2".into(),
             lede: String::new(),
             article_ids: vec!["a".into()],
+            image_url: None,
         }];
         let mut claimed: std::collections::HashSet<String> = ["a".to_string()].into();
         attach_same_story_articles(&mut stories, &pool, &mut claimed);
@@ -2472,6 +2724,7 @@ mod catchup_tests {
             headline: headline.into(),
             lede: String::new(),
             article_ids: ids.iter().map(|s| s.to_string()).collect(),
+            image_url: None,
         };
         let mut stories = vec![
             story("EU probes cloud egress fees", &["a", "b"]),
@@ -2482,6 +2735,61 @@ mod catchup_tests {
         assert_eq!(stories.len(), 2);
         assert_eq!(stories[0].article_ids, vec!["a", "b", "c"]);
         assert_eq!(stories[1].article_ids, vec!["d"]);
+    }
+
+    fn with_body(mut a: crate::db::models::ArticleWithFeed, html: Option<&str>, text: &str) -> crate::db::models::ArticleWithFeed {
+        a.article.content_html = html.map(str::to_string);
+        a.article.content_text = Some(text.to_string());
+        a
+    }
+
+    #[test]
+    fn local_draft_groups_coverage_and_leads_with_the_most_carried_story() {
+        let body = "The company said on Tuesday that the change would roll out to every customer over the coming weeks.";
+        let pool = vec![
+            with_body(article("a", "Rust 1.94 lands with a faster trait solver", "http://x/rust", "Ars Technica"), None, body),
+            with_body(article("b", "EU opens formal probe into cloud egress fees", "http://x/eu-1", "Ars Technica"),
+                Some(r#"<p><img src="https://cdn.example.com/eu.jpg" width="800"></p>"#), body),
+            with_body(article("c", "EU probe targets AWS and Azure cloud egress fees", "http://y/eu-2", "The Verge"), None, body),
+            with_body(article("d", "EU opens formal probe into cloud egress fees", "http://x/eu-1", "Hacker News"), None, ""),
+            with_body(article("e", "Why I still write Makefiles", "http://z/make", "Lobsters"), None, body),
+        ];
+        let mut claimed = std::collections::HashSet::new();
+        let (stories, briefs) = local_front_page(&pool, &mut claimed);
+        assert_eq!(stories[0].headline, "EU opens formal probe into cloud egress fees");
+        assert_eq!(stories[0].article_ids, vec!["b", "c", "d"]);
+        assert_eq!(story_image(&stories[0].article_ids, &pool).as_deref(), Some("https://cdn.example.com/eu.jpg"));
+        assert_eq!(stories.len(), 3);
+        assert!(briefs.is_empty());
+        assert_eq!(claimed.len(), 5);
+    }
+
+    #[test]
+    fn unrelated_headlines_sharing_vocabulary_stay_apart() {
+        let a = topic_terms("Apple releases security update for iPhone");
+        let b = topic_terms("Google releases security update for Chrome");
+        assert!(!same_topic(&a, &b));
+        let c = topic_terms("OpenAI launches GPT-5 with longer context");
+        let d = topic_terms("GPT-5 launches: OpenAI's new model gets longer context");
+        assert!(same_topic(&c, &d));
+    }
+
+    #[test]
+    fn lead_image_skips_pixels_and_relative_paths() {
+        assert_eq!(lead_image(Some(r#"<img src="/local.png"><img src="https://feeds.feedburner.com/~r/x.gif"><IMG alt="x" SRC='https://img.example.com/a.jpg?w=1&amp;h=2'>"#)).as_deref(),
+            Some("https://img.example.com/a.jpg?w=1&h=2"));
+        assert_eq!(lead_image(Some("<p>no picture</p>")), None);
+        assert_eq!(lead_image(None), None);
+    }
+
+    #[test]
+    fn on_device_providers_skip_the_picking_prompt() {
+        for provider in ["local", "ollama", "ds4", "mlx", "foundation-models"] {
+            assert!(runs_on_device(provider), "{provider}");
+        }
+        for provider in ["anthropic", "openai", "claude-subscription", "openrouter", "xai", "custom"] {
+            assert!(!runs_on_device(provider), "{provider}");
+        }
     }
 
     #[test]

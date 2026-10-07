@@ -195,6 +195,29 @@ const FEEDS = [
 const escape = (s) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+/** A stand-in news photo: a gradient with a few shapes, stable per article. */
+function picture(id) {
+  let hash = 0;
+  for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  const hue = hash % 360;
+  const hue2 = (hue + 40 + (hash % 80)) % 360;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="hsl(${hue},55%,42%)"/><stop offset="1" stop-color="hsl(${hue2},60%,18%)"/>
+  </linearGradient></defs>
+  <rect width="1200" height="675" fill="url(#g)"/>
+  <circle cx="${300 + (hash % 600)}" cy="${200 + (hash % 250)}" r="${120 + (hash % 90)}" fill="hsla(${hue2},70%,70%,0.25)"/>
+  <rect x="${100 + (hash % 300)}" y="420" width="${500 + (hash % 300)}" height="140" rx="24" fill="hsla(${hue},40%,90%,0.12)"/>
+</svg>`;
+}
+
+/** Aggregators link out and carry no picture; publishers lead with one. */
+const description = (feed, item) => {
+  if (item.rawDescription) return item.rawDescription;
+  if (feed.slug === "hacker-news") return item.summary;
+  return `<p><img src="${ORIGIN}/img/${item.id}" alt="" /></p><p>${item.summary}</p>`;
+};
+
 function rss(feed) {
   const items = feed.items
     .map(
@@ -204,7 +227,7 @@ function rss(feed) {
       <guid isPermaLink="false">${ORIGIN}/article/${item.id}</guid>
       <dc:creator>${escape(item.author)}</dc:creator>
       <pubDate>${hoursAgo(item.hours).toUTCString()}</pubDate>
-      <description>${escape(item.rawDescription ?? item.summary)}</description>
+      <description>${escape(description(feed, item))}</description>
     </item>`,
     )
     .join("\n");
@@ -279,6 +302,8 @@ createServer((req, res) => {
     if (!feed) return send(404, "text/plain", "no such feed");
     return send(200, "application/rss+xml; charset=utf-8", rss(feed));
   }
+  const imageMatch = url.pathname.match(/^\/img\/([\w-]+)$/);
+  if (imageMatch) return send(200, "image/svg+xml", picture(imageMatch[1]));
   const articleMatch = url.pathname.match(/^\/article\/([\w-]+)$/);
   if (articleMatch) {
     const item = byId.get(articleMatch[1]);

@@ -244,6 +244,46 @@ describe("CatchupDialog", () => {
     expect(screen.getAllByTitle("verl hits 1.0 with multi-node rollouts").length).toBeGreaterThan(0);
   });
 
+  it("prints each story as soon as it is written, with its picture and source icons", async () => {
+    vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
+    render(<CatchupDialog onClose={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+    const runId = vi.mocked(generateCatchupReport).mock.calls[0][2] as string;
+
+    const second = { headline: "Grafana ships a self-hosted analytics bundle", lede: "", article_ids: ["a2"] };
+    const page: CatchupReport = {
+      ...report,
+      stories: [
+        { ...report.stories[0], lede: "", image_url: "https://img.example.com/verl.jpg" },
+        second,
+      ],
+      briefs: [],
+      sources: [
+        { ...source, icon_url: "https://icons.example.com/verge.png" },
+        { ...source, id: "a2", title: "Grafana bundle", publication: "Lobsters" },
+      ],
+    };
+    emitProgress({ stage: "picking", completed: 0, total: 2, message: "Writing the lead story…", report: page, run_id: runId });
+
+    expect(screen.getByText("ByteDance open-sources its RL training stack")).toBeInTheDocument();
+    expect(screen.queryByText(second.headline)).not.toBeInTheDocument();
+    expect(screen.getByText("1 more story on the way")).toBeInTheDocument();
+    expect(document.querySelector('img[src="https://img.example.com/verl.jpg"]')).not.toBeNull();
+    expect(document.querySelector('img[src="https://icons.example.com/verge.png"]')).not.toBeNull();
+
+    const firstWritten: CatchupReport = {
+      ...page,
+      stories: [{ ...page.stories[0], lede: report.stories[0].lede }, second],
+    };
+    emitProgress({ stage: "writing", completed: 1, total: 2, message: "Writing story 2 of 2…", report: firstWritten, run_id: runId });
+
+    expect(screen.getByText(/ByteDance released verl 1\.0/)).toBeInTheDocument();
+    expect(screen.getByText(second.headline)).toBeInTheDocument();
+    expect(screen.getByLabelText("Writing this story")).toBeInTheDocument();
+    // A publication without an icon prints its initials instead.
+    expect(screen.getByRole("button", { name: "Grafana bundle, Lobsters" })).toHaveTextContent("LO");
+  });
+
   it("shows headlines as soon as they are picked and fills the ledes in after", async () => {
     let finish: (value: CatchupReport) => void = () => {};
     vi.mocked(generateCatchupReport).mockReturnValueOnce(

@@ -110,24 +110,32 @@ struct CatchUpSessionTests {
         #expect(!session.isLoading && session.wasStopped && session.errorMessage == nil)
     }
 
-    @Test func oldFallbackAndErrorsCannotReplaceNewRun() async {
-        for shouldFail in [false, true] {
-            let old = CatchUpDeferred<String>()
-            var picksCount = 0
-            let session = CatchUpSession(picks: { _, _ in
-                picksCount += 1
-                return picksCount == 1 ? nil : page("New")
-            }, fallback: { _, _ in try await old.value() }, lede: { _, _, _ in "New summary" })
-            let input = request([article("one")])
-            let first = session.start(request: input, range: .anything)
-            await old.untilStarted()
-            let second = session.start(request: input, range: .day)
-            await second.value
-            await old.finish(shouldFail ? .failure(URLError(.timedOut)) : .success("Old fallback"))
-            await first.value
-            #expect(session.page.stories.first?.headline == "New 1")
-            #expect(session.fallbackText == nil && session.errorMessage == nil && !session.isLoading)
-        }
+    @Test func unreadablePicksFallBackToTheDraftedPage() async {
+        var drafted: [String] = []
+        let session = CatchUpSession(picks: { _, _ in nil }, draft: { articles in
+            drafted = articles.map(\.id)
+            return page("Drafted")
+        }, lede: { _, _, _ in "Drafted summary" })
+        await session.start(request: request([article("one")]), range: .anything).value
+        #expect(drafted == ["one"])
+        #expect(session.page.stories.map(\.headline) == ["Drafted 1"])
+        #expect(session.page.stories.first?.lede == "Drafted summary")
+        #expect(session.written == 1 && session.errorMessage == nil && !session.isLoading)
+    }
+
+    @Test func storiesCountAsWrittenOneAtATime() async {
+        let second = CatchUpDeferred<String>()
+        var calls = 0
+        let session = CatchUpSession(picks: { _, _ in page("Story", count: 2) }, lede: { _, _, _ in
+            calls += 1
+            return calls == 1 ? "First summary" : try await second.value()
+        })
+        let task = session.start(request: request([article("one"), article("two")]), range: .anything)
+        await second.untilStarted()
+        #expect(session.written == 1)
+        await second.finish(.success("Second summary"))
+        await task.value
+        #expect(session.written == 2)
     }
 
     @Test func currentErrorsRemainVisibleAndRunAgainCanRecover() async {

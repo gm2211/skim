@@ -2,6 +2,7 @@ import OSLog
 import SkimCore
 import SkimInferencePolicy
 import SwiftUI
+import UIKit
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -44,17 +45,28 @@ struct AIChatConversation: Sendable {
 
         var role: Role
         var text: String
+        var quotedText: String?
+
+        var promptText: String {
+            guard let quotedText, !quotedText.isEmpty else { return text }
+            return "Replying to Skim:\n> \(quotedText.replacingOccurrences(of: "\n", with: "\n> "))\n\n\(text)"
+        }
     }
 
     var priorTurns: [Turn]
     var latestQuestion: String
+    var latestQuote: String?
+    var latestPromptText: String {
+        guard let latestQuote, !latestQuote.isEmpty else { return latestQuestion }
+        return "Replying to Skim:\n> \(latestQuote.replacingOccurrences(of: "\n", with: "\n> "))\n\n\(latestQuestion)"
+    }
     var generatedSummaryContext: String?
     var priorArticleReferences: [Article]
     var priorArticleContext: [Article]
     var priorArticleHandles: [Int]
     var articleHandleRegistry: [String: Int]
 
-    init(latestQuestion: String, priorMessages: [AIChatMessage] = [], generatedSummaryContext: String? = nil) {
+    init(latestQuestion: String, quotedText: String? = nil, priorMessages: [AIChatMessage] = [], generatedSummaryContext: String? = nil) {
         self.generatedSummaryContext = generatedSummaryContext
         let previousAnswer = priorMessages.last { $0.role == .assistant && !$0.isError }
         self.priorArticleReferences = previousAnswer?.referencedArticles ?? []
@@ -69,6 +81,8 @@ struct AIChatConversation: Sendable {
         }
         self.articleHandleRegistry = registry
         self.latestQuestion = latestQuestion
+        let trimmedQuote = quotedText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.latestQuote = trimmedQuote?.isEmpty == false ? trimmedQuote : nil
         let trimmedSummary = generatedSummaryContext?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.priorTurns = priorMessages
             .filter { !$0.isError && !($0.role == .assistant && $0.text.trimmingCharacters(in: .whitespacesAndNewlines) == trimmedSummary) }
@@ -76,7 +90,8 @@ struct AIChatConversation: Sendable {
             .map { message in
                 Turn(
                     role: message.role == .user ? .user : .assistant,
-                    text: message.text
+                    text: message.text,
+                    quotedText: message.quotedText
                 )
             }
     }
@@ -92,17 +107,13 @@ struct AIChatConversation: Sendable {
     }
 
     private var conversationSection: String {
-        let latest = latestQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !priorTurns.isEmpty else {
-            return """
-            Latest user question to answer now:
-            \(latest)
-            """
+            return latestPrompt()
         }
 
         let transcript = priorTurns.map { turn in
             let role = turn.role == .user ? "User" : "Assistant"
-            return "\(role): \(turn.text)"
+            return "\(role):\n\(turn.promptText)"
         }
         .joined(separator: "\n\n")
 
@@ -110,9 +121,12 @@ struct AIChatConversation: Sendable {
         Previous conversation for context only. Do not answer these older turns again:
         \(transcript)
 
-        Latest user question to answer now:
-        \(latest)
+        \(latestPrompt())
         """
+    }
+
+    private func latestPrompt() -> String {
+        return "Latest user question to answer now:\n\(latestPromptText.trimmingCharacters(in: .whitespacesAndNewlines))"
     }
 }
 
@@ -1272,10 +1286,10 @@ enum NativeAI {
         let systemMessage: [String: String] = ["role": "system", "content": systemContent]
 
         let priorTurnMessages: [[String: String]] = conversation.priorTurns.map { turn in
-            ["role": turn.role == .user ? "user" : "assistant", "content": turn.text]
+            ["role": turn.role == .user ? "user" : "assistant", "content": turn.promptText]
         }
 
-        let finalContent = [AIRequestPolicy.generatedSummaryContext(conversation.generatedSummaryContext), conversation.latestQuestion].filter { !$0.isEmpty }.joined(separator: "\n\n")
+        let finalContent = [AIRequestPolicy.generatedSummaryContext(conversation.generatedSummaryContext), conversation.latestPromptText].filter { !$0.isEmpty }.joined(separator: "\n\n")
         let finalUser: [String: String] = ["role": "user", "content": finalContent]
 
         return [systemMessage] + priorTurnMessages + [finalUser]
@@ -1301,7 +1315,7 @@ enum NativeAI {
         var priorExchange: (question: String, answer: String, label: String)?
         if let lastUser = conversation.priorTurns.last(where: { $0.role == .user }),
            let lastAssistant = conversation.priorTurns.last(where: { $0.role == .assistant }) {
-            priorExchange = (question: lastUser.text, answer: lastAssistant.text, label: "A")
+            priorExchange = (question: lastUser.promptText, answer: lastAssistant.text, label: "A")
         } else if conversation.priorTurns.isEmpty,
                   let summary = conversation.generatedSummaryContext?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !summary.isEmpty,
@@ -1312,7 +1326,7 @@ enum NativeAI {
         let messages = GroundedChatPrompt.build(
             system: system,
             articleContext: articleContext,
-            question: question,
+            question: conversation.latestPromptText,
             priorExchange: priorExchange,
             webBlock: webBlock
         )
@@ -3329,6 +3343,7 @@ struct AIChatSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding private var messages: [AIChatMessage]
     @State private var input = ""
+    @State private var quotedText: String?
     @State private var isSending = false
     @State private var showReauth = false
     @State private var showAISettings = false
@@ -3354,7 +3369,15 @@ struct AIChatSheet: View {
                                     .padding(.top, 80)
                             } else {
                                 ForEach(messages) { message in
-                                    AIChatBubble(message: message, onReauth: { showReauth = true }, onOpenSettings: { showAISettings = true })
+                                    AIChatBubble(
+                                        message: message,
+                                        onReauth: { showReauth = true },
+                                        onOpenSettings: { showAISettings = true },
+                                        onReply: isSending ? nil : { quote in
+                                            quotedText = quote
+                                            focused = true
+                                        }
+                                    )
                                         .id(message.id)
                                 }
                                 AIDisclaimerLabel()
@@ -3387,25 +3410,53 @@ struct AIChatSheet: View {
                     }
                 }
 
-                HStack(spacing: 10) {
-                    TextField("Ask...", text: $input, axis: .vertical)
-                        .focused($focused)
-                        .lineLimit(1...4)
-                        .font(.system(size: 17, weight: .regular))
-                        .foregroundStyle(SkimStyle.text)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-
-                    Button {
-                        Task { await send() }
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 32, weight: .semibold))
-                            .foregroundStyle(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SkimStyle.secondary : SkimStyle.accent)
+                VStack(spacing: 8) {
+                    if let quotedText {
+                        HStack(alignment: .top, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Replying to Skim")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(SkimStyle.accent)
+                                Text(quotedText)
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(SkimStyle.secondary)
+                                    .lineLimit(3)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            Button {
+                                self.quotedText = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(SkimStyle.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Remove reply quote")
+                        }
+                        .padding(10)
+                        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
-                    .buttonStyle(.plain)
-                    .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
+
+                    HStack(spacing: 10) {
+                        TextField("Ask...", text: $input, axis: .vertical)
+                            .focused($focused)
+                            .disabled(isSending)
+                            .lineLimit(1...4)
+                            .font(.system(size: 17, weight: .regular))
+                            .foregroundStyle(SkimStyle.text)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                        Button {
+                            Task { await send() }
+                        } label: {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 32, weight: .semibold))
+                                .foregroundStyle(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SkimStyle.secondary : SkimStyle.accent)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
+                    }
                 }
                 .padding(14)
                 .background(SkimStyle.chrome)
@@ -3457,11 +3508,14 @@ struct AIChatSheet: View {
         let question = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !isSending else { return }
         let toSend = question
+        let quoteToSend = quotedText
         let priorMessages = messages
-        let conversation = AIChatConversation(latestQuestion: toSend, priorMessages: priorMessages, generatedSummaryContext: request.generatedSummaryContext ?? initialAssistantMessage)
+        let conversation = AIChatConversation(latestQuestion: toSend, quotedText: quoteToSend, priorMessages: priorMessages, generatedSummaryContext: request.generatedSummaryContext ?? initialAssistantMessage)
         input = ""
+        quotedText = nil
         focused = true
-        messages.append(AIChatMessage(role: .user, text: toSend))
+        let userMessage = AIChatMessage(role: .user, text: toSend, quotedText: quoteToSend)
+        messages.append(userMessage)
         isSending = true
         do {
             let answer = try await request.answer(conversation)
@@ -3477,6 +3531,9 @@ struct AIChatSheet: View {
                 )
             )
         } catch {
+            messages.removeAll { $0.id == userMessage.id }
+            input = toSend
+            quotedText = quoteToSend
             let reauth: Bool = {
                 if case NativeAIError.requiresReauthentication = error { return true }
                 return false
@@ -3496,6 +3553,7 @@ struct AIChatMessage: Identifiable, Sendable {
     let id = UUID()
     var role: Role
     var text: String
+    var quotedText: String? = nil
     var referencedArticles: [Article] = []
     var webCitations: [WebCitation] = []
     var contextArticles: [Article] = []
@@ -3510,8 +3568,10 @@ private struct AIChatBubble: View {
     var message: AIChatMessage
     var onReauth: (() -> Void)? = nil
     var onOpenSettings: (() -> Void)? = nil
+    var onReply: ((String) -> Void)? = nil
 
     @State private var activeCitation: WebCitation?
+    @State private var selectedText = ""
 
     var body: some View {
         HStack {
@@ -3520,17 +3580,42 @@ private struct AIChatBubble: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
-                Group {
-                    if message.role == .assistant, !message.isError {
-                        Text(ChatMarkdown.attributed(message.text))
-                    } else {
-                        Text(message.text)
+                if let quote = message.quotedText {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Replying to Skim")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(SkimStyle.accent)
+                        Text(quote)
+                            .font(.system(size: 13))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .lineLimit(3)
+                    }
+                    .padding(.leading, 10)
+                    .overlay(alignment: .leading) {
+                        Rectangle().fill(SkimStyle.accent).frame(width: 2)
                     }
                 }
-                .font(.system(size: 17, weight: .regular))
-                .foregroundStyle(message.isError ? Color.red.opacity(0.95) : SkimStyle.text)
-                .lineSpacing(4)
-                .textSelection(.enabled)
+
+                SelectableChatText(
+                    text: message.role == .assistant && !message.isError ? ChatMarkdown.attributed(message.text) : AttributedString(message.text),
+                    sourceMarkdown: message.text,
+                    isError: message.isError,
+                    onReply: message.role == .assistant && !message.isError ? onReply : nil,
+                    onSelection: { selectedText = $0 }
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if message.role == .assistant, !message.isError, !selectedText.isEmpty, let onReply {
+                    Button {
+                        onReply(selectedText)
+                        selectedText = ""
+                    } label: {
+                        Label("Reply", systemImage: "arrowshape.turn.up.left")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(SkimStyle.accent)
+                }
 
                 if message.needsReauth, let onReauth {
                     Button {
@@ -3596,6 +3681,160 @@ private struct AIChatBubble: View {
         .sheet(item: $activeCitation) { citation in
             CitationBrowserSheet(citation: citation)
         }
+    }
+}
+
+/// UITextView provides native iOS text selection and copying while keeping
+/// the rendered Markdown attributes used by the chat bubble.
+private struct SelectableChatText: UIViewRepresentable {
+    var text: AttributedString
+    var sourceMarkdown: String
+    var isError: Bool
+    var onReply: ((String) -> Void)?
+    var onSelection: (String) -> Void
+
+    func makeUIView(context: Context) -> ChatSelectableTextView {
+        let view = ChatSelectableTextView()
+        view.delegate = context.coordinator
+        view.backgroundColor = .clear
+        view.isEditable = false
+        view.isSelectable = true
+        view.isScrollEnabled = false
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        view.font = .systemFont(ofSize: 17)
+        view.textColor = isError ? UIColor.systemRed : UIColor.label
+        view.linkTextAttributes = [.foregroundColor: UIColor.tintColor]
+        return view
+    }
+
+    func updateUIView(_ view: ChatSelectableTextView, context: Context) {
+        context.coordinator.onSelection = onSelection
+        context.coordinator.onReply = onReply
+        let rendered = makeRenderedText()
+        if view.attributedText != rendered {
+            view.attributedText = rendered
+            view.invalidateIntrinsicContentSize()
+        }
+        view.textColor = isError ? UIColor.systemRed : UIColor.label
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ChatSelectableTextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width.isFinite else { return nil }
+        return CGSize(width: width, height: uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
+    }
+
+    private func makeRenderedText() -> NSAttributedString {
+        let rendered = NSMutableAttributedString(attributedString: NSAttributedString(text))
+        let fullRange = NSRange(location: 0, length: rendered.length)
+        let baseFont = UIFont.systemFont(ofSize: 17)
+        rendered.addAttribute(.font, value: baseFont, range: fullRange)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = 4
+        rendered.addAttribute(.paragraphStyle, value: paragraph, range: fullRange)
+
+        for run in text.runs {
+            guard let intent = run.inlinePresentationIntent else { continue }
+            let prefix = String(text[text.startIndex..<run.range.lowerBound].characters)
+            let selected = String(text[run.range].characters)
+            let range = NSRange(location: prefix.utf16.count, length: selected.utf16.count)
+            let isCode = intent.contains(.code)
+            let isBold = intent.contains(.stronglyEmphasized)
+            let isItalic = intent.contains(.emphasized)
+            let font: UIFont
+            if isCode {
+                font = .monospacedSystemFont(ofSize: 15, weight: .regular)
+                rendered.addAttribute(.backgroundColor, value: UIColor.secondarySystemBackground, range: range)
+            } else if isBold && isItalic {
+                font = .systemFont(ofSize: 17, weight: .bold).withTraits(.traitItalic)
+            } else if isBold {
+                font = .boldSystemFont(ofSize: 17)
+            } else if isItalic {
+                font = .italicSystemFont(ofSize: 17)
+            } else {
+                continue
+            }
+            rendered.addAttribute(.font, value: font, range: range)
+        }
+
+        let renderedString = rendered.string as NSString
+        var searchLocation = 0
+        var headingCodeFence: (marker: Character, length: Int)?
+        for line in sourceMarkdown.split(separator: "\n") {
+            let trimmed = line.drop(while: { $0 == " " || $0 == "\t" })
+            let indentation = line.distance(from: line.startIndex, to: trimmed.startIndex)
+            if indentation <= 3, let marker = trimmed.first, marker == "`" || marker == "~" {
+                let length = trimmed.prefix(while: { $0 == marker }).count
+                if length >= 3 {
+                    let rest = trimmed.dropFirst(length).trimmingCharacters(in: .whitespaces)
+                    if let currentFence = headingCodeFence {
+                        if currentFence.marker == marker, length >= currentFence.length, rest.isEmpty {
+                            headingCodeFence = nil
+                        }
+                    } else {
+                        headingCodeFence = (marker, length)
+                    }
+                    continue
+                }
+            }
+            if headingCodeFence != nil { continue }
+            let heading = line.prefix(while: { $0 == "#" }).count
+            guard (1...6).contains(heading), line.count > heading, line[line.index(line.startIndex, offsetBy: heading)] == " " else { continue }
+            let title = String(line.dropFirst(heading + 1)).trimmingCharacters(in: .whitespaces)
+            guard !title.isEmpty else { continue }
+            let found = renderedString.range(of: title, options: [], range: NSRange(location: searchLocation, length: max(0, renderedString.length - searchLocation)))
+            guard found.location != NSNotFound else { continue }
+            let size = max(18, 24 - CGFloat(heading))
+            rendered.addAttribute(.font, value: UIFont.systemFont(ofSize: size, weight: .semibold), range: found)
+            searchLocation = NSMaxRange(found)
+        }
+        return rendered
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(onSelection: onSelection, onReply: onReply) }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var onSelection: (String) -> Void
+        var onReply: ((String) -> Void)?
+        init(onSelection: @escaping (String) -> Void, onReply: ((String) -> Void)?) {
+            self.onSelection = onSelection
+            self.onReply = onReply
+        }
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            guard let range = textView.selectedTextRange else { onSelection(""); return }
+            onSelection(textView.text(in: range)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+        }
+        func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            replyMenu(for: textView, suggestedActions: suggestedActions)
+        }
+        func textView(_ textView: UITextView, editMenuForTextInRanges ranges: [NSValue], suggestedActions: [UIMenuElement]) -> UIMenu? {
+            replyMenu(for: textView, suggestedActions: suggestedActions)
+        }
+        private func replyMenu(for textView: UITextView, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            guard let onReply else { return UIMenu(children: suggestedActions) }
+            let action = UIAction(title: "Reply", image: UIImage(systemName: "arrowshape.turn.up.left")) { [weak textView] _ in
+                guard let textView, let selection = textView.selectedTextRange,
+                      let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !quote.isEmpty else { return }
+                onReply(quote)
+            }
+            return UIMenu(children: suggestedActions + [action])
+        }
+    }
+}
+
+private final class ChatSelectableTextView: UITextView {
+    override var intrinsicContentSize: CGSize {
+        let width = bounds.width > 0 ? bounds.width : UIView.noIntrinsicMetric
+        guard width != UIView.noIntrinsicMetric else { return super.intrinsicContentSize }
+        return sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+    }
+}
+
+private extension UIFont {
+    func withTraits(_ traits: UIFontDescriptor.SymbolicTraits) -> UIFont {
+        let descriptor = fontDescriptor.withSymbolicTraits(fontDescriptor.symbolicTraits.union(traits)) ?? fontDescriptor
+        return UIFont(descriptor: descriptor, size: pointSize)
     }
 }
 

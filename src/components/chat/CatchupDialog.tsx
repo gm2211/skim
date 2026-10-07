@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import {
   CATCHUP_CANCELLED,
@@ -80,6 +80,61 @@ export function catchupScopeSummary(
   return `Read ${articles} from ${source}${window}.`;
 }
 
+/** Initials and a stable colour for a publication with no usable icon. */
+function publicationBadge(publication: string) {
+  const words = publication.replace(/^www\./i, "").split(/[\s.\-_]+/).filter(Boolean);
+  const initials = (words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? "S").slice(0, 2)).toUpperCase();
+  const palette = ["#1f52fa", "#ad1a2b", "#5aa1ab", "#ed3b21", "#c9a227", "#852b4d"];
+  let hash = 0;
+  for (const ch of publication) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return { initials, color: palette[hash % palette.length] };
+}
+
+/** A publication's favicon, or its initials when there is none or it fails. */
+function PublicationIcon({ source, size }: { source: CatchupSource; size: number }) {
+  const [failed, setFailed] = useState(false);
+  if (source.icon_url && !failed) {
+    return (
+      <img
+        src={source.icon_url}
+        alt=""
+        width={size}
+        height={size}
+        onError={() => setFailed(true)}
+        style={{ width: size, height: size, borderRadius: 6, background: "rgba(255,255,255,0.9)", padding: 2, display: "block" }}
+      />
+    );
+  }
+  const { initials, color } = publicationBadge(source.publication);
+  return (
+    <span
+      aria-hidden="true"
+      className="flex items-center justify-center text-white"
+      style={{ width: size, height: size, borderRadius: 6, background: color, fontSize: size * 0.42, fontWeight: 800 }}
+    >
+      {initials}
+    </span>
+  );
+}
+
+/** A story's picture; it removes itself when the image cannot load. */
+function StoryImage({ src, style, onClick }: { src: string; style: CSSProperties; onClick?: () => void }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      onClick={onClick}
+      className={onClick ? "cursor-pointer" : undefined}
+      style={{ objectFit: "cover", background: "rgba(255,255,255,0.04)", display: "block", ...style }}
+    />
+  );
+}
+
 export function CatchupDialog({ onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
   const showSettings = useUiStore((s) => s.showSettings);
@@ -105,6 +160,10 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     () => catchupErrors.get(catchupCacheKey(catchupSelection.scope, catchupSelection.sinceHours)) ?? null
   );
   const [progress, setProgress] = useState<CatchupProgress | null>(null);
+  // How many stories have their lede in. The page prints those, plus the one
+  // being written, so each story lands on its own as soon as it is ready
+  // rather than the whole page arriving at the end.
+  const [written, setWritten] = useState(Number.POSITIVE_INFINITY);
   // The run currently in flight, so a stale response or a stopped run cannot
   // clobber a newer one — and so an unmount or a scope change mid-run knows
   // what to tell the backend to cancel.
@@ -128,6 +187,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     catchupSelection.sinceHours = sinceHours;
     const c = catchupCache.get(cacheKey);
     setReport(c && Date.now() - c.ts < CACHE_TTL_MS ? c.report : null);
+    setWritten(Number.POSITIVE_INFINITY);
     setError(catchupErrors.get(cacheKey) ?? null);
     setStopped(false);
   }, [cacheKey, scope, sinceHours]);
@@ -142,12 +202,14 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     setLoading(true);
     setError(null);
     setProgress(null);
+    setWritten(0);
     catchupErrors.delete(runKey);
     setReport(null);
     try {
       const nextReport = await generateCatchupReport(runScope, runSinceHours, id);
       if (activeRun.current !== id) return;
       setReport(nextReport);
+      setWritten(Number.POSITIVE_INFINITY);
       catchupCache.set(runKey, { report: nextReport, ts: Date.now() });
     } catch (caught) {
       if (activeRun.current !== id) return;
@@ -187,6 +249,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     listen<CatchupProgress>(CATCHUP_PROGRESS_EVENT, (event) => {
       if (event.payload.run_id !== activeRun.current) return;
       setProgress(event.payload);
+      setWritten(event.payload.stage === "done" ? Number.POSITIVE_INFINITY : event.payload.completed);
       const partial = event.payload.report;
       if (partial.stories.length > 0 || partial.briefs.length > 0) setReport(partial);
     }).then((fn) => {
@@ -220,61 +283,33 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     if (source?.url) openUrl(source.url);
   };
 
-  const renderSourceLink = (source: CatchupSource, index?: number) => (
-    <button
-      key={source.id}
-      onClick={(e) => {
-        e.stopPropagation();
-        openArticle(source.id);
-      }}
-      className="text-left min-w-0 group flex items-baseline"
-      style={{ fontSize: 11.5, lineHeight: 1.5, gap: 6 }}
-      title={source.title}
-    >
-      {index !== undefined && (
-        <span className="text-text-muted flex-shrink-0" style={{ fontVariantNumeric: "tabular-nums", minWidth: 12 }}>
-          {index + 1}
-        </span>
-      )}
-      <span className="min-w-0">
-        <span className="text-accent" style={{ fontWeight: 600 }}>
-          {source.publication}
-        </span>
-        <span className="text-text-muted group-hover:text-text-primary transition-colors">
-          {"  "}
-          {source.title}
-        </span>
-      </span>
-    </button>
-  );
-
   const citedSources = (articleIds: string[]) =>
     articleIds.map((id) => sourcesById.get(id)).filter((s): s is CatchupSource => !!s);
 
-  // Every article the story gathers, cited under it like a newspaper crediting
-  // its reporting: numbered, publication first, each one opening the article.
-  const renderSources = (articleIds: string[]) => {
+  // The articles behind a story, as a compact row of publication icons; each
+  // one opens its article, and hovering names it.
+  const renderRelated = (articleIds: string[]) => {
     const cited = citedSources(articleIds);
     if (cited.length === 0) return null;
     return (
-      <div style={{ marginTop: 10 }}>
-        <div className="text-text-muted" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase" }}>
-          {cited.length === 1 ? "Source" : `${cited.length} sources`}
-        </div>
-        <div className="flex flex-col" style={{ marginTop: 4, gap: 2 }}>
-          {cited.map((source, index) => renderSourceLink(source, index))}
-        </div>
-      </div>
-    );
-  };
-
-  // The article a brief came from, printed as a byline under it.
-  const renderByline = (articleIds: string[]) => {
-    const cited = citedSources(articleIds);
-    if (cited.length === 0) return null;
-    return (
-      <div className="flex flex-col" style={{ marginTop: 8, gap: 2 }}>
-        {cited.map((source) => renderSourceLink(source))}
+      <div className="flex items-center flex-wrap" style={{ marginTop: 10, gap: 6 }}>
+        {cited.map((source) => (
+          <button
+            key={source.id}
+            onClick={(e) => {
+              e.stopPropagation();
+              openArticle(source.id);
+            }}
+            title={source.title}
+            aria-label={`${source.title}, ${source.publication}`}
+            className="catchup-source-icon"
+          >
+            <PublicationIcon source={source} size={22} />
+          </button>
+        ))}
+        <span className="text-text-muted" style={{ fontSize: 11.5, fontWeight: 600, marginLeft: 2 }}>
+          {cited.length === 1 ? cited[0].publication : `${cited.length} sources`}
+        </span>
       </div>
     );
   };
@@ -304,71 +339,117 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     </div>
   );
 
-  const renderStory = (story: CatchupStory, index: number) => {
-    const lead = index === 0;
+  const renderLede = (story: CatchupStory, lead: boolean, writing: boolean) =>
+    story.lede ? (
+      <p
+        className="text-text-primary"
+        style={{
+          marginTop: lead ? 10 : 6,
+          fontSize: lead ? 15 : 13,
+          lineHeight: 1.6,
+          opacity: 0.86,
+          ...(lead ? {} : { display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
+        }}
+      >
+        {story.lede}
+      </p>
+    ) : writing ? (
+      renderLedeSkeleton(lead)
+    ) : null;
+
+  const renderHeadline = (story: CatchupStory, lead: boolean) => (
+    <h4
+      onClick={story.article_ids[0] ? () => openArticle(story.article_ids[0]) : undefined}
+      className={`catchup-headline text-text-primary ${story.article_ids[0] ? "cursor-pointer hover:text-accent transition-colors" : ""}`}
+      style={{
+        fontSize: lead ? (isPhone ? 25 : 30) : 18,
+        fontWeight: 700,
+        lineHeight: lead ? 1.15 : 1.25,
+        letterSpacing: lead ? -0.3 : -0.1,
+      }}
+    >
+      {story.headline}
+    </h4>
+  );
+
+  // The lead runs WSJ-style across the top: its picture full width, then a big
+  // headline, the lede and the row of related articles.
+  const renderLead = (story: CatchupStory, writing: boolean) => (
+    <article key={`0-${story.headline}`} className="story-rise-in">
+      {story.image_url && (
+        <StoryImage
+          src={story.image_url}
+          onClick={story.article_ids[0] ? () => openArticle(story.article_ids[0]) : undefined}
+          style={{ width: "100%", aspectRatio: "16 / 9", maxHeight: 340, marginBottom: 14, borderRadius: 10 }}
+        />
+      )}
+      {renderKicker(story.article_ids)}
+      {renderHeadline(story, true)}
+      {renderLede(story, true, writing)}
+      {renderRelated(story.article_ids)}
+    </article>
+  );
+
+  // Every other story: headline and lede beside a thumbnail, then its icons.
+  const renderStory = (story: CatchupStory, index: number, writing: boolean) => {
+    if (index === 0) return renderLead(story, writing);
+    const thumb = isPhone ? { width: 92, height: 70 } : { width: 150, height: 100 };
     return (
       <article
         key={`${index}-${story.headline}`}
         className="story-rise-in"
-        style={{
-          borderTop: lead ? undefined : "1px solid rgba(255,255,255,0.06)",
-          paddingTop: lead ? 0 : 18,
-          marginTop: lead ? 0 : 18,
-        }}
+        style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 18, marginTop: 18 }}
       >
-        {renderKicker(story.article_ids)}
-        <h4
-          onClick={story.article_ids[0] ? () => openArticle(story.article_ids[0]) : undefined}
-          className={`text-text-primary ${story.article_ids[0] ? "cursor-pointer hover:text-accent transition-colors" : ""}`}
-          style={{
-            fontSize: lead ? 23 : 16,
-            fontWeight: lead ? 700 : 650,
-            lineHeight: lead ? 1.2 : 1.3,
-            letterSpacing: lead ? -0.4 : -0.2,
-          }}
-        >
-          {story.headline}
-        </h4>
-        {story.lede ? (
-          <p
-            className="text-text-primary"
-            style={{
-              marginTop: lead ? 10 : 6,
-              fontSize: lead ? 14.5 : 13,
-              lineHeight: 1.65,
-              opacity: 0.86,
-            }}
-          >
-            {story.lede}
-          </p>
-        ) : loading ? (
-          renderLedeSkeleton(lead)
-        ) : null}
-        {renderSources(story.article_ids)}
+        <div className="flex items-start" style={{ gap: isPhone ? 12 : 18 }}>
+          <div className="min-w-0 flex-1">
+            {renderKicker(story.article_ids)}
+            {renderHeadline(story, false)}
+            {renderLede(story, false, writing)}
+          </div>
+          {story.image_url && (
+            <StoryImage
+              src={story.image_url}
+              onClick={story.article_ids[0] ? () => openArticle(story.article_ids[0]) : undefined}
+              style={{ ...thumb, flexShrink: 0, borderRadius: 8 }}
+            />
+          )}
+        </div>
+        {renderRelated(story.article_ids)}
       </article>
     );
   };
 
   const renderBrief = (brief: CatchupBrief, index: number) => {
     const firstId = brief.article_ids[0];
+    const first = citedSources(brief.article_ids)[0];
     return (
-      <li key={`${index}-${brief.text}`} className="story-rise-in flex items-start gap-2">
-        <span
-          className="text-accent flex-shrink-0"
-          style={{ fontSize: 13, lineHeight: 1.6 }}
-          aria-hidden="true"
-        >
-          &#8226;
-        </span>
+      <li key={`${index}-${brief.text}`} className="story-rise-in flex items-start" style={{ gap: 10 }}>
+        {first ? (
+          <button
+            onClick={() => openArticle(first.id)}
+            title={first.title}
+            aria-label={`${first.title}, ${first.publication}`}
+            className="catchup-source-icon flex-shrink-0"
+            style={{ marginTop: 1 }}
+          >
+            <PublicationIcon source={first} size={20} />
+          </button>
+        ) : (
+          <span style={{ width: 20 }} />
+        )}
         <div className="min-w-0 flex-1">
           <p
             onClick={firstId ? () => openArticle(firstId) : undefined}
             className={`text-text-primary ${firstId ? "cursor-pointer hover:text-accent transition-colors" : ""}`}
-            style={{ fontSize: 13, lineHeight: 1.6, opacity: 0.86 }}
+            style={{ fontSize: 13.5, lineHeight: 1.45, fontWeight: 550 }}
           >
             {brief.text}
           </p>
-          {renderByline(brief.article_ids.slice(0, 2))}
+          {first && (
+            <span className="text-text-muted" style={{ fontSize: 11.5 }}>
+              {first.publication}
+            </span>
+          )}
         </div>
       </li>
     );
@@ -630,7 +711,21 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 </p>
               )}
 
-              {report.stories.map((story, index) => renderStory(story, index))}
+              {report.stories
+                .slice(0, written + 1)
+                .map((story, index) => renderStory(story, index, loading && index >= written))}
+
+              {loading && report.stories.length > written + 1 && (
+                <p
+                  className="text-text-muted flex items-center"
+                  style={{ fontSize: 12, marginTop: 22, gap: 8 }}
+                >
+                  <span className="story-skeleton-line" style={{ width: 28, height: 6 }} />
+                  {report.stories.length - written - 1 === 1
+                    ? "1 more story on the way"
+                    : `${report.stories.length - written - 1} more stories on the way`}
+                </p>
+              )}
 
               {report.briefs.length > 0 && (
                 <div

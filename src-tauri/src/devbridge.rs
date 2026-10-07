@@ -29,6 +29,7 @@ use tauri::{Listener, Manager};
 /// a buffer the browser polls instead.
 const FORWARDED_EVENTS: &[&str] = &[
     crate::commands::editions::TODAY_LEDE_PROGRESS_EVENT,
+    crate::commands::ai::CATCHUP_PROGRESS_EVENT,
     "theme_progress",
     "triage_progress",
     "model-download-progress",

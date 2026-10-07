@@ -379,6 +379,8 @@ export interface CatchupStory {
   headline: string;
   lede: string;
   article_ids: string[];
+  /** The picture printed with the story, from the first article that has one. */
+  image_url?: string | null;
 }
 /** A one-line item below the fold. */
 export interface CatchupBrief {
@@ -392,6 +394,10 @@ export interface CatchupSource {
   publication: string;
   url: string | null;
   published_at: number | null;
+  /** The article's own picture, when its feed carried one. */
+  image_url?: string | null;
+  /** The publication's icon, shown in the row of related articles. */
+  icon_url?: string | null;
 }
 export interface CatchupReport {
   stories: CatchupStory[];

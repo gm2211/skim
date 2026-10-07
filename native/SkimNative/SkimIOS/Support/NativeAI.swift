@@ -429,21 +429,6 @@ enum NativeAI {
     /// Raised from the old hardcoded 35 so larger inboxes get real coverage.
     static let catchUpArticleLimit = 1000
 
-    static func quickCatchUp(articles: [Article], settings: AppSettings) async throws -> String {
-        try await complete(
-            settings: settings,
-            instructions: """
-            You write crisp catch-up reports for a news/RSS reader. Be useful, specific, and concise. Use Markdown headings and bullets. Whenever you mention a specific article, cite it with its numeric handle like [3] and its title so the app can make it clickable.
-            """,
-            prompt: """
-            Create a Super Quick Catch-up from these articles. Group related items into themes, name what matters, and keep it scannable.
-
-            \(articleDigest(articles, limit: catchUpArticleLimit, budget: catchUpDigestBudget(settings: settings)))
-            """,
-            maxTokens: 700
-        )
-    }
-
     /// Structured catch-up items, still produced by the Foundation Models
     /// guided-generation path and by the legacy JSON shape.
     struct CatchUpItem {
@@ -528,16 +513,16 @@ enum NativeAI {
 
     /// Pass one: pick the stories, group the articles under them, and write the
     /// headlines. Returns nil when the model's answer cannot be read, so the
-    /// caller can fall back to the plain-text catch-up.
+    /// caller can draft the page from the articles instead.
     static func catchUpPicks(articles: [Article], settings: AppSettings) async throws -> CatchUpPage? {
-#if canImport(FoundationModels)
-        if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
-            // Guided generation already returns a clean list; keep its
-            // headlines and let the second pass write the ledes.
-            let items = try await quickCatchUpStructuredFM(articles: articles)
-            return frontPage(fromLegacy: items, articleCount: articles.count)
+        // On-device models skip this pass: one prompt over the whole listing
+        // is the slowest step of the run on a phone, and small models (Gemma 3
+        // 1B) rarely answer it with JSON that can be read. The page is drafted
+        // straight from the articles instead, so the first story shows at once
+        // and the model only writes the ledes.
+        if catchUpRunsOnDevice(settings) {
+            return catchUpDraft(articles: articles)
         }
-#endif
 
         let raw = try await complete(
             settings: settings,
@@ -580,6 +565,28 @@ enum NativeAI {
             return frontPage(fromLegacy: items, articleCount: articles.count)
         }
         return nil
+    }
+
+    /// Providers that run the model on the phone itself.
+    static func catchUpRunsOnDevice(_ settings: AppSettings) -> Bool {
+        ["mlx", "foundation-models"].contains(settings.ai.provider)
+    }
+
+    /// The front page drafted from the articles alone (see `CatchUpDraft`):
+    /// related coverage grouped, each story under its best article's headline,
+    /// ledes left for the second pass.
+    static func catchUpDraft(articles: [Article]) -> CatchUpPage {
+        let draft = CatchUpDraft.frontPage(
+            articles,
+            maxStories: catchUpMaxStories,
+            maxBriefs: catchUpMaxBriefs,
+            maxCitationsPerStory: catchUpMaxCitationsPerStory,
+            maxCitationsPerBrief: catchUpMaxCitationsPerBrief
+        )
+        return CatchUpPage(
+            stories: draft.stories.map { CatchUpStory(headline: $0.text, lede: "", articleIndexes: $0.articleIndexes) },
+            briefs: draft.briefs.map { CatchUpBrief(text: $0.text, articleIndexes: $0.articleIndexes) }
+        )
     }
 
     /// Select a source passage under one headline; only an exact, bounded

@@ -59,7 +59,7 @@ describe("resolveMlxRepoId", () => {
 
   it("falls back to the device default when the saved model is not phone-friendly", () => {
     // A desktop-only model was saved, but the device is now a phone.
-    const repoId = resolveMlxRepoId({ model: "mlx-community/gemma-3-4b-it-4bit", local_model_path: null }, true);
+    const repoId = resolveMlxRepoId({ model: "mlx-community/gemma-4-e2b-it-4bit", local_model_path: null }, true);
     expect(repoId).toBe("mlx-community/Qwen3-1.7B-4bit");
   });
 });

@@ -73,7 +73,7 @@ enum ModelCatalog {
             choices.append(
                 ModelChoice(
                     id: legacy.repoId,
-                    label: "\(legacy.repoId) (legacy)",
+                    label: "\(legacy.label) (legacy)",
                     isAvailable: downloaded.contains(legacy.repoId),
                     detail: nil
                 )

@@ -4,6 +4,8 @@ import Foundation
 
 public enum MLXModelFamily: Sendable {
     case gemma
+    /// Gemma 4 changed the turn markup to `<|turn>` / `<turn|>`.
+    case gemma4
     case llama
     case qwen
     case phi
@@ -16,6 +18,8 @@ public enum MLXModelFamily: Sendable {
         switch self {
         case .gemma:
             return ["<end_of_turn>", "<eos>"]
+        case .gemma4:
+            return ["<turn|>", "<eos>"]
         case .llama:
             return ["<|eot_id|>", "<|end_of_text|>"]
         case .qwen:
@@ -35,7 +39,7 @@ public enum MLXModelFamily: Sendable {
     /// output via the `enable_thinking` additionalContext flag.
     public var supportsThinkingToggle: Bool {
         switch self {
-        case .qwen, .smol:
+        case .qwen, .smol, .gemma4:
             return true
         default:
             return false
@@ -46,6 +50,7 @@ public enum MLXModelFamily: Sendable {
         let lower = repoId.lowercased()
         if lower.contains("smollm") { return .smol }
         if lower.contains("lfm2") { return .lfm }
+        if lower.contains("gemma-4") || lower.contains("gemma4") { return .gemma4 }
         if lower.contains("gemma") { return .gemma }
         if lower.contains("llama") { return .llama }
         if lower.contains("qwen") { return .qwen }
@@ -115,6 +120,27 @@ public struct MLXSamplingPreset: Sendable, Equatable {
         "mlx-community/Phi-4-mini-instruct-4bit": MLXSamplingPreset(
             temperature: 0.3, topP: 0.95, repetitionPenalty: 1.1, repetitionContextSize: 64
         ),
+        // Qwen3.5 2B / 4B (non-thinking). Same low-temperature, light-penalty
+        // shape as Qwen3, which the chat eval already validated.
+        "mlx-community/Qwen3.5-2B-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
+        "mlx-community/Qwen3.5-4B-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
+        // LFM2.5 1.2B Instruct (Liquid recommends temperature 0.1, top-p 0.1
+        // and repetition penalty 1.05 for factual use; a little looser here
+        // to match the other compact models' answer length).
+        "mlx-community/LFM2.5-1.2B-Instruct-4bit": MLXSamplingPreset(
+            temperature: 0.2, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
+        // Gemma 4 E2B / E4B
+        "mlx-community/gemma-4-e2b-it-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.95, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
+        "mlx-community/gemma-4-e4b-it-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.95, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
         // Gemma 3n E2B
         "mlx-community/gemma-3n-E2B-it-lm-4bit": MLXSamplingPreset(
             temperature: 0.35, topP: 0.95, repetitionPenalty: 1.1, repetitionContextSize: 64
@@ -135,8 +161,10 @@ public struct MLXSamplingPreset: Sendable, Equatable {
 public enum LocalModelOutput {
     public static func sanitize(_ text: String, family: MLXModelFamily) -> String {
         var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        while result.hasPrefix("<think>") {
-            guard let end = result.range(of: "</think>") else { return "" }
+        // Qwen-style `<think>…</think>` and Gemma 4's `<|channel>thought…<channel|>`.
+        let reasoningBlocks = [("<think>", "</think>"), ("<|channel>", "<channel|>")]
+        while let close = reasoningBlocks.first(where: { result.hasPrefix($0.0) })?.1 {
+            guard let end = result.range(of: close) else { return "" }
             result = String(result[end.upperBound...])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }

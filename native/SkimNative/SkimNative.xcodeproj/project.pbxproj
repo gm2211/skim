@@ -12,8 +12,6 @@
 		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
 		1DC5A4B057212FB263947314 /* SmartFolderEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */; };
 		20D5454E94949C27DBAF38C5 /* AIErrorBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B61709B52E5986EFC1C3ECB /* AIErrorBox.swift */; };
-		214DC26687D7CFE6647B4E3C /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */; };
-		25F3EE8A8FEBDA2FC33DB56E /* Hub in Frameworks */ = {isa = PBXBuildFile; productRef = 8B0DFA296F4A48F6B090AFBC /* Hub */; };
 		2A601923CBA16F4DD268D2C9 /* NativeKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B69429F0218849C4A4E655 /* NativeKeychain.swift */; };
 		2AB0CE0EC7CED2383AD2A4EC /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1751E6AA54B6FF0B8F3606F3 /* ModelCatalog.swift */; };
 		31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89737FFF993802E562860605 /* AIDisclaimerLabel.swift */; };
@@ -36,7 +34,6 @@
 		949AEC33EE8019F0584D6253 /* ArticleExtractorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */; };
 		95446AAA3D78AA5861C2B0FF /* CatchUpSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74ABDAB8FC2EB5BC6017B9D7 /* CatchUpSession.swift */; };
 		96F49A7819D5D167616F137F /* LegalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8387834F563CFA86721EBF1D /* LegalView.swift */; };
-		9A48EFF3F29B3477E0CE9120 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = C72D1637C2C2401209468AAB /* MLXLLM */; };
 		A20D6777CCE9FF23884FB7F1 /* NativeClaudeOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */; };
 		AFD473138D9923FB717FE9E2 /* NativeAIGuardrailRefusalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D15E5B261AE4E05EEAE52DC /* NativeAIGuardrailRefusalTests.swift */; };
 		B953F0D786947B4765B2827E /* hackernoon-9m0.html in Resources */ = {isa = PBXBuildFile; fileRef = 7F972FCF70051CCDDFB99F04 /* hackernoon-9m0.html */; };
@@ -48,7 +45,7 @@
 		D5D2795C99FD3003AA0F056B /* NativeWebSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1B88832F456973EA297F0F /* NativeWebSearch.swift */; };
 		D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A483594667B890576E4D368D /* SkimNativeApp.swift */; };
 		DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BA45434D97C1ACA953B839 /* NativeMLX.swift */; };
-		DFC1782BE965DCD3BBEAFEC9 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = A6EF4FD219591BC7A9787950 /* MLX */; };
+		5E0A1C7D3B9F4E2A8C6D0B11 /* SkimMLXEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 5E0A1C7D3B9F4E2A8C6D0B12 /* SkimMLXEngine */; };
 		E0006C62ED6F6DE502164145 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9AD11F7D9C976F34C0C9347 /* RootView.swift */; };
 		E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */; };
 		F22F6907C7390FE6C195AD8C /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 96F35F36DD1B890E9DE5ACBA /* SkimCore */; };
@@ -128,10 +125,7 @@
 			files = (
 				568EFC6280529AB7F91222BD /* SkimCore in Frameworks */,
 				F77D922DF2F50121B27BDD3B /* SkimInferencePolicy in Frameworks */,
-				DFC1782BE965DCD3BBEAFEC9 /* MLX in Frameworks */,
-				214DC26687D7CFE6647B4E3C /* MLXLMCommon in Frameworks */,
-				9A48EFF3F29B3477E0CE9120 /* MLXLLM in Frameworks */,
-				25F3EE8A8FEBDA2FC33DB56E /* Hub in Frameworks */,
+				5E0A1C7D3B9F4E2A8C6D0B11 /* SkimMLXEngine in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -316,10 +310,7 @@
 			packageProductDependencies = (
 				8734D4E26C300D1AD49D4262 /* SkimCore */,
 				DC6D547D6D1E448AFD5E74FA /* SkimInferencePolicy */,
-				A6EF4FD219591BC7A9787950 /* MLX */,
-				01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */,
-				C72D1637C2C2401209468AAB /* MLXLLM */,
-				8B0DFA296F4A48F6B090AFBC /* Hub */,
+				5E0A1C7D3B9F4E2A8C6D0B12 /* SkimMLXEngine */,
 			);
 			productName = "Skim iOS";
 			productReference = D60276D39C8ED76452B2EB26 /* Skim iOS.app */;
@@ -377,9 +368,7 @@
 			mainGroup = 1A2D47319E7CFF24CC9F78AD;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				67D103D1C16F827F3B1E7819 /* XCRemoteSwiftPackageReference "mlx-swift" */,
-				8EFD0C399CD27477B350989C /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
-				9A45BD01B133ECCCE6766556 /* XCRemoteSwiftPackageReference "swift-transformers" */,
+				5E0A1C7D3B9F4E2A8C6D0B13 /* XCLocalSwiftPackageReference "../../shared/SkimMLXEngine" */,
 				DD3DF580024801F9AE4E4899 /* XCLocalSwiftPackageReference "../SkimCore" */,
 				98DD53F3341BA0D6BEF2F73E /* XCLocalSwiftPackageReference "../../shared/SkimInferencePolicy" */,
 			);
@@ -811,67 +800,28 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../SkimCore;
 		};
+		5E0A1C7D3B9F4E2A8C6D0B13 /* XCLocalSwiftPackageReference "../../shared/SkimMLXEngine" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../shared/SkimMLXEngine;
+		};
 /* End XCLocalSwiftPackageReference section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		67D103D1C16F827F3B1E7819 /* XCRemoteSwiftPackageReference "mlx-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ml-explore/mlx-swift.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.18.0;
-			};
-		};
-		8EFD0C399CD27477B350989C /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.21.0;
-			};
-		};
-		9A45BD01B133ECCCE6766556 /* XCRemoteSwiftPackageReference "swift-transformers" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/huggingface/swift-transformers";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
-		01AF9F9115F22E9DD2E51BE1 /* MLXLMCommon */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 8EFD0C399CD27477B350989C /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
-			productName = MLXLMCommon;
-		};
 		8734D4E26C300D1AD49D4262 /* SkimCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SkimCore;
-		};
-		8B0DFA296F4A48F6B090AFBC /* Hub */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 9A45BD01B133ECCCE6766556 /* XCRemoteSwiftPackageReference "swift-transformers" */;
-			productName = Hub;
 		};
 		96F35F36DD1B890E9DE5ACBA /* SkimCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SkimCore;
 		};
-		A6EF4FD219591BC7A9787950 /* MLX */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 67D103D1C16F827F3B1E7819 /* XCRemoteSwiftPackageReference "mlx-swift" */;
-			productName = MLX;
-		};
-		C72D1637C2C2401209468AAB /* MLXLLM */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 8EFD0C399CD27477B350989C /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
-			productName = MLXLLM;
-		};
 		DC6D547D6D1E448AFD5E74FA /* SkimInferencePolicy */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SkimInferencePolicy;
+		};
+		5E0A1C7D3B9F4E2A8C6D0B12 /* SkimMLXEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SkimMLXEngine;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

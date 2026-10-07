@@ -4,6 +4,9 @@ import Testing
 @Test func familiesUseExpectedTurnTerminatorsAndThinkingFlags() {
     let cases: [(String, MLXModelFamily, Set<String>, Bool)] = [
         ("mlx-community/gemma-3-1b-it-4bit", .gemma, ["<end_of_turn>", "<eos>"], false),
+        ("mlx-community/gemma-4-e2b-it-4bit", .gemma4, ["<turn|>", "<eos>"], true),
+        ("mlx-community/Qwen3.5-2B-4bit", .qwen, ["<|im_end|>", "<|endoftext|>"], true),
+        ("mlx-community/LFM2.5-1.2B-Instruct-4bit", .lfm, ["<|im_end|>", "<|endoftext|>"], false),
         ("mlx-community/Llama-3.2-1B-Instruct-4bit", .llama, ["<|eot_id|>", "<|end_of_text|>"], false),
         ("mlx-community/Qwen3-1.7B-4bit", .qwen, ["<|im_end|>", "<|endoftext|>"], true),
         ("mlx-community/Phi-4-mini-instruct-4bit", .phi, ["<|end|>", "<|endoftext|>"], false),
@@ -33,7 +36,12 @@ import Testing
         ("gemma-3n-E2B-it-lm-4bit", 0.35, 0.95, 1.1),
         ("Qwen3-8B-4bit", 0.3, 0.9, 1.05),
         ("Qwen3-30B-A3B-4bit", 0.3, 0.9, 1.05),
-        ("LFM2-1.2B-4bit", 0.3, 0.95, 1.05)
+        ("LFM2-1.2B-4bit", 0.3, 0.95, 1.05),
+        ("Qwen3.5-2B-4bit", 0.3, 0.9, 1.05),
+        ("Qwen3.5-4B-4bit", 0.3, 0.9, 1.05),
+        ("LFM2.5-1.2B-Instruct-4bit", 0.2, 0.9, 1.05),
+        ("gemma-4-e2b-it-4bit", 0.3, 0.95, 1.05),
+        ("gemma-4-e4b-it-4bit", 0.3, 0.95, 1.05)
     ]
     #expect(MLXSamplingPreset.presets.count == cases.count)
     for (repo, temperature, topP, repetition) in cases {
@@ -82,4 +90,9 @@ import Testing
     let text = "The tokens <eos> and <end_of_turn> are literal examples."
     #expect(LocalModelOutput.sanitize(text + " <end_of_turn> \n<eos> ", family: .gemma) == text)
     #expect(LocalModelOutput.sanitize("Answer<|im_end|>", family: .gemma) == "Answer<|im_end|>")
+}
+
+@Test func sanitizeDropsGemma4ThoughtChannel() {
+    let raw = "<|channel>thought\nplanning<channel|>The council approved it.<turn|>"
+    #expect(LocalModelOutput.sanitize(raw, family: .gemma4) == "The council approved it.")
 }

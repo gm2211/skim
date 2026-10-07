@@ -2,12 +2,8 @@ import Foundation
 #if canImport(UIKit)
 import UIKit
 #endif
-import Hub
-import MLX
-import MLXLMCommon
-import MLXLLM
-
 import SkimInferencePolicy
+import SkimMLXEngine
 
 // Preserve the app-module names used by SettingsSheet while sharing their implementation.
 typealias MLXModelFamily = SkimInferencePolicy.MLXModelFamily
@@ -20,9 +16,9 @@ actor MLXRunner {
     static let defaultRepoId = "mlx-community/gemma-3-1b-it-4bit"
 
     private var currentRepoId: String = MLXRunner.defaultRepoId
-    private var loadedContainer: ModelContainer?
+    private var loadedContainer: SkimMLXModel?
     private var loadedRepoId: String?
-    private var loadingTask: Task<ModelContainer, Error>?
+    private var loadingTask: Task<SkimMLXModel, Error>?
     private var loadingRepoId: String?
     private var progressSink: (@Sendable (Double) -> Void)?
     private var downloadTask: Task<Void, Error>?
@@ -63,6 +59,13 @@ actor MLXRunner {
             let stream = center.notifications(named: UIApplication.didEnterBackgroundNotification)
             for await _ in stream {
                 await self?.evict()
+            }
+        }
+        // The kept article prefix is the cheapest thing to give back.
+        Task { [weak self] in
+            let stream = center.notifications(named: UIApplication.didReceiveMemoryWarningNotification)
+            for await _ in stream {
+                await self?.dropPrefixCache()
             }
         }
         #endif
@@ -271,6 +274,10 @@ actor MLXRunner {
         loadingRepoId = nil
     }
 
+    func dropPrefixCache() async {
+        await loadedContainer?.clearPrefixCache()
+    }
+
     func isModelDownloaded(repoId: String) -> Bool {
         MLXRunner.isRepoDownloaded(repoId)
     }
@@ -291,30 +298,17 @@ actor MLXRunner {
 
         let sink = progressSink
         let task = Task { () throws -> Void in
-            let config = ModelConfiguration(id: repoId)
-            // Use a background URLSession so the OS can continue (or restart) the download
-            // even when the app is suspended or killed. Incomplete shard files are preserved
-            // across launches so the Hub library can resume from where it left off.
-            let hub = HubApi(useBackgroundSession: true)
-            _ = try await MLXLMCommon.downloadModel(
-                hub: hub,
-                configuration: config,
-                progressHandler: { progress in
-                    sink?(progress.fractionCompleted)
-                }
-            )
-
-            // MLXLMCommon.downloadModel only fetches *.safetensors and *.json. Newer
-            // repos (Qwen3 2507, SmolLM3, Gemma 3n) ship their chat template as a
-            // standalone chat_template.jinja, which the tokenizer loader reads from the
-            // model folder. Fetch it too so the model still works offline.
-            if !Task.isCancelled {
-                _ = try await hub.snapshot(from: Hub.Repo(id: repoId), matching: ["*.jinja"])
+            // A background URLSession lets the OS continue (or restart) the
+            // download while the app is suspended or killed; incomplete shard
+            // files survive across launches so the download resumes.
+            let downloader = SkimHubDownloader(useBackgroundSession: true)
+            _ = try await downloader.downloadModel(repoId: repoId) { progress in
+                sink?(progress.fractionCompleted)
             }
 
-            // swift-transformers' HubApi.snapshot() returns normally (rather than
-            // throwing) when the task is cancelled mid-download, so we must check
-            // explicitly here before treating the download as having succeeded.
+            // The Hub snapshot returns normally (rather than throwing) when
+            // the task is cancelled mid-download, so check explicitly before
+            // treating the download as having succeeded.
             if Task.isCancelled {
                 throw MLXError.cancelled
             }
@@ -411,22 +405,14 @@ actor MLXRunner {
     /// can hold hundreds of megabytes, which counts against the app's limit.
     private static let memoryConfigured: Void = {
         if ProcessInfo.processInfo.physicalMemory < 25 * gigabyte / 2 {
-            MLX.GPU.set(cacheLimit: 64 * 1024 * 1024)
+            SkimMLXRuntime.setCacheLimit(bytes: 64 * 1024 * 1024)
         }
     }()
 
     private static let gigabyte = UInt64(1024 * 1024 * 1024)
 
-    private static func checkPromptFits(_ tokens: Int) throws {
-        guard tokens > maxPromptTokens else { return }
-        throw MLXError.unavailable(
-            "This is too much text for the on-device model (\(tokens) tokens, it reads at most \(maxPromptTokens)). "
-                + "Narrow the time range, or use a cloud provider for long requests."
-        )
-    }
-
     @discardableResult
-    func ensureLoaded() async throws -> ModelContainer {
+    func ensureLoaded() async throws -> SkimMLXModel {
         guard MLXRunner.isAvailableOnThisRuntime else {
             throw MLXError.unavailable("MLX inference requires a real iPhone. The Simulator cannot run the MLX backend.")
         }
@@ -453,20 +439,11 @@ actor MLXRunner {
             throw MLXError.loadFailed("Model \(repoId) is not downloaded.")
         }
 
-        let sink = progressSink
         let family = MLXModelFamily.detect(from: repoId)
-        let task = Task { () throws -> ModelContainer in
+        let directory = MLXRunner.cacheDirectory(forRepo: repoId)
+        let task = Task { () throws -> SkimMLXModel in
             do {
-                let config = ModelConfiguration(
-                    id: repoId,
-                    extraEOSTokens: family.extraEOSTokens
-                )
-                return try await LLMModelFactory.shared.loadContainer(
-                    configuration: config,
-                    progressHandler: { progress in
-                        sink?(progress.fractionCompleted)
-                    }
-                )
+                return try await SkimMLXModel.load(directory: directory, family: family)
             } catch {
                 throw MLXError.loadFailed("Model files corrupted — tap to re-download. (\(error))")
             }
@@ -490,79 +467,42 @@ actor MLXRunner {
         }
     }
 
+    /// Loads the selected model in the background so the first question
+    /// doesn't pay for reading weights. Errors are left for the real request
+    /// to report.
+    func prewarm(repoId: String) async {
+        guard MLXRunner.isAvailableOnThisRuntime, MLXRunner.isRepoDownloaded(repoId) else { return }
+        setModel(repoId: repoId)
+        _ = try? await ensureLoaded()
+    }
+
     // MARK: - Core messages-based generation (shared implementation)
 
     /// Core completion from an arbitrary messages array. All other complete/stream
     /// variants delegate here after building their messages array.
+    ///
+    /// `reusablePrefixMarker` names the text that ends the part of the prompt
+    /// the next request will repeat (the article in article chat), so its
+    /// prefill can be reused instead of recomputed.
     func complete(
         messages: [[String: String]],
         maxTokens: Int,
         temperature: Float? = nil,
         topP: Float? = nil,
         repetitionPenalty: Float? = nil,
-        repetitionContextSize: Int? = nil
+        repetitionContextSize: Int? = nil,
+        reusablePrefixMarker: String? = nil
     ) async throws -> String {
-        try Task.checkCancellation()
-        let container = try await ensureLoaded()
-        try Task.checkCancellation()
-
-        // Resolve sampling params: caller override > per-model preset > hardcoded fallback
-        let preset = MLXSamplingPreset.preset(for: currentRepoId)
-        let resolvedTemperature = temperature ?? preset.temperature
-        let resolvedTopP = topP ?? preset.topP
-        let resolvedRepPenalty = repetitionPenalty ?? preset.repetitionPenalty
-        let resolvedRepCtxSize = repetitionContextSize ?? preset.repetitionContextSize
-
-        // maxTokens is passed directly into GenerateParameters so the TokenIterator
-        // can terminate internally without relying solely on the callback counting tokens.
-        let params = GenerateParameters(
+        try await generate(
+            messages: messages,
             maxTokens: maxTokens,
-            temperature: resolvedTemperature,
-            topP: resolvedTopP,
-            repetitionPenalty: resolvedRepPenalty,
-            repetitionContextSize: resolvedRepCtxSize
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            repetitionContextSize: repetitionContextSize,
+            reusablePrefixMarker: reusablePrefixMarker,
+            onToken: nil
         )
-        let family = MLXModelFamily.detect(from: currentRepoId)
-
-        do {
-            let raw = try await container.perform { (context: ModelContext) -> String in
-                try Task.checkCancellation()
-                let userInput = UserInput(
-                    messages: LocalChatMessages.prepare(messages: messages.map { LocalChatMessage(role: $0["role"] ?? "user", content: $0["content"] ?? "") }),
-                    additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
-                )
-                let lmInput = try await context.processor.prepare(input: userInput)
-                try Task.checkCancellation()
-                try MLXRunner.checkPromptFits(lmInput.text.tokens.size)
-
-                // Wrap in MLX.withError so C-layer errors (e.g. from MLXArray.eval during
-                // token sampling) become catchable Swift errors instead of calling fatalError
-                // and aborting the process. The scoped handler must be active on the same
-                // thread/task that MLX eval runs on — placing it inside container.perform's
-                // closure body guarantees that.
-                let result = try MLX.withError {
-                    try MLXLMCommon.generate(
-                        input: lmInput,
-                        parameters: params,
-                        context: context
-                    ) { (_: [Int]) in Task.isCancelled ? GenerateDisposition.stop : GenerateDisposition.more }
-                }
-                return result.output
-            }
-            try Task.checkCancellation()
-            return LocalModelOutput.sanitize(raw, family: family)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as MLX.MLXError {
-            // MLX C-layer runtime error surfaced via scoped withError handler.
-            // MLX.MLXError is mlx-swift's type (distinct from Skim's local MLXError);
-            // map it into Skim's error hierarchy so callers see a consistent type.
-            throw MLXError.generationFailed(error.localizedDescription)
-        } catch let error as MLXError {
-            throw error
-        } catch {
-            throw MLXError.generationFailed("\(error)")
-        }
     }
 
     /// Core streaming generation from an arbitrary messages array.
@@ -573,61 +513,65 @@ actor MLXRunner {
         topP: Float? = nil,
         repetitionPenalty: Float? = nil,
         repetitionContextSize: Int? = nil,
+        reusablePrefixMarker: String? = nil,
         onToken: @Sendable @escaping (String) -> Void
     ) async throws -> String {
-        let container = try await ensureLoaded()
-
-        // Resolve sampling params: caller override > per-model preset > hardcoded fallback
-        let preset = MLXSamplingPreset.preset(for: currentRepoId)
-        let resolvedTemperature = temperature ?? preset.temperature
-        let resolvedTopP = topP ?? preset.topP
-        let resolvedRepPenalty = repetitionPenalty ?? preset.repetitionPenalty
-        let resolvedRepCtxSize = repetitionContextSize ?? preset.repetitionContextSize
-
-        let params = GenerateParameters(
+        try await generate(
+            messages: messages,
             maxTokens: maxTokens,
-            temperature: resolvedTemperature,
-            topP: resolvedTopP,
-            repetitionPenalty: resolvedRepPenalty,
-            repetitionContextSize: resolvedRepCtxSize
+            temperature: temperature,
+            topP: topP,
+            repetitionPenalty: repetitionPenalty,
+            repetitionContextSize: repetitionContextSize,
+            reusablePrefixMarker: reusablePrefixMarker,
+            onToken: onToken
         )
-        let family = MLXModelFamily.detect(from: currentRepoId)
+    }
+
+    private func generate(
+        messages: [[String: String]],
+        maxTokens: Int,
+        temperature: Float?,
+        topP: Float?,
+        repetitionPenalty: Float?,
+        repetitionContextSize: Int?,
+        reusablePrefixMarker: String?,
+        onToken: (@Sendable (String) -> Void)?
+    ) async throws -> String {
+        try Task.checkCancellation()
+        let model = try await ensureLoaded()
+        try Task.checkCancellation()
+
+        // Resolve sampling params: caller override > per-model preset.
+        let preset = MLXSamplingPreset.preset(for: currentRepoId)
+        let sampling = SkimSampling(
+            maxTokens: maxTokens,
+            temperature: temperature ?? preset.temperature,
+            topP: topP ?? preset.topP,
+            repetitionPenalty: repetitionPenalty ?? preset.repetitionPenalty,
+            repetitionContextSize: repetitionContextSize ?? preset.repetitionContextSize
+        )
+        let prepared = LocalChatMessages.prepare(
+            messages: messages.map { LocalChatMessage(role: $0["role"] ?? "user", content: $0["content"] ?? "") }
+        )
 
         do {
-            let raw = try await container.perform { (context: ModelContext) -> String in
-                let userInput = UserInput(
-                    messages: LocalChatMessages.prepare(messages: messages.map { LocalChatMessage(role: $0["role"] ?? "user", content: $0["content"] ?? "") }),
-                    additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
-                )
-                let lmInput = try await context.processor.prepare(input: userInput)
-                try MLXRunner.checkPromptFits(lmInput.text.tokens.size)
-
-                // Async withError wraps the streaming loop so any MLX C-layer error
-                // emitted during token sampling (MLXArray.item / MLXArray.eval) is thrown
-                // as a Swift error instead of aborting the process via fatalError.
-                // Placed inside container.perform to ensure the scoped handler is active
-                // on the same task where MLX evaluation actually runs.
-                return try await MLX.withError {
-                    var accumulated = ""
-                    for await item in try MLXLMCommon.generate(
-                        input: lmInput,
-                        cache: nil,
-                        parameters: params,
-                        context: context
-                    ) {
-                        if let chunk = item.chunk {
-                            accumulated += chunk
-                            onToken(chunk)
-                        }
-                    }
-                    return accumulated
-                }
-            }
-            return LocalModelOutput.sanitize(raw, family: family)
-        } catch let error as MLX.MLXError {
-            // MLX C-layer runtime error surfaced via scoped withError handler.
-            // Map to Skim's error hierarchy for consistent error handling by callers.
-            throw MLXError.generationFailed(error.localizedDescription)
+            let result = try await model.generate(
+                messages: prepared,
+                sampling: sampling,
+                reusablePrefixMarker: reusablePrefixMarker,
+                maxPromptTokens: MLXRunner.maxPromptTokens,
+                onChunk: onToken
+            )
+            try Task.checkCancellation()
+            return LocalModelOutput.sanitize(result.text, family: model.family)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch SkimEngineError.generationFailed(let message) {
+            // An MLX C-layer runtime error, caught instead of aborting.
+            throw MLXError.generationFailed(message)
+        } catch let error as SkimEngineError {
+            throw MLXError.unavailable(error.localizedDescription)
         } catch let error as MLXError {
             throw error
         } catch {

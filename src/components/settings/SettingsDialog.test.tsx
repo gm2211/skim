@@ -43,7 +43,7 @@ describe("Settings provider drafts", () => {
     renderDialog();
     await user.selectOptions(await screen.findByRole("combobox", { name: "Provider" }), "mlx");
     await screen.findByText("On-device MLX runtime detected");
-    await user.selectOptions(screen.getByRole("combobox", { name: "On-device model" }), "mlx-community/gemma-3-1b-it-4bit");
+    await user.selectOptions(screen.getByRole("combobox", { name: "On-device model" }), "mlx-community/LFM2.5-1.2B-Instruct-4bit");
     expect(saveSettings).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(saveSettings).not.toHaveBeenCalled();

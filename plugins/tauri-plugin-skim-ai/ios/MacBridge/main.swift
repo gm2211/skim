@@ -1,10 +1,7 @@
 import Foundation
 import SkimInferencePolicy
 import FoundationModels
-import Hub
-import MLX
-import MLXLMCommon
-import MLXLLM
+import SkimMLXEngine
 
 struct Request: Decodable {
     let command: String
@@ -14,7 +11,12 @@ struct Request: Decodable {
     let messages: [LocalChatMessage]?
     let maxTokens: Int?
     let temperature: Float?
+    let topP: Float?
+    let repetitionPenalty: Float?
     let jsonMode: Bool?
+    /// Text ending the prompt part the next request will repeat; its model
+    /// state is kept so that request skips the prefill. Absent: no reuse.
+    let reusablePrefixMarker: String?
 }
 
 struct Availability: Codable {
@@ -29,6 +31,8 @@ struct Response: Encodable {
     let bool: Bool?
     let availability: Availability?
     let error: String?
+    /// Speed and memory for an `mlx_complete`, for the eval tool. The app ignores it.
+    var metrics: SkimGenerationMetrics? = nil
 }
 
 func cacheDirectory(_ repoId: String) -> URL {
@@ -82,48 +86,43 @@ func emitProgress(_ fraction: Double) {
 
 actor MLXWorker {
     private var repoId: String?
-    private var container: ModelContainer?
+    private var model: SkimMLXModel?
 
-    func complete(_ request: Request) async throws -> String {
-      let repo = try validatedRepoId(request.repoId ?? "mlx-community/gemma-3-1b-it-4bit")
+    /// Macs have the memory for long prompts; this only stops a runaway one.
+    private static let maxPromptTokens = 32_768
+
+    func complete(_ request: Request) async throws -> SkimGeneration {
+      let repo = try validatedRepoId(request.repoId ?? "mlx-community/Qwen3-4B-Instruct-2507-4bit")
       guard ModelChatTemplate.isUsable(in: cacheDirectory(repo)) else {
           throw NSError(domain: "SkimAI", code: 12, userInfo: [NSLocalizedDescriptionKey: "Model chat template missing or invalid — re-download this model."])
       }
       guard isDownloaded(repo) else { throw NSError(domain: "SkimAI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Model \(repo) is not downloaded."]) }
-      if container == nil || repoId != repo {
-        // Directory-backed loading needs the same family terminators as native iOS.
-        let extraEOSTokens = MLXModelFamily.detect(from: repo).extraEOSTokens
-        let configuration = ModelConfiguration(
-            directory: cacheDirectory(repo),
-            extraEOSTokens: extraEOSTokens
-        )
-        container = try await LLMModelFactory.shared.loadContainer(configuration: configuration) { emitProgress($0.fractionCompleted) }
+      if model == nil || repoId != repo {
+        model = nil
+        model = try await SkimMLXModel.load(directory: cacheDirectory(repo), family: MLXModelFamily.detect(from: repo))
         repoId = repo
       }
-      let container = container!
-      let family = MLXModelFamily.detect(from: repo)
+      let model = model!
       let preset = MLXSamplingPreset.preset(for: repo)
-      let input = UserInput(
-          messages: LocalChatMessages.prepare(messages: request.messages, system: request.system ?? "", user: request.user ?? "", jsonMode: request.jsonMode ?? false),
-          additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil
-      )
-      let parameters = GenerateParameters(
+      let sampling = SkimSampling(
           maxTokens: request.maxTokens ?? 512,
           temperature: request.temperature ?? preset.temperature,
-          topP: preset.topP,
-          repetitionPenalty: preset.repetitionPenalty,
+          topP: request.topP ?? preset.topP,
+          repetitionPenalty: request.repetitionPenalty ?? preset.repetitionPenalty,
           repetitionContextSize: preset.repetitionContextSize
       )
-      let raw = try await container.perform { context in
-        let prepared = try await context.processor.prepare(input: input)
-        let result = try MLXLMCommon.generate(input: prepared, parameters: parameters, context: context) { (_: [Int]) in GenerateDisposition.more }
-        return result.output
-      }
-      return LocalModelOutput.sanitize(raw, family: family)
+      let messages = LocalChatMessages.prepare(messages: request.messages, system: request.system ?? "", user: request.user ?? "", jsonMode: request.jsonMode ?? false)
+      let result = try await model.generate(
+          messages: messages,
+          sampling: sampling,
+          reusablePrefixMarker: request.reusablePrefixMarker,
+          maxPromptTokens: Self.maxPromptTokens
+      )
+      return SkimGeneration(text: LocalModelOutput.sanitize(result.text, family: model.family), metrics: result.metrics)
     }
 
     func evict(_ repo: String) {
-      if repoId == repo { container = nil; repoId = nil }
+      if repoId == repo { model = nil; repoId = nil }
     }
 }
 
@@ -140,20 +139,17 @@ func process(_ request: Request) async {
             emit(Response(ok: true, value: nil, bool: nil, availability: nil, error: nil))
         case "mlx_download":
             let repo = try validatedRepoId(request.repoId)
-            let hub = HubApi()
             try Task.checkCancellation()
-            _ = try await MLXLMCommon.downloadModel(hub: hub, configuration: ModelConfiguration(id: repo)) { emitProgress($0.fractionCompleted) }
-            try Task.checkCancellation()
-            // The model downloader excludes standalone templates; snapshot reuses
-            // cached weights and fetches only the repository's authoritative Jinja.
-            _ = try await hub.snapshot(from: Hub.Repo(id: repo), matching: ["*.jinja"])
+            _ = try await SkimHubDownloader(useBackgroundSession: false).downloadModel(repoId: repo) { emitProgress($0.fractionCompleted) }
             try Task.checkCancellation()
             guard ModelChatTemplate.isUsable(in: cacheDirectory(repo)) else {
                 throw NSError(domain: "SkimAI", code: 12, userInfo: [NSLocalizedDescriptionKey: "Model chat template missing or invalid — re-download this model."])
             }
             await mlxWorker.evict(repo)
             emit(Response(ok: true, value: nil, bool: nil, availability: nil, error: nil))
-        case "mlx_complete": emit(Response(ok: true, value: try await mlxWorker.complete(request), bool: nil, availability: nil, error: nil))
+        case "mlx_complete":
+            let result = try await mlxWorker.complete(request)
+            emit(Response(ok: true, value: result.text, bool: nil, availability: nil, error: nil, metrics: result.metrics))
         case "fm_availability":
             if #available(macOS 26.0, *) { emit(Response(ok: true, value: nil, bool: nil, availability: foundationAvailability(), error: nil)) }
             else { emit(Response(ok: true, value: nil, bool: nil, availability: Availability(available: false, status: "unsupported-os", message: "Apple Foundation Models require macOS 26 or later."), error: nil)) }

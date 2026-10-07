@@ -85,6 +85,7 @@ struct ArticleDetailView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
             .presentationBackground(SkimStyle.chrome)
+            .onAppear(perform: prewarmLocalModel)
         }
         .sheet(item: $activeAIChat) { request in
             AIChatSheet(
@@ -95,6 +96,7 @@ struct ArticleDetailView: View {
                 .environmentObject(model)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+                .onAppear(perform: prewarmLocalModel)
                 .onDisappear { activeChatInitialMessage = nil }
         }
         .fullScreenCover(isPresented: $showAIDisclaimerGate) {
@@ -267,6 +269,13 @@ struct ArticleDetailView: View {
         await model.toggleStar(article)
         article.isStarred.toggle()
         self.article = article
+    }
+
+    /// Starts reading the on-device model's weights while the person is
+    /// still choosing options or typing, so the first answer starts sooner.
+    private func prewarmLocalModel() {
+        guard model.settings.ai.provider == "mlx" else { return }
+        NativeMLX.prewarm(settings: model.settings.ai)
     }
 
     private func presentSummary() {

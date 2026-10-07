@@ -23,6 +23,13 @@ import Testing
         // happens to be the correct bucket for the real ~3.8B model.
         ("mlx-community/Phi-4-mini-instruct-4bit", .mid),
         ("mlx-community/gemma-3n-E2B-it-lm-4bit", .compact),
+        // A version number before the size ("3.5-", "2.5-", "4-") is not
+        // followed by B, so the size token still wins.
+        ("mlx-community/Qwen3.5-2B-4bit", .compact),
+        ("mlx-community/Qwen3.5-4B-4bit", .mid),
+        ("mlx-community/LFM2.5-1.2B-Instruct-4bit", .compact),
+        ("mlx-community/gemma-4-e2b-it-4bit", .compact),
+        ("mlx-community/gemma-4-e4b-it-4bit", .mid),
     ]
     for (repoId, expected) in expectations {
         #expect(LocalModelTier.tier(for: repoId) == expected, "\(repoId) should be \(expected)")

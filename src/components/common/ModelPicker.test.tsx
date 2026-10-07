@@ -90,13 +90,13 @@ describe("ModelPicker", () => {
   });
 
   it("disables an MLX model that is not downloaded and saves both model fields for one that is", async () => {
-    const downloaded = "mlx-community/gemma-3-1b-it-4bit";
+    const downloaded = "mlx-community/LFM2.5-1.2B-Instruct-4bit";
     vi.mocked(commands.mlxIsModelDownloaded).mockImplementation(async (repoId: string) => repoId === downloaded);
     renderPicker("today", settingsWith({ provider: "mlx", model: null, local_model_path: null }));
 
     const combo = await screen.findByRole("combobox", { name: "AI model" });
     await waitFor(() => {
-      const notDownloaded = screen.getByRole("option", { name: /LFM2 1\.2B/ }) as HTMLOptionElement;
+      const notDownloaded = screen.getByRole("option", { name: /Qwen3\.5 2B/ }) as HTMLOptionElement;
       expect(notDownloaded.disabled).toBe(true);
     });
 

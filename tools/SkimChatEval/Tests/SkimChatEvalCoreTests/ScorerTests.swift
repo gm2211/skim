@@ -122,3 +122,38 @@ private let necroprintingCase = ChatEvalCase(
     #expect(!ChatAnswerScorer.score(answer: "One. Two. Three.", testCase: testCase).passed)
     #expect(ChatAnswerScorer.score(answer: "One. Two.", testCase: testCase).passed)
 }
+
+// MARK: - Summary faithfulness
+
+private let bridgeSummaryCase = SummaryEvalCase(
+    name: "bridge_medium",
+    article: "bridge_late_numeric_fact",
+    length: "medium",
+    mustContainAny: [["42.7"], ["eleven weeks", "11 weeks"]],
+    mustNotContain: ["behind schedule"]
+)
+
+private let bridgeBody = "The rehabilitation took fourteen months, cost $42.7 million, replaced roughly 14,000 rivets, and finished eleven weeks ahead of the revised schedule."
+
+@Test func summaryScorerPassesFaithfulSummary() {
+    let summary = "The bridge reopened after a 14-month, $42.7 million rehabilitation that replaced 14,000 rivets and finished 11 weeks ahead of the revised schedule."
+    let result = SummaryScorer.score(summary: summary, testCase: bridgeSummaryCase, articleBody: bridgeBody, wordCount: 150)
+    #expect(result.passed, "\(result.failures)")
+}
+
+@Test func summaryScorerFlagsInventedNumber() {
+    let summary = "The $42.7 million project finished eleven weeks early and added 300 parking spaces."
+    let result = SummaryScorer.score(summary: summary, testCase: bridgeSummaryCase, articleBody: bridgeBody, wordCount: 150)
+    #expect(!result.passed)
+    #expect(result.failures.map(\.rule) == ["unsupportedNumber"])
+}
+
+@Test func summaryScorerFlagsOverlongSummary() {
+    let summary = Array(repeating: "The $42.7 million bridge finished eleven weeks early.", count: 10).joined(separator: " ")
+    let result = SummaryScorer.score(summary: summary, testCase: bridgeSummaryCase, articleBody: bridgeBody, wordCount: 30)
+    #expect(result.failures.map(\.rule) == ["tooLong"])
+}
+
+@Test func summaryNumbersReadDigitsAndWords() {
+    #expect(SummaryScorer.numbers(in: "$42.7 million, 14,000 rivets, eleven weeks, the 1920s, one of them") == ["42.7", "14000", "11", "1920"])
+}

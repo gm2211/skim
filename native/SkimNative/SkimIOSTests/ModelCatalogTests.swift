@@ -47,24 +47,32 @@ struct ModelCatalogTests {
     // MARK: - mlxChoices
 
     @Test func testMLXChoicesMarksAvailabilityFromDownloadedSet() {
+        let downloaded: Set<String> = ["mlx-community/LFM2.5-1.2B-Instruct-4bit"]
+        let choices = ModelCatalog.mlxChoices(downloaded: downloaded, current: "mlx-community/LFM2.5-1.2B-Instruct-4bit")
+        let lfm = choices.first { $0.id == "mlx-community/LFM2.5-1.2B-Instruct-4bit" }
+        let qwen = choices.first { $0.id == "mlx-community/Qwen3-1.7B-4bit" }
+        #expect(lfm?.isAvailable == true)
+        #expect(qwen?.isAvailable == false)
+    }
+
+    @Test func testMLXChoicesNamesRetiredModelInLegacyEntry() {
         let downloaded: Set<String> = ["mlx-community/gemma-3-1b-it-4bit"]
         let choices = ModelCatalog.mlxChoices(downloaded: downloaded, current: "mlx-community/gemma-3-1b-it-4bit")
         let gemma = choices.first { $0.id == "mlx-community/gemma-3-1b-it-4bit" }
-        let qwen = choices.first { $0.id == "mlx-community/Qwen3-1.7B-4bit" }
+        #expect(gemma?.label == "Gemma 3 1B (legacy)")
         #expect(gemma?.isAvailable == true)
-        #expect(qwen?.isAvailable == false)
     }
 
     @Test func testMLXChoicesAppendsLegacyEntryForUnknownCurrent() {
         let choices = ModelCatalog.mlxChoices(downloaded: [], current: "mlx-community/some-removed-model-4bit")
         let legacy = choices.first { $0.id == "mlx-community/some-removed-model-4bit" }
         #expect(legacy != nil)
-        #expect(legacy?.label.hasSuffix("(legacy)") == true)
+        #expect(legacy?.label == "mlx-community/some-removed-model-4bit (legacy)")
         #expect(legacy?.isAvailable == false)
     }
 
     @Test func testMLXChoicesOmitsLegacyEntryWhenCurrentIsCataloged() {
-        let choices = ModelCatalog.mlxChoices(downloaded: [], current: "mlx-community/gemma-3-1b-it-4bit")
+        let choices = ModelCatalog.mlxChoices(downloaded: [], current: "mlx-community/Qwen3-1.7B-4bit")
         let legacyCount = choices.filter { $0.label.hasSuffix("(legacy)") }.count
         #expect(legacyCount == 0)
     }

@@ -628,3 +628,11 @@ select option {
   .today-story-cell:first-child p { max-width: 780px; font-size: 16px; }
   .today-masthead h2 { font-size: 32px; }
 }
+
+/* Pointer controls use desktop density; touch controls retain their spacing. */
+@media (min-width: 601px) and (pointer: fine) {
+  html {
+    --skim-control-height: 32px;
+    --skim-control-padding: 5px 30px 5px 10px;
+  }
+}

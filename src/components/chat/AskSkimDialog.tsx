@@ -14,12 +14,14 @@ import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { ModelPicker } from "../common/ModelPicker";
 import { Select } from "../ui/Select";
+import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./ChatMessageContent";
 
 type Scope = "inbox" | "unread" | "all";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
+  reply?: ChatReply;
   sources?: ChatSource[];
   articleIds?: string[];
 }
@@ -47,6 +49,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(open && isPhone, onClose);
   const [scope, setScope] = useState<Scope>("unread");
   const [input, setInput] = useState("");
+  const [reply, setReply] = useState<ChatReply | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [completedSends, setCompletedSends] = useState(0);
@@ -81,17 +84,18 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
     if (!query || loading || needsSetup) return;
     setError(null);
 
-    const userMsg: Message = { role: "user", content: query };
+    const userMsg: Message = { role: "user", content: query, reply: reply ?? undefined };
     const next = [...messages, userMsg];
     setMessages(next);
     setInput("");
+    setReply(null);
     focusAfterSend.current = true;
     setLoading(true);
 
-    const history: ChatMessageInput[] = messages.map((m) => ({ role: m.role, content: m.content }));
+    const history: ChatMessageInput[] = messages.map((m) => ({ role: m.role, content: chatPrompt(m.content, m.reply) }));
 
     try {
-      const resp: ArticleChatResponse = await chatWithArticles(scope, query, history, [...messages].reverse().find((message) => message.role === "assistant")?.articleIds);
+      const resp: ArticleChatResponse = await chatWithArticles(scope, chatPrompt(query, reply), history, [...messages].reverse().find((message) => message.role === "assistant")?.articleIds);
       setMessages((m) => [
         ...m,
         { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids },
@@ -100,6 +104,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
       setError(String(e instanceof Error ? e.message : e));
       setMessages((m) => m.slice(0, -1));
       setInput(query);
+      setReply(reply);
     } finally {
       setLoading(false);
       setCompletedSends((count) => count + 1);
@@ -120,8 +125,8 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
         className={`${isPhone ? "fixed left-0 right-0 overflow-hidden" : "border border-white/10 rounded-2xl shadow-2xl"} flex flex-col`}
         style={{
           background: "var(--color-bg-secondary)",
-          width: isPhone ? undefined : "min(720px, 92vw)",
-          height: isPhone ? "100dvh" : "min(720px, 85vh)",
+          width: isPhone ? undefined : "min(640px, 92vw)",
+          height: isPhone ? "100dvh" : "min(600px, 85vh)",
           top: isPhone ? 0 : undefined,
           willChange: isPhone ? "transform, height" : undefined,
           ...swipeToDismissStyle,
@@ -134,21 +139,21 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
         {/* Header */}
         <div
           className="flex items-center gap-3 border-b border-border flex-wrap"
-          style={{ padding: isPhone ? "12px 16px" : "20px 24px", touchAction: isPhone ? "pan-y" : undefined }}
+          style={{ padding: "12px 16px", touchAction: isPhone ? "pan-y" : undefined }}
           {...swipeToDismissHandlers}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-accent flex-shrink-0">
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
           </svg>
-          <h3 id="ask-skim-title" className="text-text-primary flex-1" style={{ fontSize: 20, fontWeight: 600 }}>
+          <h3 id="ask-skim-title" className="text-text-primary flex-1" style={{ fontSize: isPhone ? 20 : 16, fontWeight: 600 }}>
             Ask Skim
           </h3>
           <Select
             aria-label="Articles to search"
             value={scope}
             onChange={(e) => setScope(e.target.value as Scope)}
-            style={{ fontSize: 14 }}
+            style={{ fontSize: isPhone ? 14 : 12 }}
           >
             <option value="inbox">Inbox</option>
             <option value="unread">Unread</option>
@@ -158,6 +163,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
           <button
             onClick={onClose}
             className="tap-target text-text-muted hover:text-text-primary transition-colors flex-shrink-0 rounded-lg hover:bg-white/10"
+            style={!isPhone ? { minWidth: "var(--skim-control-height, 44px)", minHeight: "var(--skim-control-height, 44px)", width: "var(--skim-control-height, 44px)", height: "var(--skim-control-height, 44px)" } : undefined}
             title="Close (Esc)"
             aria-label="Close"
           >
@@ -198,11 +204,11 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
                     padding: "10px 14px",
                     fontSize: 13,
                     maxWidth: "88%",
-                    whiteSpace: "pre-wrap",
                     wordBreak: "break-word",
                   }}
                 >
-                  {m.content}
+                  {m.reply && <ReplyPreview reply={m.reply} />}
+                  <ChatMessageContent content={m.content} role={m.role} onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }} replyDisabled={loading} />
                 </div>
               </div>
               {m.role === "assistant" && m.sources && m.sources.length > 0 && (
@@ -246,6 +252,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
 
         {/* Input */}
         <div className="border-t border-white/5 min-w-0" style={{ padding: "12px 16px 8px" }}>
+          {reply && <ReplyPreview reply={reply} onRemove={() => setReply(null)} />}
           <div className="flex items-center gap-2 min-w-0">
             <textarea
               ref={inputRef}

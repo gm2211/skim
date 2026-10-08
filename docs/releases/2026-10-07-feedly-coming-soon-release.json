@@ -1,0 +1,63 @@
+{
+  "ios_version": "0.1.14",
+  "ios_build": "79",
+  "bundle_id": "com.gm2211.skim",
+  "source_commit": "f24014433bc64358458f237f9b4d4ea409b39c4f",
+  "source_pr": "https://github.com/gm2211/skim/pull/189",
+  "feature": "Feedly coming-soon sign-in preview",
+  "requested_copy": {
+    "action": "Sign in with Feedly",
+    "badge": "Coming soon",
+    "note": "Feedly developer access costs $96/year.",
+    "price_note_provenance": "Exact user-requested display copy; this release does not independently establish API or OAuth pricing."
+  },
+  "ios_binary_sha256": "1de85b2e7797dda8ee4f88ae326e2e9507a21717c06048940eeb7d573fc4be15",
+  "ios_dsym_uuid": "822C4540-08D5-36CE-A735-EF8A686EBED4",
+  "verified_at": "2026-10-07T22:50:05.921487+00:00",
+  "tests": {
+    "existing_feedly_import_and_dialog": 4,
+    "typescript": true,
+    "vite_production_build": true,
+    "independent_review": "No actionable findings"
+  },
+  "browser_qa": {
+    "actual_component_with_mock_tauri_bridge": true,
+    "disabled_sign_in": true,
+    "cost_note": true,
+    "export_dispatch": true,
+    "opml_picker_enabled": true,
+    "desktop_layout": true,
+    "viewport_320x568_scrolls_with_header_and_tabs_visible": true
+  },
+  "native_validation": {
+    "signed_release_archive": true,
+    "archive_metadata_verified": true,
+    "signature_verified": true,
+    "physical_device_install_not_performed": true
+  },
+  "testflight": {
+    "app_id": "6764192071",
+    "build_id": "5ff905c6-9ace-4771-bbbd-e91e1ef139d6",
+    "version": "0.1.14",
+    "build": "79",
+    "upload_completed": true,
+    "uploaded_at": "2026-10-07T15:47:54-07:00",
+    "processing": "VALID",
+    "audience": "INTERNAL_ONLY",
+    "internal_build_state": "IN_BETA_TESTING",
+    "install_available": true,
+    "auto_notify_enabled": true,
+    "internal_group": {
+      "id": "8585aadc-ad81-4d36-9de1-1fdfebce1db7",
+      "name": "me",
+      "isInternalGroup": true,
+      "hasAccessToAllBuilds": true
+    },
+    "group_access_verified": true
+  },
+  "merge_status": {
+    "state": "OPEN",
+    "blocker": "GitHub requires review; admin override was rejected by automatic approval review and has not been authorized.",
+    "follow_up_bead": "skim-yho5"
+  }
+}

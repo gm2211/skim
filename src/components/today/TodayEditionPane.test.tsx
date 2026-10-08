@@ -12,6 +12,7 @@ import { useUiStore } from "../../stores/uiStore";
 
 vi.mock("../../services/commands", () => ({
   getOrGenerateTodayEdition: vi.fn(),
+  getArticle: vi.fn(async () => null),
   refreshAllFeeds: vi.fn(),
   triageArticles: vi.fn(),
   listTodayEditionItems: vi.fn(),
@@ -142,6 +143,7 @@ function renderPane(strict = false, cached?: TodayEditionView) {
 }
 
 beforeEach(() => {
+  vi.mocked(commands.getArticle).mockResolvedValue({ content_html: null } as Awaited<ReturnType<typeof commands.getArticle>>);
   vi.mocked(openUrl).mockReset();
   vi.mocked(listen).mockClear();
   useUiStore.setState({ selectedArticleId: null });
@@ -160,6 +162,20 @@ afterEach(() => {
 });
 
 describe("TodayEditionPane", () => {
+  it("uses a report image, skips tracking pixels, and removes a failed image", async () => {
+    vi.mocked(commands.getArticle).mockResolvedValue({
+      id: "article-default", url: "https://example.com/news/story",
+      content_html: '<img src="/pixel.gif" width="1"><img src="/photo.jpg" width="900">',
+    } as Awaited<ReturnType<typeof commands.getArticle>>);
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    const image = await screen.findByRole("img", { name: "Image from report: Default snapshot title" });
+    expect(image).toHaveAttribute("src", "https://example.com/photo.jpg");
+    fireEvent.error(image);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Default snapshot title" })).toBeVisible();
+  });
+
   it("mounts the today model picker for this surface", async () => {
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
@@ -331,7 +347,7 @@ describe("TodayEditionPane", () => {
     renderPane();
 
     fireEvent.click(await screen.findByRole("button", { name: "1 report" }));
-    expect(screen.getByText("example.com")).toBeInTheDocument();
+    expect(screen.getAllByText("example.com")).toHaveLength(2);
     expect(screen.queryByText("Feed One")).not.toBeInTheDocument();
   });
 

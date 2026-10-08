@@ -1,6 +1,8 @@
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { TodayEditionItem, TodayEditionMemberArticle } from "../../services/types";
+
+import { useArticle } from "../../hooks/useArticles";
 
 export type StoryRank = "lead" | "story" | "brief";
 
@@ -98,6 +100,30 @@ function PreviewAttribution({ member, onOpenArticle }: {
   );
 }
 
+// Only images already supplied in the report are used; no unrelated stock art.
+function ReportImage({ articleId, title }: { articleId: string; title: string }) {
+  const { data: article } = useArticle(articleId);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const image = useMemo(() => {
+    if (!article?.content_html) return null;
+    const doc = new DOMParser().parseFromString(article.content_html, "text/html");
+    for (const node of doc.querySelectorAll("img")) {
+      const src = node.getAttribute("src");
+      if (!src || /feedburner|pixel|badge/i.test(src)) continue;
+      const width = Number(node.getAttribute("width"));
+      const height = Number(node.getAttribute("height"));
+      if ((width > 0 && width < 100) || (height > 0 && height < 100)) continue;
+      try {
+        const url = new URL(src, article.url || undefined);
+        if (url.protocol === "https:" || url.protocol === "http:") return url.href;
+      } catch { /* An invalid source should not leave a broken illustration. */ }
+    }
+    return null;
+  }, [article?.content_html, article?.url]);
+  if (!image || image === failedUrl) return null;
+  return <img className="today-report-image" src={image} alt={`Image from report: ${title}`} referrerPolicy="no-referrer" onError={() => setFailedUrl(image)} />;
+}
+
 export function TodayStory({ item, rank, isWritingLede, isSaving = false, onToggleConsumed, onOpenArticle }: Props) {
   const [expanded, setExpanded] = useState(false);
   const referencesId = useId();
@@ -116,10 +142,13 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
   const awaitingLede = !brief && !item.lede && isWritingLede;
 
   return (
-    <article className="story-rise-in today-story">
+    <article className={`story-rise-in today-story today-story--${rank}`}>
+      {primary && <p className="today-byline">{primary.publication || primary.feed_title}</p>}
+      {lead && articleId && primary?.is_read !== null && <ReportImage key={articleId} articleId={articleId} title={item.snapshot_title} />}
+
       <h3
         className={`text-text-primary ${lead ? "today-lead-headline" : ""}`}
-        style={{ fontSize: lead ? undefined : brief ? 14 : 16, fontWeight: lead ? 700 : 600, lineHeight: 1.3, letterSpacing: lead ? -0.3 : -0.1 }}
+
       >
         {articleId ? (
           <button className="today-headline hover:text-accent transition-colors" onClick={() => onOpenArticle(articleId)}>
@@ -128,7 +157,7 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
         ) : item.snapshot_title}
       </h3>
 
-      {body && <p className={`text-text-secondary ${lead ? "today-lead-summary" : ""}`} style={{ marginTop: 8, fontSize: lead ? undefined : 13, lineHeight: 1.65 }}>{body}</p>}
+      {body && <p className="today-story-summary text-text-secondary">{body}</p>}
       {ledeSource && item.lede?.trim() && (
         <PreviewAttribution member={ledeSource} onOpenArticle={onOpenArticle} />
       )}

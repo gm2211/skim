@@ -549,82 +549,95 @@ select option {
   }
 }
 
-/* Newspaper stories share one rhythm; reports open only when requested. */
-.today-story {
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
-  padding-top: 16px;
-  margin-top: 16px;
+/* A paper surface keeps the edition distinct from the surrounding app chrome. */
+.today-page {
+  container-type: inline-size;
+  --color-text-primary: #171717;
+  --color-text-secondary: #454545;
+  --color-text-muted: #636363;
+  --color-accent: #155a78;
+  --color-danger: #b32323;
+  --color-success: #26733e;
+  background: #fdfdfb;
+  color: var(--color-text-primary);
 }
-.today-headline {
-  display: block;
-  width: 100%;
-  text-align: left;
-  border-radius: 4px;
-  overflow-wrap: anywhere;
+.today-page select { background: #f3f3ef; border-color: #c8c8c3; }
+.today-scroll { padding: 0 22px 32px; }
+.today-content { width: 100%; max-width: 1440px; margin-inline: auto; }
+.today-masthead { text-align: center; margin: 8px 0 24px; }
+.today-edition-label, .today-byline, .today-briefs-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
 }
-.today-story-actions {
+.today-edition-label { color: var(--color-text-muted); }
+.today-title {
+  font-family: "Baskerville", "Times New Roman", serif;
+  font-size: clamp(56px, 8cqi, 100px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -4px;
+  margin-block: 4px 16px;
+}
+.today-edition-meta {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  justify-content: space-between;
   gap: 8px;
-  margin-top: 8px;
-}
-.today-story-control {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 4px 8px;
-  border-radius: 8px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-top: 3px double #252525;
+  border-bottom: 1px solid #252525;
   font-size: 12px;
+}
+.today-reading-progress { display: block; width: 100%; height: 2px; border: 0; appearance: none; background: transparent; }
+.today-reading-progress::-webkit-progress-bar { background: transparent; }
+.today-reading-progress::-webkit-progress-value { background: var(--color-accent); }
+.today-reading-progress::-moz-progress-bar { background: var(--color-accent); }
+.today-stories { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.today-story-cell { min-width: 0; border-bottom: 1px solid #d6d6d1; padding-bottom: 20px; }
+.today-story h3 {
+  font-family: "Baskerville", "Georgia", serif;
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -.5px;
+}
+.today-story--lead h3 { font-size: clamp(32px, 4.1cqi, 52px); }
+.today-story--brief h3 { font-size: 21px; }
+.today-byline { color: var(--color-text-muted); margin-bottom: 10px; }
+.today-headline { display: block; width: 100%; text-align: left; overflow-wrap: anywhere; }
+.today-report-image { width: 100%; max-height: 440px; aspect-ratio: 3 / 2; object-fit: cover; margin-bottom: 18px; }
+.today-story-summary { margin-top: 10px; font-size: 15px; line-height: 1.55; }
+.today-story--lead .today-story-summary { font-size: 18px; }
+.today-story-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.today-story-control {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px; min-height: 36px; padding: 4px 6px;
+  border-radius: 3px; font-size: 12px;
   transition: background 150ms ease, color 150ms ease;
 }
-.today-story-control:hover { background: rgba(255, 255, 255, 0.06); }
+.today-story-control:hover { background: #00000008; }
 .today-headline:focus-visible, .today-story-control:focus-visible, .today-reference:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 3px;
+  outline: 2px solid var(--color-accent); outline-offset: 3px;
 }
-.today-references {
-  margin-top: 8px;
-  padding: 4px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(255, 255, 255, 0.035);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-}
+.today-references { margin-top: 8px; padding: 4px 12px; border: 1px solid #d6d6d1; background: #f3f3ef; }
 .today-reference {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  width: 100%;
-  min-width: 0;
-  min-height: 44px;
-  padding: 10px 0;
-  text-align: left;
-  font-size: 12px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+  display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 0;
+  min-height: 44px; padding: 10px 0; text-align: left;
+  font-size: 12px; line-height: 1.5; overflow-wrap: anywhere;
 }
-.today-reference + .today-reference { border-top: 1px solid rgba(255, 255, 255, 0.07); }
+.today-reference + .today-reference { border-top: 1px solid #d6d6d1; }
+.today-briefs-label { grid-column: 1 / -1; border-top: 2px solid #252525; padding-top: 12px; }
+@container (min-width: 720px) {
+  .today-scroll { padding-inline: 32px; }
+  .today-stories { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 28px; }
+  .today-story-cell--lead { grid-column: span 2; border-right: 1px solid #d6d6d1; padding-right: 28px; }
+  .today-story-cell--lead:has(.today-report-image) { grid-row: span 2; }
+  .today-story--lead .today-headline { text-align: center; }
+  .today-story--lead .today-story-summary { text-align: center; }
+  .today-story--lead .today-story-actions { justify-content: center; }
+}
 @media (max-width: 600px), (pointer: coarse) {
   .today-story-control { min-height: 44px; }
-}
-
-.today-lead-headline { font-size: 20px; }
-.today-lead-summary { font-size: 14px; }
-.today-title { font-size: 22px; }
-.today-page { container-type: inline-size; }
-.today-masthead, .today-content { width: 100%; max-width: 1080px; margin-inline: auto; }
-.today-stories { display: grid; grid-template-columns: minmax(0, 1fr); }
-.today-story-cell { min-width: 0; }
-.today-briefs-label { grid-column: 1 / -1; }
-@container (min-width: 720px) {
-  .today-stories { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
-  .today-story-cell:first-child { grid-column: 1 / -1; }
-  .today-story-cell:first-child .today-story { padding-block: 24px 8px; }
-  .today-story-cell:first-child h3 { font-size: 30px; max-width: 780px; }
-  .today-story-cell:first-child p { max-width: 780px; font-size: 16px; }
-  .today-masthead h2 { font-size: 32px; }
 }

@@ -73,35 +73,17 @@ export function TodayEditionPane() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto" style={{ padding: "0 24px 24px" }}>
+      <div className="today-scroll flex-1 overflow-y-auto">
       <div className="today-content">
-      {/* Title + progress */}
-      <div className="today-masthead" style={{ padding: "8px 0 14px" }}>
-        <h2 style={{ fontWeight: 700 }} className="today-title text-text-primary truncate">
-          Today
-        </h2>
-        <p className="text-text-muted" style={{ fontSize: 13, marginTop: 2 }}>
-          {formatWindowDate(todayWin.startsAt)}
-        </p>
-        {totalCount > 0 && (
-          <div style={{ marginTop: 10 }}>
-            <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
-              <span className="text-text-muted" style={{ fontSize: 12 }}>
-                {isFullyConsumed ? "All caught up" : `${consumedCount} of ${totalCount} done`}
-              </span>
-              <span className="text-text-muted tabular-nums" style={{ fontSize: 12 }}>
-                {progressPct}%
-              </span>
-            </div>
-            <div className="rounded-full bg-white/8" style={{ height: 4, overflow: "hidden" }}>
-              <div
-                className={`h-full rounded-full transition-all ${isFullyConsumed ? "bg-success" : "bg-accent"}`}
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
+      <header className="today-masthead">
+        <p className="today-edition-label">Your daily edition</p>
+        <h2 className="today-title" aria-label="Skim daily edition">Skim</h2>
+        <div className="today-edition-meta">
+          <span>Today · {formatWindowDate(todayWin.startsAt)}</span>
+          {totalCount > 0 && <span>{isFullyConsumed ? "All caught up" : `${consumedCount} of ${totalCount} done`}</span>}
+        </div>
+        {totalCount > 0 && <progress className="today-reading-progress" value={consumedCount} max={totalCount} aria-label="Edition reading progress">{progressPct}%</progress>}
+      </header>
 
       {/* Body */}
         {isLoading && (
@@ -169,10 +151,10 @@ export function TodayEditionPane() {
                   className="today-briefs-label text-text-muted uppercase font-bold"
                   style={{ fontSize: 10.5, letterSpacing: 1.2, marginTop: 24 }}
                 >
-                  Also
+                  In brief
                 </div>
               )}
-              <div className="today-story-cell">
+              <div className={`today-story-cell today-story-cell--${rankFor(index)}`}>
               <TodayStory
                 item={item}
                 rank={rankFor(index)}

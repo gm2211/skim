@@ -76,7 +76,7 @@ export default defineConfig(async () => ({
 
   test: {
     // BYOS's vendored node:test suite runs upstream with its own build/runtime.
-    include: ["src/**/*.test.{ts,tsx}"],
+    include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.mjs"],
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],

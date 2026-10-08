@@ -358,7 +358,14 @@ export interface TodayEditionMemberArticle {
  * `EditionItem` snapshot. Never render a live story field here — only
  * snapshot_* fields — snapshots must not mutate when stories later change.
  */
+export interface TodayEditorial {
+  theme: string;
+  summary: string;
+  sources: { article_id: string; quote: string }[];
+}
+
 export interface TodayEditionItem {
+  editorial?: TodayEditorial | null;
   edition_id: string;
   story_id: string;
   story_revision_number: number;

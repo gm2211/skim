@@ -1,9 +1,9 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
 import { useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useTodayEdition } from "../../hooks/useTodayEdition";
 import { useUiStore } from "../../stores/uiStore";
-import { rankFor, LEAD_COUNT } from "../../lib/todayEdition";
+import { rankFor } from "../../lib/todayEdition";
 import { TodayStory } from "./TodayStory";
 import { ModelPicker } from "../common/ModelPicker";
 
@@ -17,13 +17,20 @@ function formatWindowDate(startsAtSeconds: number): string {
 
 export function TodayEditionPane() {
   const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane } = useUiStore();
-  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch } =
+  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch, aiEnabled } =
     useTodayEdition();
 
+  const [theme, setTheme] = useState<string | null>(null);
+  const [sharedOnly, setSharedOnly] = useState(false);
   const refreshFeeds = useRefreshAllFeeds();
   const isFrontPage = !isPhone && !selectedArticleId;
   const items = data?.items ?? [];
-  const briefsStart = items.findIndex((_, index) => rankFor(index) === "brief");
+  const themes = [...new Set(items.flatMap((item) => item.editorial?.theme ? [item.editorial.theme] : []))];
+  const activeTheme = themes.includes(theme ?? "") ? theme : null;
+  const visibleItems = items.map((item, index) => ({ item, index })).filter(({ item }) =>
+    (!activeTheme || item.editorial?.theme === activeTheme) &&
+    (!sharedOnly || item.member_articles.filter((member) => member.membership_type !== "duplicate").length > 1));
+  const briefsStart = visibleItems.find(({ index }) => rankFor(index) === "brief")?.index;
 
   const handleOpenArticle = (articleId: string) => {
     openArticleFromToday(articleId);
@@ -141,10 +148,19 @@ export function TodayEditionPane() {
           </button>
         )}
 
+        {!isLoading && !isError && items.length > 0 && <>
+          {!aiEnabled && items.some((item) => !item.editorial) && <p className="today-summary-note">Unprepared summaries show source excerpts. <button className="today-story-control text-accent" onClick={() => useUiStore.getState().setShowSettings(true)}>Set up AI for thematic summaries</button></p>}
+          <nav className="today-themes" aria-label="Newspaper themes">
+            <button className="today-story-control" aria-pressed={!activeTheme && !sharedOnly} onClick={() => { setTheme(null); setSharedOnly(false); }}>All stories</button>
+            {themes.map((name) => <button key={name} className="today-story-control" aria-pressed={activeTheme === name} onClick={() => setTheme(activeTheme === name ? null : name)}>{name}</button>)}
+            <button className="today-story-control" aria-pressed={sharedOnly} onClick={() => setSharedOnly(!sharedOnly)}>Multiple reports</button>
+          </nav>
+          {visibleItems.length === 0 && <p className="today-summary-note">No stories with multiple reports in this selection.</p>}
+        </>}
         <div className="today-stories">
         {!isLoading &&
           !isError &&
-          items.map((item, index) => (
+          visibleItems.map(({ item, index }) => (
             <Fragment key={item.story_id}>
               {index === briefsStart && (
                 <div
@@ -158,7 +174,7 @@ export function TodayEditionPane() {
               <TodayStory
                 item={item}
                 rank={rankFor(index)}
-                isWritingLede={isWritingLedes && index < LEAD_COUNT}
+                isWritingLede={isWritingLedes}
                 isSaving={setConsumed.isPending}
                 onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
                 onOpenArticle={handleOpenArticle}

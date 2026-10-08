@@ -443,6 +443,9 @@ export interface TodayLedeProgress {
   view: TodayEditionView;
 }
 export const TODAY_LEDE_PROGRESS_EVENT = "today_lede_progress";
+export const generateTodayEditorial = (editionId: string, requestId?: string) =>
+  invoke<TodayEditionView>("generate_today_editorial", requestId ? { editionId, requestId } : { editionId });
+
 export const generateTodayLedes = (editionId: string, requestId?: string) =>
   invoke<TodayEditionView>("generate_today_ledes", requestId ? { editionId, requestId } : { editionId });
 

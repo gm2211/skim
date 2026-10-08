@@ -134,16 +134,20 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
   const articleId = item.representative_article_id ?? primary?.article_id;
   const lead = rank === "lead";
   const brief = rank === "brief";
-  const body = item.lede?.trim() || (brief ? "" : item.snapshot_summary);
+  const body = item.editorial?.summary.trim() || item.lede?.trim() || (brief ? "" : item.snapshot_summary);
   const ledeSourceArticleId = item.lede_source_article_id;
   const ledeSource = item.lede?.trim() && ledeSourceArticleId
     ? members.find((member) => member.article_id === ledeSourceArticleId)
     : undefined;
-  const awaitingLede = !brief && !item.lede && isWritingLede;
+  const awaitingLede = !item.editorial && isWritingLede;
+  const coverageCount = members.filter((member) => member.membership_type !== "duplicate").length;
 
   return (
     <article className={`story-rise-in today-story today-story--${rank}`}>
-      {primary && <p className="today-byline">{primary.publication || primary.feed_title}</p>}
+      <div className="today-byline">
+        {item.editorial?.theme || primary?.publication || primary?.feed_title}
+        {coverageCount > 1 && <span className="today-coverage"> · {coverageCount} reports covering this story</span>}
+      </div>
       {lead && articleId && primary?.is_read !== null && <ReportImage key={articleId} articleId={articleId} title={item.snapshot_title} />}
 
       <h3
@@ -157,8 +161,11 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
         ) : item.snapshot_title}
       </h3>
 
-      {body && <p className="today-story-summary text-text-secondary">{body}</p>}
-      {ledeSource && item.lede?.trim() && (
+      {body && <>
+        <p className="today-story-summary text-text-secondary">{body}</p>
+        <p className="today-summary-kind">{item.editorial ? `AI summary · Based on ${item.editorial.sources.length} of ${members.length} ${members.length === 1 ? "report" : "reports"}` : "Source excerpt · Summary not prepared"}</p>
+      </>}
+      {!item.editorial && ledeSource && item.lede?.trim() && (
         <PreviewAttribution member={ledeSource} onOpenArticle={onOpenArticle} />
       )}
       {awaitingLede && (
@@ -198,7 +205,12 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
       </div>
       {expanded && (
         <div id={referencesId} className="today-references" aria-label="Story reports">
-          {members.map((member) => <Reference key={member.article_id} member={member} onOpenArticle={onOpenArticle} />)}
+          {members.map((member) => <div key={member.article_id}>
+            <Reference member={member} onOpenArticle={onOpenArticle} />
+            {item.editorial?.sources.filter((source) => source.article_id === member.article_id).map((source, index) => (
+              <blockquote className="today-evidence" key={index}>{source.quote}</blockquote>
+            ))}
+          </div>)}
         </div>
       )}
     </article>

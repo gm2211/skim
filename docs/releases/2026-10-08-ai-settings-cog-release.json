@@ -1,0 +1,25 @@
+{
+  "platform": "MAC_OS",
+  "version": "0.1.40",
+  "build": "40",
+  "sourceCommit": "574e60b99c6d155ccd53f6e61f617c224c6c24de",
+  "deliveryUUID": "ac881c7c-048b-4946-ac66-f8dbd25b9102",
+  "packageSHA256": "be7297f3036659a4007286ba54ac61fd1f18511ee0a056e831f72a48caf36ece",
+  "upload": "SUCCEEDED",
+  "processingState": "VALID",
+  "validation": {
+    "focusedTests": 33,
+    "productionMacBuild": "PASSED",
+    "packageSignatures": "PASSED",
+    "metadata": "0.1.40 (40)",
+    "helperSandboxInheritance": "PASSED",
+    "browserCogRendering": "PASSED",
+    "browserSettingsNavigation": "PASSED",
+    "accessibleName": "Open AI settings",
+    "desktopTarget": 32,
+    "touchTarget": 44
+  },
+  "nativeHelpers": "Reused unchanged existing helper binaries after unrelated shared SwiftPM cache contention.",
+  "installedRuntimeAcceptance": "Not performed.",
+  "internalBuildState": "IN_BETA_TESTING"
+}

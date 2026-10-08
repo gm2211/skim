@@ -2365,6 +2365,31 @@ private struct AddFeedSheet: View {
                             .font(.system(size: 19, weight: .bold))
                             .foregroundStyle(SkimStyle.text)
 
+                        Button {} label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: "person.crop.circle")
+                                Text("Sign in with Feedly")
+                                    .font(.body.weight(.semibold))
+                                Spacer(minLength: 8)
+                                Text("Coming soon")
+                                    .font(.caption.weight(.semibold))
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 5)
+                                    .background(SkimStyle.surface, in: Capsule())
+                            }
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(SkimStyle.accent)
+                        .disabled(true)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Sign in with Feedly, coming soon")
+                        .accessibilityHint("Feedly sign-in is unavailable yet. Import a Feedly OPML export below.")
+
+                        Text("Feedly developer access costs $96/year.")
+                            .font(.footnote)
+                            .foregroundStyle(SkimStyle.secondary)
+
                         Text("Sign in to Feedly, download your Feedly OPML, then choose the file here.")
                             .font(.system(size: 15, weight: .regular))
                             .foregroundStyle(SkimStyle.secondary)

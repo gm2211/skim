@@ -6,7 +6,7 @@
   "packageSHA256": "5327ce55e1959f9b02119b13f97bb976a962bbc7db31e624f69e85352a9f6c98",
   "deliveryUUID": "3cc35455-829d-4379-a954-5e85175a61a0",
   "upload": "SUCCEEDED",
-  "processingState": "PENDING",
+  "processingState": "VALID",
   "validation": {
     "frontendTests": 235,
     "uploadWorkflowTests": 3,
@@ -17,5 +17,13 @@
     "helperSandboxInheritance": "PASSED",
     "managedCloudSigning": "PASSED"
   },
-  "installedRuntimeAcceptance": "Not performed; installed TestFlight 0.1.5 remains until update."
+  "installedRuntimeAcceptance": "Not performed; installed TestFlight 0.1.5 remains until update.",
+  "internalBuildState": "IN_BETA_TESTING",
+  "externalBuildState": "READY_FOR_BETA_SUBMISSION",
+  "buildID": "3cc35455-829d-4379-a954-5e85175a61a0",
+  "preReleaseVersionID": "d7f91e81-2d25-4a48-a89a-538f5bc71011",
+  "internalGroup": {
+    "name": "me",
+    "hasAccessToAllBuilds": true
+  }
 }

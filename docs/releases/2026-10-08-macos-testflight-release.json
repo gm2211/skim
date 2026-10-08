@@ -1,0 +1,21 @@
+{
+  "platform": "MAC_OS",
+  "version": "0.1.38",
+  "build": "38",
+  "sourceCommit": "95f7f2b723efe88f34c886aa606568a1247c93c5",
+  "packageSHA256": "5327ce55e1959f9b02119b13f97bb976a962bbc7db31e624f69e85352a9f6c98",
+  "deliveryUUID": "3cc35455-829d-4379-a954-5e85175a61a0",
+  "upload": "SUCCEEDED",
+  "processingState": "PENDING",
+  "validation": {
+    "frontendTests": 235,
+    "uploadWorkflowTests": 3,
+    "productionBuild": "PASSED",
+    "packageSignature": "PASSED",
+    "nestedCodeSignatures": "PASSED",
+    "metadata": "0.1.38 (38)",
+    "helperSandboxInheritance": "PASSED",
+    "managedCloudSigning": "PASSED"
+  },
+  "installedRuntimeAcceptance": "Not performed; installed TestFlight 0.1.5 remains until update."
+}

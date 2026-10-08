@@ -1,0 +1,24 @@
+{
+  "name": "@byos/providers",
+  "version": "0.1.0",
+  "description": "Bring-your-own-subscription provider adapters (OpenRouter, Grok/xAI, Groq): browser-direct endpoints, model discovery, and streaming chat. Inference always goes from the browser to the provider.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=22.23.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --experimental-strip-types --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@byos/core": "file:../byos-core"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

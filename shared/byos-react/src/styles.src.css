@@ -1,0 +1,206 @@
+/*
+ * @byos/react default styles. Theme by setting these on :root (or any ancestor):
+ *   --byos-font, --byos-font-mono, --byos-text, --byos-muted, --byos-faint,
+ *   --byos-surface, --byos-surface-soft, --byos-surface-raised, --byos-surface-input,
+ *   --byos-line, --byos-line-strong, --byos-accent, --byos-accent-strong, --byos-on-accent,
+ *   --byos-success, --byos-warning, --byos-warning-soft, --byos-danger, --byos-secondary-fill,
+ *   --byos-secondary-border, --byos-secondary-hover, --byos-surface-overlay, --byos-surface-backdrop, --byos-radius,
+ *   --byos-pill-fill, --byos-pill-border, --byos-pill-text,
+ *   --byos-radius-lg, --byos-shadow
+ * Every value below falls back to a neutral default, so an unthemed site still looks finished.
+ */
+.byos-signin { display: grid; gap: 20px; padding: 4px 0; color: $text; font: 400 14px/1.5 $font; }
+.byos-signin-heading { display: grid; gap: 8px; }
+.byos-signin .byos-signin-unavailable { padding: 10px 12px; border-left: 3px solid $warning; border-radius: 0 $radius $radius 0; background: $warning-soft; color: $text; font-size: 12px; }
+.byos-signin .byos-signin-disclosure { padding: 10px 12px; border: 1px solid $line; border-radius: $radius; background: $surface-soft; color: $muted; font-size: 12px; line-height: 1.55; }
+.byos-signin-provider { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; font-weight: 600; }
+.byos-signin-provider span { color: $faint; font-size: 12px; font-weight: 400; }
+.byos-signin h3 { margin: 0; font: 600 22px/1.25 $font; letter-spacing: -.02em; }
+.byos-signin p { margin: 0; color: $muted; }
+.byos-signin .byos-signin-device { display: grid; gap: 12px; min-width: 0; }
+.byos-signin-code { display: grid; justify-items: center; gap: 8px; padding: 20px 12px; border: 1px solid $line-strong; border-radius: $radius; background: $surface-input; }
+.byos-signin-code-row { display: flex; align-items: center; justify-content: center; gap: 8px; max-width: 100%; min-width: 0; }
+.byos-signin .byos-signin-copy { display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0; border: 1px solid transparent; border-radius: $radius; background: transparent; color: $muted; cursor: pointer; }
+.byos-signin .byos-signin-copy:hover { color: $accent; background: $surface-raised; }
+.byos-signin .byos-signin-code-label { color: $faint; font: 500 11px/1.5 $font-mono; letter-spacing: .1em; }
+.byos-signin .byos-signin-code-value { display: block; min-width: 0; max-width: 100%; color: $text; font: 500 clamp(22px, 5vw, 30px)/1.3 $font-mono; letter-spacing: .08em; overflow-wrap: anywhere; text-align: center; user-select: all; background: none; padding: 0; }
+.byos-signin .byos-signin-primary { display: flex; justify-content: center; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 10px 16px; border: 1px solid $accent; border-radius: $radius; background: $accent; color: $on-accent; font: 600 14px/1.5 $font; text-align: center; text-decoration: none; cursor: pointer; transition: background 150ms ease; }
+.byos-signin .byos-signin-primary:not(:disabled):hover { background: $accent-strong; border-color: $accent-strong; }
+.byos-signin .byos-signin-primary:disabled { border-color: $line; background: $surface-raised; color: $faint; cursor: not-allowed; }
+.byos-signin-progress { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 8px; }
+.byos-signin-progress p, .byos-signin-connected p { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.byos-signin-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: $accent; }
+.byos-signin .byos-signin-cancel, .byos-signin .byos-signin-secondary { min-height: 44px; padding: 8px; border: 1px solid transparent; border-radius: $radius; background: transparent; color: $muted; font: 500 12px/1.5 $font; cursor: pointer; }
+.byos-signin .byos-signin-cancel:hover, .byos-signin .byos-signin-secondary:hover { color: $text; background: $surface-raised; }
+.byos-signin .byos-signin-secondary { border-color: $line-strong; padding-inline: 14px; }
+.byos-signin-connected { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.byos-signin-connected p { color: $success; }
+.byos-signin .byos-signin-error { padding: 12px; color: $danger; border: 1px solid $danger; border-radius: $radius; font-size: 13px; }
+.byos-signin-storage { padding-top: 12px; border-top: 1px solid $line; }
+.byos-signin-storage label { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-size: 13px; }
+.byos-signin-storage input { width: 16px; height: 16px; flex: none; margin: 0; accent-color: $accent; }
+.byos-signin .byos-signin-storage-error { margin: 0 0 6px; color: $danger; font-size: 12px; }
+.byos-signin summary { display: flex; align-items: center; gap: 8px; min-height: 44px; color: $muted; font-size: 12px; cursor: pointer; list-style: none; }
+.byos-signin .byos-signin-privacy { max-height: min(260px, 34dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.byos-signin-privacy > summary { position: sticky; top: 0; z-index: 1; background: $surface; }
+.byos-signin summary::-webkit-details-marker { display: none; }
+.byos-signin summary::before { content: '+'; color: $faint; font: 400 16px $font-mono; }
+.byos-signin details[open] > summary::before { content: '−'; }
+.byos-signin details p { margin: 0 0 8px; font-size: 12px; line-height: 1.6; }
+.byos-signin :is(button, a, input, summary):focus-visible, .byos :is(button, select):focus-visible { outline: 2px solid $accent; outline-offset: 3px; }
+@media (max-width: 600px) { .byos-signin { gap: 16px; } .byos-signin h3 { font-size: 20px; } .byos-signin-code { padding-block: 16px; } }
+
+.byos-signin-compact { gap: 10px; padding: 0; }
+.byos-signin-compact-heading { gap: 4px; }
+.byos-signin-compact .byos-signin-provider { gap: 6px; font-size: 12px; }
+.byos-signin-compact .byos-signin-provider span { font-size: 11px; }
+.byos-signin-compact h3 { font-size: 18px; line-height: 1.25; }
+.byos-signin-compact-heading > p { font-size: 13px; line-height: 1.4; }
+.byos-signin-compact-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border: 1px solid $line; border-radius: $radius; background: $surface-soft; }
+.byos-signin-compact-tabs-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.byos-signin-compact .byos-signin-help > summary { min-height: 44px; }
+.byos-signin-compact-tabs button { min-width: 0; min-height: 44px; padding: 4px 6px; border: 1px solid transparent; border-radius: calc($radius - 2px); background: transparent; color: $muted; font: 500 13px/1.3 $font; cursor: pointer; }
+.byos-signin-compact-tabs button[aria-selected="true"] { border-color: $line-strong; background: $surface; color: $text; box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.byos-signin-compact-panel { display: grid; gap: 10px; min-width: 0; }
+.byos-signin-compact-panel > .byos-signin-disclosure { padding: 8px 10px; font-size: 12px; line-height: 1.4; }
+.byos-signin-compact-panel > .byos-signin-unavailable, .byos-signin-compact-panel > .byos-signin-error { padding: 8px 10px; font-size: 12px; line-height: 1.4; }
+.byos-signin-compact-device { gap: 8px !important; }
+.byos-signin-compact .byos-signin-code { gap: 2px; padding: 6px 10px; }
+.byos-signin-compact .byos-signin-code-label { font-size: 10px; }
+.byos-signin-compact .byos-signin-code-value { font-size: clamp(20px, 5vw, 25px); line-height: 1.2; }
+.byos-signin-compact .byos-signin-progress { min-height: 44px; align-items: center; }
+.byos-signin-compact .byos-signin-progress p { font-size: 12px; }
+.byos-signin-compact .byos-signin-cancel { min-height: 44px; padding-inline: 8px; font-size: 13px; }
+.byos-signin-compact-connected { gap: 8px; }
+.byos-signin-compact-connected p { font-size: 13px; }
+.byos-signin-compact-connected .byos-signin-secondary { min-height: 44px; }
+.byos-signin-compact-support { max-height: min(190px, 28dvh); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.byos-signin-compact-support:focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
+.byos-signin-compact-storage { padding-top: 0; border-top: 0; }
+.byos-signin-compact-storage label { min-height: 44px; }
+.byos-signin-compact-privacy-content { margin-top: 8px; padding-top: 8px; border-top: 1px solid $line; color: $muted; font-size: 14px; line-height: 1.45; }
+.byos-signin-compact-privacy-content > :first-child { margin-top: 0; }
+.byos-signin-compact-privacy-content > :last-child { margin-bottom: 0; }
+.byos-signin-compact-panel :is(button, a, input, summary):focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
+
+.byos-model-effort { display: grid; gap: 12px; font: 400 14px/1.5 $font; color: $text; }
+.byos-picker-stale { display: grid; justify-items: start; gap: 8px; }
+.byos-field { display: grid; gap: 6px; }
+.byos-field > span { color: $faint; font: 500 11px/1.5 $font-mono; letter-spacing: .08em; }
+.byos-field small { color: $muted; font: 400 11px $font; letter-spacing: 0; }
+.byos-select { min-height: 44px; padding: 0 10px; border: 1px solid $line-strong; border-radius: $radius; background: $surface-input; color: $text; font: inherit; }
+.byos-note { margin: 0; color: $muted; font-size: 12px; line-height: 1.5; }
+.byos-link-button { padding: 0; border: 0; background: none; color: $accent; font: inherit; text-decoration: underline; cursor: pointer; }
+.byos-secondary-button { min-height: 44px; padding: 8px 14px; border: 1px solid $secondary-border; border-radius: $radius; background: $secondary-fill; color: $text; font: 600 13px/1.4 $font; cursor: pointer; }
+.byos-secondary-button:hover { background: $secondary-hover; }
+.byos :is(button, select):focus-visible { outline: 2px solid $accent; outline-offset: 3px; }
+
+.byos-quick-settings { display: grid; gap: 0; min-width: 0; color: $text; font: 400 14px/1.5 $font; }
+.byos-quick-settings-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; min-width: 0; margin-bottom: 12px; }
+.byos-quick-settings-provider { min-width: 0; max-width: 100%; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.byos-quick-settings-all { position: relative; isolation: isolate; min-height: 44px; flex: none; padding: 6px 8px; border: 0; background: transparent; color: $text; font: 600 13px/1.3 $font; cursor: pointer; }
+.byos-quick-settings-all::before { content: ''; position: absolute; inset: 6px 0; z-index: -1; border: 1px solid $secondary-border; border-radius: $radius; background: $secondary-fill; }
+.byos-quick-settings-all:hover::before { background: $secondary-hover; }
+.byos-quick-settings-warning { display: grid; gap: 8px; margin-bottom: 12px; padding: 10px 12px; border: 1px solid $warning; border-radius: $radius; background: $warning-soft; color: $text; font-size: 12px; }
+.byos-quick-settings-warning p, .byos-quick-settings-note { margin: 0; color: $muted; font-size: 12px; line-height: 1.5; }
+.byos-quick-settings-reconnect { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.byos-quick-settings-reconnect button { min-height: 44px; padding: 8px 14px; border: 1px solid $accent; border-radius: $radius; background: $accent; color: $on-accent; font: 600 13px/1.4 $font; cursor: pointer; }
+.byos-quick-settings-reconnect button:hover { border-color: $accent-strong; background: $accent-strong; }
+.byos-quick-settings-reconnect p { margin: 0; color: $muted; font-size: 12px; }
+.byos-quick-settings-reconnect a { min-height: 44px; display: inline-flex; align-items: center; color: $accent; font-size: 12px; }
+.byos-quick-settings-note { margin-bottom: 12px; padding: 10px 12px; border: 1px solid $line; border-radius: $radius; background: $surface-soft; }
+.byos-quick-settings-content { min-width: 0; }
+
+.byos-searchable-select { position: relative; min-width: 0; }
+.byos-searchable-select-field { height: 38px; display: grid; grid-template-columns: minmax(0, 1fr) 31px; border: 1px solid $line-strong; border-radius: $radius; background: $surface-raised; transition: border-color .16s ease, background .16s ease, box-shadow .16s ease; }
+.byos-searchable-select:focus-within .byos-searchable-select-field, .byos-searchable-select--open .byos-searchable-select-field { border-color: $accent; background: $surface-input; box-shadow: 0 0 0 3px color-mix(in srgb, $accent 25%, transparent); }
+.byos-searchable-select-input { min-width: 0; width: 100%; padding: 0 3px 0 9px; overflow: hidden; border: 0; outline: 0; background: transparent; color: $text; font: 400 12px/1.3 $font-mono; text-overflow: ellipsis; }
+.byos-searchable-select-input::selection { background: color-mix(in srgb, $accent 25%, $surface); }
+.byos-searchable-select-toggle { display: grid; place-items: center; width: 27px; padding: 0; border: 0; background: transparent; color: $muted; cursor: pointer; }
+.byos-searchable-select-toggle span { width: 0; height: 0; border-right: 4px solid transparent; border-left: 4px solid transparent; border-top: 5px solid currentColor; transition: transform .14s ease; }
+.byos-searchable-select--open .byos-searchable-select-toggle span { transform: rotate(180deg); }
+.byos-searchable-options { overflow-y: auto; padding: 5px; border: 1px solid $line-strong; border-radius: $radius; background: var(--byos-surface-overlay, $surface); box-shadow: $shadow; backdrop-filter: blur(16px); scrollbar-width: thin; scrollbar-color: $line-strong transparent; width: max-content; max-width: min(360px, calc(100vw - 16px)); }
+.byos-searchable-option { width: 100%; min-height: 36px; padding: 5px 9px; display: flex; align-items: center; justify-content: space-between; gap: 12px; overflow: hidden; border: 0; border-radius: $radius; background: transparent; color: $muted; text-align: left; font: 400 11px/1.3 $font; white-space: nowrap; cursor: pointer; }
+.byos-searchable-option > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow: hidden; text-overflow: ellipsis; }
+.byos-searchable-option-meta { padding: 0; overflow: hidden; color: $faint; font: 500 11px/1.3 $font-mono; text-overflow: ellipsis; }
+.byos-searchable-option:hover, .byos-searchable-option--active { background: $surface-soft; color: $text; }
+.byos-searchable-option--selected, .byos-searchable-option b { color: $accent; }
+.byos-searchable-option b { flex: 0 0 auto; font: 500 11px/1.3 $font-mono; }
+.byos-searchable-options p, .byos-searchable-options > small { display: block; margin: 0; padding: 9px 8px; color: $faint; font: 400 11px/1.4 $font; }
+.byos-searchable-select--compact { width: 100%; }
+.byos-searchable-select--compact .byos-searchable-select-field { height: 44px; grid-template-columns: minmax(0, 1fr) 44px; }
+.byos-searchable-select--compact .byos-searchable-select-toggle { width: 44px; }
+@media (max-width: 720px) { .byos-searchable-options > .byos-searchable-option { min-height: 44px; } }
+
+.byos-account-settings { display: grid; gap: 10px; min-width: 0; color: $text; font: 400 14px/1.45 $font; }
+.byos-account-settings-header { display: grid; gap: 8px; min-width: 0; }
+.byos-account-settings-header h2 { margin: 0; color: $text; font: 600 17px/1.25 $font; }
+.byos-account-settings-provider { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.byos-account-settings-provider strong { min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.byos-account-settings-status { color: $warning; font-size: 12px; }
+.byos-account-settings-change { min-height: 44px; margin-left: auto; padding: 0 10px; border: 1px solid $secondary-border; border-radius: $radius; background: $secondary-fill; color: $text; font: 600 13px/1.3 $font; cursor: pointer; }
+.byos-account-settings-change:hover { background: $secondary-hover; }
+.byos-account-settings-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 3px; border: 1px solid $line; border-radius: $radius; background: $surface-soft; }
+.byos-account-settings-tabs-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.byos-account-settings-tab { min-width: 0; min-height: 44px; padding: 4px 8px; border: 1px solid transparent; border-radius: calc($radius - 2px); background: transparent; color: $muted; font: 500 13px/1.3 $font; cursor: pointer; }
+.byos-account-settings-tab[aria-selected="true"] { border-color: $line-strong; background: $surface; color: $text; box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.byos-account-settings-tab:only-child { grid-column: 1 / -1; }
+.byos-account-settings-panel { min-width: 0; }
+.byos-account-settings .byos-model-effort { gap: 10px; }
+.byos-account-settings .byos-picker-stale { grid-template-columns: minmax(0, 1fr) auto; align-items: center; justify-items: stretch; gap: 6px 8px; }
+.byos-account-settings .byos-picker-stale > .byos-note { min-width: 0; }
+.byos-account-settings-expired { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 10px; color: $muted; font-size: 12px; line-height: 1.4; }
+.byos-account-settings-expired button { position: relative; isolation: isolate; min-height: 44px; padding: 6px 8px; border: 0; border-radius: $radius; background: transparent; color: $text; font: 600 12px/1.3 $font; cursor: pointer; }
+.byos-account-settings-expired button::before { content: ''; position: absolute; inset: 6px 0; z-index: -1; border: 1px solid $secondary-border; border-radius: $radius; background: $secondary-fill; }
+.byos-account-settings-expired button:hover::before { background: $secondary-hover; }
+.byos-account-settings-recovery { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.byos-provider-picker { display: grid; gap: 6px; min-width: 0; color: $text; font: 400 14px/1.4 $font; }
+.byos-provider-choice { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid $line; border-radius: $radius; background: $surface; color: $text; font: 500 13px/1.3 $font; text-align: left; cursor: pointer; }
+.byos-provider-choice:hover { border-color: $line-strong; background: $surface-soft; }
+.byos-provider-choice-selected { border-color: $accent; background: $surface-soft; }
+.byos-provider-choice-name { min-width: 0; overflow-wrap: anywhere; }
+.byos-provider-choice-badge { color: $muted; font-size: 11px; }
+.byos-provider-choice-selected-label { margin-left: auto; color: $accent; font-size: 11px; font-weight: 600; }
+
+.byos-dialog-close { width: 44px; height: 44px; padding: 0; display: inline-grid; place-items: center; flex: none; border: 1px solid $line; border-radius: $radius; background: $surface-raised; color: $muted; cursor: pointer; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
+.byos-dialog-close:hover { border-color: $line-strong; background: $surface-soft; color: $text; }
+.byos-dialog-close:focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
+
+.byos-pill-root { position: relative; display: inline-flex; }
+.byos-pill { min-height: 44px; max-width: 260px; padding: 0 10px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid $line-strong; border-radius: $radius; background: $pill-fill; color: $muted; font: 500 11px $font-mono; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; }
+.byos-pill > i { width: 6px; height: 6px; border-radius: 50%; background: $faint; }
+.byos-pill.connected { border-color: $pill-border; color: $pill-text; }
+.byos-pill.connected > i { background: $success; }
+.byos-pill-needs-sign-in { border-color: $warning !important; background: $warning-soft !important; }
+.byos-pill.byos-pill-needs-sign-in > i { background: $warning; }
+.byos-pill-prefix { flex: none; }
+.byos-pill-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; letter-spacing: 0; font: 400 12px $font; color: $text; }
+.byos-pill-popover { position: absolute; z-index: 75; top: calc(100% + 8px); right: 0; width: min(360px, calc(100vw - 24px)); padding: 16px; border: 1px solid $line-strong; border-radius: $radius-lg; background: var(--byos-surface-overlay, $surface); box-shadow: $shadow; color: $text; font: 400 14px/1.5 $font; text-align: left; }
+.byos-pill-popover-sheet { position: fixed; z-index: 181; top: auto; right: 0; bottom: 0; left: 0; width: auto; padding-bottom: calc(16px + env(safe-area-inset-bottom)); border-radius: $radius-lg $radius-lg 0 0; }
+.byos-pill-backdrop { position: fixed; inset: 0; z-index: 180; background: $surface-backdrop; }
+@media (prefers-reduced-motion: reduce) { .byos-signin .byos-signin-primary, .byos-dialog-close { transition: none; } }
+
+
+/* Official monochrome ChatGPT button colors and mark follow approved OpenAI formats. */
+.byos-chatgpt-identity { display: grid; justify-items: stretch; gap: 14px; min-width: 0; color: $text; font: 400 14px/1.5 $font; }
+.byos-chatgpt-identity-heading { display: grid; gap: 4px; }
+.byos-chatgpt-identity h2 { margin: 0; color: $text; font: 600 20px/1.25 $font; letter-spacing: -.02em; }
+.byos-chatgpt-identity p { margin: 0; }
+.byos-chatgpt-identity-heading p { color: $muted; }
+.byos-chatgpt-identity-button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 44px; padding: 10px 16px; border: 1px solid #000; border-radius: 8px; font: 600 14px/1.3 $font; text-align: center; text-decoration: none; cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }
+.byos-chatgpt-identity-button svg { display: block; flex: none; width: 20px; height: 20px; object-fit: contain; }
+.byos-chatgpt-identity-black { background: #000; color: #fff; }
+.byos-chatgpt-identity-black:hover { background: #242424; }
+.byos-chatgpt-identity-white { border-color: #d1d5db; background: #fff; color: #111; }
+.byos-chatgpt-identity-white:hover { background: #f4f4f5; }
+.byos-chatgpt-identity-button:disabled { opacity: .58; cursor: not-allowed; }
+.byos-signin .byos-signin-primary.byos-chatgpt-identity-button { gap: 10px; border-radius: 8px; font: 600 14px/1.3 $font; transition: background-color 120ms ease, color 120ms ease; }
+.byos-signin .byos-signin-primary.byos-chatgpt-identity-black { border-color: #000; background: #000; color: #fff; }
+.byos-signin .byos-signin-primary.byos-chatgpt-identity-black:not(:disabled):hover { border-color: #242424; background: #242424; }
+.byos-chatgpt-identity-status { padding: 9px 11px; border-radius: $radius; color: $muted; background: $surface-soft; font-size: 13px; }
+.byos-chatgpt-identity-status-pending { color: $text; }
+.byos-chatgpt-identity-status-success { color: $success; }
+.byos-chatgpt-identity-status-error { color: $danger; background: $warning-soft; }
+.byos-chatgpt-identity-status-unavailable { color: $muted; }
+.byos-chatgpt-identity-disclosure { color: $muted; font-size: 12px; line-height: 1.55; }
+.byos-chatgpt-identity :is(a, button):focus-visible { outline: 2px solid $accent; outline-offset: 3px; }

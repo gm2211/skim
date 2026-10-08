@@ -1,0 +1,206 @@
+[
+  {
+    "repo": "mlx-community/LFM2.5-1.2B-Instruct-4bit",
+    "reuse": true,
+    "answers": [
+      {
+        "metrics": {
+          "prefillTokensPerSecond": 318.8914818722633,
+          "timeToFirstTokenSeconds": 3.3644360303878784,
+          "peakMemoryBytes": 1440291716,
+          "totalSeconds": 3.39621901512146,
+          "decodeTokensPerSecond": 300.5903393798474,
+          "reusedPromptTokens": 0,
+          "promptTokens": 1001,
+          "generatedTokens": 9
+        },
+        "value": "The museum admission is free on Fridays.",
+        "ok": true
+      },
+      {
+        "value": "1984",
+        "metrics": {
+          "prefillTokensPerSecond": 1013.2486945533607,
+          "timeToFirstTokenSeconds": 0.06337094306945801,
+          "peakMemoryBytes": 741633722,
+          "totalSeconds": 0.07247793674468994,
+          "decodeTokensPerSecond": 277.62598666247453,
+          "reusedPromptTokens": 987,
+          "promptTokens": 1000,
+          "generatedTokens": 2
+        },
+        "ok": true
+      }
+    ]
+  },
+  {
+    "repo": "mlx-community/LFM2.5-1.2B-Instruct-4bit",
+    "reuse": false,
+    "answers": [
+      {
+        "value": "The museum admission is free on Fridays.",
+        "metrics": {
+          "prefillTokensPerSecond": 10166.052378738572,
+          "timeToFirstTokenSeconds": 0.1423560380935669,
+          "peakMemoryBytes": 1459432440,
+          "totalSeconds": 0.181177020072937,
+          "generatedTokens": 9,
+          "reusedPromptTokens": 0,
+          "decodeTokensPerSecond": 244.89108307113432,
+          "promptTokens": 1001
+        },
+        "ok": true
+      },
+      {
+        "metrics": {
+          "prefillTokensPerSecond": 8189.3368660386805,
+          "timeToFirstTokenSeconds": 0.1676260232925415,
+          "peakMemoryBytes": 1459530744,
+          "totalSeconds": 0.19344305992126465,
+          "decodeTokensPerSecond": 154.6558014767563,
+          "reusedPromptTokens": 0,
+          "promptTokens": 1000,
+          "generatedTokens": 2
+        },
+        "ok": true,
+        "value": "1984"
+      }
+    ]
+  },
+  {
+    "repo": "mlx-community/Qwen3.5-4B-4bit",
+    "reuse": true,
+    "answers": [
+      {
+        "ok": true,
+        "metrics": {
+          "prefillTokensPerSecond": 178.72102225656548,
+          "promptTokens": 1040,
+          "timeToFirstTokenSeconds": 5.8439799547195435,
+          "totalSeconds": 5.861626982688904,
+          "peakMemoryBytes": 3516844124,
+          "generatedTokens": 1,
+          "decodeTokensPerSecond": 98.8045841627307,
+          "reusedPromptTokens": 0
+        },
+        "value": "Free"
+      },
+      {
+        "metrics": {
+          "prefillTokensPerSecond": 339.95331451674423,
+          "promptTokens": 1040,
+          "timeToFirstTokenSeconds": 0.06750500202178955,
+          "totalSeconds": 0.13435602188110352,
+          "peakMemoryBytes": 2619934582,
+          "generatedTokens": 4,
+          "decodeTokensPerSecond": 70.3643405813361,
+          "reusedPromptTokens": 1023
+        },
+        "ok": true,
+        "value": "1984"
+      }
+    ]
+  },
+  {
+    "repo": "mlx-community/Qwen3.5-4B-4bit",
+    "reuse": false,
+    "answers": [
+      {
+        "value": "Free",
+        "ok": true,
+        "metrics": {
+          "prefillTokensPerSecond": 1165.5260306288587,
+          "promptTokens": 1040,
+          "timeToFirstTokenSeconds": 0.8990789651870728,
+          "totalSeconds": 0.9645159244537354,
+          "peakMemoryBytes": 3349463430,
+          "generatedTokens": 1,
+          "decodeTokensPerSecond": 34.21728932887905,
+          "reusedPromptTokens": 0
+        }
+      },
+      {
+        "metrics": {
+          "prefillTokensPerSecond": 1048.8215654338298,
+          "promptTokens": 1040,
+          "timeToFirstTokenSeconds": 0.9990149736404419,
+          "totalSeconds": 1.1483689546585083,
+          "peakMemoryBytes": 3349463574,
+          "generatedTokens": 4,
+          "decodeTokensPerSecond": 30.498040384797168,
+          "reusedPromptTokens": 0
+        },
+        "ok": true,
+        "value": "1984"
+      }
+    ]
+  },
+  {
+    "repo": "mlx-community/gemma-4-e2b-it-4bit",
+    "reuse": true,
+    "answers": [
+      {
+        "metrics": {
+          "generatedTokens": 6,
+          "decodeTokensPerSecond": 141.60298445315973,
+          "peakMemoryBytes": 3691597614,
+          "prefillTokensPerSecond": 302.264015085585,
+          "totalSeconds": 3.3862459659576416,
+          "reusedPromptTokens": 0,
+          "promptTokens": 997,
+          "timeToFirstTokenSeconds": 3.3416199684143066
+        },
+        "ok": true,
+        "value": "Fridays admission is free."
+      },
+      {
+        "ok": true,
+        "value": "1984",
+        "metrics": {
+          "generatedTokens": 4,
+          "decodeTokensPerSecond": 135.9436688193302,
+          "peakMemoryBytes": 3101727070,
+          "prefillTokensPerSecond": 549.8674088864686,
+          "totalSeconds": 0.06477296352386475,
+          "reusedPromptTokens": 984,
+          "promptTokens": 997,
+          "timeToFirstTokenSeconds": 0.033247947692871094
+        }
+      }
+    ]
+  },
+  {
+    "repo": "mlx-community/gemma-4-e2b-it-4bit",
+    "reuse": false,
+    "answers": [
+      {
+        "value": "Fridays admission is free.",
+        "ok": true,
+        "metrics": {
+          "prefillTokensPerSecond": 14392.530969065352,
+          "reusedPromptTokens": 0,
+          "timeToFirstTokenSeconds": 0.07227301597595215,
+          "peakMemoryBytes": 3629455192,
+          "promptTokens": 997,
+          "generatedTokens": 6,
+          "decodeTokensPerSecond": 122.31441527701497,
+          "totalSeconds": 0.1239849328994751
+        }
+      },
+      {
+        "value": "1984",
+        "metrics": {
+          "generatedTokens": 4,
+          "decodeTokensPerSecond": 120.34787598812103,
+          "peakMemoryBytes": 3681906528,
+          "prefillTokensPerSecond": 13348.339527541964,
+          "totalSeconds": 0.11372697353363037,
+          "reusedPromptTokens": 0,
+          "promptTokens": 997,
+          "timeToFirstTokenSeconds": 0.07754898071289062
+        },
+        "ok": true
+      }
+    ]
+  }
+]

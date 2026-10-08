@@ -3,8 +3,9 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel};
+use llama_cpp_2::model::{LlamaChatMessage, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
+use llama_cpp_2::token::LlamaToken;
 use std::num::NonZeroU32;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -168,6 +169,28 @@ fn format_chat_messages(model: &LlamaModel, messages: &[ChatMessage]) -> Result<
     Ok(prompt)
 }
 
+/// Tokenize with the same special-token and BOS settings used by the previous
+/// `str_to_token(..., AddBos::Always)` API.
+fn tokenize_prompt(model: &LlamaModel, prompt: &str) -> Result<Vec<LlamaToken>, String> {
+    if prompt.as_bytes().contains(&0) {
+        return Err("Failed to tokenize prompt: interior nul byte".to_string());
+    }
+    Ok(model.vocab().tokenize(prompt.as_bytes(), true, true))
+}
+
+/// Decode token bytes incrementally so multibyte UTF-8 characters split across
+/// token boundaries are retained by the stateful decoder.
+fn decode_token_piece(decoder: &mut encoding_rs::Decoder, bytes: &[u8]) -> String {
+    let capacity = decoder
+        .max_utf8_buffer_length(bytes.len())
+        .expect("token piece is small enough to decode");
+    let mut piece = String::with_capacity(capacity);
+    let (result, read, _) = decoder.decode_to_string(bytes, &mut piece, false);
+    debug_assert!(matches!(result, encoding_rs::CoderResult::InputEmpty));
+    debug_assert_eq!(read, bytes.len());
+    piece
+}
+
 pub fn load_model(path: &Path, gpu_layers: i32) -> Result<LoadedModel, String> {
     if path.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.to_ascii_lowercase().contains("deepseek-v4")) {
         return Err("[configure-ai] DeepSeek V4 requires the DeepSeek (DS4) provider. Select it in AI settings.".into());
@@ -285,10 +308,7 @@ fn fit_prompt(
 
     for _ in 0..6 {
         let prompt = format_chat_messages(model, &messages)?;
-        let count = model
-            .str_to_token(&prompt, AddBos::Always)
-            .map_err(|e| format!("Failed to tokenize prompt: {}", e))?
-            .len() as u32;
+        let count = tokenize_prompt(model, &prompt)?.len() as u32;
         if count <= budget {
             return Ok(prompt);
         }
@@ -316,10 +336,7 @@ fn fit_prompt(
     }
 
     let prompt = format_chat_messages(model, &messages)?;
-    let count = model
-        .str_to_token(&prompt, AddBos::Always)
-        .map_err(|e| format!("Failed to tokenize prompt: {}", e))?
-        .len() as u32;
+    let count = tokenize_prompt(model, &prompt)?.len() as u32;
     if count <= budget {
         Ok(prompt)
     } else {
@@ -335,10 +352,7 @@ fn run_inference(
     n_threads: i32,
 ) -> Result<(String, u32, u32), String> {
     // Tokenize the prompt
-    let tokens = loaded
-        .model
-        .str_to_token(prompt, AddBos::Always)
-        .map_err(|e| format!("Failed to tokenize prompt: {}", e))?;
+    let tokens = tokenize_prompt(&loaded.model, prompt)?;
     if tokens.is_empty() {
         return Err("Empty prompt".to_string());
     }
@@ -387,7 +401,9 @@ fn run_inference(
     let n_vocab = loaded.model.n_vocab();
     let mut samplers: Vec<LlamaSampler> = Vec::new();
 
-    samplers.push(LlamaSampler::penalties(n_vocab, 1.2, 0.0, 0.0));
+    // The previous API took `penalty_last_n` as its first argument. Keep that
+    // window while supplying the vocabulary size required by the new API.
+    samplers.push(LlamaSampler::penalties(n_vocab, n_vocab, 1.2, 0.0, 0.0));
 
     if temperature > 0.01 {
         samplers.push(LlamaSampler::temp(temperature as f32));
@@ -403,6 +419,7 @@ fn run_inference(
     let mut n_decoded = 0u32;
     let mut n_cur = prompt_token_count as i32;
     let mut decoder = encoding_rs::UTF_8.new_decoder();
+    let vocab = loaded.model.vocab();
 
     loop {
         if n_decoded >= max_tokens {
@@ -413,31 +430,32 @@ fn run_inference(
         sampler.accept(new_token);
 
         // Check for end of generation
-        if loaded.model.is_eog_token(new_token) {
+        if vocab.is_eog(new_token) {
             break;
         }
 
         // Convert token to text
-        if let Ok(piece) = loaded.model.token_to_piece(new_token, &mut decoder, true, None) {
-            // Stop on ChatML end-of-turn marker
-            if output.ends_with("<|im_end") && piece.contains("|>") {
-                output.truncate(output.len() - "<|im_end".len());
-                break;
-            }
-            output.push_str(&piece);
+        let bytes = vocab.token_to_piece(new_token, true, None);
+        let piece = decode_token_piece(&mut decoder, &bytes);
 
-            // Detect repetition — stop if the last ~100 chars repeat
-            let char_count = output.chars().count();
-            if char_count > 200 {
-                let boundary: usize = output.char_indices().rev().nth(99).map(|(i, _)| i).unwrap_or(0);
-                let last = &output[boundary..];
-                let prior = &output[..boundary];
-                if prior.contains(last) {
-                    if let Some(pos) = prior.rfind(last) {
-                        output.truncate(pos + last.len());
-                    }
-                    break;
+        // Stop on ChatML end-of-turn marker
+        if output.ends_with("<|im_end") && piece.contains("|>") {
+            output.truncate(output.len() - "<|im_end".len());
+            break;
+        }
+        output.push_str(&piece);
+
+        // Detect repetition — stop if the last ~100 chars repeat
+        let char_count = output.chars().count();
+        if char_count > 200 {
+            let boundary: usize = output.char_indices().rev().nth(99).map(|(i, _)| i).unwrap_or(0);
+            let last = &output[boundary..];
+            let prior = &output[..boundary];
+            if prior.contains(last) {
+                if let Some(pos) = prior.rfind(last) {
+                    output.truncate(pos + last.len());
                 }
+                break;
             }
         }
 
@@ -461,6 +479,18 @@ fn run_inference(
     let output = strip_think_blocks(output).trim().to_string();
 
     Ok((output, prompt_token_count, n_decoded))
+}
+
+#[cfg(test)]
+mod token_api_compat_tests {
+    use super::decode_token_piece;
+
+    #[test]
+    fn decodes_utf8_character_split_across_token_pieces() {
+        let mut decoder = encoding_rs::UTF_8.new_decoder();
+        assert_eq!(decode_token_piece(&mut decoder, &[b'A', 0xF0, 0x9F]), "A");
+        assert_eq!(decode_token_piece(&mut decoder, &[0x8C, 0x8D, b'B']), "🌍B");
+    }
 }
 
 #[async_trait]

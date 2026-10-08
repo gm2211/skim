@@ -13,6 +13,7 @@ vi.mock("../../services/commands", () => ({
   listRemoteModels: vi.fn(),
   mlxIsModelDownloaded: vi.fn(),
   listLocalModels: vi.fn(),
+  getSystemInfo: vi.fn(),
 }));
 
 import * as commands from "../../services/commands";
@@ -70,6 +71,7 @@ beforeEach(() => {
   vi.mocked(commands.listLocalModels).mockResolvedValue([]);
   vi.mocked(commands.mlxIsModelDownloaded).mockResolvedValue(false);
   vi.mocked(commands.listRemoteModels).mockResolvedValue([]);
+  vi.mocked(commands.getSystemInfo).mockResolvedValue({ total_memory_gb: 8, available_memory_gb: 7, max_model_size_gb: 4 });
 });
 
 describe("ModelPicker", () => {
@@ -106,6 +108,20 @@ describe("ModelPicker", () => {
     const saved = lastSavedSettings();
     expect(saved.ai.model).toBe(downloaded);
     expect(saved.ai.local_model_path).toBe(downloaded);
+  });
+
+  it("keeps a saved memory-gated model visible and hides other choices above detected memory", async () => {
+    vi.mocked(commands.getSystemInfo).mockResolvedValue({ total_memory_gb: 8, available_memory_gb: 7, max_model_size_gb: 4 });
+    renderPicker("today", settingsWith({
+      provider: "mlx",
+      model: "mlx-community/Qwen3.5-9B-4bit",
+      local_model_path: "mlx-community/Qwen3.5-9B-4bit",
+    }));
+
+    const combo = await screen.findByRole("combobox", { name: "AI model" });
+    expect(await screen.findByRole("option", { name: /Qwen3\.5 9B/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /Qwen3\.8 27B/ })).toBeNull();
+    expect(combo).toHaveValue("mlx-community/Qwen3.5-9B-4bit");
   });
 
   it("clears a stale chat_model override when picking from the main list on the chat surface", async () => {

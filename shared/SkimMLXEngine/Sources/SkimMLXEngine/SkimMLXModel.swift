@@ -71,6 +71,11 @@ public struct SkimGeneration: Sendable {
     /// Raw model text; callers apply `LocalModelOutput.sanitize`.
     public let text: String
     public let metrics: SkimGenerationMetrics
+
+    public init(text: String, metrics: SkimGenerationMetrics) {
+        self.text = text
+        self.metrics = metrics
+    }
 }
 
 public enum SkimEngineError: LocalizedError, Equatable {
@@ -211,7 +216,10 @@ public final class SkimMLXModel: @unchecked Sendable {
                     var firstChunkAt: Date?
                     var info: GenerateCompletionInfo?
                     for await event in stream {
-                        if Task.isCancelled { break }
+                        if Task.isCancelled {
+                            task.cancel()
+                            break
+                        }
                         switch event {
                         case .chunk(let chunk):
                             if firstChunkAt == nil { firstChunkAt = Date() }

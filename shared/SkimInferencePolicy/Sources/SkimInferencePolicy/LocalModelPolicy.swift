@@ -128,6 +128,15 @@ public struct MLXSamplingPreset: Sendable, Equatable {
         "mlx-community/Qwen3.5-4B-4bit": MLXSamplingPreset(
             temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
         ),
+        "mlx-community/Qwen3.5-9B-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
+        "mlx-community/Qwen3.6-35B-A3B-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
+        "mlx-community/Qwen3.8-27B-4bit": MLXSamplingPreset(
+            temperature: 0.3, topP: 0.9, repetitionPenalty: 1.05, repetitionContextSize: 64
+        ),
         // LFM2.5 1.2B Instruct (Liquid recommends temperature 0.1, top-p 0.1
         // and repetition penalty 1.05 for factual use; a little looser here
         // to match the other compact models' answer length).

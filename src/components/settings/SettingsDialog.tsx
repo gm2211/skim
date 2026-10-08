@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
+import { useSystemInfo } from "../../hooks/useModels";
 import { useUiStore, type SettingsTab } from "../../stores/uiStore";
 import type { AppSettings, FeedlyConnectionStatus } from "../../services/types";
 import {
@@ -930,9 +931,11 @@ function OnDeviceTierSection({
   const [error, setError] = useState<string | null>(null);
 
   const isPhone = useUiStore((s) => s.isPhone);
+  const systemInfo = useSystemInfo();
   const defaultModel = defaultMlxModel(isPhone);
-  const selectedRepoId = resolveMlxRepoId(ai, isPhone);
-  const availableModels = mlxModelsFor(isPhone, selectedRepoId);
+  const totalMemoryGb = systemInfo.data?.total_memory_gb;
+  const selectedRepoId = resolveMlxRepoId(ai, isPhone, totalMemoryGb);
+  const availableModels = mlxModelsFor(isPhone, selectedRepoId, totalMemoryGb);
   const selectedModel =
     availableModels.find((m) => m.repoId === selectedRepoId) ?? defaultModel;
   const commitSelectedModel = (repoId: string) => {

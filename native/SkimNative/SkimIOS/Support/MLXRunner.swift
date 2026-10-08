@@ -13,7 +13,7 @@ typealias MLXSamplingPreset = SkimInferencePolicy.MLXSamplingPreset
 
 actor MLXRunner {
     static let shared = MLXRunner()
-    static let defaultRepoId = "mlx-community/gemma-3-1b-it-4bit"
+    static let defaultRepoId = NativeMLX.defaultRepoId
 
     private var currentRepoId: String = MLXRunner.defaultRepoId
     private var loadedContainer: SkimMLXModel?

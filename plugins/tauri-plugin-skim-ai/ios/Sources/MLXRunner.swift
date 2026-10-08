@@ -19,7 +19,7 @@ actor MLXRunner {
     // MARK: - Config
 
     /// Default HF repo id. Can be overridden via `setModel(_:)`.
-    static let defaultRepoId = "mlx-community/gemma-3-1b-it-4bit"
+    static let defaultRepoId = "mlx-community/LFM2.5-1.2B-Instruct-4bit"
 
     private var currentRepoId: String = MLXRunner.defaultRepoId
     private var loadedContainer: SkimMLXModel?

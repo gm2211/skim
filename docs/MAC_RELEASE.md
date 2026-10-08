@@ -25,7 +25,7 @@ Release checks:
 - Run frontend tests and the Rust library suite. The existing local-model
   integration test requires a separately downloaded GGUF file.
 - Verify `codesign --verify --deep --strict Skim.app` and the bundle version.
-- With `mlx-community/gemma-3-1b-it-4bit` already downloaded in the app's model
+- With `mlx-community/Qwen3.5-4B-4bit` already downloaded in the app's model
   cache, run `Skim.app/Contents/MacOS/skim --check-on-device-ai` with a 120-second
   process timeout. This uses fixed arithmetic prompts, reports Foundation Models
   availability and checks two MLX completions through the signed parent/helper.

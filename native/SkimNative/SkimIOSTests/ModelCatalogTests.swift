@@ -50,7 +50,7 @@ struct ModelCatalogTests {
         let downloaded: Set<String> = ["mlx-community/LFM2.5-1.2B-Instruct-4bit"]
         let choices = ModelCatalog.mlxChoices(downloaded: downloaded, current: "mlx-community/LFM2.5-1.2B-Instruct-4bit")
         let lfm = choices.first { $0.id == "mlx-community/LFM2.5-1.2B-Instruct-4bit" }
-        let qwen = choices.first { $0.id == "mlx-community/Qwen3-1.7B-4bit" }
+        let qwen = choices.first { $0.id == "mlx-community/Qwen3.5-2B-4bit" }
         #expect(lfm?.isAvailable == true)
         #expect(qwen?.isAvailable == false)
     }
@@ -72,7 +72,7 @@ struct ModelCatalogTests {
     }
 
     @Test func testMLXChoicesOmitsLegacyEntryWhenCurrentIsCataloged() {
-        let choices = ModelCatalog.mlxChoices(downloaded: [], current: "mlx-community/Qwen3-1.7B-4bit")
+        let choices = ModelCatalog.mlxChoices(downloaded: [], current: "mlx-community/Qwen3.5-2B-4bit")
         let legacyCount = choices.filter { $0.label.hasSuffix("(legacy)") }.count
         #expect(legacyCount == 0)
     }
@@ -104,8 +104,8 @@ struct ModelCatalogTests {
 
     // MARK: - NativeMLX.effectiveDefaultRepoId (pure, download-state driven)
 
-    @Test func testEffectiveDefaultRepoIdNothingDownloadedIsQwen3() {
-        #expect(NativeMLX.effectiveDefaultRepoId(downloaded: []) == "mlx-community/Qwen3-1.7B-4bit")
+    @Test func testEffectiveDefaultRepoIdNothingDownloadedUsesLFM25() {
+        #expect(NativeMLX.effectiveDefaultRepoId(downloaded: []) == "mlx-community/LFM2.5-1.2B-Instruct-4bit")
     }
 
     @Test func testEffectiveDefaultRepoIdGemmaDownloadedOnlyStaysGemma() {
@@ -122,6 +122,35 @@ struct ModelCatalogTests {
     @Test func testEffectiveDefaultRepoIdQwen3DownloadedOnlyIsQwen3() {
         let downloaded: Set<String> = ["mlx-community/Qwen3-1.7B-4bit"]
         #expect(NativeMLX.effectiveDefaultRepoId(downloaded: downloaded) == "mlx-community/Qwen3-1.7B-4bit")
+    }
+
+    @Test func testNewDefaultDownloadedTakesPrecedence() {
+        let downloaded: Set<String> = ["mlx-community/Qwen3-1.7B-4bit", "mlx-community/LFM2.5-1.2B-Instruct-4bit"]
+        #expect(NativeMLX.effectiveDefaultRepoId(downloaded: downloaded) == NativeMLX.defaultRepoId)
+    }
+
+    @Test func testUnpinnedExistingAlternativeNeedsNoNewDownload() {
+        let repo = "mlx-community/Qwen3-4B-Instruct-2507-4bit"
+        #expect(NativeMLX.effectiveDefaultRepoId(downloaded: [repo]) == repo)
+    }
+
+    @Test func testPhoneMemoryGatesLargerAlternatives() {
+        let small = NativeMLX.offeredOptions(isPhone: true, memoryGB: 8)
+        #expect(small.count == 2)
+        #expect(small.allSatisfy { $0.isPhoneFriendly })
+        let large = NativeMLX.offeredOptions(isPhone: true, memoryGB: 11.5)
+        #expect(large.contains { $0.repoId == "mlx-community/Qwen3.5-4B-4bit" })
+        #expect(large.contains { $0.repoId == "mlx-community/gemma-4-e2b-it-4bit" })
+        #expect(!large.contains { $0.minMemoryGB >= 16 })
+    }
+
+    @Test func testMacMemoryGatesLargeModels() {
+        let small = NativeMLX.offeredOptions(isPhone: false, memoryGB: 16)
+        #expect(small.contains { $0.repoId == "mlx-community/Qwen3.5-9B-4bit" })
+        #expect(!small.contains { $0.minMemoryGB >= 48 })
+        let large = NativeMLX.offeredOptions(isPhone: false, memoryGB: 47.5)
+        #expect(large.contains { $0.repoId == "mlx-community/Qwen3.8-27B-4bit" })
+        #expect(large.contains { $0.repoId == "mlx-community/Qwen3.6-35B-A3B-4bit" })
     }
 
     @Test func testCurrentLabelRemoteProviderNilModelShowsDefaultPlaceholder() {

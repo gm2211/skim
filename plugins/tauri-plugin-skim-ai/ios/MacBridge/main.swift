@@ -92,7 +92,7 @@ actor MLXWorker {
     private static let maxPromptTokens = 32_768
 
     func complete(_ request: Request) async throws -> SkimGeneration {
-      let repo = try validatedRepoId(request.repoId ?? "mlx-community/Qwen3-4B-Instruct-2507-4bit")
+      let repo = try validatedRepoId(request.repoId ?? "mlx-community/Qwen3.5-4B-4bit")
       guard ModelChatTemplate.isUsable(in: cacheDirectory(repo)) else {
           throw NSError(domain: "SkimAI", code: 12, userInfo: [NSLocalizedDescriptionKey: "Model chat template missing or invalid — re-download this model."])
       }

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SettingsDialog } from "./SettingsDialog";
 import { useUiStore } from "../../stores/uiStore";
-import { listRemoteModels, mlxAvailability } from "../../services/commands";
+import { getSystemInfo, listRemoteModels, mlxAvailability } from "../../services/commands";
 
 function renderDialog() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -27,6 +27,7 @@ vi.mock("../../hooks/useSettings", () => ({
 vi.mock("../../services/commands", async (original) => ({
   ...await original<typeof import("../../services/commands")>(),
   listRemoteModels: vi.fn(),
+  getSystemInfo: vi.fn().mockResolvedValue({ total_memory_gb: 16, available_memory_gb: 12, max_model_size_gb: 8 }),
   mlxAvailability: vi.fn().mockResolvedValue({ available: true }),
   mlxIsModelDownloaded: vi.fn().mockResolvedValue(false),
 }));
@@ -35,6 +36,7 @@ beforeEach(() => {
   saveSettings.mockClear();
   useUiStore.setState({ isPhone: false, showSettings: true });
   vi.mocked(listRemoteModels).mockResolvedValue([]);
+  vi.mocked(getSystemInfo).mockResolvedValue({ total_memory_gb: 16, available_memory_gb: 12, max_model_size_gb: 8 });
 });
 
 describe("Settings provider drafts", () => {

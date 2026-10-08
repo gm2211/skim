@@ -1,0 +1,110 @@
+[
+  {
+    "repo": "mlx-community/LFM2.5-1.2B-Instruct-4bit",
+    "seconds": 26.88,
+    "reply": {
+      "metrics": {
+        "decodeTokensPerSecond": 170.18366249759086,
+        "promptTokens": 51,
+        "peakMemoryBytes": 744701204,
+        "timeToFirstTokenSeconds": 0.7033469676971436,
+        "reusedPromptTokens": 0,
+        "generatedTokens": 8,
+        "prefillTokensPerSecond": 73.30693989509246,
+        "totalSeconds": 0.7505979537963867
+      },
+      "value": "Admission is free on Fridays.",
+      "ok": true
+    }
+  },
+  {
+    "repo": "mlx-community/Qwen3.5-2B-4bit",
+    "seconds": 82.01,
+    "reply": {
+      "ok": true,
+      "value": "$0",
+      "metrics": {
+        "totalSeconds": 3.7662960290908813,
+        "decodeTokensPerSecond": 18.83026046863478,
+        "generatedTokens": 2,
+        "peakMemoryBytes": 1243145574,
+        "promptTokens": 54,
+        "timeToFirstTokenSeconds": 3.688866972923279,
+        "reusedPromptTokens": 0,
+        "prefillTokensPerSecond": 14.81137320054182
+      }
+    }
+  },
+  {
+    "repo": "mlx-community/Qwen3.5-4B-4bit",
+    "seconds": 145.73,
+    "reply": {
+      "ok": true,
+      "metrics": {
+        "prefillTokensPerSecond": 56.166456665693744,
+        "timeToFirstTokenSeconds": 0.9807831048965454,
+        "peakMemoryBytes": 2735302408,
+        "generatedTokens": 7,
+        "promptTokens": 54,
+        "decodeTokensPerSecond": 36.223638041563234,
+        "reusedPromptTokens": 0,
+        "totalSeconds": 1.1753990650177002
+      },
+      "value": "Admission is free on Fridays."
+    }
+  },
+  {
+    "repo": "mlx-community/gemma-4-e2b-it-4bit",
+    "seconds": 229.64,
+    "reply": {
+      "metrics": {
+        "timeToFirstTokenSeconds": 2.9645090103149414,
+        "decodeTokensPerSecond": 3.275789111953733,
+        "promptTokens": 51,
+        "totalSeconds": 3.2698700428009033,
+        "reusedPromptTokens": 0,
+        "peakMemoryBytes": 3284663484,
+        "prefillTokensPerSecond": 18.033812021669963,
+        "generatedTokens": 1
+      },
+      "value": "Free",
+      "ok": true
+    }
+  },
+  {
+    "repo": "mlx-community/Qwen3.5-9B-4bit",
+    "seconds": 214.64,
+    "reply": {
+      "value": "$0 (free)",
+      "ok": true,
+      "metrics": {
+        "totalSeconds": 1.644237995147705,
+        "decodeTokensPerSecond": 38.02398401549134,
+        "generatedTokens": 5,
+        "peakMemoryBytes": 5847984174,
+        "promptTokens": 54,
+        "timeToFirstTokenSeconds": 1.511167049407959,
+        "reusedPromptTokens": 0,
+        "prefillTokensPerSecond": 36.088030975880116
+      }
+    }
+  },
+  {
+    "repo": "mlx-community/gemma-4-e4b-it-4bit",
+    "seconds": 420.66,
+    "reply": {
+      "value": "Admission is free on Fridays.",
+      "metrics": {
+        "prefillTokensPerSecond": 14.173292574283323,
+        "timeToFirstTokenSeconds": 3.878296971321106,
+        "peakMemoryBytes": 5023487648,
+        "generatedTokens": 6,
+        "promptTokens": 51,
+        "decodeTokensPerSecond": 13.794405678734892,
+        "reusedPromptTokens": 0,
+        "totalSeconds": 4.310765981674194
+      },
+      "ok": true
+    }
+  }
+]

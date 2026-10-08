@@ -1,0 +1,374 @@
+{
+  "bridgePath" : "\/private\/tmp\/skim-mlx-engine-build\/out\/Products\/Debug\/skim-ai-macos-bridge",
+  "fixtureNote" : "All article bodies, publishers, named researchers, and quoted facts in this fixture are synthetic test material invented for evaluation purposes. They do not describe real people, institutions, or events.",
+  "fixturePath" : "shared\/fixtures\/chat-answer-quality.json",
+  "generatedAt" : "2026-10-08T12:58:25Z",
+  "prefixReuse" : true,
+  "runs" : [
+    {
+      "avgSeconds" : 5.149373099207878,
+      "caseCount" : 8,
+      "cases" : [
+        {
+          "cleanedAnswer" : "Yes, engineers created a 3D-printing nozzle using the proboscis (mouthpart) of a dead mosquito. They anesthetized and preserved lab-reared mosquitoes, dissected out the proboscis under a stereo microscope, and mounted it into a custom-machined steel collar to fit onto a standard syringe-pump extruder. This \"necroprinting\" technique allowed them to print test lines as narrow as 400 nanometers across, which is half the width of the previous record set by a machined tungsten nozzle.",
+          "cleanedPassed" : true,
+          "followUpMetrics" : {
+            "decodeTokensPerSecond" : 41.75519076530995,
+            "generatedTokens" : 119,
+            "peakMemoryBytes" : 2990194034,
+            "prefillTokensPerSecond" : 375.3359081834862,
+            "promptTokens" : 1107,
+            "reusedPromptTokens" : 979,
+            "timeToFirstTokenSeconds" : 0.3759850263595581,
+            "totalSeconds" : 3.2272160053253174
+          },
+          "metrics" : {
+            "decodeTokensPerSecond" : 52.29919033439224,
+            "generatedTokens" : 114,
+            "peakMemoryBytes" : 3510942398,
+            "prefillTokensPerSecond" : 936.4397690635374,
+            "promptTokens" : 1011,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 1.1439470052719116,
+            "totalSeconds" : 3.323744058609009
+          },
+          "name" : "necroprinting",
+          "passed" : true,
+          "rawAnswer" : "Yes, engineers created a 3D-printing nozzle using the proboscis (mouthpart) of a dead mosquito. They anesthetized and preserved lab-reared mosquitoes, dissected out the proboscis under a stereo microscope, and mounted it into a custom-machined steel collar to fit onto a standard syringe-pump extruder. This \"necroprinting\" technique allowed them to print test lines as narrow as 400 nanometers across, which is half the width of the previous record set by a machined tungsten nozzle.",
+          "rawPassed" : true,
+          "seconds" : 6.853155016899109
+        },
+        {
+          "cleanedAnswer" : "Yes, engineers are using preserved mosquito proboscises as 3D-printing nozzles. They anesthetized and dissected lab-reared mosquitoes to extract their proboscises, which were then mounted into a custom-machined steel collar for use with a standard syringe-pump extruder. This \"necroprinting\" technique produced printed lines as narrow as 400 nanometers across, significantly cheaper than the machined tungsten nozzles that cost several thousand dollars to produce.",
+          "cleanedPassed" : true,
+          "followUpMetrics" : {
+            "decodeTokensPerSecond" : 34.42118256317181,
+            "generatedTokens" : 82,
+            "peakMemoryBytes" : 2992348622,
+            "prefillTokensPerSecond" : 1187.813788175323,
+            "promptTokens" : 1108,
+            "reusedPromptTokens" : 979,
+            "timeToFirstTokenSeconds" : 0.14071500301361084,
+            "totalSeconds" : 2.5237919092178345
+          },
+          "metrics" : {
+            "decodeTokensPerSecond" : 48.639072499482666,
+            "generatedTokens" : 103,
+            "peakMemoryBytes" : 2905390122,
+            "prefillTokensPerSecond" : 538.9169126750725,
+            "promptTokens" : 1082,
+            "reusedPromptTokens" : 979,
+            "timeToFirstTokenSeconds" : 0.22930896282196045,
+            "totalSeconds" : 2.3477590084075928
+          },
+          "name" : "necroprinting_from_summary",
+          "passed" : true,
+          "rawAnswer" : "Yes, engineers are using preserved mosquito proboscises as 3D-printing nozzles. They anesthetized and dissected lab-reared mosquitoes to extract their proboscises, which were then mounted into a custom-machined steel collar for use with a standard syringe-pump extruder. This \"necroprinting\" technique produced printed lines as narrow as 400 nanometers across, significantly cheaper than the machined tungsten nozzles that cost several thousand dollars to produce.",
+          "rawPassed" : true,
+          "seconds" : 2.349032998085022
+        },
+        {
+          "cleanedAnswer" : "The crews finished the entire rehabilitation eleven weeks ahead of the revised schedule. This achievement occurred despite a four-month delay caused by unexpectedly extensive corrosion on several support beams near the bridge's midpoint. The project's general contractor noted that the crew made up the lost time by running two shifts through the final phase of deck pouring.",
+          "cleanedPassed" : true,
+          "followUpMetrics" : {
+            "decodeTokensPerSecond" : 19.251437389081087,
+            "generatedTokens" : 52,
+            "peakMemoryBytes" : 2809821746,
+            "prefillTokensPerSecond" : 846.2050909117587,
+            "promptTokens" : 855,
+            "reusedPromptTokens" : 745,
+            "timeToFirstTokenSeconds" : 0.18627607822418213,
+            "totalSeconds" : 2.8913509845733643
+          },
+          "metrics" : {
+            "decodeTokensPerSecond" : 29.422107303596544,
+            "generatedTokens" : 63,
+            "peakMemoryBytes" : 3390095436,
+            "prefillTokensPerSecond" : 2299.4732143986753,
+            "promptTokens" : 780,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.3695409297943115,
+            "totalSeconds" : 2.511667013168335
+          },
+          "name" : "bridge_late_numeric_fact",
+          "passed" : true,
+          "rawAnswer" : "The crews finished the entire rehabilitation eleven weeks ahead of the revised schedule. This achievement occurred despite a four-month delay caused by unexpectedly extensive corrosion on several support beams near the bridge's midpoint. The project's general contractor noted that the crew made up the lost time by running two shifts through the final phase of deck pouring.",
+          "rawPassed" : true,
+          "seconds" : 2.5128899812698364
+        },
+        {
+          "cleanedAnswer" : "Dr. Naomi Castellanos led the research. She was the ecologist who led the analysis of the five-year survey of barn owls and screech owls across a dozen midsize cities. Castellanos stated that her team spent most of the project's third year trying to rule out simpler explanations before accepting the decline in owl numbers.",
+          "cleanedPassed" : true,
+          "followUpMetrics" : {
+            "decodeTokensPerSecond" : 14.278930526383638,
+            "generatedTokens" : 90,
+            "peakMemoryBytes" : 2938051036,
+            "prefillTokensPerSecond" : 560.6403772839077,
+            "promptTokens" : 859,
+            "reusedPromptTokens" : 742,
+            "timeToFirstTokenSeconds" : 0.25192999839782715,
+            "totalSeconds" : 6.555203080177307
+          },
+          "metrics" : {
+            "decodeTokensPerSecond" : 21.78363056573478,
+            "generatedTokens" : 68,
+            "peakMemoryBytes" : 3444998568,
+            "prefillTokensPerSecond" : 945.7333339970852,
+            "promptTokens" : 770,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.8458030223846436,
+            "totalSeconds" : 3.9681249856948853
+          },
+          "name" : "owls_named_person_fact",
+          "passed" : true,
+          "rawAnswer" : "Dr. Naomi Castellanos led the research. She was the ecologist who led the analysis of the five-year survey of barn owls and screech owls across a dozen midsize cities. Castellanos stated that her team spent most of the project's third year trying to rule out simpler explanations before accepting the decline in owl numbers.",
+          "rawPassed" : true,
+          "seconds" : 3.971053957939148
+        },
+        {
+          "cleanedAnswer" : "The article does not specify the amount of funding or identify the specific payers for the survey. The research team's public summary does not mention who paid for the monitoring equipment or the volunteer coordination effort, and the survey did not track or estimate the project's funding sources in its published methodology. Dr. Naomi Castellanos stated only that the project \"relied on a mix of institutional and volunteer support\" without elaborating further in the released report.",
+          "cleanedPassed" : true,
+          "followUpMetrics" : {
+            "decodeTokensPerSecond" : 8.432526326859273,
+            "generatedTokens" : 78,
+            "peakMemoryBytes" : 2883721332,
+            "prefillTokensPerSecond" : 402.0867159865855,
+            "promptTokens" : 859,
+            "reusedPromptTokens" : 742,
+            "timeToFirstTokenSeconds" : 0.4564840793609619,
+            "totalSeconds" : 9.708418011665344
+          },
+          "metrics" : {
+            "decodeTokensPerSecond" : 10.012846447964366,
+            "generatedTokens" : 90,
+            "peakMemoryBytes" : 2588636364,
+            "prefillTokensPerSecond" : 107.72538812807576,
+            "promptTokens" : 779,
+            "reusedPromptTokens" : 742,
+            "timeToFirstTokenSeconds" : 0.3971219062805176,
+            "totalSeconds" : 9.364609956741333
+          },
+          "name" : "owls_fact_not_in_article",
+          "passed" : true,
+          "rawAnswer" : "The article does not specify the amount of funding or identify the specific payers for the survey. The research team's public summary does not mention who paid for the monitoring equipment or the volunteer coordination effort, and the survey did not track or estimate the project's funding sources in its published methodology. Dr. Naomi Castellanos stated only that the project \"relied on a mix of institutional and volunteer support\" without elaborating further in the released report.",
+          "rawPassed" : true,
+          "seconds" : 9.369028925895691
+        },
+        {
+          "cleanedAnswer" : "The researchers printed lines measuring as narrow as 400 nanometers across. This width was achieved using a UV-curable resin passed through a mosquito proboscis mounted in a custom steel collar. These lines were approximately half the width of the previous record, which had been set by a machined tungsten nozzle.",
+          "cleanedPassed" : true,
+          "followUpMetrics" : {
+            "decodeTokensPerSecond" : 13.088259737116624,
+            "generatedTokens" : 77,
+            "peakMemoryBytes" : 2899752018,
+            "prefillTokensPerSecond" : 428.31688645265587,
+            "promptTokens" : 1097,
+            "reusedPromptTokens" : 979,
+            "timeToFirstTokenSeconds" : 0.3119690418243408,
+            "totalSeconds" : 6.2033960819244385
+          },
+          "metrics" : {
+            "decodeTokensPerSecond" : 11.589915393998814,
+            "generatedTokens" : 64,
+            "peakMemoryBytes" : 3591402754,
+            "prefillTokensPerSecond" : 1159.6511626997096,
+            "promptTokens" : 1060,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.9942280054092407,
+            "totalSeconds" : 6.518077969551086
+          },
+          "name" : "necroprinting_followup_pronoun",
+          "passed" : true,
+          "rawAnswer" : "The researchers printed lines measuring as narrow as 400 nanometers across. This width was achieved using a UV-curable resin passed through a mosquito proboscis mounted in a custom steel collar. These lines were approximately half the width of the previous record, which had been set by a machined tungsten nozzle.",
+          "rawPassed" : true,
+          "seconds" : 6.520298957824707
+        },
+        {
+          "cleanedAnswer" : "Yes, the crews finished the rehabilitation eleven weeks ahead of the revised schedule. Despite a four-month delay caused by unexpectedly extensive corrosion on support beams near the bridge's midpoint, the general contractor stated that the crew made up the lost time by running two shifts through the final phase of deck pouring. The project supervisor noted that while nobody expected to beat the schedule after the midpoint delay, the crews pushed hard through the summer to complete the work.",
+          "cleanedPassed" : true,
+          "followUpMetrics" : {
+            "decodeTokensPerSecond" : 40.04460240865639,
+            "generatedTokens" : 52,
+            "peakMemoryBytes" : 2896041758,
+            "prefillTokensPerSecond" : 1243.2326816690231,
+            "promptTokens" : 858,
+            "reusedPromptTokens" : 745,
+            "timeToFirstTokenSeconds" : 0.13749492168426514,
+            "totalSeconds" : 1.436484932899475
+          },
+          "metrics" : {
+            "decodeTokensPerSecond" : 16.520407219225824,
+            "generatedTokens" : 87,
+            "peakMemoryBytes" : 3374602674,
+            "prefillTokensPerSecond" : 880.2391496578185,
+            "promptTokens" : 780,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.9272990226745605,
+            "totalSeconds" : 6.194125056266785
+          },
+          "name" : "bridge_yes_no",
+          "passed" : true,
+          "rawAnswer" : "Yes, the crews finished the rehabilitation eleven weeks ahead of the revised schedule. Despite a four-month delay caused by unexpectedly extensive corrosion on support beams near the bridge's midpoint, the general contractor stated that the crew made up the lost time by running two shifts through the final phase of deck pouring. The project supervisor noted that while nobody expected to beat the schedule after the midpoint delay, the crews pushed hard through the summer to complete the work.",
+          "rawPassed" : true,
+          "seconds" : 6.198238968849182
+        },
+        {
+          "cleanedAnswer" : "The team anesthetized and preserved lab-reared mosquitoes, then dissected out their proboscises under a stereo microscope. They mounted these clean specimens into a custom-machined steel collar designed to hold the base of the mouthpart rigidly in place. Finally, they ran UV-curable resin through this makeshift nozzle at low pressure while curing each printed line with a handheld UV lamp.",
+          "cleanedPassed" : false,
+          "firstFailingDetail" : "none of [\"calibrat\", \"align\", \"alignment\"] found in answer",
+          "firstFailingRule" : "mustContainAny",
+          "followUpMetrics" : {
+            "decodeTokensPerSecond" : 26.276895366128056,
+            "generatedTokens" : 73,
+            "peakMemoryBytes" : 3595335188,
+            "prefillTokensPerSecond" : 3031.8433541708614,
+            "promptTokens" : 1104,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.4253290891647339,
+            "totalSeconds" : 3.2044219970703125
+          },
+          "metrics" : {
+            "decodeTokensPerSecond" : 25.833332471316044,
+            "generatedTokens" : 78,
+            "peakMemoryBytes" : 3595760148,
+            "prefillTokensPerSecond" : 2833.4283728288933,
+            "promptTokens" : 1019,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.3991039991378784,
+            "totalSeconds" : 3.419363021850586
+          },
+          "name" : "necroprinting_list_steps",
+          "passed" : false,
+          "rawAnswer" : "The team anesthetized and preserved lab-reared mosquitoes, then dissected out their proboscises under a stereo microscope. They mounted these clean specimens into a custom-machined steel collar designed to hold the base of the mouthpart rigidly in place. Finally, they ran UV-curable resin through this makeshift nozzle at low pressure while curing each printed line with a handheld UV lamp.",
+          "rawPassed" : false,
+          "seconds" : 3.4212859869003296
+        }
+      ],
+      "model" : "mlx-community\/Qwen3.5-4B-4bit",
+      "oneShot" : false,
+      "passCount" : 7,
+      "prompt" : "new",
+      "speed" : {
+        "coldTimeToFirstTokenSeconds" : 0.3695409297943115,
+        "decodeTokensPerSecond" : 23.61978239158581,
+        "medianPromptTokens" : 780,
+        "medianReusedTokens" : 745,
+        "peakMemoryMB" : 3429.1841011047363,
+        "prefillTokensPerSecond" : 2299.4732143986753,
+        "warmTimeToFirstTokenSeconds" : 0.281949520111084
+      },
+      "summaryCaseCount" : 6,
+      "summaryCases" : [
+        {
+          "failures" : [
+
+          ],
+          "metrics" : {
+            "decodeTokensPerSecond" : 16.57658038422655,
+            "generatedTokens" : 68,
+            "peakMemoryBytes" : 3501945328,
+            "prefillTokensPerSecond" : 1437.9256431274353,
+            "promptTokens" : 977,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.7383569478988647,
+            "totalSeconds" : 4.840804934501648
+          },
+          "name" : "necroprinting_short",
+          "passed" : true,
+          "summary" : "A lab published a preliminary note on \"necroprinting,\" using preserved mosquito proboscises as 3D-printing nozzles. This bio-inspired approach achieves 400-nanometer lines at low cost, though it remains fragile and requires individual calibration. The team suggests potential niche applications in microelectronics and medical research."
+        },
+        {
+          "failures" : [
+
+          ],
+          "metrics" : {
+            "decodeTokensPerSecond" : 23.61978239158581,
+            "generatedTokens" : 224,
+            "peakMemoryBytes" : 3510805198,
+            "prefillTokensPerSecond" : 3201.0779268057145,
+            "promptTokens" : 978,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.35602688789367676,
+            "totalSeconds" : 9.840581893920898
+          },
+          "name" : "necroprinting_medium",
+          "passed" : true,
+          "summary" : "A small materials-engineering lab outside Portland published a preliminary technical note describing a technique using preserved mosquito proboscises as 3D-printing nozzles. This approach allows printing lines as narrow as 400 nanometers, roughly half the width of previous records achieved by expensive machined tungsten nozzles. The team, calling the method \"necroprinting,\" anesthetized and dissected lab-reared mosquitoes to mount their proboscises in custom steel collars attached to standard syringe-pump extruders. While the technique is significantly cheaper than machining alternatives, it involves inherent limitations: mounted specimens are fragile, typically surviving only a few print runs before fracturing or clogging, and require individual calibration under a microscope. Flow rates are also lower than conventional nozzles, extending print times per line. The lead engineer stated this is not intended to replace industrial manufacturing but serves as a viable option for research groups needing ultra-fine test prints without substantial tooling budgets. The team is currently testing other biting insects for finer tapers and exploring chemical hardening coatings to extend specimen durability."
+        },
+        {
+          "failures" : [
+
+          ],
+          "metrics" : {
+            "decodeTokensPerSecond" : 19.401370400536365,
+            "generatedTokens" : 44,
+            "peakMemoryBytes" : 3339760648,
+            "prefillTokensPerSecond" : 2693.961451334395,
+            "promptTokens" : 743,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.29250895977020264,
+            "totalSeconds" : 2.5604439973831177
+          },
+          "name" : "bridge_short",
+          "passed" : true,
+          "summary" : "A Portland Harbor Truss Bridge reopened after a $42.7M rehabilitation replacing its deck and reinforcing fatigue-prone connections. Unexpected corrosion caused delays, but crews finished 11 weeks ahead of the revised schedule."
+        },
+        {
+          "failures" : [
+
+          ],
+          "metrics" : {
+            "decodeTokensPerSecond" : 36.844112003380054,
+            "generatedTokens" : 235,
+            "peakMemoryBytes" : 3373642410,
+            "prefillTokensPerSecond" : 2904.9103465994936,
+            "promptTokens" : 744,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.27219200134277344,
+            "totalSeconds" : 6.650686979293823
+          },
+          "name" : "bridge_medium",
+          "passed" : true,
+          "summary" : "The Portland Harbor Truss Bridge reopened to vehicle traffic this week following a 14-month rehabilitation project. While a 2023 inspection identified hairline cracks in lower chord connections that posed no immediate safety risk, the regional transportation authority opted for full closure and repair rather than waiting for potential failure. Crews stripped the original 1920s concrete deck, discovering unexpected corrosion on support beams near the midpoint. This necessitated custom-fabricated steel sections due to lost manufacturer specifications. A new lightweight concrete deck with corrosion-resistant rebar was installed, designed to reduce dead load by nearly 200 tons. Additionally, the project included repainting the truss structure, replacing 14,000 corroded fasteners, and installing a modern expansion-joint system. A separate LED lighting addition was also funded independently. Despite a four-month delay caused by the corrosion discovery, the project was reportedly completed eleven weeks ahead of its revised schedule. The total cost was $42.7 million, funded via federal grants and regional bonds. Officials stated the bridge is expected to remain in service with routine maintenance for at least another 40 years."
+        },
+        {
+          "failures" : [
+
+          ],
+          "metrics" : {
+            "decodeTokensPerSecond" : 50.765285065025445,
+            "generatedTokens" : 42,
+            "peakMemoryBytes" : 3369022468,
+            "prefillTokensPerSecond" : 3215.725989559563,
+            "promptTokens" : 740,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.24624109268188477,
+            "totalSeconds" : 1.074038028717041
+          },
+          "name" : "owls_short",
+          "passed" : true,
+          "summary" : "A new survey suggests urban owl numbers have quietly fallen by roughly a third over five years. Researchers attribute this decline primarily to increased nighttime LED light pollution, which disrupts nocturnal hunting, alongside reduced dead trees."
+        },
+        {
+          "failures" : [
+
+          ],
+          "metrics" : {
+            "decodeTokensPerSecond" : 29.990024898374983,
+            "generatedTokens" : 202,
+            "peakMemoryBytes" : 3337367448,
+            "prefillTokensPerSecond" : 3092.744405060671,
+            "promptTokens" : 741,
+            "reusedPromptTokens" : 0,
+            "timeToFirstTokenSeconds" : 0.25442802906036377,
+            "totalSeconds" : 6.998789072036743
+          },
+          "name" : "owls_medium",
+          "passed" : true,
+          "summary" : "A five-year survey of barn and screech owls across twelve midsize cities reports a roughly one-third decline in nesting pairs since monitoring began. Researchers describe this drop as sharper and more consistent than initially anticipated, becoming statistically unmistakable only in the third and fourth years. Dr. Naomi Castellanos led the analysis, noting that observer turnover, equipment failures, and site consistency were ruled out as explanations. The primary correlate identified was increased nighttime light levels from municipal LED streetlight conversions, which researchers argue disrupt owls' sound-based hunting and alter prey behavior. While light pollution is cited as the strongest single factor, Castellanos explicitly qualifies it as a \"strong correlate rather than a proven sole cause.\" Secondary contributors include reduced availability of large dead trees for cavity nesting due to urban safety removals. Funding sources remain undisclosed in the published methodology, with support described only as a mix of institutional and volunteer efforts. The team now recommends piloting warmer color temperatures and adaptive dimming schedules in areas with known owl activity."
+        }
+      ],
+      "summaryPassCount" : 6
+    }
+  ]
+}

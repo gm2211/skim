@@ -138,6 +138,7 @@ function StoryImage({ src, style, onClick }: { src: string; style: CSSProperties
 export function CatchupDialog({ onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
   const showSettings = useUiStore((s) => s.showSettings);
+  const openSettings = useUiStore((s) => s.setShowSettings);
   const { data: settings } = useSettings();
   useLockBodyScroll(isPhone && !showSettings);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -579,8 +580,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
               </button>
             ) : (
               <button
-                onClick={run}
-                disabled={providerUnavailable}
+                onClick={providerUnavailable ? () => openSettings(true) : run}
                 className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium flex-shrink-0 whitespace-nowrap"
                 style={{
                   padding: "0 16px",
@@ -589,7 +589,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                   minHeight: CONTROL_HEIGHT,
                 }}
               >
-                {report ? "Run again" : "Run catch-up"}
+                {providerUnavailable ? "Set up AI" : report ? "Run again" : "Run catch-up"}
               </button>
             )}
           </div>

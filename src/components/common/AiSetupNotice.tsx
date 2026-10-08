@@ -27,8 +27,17 @@ export function AiSetupNotice({ error }: { error?: string | null }) {
         </p>
         {detail && <p className="text-text-secondary break-words" style={{ fontSize: 12, marginTop: 8, marginBottom: isPhone ? 16 : 0 }}>{detail}</p>}
       </div>
-      <button onClick={() => openSettings(true)} className="rounded-lg bg-accent text-bg-primary hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent" style={{ minHeight: "var(--skim-control-height, 44px)", padding: isPhone ? "10px 16px" : "6px 12px", fontSize: isPhone ? 14 : 12, fontWeight: 600, flexShrink: 0 }}>
-        Open AI settings
+      <button
+        onClick={() => openSettings(true)}
+        aria-label="Open AI settings"
+        title="Open AI settings"
+        className="inline-flex items-center justify-center rounded-lg text-text-secondary hover:text-text-primary hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+        style={{ width: "var(--skim-control-height, 44px)", height: "var(--skim-control-height, 44px)", flexShrink: 0 }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m9.5 3-.6 2.4-2.1 1.2-2.4-.7-2.5 4.2 1.8 1.8v2.4l-1.8 1.8 2.5 4.2 2.4-.7 2.1 1.2.6 2.4h5l.6-2.4 2.1-1.2 2.4.7 2.5-4.2-1.8-1.8v-2.4l1.8-1.8-2.5-4.2-2.4.7-2.1-1.2L14.5 3Z" transform="translate(0 -1.1)" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
       </button>
     </section>
   );

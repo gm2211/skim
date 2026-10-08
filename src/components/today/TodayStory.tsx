@@ -9,7 +9,6 @@ export type StoryRank = "lead" | "story" | "brief";
 interface Props {
   item: TodayEditionItem;
   rank: StoryRank;
-  isWritingLede: boolean;
   isSaving?: boolean;
   onToggleConsumed: (storyId: string, isConsumed: boolean) => void;
   onOpenArticle: (articleId: string) => void;
@@ -124,7 +123,7 @@ function ReportImage({ articleId, title }: { articleId: string; title: string })
   return <img className="today-report-image" src={image} alt={`Image from report: ${title}`} referrerPolicy="no-referrer" onError={() => setFailedUrl(image)} />;
 }
 
-export function TodayStory({ item, rank, isWritingLede, isSaving = false, onToggleConsumed, onOpenArticle }: Props) {
+export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onOpenArticle }: Props) {
   const [expanded, setExpanded] = useState(false);
   const referencesId = useId();
   // Every report remains available on request, including syndicated copies.
@@ -139,7 +138,6 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
   const ledeSource = item.lede?.trim() && ledeSourceArticleId
     ? members.find((member) => member.article_id === ledeSourceArticleId)
     : undefined;
-  const awaitingLede = !item.editorial && isWritingLede;
   const coverageCount = members.filter((member) => member.membership_type !== "duplicate").length;
 
   return (
@@ -167,12 +165,6 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
       </>}
       {!item.editorial && ledeSource && item.lede?.trim() && (
         <PreviewAttribution member={ledeSource} onOpenArticle={onOpenArticle} />
-      )}
-      {awaitingLede && (
-        <div role="status" className="text-text-muted" style={{ fontSize: 12, marginTop: 8 }}>
-          Preparing summary…
-          <div className="story-rule-live" style={{ height: 2, borderRadius: 999, marginTop: 6 }} />
-        </div>
       )}
       {item.has_material_update && item.snapshot_delta_summary && !brief && (
         <p className="text-accent" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>

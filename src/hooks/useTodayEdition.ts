@@ -66,7 +66,8 @@ function useTodayWindow(): TodayWindow {
 export function useTodayEdition() {
   const qc = useQueryClient();
   const storyLimit = useTodayStoryLimit();
-  const { data: settings } = useSettings();
+  const settingsQuery = useSettings();
+  const settings = settingsQuery.data;
   const aiEnabled = !!settings && settings.ai.provider !== "none";
   const win = useTodayWindow();
   const queryKey = useMemo(() => ["todayEdition", win.startsAt, win.endsAt, storyLimit] as const, [win.startsAt, win.endsAt, storyLimit]);
@@ -192,7 +193,10 @@ export function useTodayEdition() {
     setConsumed,
     ledeProgress,
     isWritingLedes,
-    canRetryLedes: aiEnabled && missingLedes && !isWritingLedes,
+    settingsUnavailable: settingsQuery.isError,
+    retrySettings: settingsQuery.refetch,
+    isPreparingSummaries: settingsQuery.isPending || (aiEnabled && missingLedes && requests[editionId ?? ""] !== "settled"),
+    canRetryLedes: aiEnabled && missingLedes && !!editionId && requests[editionId] === "settled",
     retryLedes,
   };
 }

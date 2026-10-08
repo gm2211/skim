@@ -66,6 +66,8 @@ describe("AddFeedDialog Feedly export", () => {
     const url = "https://feedly.com/i/back?nextUri=%2Fopml";
     expect(openUrl).toHaveBeenCalledWith(url);
     expect(writeText).toHaveBeenCalledWith(url);
+    expect(screen.getByRole("status")).toHaveTextContent("Export link copied");
+    expect(screen.getByRole("button", { name: "Copy export link" })).toBeEnabled();
   });
 
   it("shows an opener error when Feedly cannot be opened", async () => {

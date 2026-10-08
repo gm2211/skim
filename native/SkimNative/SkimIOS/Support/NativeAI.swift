@@ -3255,8 +3255,16 @@ struct AIResultSheet: View {
                             }
                             .disabled(isLoading)
                         } else {
-                            Button("Run Again") { retryTask = Task { await run() } }
-                                .disabled(isLoading)
+                            Button {
+                                retryTask = Task { await run() }
+                            } label: {
+                                Label("Run Again", systemImage: "arrow.clockwise")
+                                    .labelStyle(.iconOnly)
+                                    .frame(minWidth: 44, minHeight: 44)
+                                    .contentShape(Rectangle())
+                            }
+                            .help("Run Again")
+                            .disabled(isLoading)
                         }
                     }
                 }

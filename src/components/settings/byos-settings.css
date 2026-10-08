@@ -1,0 +1,35 @@
+.skim-byos-settings {
+  --byos-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --byos-text: var(--color-text-primary);
+  --byos-muted: var(--color-text-secondary);
+  --byos-faint: var(--color-text-muted);
+  --byos-surface: var(--color-bg-secondary);
+  --byos-surface-soft: var(--color-bg-tertiary);
+  --byos-surface-raised: var(--color-bg-hover);
+  --byos-surface-input: var(--color-bg-tertiary);
+  --byos-line: var(--color-border-light);
+  --byos-line-strong: var(--color-border);
+  --byos-accent: var(--color-accent);
+  --byos-accent-strong: var(--color-accent-hover);
+  --byos-on-accent: var(--color-bg-primary);
+  --byos-secondary-fill: var(--color-bg-tertiary);
+  --byos-secondary-border: var(--color-border);
+  --byos-secondary-hover: var(--color-bg-hover);
+  --byos-success: var(--color-success);
+  --byos-warning: var(--color-warning);
+  --byos-danger: var(--color-danger);
+}
+
+.skim-byos-settings .byos-provider-picker {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.skim-byos-settings .byos-provider-choice {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 380px) {
+  .skim-byos-settings .byos-provider-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

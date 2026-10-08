@@ -1,6 +1,6 @@
-commit=b7c3b646e1d5c450c6e5fa7e39c74b596f85af71
+commit=229c74d0e703d5d70aef7dc60ad490ec019ccc4c
 sourcePath=packages
 mode=packages
-packages=core,providers
+packages=core,providers,react
 namePrefix=byos-
 engine=omit

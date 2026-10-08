@@ -40,9 +40,12 @@ function devBridgePlugin(endpoint: string): Plugin {
 export default defineConfig(async () => ({
   resolve: {
     alias: {
+      "@byos/react/styles.css": fileURLToPath(new URL("./shared/byos-react/src/styles.css", import.meta.url)),
+      "@byos/react": fileURLToPath(new URL("./shared/byos-react/src/index.ts", import.meta.url)),
       "@byos/core": fileURLToPath(new URL("./shared/byos-core/src/index.ts", import.meta.url)),
       "@byos/providers": fileURLToPath(new URL("./shared/byos-providers/src/index.ts", import.meta.url)),
     },
+    dedupe: ["react", "react-dom"],
   },
   plugins: [
     react(),

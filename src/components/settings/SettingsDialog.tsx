@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import { AiAccountSettings, AiProviderPicker } from "@byos/react";
+import "@byos/react/styles.css";
+import "./byos-settings.css";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
 import { useQueryClient } from "@tanstack/react-query";
@@ -120,6 +123,14 @@ export function SettingsDialog() {
 
   const [local, setLocal] = useState<AppSettings | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => useUiStore.getState().settingsTab);
+  const [choosingProvider, setChoosingProvider] = useState(false);
+  const providerPickerRef = useRef<HTMLDivElement>(null);
+  const settingsPaneRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (activeTab !== "ai") return;
+    if (choosingProvider) providerPickerRef.current?.querySelector("button")?.focus();
+    else settingsPaneRef.current?.querySelector<HTMLButtonElement>(".byos-account-settings-change")?.focus();
+  }, [choosingProvider, local?.ai.provider, activeTab]);
   const dialogRef = useRef<HTMLDivElement>(null);
   useDialogFocus(dialogRef, () => setShowSettings(false));
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(
@@ -164,8 +175,10 @@ export function SettingsDialog() {
   const updateAi = (patch: Partial<AppSettings["ai"]>) =>
     setLocal({ ...local, ai: { ...local.ai, ...patch } });
 
-  const selectProvider = (provider: string) =>
+  const selectProvider = (provider: string) => {
     setLocal({ ...local, ai: switchProvider(local.ai, provider) });
+    setChoosingProvider(false);
+  };
 
   const availableProviders = aiProvidersForRuntime({ native: isTauri(), isIOS, isMacOS, isPhone });
   const providerSupported = availableProviders.some((provider) => provider.value === local.ai.provider);
@@ -178,6 +191,219 @@ export function SettingsDialog() {
 
   const inputClass =
     "w-full border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors";
+
+  const modelSettings = (<>
+                {providerSupported && local.ai.provider === "local" && (
+                  <ModelBrowser ai={local.ai} updateAi={updateAi} />
+                )}
+
+                {providerSupported && local.ai.provider === "ds4" && isMacOS && (
+                  <Ds4Settings ai={local.ai} updateAi={updateAi} />
+                )}
+
+                {providerSupported && local.ai.provider === "mlx" && (
+                  <>
+                    <OnDeviceTierSection ai={local.ai} updateAi={updateAi} />
+                    <label className="flex items-start gap-3 text-text-primary" style={{ minHeight: 44, marginBottom: 16, fontSize: 14 }}>
+                      <input type="checkbox" checked={local.ai.local_chat_web_search ?? true}
+                        onChange={(event) => updateAi({ local_chat_web_search: event.target.checked })}
+                        className="accent-accent" style={{ marginTop: 4 }} />
+                      <span>Web search in chat<span className="block text-text-secondary" style={{ fontSize: 12, marginTop: 4 }}>Look up current information when the article cannot answer.</span></span>
+                    </label>
+                  </>
+                )}
+
+                {providerSupported && local.ai.provider === "foundation-models" && (
+                  <FoundationModelsSection />
+                )}
+
+                {!["none", "local", "mlx", "foundation-models", "ds4"].includes(local.ai.provider) && (
+                  <InputField
+                    label="Model"
+                    description="Leave blank for default model"
+                  >
+                    {(REMOTE_LIST_PROVIDERS as readonly string[]).includes(local.ai.provider) ? <RemoteModelPicker
+                      provider={local.ai.provider}
+                      apiKey={local.ai.api_key}
+                      endpoint={local.ai.endpoint}
+                      value={local.ai.model ?? ""}
+                      onChange={(value) => updateAi({ model: value || null })}
+                    /> : <input
+                      type="text"
+                      value={local.ai.model ?? ""}
+                      onChange={(e) => updateAi({ model: e.target.value || null })}
+                      placeholder={
+                        local.ai.provider === "openai"
+                          ? "gpt-4o-mini"
+                          : local.ai.provider === "openrouter"
+                            ? "anthropic/claude-3.5-sonnet"
+                            : local.ai.provider === "ollama"
+                              ? "llama3"
+                              : local.ai.provider === "claude-cli"
+                                ? "sonnet"
+                                : "model-name"
+                      }
+                      className={inputClass}
+                      style={inputStyle}
+                    />}
+                  </InputField>
+                )}
+
+  </>);
+  const accountSettings = (<>
+                {needsApiKey(local.ai.provider) && (
+                  <InputField
+                    label={local.ai.provider === "claude-cli" ? "Setup Token (optional)" : "API Key"}
+                    description={
+                      local.ai.provider === "claude-cli"
+                        ? "Leave blank to use your existing Claude Pro/Max subscription via 'claude -p'. Only paste a token here if you want to authenticate with an ANTHROPIC_API_KEY instead (run 'claude setup-token' to get one)."
+                        : undefined
+                    }
+                  >
+                    <input
+                      type="password"
+                      value={local.ai.api_key ?? ""}
+                      onChange={(e) => updateAi({ api_key: e.target.value.trim() || null })}
+                      placeholder={local.ai.provider === "claude-cli" ? "Leave blank for subscription auth" : "sk-..."}
+                      className={inputClass}
+                      style={inputStyle}
+                    />
+                  </InputField>
+                )}
+
+                {local.ai.provider === "claude-cli" && (
+                  <div
+                    className="rounded-lg border border-accent/30 bg-accent/5"
+                    style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}
+                  >
+                    <p className="text-text-primary" style={{ fontWeight: 500, marginBottom: 4 }}>
+                      How it works
+                    </p>
+                    <p className="text-text-muted">
+                      Skim runs <code className="text-accent">claude -p "..."</code> under the hood. If the{" "}
+                      <code className="text-accent">claude</code> CLI is already signed into your Pro/Max
+                      account, nothing else is needed. Install with{" "}
+                      <code className="text-accent">npm i -g @anthropic-ai/claude-code</code> then run{" "}
+                      <code className="text-accent">claude</code> once to sign in.
+                    </p>
+                  </div>
+                )}
+
+                {local.ai.provider === "claude-subscription" && (
+                  <div style={{ marginBottom: 20 }}>
+                    <ClaudeOAuthSection />
+                  </div>
+                )}
+
+                {needsEndpoint(local.ai.provider) && (
+                  <InputField label="Endpoint URL">
+                    <input
+                      type="url"
+                      value={local.ai.endpoint ?? ""}
+                      onChange={(e) => updateAi({ endpoint: e.target.value || null })}
+                      placeholder={
+                        local.ai.provider === "ollama"
+                          ? "http://localhost:11434"
+                          : "https://api.example.com"
+                      }
+                      className={inputClass}
+                      style={inputStyle}
+                    />
+                  </InputField>
+                )}
+
+
+    {!needsApiKey(local.ai.provider) && !needsEndpoint(local.ai.provider) && local.ai.provider !== "claude-subscription" && (
+      <p className="text-text-secondary" style={{ fontSize: 13 }}>
+        This on-device service runs locally. No account or API key needed.
+      </p>
+    )}
+  </>);
+  const toolsSettings = (<>
+                {local.ai.provider !== "none" && (
+                  <>
+                    <div className="border-t border-white/5" style={{ margin: "24px 0" }} />
+                    <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
+                      Summary
+                    </h3>
+
+                    <div className="flex gap-4" style={{ marginBottom: 24 }}>
+                      <InputField label="Length">
+                        <Select
+                          aria-label="Summary length"
+                          value={local.ai.summary_length ?? "short"}
+                          onChange={(e) => updateAi({ summary_length: e.target.value })}
+                          style={{ fontSize: 14, width: 170 }}
+                        >
+                          <option value="short">Short (~30 words)</option>
+                          <option value="medium">Medium (~150 words)</option>
+                          <option value="long">Long (~300 words)</option>
+                          <option value="custom">Custom...</option>
+                        </Select>
+                        {local.ai.summary_length === "custom" && (
+                          <NumberInput
+                            min={20}
+                            max={1000}
+                            placeholder="Word count"
+                            value={local.ai.summary_custom_word_count ?? null}
+                            onChange={(n) => updateAi({ summary_custom_word_count: n } as any)}
+                            className={inputClass}
+                            style={{ ...inputStyle, width: 120, marginTop: 6 }}
+                          />
+                        )}
+                      </InputField>
+
+                      <InputField label="Tone">
+                        <Select
+                          aria-label="Summary tone"
+                          value={local.ai.summary_tone ?? "concise"}
+                          onChange={(e) => updateAi({ summary_tone: e.target.value })}
+                          style={{ fontSize: 14, width: 170 }}
+                        >
+                          <option value="concise">Concise</option>
+                          <option value="detailed">Detailed</option>
+                          <option value="casual">Casual</option>
+                          <option value="technical">Technical</option>
+                        </Select>
+                      </InputField>
+
+                    </div>
+
+                    <InputField
+                      label="Custom prompt"
+                      description="Override the default summary system prompt. Leave blank to use defaults."
+                    >
+                      <textarea
+                        value={local.ai.summary_custom_prompt ?? ""}
+                        onChange={(e) => updateAi({ summary_custom_prompt: e.target.value || null })}
+                        placeholder="e.g. You summarize articles for a technical audience. Focus on data and methodology..."
+                        className={inputClass}
+                        style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
+                        rows={3}
+                      />
+                    </InputField>
+
+                    <div className="border-t border-white/5" style={{ margin: "24px 0" }} />
+                    <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
+                      AI Inbox — What you care about
+                    </h3>
+
+                    <InputField
+                      label="Your interests"
+                      description="This prompt runs alongside the preferences learned from your reading habits."
+                    >
+                      <textarea
+                        value={local.ai.triage_user_prompt ?? ""}
+                        onChange={(e) => updateAi({ triage_user_prompt: e.target.value || null })}
+                        placeholder="e.g., Prioritize distributed systems, Rust/Go internals, Claude/Anthropic news. Deprioritize crypto drama and celebrity tech."
+                        className={inputClass}
+                        style={{ ...inputStyle, minHeight: 120, resize: "vertical" }}
+                        rows={5}
+                      />
+                    </InputField>
+                  </>
+                )}
+  </>);
 
   return (
     <div
@@ -272,230 +498,38 @@ export function SettingsDialog() {
                   <AIDisclaimer variant="block" />
                 </div>
 
-                <InputField label="Provider">
-                  <Select
-                    aria-label="Provider"
-                    fullWidth
-                    value={local.ai.provider}
-                    onChange={(e) => selectProvider(e.target.value)}
-                    style={{ fontSize: 14 }}
-                  >
-                    {!providerSupported && <option value={local.ai.provider} disabled>
-                      {AI_PROVIDERS.find((provider) => provider.value === local.ai.provider)?.label ?? local.ai.provider} (unavailable here)
-                    </option>}
-                    {availableProviders.map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
-                      </option>
-                    ))}
-                  </Select>
-                  <p className="text-text-muted" style={{ fontSize: 12, marginTop: 6 }}>
-                    {providerSupported
-                      ? AI_PROVIDERS.find((p) => p.value === local.ai.provider)?.description
-                      : "This provider is unavailable in this runtime. Choose another provider to use AI here."}
-                  </p>
-                </InputField>
-
-                {providerSupported && local.ai.provider === "local" && (
-                  <ModelBrowser ai={local.ai} updateAi={updateAi} />
-                )}
-
-                {providerSupported && local.ai.provider === "ds4" && isMacOS && (
-                  <Ds4Settings ai={local.ai} updateAi={updateAi} />
-                )}
-
-                {providerSupported && local.ai.provider === "mlx" && (
-                  <>
-                    <OnDeviceTierSection ai={local.ai} updateAi={updateAi} />
-                    <label className="flex items-start gap-3 text-text-primary" style={{ minHeight: 44, marginBottom: 16, fontSize: 14 }}>
-                      <input type="checkbox" checked={local.ai.local_chat_web_search ?? true}
-                        onChange={(event) => updateAi({ local_chat_web_search: event.target.checked })}
-                        className="accent-accent" style={{ marginTop: 4 }} />
-                      <span>Web search in chat<span className="block text-text-secondary" style={{ fontSize: 12, marginTop: 4 }}>Look up current information when the article cannot answer.</span></span>
-                    </label>
-                  </>
-                )}
-
-                {providerSupported && local.ai.provider === "foundation-models" && (
-                  <FoundationModelsSection />
-                )}
-
-                {needsApiKey(local.ai.provider) && (
-                  <InputField
-                    label={local.ai.provider === "claude-cli" ? "Setup Token (optional)" : "API Key"}
-                    description={
-                      local.ai.provider === "claude-cli"
-                        ? "Leave blank to use your existing Claude Pro/Max subscription via 'claude -p'. Only paste a token here if you want to authenticate with an ANTHROPIC_API_KEY instead (run 'claude setup-token' to get one)."
-                        : undefined
-                    }
-                  >
-                    <input
-                      type="password"
-                      value={local.ai.api_key ?? ""}
-                      onChange={(e) => updateAi({ api_key: e.target.value.trim() || null })}
-                      placeholder={local.ai.provider === "claude-cli" ? "Leave blank for subscription auth" : "sk-..."}
-                      className={inputClass}
-                      style={inputStyle}
-                    />
-                  </InputField>
-                )}
-
-                {local.ai.provider === "claude-cli" && (
-                  <div
-                    className="rounded-lg border border-accent/30 bg-accent/5"
-                    style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}
-                  >
-                    <p className="text-text-primary" style={{ fontWeight: 500, marginBottom: 4 }}>
-                      How it works
-                    </p>
-                    <p className="text-text-muted">
-                      Skim runs <code className="text-accent">claude -p "..."</code> under the hood. If the{" "}
-                      <code className="text-accent">claude</code> CLI is already signed into your Pro/Max
-                      account, nothing else is needed. Install with{" "}
-                      <code className="text-accent">npm i -g @anthropic-ai/claude-code</code> then run{" "}
-                      <code className="text-accent">claude</code> once to sign in.
-                    </p>
-                  </div>
-                )}
-
-                {local.ai.provider === "claude-subscription" && (
-                  <div style={{ marginBottom: 20 }}>
-                    <ClaudeOAuthSection />
-                  </div>
-                )}
-
-                {needsEndpoint(local.ai.provider) && (
-                  <InputField label="Endpoint URL">
-                    <input
-                      type="url"
-                      value={local.ai.endpoint ?? ""}
-                      onChange={(e) => updateAi({ endpoint: e.target.value || null })}
-                      placeholder={
-                        local.ai.provider === "ollama"
-                          ? "http://localhost:11434"
-                          : "https://api.example.com"
-                      }
-                      className={inputClass}
-                      style={inputStyle}
-                    />
-                  </InputField>
-                )}
-
-                {!["none", "local", "mlx", "foundation-models", "ds4"].includes(local.ai.provider) && (
-                  <InputField
-                    label="Model"
-                    description="Leave blank for default model"
-                  >
-                    {(REMOTE_LIST_PROVIDERS as readonly string[]).includes(local.ai.provider) ? <RemoteModelPicker
-                      provider={local.ai.provider}
-                      apiKey={local.ai.api_key}
-                      endpoint={local.ai.endpoint}
-                      value={local.ai.model ?? ""}
-                      onChange={(value) => updateAi({ model: value || null })}
-                    /> : <input
-                      type="text"
-                      value={local.ai.model ?? ""}
-                      onChange={(e) => updateAi({ model: e.target.value || null })}
-                      placeholder={
-                        local.ai.provider === "openai"
-                          ? "gpt-4o-mini"
-                          : local.ai.provider === "openrouter"
-                            ? "anthropic/claude-3.5-sonnet"
-                            : local.ai.provider === "ollama"
-                              ? "llama3"
-                              : local.ai.provider === "claude-cli"
-                                ? "sonnet"
-                                : "model-name"
-                      }
-                      className={inputClass}
-                      style={inputStyle}
-                    />}
-                  </InputField>
-                )}
-
-                {local.ai.provider !== "none" && (
-                  <>
-                    <div className="border-t border-white/5" style={{ margin: "24px 0" }} />
-                    <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
-                      Summary
-                    </h3>
-
-                    <div className="flex gap-4" style={{ marginBottom: 24 }}>
-                      <InputField label="Length">
-                        <Select
-                          aria-label="Summary length"
-                          value={local.ai.summary_length ?? "short"}
-                          onChange={(e) => updateAi({ summary_length: e.target.value })}
-                          style={{ fontSize: 14, width: 170 }}
-                        >
-                          <option value="short">Short (~30 words)</option>
-                          <option value="medium">Medium (~150 words)</option>
-                          <option value="long">Long (~300 words)</option>
-                          <option value="custom">Custom...</option>
-                        </Select>
-                        {local.ai.summary_length === "custom" && (
-                          <NumberInput
-                            min={20}
-                            max={1000}
-                            placeholder="Word count"
-                            value={local.ai.summary_custom_word_count ?? null}
-                            onChange={(n) => updateAi({ summary_custom_word_count: n } as any)}
-                            className={inputClass}
-                            style={{ ...inputStyle, width: 120, marginTop: 6 }}
-                          />
-                        )}
-                      </InputField>
-
-                      <InputField label="Tone">
-                        <Select
-                          aria-label="Summary tone"
-                          value={local.ai.summary_tone ?? "concise"}
-                          onChange={(e) => updateAi({ summary_tone: e.target.value })}
-                          style={{ fontSize: 14, width: 170 }}
-                        >
-                          <option value="concise">Concise</option>
-                          <option value="detailed">Detailed</option>
-                          <option value="casual">Casual</option>
-                          <option value="technical">Technical</option>
-                        </Select>
-                      </InputField>
-
+                <div className="skim-byos-settings">
+                  {choosingProvider || local.ai.provider === "none" || !providerSupported ? (
+                    <div ref={providerPickerRef}>
+                      <h4 className="text-text-primary" style={{ marginBottom: 10, fontWeight: 600 }}>Choose AI service</h4>
+                      {!providerSupported && <p role="status" className="text-text-muted" style={{ marginBottom: 12, fontSize: 13 }}>
+                        {AI_PROVIDERS.find((provider) => provider.value === local.ai.provider)?.label ?? local.ai.provider} is unavailable here. Choose another service to use AI.
+                      </p>}
+                      <AiProviderPicker
+                        providers={availableProviders.map((provider) => ({
+                          id: provider.value,
+                          name: provider.label,
+                          badge: ["local", "mlx", "foundation-models", "ds4", "ollama"].includes(provider.value) ? "Local" : undefined,
+                        }))}
+                        selectedId={local.ai.provider}
+                        onSelect={selectProvider}
+                      />
+                      {choosingProvider && providerSupported && <button type="button" className="tap-target text-accent" style={{ marginTop: 10 }} onClick={() => setChoosingProvider(false)}>Back to settings</button>}
                     </div>
-
-                    <InputField
-                      label="Custom prompt"
-                      description="Override the default summary system prompt. Leave blank to use defaults."
-                    >
-                      <textarea
-                        value={local.ai.summary_custom_prompt ?? ""}
-                        onChange={(e) => updateAi({ summary_custom_prompt: e.target.value || null })}
-                        placeholder="e.g. You summarize articles for a technical audience. Focus on data and methodology..."
-                        className={inputClass}
-                        style={{ ...inputStyle, minHeight: 72, resize: "vertical" }}
-                        rows={3}
-                      />
-                    </InputField>
-
-                    <div className="border-t border-white/5" style={{ margin: "24px 0" }} />
-                    <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
-                      AI Inbox — What you care about
-                    </h3>
-
-                    <InputField
-                      label="Your interests"
-                      description="This prompt runs alongside the preferences learned from your reading habits."
-                    >
-                      <textarea
-                        value={local.ai.triage_user_prompt ?? ""}
-                        onChange={(e) => updateAi({ triage_user_prompt: e.target.value || null })}
-                        placeholder="e.g., Prioritize distributed systems, Rust/Go internals, Claude/Anthropic news. Deprioritize crypto drama and celebrity tech."
-                        className={inputClass}
-                        style={{ ...inputStyle, minHeight: 120, resize: "vertical" }}
-                        rows={5}
-                      />
-                    </InputField>
-                  </>
-                )}
+                  ) : null}
+                  {providerSupported && local.ai.provider !== "none" && <div ref={settingsPaneRef} hidden={choosingProvider}>
+                    <AiAccountSettings
+                      keepPanelsMounted
+                      key={local.ai.provider}
+                      providerName={AI_PROVIDERS.find((provider) => provider.value === local.ai.provider)?.label ?? local.ai.provider}
+                      strings={{ heading: "AI service" }}
+                      onChangeProvider={() => setChoosingProvider(true)}
+                      modelSettings={modelSettings}
+                      accountSettings={accountSettings}
+                      toolsSettings={toolsSettings}
+                    />
+                  </div>}
+                </div>
               </>
             )}
 

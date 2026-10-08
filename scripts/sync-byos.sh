@@ -22,5 +22,5 @@ trap 'rm -rf "$WORK"' EXIT
 git clone --quiet --no-checkout "$REPO" "$WORK/byos"
 git -C "$WORK/byos" checkout --quiet --detach "$REF"
 node "$WORK/byos/scripts/vendor.mjs" --source "$WORK/byos" --ref "$REF" \
-  --mode packages --packages core,providers --out "$ROOT/shared" \
+  --mode packages --packages core,providers,react --out "$ROOT/shared" \
   --revision "$ROOT/shared/BYOS_REVISION" --engine omit

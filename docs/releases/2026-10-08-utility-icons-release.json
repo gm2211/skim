@@ -1,0 +1,46 @@
+{
+  "source_commit": "c7212ceb37cbe75158f684cf540a47deaa380f53",
+  "feature_pr": "https://github.com/gm2211/skim/pull/198",
+  "release_pr": "https://github.com/gm2211/skim/pull/199",
+  "preserved_release_branches": [
+    "origin/codex/chat-markdown-replies",
+    "origin/codex/mac-testflight-refresh"
+  ],
+  "tests": {
+    "frontend": 244,
+    "native_core": 173,
+    "mac_credential_workflow": 3
+  },
+  "ios": {
+    "id": "090221c7-284c-4272-8401-8856d105c4cb",
+    "version": "0.1.15",
+    "platform": "IOS",
+    "build": "80",
+    "processingState": "VALID",
+    "beta": {
+      "autoNotifyEnabled": true,
+      "internalBuildState": "IN_BETA_TESTING",
+      "externalBuildState": "NOT_APPLICABLE"
+    }
+  },
+  "ios_archive_signature_verified": true,
+  "ios_executable_sha256": "9668aedd5df2abe32c7bfaac83cbdd92cd6c7b7510693c107e1230265086b3a1",
+  "mac": {
+    "version": "0.1.41",
+    "build": "41",
+    "package_sha256": "7e7333184cc918e02fdcbe9e038c2c613ae540042b05746239b7f4cd1cc220af",
+    "signature_and_metadata_verified": true,
+    "upload": "succeeded",
+    "id": "5df0dfde-8759-4d40-8860-0dba1e4ccd6e",
+    "platform": "MAC_OS",
+    "processingState": "VALID",
+    "beta": {
+      "autoNotifyEnabled": true,
+      "internalBuildState": "IN_BETA_TESTING",
+      "externalBuildState": "READY_FOR_BETA_SUBMISSION"
+    }
+  },
+  "merge_status": "Required GitHub review outstanding; auto-merge disabled",
+  "visual_validation": "No runtime visual acceptance performed",
+  "verified_at": "2026-10-08T13:26:51.774624+00:00"
+}

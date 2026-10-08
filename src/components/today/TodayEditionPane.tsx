@@ -1,4 +1,5 @@
 import { Fragment } from "react";
+import { IconButton, RefreshIcon } from "../common/IconButton";
 import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
 import { useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useTodayEdition } from "../../hooks/useTodayEdition";
@@ -68,9 +69,12 @@ export function TodayEditionPane() {
         )}
         <div className="flex-1" />
         <ModelPicker surface="today" compact disabled={isWritingLedes} />
-        <button className="today-story-control text-text-secondary hover:text-text-primary" disabled={refreshFeeds.isPending} onClick={() => refreshFeeds.mutate(undefined)}>
-          {refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
-        </button>
+        <IconButton label="Refresh feeds" tooltip={refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
+          className="text-text-secondary hover:text-text-primary hover:bg-white/10"
+          disabled={refreshFeeds.isPending} aria-busy={refreshFeeds.isPending} onClick={() => refreshFeeds.mutate(undefined)}>
+          <RefreshIcon spinning={refreshFeeds.isPending} />
+        </IconButton>
+        <span role="status" className="sr-only">{refreshFeeds.isPending ? "Refreshing feeds…" : ""}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto" style={{ padding: "0 24px 24px" }}>

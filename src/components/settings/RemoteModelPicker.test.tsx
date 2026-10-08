@@ -34,6 +34,23 @@ beforeEach(() => vi.mocked(listRemoteModels).mockReset());
 afterEach(() => vi.restoreAllMocks());
 
 describe("RemoteModelPicker", () => {
+  it("keeps the icon action named and announces loading while preventing duplicate requests", async () => {
+    const request = deferred<{ id: string; display_name: string }[]>();
+    vi.mocked(listRemoteModels).mockReturnValue(request.promise);
+    renderPicker();
+    const button = screen.getByRole("button", { name: "Load available models" });
+
+    await userEvent.setup().click(button);
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("status")).toHaveTextContent("Loading models…");
+    await act(async () => request.resolve([{ id: "model", display_name: "Model" }]));
+    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute("aria-busy", "false");
+    expect(screen.getByRole("button", { name: "Load available models" })).toBe(button);
+  });
+
   it("ignores a response from an older provider request", async () => {
     const first = deferred<{ id: string; display_name: string }[]>();
     const second = deferred<{ id: string; display_name: string }[]>();

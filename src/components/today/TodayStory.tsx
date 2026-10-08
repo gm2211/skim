@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { IconButton, RefreshIcon } from "../common/IconButton";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { TodayEditionItem, TodayEditionMemberArticle } from "../../services/types";
 
@@ -156,16 +157,20 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
             {members.length} {members.length === 1 ? "report" : "reports"}
           </button>
         )}
-        <button
+        <IconButton
           disabled={isSaving}
+          tooltipAlign="left"
+          tooltipSide="top"
+          aria-busy={isSaving}
+          tooltip={isSaving ? "Saving…" : item.is_consumed ? "Mark as unread" : "Mark as read"}
           onClick={() => onToggleConsumed(item.story_id, !item.is_consumed)}
-          className="today-story-control text-text-secondary hover:text-text-primary disabled:opacity-60"
-          aria-label={item.is_consumed ? "Mark as unread" : "Mark as read"}
+          className="text-text-secondary hover:text-text-primary hover:bg-white/10"
+          label={item.is_consumed ? "Mark as unread" : "Mark as read"}
           aria-pressed={item.is_consumed}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9" />{item.is_consumed && <path d="m7.5 12 3 3 6-6" />}</svg>
-          {isSaving ? "Saving…" : item.is_consumed ? "Read" : "Mark read"}
-        </button>
+          {isSaving ? <RefreshIcon spinning /> : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9" />{item.is_consumed && <path d="m7.5 12 3 3 6-6" />}</svg>}
+        </IconButton>
+        <span role="status" className="sr-only">{isSaving ? "Saving reading progress…" : ""}</span>
       </div>
       {expanded && (
         <div id={referencesId} className="today-references" aria-label="Story reports">

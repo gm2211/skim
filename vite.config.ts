@@ -38,6 +38,12 @@ function devBridgePlugin(endpoint: string): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  resolve: {
+    alias: {
+      "@byos/core": fileURLToPath(new URL("./shared/byos-core/src/index.ts", import.meta.url)),
+      "@byos/providers": fileURLToPath(new URL("./shared/byos-providers/src/index.ts", import.meta.url)),
+    },
+  },
   plugins: [
     react(),
     tailwindcss(),
@@ -69,6 +75,8 @@ export default defineConfig(async () => ({
   },
 
   test: {
+    // BYOS's vendored node:test suite runs upstream with its own build/runtime.
+    include: ["src/**/*.test.{ts,tsx}"],
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],

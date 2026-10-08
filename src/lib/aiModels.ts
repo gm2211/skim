@@ -1,10 +1,15 @@
 import type { AiSettings } from "../services/types";
+import { ON_DEVICE_PROVIDERS, onDeviceProvidersFor } from "@byos/providers";
+
+const onDeviceOptions = ON_DEVICE_PROVIDERS.map((provider) => ({
+  value: provider.id,
+  label: provider.displayName,
+  description: provider.description,
+}));
 
 export const AI_PROVIDERS = [
   { value: "none", label: "None", description: "AI features disabled" },
-  { value: "local", label: "Local (Embedded)", description: "Run AI locally with llama.cpp — no server needed" },
-  { value: "mlx", label: "On-device (MLX)", description: "Run a downloaded MLX model on-device. Offline. iOS/macOS only." },
-  { value: "foundation-models", label: "Apple Intelligence", description: "Apple's on-device model. Requires macOS 26+ or iOS 26+ on Apple Intelligence hardware." },
+  ...onDeviceOptions,
   { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
   { value: "claude-subscription", label: "Claude Pro/Max (OAuth)", description: "Sign in with your Claude.ai account — no API key, no CLI. Works on desktop and iOS." },
   { value: "claude-cli", label: "Claude via CLI (legacy)", description: "Uses the local 'claude' CLI binary. Legacy path — prefer 'Claude Pro/Max (OAuth)'." },
@@ -15,6 +20,33 @@ export const AI_PROVIDERS = [
   { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
   { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
 ];
+
+/** Skim supplies native bindings; browser user agents alone cannot enable them. */
+export function aiProvidersForRuntime(runtime: {
+  native: boolean;
+  isIOS: boolean;
+  isMacOS: boolean;
+  isPhone: boolean;
+}) {
+  const apple = runtime.isIOS || runtime.isMacOS;
+  const supportedProviders = onDeviceProvidersFor({
+    kind: runtime.native ? "native" : "browser",
+    supportedProviders: [
+      ...(!runtime.isIOS && !runtime.isPhone ? ["local" as const] : []),
+      ...(apple ? ["mlx" as const, "foundation-models" as const] : []),
+    ],
+  });
+  return AI_PROVIDERS.filter((provider) => {
+    if (ON_DEVICE_PROVIDERS.some((entry) => entry.id === provider.value)) {
+      return supportedProviders.some((entry) => entry.id === provider.value);
+    }
+    if (provider.value === "ds4") return runtime.native && runtime.isMacOS;
+    if (["ollama", "claude-cli"].includes(provider.value)) {
+      return runtime.native && !runtime.isIOS && !runtime.isPhone;
+    }
+    return true;
+  });
+}
 
 export type MlxModel = { repoId: string; label: string; sizeGb: number; phoneFriendly?: boolean };
 

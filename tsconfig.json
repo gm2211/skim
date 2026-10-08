@@ -8,6 +8,10 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
+    "paths": {
+      "@byos/core": ["./shared/byos-core/src/index.ts"],
+      "@byos/providers": ["./shared/byos-providers/src/index.ts"]
+    },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,

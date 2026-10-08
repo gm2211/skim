@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { isTauri } from "@tauri-apps/api/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useUiStore, type SettingsTab } from "../../stores/uiStore";
@@ -35,6 +36,7 @@ import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import {
   AI_PROVIDERS,
+  aiProvidersForRuntime,
   REMOTE_LIST_PROVIDERS,
   defaultMlxModel,
   mlxModelsFor,
@@ -165,6 +167,9 @@ export function SettingsDialog() {
   const selectProvider = (provider: string) =>
     setLocal({ ...local, ai: switchProvider(local.ai, provider) });
 
+  const availableProviders = aiProvidersForRuntime({ native: isTauri(), isIOS, isMacOS, isPhone });
+  const providerSupported = availableProviders.some((provider) => provider.value === local.ai.provider);
+
   const inputStyle = {
     background: "rgba(255, 255, 255, 0.05)",
     padding: "10px 14px",
@@ -275,33 +280,31 @@ export function SettingsDialog() {
                     onChange={(e) => selectProvider(e.target.value)}
                     style={{ fontSize: 14 }}
                   >
-                    {AI_PROVIDERS.filter((p) => {
-                      if (p.value === "ds4" && !isMacOS) return false;
-                      if (!isIOS && !isMacOS && ["mlx", "foundation-models", "ds4"].includes(p.value)) return false;
-                      // Phone: hide providers that need a desktop runtime
-                      // (llama.cpp embedded, Ollama localhost, Claude CLI).
-                      if (!isPhone) return true;
-                      return !["local", "ollama", "claude-cli"].includes(p.value);
-                    }).map((p) => (
+                    {!providerSupported && <option value={local.ai.provider} disabled>
+                      {AI_PROVIDERS.find((provider) => provider.value === local.ai.provider)?.label ?? local.ai.provider} (unavailable here)
+                    </option>}
+                    {availableProviders.map((p) => (
                       <option key={p.value} value={p.value}>
                         {p.label}
                       </option>
                     ))}
                   </Select>
                   <p className="text-text-muted" style={{ fontSize: 12, marginTop: 6 }}>
-                    {AI_PROVIDERS.find((p) => p.value === local.ai.provider)?.description}
+                    {providerSupported
+                      ? AI_PROVIDERS.find((p) => p.value === local.ai.provider)?.description
+                      : "This provider is unavailable in this runtime. Choose another provider to use AI here."}
                   </p>
                 </InputField>
 
-                {local.ai.provider === "local" && (
+                {providerSupported && local.ai.provider === "local" && (
                   <ModelBrowser ai={local.ai} updateAi={updateAi} />
                 )}
 
-                {local.ai.provider === "ds4" && isMacOS && (
+                {providerSupported && local.ai.provider === "ds4" && isMacOS && (
                   <Ds4Settings ai={local.ai} updateAi={updateAi} />
                 )}
 
-                {local.ai.provider === "mlx" && (
+                {providerSupported && local.ai.provider === "mlx" && (
                   <>
                     <OnDeviceTierSection ai={local.ai} updateAi={updateAi} />
                     <label className="flex items-start gap-3 text-text-primary" style={{ minHeight: 44, marginBottom: 16, fontSize: 14 }}>
@@ -313,7 +316,7 @@ export function SettingsDialog() {
                   </>
                 )}
 
-                {local.ai.provider === "foundation-models" && (
+                {providerSupported && local.ai.provider === "foundation-models" && (
                   <FoundationModelsSection />
                 )}
 

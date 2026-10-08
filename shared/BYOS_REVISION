@@ -1,0 +1,6 @@
+commit=b7c3b646e1d5c450c6e5fa7e39c74b596f85af71
+sourcePath=packages
+mode=packages
+packages=core,providers
+namePrefix=byos-
+engine=omit

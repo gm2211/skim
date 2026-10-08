@@ -15,9 +15,13 @@ function renderDialog() {
   );
 }
 
-const { saveSettings } = vi.hoisted(() => ({ saveSettings: vi.fn() }));
+const { saveSettings, nativeRuntime } = vi.hoisted(() => ({ saveSettings: vi.fn(), nativeRuntime: vi.fn() }));
 vi.mock("../../utils/platform", () => ({ isIOS: false, isMacOS: true }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn().mockResolvedValue(() => {}) }));
+vi.mock("@tauri-apps/api/core", async (original) => ({
+  ...await original<typeof import("@tauri-apps/api/core")>(),
+  isTauri: nativeRuntime,
+}));
 
 const settings = { ai: { provider: "openai", api_key: "test-openai-secret", endpoint: null, model: "saved-model" }, appearance: {}, sync: {} };
 vi.mock("../../hooks/useSettings", () => ({
@@ -33,11 +37,26 @@ vi.mock("../../services/commands", async (original) => ({
 
 beforeEach(() => {
   saveSettings.mockClear();
+  nativeRuntime.mockReturnValue(true);
+  settings.ai.provider = "openai";
   useUiStore.setState({ isPhone: false, showSettings: true });
   vi.mocked(listRemoteModels).mockResolvedValue([]);
 });
 
 describe("Settings provider drafts", () => {
+  it("hides native options in browsers and retains an unavailable saved choice without starting its engine", async () => {
+    nativeRuntime.mockReturnValue(false);
+    settings.ai.provider = "mlx";
+    vi.mocked(mlxAvailability).mockClear();
+    renderDialog();
+    const picker = await screen.findByRole("combobox", { name: "Provider" });
+    expect(picker).toHaveValue("mlx");
+    expect(screen.getByRole("option", { name: "On-device (MLX) (unavailable here)" })).toBeDisabled();
+    expect(screen.queryByRole("option", { name: "Local (Embedded)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Apple Intelligence" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "On-device model" })).not.toBeInTheDocument();
+    expect(mlxAvailability).not.toHaveBeenCalled();
+  });
   it("keeps on-device model changes in the draft until Save", async () => {
     const user = userEvent.setup();
     renderDialog();

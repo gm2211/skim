@@ -38,10 +38,6 @@ type CacheEntry = { report: CatchupReport; ts: number };
 const catchupCache = new Map<string, CacheEntry>();
 const catchupErrors = new Map<string, string>();
 
-/** The one height every control on the dialog's toolbar row shares. */
-const CONTROL_HEIGHT = 40;
-const CONTROL_LABEL_STYLE = { fontSize: 12, fontWeight: 600 } as const;
-
 /** How far back to catch up. `null` is the whole unread backlog. */
 export const CATCHUP_RANGES: { value: CatchupSinceHours; label: string }[] = [
   { value: 6, label: "Last 6 hours" },
@@ -466,6 +462,13 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
 
   const providerUnavailable = settings?.ai.provider === "none";
   const setupError = isAiSetupError(error);
+  const controlHeight = "var(--skim-control-height, 44px)";
+  const controlLabelStyle = { fontSize: isPhone ? 12 : 11, fontWeight: isPhone ? 600 : 500 };
+  const controlStyle = {
+    height: controlHeight, minHeight: controlHeight,
+    fontSize: isPhone ? 13 : 12,
+    padding: "var(--skim-control-padding, 9px 34px 9px 12px)",
+  };
 
   return createPortal(
     <div
@@ -480,7 +483,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
         className={`${isPhone ? "fixed left-0 right-0 overflow-hidden" : "border border-white/10 rounded-2xl shadow-2xl"} flex flex-col`}
         style={{
           background: "rgba(22, 27, 34, 0.98)",
-          width: isPhone ? undefined : "min(760px, 92vw)",
+          width: isPhone ? undefined : "min(640px, 92vw)",
           height: isPhone ? "100dvh" : undefined,
           top: isPhone ? 0 : undefined,
           willChange: isPhone ? "transform, height" : undefined,
@@ -494,19 +497,20 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
       >
         <div
           className="relative border-b border-white/5"
-          style={{ padding: isPhone ? "16px 56px 16px 16px" : "20px 64px 20px 24px", touchAction: isPhone ? "pan-y" : undefined }}
+          style={{ padding: isPhone ? "16px 56px 16px 16px" : "12px 52px 12px 16px", touchAction: isPhone ? "pan-y" : undefined }}
           {...swipeToDismissHandlers}
         >
-          <h3 id="catchup-title" className="text-text-primary" style={{ fontSize: 20, lineHeight: 1.3, fontWeight: 650 }}>
+          <h3 id="catchup-title" className="text-text-primary" style={{ fontSize: isPhone ? 20 : 16, lineHeight: 1.3, fontWeight: 600 }}>
             Quick Catch-up
           </h3>
-          <p className="text-text-muted" style={{ marginTop: 4, fontSize: 13, lineHeight: 1.5 }}>
-            Turn your latest articles into a concise briefing.
+          <p className="text-text-muted" style={{ marginTop: 3, fontSize: isPhone ? 13 : 12, lineHeight: 1.5 }}>
+            A briefing from your unread articles.
           </p>
           <button
             onClick={onClose}
             className="tap-target absolute text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
-            style={{ right: isPhone ? 12 : 16, top: isPhone ? 12 : 16 }}
+            style={{ right: isPhone ? 12 : 10, top: isPhone ? 12 : 10,
+              ...(!isPhone ? { width: controlHeight, height: controlHeight, minWidth: controlHeight, minHeight: controlHeight } : {}) }}
             title="Close"
             aria-label="Close"
           >
@@ -516,17 +520,17 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
           </button>
         </div>
 
-        <div className="border-b border-white/5" style={{ padding: isPhone ? "12px 16px" : "12px 24px" }}>
+        <div className="border-b border-white/5" style={{ padding: isPhone ? "12px 16px" : "10px 16px" }}>
           {/* Every control on this row carries the same explicit height and the
               row aligns on its end, so the button cannot drift against the
               selects the way it did when only the selects were sized. */}
-          <div className="flex flex-wrap items-end" style={{ gap: 12 }}>
-            <label className="flex min-w-0 flex-1 flex-col" style={{ gap: 6, minWidth: 150 }}>
-              <span style={CONTROL_LABEL_STYLE}>Model</span>
+          <div className="flex flex-wrap items-end" style={{ gap: isPhone ? 12 : 8 }}>
+            {!providerUnavailable && <label className="flex min-w-0 flex-1 flex-col" style={{ gap: 6, minWidth: 150 }}>
+              <span className="text-text-muted" style={controlLabelStyle}>Model</span>
               <ModelPicker surface="catchup" disabled={loading} />
-            </label>
+            </label>}
             <label className="flex min-w-0 flex-1 flex-col" style={{ gap: 6, minWidth: 150 }}>
-              <span className="text-text-muted" style={CONTROL_LABEL_STYLE}>Include</span>
+              <span className="text-text-muted" style={controlLabelStyle}>Include</span>
               <Select
                 aria-label="Include"
                 fullWidth
@@ -535,14 +539,14 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                   if (loading) stop();
                   setScope(e.target.value as CatchupScope);
                 }}
-                style={{ height: CONTROL_HEIGHT, minHeight: CONTROL_HEIGHT }}
+                style={controlStyle}
               >
                 <option value="inbox">Priority inbox</option>
-                <option value="unread">All unread articles</option>
+                <option value="unread">{isPhone ? "Unread articles" : "All unread articles"}</option>
               </Select>
             </label>
             <label className="flex min-w-0 flex-1 flex-col" style={{ gap: 6, minWidth: 140 }}>
-              <span className="text-text-muted" style={CONTROL_LABEL_STYLE}>Going back</span>
+              <span className="text-text-muted" style={controlLabelStyle}>Going back</span>
               <Select
                 aria-label="Going back"
                 fullWidth
@@ -551,14 +555,14 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                   if (loading) stop();
                   setSinceHours(e.target.value === "all" ? null : Number(e.target.value));
                 }}
-                style={{ height: CONTROL_HEIGHT, minHeight: CONTROL_HEIGHT }}
+                style={controlStyle}
               >
                 {CATCHUP_RANGES.map((range) => (
                   <option
                     key={range.label}
                     value={range.value === null ? "all" : String(range.value)}
                   >
-                    {range.label}
+                    {isPhone && range.value === null ? "All unread" : range.label}
                   </option>
                 ))}
               </Select>
@@ -568,38 +572,37 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 onClick={stop}
                 className="border border-white/10 hover:bg-white/10 text-text-primary rounded-lg transition-colors font-medium flex-shrink-0 whitespace-nowrap"
                 style={{
-                  padding: "0 16px",
-                  fontSize: 13,
-                  height: CONTROL_HEIGHT,
-                  minHeight: CONTROL_HEIGHT,
+                  padding: isPhone ? "0 16px" : "0 12px",
+                  fontSize: isPhone ? 13 : 12,
+                  height: controlHeight,
+                  minHeight: controlHeight,
                 }}
                 aria-label="Stop catch-up"
               >
                 Stop
               </button>
-            ) : (
+            ) : !providerUnavailable ? (
               <button
                 onClick={run}
-                disabled={providerUnavailable}
                 className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium flex-shrink-0 whitespace-nowrap"
                 style={{
-                  padding: "0 16px",
-                  fontSize: 13,
-                  height: CONTROL_HEIGHT,
-                  minHeight: CONTROL_HEIGHT,
+                  padding: isPhone ? "0 16px" : "0 12px",
+                  fontSize: isPhone ? 13 : 12,
+                  height: controlHeight,
+                  minHeight: controlHeight,
                 }}
               >
                 {report ? "Run again" : "Run catch-up"}
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0" style={{ padding: isPhone ? "20px 16px" : "24px", minHeight: isPhone ? 0 : 260 }}>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0" style={{ padding: isPhone ? "20px 16px" : "16px", minHeight: !isPhone && (report || loading) ? 260 : 0 }}>
           {providerUnavailable && <AiSetupNotice />}
 
           {!providerUnavailable && !report && !loading && !error && (
-            <div style={{ padding: "24px 0" }}>
+            <div style={{ padding: isPhone ? "24px 0" : "8px 0" }}>
               {stopped ? (
                 <h4 className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>Catch-up stopped.</h4>
               ) : (
@@ -747,7 +750,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
           )}
         </div>
 
-        <div className="border-t border-white/5 flex-shrink-0" style={{ padding: "8px 20px" }}>
+        <div className="border-t border-white/5 flex-shrink-0" style={{ padding: isPhone ? "8px 20px" : "8px 16px" }}>
           <AIDisclaimer />
         </div>
       </div>

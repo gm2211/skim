@@ -101,7 +101,7 @@ export function ModelPicker({ surface, disabled, compact, label }: Props) {
         onChange={handleChange}
         disabled={disabled || saving}
         fullWidth={!compact}
-        style={compact ? { maxWidth: 200, minHeight: 40, fontSize: 13 } : undefined}
+        style={compact ? { maxWidth: 200, fontSize: 13 } : undefined}
       >
         {options.map((choice) => (
           <option key={choice.value} value={choice.value} disabled={choice.disabled}>

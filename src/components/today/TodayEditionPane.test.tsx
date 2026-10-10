@@ -12,11 +12,12 @@ import { useUiStore } from "../../stores/uiStore";
 
 vi.mock("../../services/commands", () => ({
   getOrGenerateTodayEdition: vi.fn(),
+  getArticle: vi.fn(async () => null),
   refreshAllFeeds: vi.fn(),
   triageArticles: vi.fn(),
   listTodayEditionItems: vi.fn(),
   setTodayEditionItemConsumed: vi.fn(),
-  generateTodayLedes: vi.fn(),
+  generateTodayEditorial: vi.fn(),
   TODAY_LEDE_PROGRESS_EVENT: "today_lede_progress",
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
@@ -105,6 +106,10 @@ function makeItem(overrides: Partial<TodayEditionItem>): TodayEditionItem {
   };
 }
 
+function editorial(summary: string, theme = "Technology") {
+  return { theme, summary, sources: [{ article_id: "article-default", quote: "Supporting passage from the report." }] };
+}
+
 function makeView(items: TodayEditionItem[]): TodayEditionView {
   const consumed = items.filter((i) => i.is_consumed).length;
   return {
@@ -142,24 +147,132 @@ function renderPane(strict = false, cached?: TodayEditionView) {
 }
 
 beforeEach(() => {
+  vi.mocked(commands.getArticle).mockResolvedValue({ content_html: null } as Awaited<ReturnType<typeof commands.getArticle>>);
   vi.mocked(openUrl).mockReset();
   vi.mocked(listen).mockClear();
-  useUiStore.setState({ selectedArticleId: null });
+  useUiStore.setState({ selectedArticleId: null, showSettings: false });
   vi.mocked(commands.refreshAllFeeds).mockResolvedValue(1);
   vi.mocked(commands.triageArticles).mockResolvedValue({ triaged_count: 0, batches: 0, errors: [] });
   useUiStore.setState({ isPhone: false, sidebarCollapsed: false });
   vi.mocked(commands.getSettings).mockResolvedValue(DEFAULT_SETTINGS);
-  vi.mocked(commands.generateTodayLedes).mockImplementation((_id: string) => new Promise(() => {}));
+  vi.mocked(commands.generateTodayEditorial).mockImplementation((_id: string) => new Promise(() => {}));
 });
 
 afterEach(() => {
   vi.mocked(commands.getOrGenerateTodayEdition).mockReset();
   vi.mocked(commands.setTodayEditionItemConsumed).mockReset();
   vi.mocked(commands.getSettings).mockReset();
-  vi.mocked(commands.generateTodayLedes).mockReset();
+  vi.mocked(commands.generateTodayEditorial).mockReset();
 });
 
 describe("TodayEditionPane", () => {
+  it("uses a report image, skips tracking pixels, and removes a failed image", async () => {
+    vi.mocked(commands.getArticle).mockResolvedValue({
+      id: "article-default", url: "https://example.com/news/story",
+      content_html: '<img src="/pixel.gif" width="1"><img src="/photo.jpg" width="900">',
+    } as Awaited<ReturnType<typeof commands.getArticle>>);
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    const image = await screen.findByRole("img", { name: "Image from report: Default snapshot title" });
+    expect(image).toHaveAttribute("src", "https://example.com/photo.jpg");
+    fireEvent.error(image);
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Default snapshot title" })).toBeVisible();
+  });
+
+  it("shows synthesized summaries by theme and distinguishes shared coverage from syndicated copies", async () => {
+    const first = makeItem({ story_id: "shared", snapshot_title: "Shared event", editorial: editorial("Two reports describe the same consequential decision.", "Public policy") });
+    first.member_articles.push({ ...first.member_articles[0], article_id: "second-report", feed_id: "second-feed", is_representative: false });
+    const duplicate = makeItem({ story_id: "duplicate", snapshot_title: "One syndicated report", editorial: editorial("One report, carried twice.") });
+    duplicate.member_articles.push({ ...duplicate.member_articles[0], article_id: "copy", membership_type: "duplicate", is_representative: false });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([first, duplicate]));
+    renderPane();
+    expect(await screen.findByText("Two reports describe the same consequential decision.")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Public policy" }));
+    expect(screen.queryByRole("heading", { name: "One syndicated report" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "All stories" }));
+    await userEvent.click(screen.getByRole("button", { name: "Multiple reports" }));
+    expect(screen.getByRole("heading", { name: "Shared event" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "One syndicated report" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "2 reports" }));
+    expect(screen.getByText("Supporting passage from the report.")).toBeVisible();
+  });
+
+  it("shows later editorial summaries on the next newspaper page", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView(Array.from({ length: 7 }, (_, index) => makeItem({
+      story_id: `story-${index}`, editorial: index === 6 ? editorial("A concise development worth knowing.") : null,
+    }))));
+    renderPane();
+    await userEvent.click(await screen.findByRole("button", { name: "Next page" }));
+    expect(await screen.findByText("A concise development worth knowing.")).toBeVisible();
+  });
+
+  it("opens with shapes and reveals only each completed story as progress arrives", async () => {
+    vi.mocked(commands.getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } });
+    let loadEdition!: (view: TodayEditionView) => void;
+    vi.mocked(commands.getOrGenerateTodayEdition).mockReturnValue(new Promise((resolve) => { loadEdition = resolve; }));
+    renderPane();
+    expect(screen.getAllByRole("status", { name: "Preparing story" })).toHaveLength(6);
+    expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
+    const first = makeItem({ story_id: "one", snapshot_title: "First real headline", snapshot_summary: "Raw first excerpt" });
+    const second = makeItem({ story_id: "two", snapshot_title: "Second real headline", snapshot_summary: "Raw second excerpt" });
+    const view = makeView([first, second]);
+    await act(async () => loadEdition(view));
+    await waitFor(() => expect(commands.generateTodayEditorial).toHaveBeenCalledTimes(1));
+    expect(screen.getAllByRole("status", { name: "Preparing story" })).toHaveLength(2);
+    expect(screen.queryByText("First real headline")).not.toBeInTheDocument();
+    expect(screen.queryByText("Raw first excerpt")).not.toBeInTheDocument();
+    const calls = vi.mocked(listen).mock.calls;
+    const callback = calls[calls.length - 1][1];
+    const requestId = vi.mocked(commands.generateTodayEditorial).mock.calls[0][1];
+    const progressed = makeView([{ ...first, editorial: editorial("The completed, supported summary.") }, second]);
+    await act(async () => callback({ event: "today_lede_progress", id: 1, payload: {
+      edition_id: view.edition.id, request_id: requestId, completed: 1, total: 2, message: "Writing story 2", view: progressed,
+    } }));
+    expect(screen.getByText("First real headline")).toBeVisible();
+    expect(screen.getByText("The completed, supported summary.")).toBeVisible();
+    expect(screen.getAllByRole("status", { name: "Preparing story" })).toHaveLength(1);
+    expect(screen.queryByText("Second real headline")).not.toBeInTheDocument();
+    expect(screen.queryByText("Raw second excerpt")).not.toBeInTheDocument();
+  });
+
+  it("paginates larger editions without dropping stories and resets on a theme filter", async () => {
+    const items = Array.from({ length: 20 }, (_, index) => makeItem({ story_id: `page-story-${index}`,
+      snapshot_title: `Story ${index + 1}`, editorial: editorial(`Summary ${index + 1}`, index < 18 ? "Technology" : "Local") }));
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView(items));
+    renderPane();
+    await screen.findByText("Page 1 of 4");
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(6);
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(screen.getByText("Page 2 of 4")).toBeVisible();
+    expect(screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Story 7", "Story 8", "Story 9", "Story 10", "Story 11", "Story 12"]);
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
+    expect(screen.getByText("Page 4 of 4")).toBeVisible();
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Local" }));
+    expect(screen.getByText("Page 1 of 1")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Story 19" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "All stories" }));
+    expect(screen.getByText("Page 1 of 4")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Edition size" }));
+    expect(useUiStore.getState().settingsTab).toBe("sync");
+    expect(useUiStore.getState().showSettings).toBe(true);
+  });
+
+  it("does not leave skeletons forever when AI settings fail to load", async () => {
+    vi.mocked(commands.getSettings).mockRejectedValue(new Error("Settings unavailable"));
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    expect(await screen.findByText("Default snapshot title")).toBeVisible();
+    expect(screen.queryByRole("status", { name: "Preparing story" })).not.toBeInTheDocument();
+    vi.mocked(commands.getSettings).mockResolvedValue(DEFAULT_SETTINGS);
+    await userEvent.click(screen.getByRole("button", { name: "Retry AI settings" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Retry AI settings" })).not.toBeInTheDocument());
+  });
+
   it("mounts the today model picker for this surface", async () => {
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
@@ -175,7 +288,6 @@ describe("TodayEditionPane", () => {
     });
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
-    await screen.findByText("Default snapshot title");
     await waitFor(() => expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "true"));
   });
 
@@ -331,7 +443,7 @@ describe("TodayEditionPane", () => {
     renderPane();
 
     fireEvent.click(await screen.findByRole("button", { name: "1 report" }));
-    expect(screen.getByText("example.com")).toBeInTheDocument();
+    expect(screen.getAllByText("example.com")).toHaveLength(2);
     expect(screen.queryByText("Feed One")).not.toBeInTheDocument();
   });
 
@@ -474,18 +586,18 @@ describe("Today interaction and async boundaries", () => {
     const view = makeView([makeItem({})]);
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
     renderPane();
-    await screen.findByText("Default snapshot title");
+    await screen.findByText("Preparing summaries…");
     await waitFor(() => expect(vi.mocked(listen).mock.calls.length).toBeGreaterThan(0));
     const calls = vi.mocked(listen).mock.calls;
     const callback = calls[calls.length - 1][1];
     const count = calls.length;
-    const requestId = vi.mocked(commands.generateTodayLedes).mock.calls[0][1];
+    const requestId = vi.mocked(commands.generateTodayEditorial).mock.calls[0][1];
     const event = (eventView: TodayEditionView, request_id = requestId) => ({ event: "today_lede_progress", id: 1, payload: { edition_id: eventView.edition.id, request_id, completed: 1, total: 2, message: "Preparing summaries", view: eventView } });
     const other = makeView([makeItem({ snapshot_title: "Wrong edition" })]);
     other.edition.id = "tomorrow";
     await act(async () => callback(event(other)));
     expect(screen.queryByText("Wrong edition")).not.toBeInTheDocument();
-    await act(async () => callback(event(makeView([makeItem({ lede: "The written summary" })]))));
+    await act(async () => callback(event(makeView([makeItem({ lede: "The written summary", editorial: editorial("The written summary") })]))));
     expect(await screen.findByText("The written summary")).toBeInTheDocument();
     expect(vi.mocked(listen).mock.calls.length).toBe(count);
   });
@@ -519,7 +631,7 @@ describe("Today summary retries", () => {
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
     await screen.findByText("Default summary");
-    expect(commands.generateTodayLedes).not.toHaveBeenCalled();
+    expect(commands.generateTodayEditorial).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Retry summaries" })).not.toBeInTheDocument();
     expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();
   });
@@ -528,13 +640,13 @@ describe("Today summary retries", () => {
     enableAI();
     const view = makeView([makeItem({})]);
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
-    if (outcome === "failure") vi.mocked(commands.generateTodayLedes).mockRejectedValueOnce(new Error("Unavailable"));
-    else vi.mocked(commands.generateTodayLedes).mockResolvedValueOnce(view);
-    vi.mocked(commands.generateTodayLedes).mockResolvedValueOnce(makeView([makeItem({ lede: "Recovered summary" })]));
+    if (outcome === "failure") vi.mocked(commands.generateTodayEditorial).mockRejectedValueOnce(new Error("Unavailable"));
+    else vi.mocked(commands.generateTodayEditorial).mockResolvedValueOnce(view);
+    vi.mocked(commands.generateTodayEditorial).mockResolvedValueOnce(makeView([makeItem({ lede: "Recovered summary", editorial: editorial("Recovered summary") })]));
     renderPane(true);
     await userEvent.click(await screen.findByRole("button", { name: "Retry summaries" }));
     expect(await screen.findByText("Recovered summary")).toBeInTheDocument();
-    expect(commands.generateTodayLedes).toHaveBeenCalledTimes(2);
+    expect(commands.generateTodayEditorial).toHaveBeenCalledTimes(2);
     expect(commands.getOrGenerateTodayEdition).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Retry summaries" })).not.toBeInTheDocument();
@@ -545,11 +657,11 @@ describe("Today summary retries", () => {
     const view = makeView([makeItem({})]);
     let finish!: (view: TodayEditionView) => void;
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
-    vi.mocked(commands.generateTodayLedes).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    vi.mocked(commands.generateTodayEditorial).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     const { qc } = renderPane(true, view);
     await waitFor(() => expect(qc.isFetching()).toBe(0));
-    expect(commands.generateTodayLedes).toHaveBeenCalledTimes(1);
-    await act(async () => finish(makeView([makeItem({ lede: "Completed after effect replay" })])));
+    expect(commands.generateTodayEditorial).toHaveBeenCalledTimes(1);
+    await act(async () => finish(makeView([makeItem({ lede: "Completed after effect replay", editorial: editorial("Completed after effect replay") })])));
     expect(await screen.findByText("Completed after effect replay")).toBeInTheDocument();
     expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();
     const calls = vi.mocked(listen).mock.calls;
@@ -566,18 +678,18 @@ describe("Today summary retries", () => {
     const next = makeView([makeItem({ snapshot_title: "Second edition" })]);
     next.edition = { ...next.edition, id: "second", story_limit: 5 };
     vi.mocked(commands.getOrGenerateTodayEdition).mockImplementation(async (_a, _b, _c, limit) => limit === 5 ? next : first);
-    vi.mocked(commands.generateTodayLedes).mockImplementation((id) => id === first.edition.id ? new Promise((resolve) => { finish = resolve; }) : Promise.resolve(next));
+    vi.mocked(commands.generateTodayEditorial).mockImplementation((id) => id === first.edition.id ? new Promise((resolve) => { finish = resolve; }) : Promise.resolve(next));
     const { qc } = renderPane(true);
     await screen.findByText("Preparing summaries…");
-    expect(commands.generateTodayLedes).toHaveBeenCalledTimes(1);
+    expect(commands.generateTodayEditorial).toHaveBeenCalledTimes(1);
     await act(async () => { qc.setQueryData(["settings"], { ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" }, sync: { ...DEFAULT_SETTINGS.sync, today_story_limit: 5 } }); });
     await screen.findByText("Second edition");
     await screen.findByRole("button", { name: "Retry summaries" });
-    await act(async () => finish({ ...first, items: [makeItem({ lede: "Late first summary" })] }));
+    await act(async () => finish({ ...first, items: [makeItem({ lede: "Late first summary", editorial: editorial("Late first summary") })] }));
     expect(screen.queryByText("Late first summary")).not.toBeInTheDocument();
     expect(screen.getByText("Second edition")).toBeInTheDocument();
     expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();
-    expect(commands.generateTodayLedes).toHaveBeenCalledTimes(2);
+    expect(commands.generateTodayEditorial).toHaveBeenCalledTimes(2);
   });
 
   it("ignores delayed progress from a previous attempt while retrying the same edition", async () => {
@@ -585,13 +697,13 @@ describe("Today summary retries", () => {
     const view = makeView([makeItem({})]);
     let finishRetry!: (view: TodayEditionView) => void;
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
-    vi.mocked(commands.generateTodayLedes)
+    vi.mocked(commands.generateTodayEditorial)
       .mockRejectedValueOnce(new Error("Temporary failure"))
       .mockImplementationOnce(() => new Promise((resolve) => { finishRetry = resolve; }));
     renderPane();
     await userEvent.click(await screen.findByRole("button", { name: "Retry summaries" }));
     await screen.findByText("Preparing summaries…");
-    const calls = vi.mocked(commands.generateTodayLedes).mock.calls;
+    const calls = vi.mocked(commands.generateTodayEditorial).mock.calls;
     expect(calls).toHaveLength(2);
     const previousRequestId = calls[0][1];
     const activeRequestId = calls[1][1];
@@ -599,14 +711,14 @@ describe("Today summary retries", () => {
     expect(activeRequestId).not.toBe(previousRequestId);
     const listeners = vi.mocked(listen).mock.calls;
     const callback = listeners[listeners.length - 1][1];
-    const stale = makeView([makeItem({ lede: "Stale prior-attempt summary" })]);
+    const stale = makeView([makeItem({ lede: "Stale prior-attempt summary", editorial: editorial("Stale prior-attempt summary") })]);
     await act(async () => callback({
       event: "today_lede_progress", id: 1,
       payload: { edition_id: view.edition.id, request_id: previousRequestId, completed: 1, total: 1, message: "Old attempt", view: stale },
     }));
     expect(screen.queryByText("Stale prior-attempt summary")).not.toBeInTheDocument();
     expect(screen.queryByText("Old attempt")).not.toBeInTheDocument();
-    const current = makeView([makeItem({ lede: "Current retry summary" })]);
+    const current = makeView([makeItem({ lede: "Current retry summary", editorial: editorial("Current retry summary") })]);
     await act(async () => callback({
       event: "today_lede_progress", id: 1,
       payload: { edition_id: view.edition.id, request_id: activeRequestId, completed: 0, total: 1, message: "Current attempt", view: current },
@@ -622,22 +734,26 @@ describe("Today summary retries", () => {
     const view = makeView([makeItem({})]);
     let finishLedes!: (view: TodayEditionView) => void;
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
-    vi.mocked(commands.generateTodayLedes).mockReturnValue(new Promise((resolve) => { finishLedes = resolve; }));
+    vi.mocked(commands.generateTodayEditorial).mockReturnValue(new Promise((resolve) => { finishLedes = resolve; }));
     const consumed = makeView([makeItem({ is_consumed: true, consumed_at: 42 })]);
     vi.mocked(commands.setTodayEditionItemConsumed).mockResolvedValue(consumed);
     renderPane();
-    await userEvent.click(await screen.findByRole("button", { name: "Mark as read" }));
-    await screen.findByText("All caught up");
+    await screen.findByText("Preparing summaries…");
     const callbacks = vi.mocked(listen).mock.calls;
     const callback = callbacks[callbacks.length - 1][1];
-    const requestId = vi.mocked(commands.generateTodayLedes).mock.calls[0][1];
-    const lateProgress = makeView([makeItem({ lede: "Progress lede" })]);
+    const requestId = vi.mocked(commands.generateTodayEditorial).mock.calls[0][1];
+    const lateProgress = makeView([makeItem({ lede: "Progress lede", editorial: editorial("Progress lede") })]);
     await act(async () => callback({ event: "today_lede_progress", id: 1, payload: {
       edition_id: view.edition.id, request_id: requestId, completed: 0, total: 1, message: "Writing", view: lateProgress,
     } }));
+    await userEvent.click(screen.getByRole("button", { name: "Mark as read" }));
+    await screen.findByText("All caught up");
+    await act(async () => callback({ event: "today_lede_progress", id: 1, payload: {
+      edition_id: view.edition.id, request_id: requestId, completed: 1, total: 1, message: "Finished", view: lateProgress,
+    } }));
     expect(screen.getByText("All caught up")).toBeInTheDocument();
     expect(screen.getByText("Progress lede")).toBeInTheDocument();
-    const lateCompletion = makeView([makeItem({ lede: "Completed lede" })]);
+    const lateCompletion = makeView([makeItem({ lede: "Completed lede", editorial: editorial("Completed lede") })]);
     await act(async () => finishLedes(lateCompletion));
     expect(screen.getByText("All caught up")).toBeInTheDocument();
     expect(screen.getByText("Progress lede")).toBeInTheDocument();
@@ -645,25 +761,26 @@ describe("Today summary retries", () => {
 
   it("keeps a newly written lede when an earlier consumption save returns", async () => {
     enableAI();
-    const view = makeView([makeItem({})]);
+    const ready = makeItem({ story_id: "ready", editorial: editorial("Already prepared") });
+    const view = makeView([ready, makeItem({})]);
     let finishLedes!: (view: TodayEditionView) => void;
     let resolveSave!: (view: TodayEditionView) => void;
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
-    vi.mocked(commands.generateTodayLedes).mockReturnValue(new Promise((resolve) => { finishLedes = resolve; }));
+    vi.mocked(commands.generateTodayEditorial).mockReturnValue(new Promise((resolve) => { finishLedes = resolve; }));
     vi.mocked(commands.setTodayEditionItemConsumed).mockReturnValue(new Promise((resolve) => { resolveSave = resolve; }));
     renderPane();
     await userEvent.click(await screen.findByRole("button", { name: "Mark as read" }));
     const callbacks = vi.mocked(listen).mock.calls;
     const callback = callbacks[callbacks.length - 1][1];
-    const requestId = vi.mocked(commands.generateTodayLedes).mock.calls[0][1];
-    const latestLede = makeView([makeItem({ lede: "Lede finished while save was pending" })]);
+    const requestId = vi.mocked(commands.generateTodayEditorial).mock.calls[0][1];
+    const latestLede = makeView([ready, makeItem({ lede: "Lede finished while save was pending", editorial: editorial("Lede finished while save was pending") })]);
     await act(async () => callback({ event: "today_lede_progress", id: 1, payload: {
       edition_id: view.edition.id, request_id: requestId, completed: 1, total: 1, message: "Finished", view: latestLede,
     } }));
     expect(screen.getByText("Lede finished while save was pending")).toBeInTheDocument();
-    const savedWithoutLede = makeView([makeItem({ is_consumed: true, consumed_at: 42 })]);
+    const savedWithoutLede = makeView([{ ...ready, is_consumed: true, consumed_at: 42 }, makeItem({})]);
     await act(async () => resolveSave(savedWithoutLede));
-    expect(await screen.findByText("All caught up")).toBeInTheDocument();
+    expect(await screen.findByText("1 of 2 done")).toBeInTheDocument();
     expect(screen.getByText("Lede finished while save was pending")).toBeInTheDocument();
     await act(async () => finishLedes(latestLede));
   });

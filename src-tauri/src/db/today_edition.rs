@@ -7,7 +7,7 @@ use super::semantic_edition::SemanticGroup;
 use crate::db::models::{Edition, EditionItem, EditionStatus, StoryMembershipType, StoryRevision};
 use crate::db::{queries, story_clustering};
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
@@ -19,7 +19,7 @@ const SCOPE_TODAY: &str = "today";
 #[cfg(test)]
 const MAX_RANK_CANDIDATES: usize = 10_000;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodayEditionMemberArticle {
     pub article_id: String,
     pub feed_id: String,
@@ -39,7 +39,7 @@ pub struct TodayEditionMemberArticle {
     pub is_starred: Option<bool>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodayEditionItemView {
     #[serde(flatten)]
     pub snapshot: EditionItem,
@@ -47,9 +47,28 @@ pub struct TodayEditionItemView {
     pub representative_article_id: Option<String>,
     pub member_article_ids: Vec<String>,
     pub member_articles: Vec<TodayEditionMemberArticle>,
+    #[serde(default)]
+    pub editorial: Option<TodayEditorial>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+/// Model-generated synthesis with verified source quotations. Quote membership
+/// and verbatim matching do not prove that the prose is entailed by the reports.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TodayEditorial {
+    pub theme: String,
+    pub summary: String,
+    pub sources: Vec<TodayEditorialSource>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TodayEditorialSource {
+    pub article_id: String,
+    pub quote: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodayEditionView {
     pub edition: Edition,
     pub items: Vec<TodayEditionItemView>,
@@ -669,15 +688,55 @@ pub fn list_items(
             let has_material_update = queries::get_story_revision(
                 conn, &snapshot.story_id, snapshot.story_revision_number,
             )?.is_some_and(|revision| revision.is_material_change);
+            let editorial_json: Option<String> = conn.query_row(
+                "SELECT editorial_json FROM edition_item_editorials
+                 WHERE edition_id = ?1 AND story_id = ?2",
+                params![snapshot.edition_id, snapshot.story_id],
+                |row| row.get(0),
+            ).optional()?;
+            let editorial = editorial_json.map(|json| serde_json::from_str(&json).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(error))
+            })).transpose()?;
             Ok(TodayEditionItemView {
                 has_material_update,
                 snapshot,
                 representative_article_id,
                 member_article_ids,
                 member_articles,
+                editorial,
             })
         })
         .collect()
+}
+
+/// Cache once per frozen item; concurrent calls cannot replace a saved result.
+pub(crate) fn save_editorial(
+    conn: &Connection,
+    edition_id: &str,
+    story_id: &str,
+    editorial: &TodayEditorial,
+    source_evidence_hashes: &std::collections::BTreeMap<String, String>,
+    model: &str,
+) -> Result<(), rusqlite::Error> {
+    for source in &editorial.sources {
+        let member: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM edition_item_articles
+             WHERE edition_id = ?1 AND story_id = ?2 AND article_id = ?3)",
+            params![edition_id, story_id, source.article_id], |row| row.get(0),
+        )?;
+        if !member || !source_evidence_hashes.contains_key(&source.article_id) {
+            return Err(rusqlite::Error::InvalidParameterName("Editorial source is not an evidenced edition member".into()));
+        }
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO edition_item_editorials
+         (edition_id, story_id, editorial_json, source_evidence_hashes_json, model)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![edition_id, story_id,
+            serde_json::to_string(editorial).map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?,
+            serde_json::to_string(source_evidence_hashes).map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?, model],
+    )?;
+    Ok(())
 }
 
 fn list_snapshot_member_articles(
@@ -824,6 +883,61 @@ mod tests {
         add_story(&conn, "top-d", 2, false, GENERATED_AT - 70);
         add_story(&conn, "prior-day", 3, false, DAY_START - 100);
         conn
+    }
+
+    #[test]
+    fn editorial_cache_survives_reopen_without_changing_snapshot_or_legacy_lede() {
+        let path = std::env::temp_dir().join(format!("skim-editorial-{}.sqlite", uuid::Uuid::new_v4()));
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch("PRAGMA foreign_keys=ON;").unwrap();
+        migrations::run_migrations(&conn).unwrap();
+        conn.execute_batch("INSERT INTO feeds (id,title,url,created_at,updated_at) VALUES
+            ('feed-1','One','https://one.test',0,0),('feed-2','Two','https://two.test',0,0);").unwrap();
+        add_story(&conn, "shared", 2, false, GENERATED_AT - 10);
+        let before = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        let item = &before.items[0];
+        assert!(item.editorial.is_none());
+        let mut legacy_view_json = serde_json::to_value(&before).unwrap();
+        legacy_view_json["items"][0].as_object_mut().unwrap().remove("editorial");
+        let legacy_view: TodayEditionView = serde_json::from_value(legacy_view_json).unwrap();
+        assert!(legacy_view.items[0].editorial.is_none());
+        conn.execute("UPDATE edition_items SET lede = 'Legacy preview bytes' WHERE edition_id = ?1", [&before.edition.id]).unwrap();
+        let editorial = TodayEditorial {
+            theme: "A shared development".into(),
+            summary: "Two reports describe the shared development. Their details explain the next steps.".into(),
+            sources: item.member_article_ids.iter().map(|id| TodayEditorialSource {
+                article_id: id.clone(), quote: format!("Evidence in {id}."),
+            }).collect(),
+        };
+        let hashes = item.member_article_ids.iter().map(|id| (id.clone(), "saved-body-hash".into())).collect();
+        save_editorial(&conn, &before.edition.id, &item.snapshot.story_id, &editorial, &hashes, "configured-model").unwrap();
+        let mut replacement = editorial.clone(); replacement.summary = "Do not overwrite the cached synthesis.".into();
+        save_editorial(&conn, &before.edition.id, &item.snapshot.story_id, &replacement, &hashes, "another-model").unwrap();
+        let mut outsider = editorial.clone(); outsider.sources[0].article_id = "outsider".into();
+        assert!(save_editorial(&conn, &before.edition.id, &item.snapshot.story_id, &outsider, &hashes, "model").is_err());
+        drop(conn);
+        let conn = Connection::open(&path).unwrap();
+        migrations::run_migrations(&conn).unwrap();
+        let loaded = load(&conn, &before.edition.id).unwrap();
+        assert_eq!(loaded.items[0].editorial.as_ref(), Some(&editorial));
+        assert_eq!(loaded.items[0].snapshot.snapshot_title, item.snapshot.snapshot_title);
+        assert_eq!(loaded.items[0].snapshot.snapshot_summary, item.snapshot.snapshot_summary);
+        assert_eq!(loaded.items[0].snapshot.position, item.snapshot.position);
+        assert_eq!(loaded.items[0].snapshot.is_consumed, item.snapshot.is_consumed);
+        assert_eq!(loaded.items[0].member_article_ids, item.member_article_ids);
+        assert_eq!(loaded.total_count, before.total_count);
+        let (legacy, model, evidence): (String, String, String) = conn.query_row(
+            "SELECT i.lede, e.model, e.source_evidence_hashes_json FROM edition_items i
+             JOIN edition_item_editorials e USING(edition_id,story_id) WHERE i.edition_id = ?1",
+            [&before.edition.id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ).unwrap();
+        assert_eq!(legacy, "Legacy preview bytes");
+        assert_eq!(model, "configured-model");
+        assert_eq!(serde_json::from_str::<std::collections::BTreeMap<String, String>>(&evidence).unwrap(), hashes);
+        let other_edition = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 10).unwrap();
+        assert!(other_edition.items[0].editorial.is_none());
+        drop(conn);
+        std::fs::remove_file(path).unwrap();
     }
 
     fn add_story(

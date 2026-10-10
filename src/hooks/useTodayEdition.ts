@@ -6,26 +6,29 @@ import type { TodayEditionView } from "../services/types";
 import { msUntilWindowRollover, todayWindow, type TodayWindow } from "../lib/todayEdition";
 import { useSettings } from "./useSettings";
 
-/** Merge ledes without allowing an older whole-edition snapshot to erase newer state. */
+/** Merge generated text only; stale progress must never roll back reading state. */
 function mergeLedesIntoCurrent(current: TodayEditionView | undefined, incoming: TodayEditionView): TodayEditionView {
   if (!current || current.edition.id !== incoming.edition.id) return incoming;
-  const ledes = new Map(incoming.items.filter((item) => item.lede?.trim()).map((item) => [item.story_id, item.lede]));
-  if (ledes.size === 0) return current;
+  const incomingItems = new Map(incoming.items.map((item) => [item.story_id, item]));
   return {
     ...current,
-    items: current.items.map((item) => !item.lede?.trim() && ledes.has(item.story_id) ? { ...item, lede: ledes.get(item.story_id)! } : item),
+    items: current.items.map((item) => {
+      const next = incomingItems.get(item.story_id);
+      return next ? {
+        ...item,
+        lede: item.lede || next.lede,
+        lede_source_article_id: item.lede ? item.lede_source_article_id : next.lede_source_article_id,
+        lede_source_evidence_hash: item.lede ? item.lede_source_evidence_hash : next.lede_source_evidence_hash,
+        editorial: item.editorial ?? next.editorial,
+      } : item;
+    }),
   };
 }
 
-/** Keep the latest generated ledes while applying a consumption-save response. */
+/** Preserve generated summaries while applying a consumption-save response. */
 function preserveLatestLedes(saveView: TodayEditionView, current: TodayEditionView | undefined): TodayEditionView {
   if (!current || current.edition.id !== saveView.edition.id) return saveView;
-  const ledes = new Map(current.items.filter((item) => item.lede?.trim()).map((item) => [item.story_id, item.lede]));
-  if (ledes.size === 0) return saveView;
-  return {
-    ...saveView,
-    items: saveView.items.map((item) => ledes.has(item.story_id) ? { ...item, lede: ledes.get(item.story_id)! } : item),
-  };
+  return mergeLedesIntoCurrent(saveView, current);
 }
 
 export function useTodayStoryLimit(): number {
@@ -63,7 +66,8 @@ function useTodayWindow(): TodayWindow {
 export function useTodayEdition() {
   const qc = useQueryClient();
   const storyLimit = useTodayStoryLimit();
-  const { data: settings } = useSettings();
+  const settingsQuery = useSettings();
+  const settings = settingsQuery.data;
   const aiEnabled = !!settings && settings.ai.provider !== "none";
   const win = useTodayWindow();
   const queryKey = useMemo(() => ["todayEdition", win.startsAt, win.endsAt, storyLimit] as const, [win.startsAt, win.endsAt, storyLimit]);
@@ -107,8 +111,7 @@ export function useTodayEdition() {
     },
   });
 
-  // Ledes are written after the edition exists, one model call per story, so
-  // the page is published again after each one and the stories fill in.
+  // Editorial summaries arrive after grouping and ranking, one story at a time.
   const editionId = query.data?.edition.id;
   const resetConsumed = setConsumed.reset;
   useEffect(() => {
@@ -127,7 +130,7 @@ export function useTodayEdition() {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  const missingLedes = !!query.data?.items.slice(0, 6).some((item) => !item.lede?.trim());
+  const missingLedes = !!query.data?.items.some((item) => !item.editorial?.summary.trim());
   const isWritingLedes = !!editionId && requests[editionId] === "pending";
 
   const retryLedes = useCallback(() => {
@@ -140,7 +143,7 @@ export function useTodayEdition() {
     setLedeProgress(null);
     // Capture the cache key; effect cleanup must not discard a valid response
     // or leave a request permanently pending (including StrictMode replays).
-    void commands.generateTodayLedes(editionId, requestId).then((view) => {
+    void commands.generateTodayEditorial(editionId, requestId).then((view) => {
       if (view.edition.id === editionId) {
         qc.setQueryData<TodayEditionView>(queryKey, (current) => mergeLedesIntoCurrent(current, view));
       }
@@ -186,10 +189,14 @@ export function useTodayEdition() {
     ...query,
     window: win,
     storyLimit,
+    aiEnabled,
     setConsumed,
     ledeProgress,
     isWritingLedes,
-    canRetryLedes: aiEnabled && missingLedes && !isWritingLedes,
+    settingsUnavailable: settingsQuery.isError,
+    retrySettings: settingsQuery.refetch,
+    isPreparingSummaries: settingsQuery.isPending || (aiEnabled && missingLedes && requests[editionId ?? ""] !== "settled"),
+    canRetryLedes: aiEnabled && missingLedes && !!editionId && requests[editionId] === "settled",
     retryLedes,
   };
 }

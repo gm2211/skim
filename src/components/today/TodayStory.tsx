@@ -1,13 +1,14 @@
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { TodayEditionItem, TodayEditionMemberArticle } from "../../services/types";
+
+import { useArticle } from "../../hooks/useArticles";
 
 export type StoryRank = "lead" | "story" | "brief";
 
 interface Props {
   item: TodayEditionItem;
   rank: StoryRank;
-  isWritingLede: boolean;
   isSaving?: boolean;
   onToggleConsumed: (storyId: string, isConsumed: boolean) => void;
   onOpenArticle: (articleId: string) => void;
@@ -98,7 +99,31 @@ function PreviewAttribution({ member, onOpenArticle }: {
   );
 }
 
-export function TodayStory({ item, rank, isWritingLede, isSaving = false, onToggleConsumed, onOpenArticle }: Props) {
+// Only images already supplied in the report are used; no unrelated stock art.
+function ReportImage({ articleId, title }: { articleId: string; title: string }) {
+  const { data: article } = useArticle(articleId);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+  const image = useMemo(() => {
+    if (!article?.content_html) return null;
+    const doc = new DOMParser().parseFromString(article.content_html, "text/html");
+    for (const node of doc.querySelectorAll("img")) {
+      const src = node.getAttribute("src");
+      if (!src || /feedburner|pixel|badge/i.test(src)) continue;
+      const width = Number(node.getAttribute("width"));
+      const height = Number(node.getAttribute("height"));
+      if ((width > 0 && width < 100) || (height > 0 && height < 100)) continue;
+      try {
+        const url = new URL(src, article.url || undefined);
+        if (url.protocol === "https:" || url.protocol === "http:") return url.href;
+      } catch { /* An invalid source should not leave a broken illustration. */ }
+    }
+    return null;
+  }, [article?.content_html, article?.url]);
+  if (!image || image === failedUrl) return null;
+  return <img className="today-report-image" src={image} alt={`Image from report: ${title}`} referrerPolicy="no-referrer" onError={() => setFailedUrl(image)} />;
+}
+
+export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onOpenArticle }: Props) {
   const [expanded, setExpanded] = useState(false);
   const referencesId = useId();
   // Every report remains available on request, including syndicated copies.
@@ -108,18 +133,24 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
   const articleId = item.representative_article_id ?? primary?.article_id;
   const lead = rank === "lead";
   const brief = rank === "brief";
-  const body = item.lede?.trim() || (brief ? "" : item.snapshot_summary);
+  const body = item.editorial?.summary.trim() || item.lede?.trim() || (brief ? "" : item.snapshot_summary);
   const ledeSourceArticleId = item.lede_source_article_id;
   const ledeSource = item.lede?.trim() && ledeSourceArticleId
     ? members.find((member) => member.article_id === ledeSourceArticleId)
     : undefined;
-  const awaitingLede = !brief && !item.lede && isWritingLede;
+  const coverageCount = members.filter((member) => member.membership_type !== "duplicate").length;
 
   return (
-    <article className="story-rise-in today-story">
+    <article className={`story-rise-in today-story today-story--${rank}`}>
+      <div className="today-byline">
+        {item.editorial?.theme || primary?.publication || primary?.feed_title}
+        {coverageCount > 1 && <span className="today-coverage"> · {coverageCount} reports covering this story</span>}
+      </div>
+      {lead && articleId && primary?.is_read !== null && <ReportImage key={articleId} articleId={articleId} title={item.snapshot_title} />}
+
       <h3
         className={`text-text-primary ${lead ? "today-lead-headline" : ""}`}
-        style={{ fontSize: lead ? undefined : brief ? 14 : 16, fontWeight: lead ? 700 : 600, lineHeight: 1.3, letterSpacing: lead ? -0.3 : -0.1 }}
+
       >
         {articleId ? (
           <button className="today-headline hover:text-accent transition-colors" onClick={() => onOpenArticle(articleId)}>
@@ -128,15 +159,12 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
         ) : item.snapshot_title}
       </h3>
 
-      {body && <p className={`text-text-secondary ${lead ? "today-lead-summary" : ""}`} style={{ marginTop: 8, fontSize: lead ? undefined : 13, lineHeight: 1.65 }}>{body}</p>}
-      {ledeSource && item.lede?.trim() && (
+      {body && <>
+        <p className="today-story-summary text-text-secondary">{body}</p>
+        <p className="today-summary-kind">{item.editorial ? `AI summary · Based on ${item.editorial.sources.length} of ${members.length} ${members.length === 1 ? "report" : "reports"}` : "Source excerpt · Summary not prepared"}</p>
+      </>}
+      {!item.editorial && ledeSource && item.lede?.trim() && (
         <PreviewAttribution member={ledeSource} onOpenArticle={onOpenArticle} />
-      )}
-      {awaitingLede && (
-        <div role="status" className="text-text-muted" style={{ fontSize: 12, marginTop: 8 }}>
-          Preparing summary…
-          <div className="story-rule-live" style={{ height: 2, borderRadius: 999, marginTop: 6 }} />
-        </div>
       )}
       {item.has_material_update && item.snapshot_delta_summary && !brief && (
         <p className="text-accent" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.5 }}>
@@ -169,7 +197,12 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
       </div>
       {expanded && (
         <div id={referencesId} className="today-references" aria-label="Story reports">
-          {members.map((member) => <Reference key={member.article_id} member={member} onOpenArticle={onOpenArticle} />)}
+          {members.map((member) => <div key={member.article_id}>
+            <Reference member={member} onOpenArticle={onOpenArticle} />
+            {item.editorial?.sources.filter((source) => source.article_id === member.article_id).map((source, index) => (
+              <blockquote className="today-evidence" key={index}>{source.quote}</blockquote>
+            ))}
+          </div>)}
         </div>
       )}
     </article>

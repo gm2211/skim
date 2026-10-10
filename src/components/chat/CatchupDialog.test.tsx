@@ -88,12 +88,24 @@ describe("CatchupDialog", () => {
     settings = { ai: { provider } };
     render(<CatchupDialog onClose={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Run catch-up" })).toBeDisabled();
-    await userEvent.setup().click(screen.getByRole("button", { name: "Open AI settings" }));
+    expect(screen.queryByRole("button", { name: "Run catch-up" })).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Set up AI" }));
 
     expect(useUiStore.getState().showSettings).toBe(true);
     expect(generateCatchupReport).not.toHaveBeenCalled();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("returns from AI settings with a working catch-up action", async () => {
+    settings = { ai: { provider: "none" } };
+    vi.mocked(generateCatchupReport).mockImplementationOnce(() => new Promise(() => {}));
+    const view = render(<CatchupDialog onClose={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Set up AI" }));
+    settings = { ai: { provider: "openai" } };
+    act(() => useUiStore.setState({ showSettings: false }));
+    view.rerender(<CatchupDialog onClose={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Run catch-up" }));
+    expect(generateCatchupReport).toHaveBeenCalledTimes(1);
   });
 
   it("turns backend configuration errors into a settings action", async () => {

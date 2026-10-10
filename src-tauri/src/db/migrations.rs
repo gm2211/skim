@@ -325,6 +325,21 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         }
     }
 
+    // Model-written synthesis is separate from immutable snapshot excerpts and
+    // legacy ledes. Quotes and the exact resolved-body hashes travel together.
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS edition_item_editorials (
+            edition_id TEXT NOT NULL,
+            story_id TEXT NOT NULL,
+            editorial_json TEXT NOT NULL,
+            source_evidence_hashes_json TEXT NOT NULL,
+            model TEXT NOT NULL,
+            PRIMARY KEY (edition_id, story_id),
+            FOREIGN KEY (edition_id, story_id)
+                REFERENCES edition_items(edition_id, story_id) ON DELETE CASCADE
+        );",
+    )?;
+
     // Written ledes for Today's stories. Deliberately not named `snapshot_*`:
     // the snapshot fields are frozen by the trigger above, this one is filled
     // in after the edition exists and may be rewritten on a re-run.

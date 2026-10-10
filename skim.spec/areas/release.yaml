@@ -1,0 +1,23 @@
+id: release
+name: Release and shipping
+behaviors:
+  - id: ship-end-to-end
+    description: >-
+      Once Giulio asks for something, agents take it end to end without waiting for him: merge their
+      own PR once local checks pass (never self-approving), rebuild the desktop app on his Mac, and
+      upload the iOS build to TestFlight.
+    source:
+      text: >-
+        once he asks for something, do it end to end without waiting for him. Merge your own PR
+        once local checks pass, then ship it: rebuild the desktop app on his Mac and upload the iOS
+        build to TestFlight. Never ask him to review, approve, merge, or type a go-ahead for
+        TestFlight.
+      reference: Skim project instructions (Giulio)
+  - id: bump-before-archive
+    description: >-
+      Every App Store Connect or TestFlight archive carries a bumped version or build number; the
+      upload refuses an unchanged one.
+  - id: desktop-release-checks
+    description: >-
+      A desktop release is signed, passes codesign verification and the on-device AI self-check, and
+      never bundles model weights.

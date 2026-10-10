@@ -1,0 +1,27 @@
+id: reader
+name: Reader
+behaviors:
+  - id: full-text-extraction
+    description: >-
+      Opening an article extracts its full text automatically. If extraction fails, the reader shows
+      the RSS preview with a notice and a way to retry, and the web view still works.
+  - id: reader-web-toggle
+    description: >-
+      A reader can switch between the extracted Reader view and the original Web view (desktop
+      toolbar or arrow keys; iOS swipe).
+  - id: open-marks-read
+    description: Opening an article marks it read.
+  - id: reading-time-tracked
+    description: >-
+      Time spent reading an article is recorded as an engagement signal (desktop skips this when the
+      article is opened from Recent).
+  - id: aggregator-comments
+    description: Hacker News and Reddit articles show their top comments with points.
+  - id: reader-toolbar
+    description: >-
+      Desktop: the reader toolbar offers back/forward, Chat, Reader/Web, Summarize, Star, Read, Pin
+      to top, and Open in browser.
+  - id: offline-preload
+    description: >-
+      The newest articles are prepared for offline reading, up to a limit the reader sets (desktop
+      Settings > Reading, 25-1000; iOS Settings > Library).

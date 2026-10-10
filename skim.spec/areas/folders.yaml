@@ -1,0 +1,21 @@
+id: folders
+name: Folders and smart folders
+behaviors:
+  - id: flat-manual-folders
+    description: >-
+      Readers organize feeds into flat folders (no nesting), created, renamed, and deleted from the
+      sidebar. Desktop moves feeds between folders through the feed menu.
+  - id: smart-folder-rules
+    description: >-
+      A smart folder collects feeds by rule: feed title regex, feed URL regex, or OPML category,
+      matching any or all rules. Smart folders and regular folders convert into each other.
+    details: Desktop and iOS evaluate rules against the same shared fixtures (smart-folder-matches).
+  - id: topic-to-feeds
+    description: >-
+      Desktop: when creating a folder, a reader can describe a topic and AI picks the matching feeds.
+  - id: auto-organize
+    description: >-
+      "Auto-organize with AI" proposes folders for feeds, either for unassigned feeds only (default)
+      or by reorganizing everything. The reader can choose a name casing style, skip individual
+      proposed folders, and then apply or cancel. iOS shows a local fallback preview when AI is
+      unavailable.

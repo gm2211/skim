@@ -1,0 +1,12 @@
+id: settings
+name: Settings
+behaviors:
+  - id: desktop-settings-tabs
+    description: >-
+      Desktop Settings has Reading, AI Provider (opened by default), Sync, and Appearance tabs.
+  - id: ios-settings-sections
+    description: >-
+      iOS Settings has AI (provider, status, sign-in or API key, summary defaults), Library (offline
+      preload), About (version and build), and Legal (including the AI disclaimer).
+  - id: polished-dropdowns
+    description: Every dropdown in Settings and AI surfaces uses Skim's own styled menu.

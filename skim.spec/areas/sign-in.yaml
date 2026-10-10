@@ -1,0 +1,18 @@
+id: sign-in
+name: Sign-in
+behaviors:
+  - id: claude-subscription-sign-in
+    description: >-
+      A reader can sign in with their Claude Pro/Max subscription instead of an API key. Desktop
+      offers a browser sign-in that returns to the app and a copy-paste code flow; iOS signs in
+      in-app. Tokens refresh automatically and the reader can sign out.
+  - id: claude-sign-in-redirect-works
+    description: >-
+      Desktop browser sign-in with Claude completes without a redirect URI error.
+    details: >-
+      Giulio reported a redirect URI error on 2026-10-10; the fix is in progress in the "Sign-in
+      redirect URI error" thread.
+  - id: feedly-sign-in
+    description: >-
+      Desktop: Feedly sign-in uses OAuth with a local callback and refreshes its token before it
+      expires.

@@ -1,0 +1,37 @@
+version: '2'
+name: Skim
+description: >-
+  Skim is an RSS reader for the age of AI: it ingests feeds, lets a model the reader chooses triage
+  the noise, and helps them skim the rest. It ships as a Tauri desktop app (React + Rust, macOS) and
+  a native SwiftUI iOS/iPadOS app (SkimNative + SkimCore). This spec is the single source of product
+  intent for both. It is maintained with Giulio's Specify (github.com/gm2211/specify) through
+  scripts/specify.sh, never with GitHub's Spec Kit `specify` CLI. Behaviors say "desktop" or "iOS"
+  when they hold on only one platform; otherwise they hold on both.
+target:
+  type: web
+  url: http://localhost:1420
+assumptions:
+  - description: >-
+      The desktop app is run with `pnpm tauri dev` (Vite on port 1420); the iOS app is built from
+      native/SkimNative with Xcode. AI behaviors need a configured provider.
+test_dir: src
+areas:
+  - areas/platforms.yaml
+  - areas/feeds.yaml
+  - areas/folders.yaml
+  - areas/article-list.yaml
+  - areas/reader.yaml
+  - areas/navigation.yaml
+  - areas/today.yaml
+  - areas/catch-up.yaml
+  - areas/ai-inbox.yaml
+  - areas/chat.yaml
+  - areas/summarize.yaml
+  - areas/ai-providers.yaml
+  - areas/sign-in.yaml
+  - areas/ai-notices.yaml
+  - areas/settings.yaml
+  - areas/layout.yaml
+  - areas/shared-policy.yaml
+  - areas/release.yaml
+  - areas/development-process.yaml

@@ -1,0 +1,25 @@
+id: platforms
+name: Platforms
+prose: >-
+  Skim has two shipping apps that share product policy but not UI code. Desktop is Tauri 2 with a
+  React frontend and Rust backend; iOS/iPadOS is a native SwiftUI app. Each keeps its own local
+  library; there is no Skim-owned cloud service.
+behaviors:
+  - id: macos-desktop-ships
+    description: >-
+      The macOS desktop app is the shipping desktop build. Windows and Linux builds compile but are
+      not part of the release pipeline.
+  - id: ios-is-native-swiftui
+    description: >-
+      The iOS/iPadOS app that ships to TestFlight is the native SwiftUI app in native/SkimNative,
+      requiring iOS 26. iPhone runs in portrait only; iPad also allows landscape.
+    details: >-
+      The older Tauri iOS scaffold in src-tauri/gen/apple remains in the tree but does not drive
+      TestFlight. The native macOS target in SkimNative is a placeholder.
+  - id: local-library-per-device
+    description: >-
+      Each app keeps its library in a local SQLite database on the device. Skim runs no sync service
+      of its own; Feedly is the only upstream on desktop, and iOS and macOS do not sync with each
+      other.
+  - id: no-android
+    description: There is no Android app.

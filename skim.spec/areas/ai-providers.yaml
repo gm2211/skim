@@ -1,0 +1,51 @@
+id: ai-providers
+name: AI providers and models
+prose: >-
+  Skim is an interface to models the reader chooses. Every AI feature runs on the configured
+  provider, cloud or on-device.
+behaviors:
+  - id: desktop-providers
+    description: >-
+      Desktop providers: None, Local (llama.cpp), On-device MLX, Apple Intelligence, Ollama, Claude
+      Pro/Max (OAuth), Claude CLI (legacy), Claude API key, OpenAI, Grok (xAI), DeepSeek DS4 (Mac
+      only), OpenRouter, and Custom (any OpenAI-compatible endpoint).
+  - id: ios-providers
+    description: >-
+      iOS providers: Apple Intelligence (default), On-device MLX, Claude Pro/Max, Grok (xAI), OpenAI,
+      and Custom.
+  - id: keys-kept-per-provider
+    description: >-
+      Each provider keeps its own API key, endpoint, and model, so switching away and back does not
+      lose them.
+  - id: inline-model-picker
+    description: >-
+      Catch-up, Ask Skim, article chat, Summarize, and Today each have an inline model picker that
+      changes the model for the current provider and links to AI settings.
+    details: Remote model lists are fetched live; a failed fetch falls back to the current model.
+  - id: desktop-local-models
+    description: >-
+      Desktop local models come from a curated list (Qwen3.5 2B, 4B recommended, 9B, 35B-A3B on Macs
+      with 32 GB or more, and Gemma 4 E4B), can be downloaded, deleted, or browsed on Hugging Face,
+      and honor a power mode (Cool, Balanced, Performance), optional preload, and idle eviction.
+    details: The local model's context is sized to the prompt rather than fixed.
+  - id: ios-mlx-models
+    description: >-
+      iOS on-device MLX defaults to Qwen3 1.7B, offers a curated catalog filtered to what the device
+      can run (iPhones see models under 4 GB), and supports download with progress, cancel, and
+      delete.
+    details: >-
+      Qwen3 1.7B became the default after scoring 8/8 versus Gemma 3 1B's 5/8 on the chat answer
+      quality eval. Existing Gemma users keep Gemma unless Qwen is already downloaded. A saved model
+      that leaves the catalog stays selectable as legacy.
+  - id: on-device-memory-safety
+    description: >-
+      iOS evicts the loaded model when the app backgrounds or the device runs hot, and caps prompt
+      size by device memory so on-device AI does not crash the app.
+  - id: on-device-on-apple-silicon-macs
+    description: >-
+      Desktop reports on-device MLX and Apple Intelligence as available on every Apple silicon Mac
+      that supports them (Apple Intelligence needs macOS 26).
+  - id: ds4-large-macs
+    description: >-
+      Desktop offers DeepSeek V4 Flash (DS4) only on Macs with at least 96 GiB of memory, as a
+      resumable, checksum-verified download.

@@ -1,0 +1,14 @@
+id: layout
+name: Layout and touch
+behaviors:
+  - id: responsive-panes
+    description: >-
+      Desktop: below 1100 px the sidebar auto-collapses, below 830 px the list collapses, and below
+      600 px the app switches to one pane at a time. Panes the app collapsed re-expand when space
+      returns.
+  - id: narrow-gestures
+    description: >-
+      Desktop narrow layout: swiping from the left edge reveals the sidebar, pull-to-refresh refreshes
+      the list, and swipe-to-dismiss owns the gesture over the reader, including web view.
+  - id: chat-reachable-when-narrow
+    description: Article chat stays reachable in narrow Mac windows.

@@ -10,8 +10,8 @@ behaviors:
     description: >-
       Desktop browser sign-in with Claude completes without a redirect URI error.
     details: >-
-      Giulio reported a redirect URI error on 2026-10-10; the fix is in progress in the "Sign-in
-      redirect URI error" thread.
+      The Claude Code OAuth client only accepts http://localhost:<port>/callback, so the loopback
+      redirect uses localhost (port 54134) and Skim listens on both IPv4 and IPv6 loopback.
   - id: feedly-sign-in
     description: >-
       Desktop: Feedly sign-in uses OAuth with a local callback and refreshes its token before it

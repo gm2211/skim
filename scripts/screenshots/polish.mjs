@@ -6,7 +6,8 @@
 //   node scripts/screenshots/polish.mjs out/   # writes <scene>.png into out/
 //
 // Env: SKIM_URL (default http://localhost:1420/), CHROME_PATH, SCENES (a
-// comma-separated subset of the scene names below).
+// comma-separated subset of the scene names below), SKIM_MOCK=0 to drive the
+// real app over the dev bridge, CATCHUP_WAIT_MS for how long a real run gets.
 import { chromium } from "playwright";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -31,7 +32,7 @@ const STILL_CSS = `
 `;
 
 const openCatchup = async (p) => {
-  await p.locator('[title="Super-quick catch-up"]').first().click();
+  await p.locator('[aria-label="Quick Catch-up"]').first().click();
   await p.locator('[role="dialog"]').waitFor({ state: "visible" });
   await p.waitForTimeout(300);
 };
@@ -39,7 +40,7 @@ const openCatchup = async (p) => {
 const runCatchup = async (p) => {
   await openCatchup(p);
   await p.getByRole("button", { name: /run catch-up/i }).first().click();
-  await p.waitForTimeout(900);
+  await p.waitForTimeout(Number(process.env.CATCHUP_WAIT_MS ?? 900));
 };
 
 /** Lets the dialog grow to its content so one capture shows the whole page. */
@@ -115,10 +116,14 @@ const main = async () => {
     });
     const p = await ctx.newPage();
     p.on("pageerror", (e) => console.warn(`  ! ${scene.name}: ${e}`));
-    await p.addInitScript({ path: path.join(HERE, "fixtures.js") });
-    await p.addInitScript({ path: path.join(HERE, "mock-backend.js") });
-    if (scene.init) await p.addInitScript(scene.init);
-    await p.goto(URL_, { waitUntil: "networkidle" });
+    // SKIM_MOCK=0 drives the real app (over the dev bridge) instead of the
+    // demo fixtures; the mid-run scenes then show whatever the backend has.
+    if (process.env.SKIM_MOCK !== "0") {
+      await p.addInitScript({ path: path.join(HERE, "fixtures.js") });
+      await p.addInitScript({ path: path.join(HERE, "mock-backend.js") });
+      if (scene.init) await p.addInitScript(scene.init);
+    }
+    await p.goto(URL_, { waitUntil: process.env.SKIM_MOCK === "0" ? "load" : "networkidle" });
     await p.addStyleTag({ content: STILL_CSS });
     await p.waitForTimeout(800);
     const gotIt = p.getByRole("button", { name: /got it/i });

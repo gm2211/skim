@@ -7,6 +7,7 @@ import { AddFeedDialog } from "./components/feed/AddFeedDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { CommandPalette } from "./components/palette/CommandPalette";
 import { useUiStore } from "./stores/uiStore";
+import { openArticleLink } from "./lib/externalLinks";
 import { useEffect, useRef, useState } from "react";
 import { triageArticles, refreshAllFeeds, importOpml } from "./services/commands";
 import { useQueryClient } from "@tanstack/react-query";
@@ -442,6 +443,16 @@ function App() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Safety net: no link anywhere in the app may replace Skim's own window
+  // (there would be no way back). Web links open in the default browser.
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      openArticleLink(e);
+    };
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
   }, []);
 
   // Mouse back/forward buttons step through article history.

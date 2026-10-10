@@ -1,0 +1,48 @@
+id: feeds
+name: Feeds and import
+prose: >-
+  Getting feeds into Skim and keeping them fresh. Desktop can sync with Feedly over OAuth; iOS
+  imports Feedly subscriptions through an OPML file.
+behaviors:
+  - id: add-feed-by-url
+    description: >-
+      A reader can add a feed by URL. Skim resolves the feed document and its site, and accepts RSS
+      2.0, Atom, and JSON Feed.
+  - id: opml-import-with-preview
+    description: >-
+      A reader can import an OPML file and preview the feeds before importing them. iOS offers
+      Import OPML from the empty library state.
+  - id: opml-drop-anywhere
+    description: >-
+      Desktop: dropping an .opml or .xml file anywhere in the window imports it in the background and
+      confirms with "Imported N feeds".
+  - id: feedly-oauth-sync
+    description: >-
+      Desktop: a reader can sign in with Feedly from Settings > Sync to pull subscriptions, entries,
+      read state, and stars. Read, unread, mark-feed-read, and star changes made in Skim are pushed
+      back to Feedly. The reader can disconnect.
+  - id: feedly-opml-on-ios
+    description: >-
+      iOS: "Import from Feedly" guides the reader to download their Feedly OPML on the web and pick
+      that file; iOS has no Feedly account connection.
+  - id: refresh-on-launch-and-focus
+    description: >-
+      Desktop: all feeds refresh and triage on launch, and again when the window regains focus if
+      the last refresh was more than an hour ago. The sidebar has a manual refresh button.
+  - id: auto-refresh-interval
+    description: >-
+      The "Auto-refresh interval" setting controls how often feeds refresh while Skim is open.
+    details: >-
+      Known gap (2026-10-10): desktop shows and saves this setting, but nothing reads
+      refresh_interval_minutes yet.
+  - id: per-feed-article-cap
+    description: >-
+      Each feed keeps at most "max articles per feed" articles (default 200) so a runaway feed cannot
+      bloat the library.
+  - id: duplicate-feed-merge
+    description: >-
+      Desktop: when feeds normalize to the same URL, a banner reports "N duplicate feeds found" and
+      offers to merge them.
+  - id: feed-menu
+    description: >-
+      Desktop: a feed's menu offers Rename, Move to folder, and Remove feed.

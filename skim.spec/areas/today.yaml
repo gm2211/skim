@@ -1,0 +1,30 @@
+id: today
+name: Today edition
+prose: >-
+  Today is a frozen daily front page: the most important stories from the reader's feeds, grouped
+  across sources, with a short preview taken from a real source.
+behaviors:
+  - id: frozen-daily-edition
+    description: >-
+      Today shows an edition of 5, 10, or 20 stories (reader's choice). Stories stay fixed for the
+      edition; changing the size starts a new edition, and the edition rolls over at local midnight.
+  - id: grouped-coverage
+    description: >-
+      Each story groups the reports that cover the same event, shows how many reports there are, and
+      labels syndicated copies.
+  - id: source-verified-preview
+    description: >-
+      A story's preview is an exact passage from one named source, one to three sentences and at
+      most 60 words, so it never puts words in a publisher's mouth.
+  - id: whats-new
+    description: When a story gains new coverage after the edition was made, it shows a "What's new" line.
+  - id: read-progress
+    description: >-
+      Each story can be marked read, and the header shows "N of M" read progress or "All caught up".
+  - id: summary-retry
+    description: >-
+      Missing story summaries can be retried, with progress shown while they are written.
+  - id: ranking-signals
+    description: >-
+      Story ranking uses the reader's stars, priority overrides, and engagement, plus the shared
+      story policy's importance rating.

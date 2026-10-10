@@ -1,0 +1,41 @@
+id: catch-up
+name: Quick Catch-up
+prose: >-
+  Quick Catch-up turns unread articles from a chosen time range into a newspaper front page, written
+  by the reader's model and citing every source.
+behaviors:
+  - id: newspaper-front-page
+    description: >-
+      Quick Catch-up lays its stories out like a newspaper front page: a full-width lead story,
+      secondary stories, and briefs.
+  - id: stories-print-as-they-land
+    description: >-
+      Stories appear as the model produces them, with placeholders for ledes still being written.
+  - id: cited-sources
+    description: >-
+      Each story groups its coverage and cites every source it used; tapping a source opens that
+      article.
+  - id: scope-and-range
+    description: >-
+      The reader picks what to include (desktop: All unread by default, or Priority inbox for
+      priority 4-5 only) and how far back to go (6 hours, 24 hours, 3 days, a week, or anything
+      unread). Desktop remembers the last choice.
+  - id: stop-and-rerun
+    description: >-
+      A run can be stopped at any time, which cancels the model request. Changing scope or range
+      mid-run stops it too. After a stop the reader can run again to finish the page.
+  - id: fits-on-device-memory
+    description: >-
+      On-device models never run the phone out of memory: Catch-up trims its input to the model's
+      budget, and a request over the budget fails with advice to narrow the range or use a cloud
+      provider.
+  - id: really-nice-newspaper-view
+    description: >-
+      The newspaper view on desktop and iOS is polished to the standard of a real printed front
+      page, together with a pass over buttons, icons, and flows across the app.
+    details: In progress (2026-10-10) in the "Newspaper view and UI polish" thread.
+    source:
+      text: >-
+        spin up fable 5.1 and do "self play" - I want a really nice newspaper view in both desktop
+        and ios - also polish up ui buttons / icons and flows
+      reference: Giulio, project thread "Newspaper view and UI polish", 2026-10-10

@@ -8,6 +8,7 @@ import { getOrFetchReaderContent, cancelSummarize } from "../../services/command
 import { ChatDrawer } from "../chat/ChatPanel";
 import { useReadingTimeTracker } from "../../hooks/useLearning";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { openArticleHref, openArticleLink } from "../../lib/externalLinks";
 import { NumberInput } from "../ui/NumberInput";
 import { Select } from "../ui/Select";
 import { AIDisclaimer } from "../common/AIDisclaimer";
@@ -149,6 +150,14 @@ const EMBEDDED_WEB_VIEW_SCRIPT = `
     pullCandidate = false;
     pulling = false;
   };
+  document.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+    const href = anchor && anchor.getAttribute("href");
+    if (!href || href.trim().startsWith("#")) return;
+    event.preventDefault();
+    window.parent.postMessage({ type: "skim-open-link", href }, "*");
+  }, true);
   window.addEventListener("touchend", (event) => finish("end", event), { passive: true, capture: true });
   window.addEventListener("touchcancel", (event) => finish("cancel", event), { passive: true, capture: true });
   window.addEventListener("blur", () => {
@@ -887,6 +896,18 @@ export function ArticleDetail() {
     };
   }, [beginArticleSwipe, cancelActiveArticleSwipe, endArticleSwipe, isPhone, moveArticleSwipe]);
 
+  // Links clicked in the Web view open in the browser rather than inside the frame.
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      const data = event.data as { type?: string; href?: string };
+      if (data?.type !== "skim-open-link" || typeof data.href !== "string") return;
+      openArticleHref(data.href, article?.url);
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [article?.url]);
+
   useEffect(() => {
     if (!isPhone) return;
     const handleMessage = (event: MessageEvent) => {
@@ -1094,7 +1115,7 @@ export function ArticleDetail() {
         : `transform ${SLIDE_MS}ms ${PHONE_SLIDE_EASING}`;
 
   return (
-    <div ref={readerFocusRef} tabIndex={-1} role="region" aria-label="Article reader" className="flex-1 min-w-0 min-h-0 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
+    <div ref={readerFocusRef} tabIndex={-1} role="region" aria-label="Article reader" onClickCapture={(e) => openArticleLink(e.nativeEvent, article.url)} className="flex-1 min-w-0 min-h-0 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
       {/* Toolbar */}
       <div
         className="flex items-center justify-between relative z-20 flex-shrink-0"

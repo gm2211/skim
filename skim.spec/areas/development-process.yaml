@@ -1,0 +1,11 @@
+id: development-process
+name: Development process
+behaviors:
+  - id: spec-uses-giulios-specify
+    description: >-
+      Skim's spec (skim.spec) is maintained with Giulio's Specify from github.com/gm2211/specify,
+      invoked through scripts/specify.sh, and never with GitHub's Spec Kit `specify` CLI. Agents keep
+      it current and curated as product decisions are made.
+    source:
+      text: use my "specify" not github's to make sure our spec is up to date and well curated
+      reference: Giulio, project thread "Skim spec curation", 2026-10-10

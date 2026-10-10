@@ -733,6 +733,15 @@ private struct ReaderPage: View {
                 } else {
                     linkCard(url: externalURL, article: article)
                 }
+            } else if redditSelftext == nil, case .loaded(let text) = extractedBody {
+                // A self post's text saved for offline reading.
+                Text(text)
+                    .font(.system(size: 19, weight: .regular))
+                    .lineSpacing(7)
+                    .foregroundStyle(SkimStyle.text)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             discussionSection(article)

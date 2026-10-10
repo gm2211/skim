@@ -99,7 +99,13 @@ pub fn default_model(provider: &str) -> String {
         "anthropic" | "claude-subscription" => "claude-sonnet-4-5".to_string(),
         "ollama" => "llama3".to_string(),
         "xai" => "grok-4.3".to_string(),
-        "mlx" => "mlx-community/gemma-3-1b-it-4bit".to_string(),
+        "mlx" => {
+            if cfg!(target_os = "ios") {
+                "mlx-community/LFM2.5-1.2B-Instruct-4bit".to_string()
+            } else {
+                "mlx-community/Qwen3.5-4B-4bit".to_string()
+            }
+        }
         "foundation-models" => "foundation-model".to_string(),
         "ds4" => "deepseek-v4-flash".to_string(),
         _ => "gpt-4o-mini".to_string(),

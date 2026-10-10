@@ -8,7 +8,7 @@ import {
   providerLabel,
   resolveMlxRepoId,
 } from "../lib/aiModels";
-import { useLocalModels } from "./useModels";
+import { useLocalModels, useSystemInfo } from "./useModels";
 
 export type ModelSurface = "catchup" | "chat" | "summarize" | "today";
 
@@ -43,10 +43,13 @@ export function useModelChoices(
   opts: { isPhone: boolean; surface: ModelSurface },
 ): ModelChoices {
   const { isPhone, surface } = opts;
+  const systemInfo = useSystemInfo();
+  const totalMemoryGb = systemInfo.data?.total_memory_gb;
   const chatOverrideActive = surface === "chat" && hasChatOverride(ai);
   const provider = ai.provider;
 
-  const mlxModels = mlxModelsFor(isPhone, resolveMlxRepoId(ai, isPhone));
+  const currentMlxRepoId = resolveMlxRepoId(ai, isPhone, totalMemoryGb);
+  const mlxModels = mlxModelsFor(isPhone, currentMlxRepoId, totalMemoryGb);
   const isMlx = !chatOverrideActive && provider === "mlx";
   const isLocal = !chatOverrideActive && provider === "local";
   const isRemote =
@@ -85,7 +88,7 @@ export function useModelChoices(
   }
 
   if (isMlx) {
-    const current = resolveMlxRepoId(ai, isPhone);
+    const current = currentMlxRepoId;
     const choices: ModelChoice[] = mlxModels.map((m, i) => {
       const downloaded = mlxDownloadQueries[i]?.data;
       return {

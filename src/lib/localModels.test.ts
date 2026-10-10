@@ -25,10 +25,17 @@ describe("friendlyModelName", () => {
 });
 
 describe("localModelPresetsFor", () => {
-  it("hides the 35B model below 32 GB and when memory is unknown", () => {
-    expect(localModelPresetsFor(16).map((m) => m.name)).not.toContain("Qwen3.5 35B-A3B");
-    expect(localModelPresetsFor(undefined).map((m) => m.name)).not.toContain("Qwen3.5 35B-A3B");
+  it("hides large models below 48 GB and when memory is unknown", () => {
+    expect(localModelPresetsFor(16).map((m) => m.name)).not.toContain("Qwen3.6 35B-A3B");
+    expect(localModelPresetsFor(undefined).map((m) => m.name)).not.toContain("Qwen3.6 35B-A3B");
     expect(localModelPresetsFor(64)).toHaveLength(LOCAL_MODEL_PRESETS.length);
+  });
+
+  it("uses physical memory to filter the middle and largest tiers", () => {
+    expect(localModelPresetsFor(8).map((m) => m.name)).not.toContain("Qwen3.5 9B");
+    expect(localModelPresetsFor(16).map((m) => m.name)).toContain("Qwen3.5 9B");
+    expect(localModelPresetsFor(32).map((m) => m.name)).not.toContain("Qwen3.8 27B");
+    expect(localModelPresetsFor(47.5).map((m) => m.name)).toContain("Qwen3.8 27B");
   });
 
   it("recommends exactly one model", () => {

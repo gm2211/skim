@@ -23,12 +23,17 @@ func printUsage() {
     Usage: skim-chat-eval [options]
 
     Options:
-      --models <ids>         Comma-separated MLX repo ids (default: gemma-3-1b-it-4bit, Qwen3-1.7B-4bit, Qwen3-4B-Instruct-2507-4bit)
+      --models <ids>         Comma-separated MLX repo ids (default: the phone-sized models Skim offers)
       --one-shot             Append the one-shot example to the new prompt's system message
       --legacy-prompt        Reproduce the pre-existing production message layout instead of GroundedChatPrompt
       --fixture <path>       Path to the eval fixture JSON (default: shared/fixtures/chat-answer-quality.json)
       --bridge-path <path>   Path to the skim-ai-macos-bridge helper binary
+      --summaries <path>     Summary faithfulness fixture (default: shared/fixtures/summary-faithfulness.json)
+      --no-summaries         Skip the summary cases
+      --no-prefix-reuse      Prefill every question from scratch (A/B for article prefix reuse)
+      --no-follow-ups        Skip the unscored same-article follow-up questions
       --json-out <path>      Write the full report as JSON to this path
+      --markdown-out <path>  Write a comparison table as Markdown to this path
       --help                 Show this message
     """)
 }
@@ -39,6 +44,10 @@ var legacyPrompt = false
 var fixturePath = repoRootRelative("shared/fixtures/chat-answer-quality.json")
 var bridgePath = repoRootRelative("plugins/tauri-plugin-skim-ai/bin/skim-ai-macos-bridge-aarch64-apple-darwin")
 var jsonOutPath: String?
+var summaryFixturePath: String? = repoRootRelative("shared/fixtures/summary-faithfulness.json")
+var prefixReuse = true
+var followUps = true
+var markdownOutPath: String?
 
 var arguments = Array(CommandLine.arguments.dropFirst())
 var index = 0
@@ -65,6 +74,20 @@ while index < arguments.count {
         index += 1
         guard index < arguments.count else { print("--json-out requires a value"); exit(1) }
         jsonOutPath = arguments[index]
+    case "--summaries":
+        index += 1
+        guard index < arguments.count else { print("--summaries requires a value"); exit(1) }
+        summaryFixturePath = arguments[index]
+    case "--no-summaries":
+        summaryFixturePath = nil
+    case "--no-prefix-reuse":
+        prefixReuse = false
+    case "--no-follow-ups":
+        followUps = false
+    case "--markdown-out":
+        index += 1
+        guard index < arguments.count else { print("--markdown-out requires a value"); exit(1) }
+        markdownOutPath = arguments[index]
     case "--help", "-h":
         printUsage()
         exit(0)
@@ -91,12 +114,16 @@ let options = EvalOptions(
     models: models,
     oneShot: oneShot,
     legacyPrompt: legacyPrompt,
-    jsonOutPath: jsonOutPath
+    jsonOutPath: jsonOutPath,
+    summaryFixturePath: summaryFixturePath,
+    prefixReuse: prefixReuse,
+    followUps: followUps,
+    markdownOutPath: markdownOutPath
 )
 
 do {
     let report = try ChatEvalRunner.run(options: options)
-    let anyFailed = report.runs.contains { $0.passCount < $0.caseCount }
+    let anyFailed = report.runs.contains { $0.passCount < $0.caseCount || $0.summaryPassCount < $0.summaryCaseCount }
     exit(anyFailed ? 1 : 0)
 } catch {
     print("skim-chat-eval failed: \(error)")

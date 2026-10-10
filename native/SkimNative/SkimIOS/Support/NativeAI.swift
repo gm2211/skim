@@ -1469,7 +1469,8 @@ enum NativeAI {
                 maxTokens: budget.maxTokens,
                 temperature: Double(sampling.temperature),
                 topP: Double(sampling.topP),
-                repetitionPenalty: Double(sampling.repetitionPenalty)
+                repetitionPenalty: Double(sampling.repetitionPenalty),
+                reusablePrefixMarker: PromptPrefix.articleMarker
             )
             return ChatAnswerCleanup.clean(raw, question: conversation.latestQuestion)
         }
@@ -1550,7 +1551,8 @@ enum NativeAI {
                 maxTokens: budget.maxTokens,
                 temperature: Double(sampling.temperature),
                 topP: Double(sampling.topP),
-                repetitionPenalty: Double(sampling.repetitionPenalty)
+                repetitionPenalty: Double(sampling.repetitionPenalty),
+                reusablePrefixMarker: PromptPrefix.articleMarker
             )
             let text = ChatAnswerCleanup.clean(raw, question: conversation.latestQuestion)
             return (text, [])

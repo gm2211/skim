@@ -16,58 +16,83 @@ export const AI_PROVIDERS = [
   { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
 ];
 
-export type MlxModel = { repoId: string; label: string; sizeGb: number; phoneFriendly?: boolean };
+export type MlxModel = {
+  repoId: string;
+  label: string;
+  sizeGb: number;
+  phoneFriendly?: boolean;
+  minMemoryGb?: number;
+  minPhoneMemoryGb?: number;
+};
 
-// Sorted ascending by size. Every repo id here is either one Skim already
-// shipped or one listed in the pinned mlx-swift-examples LLMRegistry, and every
-// architecture is one that release's LLMModelFactory can load.
+// Sizes are rounded download sizes in GB. Memory gates use physical unified
+// memory, not the download size.
 export const MLX_MODELS: MlxModel[] = [
-  { repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (iPhone, fastest)", sizeGb: 0.7, phoneFriendly: true },
-  { repoId: "mlx-community/LFM2-1.2B-4bit", label: "LFM2 1.2B (iPhone, fast)", sizeGb: 0.7, phoneFriendly: true },
-  { repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B (iPhone, recommended)", sizeGb: 1.0, phoneFriendly: true },
-  { repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: "Qwen3 4B Instruct (Mac, recommended)", sizeGb: 2.3 },
-  { repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B (Mac)", sizeGb: 2.4 },
-  { repoId: "mlx-community/Qwen3-8B-4bit", label: "Qwen3 8B (Mac, 16 GB+)", sizeGb: 4.6 },
-  { repoId: "mlx-community/Qwen3-30B-A3B-4bit", label: "Qwen3 30B-A3B (Mac, 32 GB+, best quality)", sizeGb: 17.2 },
+  { repoId: "mlx-community/LFM2.5-1.2B-Instruct-4bit", label: "LFM2.5 1.2B Instruct (iPhone, recommended)", sizeGb: 0.7, phoneFriendly: true },
+  { repoId: "mlx-community/Qwen3.5-2B-4bit", label: "Qwen3.5 2B (iPhone)", sizeGb: 1.8, phoneFriendly: true },
+  { repoId: "mlx-community/Qwen3.5-4B-4bit", label: "Qwen3.5 4B (Mac, recommended; 12 GB iPhones)", sizeGb: 3.1, phoneFriendly: true, minPhoneMemoryGb: 11.5 },
+  { repoId: "mlx-community/gemma-4-e2b-it-4bit", label: "Gemma 4 E2B (12 GB iPhones, Mac)", sizeGb: 3.6, phoneFriendly: true, minPhoneMemoryGb: 11.5 },
+  { repoId: "mlx-community/gemma-4-e4b-it-4bit", label: "Gemma 4 E4B (Mac, 16 GB+)", sizeGb: 5.2, minMemoryGb: 16 },
+  { repoId: "mlx-community/Qwen3.5-9B-4bit", label: "Qwen3.5 9B (Mac, 16 GB+, 24 GB recommended)", sizeGb: 6.0, minMemoryGb: 16 },
+  { repoId: "mlx-community/Qwen3.8-27B-4bit", label: "Qwen3.8 27B (Mac, 48 GB+)", sizeGb: 16.1, minMemoryGb: 48 },
+  { repoId: "mlx-community/Qwen3.6-35B-A3B-4bit", label: "Qwen3.6 35B-A3B (Mac, 48 GB+)", sizeGb: 20.4, minMemoryGb: 48 },
 ];
 
 // Models Skim used to offer. Not listed for new picks, but a saved selection
 // keeps working (and stays visible in the picker) so nobody is silently moved
 // to a different model and made to re-download.
 export const RETIRED_MLX_MODELS: MlxModel[] = [
+  { repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (retired)", sizeGb: 0.7, phoneFriendly: true },
+  { repoId: "mlx-community/LFM2-1.2B-4bit", label: "LFM2 1.2B (retired)", sizeGb: 0.7, phoneFriendly: true },
+  { repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B (retired)", sizeGb: 2.4 },
   { repoId: "mlx-community/Llama-3.2-1B-Instruct-4bit", label: "Llama 3.2 1B (retired)", sizeGb: 0.8, phoneFriendly: true },
   { repoId: "mlx-community/SmolLM3-3B-4bit", label: "SmolLM3 3B (retired)", sizeGb: 1.8 },
   { repoId: "mlx-community/Llama-3.2-3B-Instruct-4bit", label: "Llama 3.2 3B (retired)", sizeGb: 1.8 },
   { repoId: "mlx-community/Phi-4-mini-instruct-4bit", label: "Phi-4 Mini (retired)", sizeGb: 2.2 },
   { repoId: "mlx-community/gemma-3n-E2B-it-lm-4bit", label: "Gemma 3n E2B (retired)", sizeGb: 2.6 },
+  { repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B (retired)", sizeGb: 1.0, phoneFriendly: true },
+  { repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: "Qwen3 4B Instruct (retired)", sizeGb: 2.3 },
+  { repoId: "mlx-community/Qwen3-8B-4bit", label: "Qwen3 8B (retired)", sizeGb: 4.6 },
+  { repoId: "mlx-community/Qwen3-30B-A3B-4bit", label: "Qwen3 30B-A3B (retired)", sizeGb: 17.2 },
 ];
 
 /**
- * MLX models offered on this device — phones only see the phone-friendly tier.
- * A retired model stays in the list while it is the saved selection.
+ * MLX models offered on this device. Memory-gated choices are hidden until
+ * physical memory is known; any explicitly selected model remains available.
  */
-export function mlxModelsFor(isPhone: boolean, selectedRepoId?: string | null): MlxModel[] {
-  const fits = (m: MlxModel) => !isPhone || !!m.phoneFriendly;
-  const models = MLX_MODELS.filter(fits);
-  const retired = RETIRED_MLX_MODELS.find((m) => m.repoId === selectedRepoId && fits(m));
-  return retired ? [...models, retired] : models;
+export function mlxModelsFor(
+  isPhone: boolean,
+  selectedRepoId?: string | null,
+  totalMemoryGb?: number | null,
+): MlxModel[] {
+  const fitsDevice = (m: MlxModel) => !isPhone || !!m.phoneFriendly;
+  const fitsMemory = (m: MlxModel) =>
+    (m.minMemoryGb === undefined || (totalMemoryGb != null && totalMemoryGb >= m.minMemoryGb - 0.5)) &&
+    (!isPhone || m.minPhoneMemoryGb === undefined || (totalMemoryGb != null && totalMemoryGb >= m.minPhoneMemoryGb));
+  const models = MLX_MODELS.filter((m) => fitsDevice(m) && fitsMemory(m));
+  const knownSelection = [...MLX_MODELS, ...RETIRED_MLX_MODELS].find((m) => m.repoId === selectedRepoId);
+  const selected = knownSelection ?? (selectedRepoId?.includes("/")
+    ? { repoId: selectedRepoId, label: `${selectedRepoId} (saved)`, sizeGb: 0 }
+    : undefined);
+  return selected && !models.some((m) => m.repoId === selected.repoId) ? [...models, selected] : models;
 }
 
 /** The model an MLX picker preselects before the user has chosen one. */
 export function defaultMlxModel(isPhone: boolean): MlxModel {
   return isPhone
-    ? MLX_MODELS.find((m) => m.repoId === "mlx-community/Qwen3-1.7B-4bit") ?? MLX_MODELS[0]
-    : MLX_MODELS.find((m) => m.repoId === "mlx-community/Qwen3-4B-Instruct-2507-4bit") ?? MLX_MODELS[0];
+    ? MLX_MODELS.find((m) => m.repoId === "mlx-community/LFM2.5-1.2B-Instruct-4bit") ?? MLX_MODELS[0]
+    : MLX_MODELS.find((m) => m.repoId === "mlx-community/Qwen3.5-4B-4bit") ?? MLX_MODELS[0];
 }
 
 /** The MLX repo id saved settings resolve to, falling back to the device default. */
 export function resolveMlxRepoId(
   ai: Pick<AiSettings, "model" | "local_model_path">,
   isPhone: boolean,
+  totalMemoryGb?: number | null,
 ): string {
   const defaultModel = defaultMlxModel(isPhone);
-  const savedRepoId = ai.model ?? ai.local_model_path ?? defaultModel.repoId;
-  const models = mlxModelsFor(isPhone, savedRepoId);
+  const savedRepoId = ai.local_model_path?.trim() || (ai.model?.includes("/") ? ai.model.trim() : null) || defaultModel.repoId;
+  const models = mlxModelsFor(isPhone, savedRepoId, totalMemoryGb);
   const selectedModel = models.find((m) => m.repoId === savedRepoId) ?? defaultModel;
   return selectedModel.repoId;
 }

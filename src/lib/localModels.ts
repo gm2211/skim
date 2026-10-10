@@ -1,8 +1,8 @@
 /**
  * GGUF models offered for the embedded llama.cpp provider on desktop.
  *
- * Every file is bartowski's Q4_K_M quant. The MLX tier in aiModels.ts stays on
- * Qwen3/Gemma 3 until the Swift MLX library can load the newer architectures.
+ * Every file is bartowski's Q4_K_M quant. The MLX catalog in aiModels.ts
+ * uses the same small families through the shared Swift inference engine.
  */
 export type LocalModelPreset = {
   repo: string;
@@ -15,23 +15,22 @@ export type LocalModelPreset = {
   minMemoryGb?: number;
 };
 
-// Sorted ascending by size. Qwen 3.5 (Feb 2026) and Gemma 4 (Mar 2026) are
-// the current small open families; the bundled llama.cpp loads both
-// (`qwen35`, `qwen35moe`, `gemma4` architectures).
+// Sorted by download size. The bundled llama.cpp supports the qwen35,
+// qwen35moe and gemma4 text architectures. Download size is not peak RAM.
 export const LOCAL_MODEL_PRESETS: LocalModelPreset[] = [
   {
     repo: "bartowski/Qwen_Qwen3.5-2B-GGUF",
     file: "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
     name: "Qwen3.5 2B",
     sizeGb: 1.4,
-    desc: "Fastest. Fine for short summaries on any Mac.",
+    desc: "Compact option for short summaries.",
   },
   {
     repo: "bartowski/Qwen_Qwen3.5-4B-GGUF",
     file: "Qwen_Qwen3.5-4B-Q4_K_M.gguf",
     name: "Qwen3.5 4B",
     sizeGb: 3.0,
-    desc: "Best balance of quality and speed for most Macs.",
+    desc: "Recommended starting point for most Macs.",
     recommended: true,
   },
   {
@@ -39,28 +38,39 @@ export const LOCAL_MODEL_PRESETS: LocalModelPreset[] = [
     file: "google_gemma-4-E4B-it-Q4_K_M.gguf",
     name: "Gemma 4 E4B",
     sizeGb: 5.4,
-    desc: "Google's small model, with a plainer writing style.",
+    desc: "Google's alternative small model. Needs 16 GB+ memory.",
+    minMemoryGb: 16,
   },
   {
     repo: "bartowski/Qwen_Qwen3.5-9B-GGUF",
     file: "Qwen_Qwen3.5-9B-Q4_K_M.gguf",
     name: "Qwen3.5 9B",
     sizeGb: 6.2,
-    desc: "Sharper triage and catch-up. Best with 16 GB+ memory.",
+    desc: "Larger option for triage and catch-up. 24 GB+ memory preferred.",
+    minMemoryGb: 16,
   },
   {
-    repo: "bartowski/Qwen_Qwen3.5-35B-A3B-GGUF",
-    file: "Qwen_Qwen3.5-35B-A3B-Q4_K_M.gguf",
-    name: "Qwen3.5 35B-A3B",
+    repo: "bartowski/Qwen3.8-27B-GGUF",
+    file: "Qwen3.8-27B-Q4_K_M.gguf",
+    name: "Qwen3.8 27B",
+    sizeGb: 17.4,
+    desc: "Large dense model. Needs 48 GB+ memory.",
+    minMemoryGb: 48,
+  },
+  {
+    repo: "bartowski/Qwen_Qwen3.6-35B-A3B-GGUF",
+    file: "Qwen_Qwen3.6-35B-A3B-Q4_K_M.gguf",
+    name: "Qwen3.6 35B-A3B",
     sizeGb: 22.3,
-    desc: "Best quality, and quick for its size. Needs 32 GB+ memory.",
-    minMemoryGb: 32,
+    desc: "Large mixture-of-experts model. Needs 48 GB+ memory.",
+    minMemoryGb: 48,
   },
 ];
 
 // Files Skim used to suggest. Not offered any more, but a downloaded copy
 // keeps working and is still shown by name.
 const RETIRED_LOCAL_MODELS: Pick<LocalModelPreset, "file" | "name">[] = [
+  { file: "Qwen_Qwen3.5-35B-A3B-Q4_K_M.gguf", name: "Qwen3.5 35B-A3B" },
   { file: "google_gemma-3-1b-it-Q4_K_M.gguf", name: "Gemma 3 1B" },
   { file: "Qwen_Qwen3-1.7B-Q4_K_M.gguf", name: "Qwen3 1.7B" },
   { file: "Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf", name: "Qwen3 4B Instruct" },
@@ -75,7 +85,7 @@ const RETIRED_LOCAL_MODELS: Pick<LocalModelPreset, "file" | "name">[] = [
 
 /** Presets that fit a machine with `memoryGb` of RAM (all but the gated ones when unknown). */
 export function localModelPresetsFor(memoryGb: number | undefined): LocalModelPreset[] {
-  return LOCAL_MODEL_PRESETS.filter((m) => !m.minMemoryGb || (memoryGb ?? 0) >= m.minMemoryGb);
+  return LOCAL_MODEL_PRESETS.filter((m) => !m.minMemoryGb || (memoryGb ?? 0) >= m.minMemoryGb - 0.5);
 }
 
 const QUANT_SUFFIX = /[-_.]((?:I?Q\d[A-Z0-9_]*)|B?F16|F32)$/i;

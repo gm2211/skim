@@ -10,20 +10,44 @@ public struct BridgeRequest: Encodable, Sendable {
     public let messages: [LocalChatMessage]?
     public let maxTokens: Int?
     public let temperature: Float?
+    /// Same as the app's article chat: keep the article's model state so a
+    /// follow-up on the same article prefills only its question.
+    public let reusablePrefixMarker: String?
 
-    public init(command: String, repoId: String? = nil, messages: [LocalChatMessage]? = nil, maxTokens: Int? = nil, temperature: Float? = nil) {
+    public init(command: String, repoId: String? = nil, messages: [LocalChatMessage]? = nil, maxTokens: Int? = nil, temperature: Float? = nil, reusablePrefixMarker: String? = nil) {
         self.command = command
         self.repoId = repoId
         self.messages = messages
         self.maxTokens = maxTokens
         self.temperature = temperature
+        self.reusablePrefixMarker = reusablePrefixMarker
     }
+}
+
+/// Speed and memory for one generation, as the helper reports them
+/// (`SkimGenerationMetrics` in shared/SkimMLXEngine).
+public struct GenerationMetrics: Codable, Sendable, Equatable {
+    public var promptTokens: Int
+    public var reusedPromptTokens: Int
+    public var generatedTokens: Int
+    public var timeToFirstTokenSeconds: Double
+    public var prefillTokensPerSecond: Double
+    public var decodeTokensPerSecond: Double
+    public var totalSeconds: Double
+    public var peakMemoryBytes: Int
+}
+
+public struct BridgeReply: Sendable {
+    public let text: String
+    /// Nil from a helper built before metrics existed.
+    public let metrics: GenerationMetrics?
 }
 
 private struct BridgeResponse: Decodable {
     let ok: Bool
     let value: String?
     let error: String?
+    let metrics: GenerationMetrics?
 }
 
 public enum BridgeError: Error, CustomStringConvertible, Sendable {
@@ -102,6 +126,10 @@ public final class ChatEvalBridge {
     /// skipping any intermediate `{"progress": ...}` lines the helper emits
     /// while downloading/loading a model container.
     public func send(_ request: BridgeRequest) throws -> String {
+        try sendWithMetrics(request).text
+    }
+
+    public func sendWithMetrics(_ request: BridgeRequest) throws -> BridgeReply {
         var data = try JSONEncoder().encode(request)
         data.append(0x0a)
         stdin.write(data)
@@ -120,7 +148,7 @@ public final class ChatEvalBridge {
                 throw BridgeError.invalidResponse(trimmed)
             }
             if decoded.ok {
-                return decoded.value ?? ""
+                return BridgeReply(text: decoded.value ?? "", metrics: decoded.metrics)
             }
             throw BridgeError.requestFailed(decoded.error ?? "unknown bridge error")
         }

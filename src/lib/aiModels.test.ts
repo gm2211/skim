@@ -38,7 +38,31 @@ describe("mlxModelsFor", () => {
   });
 
   it("returns the full catalog off phone", () => {
-    expect(mlxModelsFor(false)).toEqual(MLX_MODELS);
+    expect(mlxModelsFor(false, undefined, 64)).toEqual(MLX_MODELS);
+  });
+
+  it("hides memory-gated choices when memory is unknown and reveals them at their minimum", () => {
+    const ids = (memory?: number) => mlxModelsFor(false, undefined, memory).map((m) => m.repoId);
+    expect(ids()).not.toContain("mlx-community/Qwen3.5-9B-4bit");
+    expect(ids()).not.toContain("mlx-community/Qwen3.8-27B-4bit");
+    expect(ids(16)).toContain("mlx-community/Qwen3.5-9B-4bit");
+    expect(ids(16)).not.toContain("mlx-community/Qwen3.8-27B-4bit");
+    expect(ids(48)).toContain("mlx-community/Qwen3.8-27B-4bit");
+  });
+
+  it("allows the rounded 11.5 GB report for nominal 12 GB devices", () => {
+    expect(mlxModelsFor(true, undefined, 11.5).map((m) => m.repoId)).toContain("mlx-community/Qwen3.5-4B-4bit");
+    expect(mlxModelsFor(false, undefined, 11.5).map((m) => m.repoId)).toContain("mlx-community/gemma-4-e2b-it-4bit");
+    expect(mlxModelsFor(true, undefined, 11.4).map((m) => m.repoId)).not.toContain("mlx-community/Qwen3.5-4B-4bit");
+  });
+
+  it("retains a selected model when device filtering or memory gating would otherwise hide it", () => {
+    expect(mlxModelsFor(false, "mlx-community/Qwen3.5-9B-4bit").map((m) => m.repoId)).toContain(
+      "mlx-community/Qwen3.5-9B-4bit",
+    );
+    expect(mlxModelsFor(true, "mlx-community/Qwen3-4B-Instruct-2507-4bit").map((m) => m.repoId)).toContain(
+      "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+    );
   });
 });
 
@@ -50,36 +74,50 @@ describe("resolveMlxRepoId", () => {
 
   it("falls back to the device default when nothing is saved", () => {
     expect(resolveMlxRepoId({ model: null, local_model_path: null }, false)).toBe(
-      "mlx-community/Qwen3-4B-Instruct-2507-4bit",
+      "mlx-community/Qwen3.5-4B-4bit",
     );
     expect(resolveMlxRepoId({ model: null, local_model_path: null }, true)).toBe(
-      "mlx-community/Qwen3-1.7B-4bit",
+      "mlx-community/LFM2.5-1.2B-Instruct-4bit",
     );
   });
 
-  it("falls back to the device default when the saved model is not phone-friendly", () => {
+  it("preserves an explicitly saved model when it is not phone-friendly", () => {
     // A desktop-only model was saved, but the device is now a phone.
-    const repoId = resolveMlxRepoId({ model: "mlx-community/gemma-3-4b-it-4bit", local_model_path: null }, true);
-    expect(repoId).toBe("mlx-community/Qwen3-1.7B-4bit");
+    const repoId = resolveMlxRepoId({ model: "mlx-community/gemma-4-e2b-it-4bit", local_model_path: null }, true);
+    expect(repoId).toBe("mlx-community/gemma-4-e2b-it-4bit");
+  });
+});
+
+describe("custom MLX selections", () => {
+  it("preserves a saved repository outside the preset catalog", () => {
+    const saved = "mlx-community/Qwen3-30B-A3B-Instruct-2507-4bit";
+    expect(resolveMlxRepoId({ model: saved, local_model_path: null }, false)).toBe(saved);
+    expect(mlxModelsFor(false, saved).map((m) => m.repoId)).toContain(saved);
+  });
+
+  it("matches native precedence and rejects leaked cloud model names", () => {
+    expect(resolveMlxRepoId({ model: "claude-sonnet-5", local_model_path: "mlx-community/Qwen3-1.7B-4bit" }, true)).toBe("mlx-community/Qwen3-1.7B-4bit");
+    expect(resolveMlxRepoId({ model: "claude-sonnet-5", local_model_path: null }, true)).toBe("mlx-community/LFM2.5-1.2B-Instruct-4bit");
   });
 });
 
 describe("retired MLX models", () => {
-  const smol = "mlx-community/SmolLM3-3B-4bit";
+  const oldQwen = "mlx-community/Qwen3-4B-Instruct-2507-4bit";
 
   it("keeps a saved retired model selected and listed", () => {
-    expect(resolveMlxRepoId({ model: smol, local_model_path: smol }, false)).toBe(smol);
-    expect(mlxModelsFor(false, smol).map((m) => m.repoId)).toContain(smol);
+    expect(resolveMlxRepoId({ model: oldQwen, local_model_path: oldQwen }, false)).toBe(oldQwen);
+    expect(mlxModelsFor(false, oldQwen).map((m) => m.repoId)).toContain(oldQwen);
   });
 
   it("does not offer retired models to new picks", () => {
-    expect(mlxModelsFor(false).map((m) => m.repoId)).not.toContain(smol);
+    expect(mlxModelsFor(false, undefined, 64).map((m) => m.repoId)).not.toContain(oldQwen);
   });
 
-  it("falls back on phone when the retired model is not phone-friendly", () => {
-    expect(resolveMlxRepoId({ model: smol, local_model_path: null }, true)).toBe(
-      "mlx-community/Qwen3-1.7B-4bit",
-    );
+  it("preserves retired phone and Mac Qwen3 selections", () => {
+    for (const repoId of ["mlx-community/Qwen3-1.7B-4bit", oldQwen, "mlx-community/Qwen3-8B-4bit", "mlx-community/Qwen3-30B-A3B-4bit"]) {
+      expect(resolveMlxRepoId({ model: repoId, local_model_path: null }, true)).toBe(repoId);
+      expect(mlxModelsFor(true, repoId).map((m) => m.repoId)).toContain(repoId);
+    }
   });
 
   it("never overlaps the live catalog", () => {

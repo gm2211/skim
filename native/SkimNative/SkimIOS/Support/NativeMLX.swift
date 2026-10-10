@@ -9,6 +9,10 @@ struct MLXModelOption: Identifiable, Hashable {
     var label: String
     var sizeGB: Double
     var isPhoneFriendly: Bool
+    /// Offered on iPhone only with ~12 GB of RAM or more: its weights plus a
+    /// long article prompt would push an 8 GB phone past the app memory limit.
+    var needsHighMemoryPhone: Bool = false
+    var minMemoryGB: Double = 0
 
     var id: String { repoId }
 
@@ -21,54 +25,56 @@ struct MLXModelOption: Identifiable, Hashable {
 }
 
 enum NativeMLX {
-    /// The recommended repo id for a fresh pick (new user, or "reset to
-    /// default"). Chat answer-quality evidence (docs/releases/2026-09-29-chat-answer-quality.json)
-    /// shows Qwen3 1.7B beating Gemma 3 1B on both accuracy (8/8 vs 5/8) and
-    /// speed (avg 1.52s vs 2.68s). Existing installs are not switched to this
-    /// automatically — see `effectiveDefaultRepoId`.
-    static let defaultRepoId = "mlx-community/Qwen3-1.7B-4bit"
+    /// Fresh installations use the compact LFM2.5 model. Saved selections
+    /// and existing downloads are preserved by `effectiveDefaultRepoId`.
+    static let defaultRepoId = "mlx-community/LFM2.5-1.2B-Instruct-4bit"
 
-    /// True on an iPhone with at least ~8 GB of RAM, where the 4 GB-class Mac
-    /// model still fits comfortably. `7.5 GB` guards against reported totals
-    /// that undershoot the marketed figure.
-    private static var isHighMemoryPhone: Bool {
-        #if canImport(UIKit)
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            return ProcessInfo.processInfo.physicalMemory >= UInt64(7.5 * 1024 * 1024 * 1024)
-        }
-        #endif
-        return false
-    }
-
-    private static var qwen3_4BInstructLabel: String {
-        isHighMemoryPhone ? "Qwen3 4B Instruct (best quality, 8 GB iPhones)" : "Qwen3 4B Instruct (Mac, recommended)"
-    }
-
-    // Sorted ascending by size; mirrors MLX_MODELS in src/lib/aiModels.ts.
-    // Models dropped from this list still work for anyone who saved them:
-    // pickers add a "(legacy)" entry for the current selection.
+    // Approximate decimal GB downloaded, not peak working memory. Mirrors
+    // MLX_MODELS in src/lib/aiModels.ts. MLXLLM loads the text branch of the
+    // canonical multimodal checkpoints; Skim currently supplies text only.
     static var modelOptions: [MLXModelOption] {
         [
-            MLXModelOption(repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B (iPhone, fastest)", sizeGB: 0.7, isPhoneFriendly: true),
-            MLXModelOption(repoId: "mlx-community/LFM2-1.2B-4bit", label: "LFM2 1.2B (iPhone, fast)", sizeGB: 0.7, isPhoneFriendly: true),
-            MLXModelOption(repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B (recommended for iPhone)", sizeGB: 1.0, isPhoneFriendly: true),
-            MLXModelOption(repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: qwen3_4BInstructLabel, sizeGB: 2.3, isPhoneFriendly: false),
-            MLXModelOption(repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B (Mac)", sizeGB: 2.4, isPhoneFriendly: false),
-            MLXModelOption(repoId: "mlx-community/Qwen3-8B-4bit", label: "Qwen3 8B (Mac, 16 GB+)", sizeGB: 4.6, isPhoneFriendly: false),
-            MLXModelOption(repoId: "mlx-community/Qwen3-30B-A3B-4bit", label: "Qwen3 30B-A3B (Mac, 32 GB+, best quality)", sizeGB: 17.2, isPhoneFriendly: false)
+            MLXModelOption(repoId: defaultRepoId, label: "LFM2.5 1.2B Instruct (iPhone, recommended)", sizeGB: 0.7, isPhoneFriendly: true),
+            MLXModelOption(repoId: "mlx-community/Qwen3.5-2B-4bit", label: "Qwen3.5 2B (iPhone)", sizeGB: 1.8, isPhoneFriendly: true),
+            MLXModelOption(repoId: "mlx-community/Qwen3.5-4B-4bit", label: "Qwen3.5 4B (Mac, recommended; 12 GB iPhones)", sizeGB: 3.1, isPhoneFriendly: false, needsHighMemoryPhone: true),
+            MLXModelOption(repoId: "mlx-community/gemma-4-e2b-it-4bit", label: "Gemma 4 E2B (12 GB iPhones, Mac)", sizeGB: 3.6, isPhoneFriendly: false, needsHighMemoryPhone: true),
+            MLXModelOption(repoId: "mlx-community/gemma-4-e4b-it-4bit", label: "Gemma 4 E4B (Mac, 16 GB+)", sizeGB: 5.2, isPhoneFriendly: false, minMemoryGB: 16),
+            MLXModelOption(repoId: "mlx-community/Qwen3.5-9B-4bit", label: "Qwen3.5 9B (Mac, 16 GB+; 24 GB+ preferred)", sizeGB: 6.0, isPhoneFriendly: false, minMemoryGB: 16),
+            MLXModelOption(repoId: "mlx-community/Qwen3.8-27B-4bit", label: "Qwen3.8 27B (Mac, 48 GB+)", sizeGB: 16.1, isPhoneFriendly: false, minMemoryGB: 48),
+            MLXModelOption(repoId: "mlx-community/Qwen3.6-35B-A3B-4bit", label: "Qwen3.6 35B-A3B (Mac, 48 GB+)", sizeGB: 20.4, isPhoneFriendly: false, minMemoryGB: 48)
         ]
     }
 
-    /// Models offered in pickers on this device. iPhones skip the Mac-sized
-    /// tier (4 GB+), which does not fit in phone memory.
+    /// Removed from fresh recommendations, still selectable when saved.
+    static let retiredModelOptions: [MLXModelOption] = [
+        MLXModelOption(repoId: "mlx-community/gemma-3-1b-it-4bit", label: "Gemma 3 1B", sizeGB: 0.7, isPhoneFriendly: true),
+        MLXModelOption(repoId: "mlx-community/LFM2-1.2B-4bit", label: "LFM2 1.2B", sizeGB: 0.7, isPhoneFriendly: true),
+        MLXModelOption(repoId: "mlx-community/Qwen3-1.7B-4bit", label: "Qwen3 1.7B", sizeGB: 1.0, isPhoneFriendly: true),
+        MLXModelOption(repoId: "mlx-community/Qwen3-4B-Instruct-2507-4bit", label: "Qwen3 4B Instruct", sizeGB: 2.3, isPhoneFriendly: false),
+        MLXModelOption(repoId: "mlx-community/gemma-3-4b-it-4bit", label: "Gemma 3 4B", sizeGB: 2.4, isPhoneFriendly: false),
+        MLXModelOption(repoId: "mlx-community/Qwen3-8B-4bit", label: "Qwen3 8B", sizeGB: 4.6, isPhoneFriendly: false),
+        MLXModelOption(repoId: "mlx-community/Qwen3-30B-A3B-4bit", label: "Qwen3 30B-A3B", sizeGB: 17.2, isPhoneFriendly: false)
+    ]
+
+    /// Pure memory filter, also used by tests. Allow for reported totals
+    /// slightly below marketed RAM. Phone tiers leave room for article prefill.
+    static func offeredOptions(isPhone: Bool, memoryGB: Double) -> [MLXModelOption] {
+        modelOptions.filter { option in
+            if isPhone {
+                return option.isPhoneFriendly || (option.needsHighMemoryPhone && memoryGB >= 11.5)
+            }
+            return option.minMemoryGB == 0 || memoryGB >= option.minMemoryGB - 0.5
+        }
+    }
+
     @MainActor
     static var offeredOptions: [MLXModelOption] {
         #if canImport(UIKit)
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            return modelOptions.filter { $0.sizeGB < 4 }
-        }
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+        #else
+        let isPhone = false
         #endif
-        return modelOptions
+        return offeredOptions(isPhone: isPhone, memoryGB: Double(ProcessInfo.processInfo.physicalMemory) / pow(1024, 3))
     }
 
     static var isAvailable: Bool {
@@ -77,6 +83,7 @@ enum NativeMLX {
 
     static func option(for repoId: String) -> MLXModelOption {
         modelOptions.first(where: { $0.repoId == repoId })
+            ?? retiredModelOptions.first(where: { $0.repoId == repoId })
             ?? MLXModelOption(repoId: repoId, label: repoId, sizeGB: 0, isPhoneFriendly: false)
     }
 
@@ -103,22 +110,18 @@ enum NativeMLX {
         MLXRunner.downloadedRepoIds()
     }
 
-    /// The default repo id to use for an unpinned settings value, without
-    /// forcing a surprise download on an existing user: an existing Gemma
-    /// install that has not also fetched the new default keeps running
-    /// Gemma until the person picks something else. New users, and anyone
-    /// who already has the new default downloaded, get `defaultRepoId`.
+    /// An unpinned existing installation keeps a downloaded model rather
+    /// than being forced to download the new default. Explicit pins win above.
     static var effectiveDefaultRepoId: String {
         effectiveDefaultRepoId(downloaded: Set(downloadedRepoIds()))
     }
 
-    /// Pure variant of `effectiveDefaultRepoId` for unit testing without touching disk.
     static func effectiveDefaultRepoId(downloaded: Set<String>) -> String {
-        let legacyDefault = MLXRunner.defaultRepoId
-        if downloaded.contains(legacyDefault) && !downloaded.contains(defaultRepoId) {
-            return legacyDefault
+        if downloaded.contains(defaultRepoId) { return defaultRepoId }
+        for previous in ["mlx-community/Qwen3-1.7B-4bit", "mlx-community/gemma-3-1b-it-4bit"] {
+            if downloaded.contains(previous) { return previous }
         }
-        return defaultRepoId
+        return downloaded.sorted().first ?? defaultRepoId
     }
 
     static func download(
@@ -132,6 +135,17 @@ enum NativeMLX {
             }
         }
         try await MLXRunner.shared.downloadModel(repoId: repoId)
+    }
+
+    /// Loads the model `settings` would use, if it is downloaded, so a sheet
+    /// that is about to ask it something doesn't wait on reading weights.
+    static func prewarm(settings: AISettings) {
+        guard isAvailable else { return }
+        let repoId = resolvedRepoId(settings)
+        guard MLXRunner.isRepoDownloaded(repoId) else { return }
+        Task.detached(priority: .utility) {
+            await MLXRunner.shared.prewarm(repoId: repoId)
+        }
     }
 
     static func delete(repoId: String) async throws {
@@ -190,13 +204,18 @@ enum NativeMLX {
     /// user setting (`settings.mlx*`) wins, then the caller-supplied override (e.g. a
     /// use-case-tuned preset like `GroundedChatPrompt.samplingPreset`), then the
     /// per-model preset applied downstream in `MLXRunner`.
+    ///
+    /// `reusablePrefixMarker` is the text ending the part of the prompt that
+    /// follow-up requests repeat (see `PromptPrefix.articleMarker`); the model
+    /// state for it is kept so the next question skips that prefill.
     static func complete(
         settings: AISettings,
         messages: [[String: String]],
         maxTokens: Int,
         temperature: Double? = nil,
         topP: Double? = nil,
-        repetitionPenalty: Double? = nil
+        repetitionPenalty: Double? = nil,
+        reusablePrefixMarker: String? = nil
     ) async throws -> String {
         let repoId = resolvedRepoId(settings)
         await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
@@ -209,7 +228,8 @@ enum NativeMLX {
             temperature: settings.mlxTemperature.map { Float($0) } ?? temperature.map { Float($0) },
             topP: settings.mlxTopP.map { Float($0) } ?? topP.map { Float($0) },
             repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) } ?? repetitionPenalty.map { Float($0) },
-            repetitionContextSize: settings.mlxRepetitionContextSize
+            repetitionContextSize: settings.mlxRepetitionContextSize,
+            reusablePrefixMarker: reusablePrefixMarker
         )
         .trimmingCharacters(in: .whitespacesAndNewlines)
     }

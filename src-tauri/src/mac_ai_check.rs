@@ -16,8 +16,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let result = (|| -> Result<(), Box<dyn std::error::Error>> {
         let requests = [
             serde_json::json!({"command": "fm_availability"}),
-            serde_json::json!({"command": "mlx_complete", "repoId": "mlx-community/gemma-3-1b-it-4bit", "system": "Answer briefly.", "user": "What is 2 + 2?", "maxTokens": 24}),
-            serde_json::json!({"command": "mlx_complete", "repoId": "mlx-community/gemma-3-1b-it-4bit", "system": "Answer briefly.", "user": "What is 3 + 3?", "maxTokens": 24}),
+            serde_json::json!({"command": "mlx_complete", "system": "Answer briefly.", "user": "What is 2 + 2?", "maxTokens": 24}),
+            serde_json::json!({"command": "mlx_complete", "system": "Answer briefly.", "user": "What is 3 + 3?", "maxTokens": 24}),
         ];
         let mut reader = BufReader::new(stdout);
         for request in requests {

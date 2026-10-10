@@ -53,7 +53,7 @@ tiny_http = { version = "0.12", optional = true }
 
 # llama.cpp — desktop only. Not cross-compilable to iOS.
 [target.'cfg(not(target_os = "ios"))'.dependencies]
-llama-cpp-2 = { version = "0.1.143", features = ["metal", "sampler"] }
+llama-cpp-2 = { version = "0.1.159", features = ["metal", "sampler"] }
 
 
 [profile.dev]

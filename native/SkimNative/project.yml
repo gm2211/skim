@@ -9,15 +9,9 @@ packages:
     path: ../SkimCore
   SkimInferencePolicy:
     path: ../../shared/SkimInferencePolicy
-  mlx-swift:
-    url: https://github.com/ml-explore/mlx-swift.git
-    from: 0.18.0
-  mlx-swift-examples:
-    url: https://github.com/ml-explore/mlx-swift-examples.git
-    from: 2.21.0
-  swift-transformers:
-    url: https://github.com/huggingface/swift-transformers
-    from: 1.0.0
+  # Pins MLX, the LLM library and the tokenizer for every Skim target.
+  SkimMLXEngine:
+    path: ../../shared/SkimMLXEngine
 targets:
   Skim iOS:
     type: application
@@ -30,14 +24,7 @@ targets:
     dependencies:
       - package: SkimCore
       - package: SkimInferencePolicy
-      - package: mlx-swift
-        product: MLX
-      - package: mlx-swift-examples
-        product: MLXLMCommon
-      - package: mlx-swift-examples
-        product: MLXLLM
-      - package: swift-transformers
-        product: Hub
+      - package: SkimMLXEngine
     scheme:
       testTargets:
         - Skim iOS Tests

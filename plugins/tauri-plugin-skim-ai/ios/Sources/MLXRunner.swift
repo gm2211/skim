@@ -3,15 +3,12 @@ import SkimInferencePolicy
 #if canImport(UIKit)
 import UIKit
 #endif
-import Hub
-import MLX
-import MLXLMCommon
-import MLXLLM
+import SkimMLXEngine
 
 /// On-device LLM runtime backed by MLX + a small phone-friendly default model.
 ///
 /// - Lazy-loads the model on first `complete()`.
-/// - Caches the loaded `ModelContainer` inside the actor so subsequent calls skip load.
+/// - Caches the loaded `SkimMLXModel` inside the actor so subsequent calls skip load.
 /// - Evicts the model on app background and when thermal state hits `.serious` / `.critical`.
 ///
 /// Progress reporting for downloads is surfaced through `MLXModelManager`
@@ -22,11 +19,11 @@ actor MLXRunner {
     // MARK: - Config
 
     /// Default HF repo id. Can be overridden via `setModel(_:)`.
-    static let defaultRepoId = "mlx-community/gemma-3-1b-it-4bit"
+    static let defaultRepoId = "mlx-community/LFM2.5-1.2B-Instruct-4bit"
 
     private var currentRepoId: String = MLXRunner.defaultRepoId
-    private var loadedContainer: ModelContainer?
-    private var loadingTask: Task<ModelContainer, Error>?
+    private var loadedContainer: SkimMLXModel?
+    private var loadingTask: Task<SkimMLXModel, Error>?
 
     /// Optional progress sink; called from the hub loader as weights download.
     /// `MLXModelManager` installs this to drive the UI progress bar.
@@ -225,20 +222,12 @@ actor MLXRunner {
     /// constrained phones.
     func downloadModel(repoId: String) async throws {
         let sink = progressSink
-        let cfg = ModelConfiguration(id: repoId)
-        let hub = HubApi()
         do {
             try Task.checkCancellation()
             MLXRunner.cleanupPartialDownloads(repoId: repoId)
-            _ = try await MLXLMCommon.downloadModel(
-                hub: hub,
-                configuration: cfg,
-                progressHandler: { progress in
-                    sink?(progress.fractionCompleted)
-                }
-            )
-            try Task.checkCancellation()
-            _ = try await hub.snapshot(from: Hub.Repo(id: repoId), matching: ["*.jinja"])
+            _ = try await SkimHubDownloader(useBackgroundSession: false).downloadModel(repoId: repoId) { progress in
+                sink?(progress.fractionCompleted)
+            }
             try Task.checkCancellation()
             guard ModelChatTemplate.isUsable(in: MLXRunner.cacheDirectory(forRepo: repoId)) else {
                 throw MLXError.loadFailed("Model chat template missing or invalid — re-download this model.")
@@ -267,7 +256,7 @@ actor MLXRunner {
 
     /// Ensure the model is loaded and cached. Triggers download on first call.
     @discardableResult
-    func ensureLoaded() async throws -> ModelContainer {
+    func ensureLoaded() async throws -> SkimMLXModel {
         guard ModelChatTemplate.isUsable(in: MLXRunner.cacheDirectory(forRepo: currentRepoId)) else {
             throw MLXError.loadFailed("Model chat template missing or invalid — re-download this model.")
         }
@@ -278,17 +267,12 @@ actor MLXRunner {
         guard MLXRunner.isRepoDownloaded(repoId) else {
             throw MLXError.loadFailed("Model \(repoId) is not downloaded.")
         }
-        let sink = progressSink
-        let task = Task { () throws -> ModelContainer in
+        let task = Task { () throws -> SkimMLXModel in
             do {
-                let cfg = ModelConfiguration(id: repoId, extraEOSTokens: MLXModelFamily.detect(from: repoId).extraEOSTokens)
-                let container = try await LLMModelFactory.shared.loadContainer(
-                    configuration: cfg,
-                    progressHandler: { progress in
-                        sink?(progress.fractionCompleted)
-                    }
+                return try await SkimMLXModel.load(
+                    directory: MLXRunner.cacheDirectory(forRepo: repoId),
+                    family: MLXModelFamily.detect(from: repoId)
                 )
-                return container
             } catch {
                 throw MLXError.loadFailed("\(error)")
             }
@@ -315,13 +299,12 @@ actor MLXRunner {
         maxTokens: Int,
         temperature: Float? = nil
     ) async throws -> String {
-        let container = try await ensureLoaded()
+        let model = try await ensureLoaded()
 
         let messages = LocalChatMessages.prepare(messages: suppliedMessages, system: systemPrompt, user: userPrompt, jsonMode: jsonMode)
 
         let preset = MLXSamplingPreset.preset(for: currentRepoId)
-        let family = MLXModelFamily.detect(from: currentRepoId)
-        let params = GenerateParameters(
+        let sampling = SkimSampling(
             maxTokens: maxTokens,
             temperature: temperature ?? preset.temperature,
             topP: preset.topP,
@@ -330,18 +313,8 @@ actor MLXRunner {
         )
 
         do {
-            let output: String = try await container.perform { (context: ModelContext) -> String in
-                let userInput = UserInput(messages: messages, additionalContext: family.supportsThinkingToggle ? ["enable_thinking": false] : nil)
-                let lmInput = try await context.processor.prepare(input: userInput)
-
-                let result = try MLXLMCommon.generate(
-                    input: lmInput,
-                    parameters: params,
-                    context: context
-                ) { (_: [Int]) in GenerateDisposition.more }
-                return result.output
-            }
-            return LocalModelOutput.sanitize(output, family: family)
+            let result = try await model.generate(messages: messages, sampling: sampling, maxPromptTokens: 16_384)
+            return LocalModelOutput.sanitize(result.text, family: model.family)
         } catch let e as MLXError {
             throw e
         } catch {

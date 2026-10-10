@@ -1,0 +1,49 @@
+{
+  "note": "Summary faithfulness cases for on-device models. Articles come from chat-answer-quality.json by case name (synthetic material, not real people or events). A summary fails if it misses a key fact, states a banned (invented) claim, uses a number the article never gives, or runs past twice the requested length.",
+  "cases": [
+    {
+      "name": "necroprinting_short",
+      "article": "necroprinting",
+      "length": "short",
+      "mustContainAny": [["mosquito", "proboscis"], ["nozzle", "print"]],
+      "mustNotContain": ["university of", "patent", "commercial", "Summary:", "**"]
+    },
+    {
+      "name": "necroprinting_medium",
+      "article": "necroprinting",
+      "length": "medium",
+      "mustContainAny": [["mosquito", "proboscis"], ["400 nanometer", "400-nanometer", "400 nm"], ["fragile", "fracture", "clog", "handful of", "few print runs", "few runs"], ["nozzle"]],
+      "mustNotContain": ["university of", "patent", "peer-reviewed study", "Summary:", "**"]
+    },
+    {
+      "name": "bridge_short",
+      "article": "bridge_late_numeric_fact",
+      "length": "short",
+      "mustContainAny": [["bridge"], ["reopen", "rehabilitat", "renovat", "restor"]],
+      "mustNotContain": ["behind schedule", "over budget", "collapse", "Summary:", "**"]
+    },
+    {
+      "name": "bridge_medium",
+      "article": "bridge_late_numeric_fact",
+      "length": "medium",
+      "mustContainAny": [["42.7"], ["eleven weeks", "11 weeks"], ["corrosion", "corroded"], ["deck"]],
+      "mustNotContain": ["behind schedule", "over budget", "collapse", "Summary:", "**"]
+    },
+    {
+      "name": "owls_short",
+      "article": "owls_named_person_fact",
+      "length": "short",
+      "mustContainAny": [["owl"], ["third", "33"]],
+      "mustNotContain": ["funded by", "grant from", "National Science Foundation", "extinct", "Summary:", "**"],
+      "allowedNumbers": ["33"]
+    },
+    {
+      "name": "owls_medium",
+      "article": "owls_named_person_fact",
+      "length": "medium",
+      "mustContainAny": [["owl"], ["third", "33"], ["light", "LED"], ["Castellanos"]],
+      "mustNotContain": ["funded by", "grant from", "National Science Foundation", "extinct", "Summary:", "**"],
+      "allowedNumbers": ["33"]
+    }
+  ]
+}

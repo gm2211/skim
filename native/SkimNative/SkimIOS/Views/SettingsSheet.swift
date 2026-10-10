@@ -775,7 +775,7 @@ private struct MLXSettingsPanel: View {
             options.append(
                 MLXModelOption(
                     repoId: legacy.repoId,
-                    label: "\(legacy.repoId) (legacy)",
+                    label: "\(legacy.label) (legacy)",
                     sizeGB: legacy.sizeGB,
                     isPhoneFriendly: legacy.isPhoneFriendly
                 )

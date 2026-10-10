@@ -45,7 +45,7 @@
 		D5D2795C99FD3003AA0F056B /* NativeWebSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1B88832F456973EA297F0F /* NativeWebSearch.swift */; };
 		D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A483594667B890576E4D368D /* SkimNativeApp.swift */; };
 		DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BA45434D97C1ACA953B839 /* NativeMLX.swift */; };
-		5E0A1C7D3B9F4E2A8C6D0B11 /* SkimMLXEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 5E0A1C7D3B9F4E2A8C6D0B12 /* SkimMLXEngine */; };
+		DFC1782BE965DCD3BBEAFEC9 /* SkimMLXEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 356F134F0CF2259CC2DA4CF9 /* SkimMLXEngine */; };
 		E0006C62ED6F6DE502164145 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9AD11F7D9C976F34C0C9347 /* RootView.swift */; };
 		E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */; };
 		F22F6907C7390FE6C195AD8C /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 96F35F36DD1B890E9DE5ACBA /* SkimCore */; };
@@ -64,6 +64,7 @@
 
 /* Begin PBXFileReference section */
 		038284DEE00F91A360324653 /* Style.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Style.swift; sourceTree = "<group>"; };
+		03D45CE6B40997BAD9FD2613 /* SkimMLXEngine */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimMLXEngine; path = ../../shared/SkimMLXEngine; sourceTree = SOURCE_ROOT; };
 		093BD7166E85CDD2AC4F89C7 /* Skim iOS Tests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = "Skim iOS Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		09444431BA1054837AA91213 /* ArticleReaderContentLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleReaderContentLoader.swift; sourceTree = "<group>"; };
 		0A322079492B7E2B99DBEB26 /* ModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPicker.swift; sourceTree = "<group>"; };
@@ -125,7 +126,7 @@
 			files = (
 				568EFC6280529AB7F91222BD /* SkimCore in Frameworks */,
 				F77D922DF2F50121B27BDD3B /* SkimInferencePolicy in Frameworks */,
-				5E0A1C7D3B9F4E2A8C6D0B11 /* SkimMLXEngine in Frameworks */,
+				DFC1782BE965DCD3BBEAFEC9 /* SkimMLXEngine in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -187,6 +188,7 @@
 			children = (
 				55C58C12B9B2AB383B4BA89C /* SkimCore */,
 				CAB966C027C845488FBAF8FD /* SkimInferencePolicy */,
+				03D45CE6B40997BAD9FD2613 /* SkimMLXEngine */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -310,7 +312,7 @@
 			packageProductDependencies = (
 				8734D4E26C300D1AD49D4262 /* SkimCore */,
 				DC6D547D6D1E448AFD5E74FA /* SkimInferencePolicy */,
-				5E0A1C7D3B9F4E2A8C6D0B12 /* SkimMLXEngine */,
+				356F134F0CF2259CC2DA4CF9 /* SkimMLXEngine */,
 			);
 			productName = "Skim iOS";
 			productReference = D60276D39C8ED76452B2EB26 /* Skim iOS.app */;
@@ -368,9 +370,9 @@
 			mainGroup = 1A2D47319E7CFF24CC9F78AD;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				5E0A1C7D3B9F4E2A8C6D0B13 /* XCLocalSwiftPackageReference "../../shared/SkimMLXEngine" */,
 				DD3DF580024801F9AE4E4899 /* XCLocalSwiftPackageReference "../SkimCore" */,
 				98DD53F3341BA0D6BEF2F73E /* XCLocalSwiftPackageReference "../../shared/SkimInferencePolicy" */,
+				56A9B13DE61B515C2CBFA7FA /* XCLocalSwiftPackageReference "../../shared/SkimMLXEngine" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D7ABB738AAC39584D7DAB6DD /* Products */;
@@ -479,7 +481,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 78;
+				CURRENT_PROJECT_VERSION = 79;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
@@ -566,7 +568,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 78;
+				CURRENT_PROJECT_VERSION = 79;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Skim;
@@ -633,7 +635,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 78;
+				CURRENT_PROJECT_VERSION = 79;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkimIOS/Info.plist;
@@ -667,7 +669,7 @@
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 78;
+				CURRENT_PROJECT_VERSION = 79;
 				DEVELOPMENT_TEAM = 6KQV68SJ5P;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = SkimIOS/Info.plist;
@@ -792,6 +794,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		56A9B13DE61B515C2CBFA7FA /* XCLocalSwiftPackageReference "../../shared/SkimMLXEngine" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../shared/SkimMLXEngine;
+		};
 		98DD53F3341BA0D6BEF2F73E /* XCLocalSwiftPackageReference "../../shared/SkimInferencePolicy" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../shared/SkimInferencePolicy;
@@ -800,13 +806,13 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../SkimCore;
 		};
-		5E0A1C7D3B9F4E2A8C6D0B13 /* XCLocalSwiftPackageReference "../../shared/SkimMLXEngine" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../../shared/SkimMLXEngine;
-		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		356F134F0CF2259CC2DA4CF9 /* SkimMLXEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SkimMLXEngine;
+		};
 		8734D4E26C300D1AD49D4262 /* SkimCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SkimCore;
@@ -818,10 +824,6 @@
 		DC6D547D6D1E448AFD5E74FA /* SkimInferencePolicy */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SkimInferencePolicy;
-		};
-		5E0A1C7D3B9F4E2A8C6D0B12 /* SkimMLXEngine */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = SkimMLXEngine;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

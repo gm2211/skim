@@ -44,7 +44,7 @@ pub async fn get_or_generate_today_edition(
         && crate::db::semantic_edition::eligible_count(candidates.len())
     {
         let mut ai_settings = settings.ai.clone();
-        ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+        ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
         if let Ok(provider) =
             create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)
         {
@@ -195,7 +195,7 @@ pub async fn generate_today_ledes(
     }
 
     let mut ai_settings = settings.ai.clone();
-    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
         .model

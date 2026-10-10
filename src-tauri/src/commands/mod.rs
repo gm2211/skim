@@ -4,6 +4,7 @@ pub mod article_body;
 pub mod articles;
 pub mod chat;
 pub mod claude_oauth;
+pub mod xai_oauth;
 pub mod editions;
 pub mod ds4;
 pub mod feeds;

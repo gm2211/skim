@@ -670,7 +670,7 @@ pub async fn summarize_article(
         }
     }
 
-    settings.ai.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    settings.ai.oauth_access_token = crate::ai::subscription_access_token(&db, &settings.ai.provider);
 
     let provider = create_provider_with_app(&settings.ai, Some(model_state.inner().clone()), &app)?;
 
@@ -875,7 +875,7 @@ pub async fn generate_themes(
     }
 
     let mut ai_settings = settings.ai.clone();
-    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
 
     let model = ai_settings
@@ -1212,7 +1212,7 @@ pub async fn triage_articles(
     }
 
     let mut ai_settings = settings.ai.clone();
-    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
         .model
@@ -2409,7 +2409,7 @@ async fn build_catchup_report(
     }
 
     let mut ai_settings = settings.ai.clone();
-    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
         .model

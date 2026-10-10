@@ -167,6 +167,17 @@ pub fn init_state<R: tauri::Runtime>(app: &tauri::AppHandle<R>, app_dir: std::pa
     }
 
     app.manage(database);
+
+    // Keep subscription sign-ins (Claude, SuperGrok) alive across token expiry.
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(300));
+        loop {
+            ticker.tick().await;
+            let db = handle.state::<Database>();
+            ai::refresh_due_subscription_tokens(&db).await;
+        }
+    });
     app.manage(model_state);
     app.manage(DownloadCancelFlag(Arc::new(AtomicBool::new(false))));
     app.manage(Arc::new(Mutex::new(SummaryCache::new())) as SharedSummaryCache);
@@ -280,6 +291,10 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::claude_oauth::claude_oauth_sign_out,
             commands::claude_oauth::claude_oauth_status,
             commands::claude_oauth::claude_oauth_refresh,
+            commands::xai_oauth::xai_oauth_begin,
+            commands::xai_oauth::xai_oauth_complete,
+            commands::xai_oauth::xai_oauth_status,
+            commands::xai_oauth::xai_oauth_sign_out,
     ]
 }
 

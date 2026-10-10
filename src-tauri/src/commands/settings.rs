@@ -37,7 +37,13 @@ pub async fn list_remote_models(
     provider: String,
     api_key: Option<String>,
     endpoint: Option<String>,
+    db: State<'_, Database>,
 ) -> Result<Vec<RemoteModel>, String> {
+    // Signed in with SuperGrok and no key typed: list with the sign-in token.
+    let api_key = match api_key.filter(|key| !key.trim().is_empty()) {
+        None if provider == "xai" => crate::ai::xai_oauth::stored_access_token(&db),
+        key => key,
+    };
     let url = models_url(&provider, endpoint.as_deref())?;
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))

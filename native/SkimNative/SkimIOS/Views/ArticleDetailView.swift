@@ -123,6 +123,7 @@ struct ArticleDetailView: View {
             articleID: article.id,
             feedID: article.feedID,
             feedTitle: article.feedTitle,
+            title: article.title,
             dwellSeconds: dwell
         )
     }

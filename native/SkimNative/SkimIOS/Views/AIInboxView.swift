@@ -6,247 +6,247 @@ import SwiftUI
 struct InboxRankedArticle: Identifiable {
     var id: String { article.id }
     var article: Article
-    var aiReason: String
-    var blendedScore: Double
+    /// nil until the AI has rated the article.
+    var rating: InboxAIScore?
+    var score: Double
 }
 
-// MARK: - AI Inbox Sheet
+// MARK: - AI Inbox
 
-/// Replaces the old text-sheet AI Inbox with a navigable ranked article list.
-/// Ranking = AI scoring (LLM picks + ordering) blended with taste signals.
-struct AIInboxSheet: View {
+/// Unread articles ranked most relevant and important first. The AI rates each
+/// article once on importance and relevance; taste learned on this device from
+/// reading time, saves, pins and dismissals re-ranks on every visit.
+struct AIInboxView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
 
-    var sourceArticles: [Article]
+    /// Most articles rated per visit, so a big backlog doesn't stall the page.
+    private static let ratingsPerVisit = 60
 
+    @State private var items: [InboxRankedArticle] = []
     @State private var isLoading = true
-    @State private var rankedItems: [InboxRankedArticle] = []
+    @State private var ratingStatus: String?
     @State private var errorMessage: String?
+    @State private var ratingTask: Task<Void, Never>?
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if isLoading {
-                    loadingView
-                } else if let errorMessage {
-                    errorView(errorMessage)
-                } else if rankedItems.isEmpty {
-                    emptyView
-                } else {
-                    articleList
-                }
-            }
-            .background(SkimStyle.chrome.ignoresSafeArea())
-            .navigationTitle("AI Inbox")
-            .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(for: String.self) { articleID in
-                ArticleDetailView(articleID: articleID)
-                    .environmentObject(model)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task { await run() }
-                    } label: {
-                        Label("Run Again", systemImage: "arrow.clockwise")
-                            .labelStyle(.iconOnly)
-                    }
-                    .disabled(isLoading)
-                }
-            }
-            .task { await run() }
-        }
-    }
+        VStack(spacing: 0) {
+            header
 
-    // MARK: - Sub-views
-
-    private var loadingView: some View {
-        VStack(spacing: 18) {
-            ProgressView()
-                .tint(SkimStyle.accent)
-                .controlSize(.large)
-            Text(NativeAI.loadingStatusLabel(for: model.settings.ai))
-                .font(.system(size: 16, weight: .semibold))
+            if isLoading && items.isEmpty {
+                ProgressView()
+                    .tint(SkimStyle.accent)
+                    .controlSize(.large)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if items.isEmpty {
+                ContentUnavailableView(
+                    "Inbox zero",
+                    systemImage: "tray",
+                    description: Text("No unread articles. Refresh your feeds to fill the AI Inbox.")
+                )
                 .foregroundStyle(SkimStyle.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(32)
-    }
-
-    private func errorView(_ message: String) -> some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 36, weight: .regular))
-                .foregroundStyle(SkimStyle.secondary)
-
-            Text(message)
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(SkimStyle.secondary)
-                .multilineTextAlignment(.center)
-                .lineSpacing(4)
-
-            Button("Try Again") {
-                Task { await run() }
+                .frame(maxHeight: .infinity)
+            } else {
+                articleList
             }
-            .buttonStyle(.glassProminent)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(32)
+        .background(SkimStyle.background.ignoresSafeArea())
+        .foregroundStyle(SkimStyle.text)
+        .navigationBarBackButtonHidden()
+        .toolbar(.hidden, for: .navigationBar)
+        // Re-rank on every return (e.g. from an article) so new taste shows up.
+        .onAppear { Task { await rank() } }
+        .task { await rateNewArticles() }
+        .onDisappear { ratingTask?.cancel() }
     }
 
-    private var emptyView: some View {
-        ContentUnavailableView(
-            "No articles ranked",
-            systemImage: "tray",
-            description: Text("Add RSS feeds or refresh to populate AI Inbox.")
-        )
-        .foregroundStyle(SkimStyle.secondary)
+    // MARK: Header
+
+    private var header: some View {
+        HStack {
+            Button { dismiss() } label: {
+                Label("Articles", systemImage: "chevron.left")
+                    .frame(minHeight: 44)
+            }
+            Spacer()
+            Text("AI Inbox").font(.headline)
+            Spacer()
+            Menu {
+                Button("Rate new articles", systemImage: "sparkles") {
+                    Task { await rateNewArticles() }
+                }
+                Button("Re-rate everything", systemImage: "arrow.clockwise") {
+                    Task { await rateNewArticles(rerateAll: true) }
+                }
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Rate articles")
+            .disabled(ratingStatus != nil)
+        }
+        .padding(.horizontal, 16)
+        .background(SkimStyle.chrome)
     }
+
+    // MARK: List
 
     private var articleList: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                AIDisclaimerLabel()
-                    .padding(.horizontal, 18)
-                    .padding(.top, 10)
-                    .padding(.bottom, 6)
-
-                ForEach(Array(rankedItems.enumerated()), id: \.element.id) { index, item in
-                    NavigationLink(value: item.article.id) {
-                        InboxArticleRow(rank: index + 1, item: item)
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let ratingStatus {
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.small).tint(SkimStyle.accent)
+                            Text(ratingStatus)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(SkimStyle.secondary)
+                        }
                     }
-                    .buttonStyle(.plain)
+                    if let errorMessage {
+                        Label(errorMessage, systemImage: "exclamationmark.triangle")
+                            .font(.system(size: 13))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                    AIDisclaimerLabel()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
 
-                    if index < rankedItems.count - 1 {
-                        Divider()
-                            .padding(.leading, 70)
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                NavigationLink {
+                    ArticleDetailView(articleID: item.article.id)
+                } label: {
+                    InboxArticleRow(rank: index + 1, item: item)
+                }
+                .listRowBackground(SkimStyle.chrome)
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 12))
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    Button {
+                        dismissArticle(item.article)
+                    } label: {
+                        Label("Dismiss", systemImage: "checkmark")
+                    }
+                    .tint(SkimStyle.secondary)
+                }
+                .swipeActions(edge: .leading) {
+                    Button {
+                        Task { await model.toggleStar(item.article); await rank() }
+                    } label: {
+                        Label(item.article.isStarred ? "Unsave" : "Save",
+                              systemImage: item.article.isStarred ? "star.slash" : "star")
+                    }
+                    .tint(.yellow)
+                }
+                .contextMenu {
+                    Button("Dismiss", systemImage: "checkmark") { dismissArticle(item.article) }
+                    Button(item.article.isStarred ? "Unsave" : "Save",
+                           systemImage: item.article.isStarred ? "star.slash" : "star") {
+                        Task { await model.toggleStar(item.article); await rank() }
                     }
                 }
             }
-            .padding(.vertical, 8)
         }
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .refreshable { await rateNewArticles() }
     }
 
-    // MARK: - Ranking Logic
+    private func dismissArticle(_ article: Article) {
+        withAnimation { items.removeAll { $0.id == article.id } }
+        Task { await model.dismissFromInbox(article) }
+    }
 
-    private func run() async {
-        isLoading = true
-        errorMessage = nil
-        rankedItems = []
+    // MARK: Ranking
 
+    /// Rank unread articles from stored ratings and current taste; no AI call.
+    private func rank() async {
         do {
-            let context = try await model.articlesForAIContext(preferred: sourceArticles)
-            guard !context.isEmpty else {
-                errorMessage = "No articles available yet. Add RSS feeds or refresh before opening AI Inbox."
-                isLoading = false
-                return
+            let candidates = try await model.inboxCandidates()
+            let starred = await model.starredForTaste()
+            let taste = model.tasteStore.inboxTaste(starred: starred)
+            let strength = taste.strength
+            let now = Date()
+            let ranked = candidates.map { article -> InboxRankedArticle in
+                let rating = model.inboxScores.score(for: article.id)
+                let published = article.publishedAt ?? article.fetchedAt
+                let score = InboxRanking.score(
+                    importance: rating?.importance,
+                    relevance: rating?.relevance,
+                    affinity: taste.affinity(feedID: article.feedID, title: article.title),
+                    strength: strength,
+                    pinned: model.tasteStore.signal(for: article.id)?.priorityOverride == .pin,
+                    ageHours: max(0, now.timeIntervalSince(published)) / 3600
+                )
+                return InboxRankedArticle(article: article, rating: rating, score: score)
             }
-
-            // Ask the LLM to rank articles; it returns a text with [N] references in priority order
-            let rawText = try await NativeAI.aiInbox(articles: context, settings: model.settings)
-
-            // Parse the LLM output into a ranked id list + reasons
-            let parsed = parseInboxResponse(rawText, articles: context)
-
-            // Blend with taste signals
-            let profile = model.getPreferenceProfile()
-            rankedItems = blendWithTaste(parsed, profile: profile)
-
+            items = ranked.sorted {
+                if $0.score != $1.score { return $0.score > $1.score }
+                return ($0.article.publishedAt ?? $0.article.fetchedAt) > ($1.article.publishedAt ?? $1.article.fetchedAt)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
-
         isLoading = false
     }
 
-    /// Parse the LLM markdown output: find [N] handles and extract per-article reason lines.
-    private func parseInboxResponse(_ text: String, articles: [Article]) -> [InboxRankedArticle] {
-        var results: [InboxRankedArticle] = []
-        var seenIDs: Set<String> = []
-
-        // Split into lines; each bullet/line may reference one article
-        let lines = text.components(separatedBy: .newlines)
-        let handlePattern = #"\[(\d{1,3})\]"#
-        guard let regex = try? NSRegularExpression(pattern: handlePattern) else {
-            return fallbackRanking(articles)
-        }
-
-        for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
-            let nsRange = NSRange(trimmed.startIndex..<trimmed.endIndex, in: trimmed)
-            let matches = regex.matches(in: trimmed, range: nsRange)
-            for match in matches {
-                guard match.numberOfRanges > 1,
-                      let range = Range(match.range(at: 1), in: trimmed),
-                      let idx = Int(trimmed[range])
-                else { continue }
-                let zeroBased = idx - 1
-                guard articles.indices.contains(zeroBased) else { continue }
-                let article = articles[zeroBased]
-                guard seenIDs.insert(article.id).inserted else { continue }
-
-                // Extract reason: strip the [N] handle(s) and leading bullets/dashes
-                let reason = trimmed
-                    .replacingOccurrences(of: #"\[\d{1,3}\]"#, with: "", options: .regularExpression)
-                    .replacingOccurrences(of: #"^[\-\*\•]\s*"#, with: "", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-
-                results.append(InboxRankedArticle(
-                    article: article,
-                    aiReason: reason.isEmpty ? "Recommended by AI" : reason,
-                    blendedScore: Double(articles.count - zeroBased) // LLM order = initial score
-                ))
-            }
-        }
-
-        // If parsing found nothing, fall back to all articles
-        return results.isEmpty ? fallbackRanking(articles) : results
+    /// Rate unrated unread articles in small batches, re-ranking after each.
+    private func rateNewArticles(rerateAll: Bool = false) async {
+        ratingTask?.cancel()
+        let task = Task { await performRating(rerateAll: rerateAll) }
+        ratingTask = task
+        await task.value
     }
 
-    private func fallbackRanking(_ articles: [Article]) -> [InboxRankedArticle] {
-        articles.prefix(12).enumerated().map { idx, article in
-            InboxRankedArticle(
-                article: article,
-                aiReason: "Recommended by AI",
-                blendedScore: Double(articles.count - idx)
-            )
+    private func performRating(rerateAll: Bool) async {
+        await rank()
+        errorMessage = nil
+        guard model.settings.ai.provider != "none" else {
+            errorMessage = "Choose an AI model in Settings to rate importance and relevance. Until then the inbox ranks by what you read."
+            return
         }
-    }
+        guard AIBootDisclaimerView.isAccepted else { return }
 
-    /// Blend AI scores with taste profile feed weights.
-    /// Final score = aiScore * 0.7 + tasteBoost * 0.3
-    private func blendWithTaste(_ items: [InboxRankedArticle], profile: PreferenceProfile) -> [InboxRankedArticle] {
-        guard profile.signalCount > 0 else { return items }
+        var pending = items.map(\.article)
+        if !rerateAll {
+            pending = pending.filter { model.inboxScores.score(for: $0.id) == nil }
+        }
+        pending = Array(pending.prefix(Self.ratingsPerVisit))
+        guard !pending.isEmpty else { return }
 
-        let maxAI = items.map(\.blendedScore).max() ?? 1
-        return items
-            .map { item -> InboxRankedArticle in
-                var copy = item
-                let aiNorm = maxAI > 0 ? item.blendedScore / maxAI : 0
-
-                // Feed weight in [-1, +1]
-                let feedWeight = profile.feedWeights[item.article.feedID] ?? 0
-
-                // Per-article signal if available
-                var articleBoost: Double = 0
-                if let signal = model.tasteStore.signal(for: item.article.id) {
-                    switch signal.priorityOverride {
-                    case .pin: articleBoost += 1.5
-                    case .none: break
-                    }
+        let provider = model.settings.ai.provider
+        let batchSize = (provider == "mlx" || provider == "foundation-models") ? 10 : 20
+        let readerContext = NativeAI.inboxReaderContext(
+            interests: model.settings.ai.triageUserPrompt,
+            likedTitles: model.tasteStore.likedTitles()
+        )
+        var rated = 0
+        defer { ratingStatus = nil }
+        for start in stride(from: 0, to: pending.count, by: batchSize) {
+            guard !Task.isCancelled else { return }
+            let batch = Array(pending[start..<min(start + batchSize, pending.count)])
+            ratingStatus = "Rating \(rated + 1)–\(rated + batch.count) of \(pending.count)…"
+            do {
+                let ratings = try await NativeAI.inboxRatings(
+                    articles: batch, readerContext: readerContext, settings: model.settings)
+                let now = Date()
+                var stored: [String: InboxAIScore] = [:]
+                for (handle, rating) in ratings {
+                    stored[batch[handle - 1].id] = InboxAIScore(
+                        importance: rating.importance, relevance: rating.relevance,
+                        reason: rating.reason, scoredAt: now)
                 }
-
-                copy.blendedScore = aiNorm * 0.7 + feedWeight * 0.3 + articleBoost
-                return copy
+                model.inboxScores.set(stored)
+                rated += batch.count
+                await rank()
+            } catch {
+                if Task.isCancelled { return }
+                errorMessage = error.localizedDescription
+                return
             }
-            .sorted { $0.blendedScore > $1.blendedScore }
+        }
     }
 }
 
@@ -258,7 +258,6 @@ private struct InboxArticleRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            // Rank badge
             Text("\(rank)")
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(SkimStyle.accent)
@@ -273,40 +272,71 @@ private struct InboxArticleRow: View {
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 6) {
-                    Text(item.article.feedTitle)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(SkimStyle.accent)
-                        .lineLimit(1)
-
-                    if let publishedAt = item.article.publishedAt {
-                        Text("·")
-                            .foregroundStyle(SkimStyle.secondary)
-                        Text(publishedAt, style: .relative)
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(SkimStyle.secondary)
-                    }
-                }
-
-                if !item.aiReason.isEmpty {
-                    Text(item.aiReason)
+                if let reason = item.rating?.reason, !reason.isEmpty {
+                    Text(reason)
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+
+                HStack(spacing: 6) {
+                    Text(item.article.feedTitle)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(SkimStyle.accent)
+                        .lineLimit(1)
+                    if let publishedAt = item.article.publishedAt {
+                        Text("·").foregroundStyle(SkimStyle.secondary)
+                        Text(publishedAt, style: .relative)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .lineLimit(1)
+                    }
+                    if item.article.isStarred {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.yellow)
+                    }
+                }
+
+                if let rating = item.rating {
+                    HStack(spacing: 14) {
+                        RatingDots(label: "Importance", value: rating.importance)
+                        RatingDots(label: "For you", value: rating.relevance)
+                    }
+                } else {
+                    Text("Not rated yet")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(SkimStyle.secondary.opacity(0.8))
+                }
             }
-
-            Spacer(minLength: 4)
-
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(SkimStyle.secondary.opacity(0.6))
-                .padding(.top, 4)
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18)
+        .padding(.leading, 18)
         .padding(.vertical, 14)
-        .background(SkimStyle.chrome)
         .contentShape(Rectangle())
+    }
+}
+
+/// Five-dot rating; filled dots carry the value, the label carries the axis.
+private struct RatingDots: View {
+    var label: String
+    var value: Int
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(label)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(SkimStyle.secondary)
+            HStack(spacing: 2) {
+                ForEach(1...5, id: \.self) { n in
+                    Circle()
+                        .fill(n <= value ? SkimStyle.accent : SkimStyle.secondary.opacity(0.3))
+                        .frame(width: 5, height: 5)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label) \(value) of 5")
     }
 }

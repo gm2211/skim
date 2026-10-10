@@ -898,29 +898,98 @@ enum NativeAI {
         return page
     }
 
-    static func aiInbox(articles: [Article], settings: AppSettings) async throws -> String {
-        // FM guided-generation fast path — schema-constrained output, no JSON parsing.
+    /// One article's AI Inbox rating, keyed by its 1-based position in the batch.
+    struct InboxRating: Equatable {
+        var importance: Int
+        var relevance: Int
+        var reason: String
+    }
+
+    /// Words of reader context for AI Inbox relevance: explicit interests plus
+    /// titles the reader spent time on. Never cited back in reasons.
+    static func inboxReaderContext(interests: String?, likedTitles: [String]) -> String {
+        var lines: [String] = []
+        if let interests = interests?.trimmingCharacters(in: .whitespacesAndNewlines), !interests.isEmpty {
+            lines.append("Reader's interests (explicit): \(interests)")
+        }
+        if !likedTitles.isEmpty {
+            lines.append("Titles the reader spent time on (inspiration only, do not cite):")
+            lines.append(contentsOf: likedTitles.prefix(15).map { "- \($0)" })
+        }
+        return lines.isEmpty ? "No interest information is available." : lines.joined(separator: "\n")
+    }
+
+    /// Rate every article on importance and relevance (1-5) with the shared
+    /// AI Inbox prompt. Returns ratings keyed by 1-based handle.
+    static func inboxRatings(articles: [Article], readerContext: String, settings: AppSettings) async throws -> [Int: InboxRating] {
+        guard !articles.isEmpty else { return [:] }
+        let digest = articleDigest(articles, limit: articles.count, wordsPerArticle: 40)
 #if canImport(FoundationModels)
         if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
-            return try await aiInboxFM(articles: articles)
+            return try await inboxRatingsFM(articles: articles, digest: digest, readerContext: readerContext)
         }
 #endif
-
-        return try await complete(
+        let raw = try await complete(
             settings: settings,
-            instructions: """
-            You triage RSS articles for a smart inbox. Pick what seems most worth reading and explain why. Use Markdown bullets. Cite every selected article with its numeric handle like [3] and title so the app can make it clickable. Output ONLY plain Markdown — no JSON, no code fences.
-            """,
+            instructions: InboxRanking.triagePrompt,
             prompt: """
-            Rank the most interesting articles from this list. Return 8-12 picks with a short reason for each. Favor novelty, depth, engineering relevance, and things a curious technical reader would not want to miss.
+            \(readerContext)
 
-            User interests:
-            \(settings.ai.triageUserPrompt?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "No explicit interests configured.")
+            Articles:
+            \(digest)
 
-            \(articleDigest(articles, limit: 45))
+            Rate EVERY article above. Refer to articles by their numeric handle.
+            Output ONLY JSON:
+            {"triage":[{"id":1,"importance":3,"relevance":3,"reason":"short reason"}]}
             """,
-            maxTokens: 750
+            maxTokens: articles.count * 45 + 200,
+            jsonMode: true,
+            temperature: 0.3
         )
+        let ratings = parseInboxRatings(raw, count: articles.count)
+        if ratings.isEmpty {
+            let preview = String(raw.prefix(200)).replacingOccurrences(of: "\n", with: " ")
+            triageJSONLogger.error("AI Inbox ratings parse failed. Raw preview: \(preview, privacy: .public)")
+            throw NativeAIError.unavailable("The AI model didn't return usable ratings. Try again or pick another model.")
+        }
+        return ratings
+    }
+
+    /// Tolerant decode of `{"triage":[{id, importance, relevance, reason}]}`;
+    /// numbers may arrive as strings and single-axis `priority` fills both axes.
+    static func parseInboxRatings(_ raw: String, count: Int) -> [Int: InboxRating] {
+        func int(_ value: Any?) -> Int? {
+            if let n = value as? Int { return n }
+            if let d = value as? Double { return Int(d.rounded()) }
+            if let s = value as? String { return Int(s.trimmingCharacters(in: .whitespaces)) }
+            return nil
+        }
+        let cleaned = repairTriageJSON(raw)
+        guard let data = cleaned.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data)
+        else { return [:] }
+        let entries: [[String: Any]]
+        if let object = json as? [String: Any] {
+            entries = (object["triage"] ?? object["ratings"] ?? object["articles"]) as? [[String: Any]] ?? []
+        } else {
+            entries = json as? [[String: Any]] ?? []
+        }
+        var out: [Int: InboxRating] = [:]
+        for entry in entries {
+            guard let id = int(entry["id"] ?? entry["handle"] ?? entry["articleIndex"]),
+                  (1...count).contains(id)
+            else { continue }
+            let priority = int(entry["priority"])
+            guard let importance = int(entry["importance"]) ?? priority,
+                  let relevance = int(entry["relevance"]) ?? priority
+            else { continue }
+            out[id] = InboxRating(
+                importance: min(5, max(1, importance)),
+                relevance: min(5, max(1, relevance)),
+                reason: (entry["reason"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        }
+        return out
     }
 
     // MARK: - Structured triage JSON (used by auto-group and future JSON consumers)
@@ -2778,24 +2847,25 @@ enum NativeAI {
     // schema-constrained output, eliminating JSON parsing errors entirely.
     // Only used when the provider is "foundation-models" on iOS 26+.
 
-    /// Guided-generation output for AI Inbox triage.
+    /// Guided-generation output for one AI Inbox rating.
     @available(iOS 26.0, macOS 26.0, *)
     @Generable
-    struct FMTriageEntry {
-        /// 1-based index into the articles array.
+    struct FMInboxRating {
         @Guide(description: "1-based index of the article in the provided list")
         var articleIndex: Int
-        /// Short explanation of why this article is worth reading.
-        @Guide(description: "One sentence explanation of why this article is worth reading")
+        @Guide(description: "Importance for anyone following this area, 1 (noise) to 5 (major)", .range(1...5))
+        var importance: Int
+        @Guide(description: "Fit with this reader's interests, 1 (outside them) to 5 (squarely in them); 3 when unknown", .range(1...5))
+        var relevance: Int
+        @Guide(description: "Under 80 characters: what the article is and why it matters or is noise")
         var reason: String
     }
 
     @available(iOS 26.0, macOS 26.0, *)
     @Generable
-    struct FMTriageProposal {
-        /// Ranked list of picked articles, best first.
-        @Guide(description: "8 to 12 articles ranked by interest, best first")
-        var ranked: [FMTriageEntry]
+    struct FMInboxRatings {
+        @Guide(description: "One rating for every article in the list")
+        var ratings: [FMInboxRating]
     }
 
     /// Guided-generation output for auto-group.
@@ -2838,74 +2908,57 @@ enum NativeAI {
 
     // MARK: - FM guided-generation triage methods
 
-    /// Uses Foundation Models guided generation to produce structured AI Inbox picks.
-    /// Returns a formatted Markdown string equivalent to the free-text `aiInbox` path,
-    /// but bypasses JSON parsing by using `@Generable` schema-constrained output.
+    /// Foundation Models guided generation for AI Inbox ratings.
     @available(iOS 26.0, macOS 26.0, *)
-    static func aiInboxFM(articles: [Article]) async throws -> String {
+    static func inboxRatingsFM(articles: [Article], digest: String, readerContext: String) async throws -> [Int: InboxRating] {
         let model = SystemLanguageModel(useCase: .general)
         guard case .available = model.availability else {
             throw NativeAIError.unavailable("Apple Intelligence is not available.")
         }
-        let digest = articleDigest(articles, limit: 45)
-        let baseInstructions = """
-            You triage RSS articles for a smart inbox. Rank the most interesting articles and provide a short reason for each pick.
-            """
+        let baseInstructions = InboxRanking.triagePrompt
 
-        func attempt(instructions: String) async throws -> String {
+        func attempt(instructions: String) async throws -> [Int: InboxRating] {
             let session = LanguageModelSession(model: model, instructions: instructions)
             let response = try await session.respond(
                 to: """
-                Rank 8–12 articles from this list. Favor novelty, depth, and things a curious technical reader would not want to miss.
+                \(readerContext)
+
+                Rate every one of these \(articles.count) articles.
 
                 \(digest)
                 """,
-                generating: FMTriageProposal.self,
-                options: GenerationOptions(sampling: .random(top: 50), temperature: 0.7, maximumResponseTokens: 800)
+                generating: FMInboxRatings.self,
+                options: GenerationOptions(sampling: .greedy, maximumResponseTokens: articles.count * 45 + 200)
             )
-            let proposal = response.content
-            // Convert to Markdown bullets matching the free-text path format.
-            let lines = proposal.ranked.compactMap { entry -> String? in
-                let idx = entry.articleIndex
-                guard articles.indices.contains(idx - 1) else { return nil }
-                let article = articles[idx - 1]
-                return "- [\(idx)] **\(article.title)** — \(entry.reason)"
+            var out: [Int: InboxRating] = [:]
+            for entry in response.content.ratings where articles.indices.contains(entry.articleIndex - 1) {
+                out[entry.articleIndex] = InboxRating(
+                    importance: min(5, max(1, entry.importance)),
+                    relevance: min(5, max(1, entry.relevance)),
+                    reason: entry.reason.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
             }
-            guard !lines.isEmpty else {
-                throw NativeAIError.unavailable("Foundation Models returned no triage picks.")
+            guard !out.isEmpty else {
+                throw NativeAIError.unavailable("Foundation Models returned no ratings.")
             }
-            return lines.joined(separator: "\n")
+            return out
         }
 
         // Retries once with neutralizing instructions when Apple's on-device
         // safety filter refuses ordinary content; see the guardrail-refusal
         // guard near `completeWithFoundationModels`.
-        func attemptWithGuardrailRetry() async throws -> String {
+        do {
+            return try await attempt(instructions: baseInstructions)
+        } catch {
+            guard isGuardrailRefusal(error) else { throw error }
+            print("[NativeAI] AI Inbox (Foundation Models) refused content (guardrail); retrying once with neutralized instructions.")
             do {
-                return try await attempt(instructions: baseInstructions)
+                return try await attempt(instructions: baseInstructions + "\n\n" + guardrailNeutralizingInstructions)
             } catch {
                 guard isGuardrailRefusal(error) else { throw error }
-                print("[NativeAI] AI Inbox (Foundation Models) refused content (guardrail); retrying once with neutralized instructions.")
-                do {
-                    return try await attempt(instructions: baseInstructions + "\n\n" + guardrailNeutralizingInstructions)
-                } catch {
-                    guard isGuardrailRefusal(error) else { throw error }
-                    throw NativeAIError.unavailable(guardrailRefusalMessage)
-                }
+                throw NativeAIError.unavailable(guardrailRefusalMessage)
             }
         }
-
-        let first = try await attemptWithGuardrailRetry()
-        let (firstTrimmed, firstDegenerate) = degenerateRepetitionTrim(first)
-        guard firstDegenerate else { return first }
-
-        print("[NativeAI] AI Inbox (Foundation Models) output looked degenerate; retrying once.")
-        let second = try await attemptWithGuardrailRetry()
-        let (secondTrimmed, secondDegenerate) = degenerateRepetitionTrim(second)
-        guard secondDegenerate else { return second }
-
-        print("[NativeAI] AI Inbox retry was also degenerate; returning the longer trimmed attempt.")
-        return firstTrimmed.count >= secondTrimmed.count ? firstTrimmed : secondTrimmed
     }
 
     /// Uses Foundation Models guided generation for structured catch-up items.

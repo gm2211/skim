@@ -133,6 +133,30 @@ int32_t skim_semantic_partition(const double *members, size_t member_count,
                                 size_t verified_count, int32_t *labels,
                                 size_t labels_count);
 
+/* AI Inbox ranking. The model rates each article on two 1-5 axes:
+ * importance (how significant it is for anyone) and relevance (how well it
+ * fits this reader). Platforms learn reader affinity on device from what is
+ * opened, read, starred, pinned and dismissed, then rank with
+ * skim_inbox_score. Scores are plain doubles; higher ranks first. */
+const char *skim_inbox_triage_prompt(void);
+/* Weight one reader signal. dwell_seconds is total reading time; flags are
+ * 0/1; feedback is -1 (less), 0 or +1 (more). read_unopened marks an inbox
+ * article dismissed (marked read without ever being opened). */
+double skim_inbox_signal_weight(double dwell_seconds, int32_t opened,
+                                int32_t starred, int32_t pinned,
+                                int32_t feedback, int32_t read_unopened);
+/* Affinity in (-1, 1) from summed positive and absolute negative weights. */
+double skim_inbox_affinity(double positive, double negative);
+/* Trust in learned affinity, 0..1, from the number of reader signals. */
+double skim_inbox_learning_strength(int64_t signal_count);
+/* importance/relevance are 1-5 (ignored when has_ai is 0); affinity -1..1;
+ * strength 0..1; age_hours since publication. */
+double skim_inbox_score(double importance, double relevance, int32_t has_ai,
+                        double affinity, double strength, int32_t pinned,
+                        double age_hours);
+/* Legacy 1-5 priority bucket derived from the two axes. */
+int32_t skim_inbox_priority(double importance, double relevance);
+
 #ifdef __cplusplus
 }
 #endif

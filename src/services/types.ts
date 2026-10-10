@@ -231,6 +231,14 @@ export interface SyncSettings {
 export interface ArticleWithTriage extends Article {
   priority: number | null;
   reason: string | null;
+  /** AI-rated significance for anyone, 1-5. */
+  importance: number | null;
+  /** AI-rated fit with this reader, 1-5. */
+  relevance: number | null;
+  /** Taste learned on this device, -1..1. */
+  affinity: number;
+  /** AI Inbox rank score; higher ranks first. */
+  score: number;
 }
 
 export interface TriageResult {

@@ -145,6 +145,7 @@ final class AppModel: ObservableObject {
 
     let store: SkimStore
     let tasteStore = TasteStore()
+    let inboxScores = InboxScoreStore()
     private let importer = OPMLImportService()
     private let refresher = FeedRefreshService()
     private let readLingerDuration: TimeInterval = 30 * 60
@@ -334,13 +335,31 @@ final class AppModel: ObservableObject {
 
     // MARK: - Taste Tracking APIs
 
-    func recordReadingTime(articleID: String, feedID: String, feedTitle: String, dwellSeconds: Double) {
+    func recordReadingTime(articleID: String, feedID: String, feedTitle: String, title: String? = nil, dwellSeconds: Double) {
         tasteStore.recordReadingTime(
             articleID: articleID,
             feedID: feedID,
             feedTitle: feedTitle,
+            title: title,
             dwellSeconds: dwellSeconds
         )
+    }
+
+    /// Unread articles the AI Inbox ranks, newest first.
+    func inboxCandidates(limit: Int = 300) async throws -> [Article] {
+        try await store.listArticles(filter: ArticleFilter(readState: .unread, limit: limit))
+    }
+
+    /// Saved articles teach the inbox what the reader values.
+    func starredForTaste(limit: Int = 300) async -> [Article] {
+        (try? await store.listArticles(filter: ArticleFilter(readState: .all, starredOnly: true, limit: limit))) ?? []
+    }
+
+    /// Clear an article from the AI Inbox without opening it, and learn from it.
+    func dismissFromInbox(_ article: Article) async {
+        tasteStore.recordDismissal(articleID: article.id, feedID: article.feedID,
+                                   feedTitle: article.feedTitle, title: article.title)
+        await setRead(article, isRead: true)
     }
 
     func setPriorityOverride(articleID: String, feedID: String, feedTitle: String, override: ArticlePriorityOverride) {

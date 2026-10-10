@@ -567,6 +567,49 @@ enum NativeAI {
         return nil
     }
 
+    /// What a Catch-up runs on, and the line telling the reader when that is
+    /// not the model they picked.
+    struct CatchUpProvider {
+        var settings: AppSettings
+        var notice: String?
+    }
+
+    /// Apple Intelligence can be unsupported, switched off, or still
+    /// downloading. Rather than dead-end, say which and why, and switch to
+    /// another provider that is already set up. With none, the page is still
+    /// drafted from the articles and the ledes are excerpts.
+    static func catchUpProvider(for settings: AppSettings) -> CatchUpProvider {
+        guard settings.ai.provider == "foundation-models",
+              let reason = appleIntelligenceUnavailableReason()
+        else { return CatchUpProvider(settings: settings, notice: nil) }
+        guard let fallback = AIRequestPolicy.fallbackSettings(
+            for: settings.ai,
+            hasClaudeSubscription: ClaudeKeychainStore.loadAccessToken() != nil,
+            downloadedMLXRepoIds: NativeMLX.downloadedRepoIds(),
+            preferredMLXRepoId: NativeMLX.effectiveDefaultRepoId
+        ) else {
+            return CatchUpProvider(settings: settings, notice: "\(reason) Until then the stories below quote the articles.")
+        }
+        var switched = settings
+        switched.ai = fallback
+        let name = fallback.provider == "mlx" ? ModelCatalog.currentLabel(fallback) : providerDisplayName(fallback.provider)
+        return CatchUpProvider(settings: switched, notice: "\(reason) Using \(name) for this Catch-up.")
+    }
+
+    /// Why Apple Intelligence cannot run here, with what to do about it; nil
+    /// when it can.
+    static func appleIntelligenceUnavailableReason() -> String? {
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            if case .unavailable(let reason) = SystemLanguageModel(useCase: .general).availability {
+                return appleIntelligenceUnavailableMessage(reason)
+            }
+            return nil
+        }
+#endif
+        return "Apple Intelligence needs iOS 26 or later."
+    }
+
     /// Providers that run the model on the phone itself.
     static func catchUpRunsOnDevice(_ settings: AppSettings) -> Bool {
         ["mlx", "foundation-models"].contains(settings.ai.provider)
@@ -1705,11 +1748,8 @@ enum NativeAI {
 #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
             let model = SystemLanguageModel(useCase: .general)
-            switch model.availability {
-            case .available:
-                break
-            case .unavailable(let reason):
-                throw NativeAIError.unavailable("Apple Intelligence is not available: \(reasonDescription(reason)).")
+            if case .unavailable(let reason) = model.availability {
+                throw NativeAIError.unavailable(appleIntelligenceUnavailableMessage(reason))
             }
 
             func attempt(instructions: String) async throws -> String {
@@ -2772,6 +2812,21 @@ enum NativeAI {
         }
     }
 
+    /// Why Apple Intelligence cannot run, said with what to do about it.
+    @available(iOS 26.0, *)
+    static func appleIntelligenceUnavailableMessage(_ reason: SystemLanguageModel.Availability.UnavailableReason) -> String {
+        switch reason {
+        case .deviceNotEligible:
+            "Apple Intelligence doesn't run on this device. Pick another model in AI Settings."
+        case .appleIntelligenceNotEnabled:
+            "Apple Intelligence is turned off. Turn it on in the Settings app under Apple Intelligence & Siri."
+        case .modelNotReady:
+            "Apple Intelligence is still downloading its model. Keep this device on Wi-Fi and charging, then try again."
+        @unknown default:
+            "Apple Intelligence isn't available right now. Try again later or pick another model in AI Settings."
+        }
+    }
+
     // MARK: - @Generable triage types (Foundation Models guided generation)
     //
     // These types are used with `session.respond(to:generating:)` to produce
@@ -2844,8 +2899,8 @@ enum NativeAI {
     @available(iOS 26.0, macOS 26.0, *)
     static func aiInboxFM(articles: [Article]) async throws -> String {
         let model = SystemLanguageModel(useCase: .general)
-        guard case .available = model.availability else {
-            throw NativeAIError.unavailable("Apple Intelligence is not available.")
+        if case .unavailable(let reason) = model.availability {
+            throw NativeAIError.unavailable(appleIntelligenceUnavailableMessage(reason))
         }
         let digest = articleDigest(articles, limit: 45)
         let baseInstructions = """
@@ -2913,8 +2968,8 @@ enum NativeAI {
     @available(iOS 26.0, macOS 26.0, *)
     static func quickCatchUpStructuredFM(articles: [Article]) async throws -> [CatchUpItem] {
         let model = SystemLanguageModel(useCase: .general)
-        guard case .available = model.availability else {
-            throw NativeAIError.unavailable("Apple Intelligence is not available.")
+        if case .unavailable(let reason) = model.availability {
+            throw NativeAIError.unavailable(appleIntelligenceUnavailableMessage(reason))
         }
 
         let baseInstructions = "You write crisp catch-up summaries for a news/RSS reader."

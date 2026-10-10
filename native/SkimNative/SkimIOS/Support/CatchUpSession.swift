@@ -15,21 +15,26 @@ final class CatchUpSession: ObservableObject {
     @Published private(set) var articles: [Article] = []
     @Published private(set) var errorMessage: String?
     @Published private(set) var errorRemedy: AIErrorRemedy = .none
+    /// Set when the run is not on the model the reader picked, saying why.
+    @Published private(set) var notice: String?
 
     private var task: Task<Void, Never>?
     private var generation = UUID()
     private let picks: ([Article], AppSettings) async throws -> NativeAI.CatchUpPage?
     private let draft: ([Article]) -> NativeAI.CatchUpPage
     private let lede: (String, [Article], AppSettings) async throws -> String
+    private let provider: (AppSettings) -> NativeAI.CatchUpProvider
 
     init(
         picks: @escaping ([Article], AppSettings) async throws -> NativeAI.CatchUpPage? = { try await NativeAI.catchUpPicks(articles: $0, settings: $1) },
         draft: @escaping ([Article]) -> NativeAI.CatchUpPage = { NativeAI.catchUpDraft(articles: $0) },
-        lede: @escaping (String, [Article], AppSettings) async throws -> String = { try await NativeAI.catchUpLede(headline: $0, articles: $1, settings: $2) }
+        lede: @escaping (String, [Article], AppSettings) async throws -> String = { try await NativeAI.catchUpLede(headline: $0, articles: $1, settings: $2) },
+        provider: @escaping (AppSettings) -> NativeAI.CatchUpProvider = { NativeAI.catchUpProvider(for: $0) }
     ) {
         self.picks = picks
         self.draft = draft
         self.lede = lede
+        self.provider = provider
     }
 
     func cancel() {
@@ -48,6 +53,7 @@ final class CatchUpSession: ObservableObject {
         wasStopped = false
         errorMessage = nil
         errorRemedy = .none
+        notice = nil
         page = NativeAI.CatchUpPage()
         written = 0
         articles = []
@@ -76,10 +82,13 @@ final class CatchUpSession: ObservableObject {
                 errorMessage = "Nothing published in the \(range.label.lowercased()). Pick a wider range."
                 return
             }
+            let running = provider(request.settings)
+            notice = running.notice
+            let settings = running.settings
             statusMessage = "Reading \(context.count) \(context.count == 1 ? "article" : "articles")…"
             // A model answer that cannot be read still gets a front page: the
             // one drafted from the articles, never a wall of plain text.
-            let selected = try await picks(context, request.settings) ?? draft(context)
+            let selected = try await picks(context, settings) ?? draft(context)
             try checkCurrent(id)
             guard !selected.isEmpty else {
                 errorMessage = "Nothing on the page: there was no real news in these articles."
@@ -97,7 +106,7 @@ final class CatchUpSession: ObservableObject {
                     return context.indices.contains(offset) ? context[offset] : nil
                 }
                 let text: String
-                do { text = try await lede(story.headline, behind, request.settings) }
+                do { text = try await lede(story.headline, behind, settings) }
                 catch {
                     try checkCurrent(id)
                     if error is CancellationError { throw error }

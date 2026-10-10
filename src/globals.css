@@ -841,6 +841,25 @@ select option {
   height: 100%;
   transition: width 300ms ease;
 }
+.today-toolbar-button {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 4px 10px;
+}
+.today-toolbar-button:hover { background: rgba(255, 255, 255, 0.08); }
+.ask-example {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 12.5px;
+  line-height: 1.3;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.ask-example:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
 .today-byline {
   flex-direction: column;
   align-items: flex-start;

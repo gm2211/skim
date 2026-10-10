@@ -31,6 +31,13 @@ interface Props {
   onOpenArticle?: (articleId: string) => void;
 }
 
+/** Questions that show what the answer looks like; clicking one asks it. */
+const EXAMPLE_PROMPTS = [
+  "What are this week's biggest AI stories?",
+  "Which article covered work ethic?",
+  "Find pieces about distributed systems",
+];
+
 export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
   const showSettings = useUiStore((s) => s.showSettings);
@@ -171,14 +178,27 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
         <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-hidden min-w-0" style={{ padding: "18px" }}>
           {(needsSetup || isAiSetupError(error)) && <AiSetupNotice error={error} />}
           {messages.length === 0 && !loading && !needsSetup && !isAiSetupError(error) && (
-            <div className="text-center text-text-muted" style={{ padding: "40px 20px" }}>
-              <p style={{ fontSize: 13, marginBottom: 10 }}>
+            <div className="flex flex-col items-center text-center" style={{ padding: "48px 20px 32px" }}>
+              <p className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>
                 Ask anything about articles in your feed.
               </p>
-              <div className="flex flex-col gap-1" style={{ fontSize: 12, opacity: 0.7 }}>
-                <span>“what are this week's biggest AI stories”</span>
-                <span>“which article covered work ethic”</span>
-                <span>“find pieces about distributed systems”</span>
+              <p className="text-text-muted" style={{ fontSize: 12.5, marginTop: 4 }}>
+                Answers cite the articles they come from. Try one of these:
+              </p>
+              <div className="flex flex-wrap justify-center" style={{ gap: 8, marginTop: 16, maxWidth: 520 }}>
+                {EXAMPLE_PROMPTS.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => {
+                      setInput(prompt);
+                      inputRef.current?.focus();
+                    }}
+                    className="ask-example text-text-secondary hover:text-text-primary"
+                  >
+                    {prompt}
+                  </button>
+                ))}
               </div>
             </div>
           )}

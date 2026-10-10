@@ -6,6 +6,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { rankFor, LEAD_COUNT } from "../../lib/todayEdition";
 import { TodayStory } from "./TodayStory";
 import { ModelPicker } from "../common/ModelPicker";
+import { RefreshIcon } from "../ui/icons";
 
 function formatWindowDate(startsAtSeconds: number): string {
   return new Date(startsAtSeconds * 1000).toLocaleDateString("en-US", {
@@ -68,7 +69,12 @@ export function TodayEditionPane() {
         )}
         <div className="flex-1" />
         <ModelPicker surface="today" compact disabled={isWritingLedes} />
-        <button className="today-story-control text-text-secondary hover:text-text-primary" disabled={refreshFeeds.isPending} onClick={() => refreshFeeds.mutate(undefined)}>
+        <button
+          className="today-story-control today-toolbar-button text-text-secondary hover:text-text-primary"
+          disabled={refreshFeeds.isPending}
+          onClick={() => refreshFeeds.mutate(undefined)}
+        >
+          <RefreshIcon size={14} className={refreshFeeds.isPending ? "smooth-spin" : undefined} />
           {refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
         </button>
       </div>

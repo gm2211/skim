@@ -15,7 +15,8 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 import { ModelPicker } from "../common/ModelPicker";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { ArticleLearningActions } from "../article/ArticleLearningActions";
-import { AggregatorDetails } from "../article/AggregatorDetails";
+import { AggregatorPostView } from "../article/AggregatorPostView";
+import { parseAggregatorPost } from "../../lib/aggregatorPost";
 import { useAppCommand } from "../../lib/appCommands";
 
 type ViewMode = "reader" | "web";
@@ -342,6 +343,10 @@ export function ArticleDetail() {
   const canGoBack = useUiStore(canGoBackArticle);
   const canGoForward = useUiStore(canGoForwardArticle);
   const { data: article, refetch: refetchArticle } = useArticle(selectedArticleId);
+  // Reddit and HN items get their own layout, and the reader copy comes from
+  // the story a link post points at rather than the post's own page.
+  const aggregatorPost = useMemo(() => (article ? parseAggregatorPost(article) : null), [article]);
+  const readerUrl = aggregatorPost?.linkUrl ?? article?.url ?? null;
   const readerFocusRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (article?.id === selectedArticleId) readerFocusRef.current?.focus({ preventScroll: true });
@@ -455,7 +460,7 @@ export function ArticleDetail() {
   // previous article's fullContent value during the reset → fetch transition.
   useEffect(() => {
     const articleId = article?.id;
-    const url = article?.url;
+    const url = readerUrl;
     if (!articleId || !url) return;
     let cancelled = false;
     const seq = ++fullFetchSeqRef.current;
@@ -477,7 +482,7 @@ export function ArticleDetail() {
       }
     })();
     return () => { cancelled = true; };
-  }, [selectedArticleId, article?.id, article?.url]);
+  }, [selectedArticleId, article?.id, readerUrl]);
 
   // Close summarize menu on click outside
   useEffect(() => {
@@ -526,7 +531,7 @@ export function ArticleDetail() {
 
   const fetchFull = useCallback(async (force = false) => {
     const articleId = article?.id;
-    const url = article?.url;
+    const url = readerUrl;
     if (!articleId || !url || (!force && rawHtml)) return;
     const seq = ++fullFetchSeqRef.current;
     setLoadingFull(true);
@@ -544,7 +549,7 @@ export function ArticleDetail() {
     } finally {
       if (seq === fullFetchSeqRef.current) setLoadingFull(false);
     }
-  }, [article?.id, article?.url, rawHtml]);
+  }, [article?.id, readerUrl, rawHtml]);
 
   const refreshCurrentArticle = useCallback(async () => {
     await refetchArticle();
@@ -1115,7 +1120,7 @@ export function ArticleDetail() {
         : `transform ${SLIDE_MS}ms ${PHONE_SLIDE_EASING}`;
 
   return (
-    <div ref={readerFocusRef} tabIndex={-1} role="region" aria-label="Article reader" onClickCapture={(e) => openArticleLink(e.nativeEvent, article.url)} className="flex-1 min-w-0 min-h-0 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
+    <div ref={readerFocusRef} tabIndex={-1} role="region" aria-label="Article reader" onClickCapture={(e) => openArticleLink(e.nativeEvent, readerUrl)} className="flex-1 min-w-0 min-h-0 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
       {/* Toolbar */}
       <div
         className="flex items-center justify-between relative z-20 flex-shrink-0"
@@ -1358,7 +1363,7 @@ export function ArticleDetail() {
         </div>
       </div>
 
-      {fullError && (
+      {fullError && !aggregatorPost && (
         <div style={{ padding: "0 24px 8px" }}>
           <p className="text-danger" style={{ fontSize: 13 }}>{fullError}</p>
         </div>
@@ -1544,14 +1549,29 @@ export function ArticleDetail() {
                   <div className="article-reader-header">
                     <h1 className="text-text-primary article-reader-title">{article.title}</h1>
                     <div className="flex items-center flex-wrap gap-x-2 gap-y-1 article-reader-meta">
-                      <span className="text-accent font-medium">{article.feed_title}</span>
-                      {article.author && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{article.author}</span></>)}
+                      {aggregatorPost ? (
+                        <>
+                          <span className="text-accent font-medium">{aggregatorPost.community ?? aggregatorPost.siteName}</span>
+                          {aggregatorPost.submitter && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{aggregatorPost.kind === "reddit" ? `u/${aggregatorPost.submitter}` : aggregatorPost.submitter}</span></>)}
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-accent font-medium">{article.feed_title}</span>
+                          {article.author && (<><span className="text-text-muted">·</span><span className="text-text-secondary">{article.author}</span></>)}
+                        </>
+                      )}
                       <span className="text-text-muted">·</span>
                       <span className="text-text-muted">{formatDate(article.published_at)}</span>
                     </div>
                   </div>
-                  {(article.comments_url || article.url) && <AggregatorDetails url={article.comments_url || article.url!} />}
-                  {hasCurrentContent && fullContent ? (
+                  {aggregatorPost ? (
+                    <AggregatorPostView
+                      post={aggregatorPost}
+                      readerState={hasCurrentContent && fullContent ? "ready" : fullError || hasCurrentContent ? "unavailable" : "loading"}
+                    >
+                      <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent ?? "" }} />
+                    </AggregatorPostView>
+                  ) : hasCurrentContent && fullContent ? (
                     <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
                   ) : rssHtml ? (
                     <div className="article-content text-text-primary">

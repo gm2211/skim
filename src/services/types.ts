@@ -66,6 +66,8 @@ export interface AggregatorDetails {
   kind: "hacker_news" | "reddit" | "lobsters";
   selftext: string | null;
   external_url: string | null;
+  points?: number | null;
+  comment_count?: number | null;
   comments: AggregatorComment[];
 }
 

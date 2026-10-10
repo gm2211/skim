@@ -54,7 +54,11 @@ vi.mock("../../hooks/usePullToRefresh", () => ({
 }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 vi.mock("../article/ArticleLearningActions", () => ({ ArticleLearningActions: () => null }));
-vi.mock("../article/AggregatorDetails", () => ({ AggregatorDetails: () => null }));
+vi.mock("../article/AggregatorPostView", () => ({
+  AggregatorPostView: (p: { readerState: string; children?: React.ReactNode }) => (
+    <div data-testid="aggregator-post" data-state={p.readerState}>{p.readerState === "ready" && p.children}</div>
+  ),
+}));
 vi.mock("../common/AIDisclaimer", () => ({ AIDisclaimer: () => null }));
 vi.mock("../common/ModelPicker", () => ({
   ModelPicker: (p: { surface: string; disabled?: boolean }) => (
@@ -81,6 +85,33 @@ beforeEach(() => {
   articles.b = article("b");
   vi.mocked(getOrFetchReaderContent).mockReset();
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
+});
+
+const REDDIT_RSS = `<table><tr><td><a href="https://www.reddit.com/r/technology/comments/1abc/post/"><img src="https://external-preview.redd.it/t.jpg" /></a></td><td> submitted by <a href="https://www.reddit.com/user/plain_handle"> /u/plain_handle </a><br/><span><a href="https://www.bbc.com/news/articles/c1234">[link]</a></span> <span><a href="https://www.reddit.com/r/technology/comments/1abc/post/">[comments]</a></span></td></tr></table>`;
+
+describe("ArticleDetail Reddit and Hacker News items", () => {
+  beforeEach(() => {
+    articles.a = { ...article("a"), url: "https://www.reddit.com/r/technology/comments/1abc/post/", author: "/u/plain_handle", feed_title: "technology", content_html: REDDIT_RSS };
+  });
+
+  it("reads the linked story, not the Reddit page, and never shows the raw feed HTML", async () => {
+    vi.mocked(getOrFetchReaderContent).mockResolvedValue({ html: "", raw_html: "" });
+    render(<ArticleDetail />);
+    await waitFor(() => expect(screen.getByTestId("aggregator-post")).toHaveAttribute("data-state", "unavailable"));
+    expect(getOrFetchReaderContent).toHaveBeenCalledWith("a", "https://www.bbc.com/news/articles/c1234");
+    expect(screen.queryByText(/submitted by/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Feed preview/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Reader couldn't extract/)).not.toBeInTheDocument();
+    expect(screen.getByText("r/technology")).toBeInTheDocument();
+    expect(screen.getByText("u/plain_handle")).toBeInTheDocument();
+  });
+
+  it("renders the extracted story inside the post layout", async () => {
+    vi.mocked(getOrFetchReaderContent).mockResolvedValue({ html: `<p>${"Story text. ".repeat(40)}</p>`, raw_html: "" });
+    render(<ArticleDetail />);
+    await waitFor(() => expect(screen.getByTestId("aggregator-post")).toHaveAttribute("data-state", "ready"));
+    expect(screen.getByTestId("aggregator-post")).toHaveTextContent("Story text.");
+  });
 });
 
 describe("ArticleDetail reader loading", () => {

@@ -20,8 +20,14 @@ pub struct AggregatorDetails {
     pub kind: String,
     pub selftext: Option<String>,
     pub external_url: Option<String>,
+    pub points: Option<i64>,
+    pub comment_count: Option<i64>,
     pub comments: Vec<AggregatorComment>,
 }
+
+/// Reddit asks API clients for a `platform:app:version (by /u/user)` agent
+/// and throttles generic ones first.
+const REDDIT_USER_AGENT: &str = "desktop:app.skim.reader:v1.0 (by /u/skim_reader)";
 
 #[command]
 pub async fn fetch_aggregator_details(
@@ -94,9 +100,8 @@ async fn fetch_hacker_news(
         return Ok(None);
     };
     let value = get_json(client, &format!("https://hn.algolia.com/api/v1/items/{story_id}")).await?;
-    let comments = value
-        .get("children")
-        .and_then(Value::as_array)
+    let children = value.get("children").and_then(Value::as_array);
+    let comments = children
         .into_iter()
         .flatten()
         .take(limit)
@@ -106,8 +111,20 @@ async fn fetch_hacker_news(
         kind: "hacker_news".into(),
         selftext: value.get("text").and_then(Value::as_str).map(clean_html).filter(|text| !text.is_empty()),
         external_url: http_url(value.get("url").and_then(Value::as_str)),
+        points: value.get("points").and_then(Value::as_i64),
+        comment_count: children.map(|items| count_hn_comments(items)),
         comments,
     }))
+}
+
+fn count_hn_comments(items: &[Value]) -> i64 {
+    items
+        .iter()
+        .map(|item| {
+            let own = i64::from(item.get("text").and_then(Value::as_str).is_some());
+            own + item.get("children").and_then(Value::as_array).map_or(0, |c| count_hn_comments(c))
+        })
+        .sum()
 }
 
 fn hn_comment(value: &Value) -> Option<AggregatorComment> {
@@ -136,8 +153,7 @@ async fn fetch_reddit(
     url: &Url,
     limit: usize,
 ) -> Result<Option<AggregatorDetails>, String> {
-    let json_url = reddit_json_url(url);
-    let value = get_json(client, &json_url).await?;
+    let value = fetch_reddit_json(client, url).await?;
     let Some(post) = value
         .as_array()
         .and_then(|root| root.first())
@@ -178,8 +194,43 @@ async fn fetch_reddit(
         kind: "reddit".into(),
         selftext,
         external_url,
+        points: post.get("score").and_then(Value::as_i64),
+        comment_count: post.get("num_comments").and_then(Value::as_i64),
         comments,
     }))
+}
+
+/// Reddit refuses or rate-limits anonymous JSON requests unpredictably, so try
+/// its documented agent on www first and old.reddit as a second door.
+async fn fetch_reddit_json(client: &Client, url: &Url) -> Result<Value, String> {
+    let mut last_error = String::new();
+    for json_url in reddit_json_urls(url) {
+        let response = client
+            .get(&json_url)
+            .header(reqwest::header::USER_AGENT, REDDIT_USER_AGENT)
+            .header(reqwest::header::ACCEPT, "application/json")
+            .send()
+            .await;
+        match response.and_then(|response| response.error_for_status()) {
+            Ok(response) => match response.json::<Value>().await {
+                Ok(value) => return Ok(value),
+                Err(error) => last_error = format!("Reddit returned invalid JSON: {error}"),
+            },
+            Err(error) => last_error = format!("Could not fetch Reddit discussion: {error}"),
+        }
+    }
+    Err(last_error)
+}
+
+fn reddit_json_urls(url: &Url) -> Vec<String> {
+    let primary = reddit_json_url(url);
+    let mut urls = vec![primary.clone()];
+    if let Ok(mut old) = Url::parse(&primary) {
+        if old.set_host(Some("old.reddit.com")).is_ok() && old.as_str() != primary {
+            urls.push(old.to_string());
+        }
+    }
+    urls
 }
 
 fn reddit_json_url(url: &Url) -> String {
@@ -238,6 +289,8 @@ async fn fetch_lobsters(
         kind: "lobsters".into(),
         selftext: value.get("description").and_then(Value::as_str).map(clean_html).filter(|text| !text.is_empty()),
         external_url: http_url(value.get("url").and_then(Value::as_str)),
+        points: value.get("score").and_then(Value::as_i64),
+        comment_count: value.get("comment_count").and_then(Value::as_i64),
         comments,
     }))
 }
@@ -324,5 +377,21 @@ mod tests {
         assert_eq!(clean_html("<p>Hello &amp; world</p>"), "Hello & world");
         let url = Url::parse("https://old.reddit.com/r/rust/comments/abc/post/").unwrap();
         assert_eq!(reddit_json_url(&url), "https://www.reddit.com/r/rust/comments/abc/post.json?sort=top&limit=10&depth=1");
+        assert_eq!(
+            reddit_json_urls(&url),
+            vec![
+                "https://www.reddit.com/r/rust/comments/abc/post.json?sort=top&limit=10&depth=1".to_string(),
+                "https://old.reddit.com/r/rust/comments/abc/post.json?sort=top&limit=10&depth=1".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn counts_nested_hacker_news_comments() {
+        let tree = serde_json::json!([
+            {"text": "a", "children": [{"text": "b", "children": []}, {"text": null, "children": []}]},
+            {"text": "c", "children": []}
+        ]);
+        assert_eq!(count_hn_comments(tree.as_array().unwrap()), 3);
     }
 }

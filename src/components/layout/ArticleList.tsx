@@ -17,13 +17,17 @@ import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction, SidebarV
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { useAppCommand } from "../../lib/appCommands";
 
-const PRIORITY_GROUP_LABELS: Record<number, string> = {
-  5: "MUST READ",
-  4: "IMPORTANT",
-  3: "WORTH READING",
-  2: "ROUTINE",
-  1: "SKIP",
-};
+/** AI Inbox tiers by rank score, highest first. The list arrives sorted by score. */
+const SCORE_TIERS: { min: number; label: string }[] = [
+  { min: 75, label: "TOP PICKS" },
+  { min: 55, label: "WORTH READING" },
+  { min: 35, label: "WHEN YOU HAVE TIME" },
+  { min: -Infinity, label: "LOW PRIORITY" },
+];
+
+function inboxTierLabel(score: number) {
+  return SCORE_TIERS.find((tier) => score >= tier.min)!.label;
+}
 
 const STICKY_READ_TTL_MS = 2 * 60 * 1000;
 
@@ -166,23 +170,13 @@ function EmptyArticleState({
   );
 }
 
-function groupByPriority(articles: ArticleWithTriage[]) {
+function groupByScore(articles: ArticleWithTriage[]) {
   const groups: { label: string; indices: number[] }[] = [];
-  let currentKey: string | number = "";
-
   articles.forEach((article, i) => {
-    const key: string | number = article.priority ?? "unscored";
-    if (key !== currentKey) {
-      const label =
-        key === "unscored"
-          ? "NOT YET SCORED"
-          : PRIORITY_GROUP_LABELS[key as number] ?? `PRIORITY ${key}`;
-      groups.push({ label, indices: [] });
-      currentKey = key;
-    }
+    const label = inboxTierLabel(article.score ?? 0);
+    if (groups[groups.length - 1]?.label !== label) groups.push({ label, indices: [] });
     groups[groups.length - 1].indices.push(i);
   });
-
   return groups;
 }
 
@@ -388,9 +382,9 @@ export function ArticleList() {
     const combined = [...(rawArticles as any[]), ...injected];
     if (isInbox) {
       combined.sort((a, b) => {
-        const pa = a.priority ?? -1;
-        const pb = b.priority ?? -1;
-        if (pa !== pb) return pb - pa;
+        const sa = a.score ?? -Infinity;
+        const sb = b.score ?? -Infinity;
+        if (sa !== sb) return sb - sa;
         return (b.published_at ?? b.fetched_at) - (a.published_at ?? a.fetched_at);
       });
     } else {
@@ -462,7 +456,7 @@ export function ArticleList() {
 
   const articleGroups = useMemo(() => {
     if (!filteredArticles) return [];
-    if (isInbox) return groupByPriority(filteredArticles as ArticleWithTriage[]);
+    if (isInbox) return groupByScore(filteredArticles as ArticleWithTriage[]);
     if (isRecent && recentOrder === "engagement") {
       return [{ label: "MOST ENGAGED", indices: filteredArticles.map((_, i) => i) }];
     }
@@ -791,9 +785,12 @@ export function ArticleList() {
                 </div>
                 {group.indices.map((i) => {
                   const article = filteredArticles[i];
+                  const ranked = article as ArticleWithTriage;
                   const triageData = isInbox ? {
-                    priority: (article as ArticleWithTriage).priority ?? 3,
-                    reason: (article as ArticleWithTriage).reason ?? "",
+                    priority: ranked.priority ?? 3,
+                    reason: ranked.reason ?? "",
+                    importance: ranked.importance,
+                    relevance: ranked.relevance,
                   } : null;
                   return (
                     <ArticleCard

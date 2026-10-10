@@ -1,0 +1,29 @@
+id: article-list
+name: Article list
+behaviors:
+  - id: sidebar-views
+    description: >-
+      Desktop: the sidebar lists Today, All Articles (with unread count), Starred, Recent, and AI
+      Inbox, followed by feeds and folders, with Settings at the bottom.
+  - id: list-filters
+    description: >-
+      The list filters to Unread (default), Starred, or All. The Starred view shows starred articles
+      whether or not they are read.
+  - id: recent-view
+    description: >-
+      Desktop: Recent lists articles the reader engaged with, ordered by engagement or by recency,
+      and an item can be removed from Recent.
+  - id: bulk-read-actions
+    description: >-
+      A reader can mark all articles in the current scope read, and mark everything above or below
+      an article as read or unread.
+  - id: library-search
+    description: >-
+      Searching matches article titles, sources, and URLs across the whole library, including read
+      articles.
+  - id: list-context-menu
+    description: >-
+      An article's context menu offers mark read/unread, star/unstar, and mark above/below. iOS also
+      offers Summarize and Open Link from the list.
+  - id: optional-excerpts
+    description: Desktop can show an excerpt under each article title (Appearance setting).

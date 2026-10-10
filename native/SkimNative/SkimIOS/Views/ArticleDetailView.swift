@@ -123,6 +123,7 @@ struct ArticleDetailView: View {
             articleID: article.id,
             feedID: article.feedID,
             feedTitle: article.feedTitle,
+            title: article.title,
             dwellSeconds: dwell
         )
     }
@@ -564,6 +565,16 @@ private extension ArticleDetailView {
     }
 }
 
+private extension AggregatorKind {
+    var siteName: String {
+        switch self {
+        case .hackerNews: "Hacker News"
+        case .reddit: "Reddit"
+        case .lobsters: "Lobsters"
+        }
+    }
+}
+
 private enum ArticleLoadState {
     case idle
     case loading
@@ -587,6 +598,7 @@ private enum ArticleLoadState {
 
 private struct ReaderPage: View {
     @EnvironmentObject private var model: AppModel
+    @Environment(\.openURL) private var openURL
 
     var article: Article?
     var isLoading: Bool
@@ -666,14 +678,14 @@ private struct ReaderPage: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 5) {
-                Text(article.displayFeedTitle)
+                Text(article.aggregatorSourceLabel ?? article.displayFeedTitle)
                     .foregroundStyle(SkimStyle.accent)
 
                 HStack(spacing: 7) {
-                    if let author = article.displayAuthor {
+                    if let author = article.aggregatorSubmitter ?? article.displayAuthor {
                         Text(author)
                     }
-                    if article.displayAuthor != nil, article.publishedAt != nil {
+                    if (article.aggregatorSubmitter ?? article.displayAuthor) != nil, article.publishedAt != nil {
                         Text("·")
                     }
                     if let publishedAt = article.publishedAt {
@@ -689,12 +701,15 @@ private struct ReaderPage: View {
 
     // MARK: - Aggregator section
 
+    /// Purpose-built layout for Reddit, Hacker News and Lobsters: the post's own
+    /// text, the story it links to (a full card until a reader copy is ready,
+    /// then a one-line source row above it), and the discussion. Raw feed HTML
+    /// and extraction errors never show here.
     @ViewBuilder
     private func aggregatorSection(_ article: Article) -> some View {
         let externalURL = article.externalURL ?? resolvedExternalURL
 
-        VStack(alignment: .leading, spacing: 20) {
-            // Reddit self-post body (fetched from .json API)
+        VStack(alignment: .leading, spacing: 24) {
             if let selftext = redditSelftext {
                 Text(selftext)
                     .font(.system(size: 19, weight: .regular))
@@ -705,27 +720,9 @@ private struct ReaderPage: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            // External URL card (link posts or non-self-post aggregator items)
-            if let externalURL {
-                externalURLCard(url: externalURL, article: article)
-            }
-
-            // Extracted body — shown when auto-extract is in progress or complete.
-            // Applies to all aggregator kinds including Reddit link posts.
-            // (Reddit selftext posts show body via `redditSelftext` above instead.)
-            if redditSelftext == nil && (externalURL != nil || extractedBody.shouldDisplay) {
-                switch extractedBody {
-                case .idle:
-                    EmptyView()
-                case .loading:
-                    HStack(spacing: 10) {
-                        ProgressView().controlSize(.small)
-                        Text("Loading article…")
-                            .font(.system(size: 15))
-                            .foregroundStyle(SkimStyle.secondary)
-                    }
-                    .padding(.vertical, 4)
-                case .loaded(let text):
+            if redditSelftext == nil, let externalURL {
+                if case .loaded(let text) = extractedBody {
+                    linkSourceRow(url: externalURL)
                     Text(text)
                         .font(.system(size: 19, weight: .regular))
                         .lineSpacing(7)
@@ -733,107 +730,259 @@ private struct ReaderPage: View {
                         .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                case .failed(let reason):
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Could not extract article.")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(SkimStyle.text)
-                        Text(reason)
-                            .font(.system(size: 14))
-                            .foregroundStyle(SkimStyle.secondary)
-                        Text("Swipe left for the web view.")
-                            .font(.system(size: 14))
-                            .foregroundStyle(SkimStyle.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .skimGlass(cornerRadius: 16)
+                } else {
+                    linkCard(url: externalURL, article: article)
                 }
+            } else if redditSelftext == nil, case .loaded(let text) = extractedBody {
+                // A self post's text saved for offline reading.
+                Text(text)
+                    .font(.system(size: 19, weight: .regular))
+                    .lineSpacing(7)
+                    .foregroundStyle(SkimStyle.text)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            // Comments section
-            commentsSection
+            discussionSection(article)
         }
     }
 
-    @ViewBuilder
-    private func externalURLCard(url: URL, article: Article) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Linked article card
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 10) {
-                    Image(systemName: "link")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(SkimStyle.accent)
-                    Text(url.host(percentEncoded: false) ?? url.absoluteString)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(SkimStyle.accent)
-                        .lineLimit(1)
+    private func linkPath(_ url: URL) -> String? {
+        var path = url.path(percentEncoded: false)
+        while path.hasSuffix("/") { path.removeLast() }
+        return path.isEmpty ? nil : path
+    }
+
+    private func linkDomain(_ url: URL) -> String {
+        let host = url.host(percentEncoded: false) ?? url.absoluteString
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+
+    private func siteBadge(_ url: URL) -> some View {
+        Text(linkDomain(url).prefix(1).uppercased())
+            .font(.system(size: 12, weight: .bold))
+            .foregroundStyle(SkimStyle.secondary)
+            .frame(width: 24, height: 24)
+            .background(SkimStyle.separator, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+
+    /// Compact row shown above the extracted story.
+    private func linkSourceRow(url: URL) -> some View {
+        Button {
+            openURL(url)
+        } label: {
+            HStack(spacing: 12) {
+                siteBadge(url)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(linkDomain(url))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SkimStyle.text)
+                    if let path = linkPath(url) {
+                        Text(path)
+                            .font(.system(size: 12))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
                 }
-                Text(url.absoluteString)
-                    .font(.system(size: 12))
+                .lineLimit(1)
+                Spacer(minLength: 8)
+                Label("Original", systemImage: "arrow.up.right")
+                    .labelStyle(.titleAndIcon)
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(SkimStyle.secondary)
-                    .lineLimit(2)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
             .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(SkimStyle.separator, lineWidth: 1)
             }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Open the original on \(linkDomain(url))")
+    }
 
-            // Retry button only shown after a failed extraction attempt
-            if case .failed = extractedBody {
+    /// The linked story as the page's centerpiece while no reader copy exists.
+    private func linkCard(url: URL, article: Article) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let imageURL = article.imageURL {
+                AsyncImage(url: imageURL) { phase in
+                    if let image = phase.image {
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 190)
+                            .clipped()
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    siteBadge(url)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(linkDomain(url))
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(SkimStyle.text)
+                        if let path = linkPath(url) {
+                            Text(path)
+                                .font(.system(size: 12))
+                                .foregroundStyle(SkimStyle.secondary)
+                        }
+                    }
+                    .lineLimit(1)
+                }
+
                 Button {
-                    Task { await loadExternalArticle(url: url, articleID: article.id) }
+                    openURL(url)
                 } label: {
-                    Label("Retry", systemImage: "arrow.clockwise")
-                        .font(.system(size: 17, weight: .semibold))
+                    Label("Read on \(linkDomain(url))", systemImage: "arrow.up.right")
+                        .labelStyle(.titleAndIcon)
+                        .font(.system(size: 16, weight: .semibold))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .foregroundStyle(.white)
-                        .background(SkimStyle.accent, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding(.vertical, 13)
+                        .foregroundStyle(SkimStyle.background)
+                        .background(SkimStyle.accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
+
+                switch extractedBody {
+                case .failed:
+                    HStack(spacing: 12) {
+                        Text("This site doesn't offer a reader copy, so it opens in your browser.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 4)
+                        Button("Try again") {
+                            Task { await loadExternalArticle(url: url, articleID: article.id) }
+                        }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(SkimStyle.accent)
+                    }
+                case .loaded:
+                    EmptyView()
+                case .idle, .loading:
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Getting a reader copy…")
+                            .font(.system(size: 13))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                }
             }
+            .padding(16)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(SkimStyle.separator, lineWidth: 1)
         }
     }
 
     @ViewBuilder
-    private var commentsSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Comments")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(SkimStyle.secondary)
-                .textCase(.uppercase)
-                .tracking(1.2)
+    private func discussionSection(_ article: Article) -> some View {
+        let discussionURL = article.commentsURL ?? article.url
+        let siteName = article.aggregatorKind?.siteName ?? "the web"
+
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Discussion")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(SkimStyle.text)
+                Spacer()
+                if let discussionURL {
+                    Button {
+                        openURL(discussionURL)
+                    } label: {
+                        Label("Open on \(siteName)", systemImage: "arrow.up.right")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(SkimStyle.text)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .overlay {
+                                Capsule().stroke(SkimStyle.separator, lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.bottom, 8)
+
+            Rectangle().fill(SkimStyle.separator).frame(height: 1)
 
             switch commentsState {
-            case .idle:
-                EmptyView()
-            case .loading:
-                HStack(spacing: 10) {
-                    ProgressView().controlSize(.small)
-                    Text("Loading comments…")
-                        .font(.system(size: 15))
-                        .foregroundStyle(SkimStyle.secondary)
-                }
-            case .failed:
-                Text("Comments unavailable.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(SkimStyle.secondary)
-            case .loaded:
-                if comments.isEmpty {
-                    Text("No comments yet.")
-                        .font(.system(size: 15))
-                        .foregroundStyle(SkimStyle.secondary)
-                } else {
-                    LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(comments) { comment in
-                            CommentRow(comment: comment)
+            case .idle, .loading:
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach([0.9, 0.7, 0.8], id: \.self) { width in
+                        VStack(alignment: .leading, spacing: 8) {
+                            RoundedRectangle(cornerRadius: 3).fill(SkimStyle.separator).frame(width: 90, height: 9)
+                            GeometryReader { proxy in
+                                RoundedRectangle(cornerRadius: 3).fill(SkimStyle.surface).frame(width: proxy.size.width * width, height: 11)
+                            }
+                            .frame(height: 11)
                         }
                     }
+                }
+                .padding(.top, 16)
+                .accessibilityLabel("Loading comments")
+            case .failed:
+                if let discussionURL {
+                    Button {
+                        openURL(discussionURL)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(SkimStyle.accent)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Read the conversation on \(siteName)")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(SkimStyle.text)
+                                Text("Comments open in your browser")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(SkimStyle.secondary)
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(SkimStyle.secondary)
+                        }
+                        .padding(14)
+                        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(SkimStyle.separator, lineWidth: 1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 14)
+                }
+            case .loaded:
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
+                        if index > 0 {
+                            Rectangle().fill(SkimStyle.separator.opacity(0.6)).frame(height: 0.5)
+                        }
+                        CommentRow(comment: comment)
+                    }
+                }
+                if let discussionURL {
+                    Button {
+                        openURL(discussionURL)
+                    } label: {
+                        Label("Join the discussion on \(siteName)", systemImage: "arrow.up.right")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(SkimStyle.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 6)
                 }
             }
         }
@@ -1058,32 +1207,26 @@ private struct CommentRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Text(comment.author)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(SkimStyle.accent)
+                    .foregroundStyle(SkimStyle.secondary)
                 if let score = comment.score {
-                    Text("·")
-                        .foregroundStyle(SkimStyle.secondary)
-                    Text("\(score) pts")
-                        .font(.system(size: 12))
-                        .foregroundStyle(SkimStyle.secondary)
+                    Label("\(score)", systemImage: "arrowshape.up.fill")
+                        .labelStyle(.titleAndIcon)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(SkimStyle.secondary.opacity(0.8))
                 }
             }
             Text(comment.body)
-                .font(.system(size: 15))
+                .font(.system(size: 16))
                 .foregroundStyle(SkimStyle.text)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }
-        .padding(14)
-        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(SkimStyle.separator, lineWidth: 0.5)
-        }
+        .padding(.vertical, 14)
     }
 }
 
@@ -1297,6 +1440,30 @@ private extension Article {
 
     var displayFeedTitle: String {
         feedTitle.decodingHTMLEntities
+    }
+
+    /// "r/technology" for Reddit posts, the site name for other aggregators.
+    var aggregatorSourceLabel: String? {
+        guard let kind = aggregatorKind else { return nil }
+        if kind == .reddit {
+            for candidate in [commentsURL, url].compactMap({ $0 }) {
+                let parts = candidate.pathComponents
+                if let index = parts.firstIndex(where: { $0.lowercased() == "r" }), index + 1 < parts.count {
+                    return "r/\(parts[index + 1])"
+                }
+            }
+        }
+        return kind.siteName
+    }
+
+    /// "u/name" on Reddit; the plain user name elsewhere.
+    var aggregatorSubmitter: String? {
+        guard let kind = aggregatorKind, var name = displayAuthor else { return nil }
+        for prefix in ["/u/", "u/"] where name.lowercased().hasPrefix(prefix) {
+            name = String(name.dropFirst(prefix.count))
+        }
+        guard !name.isEmpty else { return nil }
+        return kind == .reddit ? "u/\(name)" : name
     }
 
     var displayAuthor: String? {

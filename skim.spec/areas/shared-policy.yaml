@@ -1,0 +1,20 @@
+id: shared-policy
+name: Shared desktop/iOS policy
+prose: >-
+  Desktop and iOS share product policy through code compiled into both apps (shared/SkimStoryPolicy
+  in C, shared/SkimInferencePolicy in Swift) and through fixtures both test suites read
+  (shared/fixtures).
+behaviors:
+  - id: same-story-decisions
+    description: >-
+      Given the same articles, desktop and iOS group stories, rate importance, verify that reports
+      describe the same event, and pick preview passages the same way.
+  - id: same-summary-policy
+    description: Summary tone and length rules are identical on desktop and iOS.
+  - id: same-chat-evidence
+    description: >-
+      Library chat ranks articles and selects evidence passages the same way on both platforms, and
+      never treats the assistant's own output as evidence.
+  - id: parity-by-fixtures
+    description: >-
+      Parity is enforced by shared fixtures that both the Rust and Swift test suites must pass.

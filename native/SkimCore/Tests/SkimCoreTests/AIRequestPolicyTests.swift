@@ -138,3 +138,28 @@ import Testing
     #expect(AIRequestPolicy.publicationContext(nil).contains("unknown"))
     #expect(AIRequestPolicy.publicationContext(Date(timeIntervalSince1970: .nan)).contains("unknown"))
 }
+
+@Test func fallbackPrefersChatOverrideThenClaudeThenLocalModel() {
+    let base = AISettings(provider: "foundation-models", summaryLength: "medium")
+    #expect(AIRequestPolicy.fallbackSettings(for: base, hasClaudeSubscription: false, downloadedMLXRepoIds: [], preferredMLXRepoId: "a/b") == nil)
+
+    var withChat = base
+    withChat.chatProvider = "anthropic"
+    withChat.chatApiKey = "test-key"
+    let chat = AIRequestPolicy.fallbackSettings(for: withChat, hasClaudeSubscription: true, downloadedMLXRepoIds: ["a/b"], preferredMLXRepoId: "a/b")
+    #expect(chat?.provider == "anthropic")
+    #expect(chat?.apiKey == "test-key")
+    #expect(chat?.summaryLength == "medium")
+
+    var keyless = base
+    keyless.chatProvider = "openai"
+    let claude = AIRequestPolicy.fallbackSettings(for: keyless, hasClaudeSubscription: true, downloadedMLXRepoIds: ["a/b"], preferredMLXRepoId: "a/b")
+    #expect(claude?.provider == "claude-subscription")
+    #expect(claude?.model == nil)
+
+    let local = AIRequestPolicy.fallbackSettings(for: base, hasClaudeSubscription: false, downloadedMLXRepoIds: ["x/y", "a/b"], preferredMLXRepoId: "a/b")
+    #expect(local?.provider == "mlx")
+    #expect(local?.localModelPath == "a/b")
+    let other = AIRequestPolicy.fallbackSettings(for: base, hasClaudeSubscription: false, downloadedMLXRepoIds: ["x/y"], preferredMLXRepoId: "a/b")
+    #expect(other?.localModelPath == "x/y")
+}

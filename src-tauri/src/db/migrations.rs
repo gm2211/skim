@@ -345,6 +345,18 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute_batch("ALTER TABLE edition_items ADD COLUMN lede_evidence_version INTEGER NOT NULL DEFAULT 0;")?;
     }
 
+    // AI Inbox scores each article on two axes; priority stays as a derived bucket.
+    let triage_cols: Vec<String> = conn
+        .prepare("PRAGMA table_info(article_triage)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .filter_map(|r| r.ok())
+        .collect();
+    for column in ["importance", "relevance"] {
+        if !triage_cols.iter().any(|c| c == column) {
+            conn.execute_batch(&format!("ALTER TABLE article_triage ADD COLUMN {column} INTEGER;"))?;
+        }
+    }
+
     // Add feedly_entry_id column to articles (idempotent)
     let has_feedly_entry_id: bool = conn
         .prepare("PRAGMA table_info(articles)")?

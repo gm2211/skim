@@ -45,6 +45,10 @@
       feed_icon_url: null,
       priority,
       reason,
+      importance: priority,
+      relevance: Math.max(1, Math.min(5, priority + ((i % 3) - 1))),
+      affinity: 0,
+      score: 0,
       __theme: themeId,
     };
   });
@@ -311,9 +315,11 @@
     return f.limit != null ? out.slice(off, off + f.limit) : out.slice(off);
   }
 
+  // Mirrors skim_inbox_score with no learned taste: both axes weigh equally.
+  for (const a of articles) a.score = ((a.importance - 1) / 4) * 50 + ((a.relevance - 1) / 4) * 50;
   const inboxOrder = articles
     .slice()
-    .sort((a, b) => b.priority - a.priority || (b.published_at || 0) - (a.published_at || 0));
+    .sort((a, b) => b.score - a.score || (b.published_at || 0) - (a.published_at || 0));
 
   const HANDLERS = {
     list_feeds: () => feeds,

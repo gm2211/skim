@@ -563,8 +563,26 @@ public enum AggregatorDetector {
 
     // MARK: - Private helpers
 
-    /// Scans HTML for the first href that is an absolute URL NOT pointing to reddit.com.
-    private static func extractRedditExternalURL(from html: String) -> URL? {
+    /// Reddit's feed marks the post's target with a `[link]` anchor. When it points
+    /// back at Reddit the post is a self post, even if its body links elsewhere.
+    /// Older or unusual entries without the marker fall back to the first href
+    /// that is an absolute URL NOT pointing to reddit.com.
+    static func extractRedditExternalURL(from html: String) -> URL? {
+        let marker = #"<a[^>]*href\s*=\s*['"]([^'"]+)['"][^>]*>\s*\[link\]\s*</a>"#
+        if let regex = try? NSRegularExpression(pattern: marker, options: [.caseInsensitive]),
+           let match = regex.firstMatch(in: html, range: NSRange(html.startIndex..<html.endIndex, in: html)),
+           let hrefRange = Range(match.range(at: 1), in: html) {
+            let href = String(html[hrefRange])
+                .decodingHTMLEntities()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: href),
+                  let host = url.host?.lowercased(),
+                  !host.hasSuffix("reddit.com"),
+                  !host.hasSuffix("redd.it")
+            else { return nil }
+            return url
+        }
+
         let pattern = #"href\s*=\s*['"]([^'"]+)['"]"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             return nil

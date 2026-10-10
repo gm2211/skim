@@ -1,0 +1,45 @@
+id: reader
+name: Reader
+behaviors:
+  - id: full-text-extraction
+    description: >-
+      Opening an article extracts its full text automatically. If extraction fails, the reader shows
+      the RSS preview with a notice and a way to retry, and the web view still works. Reddit, Hacker
+      News and Lobsters items use the aggregator layout instead (reader.aggregator-post-layout).
+  - id: reader-web-toggle
+    description: >-
+      A reader can switch between the extracted Reader view and the original Web view (desktop
+      toolbar or arrow keys; iOS swipe).
+  - id: open-marks-read
+    description: Opening an article marks it read.
+  - id: reading-time-tracked
+    description: >-
+      Time spent reading an article is recorded as an engagement signal (desktop skips this when the
+      article is opened from Recent).
+  - id: aggregator-comments
+    description: >-
+      Hacker News, Reddit and Lobsters items end with a Discussion section: the top comments with
+      their points, an action to open the thread on the site, and, when comments can't be loaded, a
+      card that opens the conversation there instead of an error.
+  - id: aggregator-post-layout
+    description: >-
+      Reddit, Hacker News and Lobsters items get a purpose-built reader layout instead of the
+      generic one: the community and submitter in the header, a self post's own text, and for a
+      link post a card naming the linked site with a primary "Read on <site>" action. The reader
+      copy comes from the linked story, not the aggregator page; once it is ready the card shrinks
+      to a one-line source row above it. Raw feed HTML ("submitted by ... [link] [comments]") is
+      never shown, and a story Skim can't extract keeps the card with a calm note rather than an
+      error banner.
+    source:
+      text: >-
+        don't like flimsy links and messy layouts - especially for things that we are
+        special-casing like reddit or hackernews, we should be able to optimize ui
+      reference: Giulio, project thread "Reddit and Hacker News layout", 2026-10-10
+  - id: reader-toolbar
+    description: >-
+      Desktop: the reader toolbar offers back/forward, Chat, Reader/Web, Summarize, Star, Read, Pin
+      to top, and Open in browser.
+  - id: offline-preload
+    description: >-
+      The newest articles are prepared for offline reading, up to a limit the reader sets (desktop
+      Settings > Reading, 25-1000; iOS Settings > Library).

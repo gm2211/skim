@@ -75,32 +75,29 @@ export function TodayEditionPane() {
 
       <div className="flex-1 overflow-y-auto" style={{ padding: "0 24px 24px" }}>
       <div className="today-content">
-      {/* Title + progress */}
-      <div className="today-masthead" style={{ padding: "8px 0 14px" }}>
-        <h2 style={{ fontWeight: 700 }} className="today-title text-text-primary truncate">
+      {/* Masthead: the nameplate, then a dateline whose rule doubles as the
+          day's reading progress. */}
+      <div className="today-masthead" style={{ padding: "6px 0 18px" }}>
+        <h2 className="today-title text-text-primary truncate">
           Today
         </h2>
-        <p className="text-text-muted" style={{ fontSize: 13, marginTop: 2 }}>
-          {formatWindowDate(todayWin.startsAt)}
-        </p>
-        {totalCount > 0 && (
-          <div style={{ marginTop: 10 }}>
-            <div className="flex items-center justify-between" style={{ marginBottom: 4 }}>
-              <span className="text-text-muted" style={{ fontSize: 12 }}>
-                {isFullyConsumed ? "All caught up" : `${consumedCount} of ${totalCount} done`}
-              </span>
-              <span className="text-text-muted tabular-nums" style={{ fontSize: 12 }}>
-                {progressPct}%
-              </span>
-            </div>
-            <div className="rounded-full bg-white/8" style={{ height: 4, overflow: "hidden" }}>
-              <div
-                className={`h-full rounded-full transition-all ${isFullyConsumed ? "bg-success" : "bg-accent"}`}
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-          </div>
-        )}
+        <div className="today-dateline">
+          <span>{formatWindowDate(todayWin.startsAt)}</span>
+          {totalCount > 0 && (
+            <span className="today-dateline-progress">
+              <span>{isFullyConsumed ? "All caught up" : `${consumedCount} of ${totalCount} done`}</span>
+              <span className="tabular-nums" style={{ opacity: 0.7 }}>{progressPct}%</span>
+            </span>
+          )}
+        </div>
+        <div className="today-dateline-rule" role="presentation">
+          {totalCount > 0 && (
+            <div
+              className={`today-dateline-fill ${isFullyConsumed ? "bg-success" : "bg-accent"}`}
+              style={{ width: `${progressPct}%` }}
+            />
+          )}
+        </div>
       </div>
 
       {/* Body */}

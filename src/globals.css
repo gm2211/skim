@@ -802,19 +802,91 @@ select option {
   .today-story-control { min-height: 44px; }
 }
 
-.today-lead-headline { font-size: 20px; }
-.today-lead-summary { font-size: 14px; }
-.today-title { font-size: 22px; }
+.today-lead-headline { font-size: 24px; }
+.today-lead-summary { font-size: 15px; }
+.today-body { opacity: 0.84; }
+.today-title {
+  font-family: "New York", "Iowan Old Style", "Palatino", Georgia, "Times New Roman", serif;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.6px;
+  line-height: 1.1;
+}
+.today-dateline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 10px;
+  padding-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.today-dateline-progress {
+  display: inline-flex;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.today-dateline-rule {
+  height: 2px;
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 4px 0 -3px rgba(255, 255, 255, 0.11);
+  overflow: hidden;
+}
+.today-dateline-fill {
+  height: 100%;
+  transition: width 300ms ease;
+}
+.today-byline {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 0;
+  margin-top: 10px;
+  padding: 2px 0;
+  text-align: left;
+  border-radius: 4px;
+}
+.today-byline:hover { background: none; }
+.today-byline-kicker {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+.today-byline-title {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.today-byline-report {
+  font-style: italic;
+  color: var(--color-text-secondary);
+  transition: color 120ms ease;
+}
+.today-byline:hover .today-byline-report { color: var(--color-accent-hover); }
 .today-page { container-type: inline-size; }
 .today-masthead, .today-content { width: 100%; max-width: 1080px; margin-inline: auto; }
 .today-stories { display: grid; grid-template-columns: minmax(0, 1fr); }
 .today-story-cell { min-width: 0; }
 .today-briefs-label { grid-column: 1 / -1; }
 @container (min-width: 720px) {
-  .today-stories { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
-  .today-story-cell:first-child { grid-column: 1 / -1; }
-  .today-story-cell:first-child .today-story { padding-block: 24px 8px; }
-  .today-story-cell:first-child h3 { font-size: 30px; max-width: 780px; }
-  .today-story-cell:first-child p { max-width: 780px; font-size: 16px; }
-  .today-masthead h2 { font-size: 32px; }
+  .today-stories { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 0; }
+  .today-story-cell { padding-left: 16px; padding-right: 16px; }
+  .today-story-cell:nth-child(2n) { padding-left: 0; }
+  .today-story-cell:nth-child(2n + 1) { padding-right: 0; border-left: 1px solid rgba(255, 255, 255, 0.09); }
+  .today-story-cell:first-child { grid-column: 1 / -1; padding: 0; border-left: 0; }
+  .today-story-cell:first-child .today-story { border-top: 0; padding-block: 4px 10px; margin-top: 0; }
+  .today-story-cell:first-child h3 { font-size: 34px; max-width: 820px; }
+  .today-story-cell:first-child p.today-body { max-width: 780px; font-size: 16px; }
+  .today-story-cell:nth-child(2) .today-story, .today-story-cell:nth-child(3) .today-story { border-top: 1px solid rgba(255, 255, 255, 0.28); }
+  .today-masthead h2 { font-size: 36px; }
 }

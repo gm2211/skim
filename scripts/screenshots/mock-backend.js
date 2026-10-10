@@ -169,6 +169,86 @@
   };
   window.__SKIM_CATCHUP__ = CATCHUP;
 
+  // The Today edition: the day's stories, ordered by importance, each with
+  // the articles behind it. Ledes are already written.
+  const todayMember = (i, type, representative) => ({
+    article_id: articles[i].id,
+    feed_id: articles[i].feed_id,
+    feed_title: articles[i].feed_title,
+    publication: articles[i].feed_title,
+    feed_icon_url: null,
+    title: articles[i].title,
+    url: articles[i].url,
+    author: articles[i].author,
+    published_at: articles[i].published_at,
+    membership_type: type,
+    confidence: 0.9,
+    is_representative: representative,
+    is_read: false,
+    is_starred: false,
+  });
+  const todayStory = (position, title, summary, lede, members, section) => ({
+    edition_id: "ed-today",
+    story_id: "story-" + position,
+    story_revision_number: 1,
+    position,
+    section,
+    snapshot_title: title,
+    snapshot_summary: summary,
+    snapshot_delta_summary: null,
+    has_material_update: false,
+    snapshot_source_count: members.length,
+    snapshot_reason: null,
+    is_unique_find: section === "unique_finds",
+    lede,
+    lede_source_article_id: articles[members[0]].id,
+    is_consumed: position === 2,
+    consumed_at: position === 2 ? D.now - 600 : null,
+    representative_article_id: articles[members[0]].id,
+    member_article_ids: members.map((i) => articles[i].id),
+    member_articles: members.map((i, n) => todayMember(i, n === 0 ? "coverage" : "duplicate", n === 0)),
+  });
+  const TODAY_ITEMS = [
+    todayStory(0, "Vercel breach lifted OAuth tokens from platform environment variables",
+      "Attackers pulled live OAuth tokens from Vercel's build platform.",
+      "Attackers pulled live OAuth tokens from environment variables on Vercel's build platform, which puts every project that kept secrets there in scope. Vercel has rotated platform keys and says customer tokens should be rotated by hand.",
+      [1, 12], "top_stories"),
+    todayStory(1, "Stateless agents, not model quality, are the bottleneck",
+      "Four pieces converge on the same worry about agents without state.",
+      "Four pieces land on the same worry this week: agents that cannot hold state across a session fail in ways their benchmarks never show.",
+      [3, 2, 6], "widely_covered"),
+    todayStory(2, "TypeScript 7.0 Beta ships the native compiler",
+      "The Go port reaches beta with ten-times faster builds.",
+      "The Go port of the TypeScript compiler reaches beta with ten-times faster builds. The major version bump signals real breaking changes in the compiler API.",
+      [7, 20], "top_stories"),
+    todayStory(3, "Senators push back on the plan to cut NIH and reorganize HHS",
+      "The restructuring is no longer a foregone conclusion.",
+      "Key Republican senators are pushing back on the proposed NIH cuts and HHS reorganization, so the restructuring is no longer a foregone conclusion.",
+      [14], "top_stories"),
+    todayStory(4, "Meta records employee mouse movements and keystrokes for AI training",
+      "Workplace surveillance repackaged as training-data collection.",
+      "Meta is capturing employee input to train internal models, raising workplace-surveillance concerns that regulators in two countries have already noticed.",
+      [5], "top_stories"),
+    todayStory(5, "Cloudflare rewrites Next.js as AI makes commercial open source cheap to fork",
+      "A well-funded fork of a commercial open-source project.",
+      "Cloudflare's rewrite is the clearest example yet of a well-funded company forking a commercial open-source project now that the rewrite itself is cheap.",
+      [10], "updates"),
+    todayStory(6, "A new proof settles the Kakeya conjecture in three dimensions", "A long-open conjecture falls.", null, [19], "unique_finds"),
+    todayStory(7, "Rust 1.94 stabilizes trait upcasting", "A small release with one long-awaited feature.", null, [20], "unique_finds"),
+    todayStory(8, "What we learned shipping a 200-node Jepsen suite", "Testing methodology at scale.", null, [22], "unique_finds"),
+    todayStory(9, "Amazon's next-generation storage stack, explained", "An architecture deep dive.", null, [23], "unique_finds"),
+  ];
+  const todayView = () => ({
+    edition: {
+      id: "ed-today", title: "Today", scope: "all", story_limit: 10, status: "completed",
+      starts_at: D.now - (D.now % 86400), ends_at: D.now - (D.now % 86400) + 86400,
+      generated_at: D.mins(5), completed_at: D.mins(4), total_source_count: 24,
+    },
+    items: TODAY_ITEMS,
+    consumed_count: TODAY_ITEMS.filter((i) => i.is_consumed).length,
+    total_count: TODAY_ITEMS.length,
+  });
+
   const ASK_ANSWER =
     "Article 2 briefly reports this. The author notes that Anthropic “dropped Claude Code from the Pro tier” and that the change requires a higher-tier subscription [1]. Two other pieces mention the pricing move in passing while covering agent tooling [3][5].\n\nNo dedicated coverage of OpenAI's next model or a competing release appears in these articles. Broaden the scope to all feeds if you want that.";
 
@@ -306,6 +386,14 @@
       return new Promise(() => {});
     },
     cancel_catchup_report: () => null,
+    get_or_generate_today_edition: () => todayView(),
+    list_today_edition_items: () => TODAY_ITEMS,
+    generate_today_ledes: () => todayView(),
+    set_today_edition_item_consumed: ({ storyId, isConsumed }) => {
+      const item = TODAY_ITEMS.find((i) => i.story_id === storyId);
+      if (item) item.is_consumed = isConsumed;
+      return todayView();
+    },
     chat_with_articles: () => ({
       content: ASK_ANSWER,
       provider: "anthropic",

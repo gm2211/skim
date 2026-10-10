@@ -1319,6 +1319,28 @@ import Testing
     #expect(urls.externalURL?.absoluteString == "https://example.com/story?x=1&y=2")
 }
 
+@Test func redditSelfPostLinkingElsewhereHasNoExternalArticle() throws {
+    let commentsURL = "https://www.reddit.com/r/rust/comments/def456/question/"
+    let article = ParsedArticle(
+        guid: nil,
+        title: "Has anyone tried this?",
+        url: URL(string: commentsURL),
+        author: nil,
+        contentText: nil,
+        contentHTML: """
+        <!-- SC_OFF --><div class="md"><p>Has anyone tried <a href="https://example.com/tool">this tool</a>?</p></div><!-- SC_ON -->
+        &#32; submitted by &#32;<a href="https://www.reddit.com/user/asker">/u/asker</a><br/>
+        <span><a href="\(commentsURL)">[link]</a></span>
+        <span><a href="\(commentsURL)">[comments]</a></span>
+        """,
+        imageURL: nil,
+        publishedAt: nil
+    )
+
+    let urls = AggregatorDetector.externalAndCommentsURL(from: article, kind: .reddit)
+    #expect(urls.externalURL == nil)
+}
+
 @Test func resolvesRedditExternalArticleFromJSON() throws {
     let postData: [String: Any] = [
         "is_self": false,

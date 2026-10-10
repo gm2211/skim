@@ -2026,6 +2026,16 @@ pub fn get_reader_cache(
         .transpose()
 }
 
+/// The URL a cached reader copy was fetched from, when it was recorded.
+pub fn get_reader_cache_url(
+    conn: &Connection,
+    article_id: &str,
+) -> Result<Option<String>, rusqlite::Error> {
+    let mut stmt = conn.prepare("SELECT url FROM article_reader_cache WHERE article_id = ?1")?;
+    let mut rows = stmt.query([article_id])?;
+    Ok(rows.next()?.and_then(|row| row.get::<_, Option<String>>(0).ok().flatten()))
+}
+
 pub fn put_reader_cache(
     conn: &Connection,
     article_id: &str,

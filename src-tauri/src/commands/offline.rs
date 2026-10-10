@@ -57,7 +57,14 @@ pub async fn get_or_fetch_reader_content(
     if !force_refresh.unwrap_or(false) {
         if let Some((html, raw_html)) = {
             let conn = db.conn.lock().map_err(|e| e.to_string())?;
-            queries::get_reader_cache(&conn, &article_id).map_err(|e| e.to_string())?
+            // A copy fetched from a different page (say a Reddit post before
+            // Skim learned to read the story it links to) is not this one.
+            let cached_url = queries::get_reader_cache_url(&conn, &article_id).map_err(|e| e.to_string())?;
+            if cached_url.is_some_and(|cached| cached != url) {
+                None
+            } else {
+                queries::get_reader_cache(&conn, &article_id).map_err(|e| e.to_string())?
+            }
         } {
             return Ok(FullArticleContent { html, raw_html });
         }

@@ -513,6 +513,6 @@ describe("CatchupDialog", () => {
     expect(
       screen.queryByText("ByteDance open-sources its RL training stack"),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Ready when you are")).toBeInTheDocument();
+    expect(screen.getByText("Your front page is blank.")).toBeInTheDocument();
   });
 });

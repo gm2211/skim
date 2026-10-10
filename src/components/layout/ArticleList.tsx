@@ -8,6 +8,7 @@ import { useRecentArticles, useRemoveRecent } from "../../hooks/useRecent";
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useFolders } from "../../hooks/useFolders";
 import { feedsForFolder } from "../../lib/smartFolder";
+import { CheckCircleIcon, ChatIcon, NewspaperIcon, PlusIcon, SearchIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
@@ -607,29 +608,26 @@ export function ArticleList() {
             onClick={() => setShowAddFeed(true)}
             className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
             title="Add feed"
+            aria-label="Add feed"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+            <PlusIcon />
           </button>
         )}
         <button
           onClick={() => setShowCatchup(true)}
           className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
-          title="Super-quick catch-up"
+          title="Quick Catch-up"
+          aria-label="Quick Catch-up"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
-          </svg>
+          <NewspaperIcon />
         </button>
         <button
           onClick={() => setAskOpen(true)}
           className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
           title="Ask Skim — search your feed with AI"
+          aria-label="Ask Skim"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
+          <ChatIcon />
         </button>
         <button
           onClick={handleMarkAllRead}
@@ -637,10 +635,7 @@ export function ArticleList() {
           title="Mark all as read"
           disabled={markAllRead.isPending || (sidebarView.type === "folder" && (!folders || !feeds))}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-            <polyline points="22 4 12 14.01 9 11.01" />
-          </svg>
+          <CheckCircleIcon size={17} />
         </button>
         <button
           onClick={() => {
@@ -649,11 +644,9 @@ export function ArticleList() {
           }}
           className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
           title="Search"
+          aria-label="Search"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
+          <SearchIcon size={17} />
         </button>
       </div>
 

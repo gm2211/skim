@@ -96,30 +96,162 @@
   const SUMMARY_PROSE =
     "Cloud choice is a five-year commitment disguised as a one-week decision. AWS still wins on ecosystem depth, Azure on enterprise agreements, GCP on data engineering \u2014 but none of that survives a bad fit with the stack you already have.";
 
+  // A stand-in picture per article, the way the dev newsstand draws them:
+  // a gradient with a couple of shapes, keyed off the article id.
+  const picture = (id) => {
+    let hash = 0;
+    for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    const hue = hash % 360;
+    const hue2 = (hue + 40 + (hash % 80)) % 360;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue},55%,42%)"/><stop offset="1" stop-color="hsl(${hue2},60%,18%)"/></linearGradient></defs><rect width="1200" height="675" fill="url(#g)"/><circle cx="${300 + (hash % 600)}" cy="${200 + (hash % 250)}" r="${120 + (hash % 90)}" fill="hsla(${hue2},70%,70%,0.25)"/><rect x="${100 + (hash % 300)}" y="420" width="${500 + (hash % 300)}" height="140" rx="24" fill="hsla(${hue},40%,90%,0.12)"/></svg>`;
+    return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+  };
+
+  // The Quick Catch-up front page: a handful of stories, biggest first, each
+  // backed by the articles behind it, then one-line briefs below the fold.
+  const catchupSource = (i, withPicture) => ({
+    id: articles[i].id,
+    title: articles[i].title,
+    publication: articles[i].feed_title,
+    url: articles[i].url,
+    published_at: articles[i].published_at,
+    image_url: withPicture ? picture(articles[i].id) : null,
+    icon_url: null,
+  });
   const CATCHUP = {
-    takeaways: [
-      { text: "Revolution Medicines' KRAS inhibitor showed strong Phase 3 results at AACR, and the company is already developing a next-generation 'novel class' beyond RAS inhibition.", article_ids: ["a013", "a014"] },
-      { text: "The Vercel breach lifted OAuth tokens straight out of platform environment variables, which puts every project that stored secrets there in scope.", article_ids: ["a001"] },
-      { text: "TypeScript 7.0 Beta ships the native compiler; the version bump signals real breaking changes rather than a routine release.", article_ids: ["a007"] },
-      { text: "Four separate pieces argue that stateless agents are the actual bottleneck, not model quality — including a new LLM-as-a-judge proxy for securing agents in production.", article_ids: ["a002", "a003", "a006"] },
-      { text: "Meta is capturing employee mouse movements and keystrokes to train internal models, raising workplace-surveillance concerns that regulators have already noticed.", article_ids: ["a005"] },
-      { text: "Key Republican senators are pushing back on the proposed NIH cuts and HHS reorganization, so the restructuring is no longer a foregone conclusion.", article_ids: ["a014"] },
-      { text: "Cloudflare's Next.js rewrite is the clearest example yet of AI making commercial open source cheap to fork.", article_ids: ["a010"] },
+    stories: [
+      {
+        headline: "Vercel breach lifted OAuth tokens straight out of platform environment variables",
+        lede: "Attackers pulled live OAuth tokens from environment variables on Vercel's build platform, which puts every project that kept secrets there in scope. Vercel has rotated platform keys and says customer tokens should be rotated by hand; two large customers have already reported downstream access.",
+        article_ids: ["a001", "a012"],
+        image_url: picture("a001"),
+      },
+      {
+        headline: "Stateless agents, not model quality, are the bottleneck",
+        lede: "Four pieces land on the same worry this week: agents that cannot hold state across a session fail in ways their benchmarks never show, and the fixes being proposed are harnesses and proxies rather than bigger models.",
+        article_ids: ["a003", "a002", "a006"],
+        image_url: picture("a003"),
+      },
+      {
+        headline: "TypeScript 7.0 Beta ships the native compiler",
+        lede: "The Go port of the TypeScript compiler reaches beta with ten-times faster builds. The major version bump signals real breaking changes in the compiler API rather than a routine release.",
+        article_ids: ["a007", "a020"],
+        image_url: picture("a007"),
+      },
+      {
+        headline: "Senators push back on the plan to cut NIH and reorganize HHS",
+        lede: "Key Republican senators are pushing back on the proposed NIH cuts and HHS reorganization, so the restructuring is no longer a foregone conclusion.",
+        article_ids: ["a014"],
+        image_url: picture("a014"),
+      },
+      {
+        headline: "Meta records employee mouse movements and keystrokes for AI training",
+        lede: "Meta is capturing employee input to train internal models, raising workplace-surveillance concerns that regulators in two countries have already noticed.",
+        article_ids: ["a005"],
+        image_url: null,
+      },
+      {
+        headline: "Cloudflare rewrites Next.js as AI makes commercial open source cheap to fork",
+        lede: "Cloudflare's rewrite is the clearest example yet of a well-funded company forking a commercial open-source project now that the rewrite itself is cheap.",
+        article_ids: ["a010"],
+        image_url: picture("a010"),
+      },
     ],
-    notable_mentions: [
+    briefs: [
       { text: "A new proof settles the Kakeya conjecture in three dimensions.", article_ids: ["a019"] },
       { text: "Rust 1.94 stabilizes trait upcasting.", article_ids: ["a020"] },
       { text: "Aphyr wrote up what they learned running a 200-node Jepsen suite.", article_ids: ["a022"] },
+      { text: "Amazon explains its next-generation storage stack.", article_ids: ["a023"] },
     ],
-    sources: [0, 1, 2, 5, 6, 7, 12].map((i) => ({
-      id: articles[i].id,
-      title: articles[i].title,
-      feed_title: articles[i].feed_title,
-      url: articles[i].url,
-      published_at: articles[i].published_at,
-      source_type: "article",
-    })),
+    sources: [
+      catchupSource(1, true), catchupSource(12, true), catchupSource(3, true), catchupSource(2, true),
+      catchupSource(6, false), catchupSource(7, true), catchupSource(20, false), catchupSource(14, true),
+      catchupSource(5, false), catchupSource(10, true), catchupSource(19, false), catchupSource(22, false),
+      catchupSource(23, true),
+    ],
+    article_count: 24,
   };
+  window.__SKIM_CATCHUP__ = CATCHUP;
+
+  // The Today edition: the day's stories, ordered by importance, each with
+  // the articles behind it. Ledes are already written.
+  const todayMember = (i, type, representative) => ({
+    article_id: articles[i].id,
+    feed_id: articles[i].feed_id,
+    feed_title: articles[i].feed_title,
+    publication: articles[i].feed_title,
+    feed_icon_url: null,
+    title: articles[i].title,
+    url: articles[i].url,
+    author: articles[i].author,
+    published_at: articles[i].published_at,
+    membership_type: type,
+    confidence: 0.9,
+    is_representative: representative,
+    is_read: false,
+    is_starred: false,
+  });
+  const todayStory = (position, title, summary, lede, members, section) => ({
+    edition_id: "ed-today",
+    story_id: "story-" + position,
+    story_revision_number: 1,
+    position,
+    section,
+    snapshot_title: title,
+    snapshot_summary: summary,
+    snapshot_delta_summary: null,
+    has_material_update: false,
+    snapshot_source_count: members.length,
+    snapshot_reason: null,
+    is_unique_find: section === "unique_finds",
+    lede,
+    lede_source_article_id: articles[members[0]].id,
+    is_consumed: position === 2,
+    consumed_at: position === 2 ? D.now - 600 : null,
+    representative_article_id: articles[members[0]].id,
+    member_article_ids: members.map((i) => articles[i].id),
+    member_articles: members.map((i, n) => todayMember(i, n === 0 ? "coverage" : "duplicate", n === 0)),
+  });
+  const TODAY_ITEMS = [
+    todayStory(0, "Vercel breach lifted OAuth tokens from platform environment variables",
+      "Attackers pulled live OAuth tokens from Vercel's build platform.",
+      "Attackers pulled live OAuth tokens from environment variables on Vercel's build platform, which puts every project that kept secrets there in scope. Vercel has rotated platform keys and says customer tokens should be rotated by hand.",
+      [1, 12], "top_stories"),
+    todayStory(1, "Stateless agents, not model quality, are the bottleneck",
+      "Four pieces converge on the same worry about agents without state.",
+      "Four pieces land on the same worry this week: agents that cannot hold state across a session fail in ways their benchmarks never show.",
+      [3, 2, 6], "widely_covered"),
+    todayStory(2, "TypeScript 7.0 Beta ships the native compiler",
+      "The Go port reaches beta with ten-times faster builds.",
+      "The Go port of the TypeScript compiler reaches beta with ten-times faster builds. The major version bump signals real breaking changes in the compiler API.",
+      [7, 20], "top_stories"),
+    todayStory(3, "Senators push back on the plan to cut NIH and reorganize HHS",
+      "The restructuring is no longer a foregone conclusion.",
+      "Key Republican senators are pushing back on the proposed NIH cuts and HHS reorganization, so the restructuring is no longer a foregone conclusion.",
+      [14], "top_stories"),
+    todayStory(4, "Meta records employee mouse movements and keystrokes for AI training",
+      "Workplace surveillance repackaged as training-data collection.",
+      "Meta is capturing employee input to train internal models, raising workplace-surveillance concerns that regulators in two countries have already noticed.",
+      [5], "top_stories"),
+    todayStory(5, "Cloudflare rewrites Next.js as AI makes commercial open source cheap to fork",
+      "A well-funded fork of a commercial open-source project.",
+      "Cloudflare's rewrite is the clearest example yet of a well-funded company forking a commercial open-source project now that the rewrite itself is cheap.",
+      [10], "updates"),
+    todayStory(6, "A new proof settles the Kakeya conjecture in three dimensions", "A long-open conjecture falls.", null, [19], "unique_finds"),
+    todayStory(7, "Rust 1.94 stabilizes trait upcasting", "A small release with one long-awaited feature.", null, [20], "unique_finds"),
+    todayStory(8, "What we learned shipping a 200-node Jepsen suite", "Testing methodology at scale.", null, [22], "unique_finds"),
+    todayStory(9, "Amazon's next-generation storage stack, explained", "An architecture deep dive.", null, [23], "unique_finds"),
+  ];
+  const todayView = () => ({
+    edition: {
+      id: "ed-today", title: "Today", scope: "all", story_limit: 10, status: "completed",
+      starts_at: D.now - (D.now % 86400), ends_at: D.now - (D.now % 86400) + 86400,
+      generated_at: D.mins(5), completed_at: D.mins(4), total_source_count: 24,
+    },
+    items: TODAY_ITEMS,
+    consumed_count: TODAY_ITEMS.filter((i) => i.is_consumed).length,
+    total_count: TODAY_ITEMS.length,
+  });
 
   const ASK_ANSWER =
     "Article 2 briefly reports this. The author notes that Anthropic “dropped Claude Code from the Pro tier” and that the change requires a higher-tier subscription [1]. Two other pieces mention the pricing move in passing while covering agent tooling [3][5].\n\nNo dedicated coverage of OpenAI's next model or a competing release appears in these articles. Broaden the scope to all feeds if you want that.";
@@ -239,7 +371,35 @@
       model: "claude-sonnet-5",
       created_at: D.now,
     }),
-    generate_catchup_report: () => CATCHUP,
+    // With `window.__SKIM_CATCHUP_WRITTEN__` set, the page is shown mid-run:
+    // that many stories have their lede, the next is being written, and the
+    // run never finishes, so a capture can show the page filling in.
+    generate_catchup_report: ({ runId }) => {
+      const written = window.__SKIM_CATCHUP_WRITTEN__;
+      if (written == null) return CATCHUP;
+      // A negative count is the first pass, still reading: no page yet.
+      const stories = written < 0 ? [] : CATCHUP.stories.map((story, i) => (i < written ? story : { ...story, lede: "" }));
+      setTimeout(() => {
+        emit("catchup_progress", {
+          stage: written < 0 ? "reading" : "writing",
+          completed: Math.max(0, written),
+          total: CATCHUP.stories.length,
+          message: written < 0 ? "Reading 24 articles…" : `Writing story ${written + 1} of ${CATCHUP.stories.length}…`,
+          report: { ...CATCHUP, stories, briefs: [] },
+          run_id: runId,
+        });
+      }, 50);
+      return new Promise(() => {});
+    },
+    cancel_catchup_report: () => null,
+    get_or_generate_today_edition: () => todayView(),
+    list_today_edition_items: () => TODAY_ITEMS,
+    generate_today_ledes: () => todayView(),
+    set_today_edition_item_consumed: ({ storyId, isConsumed }) => {
+      const item = TODAY_ITEMS.find((i) => i.story_id === storyId);
+      if (item) item.is_consumed = isConsumed;
+      return todayView();
+    },
     chat_with_articles: () => ({
       content: ASK_ANSWER,
       provider: "anthropic",
@@ -283,6 +443,18 @@
 
   const listeners = new Map();
   let callbackId = 0;
+  // Delivers a backend event to every listener registered for it.
+  const emit = (event, payload) => {
+    for (const [handler, name] of listeners) {
+      if (name === event && typeof window["_" + handler] === "function") {
+        window["_" + handler]({ event, id: handler, payload });
+      }
+    }
+  };
+  window.__SKIM_EMIT__ = emit;
+  window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+    unregisterListener(_event, handler) { listeners.delete(handler); },
+  };
 
   window.__TAURI_INTERNALS__ = {
     transformCallback(cb, once) {

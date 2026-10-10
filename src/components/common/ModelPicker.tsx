@@ -12,6 +12,8 @@ interface Props {
   disabled?: boolean;
   /** Narrower styling for toolbars and headers. */
   compact?: boolean;
+  /** Extra styling for the control itself, e.g. to match a toolbar's height. */
+  controlStyle?: React.CSSProperties;
   /** Overrides the default "AI model" aria-label. */
   label?: string;
 }
@@ -51,7 +53,7 @@ const FALLBACK_AI: AiSettings = {
  * anything on its own; the caller decides whether a change should trigger
  * work. A trailing "AI settings…" entry is always present as an escape hatch.
  */
-export function ModelPicker({ surface, disabled, compact, label }: Props) {
+export function ModelPicker({ surface, disabled, compact, label, controlStyle }: Props) {
   const { data: settings } = useSettings();
   const isPhone = useUiStore((s) => s.isPhone);
   const selectModel = useSelectModel();
@@ -101,7 +103,7 @@ export function ModelPicker({ surface, disabled, compact, label }: Props) {
         onChange={handleChange}
         disabled={disabled || saving}
         fullWidth={!compact}
-        style={compact ? { maxWidth: 200, minHeight: 40, fontSize: 13 } : undefined}
+        style={{ ...(compact ? { maxWidth: 200, minHeight: 40, fontSize: 13 } : {}), ...controlStyle }}
       >
         {options.map((choice) => (
           <option key={choice.value} value={choice.value} disabled={choice.disabled}>

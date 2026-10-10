@@ -31,9 +31,15 @@ behaviors:
       provider.
   - id: really-nice-newspaper-view
     description: >-
-      The newspaper view on desktop and iOS is polished to the standard of a real printed front
-      page, together with a pass over buttons, icons, and flows across the app.
-    details: In progress (2026-10-10) in the "Newspaper view and UI polish" thread.
+      The front page is set like a printed broadsheet on desktop and iOS: a serif nameplate on one
+      masthead row with the controls, a dateline under a double rule, the lead story with its
+      picture, two featured stories in equal columns, the remaining stories in a two-column tier
+      divided by hairlines, and an "Also" block for briefs. While the page is being written a live
+      rule sweeps under the dateline; before a run, and after a stop, a ghost page carries the
+      invitation to run.
+    details: >-
+      Shipped 2026-10-10 (PR #208). Today uses the same type and dateline. Toolbar and palette
+      buttons draw from one line-icon set and carry labels; Ask Skim offers example prompts.
     source:
       text: >-
         spin up fable 5.1 and do "self play" - I want a really nice newspaper view in both desktop

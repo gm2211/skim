@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats, useTriageProgress } from "../../hooks/useInbox";
 import { useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
+import { BoltIcon, ChatIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 import { FeedsSection } from "./FeedsSection";
@@ -93,10 +94,7 @@ export function Sidebar() {
           title="Collapse sidebar"
           aria-label="Collapse sidebar"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" />
-            <path d="M9 3v18" />
-          </svg>
+          <SidebarIcon />
         </button>}
         <button
           onClick={() => refreshAll.mutate()}
@@ -105,9 +103,7 @@ export function Sidebar() {
           title="Refresh all feeds"
           aria-label="Refresh all feeds"
         >
-          <svg className={refreshAll.isPending ? "smooth-spin" : undefined} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
-          </svg>
+          <RefreshIcon className={refreshAll.isPending ? "smooth-spin" : undefined} />
         </button>
         <button
           ref={askButtonRef}
@@ -116,9 +112,7 @@ export function Sidebar() {
           title="Ask Skim — search your feed with AI"
           aria-label="Ask Skim"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
+          <ChatIcon />
         </button>
         <button
           onClick={() => setSidebarView({ type: "today" })}
@@ -126,9 +120,7 @@ export function Sidebar() {
           title="Today — your finite, sectioned daily edition"
           aria-label="Today"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
-          </svg>
+          <BoltIcon />
         </button>
         <button
           onClick={() => setShowAddFeed(true)}
@@ -136,9 +128,7 @@ export function Sidebar() {
           title="Add feed"
           aria-label="Add feed"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
+          <PlusIcon />
         </button>
       </div>
       {askVisited && <AskSkimDialog

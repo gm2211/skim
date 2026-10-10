@@ -82,7 +82,7 @@ const STEPS = [
     name: "03-catchup",
     caption: "Super-quick catch-up — the week in ten takeaways",
     async run(p) {
-      await p.locator('[title="Super-quick catch-up"]').first().click();
+      await p.locator('[aria-label="Quick Catch-up"]').first().click();
       await p.waitForTimeout(500);
       await p.getByRole("button", { name: /run catch-up/i }).first().click();
       await p.waitForTimeout(1500);

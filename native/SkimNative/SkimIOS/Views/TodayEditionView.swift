@@ -126,25 +126,56 @@ struct TodayEditionView: View {
 
     private func load() async { await model.loadTodayEdition(storyLimit: storyLimit) }
 
+    /// The masthead: the nameplate, then a dateline whose double rule doubles
+    /// as the day's reading progress.
     private func editionHeader(_ edition: TodayEditionSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(edition.edition.startsAt.formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                .font(.title2.bold())
-            if edition.totalItemCount > 0 {
-                HStack {
-                    Text("\(edition.consumedItemCount) of \(edition.totalItemCount) read")
-                    Spacer()
-                    Text(edition.progress, format: .percent.precision(.fractionLength(0)))
-                        .monospacedDigit()
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Today")
+                .font(.system(size: 30, weight: .bold, design: .serif))
+                .foregroundStyle(SkimStyle.text)
+
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(edition.edition.startsAt.formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
+                    .foregroundStyle(SkimStyle.secondary)
+                Spacer(minLength: 8)
+                if edition.totalItemCount > 0 {
+                    HStack(spacing: 8) {
+                        Text(edition.consumedItemCount == edition.totalItemCount
+                             ? "ALL CAUGHT UP"
+                             : "\(edition.consumedItemCount) OF \(edition.totalItemCount) READ")
+                        Text(edition.progress, format: .percent.precision(.fractionLength(0)))
+                            .monospacedDigit()
+                            .opacity(0.7)
+                    }
+                    .foregroundStyle(SkimStyle.secondary.opacity(0.8))
                 }
-                .font(.subheadline)
-                .foregroundStyle(SkimStyle.secondary)
-                ProgressView(value: edition.progress)
-                    .accessibilityLabel("Edition progress")
             }
+            .font(.system(size: 10.5, weight: .bold))
+            .kerning(1.0)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+
+            VStack(spacing: 2) {
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Rectangle().fill(SkimStyle.text.opacity(0.28))
+                        if edition.totalItemCount > 0 {
+                            Rectangle()
+                                .fill(edition.consumedItemCount == edition.totalItemCount ? Color.green : SkimStyle.accent)
+                                .frame(width: proxy.size.width * CGFloat(edition.progress))
+                                .animation(.easeOut(duration: 0.3), value: edition.progress)
+                        }
+                    }
+                }
+                .frame(height: 2)
+                .accessibilityLabel("Edition progress")
+                .accessibilityValue(Text(edition.progress, format: .percent.precision(.fractionLength(0))))
+                Rectangle().fill(SkimStyle.text.opacity(0.11)).frame(height: 1)
+            }
+
             Text("Saved at \(edition.edition.generatedAt.formatted(date: .omitted, time: .shortened)). Stories stay fixed for this edition.")
-                .font(.footnote)
-                .foregroundStyle(SkimStyle.secondary)
+                .font(.system(size: 11))
+                .foregroundStyle(SkimStyle.secondary.opacity(0.8))
         }
     }
 
@@ -211,8 +242,10 @@ private struct TodayStoryView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: lead ? 10 : 7) {
-            Divider().overlay(SkimStyle.separator.opacity(0.6))
-                .padding(.bottom, lead ? 6 : 4)
+            if !lead {
+                Rectangle().fill(SkimStyle.text.opacity(0.11)).frame(height: 1)
+                    .padding(.bottom, 6)
+            }
 
             headline
 
@@ -220,8 +253,8 @@ private struct TodayStoryView: View {
                 TodayLedeSkeleton(lead: lead)
             } else if !ledeOrExcerpt.isEmpty {
                 Text(ledeOrExcerpt)
-                    .font(.system(size: lead ? 17 : 15, weight: .regular))
-                    .foregroundStyle(SkimStyle.secondary)
+                    .font(.system(size: lead ? 16 : brief ? 14 : 15, weight: .regular))
+                    .foregroundStyle(SkimStyle.text.opacity(0.84))
                     .lineSpacing(3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -273,8 +306,9 @@ private struct TodayStoryView: View {
     private var headlineText: some View {
         Text(item.snapshot.snapshotTitle)
             .font(.system(
-                size: lead ? 26 : brief ? 16 : 19,
-                weight: brief ? .semibold : .bold
+                size: lead ? 28 : brief ? 16 : 20,
+                weight: .bold,
+                design: .serif
             ))
             .foregroundStyle(SkimStyle.text)
             .multilineTextAlignment(.leading)
@@ -300,18 +334,17 @@ private struct TodayStoryView: View {
     private func sourceLink(_ source: TodayEditionSourceArticle) -> some View {
         let publication = PublicationName.of(feedTitle: source.feedTitle, url: source.url)
         let published = source.publishedAt.map { "Published \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "Published: unknown"
+        // One byline: the publication as a kicker, then the report's own
+        // title and when it ran.
         let label = VStack(alignment: .leading, spacing: 3) {
-            Text("Report preview · \(publication)")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(SkimStyle.accent)
-            Text(source.articleTitle)
-                .font(.system(size: 12, weight: .medium))
-                .underline()
-                .foregroundStyle(SkimStyle.accent)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(published)
-                .font(.system(size: 11))
+            Text("Report preview · \(publication)".uppercased())
+                .font(.system(size: 10.5, weight: .bold))
+                .kerning(0.8)
                 .foregroundStyle(SkimStyle.secondary)
+            (Text(source.articleTitle).italic().foregroundColor(SkimStyle.secondary)
+                + Text(" · \(published)").foregroundColor(SkimStyle.secondary.opacity(0.75)))
+                .font(.system(size: 12))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         .contentShape(Rectangle())

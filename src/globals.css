@@ -484,11 +484,194 @@ select option {
   animation: story-rise-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Quick Catch-up front page: newspaper headlines, and the row of related
-   articles printed as publication icons under each story. */
-.catchup-headline {
-  font-family: "New York", "Iowan Old Style", Georgia, "Times New Roman", serif;
+/* Quick Catch-up front page. A broadsheet in miniature: a dateline under a
+   double rule, the lead beside its picture, two featured stories, then a
+   two-column grid of the rest and a dense "Also" block. */
+.catchup-page {
+  --paper-rule: rgba(255, 255, 255, 0.11);
+  --paper-rule-strong: rgba(255, 255, 255, 0.28);
 }
+.catchup-ghost-page {
+  position: relative;
+  min-height: 300px;
+}
+.catchup-ghost {
+  mask-image: linear-gradient(to bottom, #000 30%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent 100%);
+}
+.catchup-ghost-line {
+  height: 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.catchup-ghost-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.catchup-invite {
+  max-width: 440px;
+  padding: 22px 26px 24px;
+  border-radius: 12px;
+  background: rgba(22, 27, 34, 0.96);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 18px 48px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+.catchup-nameplate {
+  font-family: "New York", "Iowan Old Style", "Palatino", Georgia, "Times New Roman", serif;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.catchup-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.catchup-control-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.catchup-control .catchup-control-select { max-width: 190px; }
+.catchup-dateline {
+  margin-bottom: 20px;
+}
+.catchup-dateline-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.catchup-dateline-scope {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-align: right;
+}
+.catchup-dateline-rule {
+  height: 2px;
+  background: var(--paper-rule-strong);
+  box-shadow: 0 4px 0 -3px var(--paper-rule);
+}
+.catchup-kicker {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 6px;
+}
+.catchup-headline {
+  font-family: "New York", "Iowan Old Style", "Palatino", Georgia, "Times New Roman", serif;
+  text-wrap: balance;
+}
+.catchup-headline-link {
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+.catchup-headline-link:hover {
+  color: var(--color-accent-hover);
+}
+.catchup-lede {
+  opacity: 0.84;
+}
+.catchup-picture {
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.catchup-lead {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 28px;
+  align-items: start;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--paper-rule-strong);
+}
+.catchup-lead:has(> .catchup-lead-text:only-child) {
+  grid-template-columns: 1fr;
+}
+.catchup-lead:has(> .catchup-lead-text:only-child) .catchup-lead-text {
+  max-width: 72ch;
+}
+/* Two equal columns with a hairline between them: every cell carries half
+   the gutter as padding, so both columns measure the same. */
+.catchup-tier {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 0;
+  row-gap: 0;
+}
+.catchup-tier > * {
+  min-width: 0;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+.catchup-tier > :nth-child(2n + 1) { padding-left: 0; }
+.catchup-tier > :nth-child(2n) { padding-right: 0; border-left: 1px solid var(--paper-rule); }
+.catchup-features {
+  padding: 22px 0;
+  border-bottom: 1px solid var(--paper-rule);
+}
+.catchup-story {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding-top: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--paper-rule);
+}
+.catchup-stories > .catchup-story-wide {
+  grid-column: 1 / -1;
+  padding-right: 0;
+  gap: 24px;
+}
+.catchup-stories > .catchup-story-wide .catchup-lede {
+  max-width: 70ch;
+}
+.catchup-also {
+  padding: 16px 20px 18px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.catchup-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--paper-rule);
+}
+.catchup-briefs {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 28px;
+}
+.catchup-brief {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--paper-rule);
+}
+.catchup-brief .catchup-source-icon { margin-top: 1px; }
 .catchup-source-icon {
   display: inline-flex;
   border-radius: 7px;
@@ -500,6 +683,13 @@ select option {
   transform: translateY(-1px);
   box-shadow: 0 0 0 2px var(--color-accent, #4c8dff);
   outline: none;
+}
+@media (max-width: 760px) {
+  .catchup-lead { grid-template-columns: 1fr; }
+  .catchup-lead > .catchup-picture { order: -1; aspect-ratio: 16 / 9; }
+  .catchup-tier, .catchup-briefs { grid-template-columns: 1fr; }
+  .catchup-tier > * { padding-left: 0; padding-right: 0; border-left: 0; }
+  .catchup-features > .catchup-feature + .catchup-feature { border-top: 1px solid var(--paper-rule); padding-top: 18px; margin-top: 18px; }
 }
 
 @keyframes story-shimmer {

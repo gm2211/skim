@@ -1,17 +1,15 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   CATCHUP_CANCELLED,
   CATCHUP_PROGRESS_EVENT,
   cancelCatchupReport,
   generateCatchupReport,
-  type CatchupBrief,
   type CatchupProgress,
   type CatchupReport,
   type CatchupScope,
   type CatchupSinceHours,
   type CatchupSource,
-  type CatchupStory,
 } from "../../services/commands";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -25,6 +23,7 @@ import { useSettings } from "../../hooks/useSettings";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { Select } from "../ui/Select";
 import { ModelPicker } from "../common/ModelPicker";
+import { CatchupFrontPage, CatchupGhostPage } from "./CatchupFrontPage";
 
 interface Props {
   onClose: () => void;
@@ -38,9 +37,8 @@ type CacheEntry = { report: CatchupReport; ts: number };
 const catchupCache = new Map<string, CacheEntry>();
 const catchupErrors = new Map<string, string>();
 
-/** The one height every control on the dialog's toolbar row shares. */
-const CONTROL_HEIGHT = 40;
-const CONTROL_LABEL_STYLE = { fontSize: 12, fontWeight: 600 } as const;
+/** The one size every control on the masthead's toolbar shares. */
+const CONTROL_STYLE = { height: 32, minHeight: 32, fontSize: 12.5, padding: "0 30px 0 10px" } as const;
 
 /** How far back to catch up. `null` is the whole unread backlog. */
 export const CATCHUP_RANGES: { value: CatchupSinceHours; label: string }[] = [
@@ -78,61 +76,6 @@ export function catchupScopeSummary(
   const window = sinceHours == null || !label ? "" : ` from the ${label.toLowerCase()}`;
   const source = scope === "inbox" ? "your priority inbox" : "everything unread";
   return `Read ${articles} from ${source}${window}.`;
-}
-
-/** Initials and a stable colour for a publication with no usable icon. */
-function publicationBadge(publication: string) {
-  const words = publication.replace(/^www\./i, "").split(/[\s.\-_]+/).filter(Boolean);
-  const initials = (words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? "S").slice(0, 2)).toUpperCase();
-  const palette = ["#1f52fa", "#ad1a2b", "#5aa1ab", "#ed3b21", "#c9a227", "#852b4d"];
-  let hash = 0;
-  for (const ch of publication) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return { initials, color: palette[hash % palette.length] };
-}
-
-/** A publication's favicon, or its initials when there is none or it fails. */
-function PublicationIcon({ source, size }: { source: CatchupSource; size: number }) {
-  const [failed, setFailed] = useState(false);
-  if (source.icon_url && !failed) {
-    return (
-      <img
-        src={source.icon_url}
-        alt=""
-        width={size}
-        height={size}
-        onError={() => setFailed(true)}
-        style={{ width: size, height: size, borderRadius: 6, background: "rgba(255,255,255,0.9)", padding: 2, display: "block" }}
-      />
-    );
-  }
-  const { initials, color } = publicationBadge(source.publication);
-  return (
-    <span
-      aria-hidden="true"
-      className="flex items-center justify-center text-white"
-      style={{ width: size, height: size, borderRadius: 6, background: color, fontSize: size * 0.42, fontWeight: 800 }}
-    >
-      {initials}
-    </span>
-  );
-}
-
-/** A story's picture; it removes itself when the image cannot load. */
-function StoryImage({ src, style, onClick }: { src: string; style: CSSProperties; onClick?: () => void }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return null;
-  return (
-    <img
-      src={src}
-      alt=""
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      onClick={onClick}
-      className={onClick ? "cursor-pointer" : undefined}
-      style={{ objectFit: "cover", background: "rgba(255,255,255,0.04)", display: "block", ...style }}
-    />
-  );
 }
 
 export function CatchupDialog({ onClose, onOpenArticle }: Props) {
@@ -283,189 +226,15 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     if (source?.url) openUrl(source.url);
   };
 
-  const citedSources = (articleIds: string[]) =>
-    articleIds.map((id) => sourcesById.get(id)).filter((s): s is CatchupSource => !!s);
-
-  // The articles behind a story, as a compact row of publication icons; each
-  // one opens its article, and hovering names it.
-  const renderRelated = (articleIds: string[]) => {
-    const cited = citedSources(articleIds);
-    if (cited.length === 0) return null;
-    return (
-      <div className="flex items-center flex-wrap" style={{ marginTop: 10, gap: 6 }}>
-        {cited.map((source) => (
-          <button
-            key={source.id}
-            onClick={(e) => {
-              e.stopPropagation();
-              openArticle(source.id);
-            }}
-            title={source.title}
-            aria-label={`${source.title}, ${source.publication}`}
-            className="catchup-source-icon"
-          >
-            <PublicationIcon source={source} size={22} />
-          </button>
-        ))}
-        <span className="text-text-muted" style={{ fontSize: 11.5, fontWeight: 600, marginLeft: 2 }}>
-          {cited.length === 1 ? cited[0].publication : `${cited.length} sources`}
-        </span>
-      </div>
-    );
-  };
-
-  // Publications behind a story, printed over its headline when it has more
-  // than one, so a story many outlets carried reads as such at a glance.
-  const renderKicker = (articleIds: string[]) => {
-    const names = [...new Set(citedSources(articleIds).map((s) => s.publication))];
-    if (names.length < 2) return null;
-    return (
-      <div className="text-accent" style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 6 }}>
-        {names.join(" · ")}
-      </div>
-    );
-  };
-
-  // A headline whose lede the second pass has not written yet.
-  const renderLedeSkeleton = (lead: boolean) => (
-    <div
-      className="flex flex-col"
-      style={{ marginTop: lead ? 10 : 8, gap: 7 }}
-      aria-label="Writing this story"
-    >
-      <div className="story-skeleton-line" style={{ width: "100%" }} />
-      <div className="story-skeleton-line" style={{ width: lead ? "92%" : "84%" }} />
-      <div className="story-skeleton-line" style={{ width: lead ? "68%" : "56%" }} />
-    </div>
-  );
-
-  const renderLede = (story: CatchupStory, lead: boolean, writing: boolean) =>
-    story.lede ? (
-      <p
-        className="text-text-primary"
-        style={{
-          marginTop: lead ? 10 : 6,
-          fontSize: lead ? 15 : 13,
-          lineHeight: 1.6,
-          opacity: 0.86,
-          ...(lead ? {} : { display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
-        }}
-      >
-        {story.lede}
-      </p>
-    ) : writing ? (
-      renderLedeSkeleton(lead)
-    ) : null;
-
-  const renderHeadline = (story: CatchupStory, lead: boolean) => (
-    <h4
-      onClick={story.article_ids[0] ? () => openArticle(story.article_ids[0]) : undefined}
-      className={`catchup-headline text-text-primary ${story.article_ids[0] ? "cursor-pointer hover:text-accent transition-colors" : ""}`}
-      style={{
-        fontSize: lead ? (isPhone ? 25 : 30) : 18,
-        fontWeight: 700,
-        lineHeight: lead ? 1.15 : 1.25,
-        letterSpacing: lead ? -0.3 : -0.1,
-      }}
-    >
-      {story.headline}
-    </h4>
-  );
-
-  // The lead runs WSJ-style across the top: its picture full width, then a big
-  // headline, the lede and the row of related articles.
-  const renderLead = (story: CatchupStory, writing: boolean) => (
-    <article key={`0-${story.headline}`} className="story-rise-in">
-      {story.image_url && (
-        <StoryImage
-          src={story.image_url}
-          onClick={story.article_ids[0] ? () => openArticle(story.article_ids[0]) : undefined}
-          style={{ width: "100%", aspectRatio: "16 / 9", maxHeight: 340, marginBottom: 14, borderRadius: 10 }}
-        />
-      )}
-      {renderKicker(story.article_ids)}
-      {renderHeadline(story, true)}
-      {renderLede(story, true, writing)}
-      {renderRelated(story.article_ids)}
-    </article>
-  );
-
-  // Every other story: headline and lede beside a thumbnail, then its icons.
-  const renderStory = (story: CatchupStory, index: number, writing: boolean) => {
-    if (index === 0) return renderLead(story, writing);
-    const thumb = isPhone ? { width: 92, height: 70 } : { width: 150, height: 100 };
-    return (
-      <article
-        key={`${index}-${story.headline}`}
-        className="story-rise-in"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: 18, marginTop: 18 }}
-      >
-        <div className="flex items-start" style={{ gap: isPhone ? 12 : 18 }}>
-          <div className="min-w-0 flex-1">
-            {renderKicker(story.article_ids)}
-            {renderHeadline(story, false)}
-            {renderLede(story, false, writing)}
-          </div>
-          {story.image_url && (
-            <StoryImage
-              src={story.image_url}
-              onClick={story.article_ids[0] ? () => openArticle(story.article_ids[0]) : undefined}
-              style={{ ...thumb, flexShrink: 0, borderRadius: 8 }}
-            />
-          )}
-        </div>
-        {renderRelated(story.article_ids)}
-      </article>
-    );
-  };
-
-  const renderBrief = (brief: CatchupBrief, index: number) => {
-    const firstId = brief.article_ids[0];
-    const first = citedSources(brief.article_ids)[0];
-    return (
-      <li key={`${index}-${brief.text}`} className="story-rise-in flex items-start" style={{ gap: 10 }}>
-        {first ? (
-          <button
-            onClick={() => openArticle(first.id)}
-            title={first.title}
-            aria-label={`${first.title}, ${first.publication}`}
-            className="catchup-source-icon flex-shrink-0"
-            style={{ marginTop: 1 }}
-          >
-            <PublicationIcon source={first} size={20} />
-          </button>
-        ) : (
-          <span style={{ width: 20 }} />
-        )}
-        <div className="min-w-0 flex-1">
-          <p
-            onClick={firstId ? () => openArticle(firstId) : undefined}
-            className={`text-text-primary ${firstId ? "cursor-pointer hover:text-accent transition-colors" : ""}`}
-            style={{ fontSize: 13.5, lineHeight: 1.45, fontWeight: 550 }}
-          >
-            {brief.text}
-          </p>
-          {first && (
-            <span className="text-text-muted" style={{ fontSize: 11.5 }}>
-              {first.publication}
-            </span>
-          )}
-        </div>
-      </li>
-    );
-  };
-
-  const sectionHeadingStyle = {
-    fontSize: 11,
-    fontWeight: 700,
-    textTransform: "uppercase" as const,
-    letterSpacing: 1.2,
-  };
+  const dateline = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
   if (showSettings) return null;
 
   const providerUnavailable = settings?.ai.provider === "none";
   const setupError = isAiSetupError(error);
+  // Before the first run the page itself invites the run, so the toolbar
+  // does not need a second button saying the same thing.
+  const inviting = !providerUnavailable && !report && !loading && !error;
 
   return createPortal(
     <div
@@ -480,12 +249,12 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
         className={`${isPhone ? "fixed left-0 right-0 overflow-hidden" : "border border-white/10 rounded-2xl shadow-2xl"} flex flex-col`}
         style={{
           background: "rgba(22, 27, 34, 0.98)",
-          width: isPhone ? undefined : "min(760px, 92vw)",
+          width: isPhone ? undefined : "min(1040px, 94vw)",
           height: isPhone ? "100dvh" : undefined,
           top: isPhone ? 0 : undefined,
           willChange: isPhone ? "transform, height" : undefined,
           ...swipeToDismissStyle,
-          maxHeight: isPhone ? undefined : "90vh",
+          maxHeight: isPhone ? undefined : "92vh",
           margin: isPhone ? 0 : "0 20px",
           paddingTop: isPhone ? "max(var(--sat, 0px), 60px)" : 0,
           paddingBottom: isPhone ? "max(var(--sab, 0px), 12px)" : 0,
@@ -494,19 +263,82 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
       >
         <div
           className="relative border-b border-white/5"
-          style={{ padding: isPhone ? "16px 56px 16px 16px" : "20px 64px 20px 24px", touchAction: isPhone ? "pan-y" : undefined }}
+          style={{ padding: isPhone ? "16px 56px 16px 16px" : "14px 76px 14px 28px", touchAction: isPhone ? "pan-y" : undefined }}
           {...swipeToDismissHandlers}
         >
-          <h3 id="catchup-title" className="text-text-primary" style={{ fontSize: 20, lineHeight: 1.3, fontWeight: 650 }}>
-            Quick Catch-up
-          </h3>
-          <p className="text-text-muted" style={{ marginTop: 4, fontSize: 13, lineHeight: 1.5 }}>
-            Turn your latest articles into a concise briefing.
-          </p>
+          {/* The nameplate and the run's controls share one row, like a
+              masthead over its toolbar; on a narrow window the controls wrap
+              under the title. */}
+          <div className="flex flex-wrap items-center" style={{ columnGap: 20, rowGap: 10 }}>
+            <h3 id="catchup-title" className="catchup-nameplate text-text-primary" style={{ marginRight: "auto" }}>
+              Quick Catch-up
+            </h3>
+            <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
+              <label className="catchup-control">
+                <span className="catchup-control-label">Model</span>
+                <ModelPicker surface="catchup" disabled={loading} controlStyle={CONTROL_STYLE} />
+              </label>
+              <label className="catchup-control">
+                <span className="catchup-control-label">Include</span>
+                <Select
+                  aria-label="Include"
+                  value={scope}
+                  onChange={(e) => {
+                    if (loading) stop();
+                    setScope(e.target.value as CatchupScope);
+                  }}
+                  style={CONTROL_STYLE}
+                >
+                  <option value="inbox">Priority inbox</option>
+                  <option value="unread">All unread articles</option>
+                </Select>
+              </label>
+              <label className="catchup-control">
+                <span className="catchup-control-label">Going back</span>
+                <Select
+                  aria-label="Going back"
+                  value={sinceHours === null ? "all" : String(sinceHours)}
+                  onChange={(e) => {
+                    if (loading) stop();
+                    setSinceHours(e.target.value === "all" ? null : Number(e.target.value));
+                  }}
+                  style={CONTROL_STYLE}
+                >
+                  {CATCHUP_RANGES.map((range) => (
+                    <option
+                      key={range.label}
+                      value={range.value === null ? "all" : String(range.value)}
+                    >
+                      {range.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              {loading ? (
+                <button
+                  onClick={stop}
+                  className="border border-white/10 hover:bg-white/10 text-text-primary rounded-lg transition-colors font-medium flex-shrink-0 whitespace-nowrap"
+                  style={{ ...CONTROL_STYLE, padding: "0 14px", fontSize: 13 }}
+                  aria-label="Stop catch-up"
+                >
+                  Stop
+                </button>
+              ) : inviting ? null : (
+                <button
+                  onClick={run}
+                  disabled={providerUnavailable}
+                  className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium flex-shrink-0 whitespace-nowrap"
+                  style={{ ...CONTROL_STYLE, padding: "0 14px", fontSize: 13 }}
+                >
+                  {report ? "Run again" : "Run catch-up"}
+                </button>
+              )}
+            </div>
+          </div>
           <button
             onClick={onClose}
             className="tap-target absolute text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
-            style={{ right: isPhone ? 12 : 16, top: isPhone ? 12 : 16 }}
+            style={{ right: isPhone ? 12 : 16, top: isPhone ? 12 : "50%", transform: isPhone ? undefined : "translateY(-50%)" }}
             title="Close"
             aria-label="Close"
           >
@@ -516,144 +348,33 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
           </button>
         </div>
 
-        <div className="border-b border-white/5" style={{ padding: isPhone ? "12px 16px" : "12px 24px" }}>
-          {/* Every control on this row carries the same explicit height and the
-              row aligns on its end, so the button cannot drift against the
-              selects the way it did when only the selects were sized. */}
-          <div className="flex flex-wrap items-end" style={{ gap: 12 }}>
-            <label className="flex min-w-0 flex-1 flex-col" style={{ gap: 6, minWidth: 150 }}>
-              <span style={CONTROL_LABEL_STYLE}>Model</span>
-              <ModelPicker surface="catchup" disabled={loading} />
-            </label>
-            <label className="flex min-w-0 flex-1 flex-col" style={{ gap: 6, minWidth: 150 }}>
-              <span className="text-text-muted" style={CONTROL_LABEL_STYLE}>Include</span>
-              <Select
-                aria-label="Include"
-                fullWidth
-                value={scope}
-                onChange={(e) => {
-                  if (loading) stop();
-                  setScope(e.target.value as CatchupScope);
-                }}
-                style={{ height: CONTROL_HEIGHT, minHeight: CONTROL_HEIGHT }}
-              >
-                <option value="inbox">Priority inbox</option>
-                <option value="unread">All unread articles</option>
-              </Select>
-            </label>
-            <label className="flex min-w-0 flex-1 flex-col" style={{ gap: 6, minWidth: 140 }}>
-              <span className="text-text-muted" style={CONTROL_LABEL_STYLE}>Going back</span>
-              <Select
-                aria-label="Going back"
-                fullWidth
-                value={sinceHours === null ? "all" : String(sinceHours)}
-                onChange={(e) => {
-                  if (loading) stop();
-                  setSinceHours(e.target.value === "all" ? null : Number(e.target.value));
-                }}
-                style={{ height: CONTROL_HEIGHT, minHeight: CONTROL_HEIGHT }}
-              >
-                {CATCHUP_RANGES.map((range) => (
-                  <option
-                    key={range.label}
-                    value={range.value === null ? "all" : String(range.value)}
-                  >
-                    {range.label}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            {loading ? (
-              <button
-                onClick={stop}
-                className="border border-white/10 hover:bg-white/10 text-text-primary rounded-lg transition-colors font-medium flex-shrink-0 whitespace-nowrap"
-                style={{
-                  padding: "0 16px",
-                  fontSize: 13,
-                  height: CONTROL_HEIGHT,
-                  minHeight: CONTROL_HEIGHT,
-                }}
-                aria-label="Stop catch-up"
-              >
-                Stop
-              </button>
-            ) : (
-              <button
-                onClick={run}
-                disabled={providerUnavailable}
-                className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium flex-shrink-0 whitespace-nowrap"
-                style={{
-                  padding: "0 16px",
-                  fontSize: 13,
-                  height: CONTROL_HEIGHT,
-                  minHeight: CONTROL_HEIGHT,
-                }}
-              >
-                {report ? "Run again" : "Run catch-up"}
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0" style={{ padding: isPhone ? "20px 16px" : "24px", minHeight: isPhone ? 0 : 260 }}>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0" style={{ padding: isPhone ? "20px 16px" : "22px 28px 28px", minHeight: isPhone ? 0 : 260 }}>
           {providerUnavailable && <AiSetupNotice />}
 
           {!providerUnavailable && !report && !loading && !error && (
-            <div style={{ padding: "24px 0" }}>
-              {stopped ? (
-                <h4 className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>Catch-up stopped.</h4>
-              ) : (
-                <>
-                  <h4 className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>Ready when you are</h4>
-                  <p className="text-text-muted" style={{ marginTop: 6, fontSize: 13, lineHeight: 1.6 }}>
-                    Choose which articles to include and how far back to go, then run a catch-up. Skim
-                    reads them and writes you a front page: the few stories that actually happened,
-                    biggest first.
-                  </p>
-                </>
-              )}
-            </div>
+            <CatchupGhostPage dateline={dateline}>
+              <div className="catchup-invite">
+                <h4 className="catchup-headline text-text-primary" style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.2 }}>
+                  {stopped ? "Catch-up stopped." : "Your front page is blank."}
+                </h4>
+                <p className="text-text-muted" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
+                  {stopped
+                    ? "Run again to write the page, or change what it should cover first."
+                    : "Choose what to include and how far back to go. Skim reads the articles and writes you a front page: the few stories that actually happened, biggest first."}
+                </p>
+                <button
+                  onClick={run}
+                  className="bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors font-medium"
+                  style={{ marginTop: 16, height: 36, padding: "0 18px", fontSize: 13 }}
+                >
+                  {stopped ? "Run again" : "Run catch-up"}
+                </button>
+              </div>
+            </CatchupGhostPage>
           )}
 
           {loading && !report && (
-            <div style={{ padding: "36px 0" }}>
-              <div className="flex items-center gap-3">
-                <svg
-                  className="smooth-spin text-accent"
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden="true"
-                >
-                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-                </svg>
-                <span className="text-text-primary" style={{ fontSize: 14, fontWeight: 600 }}>
-                  {progress?.message ?? "Reading your feed…"}
-                </span>
-                <span className="text-text-muted tabular-nums" style={{ fontSize: 12 }}>
-                  {elapsed}s
-                </span>
-              </div>
-              <div
-                className="flex flex-col"
-                style={{ marginTop: 26, gap: 22 }}
-                aria-hidden="true"
-              >
-                {[0, 1, 2].map((row) => (
-                  <div key={row} className="flex flex-col" style={{ gap: 8 }}>
-                    <div
-                      className="story-skeleton-line"
-                      style={{ height: row === 0 ? 17 : 13, width: row === 0 ? "78%" : "62%" }}
-                    />
-                    <div className="story-skeleton-line" style={{ width: "100%" }} />
-                    <div className="story-skeleton-line" style={{ width: "84%" }} />
-                  </div>
-                ))}
-              </div>
-            </div>
+            <CatchupGhostPage dateline={dateline} status={{ message: progress?.message ?? "Reading your feed…", elapsed }} />
           )}
 
           {error && setupError && <AiSetupNotice error={error} />}
@@ -669,35 +390,9 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
 
           {report && (
             <>
-              {loading && (
-                <div style={{ marginBottom: 18 }}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-text-muted" style={{ fontSize: 12 }}>
-                      {progress?.message ?? "Writing the page…"}
-                    </span>
-                    <span className="text-text-muted tabular-nums" style={{ fontSize: 12 }}>
-                      {elapsed}s
-                    </span>
-                  </div>
-                  <div
-                    className="story-rule-live"
-                    style={{ height: 2, borderRadius: 999, marginTop: 8 }}
-                  />
-                </div>
-              )}
-
               {!loading && stopped && (
                 <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 18 }}>
                   Stopped. Run again to finish the page.
-                </p>
-              )}
-
-              {!loading && !stopped && report.article_count > 0 && (
-                <p
-                  className="text-text-muted"
-                  style={{ fontSize: 11.5, marginBottom: 18, letterSpacing: 0.1 }}
-                >
-                  {catchupScopeSummary(scope, sinceHours, report.article_count)}
                 </p>
               )}
 
@@ -711,38 +406,15 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 </p>
               )}
 
-              {report.stories
-                .slice(0, written + 1)
-                .map((story, index) => renderStory(story, index, loading && index >= written))}
-
-              {loading && report.stories.length > written + 1 && (
-                <p
-                  className="text-text-muted flex items-center"
-                  style={{ fontSize: 12, marginTop: 22, gap: 8 }}
-                >
-                  <span className="story-skeleton-line" style={{ width: 28, height: 6 }} />
-                  {report.stories.length - written - 1 === 1
-                    ? "1 more story on the way"
-                    : `${report.stories.length - written - 1} more stories on the way`}
-                </p>
-              )}
-
-              {report.briefs.length > 0 && (
-                <div
-                  style={{
-                    marginTop: report.stories.length > 0 ? 28 : 0,
-                    borderTop: report.stories.length > 0 ? "1px solid rgba(255,255,255,0.1)" : undefined,
-                    paddingTop: report.stories.length > 0 ? 20 : 0,
-                  }}
-                >
-                  <h4 className="text-text-muted" style={sectionHeadingStyle}>
-                    Also
-                  </h4>
-                  <ul className="flex flex-col" style={{ listStyle: "none", marginTop: 12, gap: 12 }}>
-                    {report.briefs.map((brief, index) => renderBrief(brief, index))}
-                  </ul>
-                </div>
-              )}
+              <CatchupFrontPage
+                report={report}
+                dateline={dateline}
+                scopeSummary={!loading && !stopped && report.article_count > 0 ? catchupScopeSummary(scope, sinceHours, report.article_count) : null}
+                status={{ message: progress?.message ?? "Writing the page…", elapsed }}
+                loading={loading}
+                written={written}
+                onOpenArticle={openArticle}
+              />
             </>
           )}
         </div>

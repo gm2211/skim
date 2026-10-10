@@ -13,9 +13,14 @@ behaviors:
       The model assesses each unread article's relevance to the reader and its importance, and the
       AI Inbox sorts articles with the most relevant and important first.
     details: >-
-      Today the model assigns priority 1-5 with a one-line reason (Must Read, Important, Worth
-      Reading, Routine, Skip), and desktop groups the inbox by those labels. Making relevance and
-      importance explicit in the sort is in progress (2026-10-10) in the "AI inbox ranking" thread.
+      The model rates every unread article on two 1-5 scales, importance (significance for anyone
+      following the area) and relevance (fit with this reader), plus a one-line reason. Both apps
+      rank by the shared skim_inbox_score in SkimStoryPolicy, which blends the two ratings with
+      learned taste and a small recency decay; pinned articles stay on top. Desktop groups the
+      ranked list into Top picks, Worth reading, When you have time and Low priority, and each
+      card shows Importance and For you meters. iOS opens the AI Inbox full screen, stores each
+      article's rating so it is rated once, and re-ranks on every visit. The legacy priority is
+      derived from the two ratings. Contract: shared/fixtures/inbox-ranking.json.
     source:
       text: >-
         It should learn on my preferences as well as assess relevance and importance of an article
@@ -23,10 +28,14 @@ behaviors:
       reference: Giulio, project thread "AI inbox ranking", 2026-10-10
   - id: learns-preferences
     description: >-
-      Ranking learns from the reader's behavior: reading time, stars, chats, summaries requested, and
-      priority overrides such as Pin to top.
+      Ranking learns on the device from the reader's behavior: articles opened and how long they
+      were read, chats, stars (saves), Pin to top, and inbox articles dismissed without being opened.
     details: >-
-      Desktop no longer shows the more/less-like-this buttons; earlier feedback still counts.
+      Each signal is weighted by the shared policy and tallied per feed and per title word into an
+      affinity of -1 to 1. The affinity carries up to half of the relevance axis once there are
+      about 40 signals. iOS dismisses by swiping an inbox row; desktop counts triaged articles
+      marked read without being opened. Desktop no longer shows the more/less-like-this buttons;
+      earlier feedback still counts.
   - id: explicit-interests
     description: >-
       The reader can describe their interests in Settings > AI, and ranking uses that text alongside

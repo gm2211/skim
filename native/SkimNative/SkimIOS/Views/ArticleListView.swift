@@ -24,7 +24,6 @@ struct ArticleListView: View {
     @State private var activeChatInitialMessage: String? = nil
     @State private var activeSummaryConfiguration: Article?
     @State private var showAIInbox = false
-    @State private var aiInboxSourceArticles: [Article] = []
     @State private var showSearch = false
     @FocusState private var isSearchFocused: Bool
     /// Shown when user triggers an AI feature before accepting the disclaimer.
@@ -192,12 +191,9 @@ struct ArticleListView: View {
                 .presentationBackground(SkimStyle.chrome)
                 .onDisappear { activeChatInitialMessage = nil }
         }
-        .sheet(isPresented: $showAIInbox) {
-            AIInboxSheet(sourceArticles: aiInboxSourceArticles)
+        .navigationDestination(isPresented: $showAIInbox) {
+            AIInboxView()
                 .environmentObject(model)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(SkimStyle.chrome)
         }
         .fullScreenCover(isPresented: $showAIDisclaimerGate) {
             AIBootDisclaimerView { dontShowAgain in
@@ -398,7 +394,6 @@ struct ArticleListView: View {
     private func presentAIInbox() {
         gatedAI {
             dismissTextEntry()
-            aiInboxSourceArticles = model.articles
             showAIInbox = true
         }
     }

@@ -145,6 +145,25 @@ export const claudeOauthStatus = () =>
 export const claudeOauthRefresh = () =>
   invoke<void>("claude_oauth_refresh");
 
+// xAI SuperGrok subscription sign-in (device code)
+export interface XaiDeviceStart {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  verificationUriComplete: string;
+  interval: number;
+  expiresIn: number;
+}
+export const xaiOauthBegin = () => invoke<XaiDeviceStart>("xai_oauth_begin");
+export const xaiOauthComplete = (start: XaiDeviceStart) =>
+  invoke<void>("xai_oauth_complete", {
+    deviceCode: start.deviceCode,
+    interval: start.interval,
+    expiresIn: start.expiresIn,
+  });
+export const xaiOauthStatus = () => invoke<boolean>("xai_oauth_status");
+export const xaiOauthSignOut = () => invoke<void>("xai_oauth_sign_out");
+
 // On-device AI (iOS/macOS) — tauri-plugin-skim-ai.
 // These commands are provided by an iOS Tauri plugin that may not be
 // registered yet (desktop builds, plugin not yet wired up). Every wrapper

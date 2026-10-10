@@ -341,9 +341,10 @@ pub struct AiSettings {
     /// engagement-based preference profile built from interactions.
     #[serde(default)]
     pub triage_user_prompt: Option<String>,
-    /// OAuth bearer token for Claude Pro/Max (provider = "claude-subscription").
-    /// Populated at command time from the settings KV rows written by
-    /// `claude_oauth_*` commands — not persisted in the AppSettings JSON blob.
+    /// OAuth bearer token for Claude Pro/Max (provider = "claude-subscription")
+    /// or SuperGrok (provider = "xai"). Populated at command time from the
+    /// settings KV rows written by the `claude_oauth_*` / `xai_oauth_*`
+    /// commands — not persisted in the AppSettings JSON blob.
     #[serde(default, skip_serializing)]
     pub oauth_access_token: Option<String>,
     /// Key, endpoint and model of every provider other than the active one,

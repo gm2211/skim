@@ -1310,7 +1310,7 @@ pub async fn ai_auto_organize_feeds(
     }
 
     let mut ai_settings = settings.ai.clone();
-    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
 
@@ -1401,7 +1401,7 @@ pub async fn ai_match_feeds_for_topic(
     }
 
     let mut ai_settings = settings.ai.clone();
-    ai_settings.oauth_access_token = crate::ai::claude_oauth::stored_access_token(&db);
+    ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
 

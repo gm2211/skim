@@ -82,7 +82,7 @@ pub async fn claude_oauth_status(db: State<'_, Database>) -> Result<bool, String
     Ok(token.map(|t| !t.is_empty()).unwrap_or(false))
 }
 
-fn persist_tokens(db: &Database, tokens: &TokenSet) -> Result<(), String> {
+pub(crate) fn persist_tokens(db: &Database, tokens: &TokenSet) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     queries::set_setting(&conn, "claude_oauth_access_token", &tokens.access_token)
         .map_err(|e| e.to_string())?;

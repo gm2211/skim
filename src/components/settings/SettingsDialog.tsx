@@ -10,6 +10,11 @@ import {
   claudeOauthSignInLoopback,
   claudeOauthSignOut,
   claudeOauthStatus,
+  xaiOauthBegin,
+  xaiOauthComplete,
+  xaiOauthSignOut,
+  xaiOauthStatus,
+  type XaiDeviceStart,
   disconnectFeedly,
   feedlyOauthAvailable,
   feedlyOauthLogin,
@@ -343,9 +348,21 @@ export function SettingsDialog() {
                   <FoundationModelsSection />
                 )}
 
+                {local.ai.provider === "xai" && (
+                  <div style={{ marginBottom: 16 }}>
+                    <XaiOAuthSection />
+                  </div>
+                )}
+
                 {needsApiKey(local.ai.provider) && (
                   <InputField
-                    label={local.ai.provider === "claude-cli" ? "Setup Token (optional)" : "API Key"}
+                    label={
+                      local.ai.provider === "claude-cli"
+                        ? "Setup Token (optional)"
+                        : local.ai.provider === "xai"
+                          ? "API Key (optional when signed in)"
+                          : "API Key"
+                    }
                     description={
                       local.ai.provider === "claude-cli"
                         ? "Leave blank to use your existing Claude Pro/Max subscription via 'claude -p'. Only paste a token here if you want to authenticate with an ANTHROPIC_API_KEY instead (run 'claude setup-token' to get one)."
@@ -778,6 +795,99 @@ function SyncTab({
         </div>
       </InputField>
     </>
+  );
+}
+
+function XaiOAuthSection() {
+  const [signedIn, setSignedIn] = useState(false);
+  const [pending, setPending] = useState<XaiDeviceStart | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    xaiOauthStatus().then(setSignedIn).catch(() => setSignedIn(false));
+  }, []);
+
+  const signIn = async () => {
+    setError(null);
+    try {
+      const start = await xaiOauthBegin();
+      setPending(start);
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      try {
+        await openUrl(start.verificationUriComplete);
+      } catch {
+        window.open(start.verificationUriComplete, "_blank");
+      }
+      await xaiOauthComplete(start);
+      setSignedIn(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const signOut = async () => {
+    await xaiOauthSignOut();
+    setSignedIn(false);
+  };
+
+  const box = signedIn
+    ? "rounded-lg border border-green-500/30 bg-green-500/5"
+    : "rounded-lg border border-accent/30 bg-accent/5";
+
+  return (
+    <div className={box} style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-text-primary" style={{ fontWeight: 500 }}>
+            {signedIn ? "Signed in with SuperGrok" : "Sign in with SuperGrok"}
+          </p>
+          <p className="text-text-muted">
+            {signedIn
+              ? "Using your xAI subscription. An API key below takes priority."
+              : "Use your SuperGrok subscription instead of an API key."}
+          </p>
+        </div>
+        {signedIn ? (
+          <button
+            type="button"
+            onClick={signOut}
+            className="flex-shrink-0 rounded border border-red-500/40 text-red-400 hover:bg-red-500/10"
+            style={{ padding: "4px 10px", fontSize: 12 }}
+          >
+            Sign out
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={!!pending}
+            onClick={signIn}
+            className="flex-shrink-0 rounded border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
+            style={{ padding: "4px 10px", fontSize: 12 }}
+          >
+            {pending ? "Waiting…" : "Sign in"}
+          </button>
+        )}
+      </div>
+      {pending && (
+        <p className="text-text-muted" style={{ marginTop: 8 }}>
+          Approve in the browser. If xAI asks for a code, enter{" "}
+          <code className="text-accent" style={{ fontSize: 13, fontWeight: 600 }}>{pending.userCode}</code>{" "}
+          at{" "}
+          <a href={pending.verificationUriComplete} target="_blank" rel="noreferrer" className="text-accent underline">
+            {pending.verificationUri}
+          </a>
+          .
+        </p>
+      )}
+      {error && (
+        <p className="text-red-400" style={{ marginTop: 8 }}>
+          {error}
+          {/403/.test(error) && " Some SuperGrok plans don't include API access; an xAI API key still works."}
+        </p>
+      )}
+    </div>
   );
 }
 

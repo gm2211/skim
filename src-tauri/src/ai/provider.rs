@@ -139,7 +139,11 @@ mod endpoint_tests {
             let mut settings = crate::db::models::AppSettings::default().ai;
             settings.provider = provider.into();
             let error = create_provider(&settings, None).err().expect("missing key must fail");
-            assert_eq!(error, format!("[configure-ai] {label} API key not set."));
+            if provider == "xai" {
+                assert_eq!(error, "[configure-ai] Sign in with SuperGrok or add an xAI API key.");
+            } else {
+                assert_eq!(error, format!("[configure-ai] {label} API key not set."));
+            }
 
             settings.api_key = Some("   ".into());
             assert!(create_provider(&settings, None).is_err(), "{provider} accepted a blank key");
@@ -147,6 +151,14 @@ mod endpoint_tests {
             settings.api_key = Some("a-key".into());
             assert_eq!(create_provider(&settings, None).unwrap().name(), provider);
         }
+    }
+
+    #[test]
+    fn xai_uses_the_supergrok_sign_in_when_no_key_is_set() {
+        let mut settings = crate::db::models::AppSettings::default().ai;
+        settings.provider = "xai".into();
+        settings.oauth_access_token = Some("signed-in".into());
+        assert_eq!(create_provider(&settings, None).unwrap().name(), "xai");
     }
 
     #[test]
@@ -797,7 +809,12 @@ pub fn create_provider(
             )))
         }
         "xai" => {
-            let key = require_api_key(api_key, "xAI")?;
+            // An API key wins; otherwise use the SuperGrok sign-in token.
+            let key = api_key
+                .map(str::trim)
+                .filter(|key| !key.is_empty())
+                .or(settings.oauth_access_token.as_deref().filter(|t| !t.is_empty()))
+                .ok_or("[configure-ai] Sign in with SuperGrok or add an xAI API key.")?;
             Ok(Box::new(OpenAiCompatibleProvider::new("https://api.x.ai", Some(key), "xai")))
         }
         "openrouter" => {

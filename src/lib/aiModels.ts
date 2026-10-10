@@ -10,7 +10,7 @@ export const AI_PROVIDERS = [
   { value: "claude-cli", label: "Claude via CLI (legacy)", description: "Uses the local 'claude' CLI binary. Legacy path — prefer 'Claude Pro/Max (OAuth)'." },
   { value: "anthropic", label: "Claude (API Key)", description: "api.anthropic.com — requires API key with usage-based billing" },
   { value: "openai", label: "OpenAI", description: "api.openai.com" },
-  { value: "xai", label: "Grok (xAI)", description: "api.x.ai — requires an xAI API key" },
+  { value: "xai", label: "Grok (xAI)", description: "Sign in with your SuperGrok subscription, or use an xAI API key" },
   { value: "ds4", label: "DeepSeek (DS4)", description: "Dedicated local DeepSeek V4 Flash runtime — Mac with 96 GB+ recommended" },
   { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
   { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },

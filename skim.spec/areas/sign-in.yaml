@@ -12,6 +12,19 @@ behaviors:
     details: >-
       The Claude Code OAuth client only accepts http://localhost:<port>/callback, so the loopback
       redirect uses localhost (port 54134) and Skim listens on both IPv4 and IPv6 loopback.
+  - id: supergrok-sign-in
+    description: >-
+      A reader can sign in to the Grok (xAI) provider with their SuperGrok subscription instead of
+      an API key, on desktop and iOS, and sign out. An entered API key takes priority. Tokens
+      refresh automatically.
+    details: >-
+      Device-code flow (RFC 8628) against auth.x.ai, the same flow BYOS's grok() provider offers,
+      run from Rust because auth.x.ai sends no CORS headers. xAI has no official third-party
+      client, so Skim uses the public Grok CLI client id; xAI may return 403 for some SuperGrok
+      tiers, in which case the API key path remains. Giulio chose to add this unofficial sign-in on
+      2026-10-10.
+    source:
+      text: 'Chose "Add it" on the decision card asking "Add an unofficial ''Sign in with SuperGrok'' option to Skim''s xAI provider?"'
   - id: feedly-sign-in
     description: >-
       Desktop: Feedly sign-in uses OAuth with a local callback and refreshes its token before it

@@ -96,7 +96,7 @@ function InputField({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div style={{ marginBottom: 16 }}>
       <label className="block text-text-primary" style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>
         {label}
       </label>
@@ -107,6 +107,39 @@ function InputField({
         </p>
       )}
     </div>
+  );
+}
+
+const SUMMARY_LENGTH_LABELS: Record<string, string> = { short: "Short", medium: "Medium", long: "Long", custom: "Custom length" };
+const SUMMARY_TONE_LABELS: Record<string, string> = { concise: "Concise", detailed: "Detailed", casual: "Casual", technical: "Technical" };
+
+function summaryHint(ai: AppSettings["ai"]): string {
+  const parts = [
+    SUMMARY_LENGTH_LABELS[ai.summary_length ?? "short"] ?? ai.summary_length,
+    SUMMARY_TONE_LABELS[ai.summary_tone ?? "concise"] ?? ai.summary_tone,
+  ];
+  if (ai.summary_custom_prompt) parts.push("custom prompt");
+  return parts.join(" · ");
+}
+
+/** Collapsed-by-default group so the common provider setup fits without scrolling. */
+function SettingsDisclosure({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <details className="group border-t border-white/5" style={{ paddingTop: 4 }}>
+      <summary
+        className="flex items-center justify-between cursor-pointer list-none text-text-primary"
+        style={{ minHeight: 44, fontSize: 14, fontWeight: 500 }}
+      >
+        <span>{title}</span>
+        <span className="flex items-center gap-2 text-text-muted" style={{ fontSize: 12, fontWeight: 400 }}>
+          {hint}
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden className="transition-transform group-open:rotate-180">
+            <path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </summary>
+      <div style={{ paddingTop: 8 }}>{children}</div>
+    </details>
   );
 }
 
@@ -207,7 +240,7 @@ export function SettingsDialog() {
         style={
           isPhone
             ? swipeToDismissStyle
-            : { background: "var(--color-bg-secondary)", height: local.ai.provider === "local" ? 640 : 560, maxHeight: "90vh" }
+            : { background: "var(--color-bg-secondary)", height: 640, maxHeight: "90vh" }
         }
       >
         {/* Header */}
@@ -260,13 +293,6 @@ export function SettingsDialog() {
           <div className="flex-1 overflow-y-auto" style={{ padding: isPhone ? "16px 16px 24px" : "24px 28px" }}>
             {activeTab === "ai" && (
               <>
-                <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
-                  AI Provider
-                </h3>
-
-                <div style={{ marginBottom: 18 }}>
-                  <AIDisclaimer variant="block" />
-                </div>
 
                 <InputField label="Provider">
                   <Select
@@ -380,10 +406,7 @@ export function SettingsDialog() {
                 )}
 
                 {!["none", "local", "mlx", "foundation-models", "ds4"].includes(local.ai.provider) && (
-                  <InputField
-                    label="Model"
-                    description="Leave blank for default model"
-                  >
+                  <InputField label="Model">
                     {(REMOTE_LIST_PROVIDERS as readonly string[]).includes(local.ai.provider) ? <RemoteModelPicker
                       provider={local.ai.provider}
                       apiKey={local.ai.api_key}
@@ -413,12 +436,11 @@ export function SettingsDialog() {
 
                 {local.ai.provider !== "none" && (
                   <>
-                    <div className="border-t border-white/5" style={{ margin: "24px 0" }} />
-                    <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
-                      Summary
-                    </h3>
-
-                    <div className="flex gap-4" style={{ marginBottom: 24 }}>
+                    <SettingsDisclosure
+                      title="Summary style"
+                      hint={summaryHint(local.ai)}
+                    >
+                    <div className="flex gap-4 flex-wrap">
                       <InputField label="Length">
                         <Select
                           aria-label="Summary length"
@@ -473,12 +495,12 @@ export function SettingsDialog() {
                         rows={3}
                       />
                     </InputField>
+                    </SettingsDisclosure>
 
-                    <div className="border-t border-white/5" style={{ margin: "24px 0" }} />
-                    <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
-                      AI Inbox — What you care about
-                    </h3>
-
+                    <SettingsDisclosure
+                      title="AI Inbox interests"
+                      hint={local.ai.triage_user_prompt ? "Custom" : "Learned from your reading"}
+                    >
                     <InputField
                       label="Your interests"
                       description="This prompt runs alongside the preferences learned from your reading habits."
@@ -492,8 +514,13 @@ export function SettingsDialog() {
                         rows={5}
                       />
                     </InputField>
+                    </SettingsDisclosure>
                   </>
                 )}
+
+                <div style={{ marginTop: 16 }}>
+                  <AIDisclaimer variant="block" />
+                </div>
               </>
             )}
 

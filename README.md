@@ -23,7 +23,7 @@ desktop app does not use `SkimCore`.
 See the [mobile/desktop comparison](docs/MOBILE_DESKTOP_COMPARISON.md) for core
 ownership, feature differences, and the migration needed for actual code sharing.
 
-Full feature list and architecture in [`docs/SPEC.md`](docs/SPEC.md).
+Product spec: [`skim.spec/`](skim.spec), maintained with [Specify](https://github.com/gm2211/specify) (`scripts/specify.sh view --spec skim.spec`).
 
 [MIT](LICENSE).
 

@@ -151,4 +151,25 @@ struct CatchUpSessionTests {
         await session.start(request: input, range: .anything).value
         #expect(session.errorMessage == nil && session.page.stories.first?.lede == "Recovered summary")
     }
+
+    @Test func unavailableAppleIntelligenceRunsOnFallbackAndSaysWhy() async {
+        var pickedProviders: [String] = []
+        var ledeProviders: [String] = []
+        let session = CatchUpSession(picks: { _, settings in
+            pickedProviders.append(settings.ai.provider)
+            return page("Story")
+        }, lede: { _, _, settings in
+            ledeProviders.append(settings.ai.provider)
+            return "Written"
+        }, provider: { settings in
+            var switched = settings
+            switched.ai.provider = "claude-subscription"
+            return NativeAI.CatchUpProvider(settings: switched, notice: "Apple Intelligence is turned off. Using Claude subscription for this Catch-up.")
+        })
+        await session.start(request: request([article("one")]), range: .anything).value
+        #expect(session.errorMessage == nil)
+        #expect(session.notice?.contains("Apple Intelligence is turned off") == true)
+        #expect(pickedProviders == ["claude-subscription"] && ledeProviders == ["claude-subscription"])
+        #expect(session.page.stories.first?.lede == "Written")
+    }
 }

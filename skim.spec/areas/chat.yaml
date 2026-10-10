@@ -1,0 +1,29 @@
+id: chat
+name: Ask Skim and article chat
+behaviors:
+  - id: ask-skim-grounded
+    description: >-
+      Ask Skim answers a question from the reader's library with numbered citations to the articles
+      it used, and lists separately the articles it only searched.
+    details: >-
+      Desktop scopes are Inbox (priority 3 and up), Unread (default), and All. Enter sends and
+      Shift+Enter adds a line.
+  - id: article-chat
+    description: >-
+      A reader can chat with any article; answers are grounded in the article's full text and the
+      conversation so far, not just the feed teaser.
+  - id: web-search
+    description: >-
+      Chat can search the web when the library does not cover a question, and web sources are marked
+      as such in the citations.
+    details: >-
+      Supported by Claude providers on desktop; desktop MLX and iOS expose a "Web search in chat"
+      setting.
+  - id: answer-first-on-small-models
+    description: >-
+      On-device models answer first, stay grounded in exact source passages, and drop chatbot
+      boilerplate.
+  - id: chat-recovers-after-settings-fix
+    description: >-
+      After the reader fixes their AI settings, an article chat that failed works again without
+      reopening the app.

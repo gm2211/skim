@@ -1,0 +1,23 @@
+id: navigation
+name: Navigation, history, and shortcuts
+behaviors:
+  - id: article-history
+    description: >-
+      Desktop: opened articles form browser-style back/forward history of up to 100 entries. Opening
+      a new article drops forward entries. Back reopens the last article even after the reader was
+      closed.
+    details: Cmd+[ and Cmd+], mouse back/forward buttons, and toolbar arrows navigate history.
+  - id: command-palette
+    description: >-
+      Desktop: Cmd+K opens a command palette (even while typing in a field) that fuzzy-matches
+      commands by words or initials, so "qc" finds Quick Catch-up.
+    details: >-
+      It covers article actions, Go destinations, actions such as catch-up, Ask, refresh, mark all
+      read, add feed, view toggles, every Settings tab, every folder and feed, and live article
+      search after two typed characters. Ctrl+N/Ctrl+P and arrow keys move the selection.
+  - id: keyboard-shortcuts
+    description: >-
+      Desktop: Cmd+, opens Settings, Cmd+Option+S toggles the sidebar, and Escape closes dialogs.
+  - id: catch-up-return
+    description: >-
+      Closing an article opened from Quick Catch-up returns the reader to Quick Catch-up.

@@ -1,0 +1,18 @@
+id: summarize
+name: Summarize
+behaviors:
+  - id: summarize-article
+    description: >-
+      A reader can summarize any article from the reader, the list context menu, or the command
+      palette.
+  - id: summary-options
+    description: >-
+      Summary options are length (short ~30, medium ~150, long ~300 words, or a custom 20-1000
+      words), tone (concise, detailed, casual, technical), a custom prompt, and the model.
+    details: iOS keeps the options used for a summary as the new defaults.
+  - id: faithful-summaries
+    description: >-
+      Summaries keep the source's uncertainty, attribution, negation, and timing.
+  - id: cancel-and-cache
+    description: >-
+      An in-flight summary can be cancelled, and finished summaries are cached per article.

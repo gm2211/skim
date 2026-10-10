@@ -402,6 +402,8 @@ fn default_today_story_limit() -> i32 {
 pub struct ArticleTriage {
     pub article_id: String,
     pub priority: i32,
+    pub importance: Option<i32>,
+    pub relevance: Option<i32>,
     pub reason: String,
     pub provider: Option<String>,
     pub model: Option<String>,
@@ -416,6 +418,14 @@ pub struct ArticleWithTriage {
     pub feed_icon_url: Option<String>,
     pub priority: Option<i32>,
     pub reason: Option<String>,
+    /// AI-rated significance for anyone, 1-5.
+    pub importance: Option<i32>,
+    /// AI-rated fit with this reader, 1-5.
+    pub relevance: Option<i32>,
+    /// Learned on-device taste for this article, -1..1.
+    pub affinity: f64,
+    /// Final AI Inbox rank score; higher ranks first.
+    pub score: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

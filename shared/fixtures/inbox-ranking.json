@@ -1,0 +1,41 @@
+{
+  "signal_weights": [
+    {"name": "dismissed unopened", "dwell": 0, "opened": false, "starred": false, "pinned": false, "feedback": 0, "read_unopened": true, "weight": -0.1},
+    {"name": "opened then marked read", "dwell": 0, "opened": true, "starred": false, "pinned": false, "feedback": 0, "read_unopened": true, "weight": 0.1},
+    {"name": "glanced", "dwell": 5, "opened": true, "starred": false, "pinned": false, "feedback": 0, "read_unopened": false, "weight": 0.1},
+    {"name": "skimmed", "dwell": 15, "opened": true, "starred": false, "pinned": false, "feedback": 0, "read_unopened": false, "weight": 0.3},
+    {"name": "read", "dwell": 45, "opened": true, "starred": false, "pinned": false, "feedback": 0, "read_unopened": false, "weight": 0.6},
+    {"name": "read deeply and saved", "dwell": 300, "opened": true, "starred": true, "pinned": false, "feedback": 0, "read_unopened": false, "weight": 2.0},
+    {"name": "pinned", "dwell": 0, "opened": false, "starred": false, "pinned": true, "feedback": 0, "read_unopened": false, "weight": 1.0},
+    {"name": "opened, asked for less", "dwell": 0, "opened": true, "starred": false, "pinned": false, "feedback": -1, "read_unopened": false, "weight": -0.9},
+    {"name": "asked for more", "dwell": 0, "opened": false, "starred": false, "pinned": false, "feedback": 1, "read_unopened": false, "weight": 0.8}
+  ],
+  "affinity": [
+    {"positive": 0, "negative": 0, "affinity": 0.0},
+    {"positive": 8, "negative": 0, "affinity": 0.8},
+    {"positive": 1, "negative": 5, "affinity": -0.5}
+  ],
+  "strength": [
+    {"signals": 0, "strength": 0.0},
+    {"signals": 10, "strength": 0.25},
+    {"signals": 100, "strength": 1.0}
+  ],
+  "scores": [
+    {"name": "top on both axes, fresh", "importance": 5, "relevance": 5, "has_ai": true, "affinity": 0, "strength": 0, "pinned": false, "age_hours": 0, "score": 100.0},
+    {"name": "middling, two days old", "importance": 3, "relevance": 3, "has_ai": true, "affinity": 0, "strength": 0, "pinned": false, "age_hours": 48, "score": 45.0},
+    {"name": "not yet scored", "importance": 0, "relevance": 0, "has_ai": false, "affinity": 0, "strength": 0, "pinned": false, "age_hours": 0, "score": 40.0},
+    {"name": "learned taste lifts a low AI relevance", "importance": 3, "relevance": 2, "has_ai": true, "affinity": 0.8, "strength": 1, "pinned": false, "age_hours": 0, "score": 53.75},
+    {"name": "pinned noise still on top", "importance": 1, "relevance": 1, "has_ai": true, "affinity": 0, "strength": 0, "pinned": true, "age_hours": 200, "score": 90.0},
+    {"name": "learned dislike pulls a relevant article down", "importance": 4, "relevance": 5, "has_ai": true, "affinity": -0.8, "strength": 1, "pinned": false, "age_hours": 12, "score": 63.75}
+  ],
+  "priority": [
+    {"importance": 5, "relevance": 5, "priority": 5},
+    {"importance": 4, "relevance": 3, "priority": 4},
+    {"importance": 1, "relevance": 2, "priority": 2},
+    {"importance": 3, "relevance": 4, "priority": 4}
+  ],
+  "terms": [
+    {"title": "Apple ships the new M5 MacBook Pro with faster GPUs", "terms": ["apple", "ships", "macbook", "faster", "gpus"]},
+    {"title": "Why the Fed's rate decision matters for your mortgage", "terms": ["rate", "decision", "matters", "mortgage"]}
+  ]
+}

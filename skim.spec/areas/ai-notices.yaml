@@ -1,0 +1,15 @@
+id: ai-notices
+name: AI disclaimer and setup notices
+behaviors:
+  - id: launch-disclaimer
+    description: >-
+      At launch Skim shows an AI disclaimer with links to the Terms and Privacy Policy. Accepting it
+      lasts for that launch unless the reader checks "Don't show again until the next update", which
+      holds until the app version (or the disclaimer) changes.
+  - id: inline-ai-label
+    description: >-
+      AI-generated content carries a short note that it may be inaccurate or biased.
+  - id: setup-errors-link-to-fix
+    description: >-
+      When AI cannot run because of setup (no provider, expired sign-in, missing model, missing key),
+      the surface says which problem it is and offers a button to the right settings or sign-in.

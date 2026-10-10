@@ -5,8 +5,9 @@
 //! versions (cross-checked against the shipped binary strings).
 //!
 //! Two flow variants:
-//!   * `run_oauth_flow_loopback` — desktop: binds a TCP socket on
-//!     `127.0.0.1:54134`, opens the browser, intercepts the redirect.
+//!   * `run_oauth_flow_loopback` — desktop: binds loopback port 54134 (IPv4
+//!     and, when available, IPv6), opens the browser, intercepts the
+//!     redirect to `http://localhost:54134/callback`.
 //!   * `begin_paste_flow` / `exchange_pasted_code` — iOS/Tauri-mobile: show
 //!     the authorize URL to the user, they complete in the system browser,
 //!     copy the displayed `CODE#STATE` string, and paste it back.
@@ -15,6 +16,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
@@ -26,7 +28,10 @@ pub const SCOPE: &str = "user:profile user:inference";
 pub const BETA_HEADER: &str = "oauth-2025-04-20,claude-code-20250219";
 pub const SYSTEM_PREFIX: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
 
-pub const LOOPBACK_HOST: &str = "127.0.0.1";
+/// Host in the redirect URI. The Claude Code client only accepts
+/// `http://localhost:<port>/callback`; `127.0.0.1` is rejected with
+/// "Redirect URI … is not supported by client".
+pub const LOOPBACK_HOST: &str = "localhost";
 pub const LOOPBACK_PORT: u16 = 54134;
 pub const LOOPBACK_PATH: &str = "/callback";
 pub const PASTE_REDIRECT_URI: &str = "https://console.anthropic.com/oauth/code/callback";
@@ -81,13 +86,16 @@ pub async fn run_oauth_flow_loopback() -> Result<TokenSet, String> {
     let pkce = generate_pkce(&redirect_uri);
     let auth_url = build_authorize_url(&pkce);
 
-    let listener = TcpListener::bind((LOOPBACK_HOST, LOOPBACK_PORT))
+    // `localhost` may resolve to ::1 or 127.0.0.1 depending on the browser,
+    // so listen on both loopback stacks. IPv4 is required; IPv6 is best-effort.
+    let v4 = TcpListener::bind((Ipv4Addr::LOCALHOST, LOOPBACK_PORT))
         .await
-        .map_err(|e| format!("Bind {}:{} failed ({}) — is another app using this port?", LOOPBACK_HOST, LOOPBACK_PORT, e))?;
+        .map_err(|e| format!("Bind 127.0.0.1:{} failed ({}) — is another app using this port?", LOOPBACK_PORT, e))?;
+    let v6 = TcpListener::bind((Ipv6Addr::LOCALHOST, LOOPBACK_PORT)).await.ok();
 
     open_browser(&auth_url)?;
 
-    let (code, received_state) = tokio::time::timeout(Duration::from_secs(300), accept_callback(&listener))
+    let (code, received_state) = tokio::time::timeout(Duration::from_secs(300), accept_callback(&v4, v6.as_ref()))
         .await
         .map_err(|_| "Timed out waiting for Claude sign-in (5 minutes)".to_string())??;
 
@@ -170,15 +178,36 @@ async fn parse_token_response(resp: reqwest::Response) -> Result<TokenSet, Strin
     Ok(TokenSet { access_token, refresh_token, expires_at })
 }
 
-async fn accept_callback(listener: &TcpListener) -> Result<(String, String), String> {
-    let (mut stream, _) = listener.accept().await.map_err(|e| e.to_string())?;
-    let mut buf = [0u8; 4096];
-    let n = stream.read(&mut buf).await.map_err(|e| e.to_string())?;
-    let req = String::from_utf8_lossy(&buf[..n]);
-    let line = req.lines().next().unwrap_or("");
-    let target = line.split_whitespace().nth(1).unwrap_or("");
-    let (code, state) = parse_callback_query(target)?;
+async fn accept_callback(v4: &TcpListener, v6: Option<&TcpListener>) -> Result<(String, String), String> {
+    loop {
+        let (mut stream, _) = match v6 {
+            Some(v6) => tokio::select! {
+                r = v4.accept() => r,
+                r = v6.accept() => r,
+            },
+            None => v4.accept().await,
+        }
+        .map_err(|e| e.to_string())?;
+        let mut buf = [0u8; 4096];
+        // Browsers may open speculative connections that never send a request,
+        // or ask for /favicon.ico; skip anything that isn't the callback.
+        let n = match tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buf)).await {
+            Ok(Ok(n)) => n,
+            _ => continue,
+        };
+        let req = String::from_utf8_lossy(&buf[..n]);
+        let line = req.lines().next().unwrap_or("");
+        let target = line.split_whitespace().nth(1).unwrap_or("");
+        if !target.starts_with(LOOPBACK_PATH) {
+            let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n").await;
+            continue;
+        }
+        let (code, state) = parse_callback_query(target)?;
+        return respond_signed_in(stream).await.map(|_| (code, state));
+    }
+}
 
+async fn respond_signed_in(mut stream: tokio::net::TcpStream) -> Result<(), String> {
     let response_body = "<html><body style='font-family:system-ui;padding:48px;text-align:center'><h2>Signed in to Claude</h2><p>You can close this window and return to Skim.</p></body></html>";
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
@@ -187,7 +216,7 @@ async fn accept_callback(listener: &TcpListener) -> Result<(String, String), Str
     );
     let _ = stream.write_all(response.as_bytes()).await;
     let _ = stream.shutdown().await;
-    Ok((code, state))
+    Ok(())
 }
 
 fn parse_callback_query(target: &str) -> Result<(String, String), String> {
@@ -242,6 +271,17 @@ pub fn stored_access_token(db: &crate::db::Database) -> Option<String> {
     let conn = db.conn.lock().ok()?;
     let tok = crate::db::queries::get_setting(&conn, "claude_oauth_access_token").ok().flatten()?;
     if tok.is_empty() { None } else { Some(tok) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loopback_redirect_uses_localhost() {
+        // The Claude Code OAuth client rejects 127.0.0.1 redirect URIs.
+        assert_eq!(loopback_redirect_uri(), "http://localhost:54134/callback");
+    }
 }
 
 fn random_url_safe(bytes: usize) -> String {

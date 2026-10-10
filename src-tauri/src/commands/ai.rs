@@ -1121,7 +1121,13 @@ pub async fn get_article_theme_tags(
 struct TriageResponseItem {
     #[serde(alias = "id", alias = "handle")]
     id: serde_json::Value,
-    priority: i32,
+    #[serde(default)]
+    importance: Option<i32>,
+    #[serde(default)]
+    relevance: Option<i32>,
+    /// Older single-axis responses; used for both axes when they are missing.
+    #[serde(default)]
+    priority: Option<i32>,
     #[serde(default)]
     reason: String,
 }
@@ -1255,8 +1261,8 @@ pub async fn triage_articles(
                 excerpt_clean
             ));
         }
-        // ~30 output tokens per item is plenty for handle + priority + short reason.
-        let max_tokens = (chunk.len() as i64 * 35 + 200).max(512);
+        // ~40 output tokens per item covers handle + two ratings + short reason.
+        let max_tokens = (chunk.len() as i64 * 45 + 200).max(512);
 
         let request = ChatRequest {
             model: model.clone(),
@@ -1306,9 +1312,15 @@ pub async fn triage_articles(
                                     }
                                     _ => None,
                                 }?;
+                                let importance =
+                                    t.importance.or(t.priority).unwrap_or(3).clamp(1, 5);
+                                let relevance =
+                                    t.relevance.or(t.priority).unwrap_or(3).clamp(1, 5);
                                 Some(crate::db::models::ArticleTriage {
                                     article_id,
-                                    priority: t.priority.clamp(1, 5),
+                                    priority: crate::db::inbox_rank::priority(importance, relevance),
+                                    importance: Some(importance),
+                                    relevance: Some(relevance),
                                     reason: t.reason,
                                     provider: Some(provider.name().to_string()),
                                     model: Some(model.clone()),

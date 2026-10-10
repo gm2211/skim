@@ -35,6 +35,51 @@ public enum AIRequestPolicy {
         return resolved
     }
 
+    /// What to run instead when the picked provider cannot run on this
+    /// device (Apple Intelligence off, unsupported, or still downloading):
+    /// the chat override when it is set up, then a signed-in Claude
+    /// subscription, then a downloaded on-device model. Nil when nothing
+    /// else is set up.
+    public static func fallbackSettings(
+        for base: AISettings,
+        hasClaudeSubscription: Bool,
+        downloadedMLXRepoIds: [String],
+        preferredMLXRepoId: String
+    ) -> AISettings? {
+        func isSetUp(_ ai: AISettings) -> Bool {
+            switch ai.provider {
+            case "claude-subscription": hasClaudeSubscription
+            case "mlx": !downloadedMLXRepoIds.isEmpty
+            case "anthropic", "openai", "xai", "openrouter": !(ai.apiKey ?? "").isEmpty
+            case "custom": !(ai.endpoint ?? "").isEmpty
+            default: false
+            }
+        }
+        let chat = chatSettings(base)
+        if chat.provider != base.provider, isSetUp(chat) {
+            if chat.provider == "mlx", let path = chat.localModelPath, !downloadedMLXRepoIds.contains(path) {
+                var local = chat
+                local.localModelPath = nil
+                return local
+            }
+            return chat
+        }
+        if hasClaudeSubscription {
+            var claude = base
+            claude.provider = "claude-subscription"
+            claude.model = nil
+            return claude
+        }
+        if let repo = downloadedMLXRepoIds.contains(preferredMLXRepoId) ? preferredMLXRepoId : downloadedMLXRepoIds.first {
+            var local = base
+            local.provider = "mlx"
+            local.model = nil
+            local.localModelPath = repo
+            return local
+        }
+        return nil
+    }
+
     public struct SummaryPlan: Equatable, Sendable {
         public var wordCount: Int
         public var bulletMin: Int

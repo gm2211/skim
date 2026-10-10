@@ -108,15 +108,7 @@ pub fn triage_system_prompt(
     preferences: Option<&crate::db::models::UserPreferenceProfile>,
     user_prompt: Option<&str>,
 ) -> String {
-    let base = "You triage RSS articles for a busy reader. For each article, assign a priority (1-5) and write a one-line reason (under 80 chars) describing what the article is about and why it matters (or why it's noise).\n\n\
-     Priority scale:\n\
-     5 = Breaking/urgent, directly relevant, actionable\n\
-     4 = Important development, significant news\n\
-     3 = Interesting, worth reading when time allows\n\
-     2 = Routine update, low novelty\n\
-     1 = Noise, promotional, or not useful\n\n\
-     Be opinionated. Most articles should be 2-3. Reserve 5 for genuinely important items. Reserve 1 for clear noise.\n\
-     The reason field must describe the article itself — never mention \"tracked topics\", \"user preferences\", \"reader history\", or the reader's past behavior. The reader doesn't see or manage a topic list and will be confused by such phrasing.";
+    let base = crate::db::inbox_rank::triage_prompt();
 
     let mut context = String::from(base);
 
@@ -164,7 +156,7 @@ pub fn triage_user_prompt(articles_listing: &str) -> String {
 For EVERY article above, return an entry. Refer to articles by their numeric handle.
 
 Output JSON:
-{{"triage":[{{"id":0,"priority":3,"reason":"short reason"}}]}}"#
+{{"triage":[{{"id":0,"importance":3,"relevance":3,"reason":"short reason"}}]}}"#
     )
 }
 

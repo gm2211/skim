@@ -20,11 +20,39 @@ const PRIORITY_LABELS: Record<number, string> = {
 
 interface Props {
   article: Article;
-  triage?: { priority: number; reason: string } | null;
+  triage?: {
+    priority: number;
+    reason: string;
+    importance?: number | null;
+    relevance?: number | null;
+  } | null;
   themeTags?: { themeId: string; label: string }[];
   isSelected: boolean;
   onSelect: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+}
+
+/** Five-dot rating; filled dots carry the value, the label carries the axis. */
+function RatingDots({ label, value }: { label: string; value: number }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-text-muted flex-shrink-0"
+      style={{ fontSize: 11 }}
+      title={`${label}: ${value} of 5`}
+      aria-label={`${label} ${value} of 5`}
+    >
+      {label}
+      <span className="inline-flex gap-px" aria-hidden="true">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <span
+            key={n}
+            className={`rounded-full ${n <= value ? "bg-accent" : "bg-white/15"}`}
+            style={{ width: 4, height: 4 }}
+          />
+        ))}
+      </span>
+    </span>
+  );
 }
 
 function timeAgo(timestamp: number | null): string {
@@ -139,6 +167,20 @@ export function ArticleCard({ article, triage, themeTags, isSelected, onSelect, 
           >
             {article.title}
           </h3>
+          {triage?.reason ? (
+            <p
+              className="text-text-secondary line-clamp-1"
+              style={{ fontSize: 12, lineHeight: 1.45, marginBottom: 6 }}
+            >
+              {triage.reason}
+            </p>
+          ) : null}
+          {triage?.importance != null && triage?.relevance != null ? (
+            <div className="flex items-center gap-3" style={{ marginBottom: 6 }}>
+              <RatingDots label="Importance" value={triage.importance} />
+              <RatingDots label="For you" value={triage.relevance} />
+            </div>
+          ) : null}
           {showExcerpt && article.content_text ? (
             <p
               className="text-text-muted line-clamp-2"

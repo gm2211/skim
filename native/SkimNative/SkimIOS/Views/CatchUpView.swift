@@ -19,6 +19,7 @@ struct CatchUpRequest: Identifiable {
 struct CatchUpSheet: View {
     var request: CatchUpRequest
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var model: AppModel
 
     @StateObject private var session = CatchUpSession()
     @State private var range: CatchUpRange = .anything
@@ -33,7 +34,7 @@ struct CatchUpSheet: View {
                         range: $range,
                         isLoading: session.isLoading
                     )
-                    .onChange(of: range) { _, selected in session.start(request: request, range: selected) }
+                    .onChange(of: range) { _, selected in run(range: selected) }
 
                     if session.wasStopped {
                         Text("Stopped. Change the range or run again.")
@@ -42,8 +43,15 @@ struct CatchUpSheet: View {
                             .accessibilityIdentifier("catch-up-stopped")
                     }
 
+                    if let notice = session.notice {
+                        Label(notice, systemImage: "info.circle")
+                            .font(.subheadline)
+                            .foregroundStyle(SkimStyle.secondary)
+                            .accessibilityIdentifier("catch-up-notice")
+                    }
+
                     if let errorMessage = session.errorMessage {
-                        AIErrorBox(message: errorMessage, remedy: session.errorRemedy, onResolved: { session.start(request: request, range: range) })
+                        AIErrorBox(message: errorMessage, remedy: session.errorRemedy, onResolved: { run() })
 
                     } else if !session.page.isEmpty {
                         if session.isLoading {
@@ -79,7 +87,7 @@ struct CatchUpSheet: View {
                         Button("Stop", role: .cancel) { session.cancel() }
                             .accessibilityIdentifier("catch-up-stop")
                     } else {
-                        Button("Run Again") { session.start(request: request, range: range) }
+                        Button("Run Again") { run() }
                             .accessibilityIdentifier("catch-up-run-again")
                     }
                 }
@@ -88,9 +96,19 @@ struct CatchUpSheet: View {
         .task(id: request.id) {
             guard startedRequestID != request.id else { return }
             startedRequestID = request.id
-            session.start(request: request, range: range)
+            run()
         }
         .onDisappear { session.cancel() }
+    }
+
+    /// Runs on the model picked now, not the one in place when the sheet
+    /// opened, so a change in the sheet's model picker or AI Settings takes
+    /// effect on the next run.
+    private func run(range: CatchUpRange? = nil) {
+        var current = request
+        current.settings = model.settings
+        current.statusLabel = NativeAI.loadingStatusLabel(for: model.settings.ai)
+        session.start(request: current, range: range ?? self.range)
     }
 
 }

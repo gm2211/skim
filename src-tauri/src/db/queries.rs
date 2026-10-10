@@ -1366,13 +1366,15 @@ pub fn upsert_triage_batch(
     let tx = conn.unchecked_transaction()?;
     {
         let mut stmt = tx.prepare(
-            "INSERT OR REPLACE INTO article_triage (article_id, priority, reason, provider, model, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
+            "INSERT OR REPLACE INTO article_triage (article_id, priority, importance, relevance, reason, provider, model, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
         )?;
         for item in items {
             stmt.execute(params![
                 item.article_id,
                 item.priority,
+                item.importance,
+                item.relevance,
                 item.reason,
                 item.provider,
                 item.model,
@@ -1408,10 +1410,12 @@ pub fn get_inbox_articles_since(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
                 a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id, a.comments_url,
                 f.title as feed_title, f.icon_url as feed_icon_url,
-                t.priority, t.reason
+                t.priority, t.reason, t.importance, t.relevance,
+                COALESCE(i.priority_override, 0) >= 5
          FROM articles a
          JOIN feeds f ON a.feed_id = f.id
          LEFT JOIN article_triage t ON a.id = t.article_id
+         LEFT JOIN article_interactions i ON a.id = i.article_id
          WHERE 1=1",
     );
     let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -1431,44 +1435,82 @@ pub fn get_inbox_articles_since(
             param_values.len()
         ));
     }
+    // Bound the candidate pool; ranking happens below with learned taste.
+    sql.push_str(" ORDER BY COALESCE(a.published_at, a.fetched_at) DESC LIMIT 5000");
 
-    // Triaged articles first (sorted by priority desc), untriaged below (by date).
-    sql.push_str(
-        " ORDER BY CASE WHEN t.priority IS NULL THEN 1 ELSE 0 END,
-                   t.priority DESC,
-                   COALESCE(a.published_at, a.fetched_at) DESC",
-    );
-    sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, offset));
+    let taste = super::inbox_rank::load_taste(conn)?;
+    let strength = taste.strength();
+    let now = chrono::Utc::now().timestamp();
 
     let params_ref: Vec<&dyn rusqlite::types::ToSql> =
         param_values.iter().map(|p| p.as_ref()).collect();
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt
+    let mut rows = stmt
         .query_map(params_ref.as_slice(), |row| {
-            Ok(ArticleWithTriage {
-                article: Article {
-                    id: row.get(0)?,
-                    feed_id: row.get(1)?,
-                    title: row.get(2)?,
-                    url: row.get(3)?,
-                    author: row.get(4)?,
-                    content_html: row.get(5)?,
-                    content_text: row.get(6)?,
-                    published_at: row.get(7)?,
-                    fetched_at: row.get(8)?,
-                    is_read: row.get::<_, i32>(9)? != 0,
-                    is_starred: row.get::<_, i32>(10)? != 0,
-                    feedly_entry_id: row.get(11)?,
-                    comments_url: row.get(12)?,
+            let priority: Option<i32> = row.get(15)?;
+            // Rows triaged before the two-axis prompt carry only a priority.
+            let importance: Option<i32> = row.get::<_, Option<i32>>(17)?.or(priority);
+            let relevance: Option<i32> = row.get::<_, Option<i32>>(18)?.or(priority);
+            let pinned = row.get::<_, bool>(19)?;
+            Ok((
+                ArticleWithTriage {
+                    article: Article {
+                        id: row.get(0)?,
+                        feed_id: row.get(1)?,
+                        title: row.get(2)?,
+                        url: row.get(3)?,
+                        author: row.get(4)?,
+                        content_html: row.get(5)?,
+                        content_text: row.get(6)?,
+                        published_at: row.get(7)?,
+                        fetched_at: row.get(8)?,
+                        is_read: row.get::<_, i32>(9)? != 0,
+                        is_starred: row.get::<_, i32>(10)? != 0,
+                        feedly_entry_id: row.get(11)?,
+                        comments_url: row.get(12)?,
+                    },
+                    feed_title: row.get(13)?,
+                    feed_icon_url: row.get(14)?,
+                    priority,
+                    reason: row.get(16)?,
+                    importance,
+                    relevance,
+                    affinity: 0.0,
+                    score: 0.0,
                 },
-                feed_title: row.get(13)?,
-                feed_icon_url: row.get(14)?,
-                priority: row.get(15)?,
-                reason: row.get(16)?,
-            })
+                pinned,
+            ))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(rows)
+
+    for (item, pinned) in rows.iter_mut() {
+        let a = &item.article;
+        let when = a.published_at.unwrap_or(a.fetched_at);
+        item.affinity = taste.affinity(&a.feed_id, &a.title);
+        item.score = super::inbox_rank::score(&super::inbox_rank::ScoreInput {
+            importance: item.importance,
+            relevance: item.relevance,
+            affinity: item.affinity,
+            strength,
+            pinned: *pinned,
+            age_hours: (now - when).max(0) as f64 / 3600.0,
+        });
+    }
+    let mut rows: Vec<ArticleWithTriage> = rows.into_iter().map(|(item, _)| item).collect();
+    rows.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                b.article.published_at.unwrap_or(b.article.fetched_at)
+                    .cmp(&a.article.published_at.unwrap_or(a.article.fetched_at))
+            })
+    });
+    Ok(rows
+        .into_iter()
+        .skip(offset.max(0) as usize)
+        .take(limit.max(0) as usize)
+        .collect())
 }
 
 pub fn get_untriaged_article_ids(
@@ -2198,6 +2240,37 @@ mod story_persistence_tests {
         let high_and_recent = get_inbox_articles_since(&conn, Some(4), Some(false), Some(150), 100, 0)
             .expect("high priority, recent");
         assert!(high_and_recent.is_empty());
+    }
+
+    #[test]
+    fn inbox_ranks_by_importance_and_relevance_then_pins() {
+        let conn = setup();
+        conn.execute_batch(
+            "INSERT INTO article_triage (article_id, priority, importance, relevance, reason, created_at)
+             VALUES ('article-1', 5, 5, 4, 'big', 1);
+             INSERT INTO article_triage (article_id, priority, reason, created_at)
+             VALUES ('article-3', 2, 'legacy single axis', 1);",
+        )
+        .unwrap();
+        let ranked = get_inbox_articles_since(&conn, None, Some(false), None, 100, 0).unwrap();
+        let ids: Vec<_> = ranked.iter().map(|a| a.article.id.as_str()).collect();
+        // Older but more important and relevant wins over newer.
+        assert_eq!(ids, vec!["article-1", "article-3"]);
+        assert_eq!((ranked[0].importance, ranked[0].relevance), (Some(5), Some(4)));
+        // Legacy rows fall back to their single priority on both axes.
+        assert_eq!((ranked[1].importance, ranked[1].relevance), (Some(2), Some(2)));
+        assert!(ranked[0].score > ranked[1].score);
+
+        conn.execute(
+            "INSERT INTO article_interactions (article_id, priority_override, updated_at) VALUES ('article-3', 5, 1)",
+            [],
+        )
+        .unwrap();
+        let pinned = get_inbox_articles_since(&conn, None, Some(false), None, 100, 0).unwrap();
+        assert_eq!(pinned[0].article.id, "article-3");
+        let page = get_inbox_articles_since(&conn, None, Some(false), None, 1, 1).unwrap();
+        assert_eq!(page.len(), 1);
+        assert_eq!(page[0].article.id, "article-1");
     }
 
     #[test]

@@ -26,9 +26,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         className={`appearance-none border border-white/10 rounded-lg text-text-primary transition-colors hover:border-white/20 focus:outline-none focus:border-accent/60 disabled:cursor-not-allowed ${fullWidth ? "w-full" : ""} ${className}`}
         style={{
           background: "rgba(255,255,255,0.05)",
-          padding: "9px 34px 9px 12px",
+          padding: "var(--skim-control-padding, 9px 34px 9px 12px)",
           fontSize: 13,
-          minHeight: 40,
+          minHeight: "var(--skim-control-height, 44px)",
           fontWeight: 500,
           cursor: disabled ? "not-allowed" : "pointer",
           ...style,

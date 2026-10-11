@@ -224,7 +224,15 @@ struct SettingsSheet: View {
     }
 
     private var librarySection: some View {
-        SettingsSection(title: "Library") {
+        SettingsSection(
+            title: "Library",
+            action: SettingsIconAction(
+                systemName: "arrow.clockwise",
+                title: "Refresh Feeds",
+                isLoading: model.isLoading,
+                action: onRefresh
+            )
+        ) {
             HStack {
                 SettingMetric(value: model.feeds.count.formatted(), label: model.feeds.count == 1 ? "Feed" : "Feeds")
                 SettingMetric(value: model.totalUnreadCount.formatted(), label: "Unread")
@@ -237,17 +245,26 @@ struct SettingsSheet: View {
             SettingsAction(systemName: "plus", title: "Add RSS Feed", action: onAddFeed)
             SettingsAction(systemName: "square.and.arrow.down", title: "Import OPML", action: onImportOPML)
             SettingsAction(systemName: "folder.badge.plus", title: "Auto-group Feeds", action: onAutoGroup)
-            SettingsAction(systemName: "arrow.clockwise", title: model.isLoading ? "Refreshing..." : "Refresh Feeds", action: onRefresh)
-                .disabled(model.isLoading)
 
             Divider()
                 .overlay(SkimStyle.separator)
 
-            SettingRow(
-                systemName: "tray.and.arrow.down",
-                title: "Offline Cache",
-                detail: "\(model.offlineCachedArticleCount.formatted()) extracted articles cached. RSS article bodies are already stored locally."
-            )
+            HStack(alignment: .top, spacing: 8) {
+                SettingRow(
+                    systemName: "tray.and.arrow.down",
+                    title: "Offline Cache",
+                    detail: "\(model.offlineCachedArticleCount.formatted()) extracted articles cached. RSS article bodies are already stored locally."
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                SettingsIconAction(
+                    systemName: "arrow.down.doc",
+                    title: "Preload Articles",
+                    isLoading: model.isPreloadingArticles
+                ) {
+                    Task { await model.preloadArticlesForOffline() }
+                }
+            }
 
             Stepper(value: offlinePreloadLimitBinding, in: 25...1_000, step: 25) {
                 HStack(alignment: .top, spacing: 14) {
@@ -290,14 +307,6 @@ struct SettingsSheet: View {
                     .foregroundStyle(SkimStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            SettingsAction(
-                systemName: "arrow.down.doc",
-                title: model.isPreloadingArticles ? "Preloading Articles..." : "Preload Articles"
-            ) {
-                Task { await model.preloadArticlesForOffline() }
-            }
-            .disabled(model.isPreloadingArticles)
         }
     }
 
@@ -1572,15 +1581,20 @@ private struct WordCountPresetChips: View {
 
 private struct SettingsSection<Content: View>: View {
     var title: String
+    var action: SettingsIconAction? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(title)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(SkimStyle.secondary)
-                .tracking(1.2)
-                .textCase(.uppercase)
+            HStack {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .tracking(1.2)
+                    .textCase(.uppercase)
+                Spacer()
+                action
+            }
 
             VStack(alignment: .leading, spacing: 16) {
                 content
@@ -1692,6 +1706,35 @@ private extension String {
     var nilIfEmpty: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+private struct SettingsIconAction: View {
+    var systemName: String
+    var title: String
+    var isLoading = false
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Image(systemName: systemName)
+                        .font(.system(size: 20, weight: .regular))
+                }
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .tint(SkimStyle.accent)
+        .foregroundStyle(SkimStyle.accent)
+        .accessibilityLabel(title)
+        .accessibilityValue(isLoading ? "In progress" : "")
+        .help(title)
+        .disabled(isLoading)
     }
 }
 

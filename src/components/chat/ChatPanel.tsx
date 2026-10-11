@@ -1,4 +1,4 @@
-import { Fragment, useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { chatWithArticle, webSearch } from "../../services/commands";
 import type { SearchResult, WebCitation } from "../../services/types";
 import { useUiStore } from "../../stores/uiStore";
@@ -6,10 +6,12 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { useSettings } from "../../hooks/useSettings";
 import { ModelPicker } from "../common/ModelPicker";
+import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./ChatMessageContent";
 
 interface ChatMessage {
   role: "user" | "assistant" | "search";
   content: string;
+  reply?: ChatReply;
   searchResults?: SearchResult[];
   /** Web citations produced by the tool-use loop on assistant turns. */
   webCitations?: WebCitation[];
@@ -27,27 +29,6 @@ const COLLAPSED_HEIGHT = 44;
 const PHONE_COLLAPSED_HEIGHT = 52;
 const DEFAULT_HEIGHT = 280;
 const MIN_HEIGHT = 140;
-
-function renderAssistantContent(content: string) {
-  return content.split(/\n\n+/).map((paragraph, paragraphIndex) => (
-    <p key={paragraphIndex} style={{ marginTop: paragraphIndex > 0 ? 6 : 0 }}>
-      {paragraph.split("\n").map((line, lineIndex) => (
-        <Fragment key={lineIndex}>
-          {lineIndex > 0 && <br />}
-          {line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g).map((part, partIndex) => {
-            if (part.startsWith("**") && part.endsWith("**")) {
-              return <strong key={partIndex}>{part.slice(2, -2)}</strong>;
-            }
-            if (part.startsWith("*") && part.endsWith("*")) {
-              return <em key={partIndex}>{part.slice(1, -1)}</em>;
-            }
-            return <Fragment key={partIndex}>{part}</Fragment>;
-          })}
-        </Fragment>
-      ))}
-    </p>
-  ));
-}
 
 export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, onOpenChange }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
@@ -67,6 +48,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
   );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [reply, setReply] = useState<ChatReply | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +64,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     requestSeqRef.current += 1;
     setMessages([]);
     setInput("");
+    setReply(null);
     setLoading(false);
     setSearchLoading(false);
     setError(null);
@@ -122,20 +105,21 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
 
   const sendMessage = useCallback(async () => {
     const text = input.trim();
-    if (!text || loading || needsSetup) return;
+    if (!text || loading || searchLoading || needsSetup) return;
 
     const requestSeq = ++requestSeqRef.current;
     setError(null);
-    const userMsg: ChatMessage = { role: "user", content: text };
+    const userMsg: ChatMessage = { role: "user", content: text, reply: reply ?? undefined };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
+    setReply(null);
     setLoading(true);
 
     try {
       const history = newMessages
         .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+        .map((m) => ({ role: m.role as "user" | "assistant", content: chatPrompt(m.content, "reply" in m ? m.reply : undefined) }));
 
       const response = await chatWithArticle(articleId, history, summaryContext);
       if (requestSeqRef.current !== requestSeq) return;
@@ -151,11 +135,12 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
       if (requestSeqRef.current !== requestSeq) return;
       setMessages((prev) => prev.slice(0, -1));
       setInput(text);
+      setReply(reply);
       setError(String(e instanceof Error ? e.message : e));
     } finally {
       if (requestSeqRef.current === requestSeq) setLoading(false);
     }
-  }, [input, messages, loading, needsSetup, articleId, summaryContext]);
+  }, [input, reply, messages, loading, searchLoading, needsSetup, articleId, summaryContext]);
 
   const doSearch = useCallback(async (query: string) => {
     if (needsSetup || loading || searchLoading) return;
@@ -181,7 +166,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
       const allMessages = [...messages, { role: "user" as const, content: contextContent }];
       const history = allMessages
         .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+        .map((m) => ({ role: m.role as "user" | "assistant", content: chatPrompt(m.content, "reply" in m ? m.reply : undefined) }));
 
       setLoading(true);
       const response = await chatWithArticle(articleId, history, summaryContext);
@@ -210,7 +195,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const text = input.trim();
-      if (text.startsWith("/search ")) {
+      if (!reply && text.startsWith("/search ")) {
         const query = text.slice(8).trim();
         if (query) { setInput(""); doSearch(query); }
       } else {
@@ -221,7 +206,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
 
   const handleSubmit = () => {
     const text = input.trim();
-    if (text.startsWith("/search ")) {
+    if (!reply && text.startsWith("/search ")) {
       const query = text.slice(8).trim();
       if (query) { setInput(""); doSearch(query); }
     } else {
@@ -291,7 +276,8 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
           <ModelPicker surface="chat" compact disabled={loading || searchLoading} />
           {messages.length > 0 && (
             <button
-              onClick={() => setMessages([])}
+              onClick={() => { setMessages([]); setReply(null); }}
+              disabled={loading || searchLoading}
               className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
               style={{ fontSize: isPhone ? 12 : 10 }}
             >
@@ -347,7 +333,8 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
                     lineHeight: 1.4,
                   }}
                 >
-                  {msg.content}
+                  {msg.reply && <ReplyPreview reply={msg.reply} />}
+                  <ChatMessageContent content={msg.content} role="user" onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }} replyDisabled={loading || searchLoading} />
                 </div>
               </div>
             )}
@@ -363,7 +350,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
                     lineHeight: 1.4,
                   }}
                 >
-                  {renderAssistantContent(msg.content)}
+                  <ChatMessageContent content={msg.content} role="assistant" onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }} replyDisabled={loading || searchLoading} />
                 </div>
                 {msg.webCitations && msg.webCitations.length > 0 && (
                   <div
@@ -470,6 +457,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
             {error}
           </div>
         )}
+        {reply && <ReplyPreview reply={reply} onRemove={() => setReply(null)} />}
         <div className="flex items-end gap-2 min-w-0">
           <textarea
             ref={inputRef}
@@ -480,11 +468,11 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
             className="flex-1 min-w-0 border border-white/10 rounded-lg text-text-primary bg-white/5 placeholder-text-muted resize-none focus:outline-none focus:border-accent/40"
             style={{ padding: isPhone ? "10px 12px" : "6px 10px", fontSize: isPhone ? 16 : 12, maxHeight: 80, lineHeight: 1.4, width: 0, minHeight: isPhone ? 44 : undefined }}
             rows={1}
-            disabled={loading || needsSetup}
+            disabled={loading || searchLoading || needsSetup}
           />
           <button
             onClick={handleSubmit}
-            disabled={loading || needsSetup || !input.trim()}
+            disabled={loading || searchLoading || needsSetup || !input.trim()}
             className="tap-target text-accent hover:bg-accent/10 disabled:opacity-30 rounded-lg transition-colors flex-shrink-0"
             style={{ padding: isPhone ? 0 : "6px 10px" }}
             aria-label="Send message"

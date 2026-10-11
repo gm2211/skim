@@ -58,6 +58,37 @@ import Testing
     #expect(String(result.characters) == "• first\n• second")
 }
 
+@Test func chatMarkdownKeepsOrderedListsAndRendersFencedCode() {
+    let result = ChatMarkdown.attributed("1. first\n2. second\n\n```swift\nlet marker = ```\nlet x = 1\n```")
+    let text = String(result.characters)
+    #expect(text.contains("1. first"))
+    #expect(text.contains("2. second"))
+    #expect(text.contains("let marker = ```"))
+    #expect(text.contains("let x = 1"))
+    #expect(text.components(separatedBy: "```").count == 2) // only the literal code content remains
+}
+
+@Test func chatMarkdownRendersQuotesAndTablesWithoutSyntaxNoise() {
+    let result = ChatMarkdown.attributed("> quoted text\n\n| Name | Value |\n| --- | --- |\n| Alpha | `x | y` |")
+    let text = String(result.characters)
+    #expect(text.contains("│ quoted text"))
+    #expect(text.contains("Name   ·   Value"))
+    #expect(text.contains("Alpha   ·   x | y"))
+    #expect(!text.contains("| Name"))
+    #expect(!text.contains("| Alpha"))
+}
+
+@Test func chatMarkdownPreservesNonTablePipes() {
+    let result = ChatMarkdown.attributed("Use `a | b` or x | y.")
+    #expect(String(result.characters) == "Use a | b or x | y.")
+}
+
+@Test func chatMarkdownKeepsInlineCodeFormatting() {
+    let result = ChatMarkdown.attributed("Run `skim doctor` now.")
+    #expect(String(result.characters) == "Run skim doctor now.")
+    #expect(result.runs.contains { $0.inlinePresentationIntent?.contains(.code) == true })
+}
+
 @Test func chatMarkdownFallsBackToPlainTextNeverCrashesOnArbitraryInput() {
     let inputs = ["", "**", "###", "[broken(", "* \n- \n#", String(repeating: "*", count: 500)]
     for input in inputs {

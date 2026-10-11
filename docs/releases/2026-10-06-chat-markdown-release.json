@@ -1,0 +1,59 @@
+{
+  "ios_version": "0.1.14",
+  "ios_build": "78",
+  "bundle_id": "com.gm2211.skim",
+  "source_commit": "314baa75e232d09a6b16cf57c905f836a2daccb9",
+  "release_metadata_commit": "073a43012750723803eea810a8ef04b2d55864e9",
+  "source_pr": "https://github.com/gm2211/skim/pull/189",
+  "ios_binary_sha256": "765d711690e38e156d3216c912655406ea36052e96498dfc236f2f55aa6e9bf8",
+  "ios_dsym_uuid": "F79264E1-30A4-3F97-8739-EF1092F92654",
+  "verified_at": "2026-10-07T01:33:03.855777+00:00",
+  "tests": {
+    "frontend": 241,
+    "skim_core": 170,
+    "ios_native": 77
+  },
+  "builds": {
+    "typescript": true,
+    "vite": true,
+    "ios_simulator": true,
+    "signed_ios_archive": true,
+    "archive_signature_verified": true,
+    "testflight_upload": true
+  },
+  "desktop_browser_qa": {
+    "provider": "mock",
+    "markdown_rendering": true,
+    "selected_text_reply_payload": true,
+    "article_chat": true,
+    "ask_skim": true,
+    "narrow_layout": true
+  },
+  "native_device_acceptance": "Not installed on a physical device during this release. Native behavior covered by simulator tests; signed archive and App Store Connect status verified independently.",
+  "testflight": {
+    "app_id": "6764192071",
+    "build_id": "cd25a96e-6ac1-49ee-ab76-f095fc1de5c5",
+    "version": "0.1.14",
+    "build": "78",
+    "upload_completed": true,
+    "uploaded_at": "2026-10-06T18:30:49-07:00",
+    "processing": "VALID",
+    "audience": "INTERNAL_ONLY",
+    "internal_build_state": "IN_BETA_TESTING",
+    "install_available": true,
+    "auto_notify_enabled": true,
+    "internal_group": {
+      "id": "8585aadc-ad81-4d36-9de1-1fdfebce1db7",
+      "name": "me",
+      "isInternalGroup": true,
+      "hasAccessToAllBuilds": true
+    },
+    "group_access_verified": true
+  },
+  "merge_status": {
+    "pr": "https://github.com/gm2211/skim/pull/189",
+    "state": "OPEN",
+    "blocker": "GitHub required review; auto-merge unavailable; automatic approval review rejected admin bypass without explicit authorization.",
+    "follow_up_bead": "skim-yho5"
+  }
+}

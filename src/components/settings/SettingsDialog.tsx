@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { AiAccountSettings, AiProviderPicker } from "@byos/react";
+import { AiAccountSettings, AiProviderPicker, DeviceCodeSignIn, type DeviceCode, type DeviceCodeStatus } from "@byos/react";
 import "@byos/react/styles.css";
 import "./byos-settings.css";
 import { listen } from "@tauri-apps/api/event";
@@ -19,7 +19,6 @@ import {
   xaiOauthComplete,
   xaiOauthSignOut,
   xaiOauthStatus,
-  type XaiDeviceStart,
   disconnectFeedly,
   feedlyOauthAvailable,
   feedlyOauthLogin,
@@ -836,96 +835,73 @@ function SyncTab({
   );
 }
 
+/** SuperGrok sign-in through BYOS's shared device-code UI. Skim's Rust side
+ * plays the BYOS "site" role, making the auth.x.ai calls that browsers can't. */
 function XaiOAuthSection() {
   const [signedIn, setSignedIn] = useState(false);
-  const [pending, setPending] = useState<XaiDeviceStart | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<DeviceCodeStatus>("idle");
+  const [device, setDevice] = useState<DeviceCode | null>(null);
+  const [error, setError] = useState<string | undefined>();
+  const attempt = useRef(0);
 
   useEffect(() => {
     xaiOauthStatus().then(setSignedIn).catch(() => setSignedIn(false));
   }, []);
 
-  const signIn = async () => {
-    setError(null);
+  const start = async () => {
+    const id = ++attempt.current;
+    setError(undefined);
+    setDevice(null);
+    setStatus("pending");
     try {
-      const start = await xaiOauthBegin();
-      setPending(start);
+      const begun = await xaiOauthBegin();
+      if (id !== attempt.current) return;
+      setDevice({ deviceAuthId: begun.deviceCode, userCode: begun.userCode, verificationUriComplete: begun.verificationUriComplete });
       const { openUrl } = await import("@tauri-apps/plugin-opener");
-      try {
-        await openUrl(start.verificationUriComplete);
-      } catch {
-        window.open(start.verificationUriComplete, "_blank");
-      }
-      await xaiOauthComplete(start);
+      openUrl(begun.verificationUriComplete).catch(() => window.open(begun.verificationUriComplete, "_blank"));
+      await xaiOauthComplete(begun);
+      if (id !== attempt.current) return;
       setSignedIn(true);
+      setStatus("idle");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (id !== attempt.current) return;
+      const message = e instanceof Error ? e.message : String(e);
+      setError(/\(403\)/.test(message) ? `${message} Some SuperGrok plans don't include API access; an xAI API key still works.` : message);
+      setStatus("error");
     } finally {
-      setPending(null);
+      if (id === attempt.current) setDevice(null);
     }
   };
 
-  const signOut = async () => {
+  const cancel = () => {
+    attempt.current += 1;
+    setStatus("idle");
+    setDevice(null);
+  };
+
+  const disconnect = async () => {
     await xaiOauthSignOut();
     setSignedIn(false);
   };
 
-  const box = signedIn
-    ? "rounded-lg border border-green-500/30 bg-green-500/5"
-    : "rounded-lg border border-accent/30 bg-accent/5";
-
   return (
-    <div className={box} style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-text-primary" style={{ fontWeight: 500 }}>
-            {signedIn ? "Signed in with SuperGrok" : "Sign in with SuperGrok"}
-          </p>
-          <p className="text-text-muted">
-            {signedIn
-              ? "Using your xAI subscription. An API key below takes priority."
-              : "Use your SuperGrok subscription instead of an API key."}
-          </p>
-        </div>
-        {signedIn ? (
-          <button
-            type="button"
-            onClick={signOut}
-            className="flex-shrink-0 rounded border border-red-500/40 text-red-400 hover:bg-red-500/10"
-            style={{ padding: "4px 10px", fontSize: 12 }}
-          >
-            Sign out
-          </button>
-        ) : (
-          <button
-            type="button"
-            disabled={!!pending}
-            onClick={signIn}
-            className="flex-shrink-0 rounded border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
-            style={{ padding: "4px 10px", fontSize: 12 }}
-          >
-            {pending ? "Waiting…" : "Sign in"}
-          </button>
-        )}
-      </div>
-      {pending && (
-        <p className="text-text-muted" style={{ marginTop: 8 }}>
-          Approve in the browser. If xAI asks for a code, enter{" "}
-          <code className="text-accent" style={{ fontSize: 13, fontWeight: 600 }}>{pending.userCode}</code>{" "}
-          at{" "}
-          <a href={pending.verificationUriComplete} target="_blank" rel="noreferrer" className="text-accent underline">
-            {pending.verificationUri}
-          </a>
-          .
-        </p>
-      )}
-      {error && (
-        <p className="text-red-400" style={{ marginTop: 8 }}>
-          {error}
-          {/403/.test(error) && " Some SuperGrok plans don't include API access; an xAI API key still works."}
-        </p>
-      )}
-    </div>
+    <DeviceCodeSignIn
+      providerName="SuperGrok"
+      compact
+      status={status}
+      device={device}
+      error={error}
+      connected={signedIn}
+      onStart={start}
+      onCancel={cancel}
+      onDisconnect={disconnect}
+      disclosure="Unofficial: uses the Grok CLI sign-in. Your token stays on this device; an API key below takes priority."
+      strings={{
+        connectBody: "Use your SuperGrok subscription instead of an API key.",
+        connectedBody: "Your SuperGrok account is saved on this device.",
+        connectedUnavailableBody: "Your SuperGrok account is saved on this device. It can't be used right now.",
+      }}
+    />
   );
 }
 

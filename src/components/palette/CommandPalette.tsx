@@ -11,6 +11,7 @@ import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { getArticles } from "../../services/commands";
 import { runAppCommand } from "../../lib/appCommands";
 import { filterCommands, formatShortcutKey, type PaletteCommand } from "../../lib/commandPalette";
+import { PALETTE_ICONS } from "../ui/icons";
 
 const ARTICLE_RESULTS = 8;
 
@@ -41,72 +42,72 @@ function useCommands(): PaletteCommand[] {
 
   if (article) {
     const g = "Article";
-    add(g, { id: "article.summarize", title: "Summarize article", keywords: ["ai", "tldr"], run: () => runAppCommand("summarize") });
-    add(g, { id: "article.chat", title: "Chat with article", keywords: ["ask", "question"], run: () => runAppCommand("toggle-chat") });
+    add(g, { id: "article.summarize", icon: "sparkle", title: "Summarize article", keywords: ["ai", "tldr"], run: () => runAppCommand("summarize") });
+    add(g, { id: "article.chat", icon: "chat", title: "Chat with article", keywords: ["ask", "question"], run: () => runAppCommand("toggle-chat") });
     add(g, {
-      id: "article.star",
+      id: "article.star", icon: "star",
       title: article.is_starred ? "Unstar article" : "Star article",
       keywords: ["favorite", "save"],
       run: () => toggleStar.mutate(article.id),
     });
     add(g, {
-      id: "article.read",
+      id: "article.read", icon: "check",
       title: article.is_read ? "Mark article as unread" : "Mark article as read",
       run: () => toggleRead.mutate(article.id),
     });
     const pinned = interaction?.priority_override === 5;
     add(g, {
-      id: "article.pin",
+      id: "article.pin", icon: "pin",
       title: pinned ? "Unpin article" : "Pin article to top",
       keywords: ["priority"],
       run: () => setPriority.mutate({ articleId: article.id, priority: pinned ? 3 : 5 }),
     });
     if (article.url) {
-      add(g, { id: "article.reader", title: "Reader view", shortcut: ["←"], run: () => runAppCommand("reader-view") });
-      add(g, { id: "article.web", title: "Web view", keywords: ["original", "page"], shortcut: ["→"], run: () => runAppCommand("web-view") });
+      add(g, { id: "article.reader", icon: "book", title: "Reader view", shortcut: ["←"], run: () => runAppCommand("reader-view") });
+      add(g, { id: "article.web", icon: "globe", title: "Web view", keywords: ["original", "page"], shortcut: ["→"], run: () => runAppCommand("web-view") });
       const url = article.url;
-      add(g, { id: "article.open", title: "Open in browser", keywords: ["external", "safari", "link"], run: () => void openUrl(url) });
+      add(g, { id: "article.open", icon: "external", title: "Open in browser", keywords: ["external", "safari", "link"], run: () => void openUrl(url) });
     }
-    add(g, { id: "article.close", title: "Close article", run: () => useUiStore.getState().closeArticleDetail() });
+    add(g, { id: "article.close", icon: "close", title: "Close article", run: () => useUiStore.getState().closeArticleDetail() });
   }
 
   {
     const g = "Go to";
     if (canGoBackArticle(ui)) {
-      add(g, { id: "go.back", title: "Back to previous article", keywords: ["history"], shortcut: ["mod", "["], run: () => useUiStore.getState().goBackArticle() });
+      add(g, { id: "go.back", icon: "back", title: "Back to previous article", keywords: ["history"], shortcut: ["mod", "["], run: () => useUiStore.getState().goBackArticle() });
     }
     if (canGoForwardArticle(ui)) {
-      add(g, { id: "go.forward", title: "Forward to next article", keywords: ["history"], shortcut: ["mod", "]"], run: () => useUiStore.getState().goForwardArticle() });
+      add(g, { id: "go.forward", icon: "forward", title: "Forward to next article", keywords: ["history"], shortcut: ["mod", "]"], run: () => useUiStore.getState().goForwardArticle() });
     }
-    add(g, { id: "go.today", title: "Today", keywords: ["edition", "front page"], run: () => ui.setSidebarView({ type: "today" }) });
-    add(g, { id: "go.all", title: "All Articles", run: () => ui.setSidebarView({ type: "all" }) });
-    add(g, { id: "go.starred", title: "Starred", keywords: ["favorites"], run: () => ui.setSidebarView({ type: "starred" }) });
-    add(g, { id: "go.recent", title: "Recently Read", keywords: ["history"], run: () => ui.setSidebarView({ type: "recent" }) });
-    add(g, { id: "go.inbox", title: "AI Inbox", keywords: ["triage", "priority"], run: () => ui.setSidebarView({ type: "inbox" }) });
+    add(g, { id: "go.today", icon: "bolt", title: "Today", keywords: ["edition", "front page"], run: () => ui.setSidebarView({ type: "today" }) });
+    add(g, { id: "go.all", icon: "list", title: "All Articles", run: () => ui.setSidebarView({ type: "all" }) });
+    add(g, { id: "go.starred", icon: "star", title: "Starred", keywords: ["favorites"], run: () => ui.setSidebarView({ type: "starred" }) });
+    add(g, { id: "go.recent", icon: "clock", title: "Recently Read", keywords: ["history"], run: () => ui.setSidebarView({ type: "recent" }) });
+    add(g, { id: "go.inbox", icon: "inbox", title: "AI Inbox", keywords: ["triage", "priority"], run: () => ui.setSidebarView({ type: "inbox" }) });
   }
 
   {
     const g = "Actions";
-    add(g, { id: "action.catchup", title: "Quick Catch-up", keywords: ["summary", "brief"], run: () => ui.setShowCatchup(true) });
-    add(g, { id: "action.ask", title: "Ask Skim", keywords: ["ai", "search", "chat"], run: () => runAppCommand("ask-skim") });
-    add(g, { id: "action.refresh", title: "Refresh all feeds", keywords: ["reload", "sync", "fetch"], run: () => refreshAll.mutate() });
+    add(g, { id: "action.catchup", icon: "newspaper", title: "Quick Catch-up", keywords: ["summary", "brief"], run: () => ui.setShowCatchup(true) });
+    add(g, { id: "action.ask", icon: "chat", title: "Ask Skim", keywords: ["ai", "search", "chat"], run: () => runAppCommand("ask-skim") });
+    add(g, { id: "action.refresh", icon: "refresh", title: "Refresh all feeds", keywords: ["reload", "sync", "fetch"], run: () => refreshAll.mutate() });
     if (!isToday) {
-      add(g, { id: "action.search", title: "Search articles", keywords: ["find", "filter"], run: () => runAppCommand("focus-search") });
-      add(g, { id: "action.markAllRead", title: "Mark all as read", run: () => runAppCommand("mark-all-read") });
+      add(g, { id: "action.search", icon: "search", title: "Search articles", keywords: ["find", "filter"], run: () => runAppCommand("focus-search") });
+      add(g, { id: "action.markAllRead", icon: "check", title: "Mark all as read", run: () => runAppCommand("mark-all-read") });
     }
-    add(g, { id: "action.addFeed", title: "Add feed", keywords: ["subscribe", "rss", "new"], run: () => ui.setShowAddFeed(true) });
-    add(g, { id: "action.feedly", title: "Import from Feedly", keywords: ["opml", "import"], run: () => ui.setShowAddFeed(true, "feedly") });
+    add(g, { id: "action.addFeed", icon: "plus", title: "Add feed", keywords: ["subscribe", "rss", "new"], run: () => ui.setShowAddFeed(true) });
+    add(g, { id: "action.feedly", icon: "import", title: "Import from Feedly", keywords: ["opml", "import"], run: () => ui.setShowAddFeed(true, "feedly") });
   }
 
   {
     const g = "View";
     if (!isToday) {
-      add(g, { id: "view.unread", title: "Show unread only", keywords: ["filter"], run: () => ui.setListFilter("unread") });
-      add(g, { id: "view.allItems", title: "Show all articles", keywords: ["filter", "read"], run: () => ui.setListFilter("all") });
-      add(g, { id: "view.starredItems", title: "Show starred articles", keywords: ["filter"], run: () => ui.setListFilter("starred") });
+      add(g, { id: "view.unread", icon: "eye", title: "Show unread only", keywords: ["filter"], run: () => ui.setListFilter("unread") });
+      add(g, { id: "view.allItems", icon: "list", title: "Show all articles", keywords: ["filter", "read"], run: () => ui.setListFilter("all") });
+      add(g, { id: "view.starredItems", icon: "star", title: "Show starred articles", keywords: ["filter"], run: () => ui.setListFilter("starred") });
     }
     add(g, {
-      id: "view.sidebar",
+      id: "view.sidebar", icon: "sidebar",
       title: ui.sidebarCollapsed ? "Show sidebar" : "Hide sidebar",
       keywords: ["toggle", "collapse", "expand"],
       shortcut: ["mod", "alt", "S"],
@@ -114,7 +115,7 @@ function useCommands(): PaletteCommand[] {
     });
     if (!isToday) {
       add(g, {
-        id: "view.list",
+        id: "view.list", icon: "list",
         title: ui.listCollapsed ? "Show article list" : "Hide article list",
         keywords: ["toggle", "collapse", "expand"],
         run: () => ui.toggleList(),
@@ -124,17 +125,18 @@ function useCommands(): PaletteCommand[] {
 
   {
     const g = "Settings";
-    add(g, { id: "settings.open", title: "Open Settings", keywords: ["preferences"], shortcut: ["mod", ","], run: () => ui.setShowSettings(true) });
-    add(g, { id: "settings.reading", title: "Reading settings", keywords: ["preferences", "offline"], run: () => ui.setShowSettings(true, "reading") });
-    add(g, { id: "settings.ai", title: "AI Provider settings", keywords: ["preferences", "model", "api key", "local"], run: () => ui.setShowSettings(true, "ai") });
-    add(g, { id: "settings.sync", title: "Sync settings", keywords: ["preferences", "feedly", "refresh interval"], run: () => ui.setShowSettings(true, "sync") });
-    add(g, { id: "settings.appearance", title: "Appearance settings", keywords: ["preferences", "theme", "font"], run: () => ui.setShowSettings(true, "appearance") });
+    add(g, { id: "settings.open", icon: "settings", title: "Open Settings", keywords: ["preferences"], shortcut: ["mod", ","], run: () => ui.setShowSettings(true) });
+    add(g, { id: "settings.reading", icon: "book", title: "Reading settings", keywords: ["preferences", "offline"], run: () => ui.setShowSettings(true, "reading") });
+    add(g, { id: "settings.ai", icon: "sparkle", title: "AI Provider settings", keywords: ["preferences", "model", "api key", "local"], run: () => ui.setShowSettings(true, "ai") });
+    add(g, { id: "settings.sync", icon: "refresh", title: "Sync settings", keywords: ["preferences", "feedly", "refresh interval"], run: () => ui.setShowSettings(true, "sync") });
+    add(g, { id: "settings.appearance", icon: "eye", title: "Appearance settings", keywords: ["preferences", "theme", "font"], run: () => ui.setShowSettings(true, "appearance") });
   }
 
   for (const folder of folders ?? []) {
     add("Folders", {
       id: `folder.${folder.id}`,
       title: folder.name,
+      icon: "folder",
       detail: folder.is_smart ? "Smart folder" : "Folder",
       run: () => ui.setSidebarView({ type: "folder", folderId: folder.id }),
     });
@@ -143,6 +145,7 @@ function useCommands(): PaletteCommand[] {
     add("Feeds", {
       id: `feed.${feed.id}`,
       title: feed.title,
+      icon: "rss",
       detail: feed.unread_count > 0 ? `${feed.unread_count} unread` : undefined,
       run: () => ui.setSidebarView({ type: "feed", feedId: feed.id }),
     });
@@ -180,6 +183,7 @@ export function CommandPalette() {
       group: "Articles",
       title: a.title,
       detail: feedTitles.get(a.feed_id),
+      icon: "book",
       run: () => useUiStore.getState().setSelectedArticleId(a.id),
     }));
     return [...matched, ...articles];
@@ -285,6 +289,15 @@ export function CommandPalette() {
                   className={`flex items-center gap-3 rounded-lg cursor-pointer ${selected ? "bg-white/10 text-text-primary" : "text-text-secondary"}`}
                   style={{ padding: "8px 12px", fontSize: 14 }}
                 >
+                  <span
+                    className={`flex items-center justify-center flex-shrink-0 ${selected ? "text-text-primary" : "text-text-muted"}`}
+                    style={{ width: 18, height: 18 }}
+                  >
+                    {(() => {
+                      const Glyph = command.icon ? PALETTE_ICONS[command.icon] : undefined;
+                      return Glyph ? <Glyph size={16} strokeWidth={1.9} /> : null;
+                    })()}
+                  </span>
                   <span className="truncate min-w-0">{command.title}</span>
                   {command.detail && (
                     <span className="text-text-muted truncate min-w-0 flex-shrink" style={{ fontSize: 12 }}>{command.detail}</span>

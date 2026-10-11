@@ -8,6 +8,8 @@ export interface PaletteCommand {
   shortcut?: string[];
   /** Secondary text shown after the title (a feed's folder, an article's feed). */
   detail?: string;
+  /** Which of the app's line icons to print before the title. */
+  icon?: string;
   run: () => void;
 }
 

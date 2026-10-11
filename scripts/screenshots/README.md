@@ -27,3 +27,20 @@ To change what the demo shows, edit `STEPS` in `capture.mjs`. To change the
 content on screen, edit `fixtures.js`. Slide order follows filename order.
 
 `build-demo.mjs` needs ffmpeg on `PATH`, or `FFMPEG=/path/to/ffmpeg`.
+
+## Design passes
+
+`polish.mjs` renders the screens a design pass looks at (the Quick Catch-up
+front page in its empty, reading, filling-in and finished states, Today, the
+reader, the command palette, Ask Skim, Settings), each at a fixed viewport and
+DPR, so two runs can be compared side by side:
+
+```bash
+pnpm dev                                        # in one shell
+node scripts/screenshots/polish.mjs out/before  # then change things…
+node scripts/screenshots/polish.mjs out/after
+```
+
+By default it runs against the demo fixtures. `SKIM_MOCK=0` drives the real
+app over the dev bridge instead (see `docs/DEV_BROWSER.md`), and
+`SCENES=catchup-page,today` limits a run to the scenes named.

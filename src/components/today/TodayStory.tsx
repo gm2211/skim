@@ -49,6 +49,21 @@ function Reference({ member, onOpenArticle }: {
   );
 }
 
+/** A short, readable time for a byline: the clock today, the date otherwise. */
+function bylineTime(publishedAt: number | null): string {
+  if (publishedAt == null) return "time unknown";
+  const date = new Date(publishedAt * 1000);
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  return sameDay
+    ? date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/**
+ * Names the report the lede was written from, as a byline under the lede:
+ * the publication, then the report's own title and when it was published.
+ */
 function PreviewAttribution({ member, onOpenArticle }: {
   member: TodayEditionMemberArticle;
   onOpenArticle: (articleId: string) => void;
@@ -61,35 +76,23 @@ function PreviewAttribution({ member, onOpenArticle }: {
       onOpenArticle(member.article_id);
     }
   };
+  const publication = member.publication || member.feed_title;
   const content = <>
-    <span>Report preview · {member.publication || member.feed_title}</span>
-    <span className="underline">{member.title}</span>
-      <span className="text-text-secondary">{member.published_at == null
-      ? "Published: unknown"
-      : `Published ${new Date(member.published_at * 1000).toLocaleString()}`}</span>
+    <span className="today-byline-kicker">Report preview · {publication}</span>
+    <span className="today-byline-title">
+      <span className="today-byline-report">{member.title}</span>
+      <span className="text-text-muted"> · Published {bylineTime(member.published_at)}</span>
+    </span>
   </>;
-  const label = `Report preview from ${member.publication || member.feed_title}: ${member.title}${member.published_at == null ? ", published time unknown" : `, published ${new Date(member.published_at * 1000).toLocaleString()}`}`;
-  const style = {
-    display: "flex",
-    flexDirection: "column" as const,
-    alignItems: "flex-start",
-    justifyContent: "center",
-    flexWrap: "nowrap" as const,
-    gap: 3,
-    width: "100%",
-    minHeight: 44,
-    padding: 0,
-    textAlign: "left" as const,
-  };
+  const label = `Report preview from ${publication}: ${member.title}${member.published_at == null ? ", published time unknown" : `, published ${new Date(member.published_at * 1000).toLocaleString()}`}`;
 
   if (isDeleted && !member.url) {
-    return <div className="today-story-control text-accent" style={style} aria-label={label}>{content}</div>;
+    return <div className="today-story-control today-byline" aria-label={label}>{content}</div>;
   }
 
   return (
     <button
-      className="today-story-control text-accent hover:text-text-primary"
-      style={style}
+      className="today-story-control today-byline group"
       onClick={activate}
       aria-label={label}
     >
@@ -118,8 +121,8 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
   return (
     <article className="story-rise-in today-story">
       <h3
-        className={`text-text-primary ${lead ? "today-lead-headline" : ""}`}
-        style={{ fontSize: lead ? undefined : brief ? 14 : 16, fontWeight: lead ? 700 : 600, lineHeight: 1.3, letterSpacing: lead ? -0.3 : -0.1 }}
+        className={`catchup-headline text-text-primary ${lead ? "today-lead-headline" : ""}`}
+        style={{ fontSize: lead ? undefined : brief ? 15 : 19, fontWeight: 700, lineHeight: lead ? 1.12 : 1.22, letterSpacing: lead ? -0.5 : -0.15 }}
       >
         {articleId ? (
           <button className="today-headline hover:text-accent transition-colors" onClick={() => onOpenArticle(articleId)}>
@@ -128,7 +131,7 @@ export function TodayStory({ item, rank, isWritingLede, isSaving = false, onTogg
         ) : item.snapshot_title}
       </h3>
 
-      {body && <p className={`text-text-secondary ${lead ? "today-lead-summary" : ""}`} style={{ marginTop: 8, fontSize: lead ? undefined : 13, lineHeight: 1.65 }}>{body}</p>}
+      {body && <p className={`today-body text-text-primary ${lead ? "today-lead-summary" : ""}`} style={{ marginTop: lead ? 10 : 7, fontSize: lead ? undefined : 13.5, lineHeight: 1.55 }}>{body}</p>}
       {ledeSource && item.lede?.trim() && (
         <PreviewAttribution member={ledeSource} onOpenArticle={onOpenArticle} />
       )}

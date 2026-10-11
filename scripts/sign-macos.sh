@@ -4,6 +4,11 @@ set -eu
 PROJECT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 APP_PATH=${1:-"$PROJECT_DIR/src-tauri/target/release/bundle/macos/Skim.app"}
 IDENTITY=${APPLE_SIGNING_IDENTITY:--}
+python3 "$PROJECT_DIR/scripts/package-swift-runtime.py" "$APP_PATH"
+for library in "$APP_PATH"/Contents/Frameworks/*.dylib; do
+  [ -f "$library" ] || continue
+  codesign --force --sign "$IDENTITY" "$library"
+done
 # Data stays in Resources so codesign does not interpret it as nested code.
 # MLX and SwiftPM resolve these relative aliases beside the executable.
 ln -sfn ../Resources/mlx.metallib "$APP_PATH/Contents/MacOS/mlx.metallib"

@@ -1,0 +1,21 @@
+{
+  "name": "@byos/core",
+  "version": "0.1.0",
+  "description": "Bring-your-own-subscription core: browser-held AI credential vault, reasoning effort choices, and provider model catalog cache. Framework-free; reusable by any site. Provider tokens live only in the browser and this package has no call that sends one to the site's own server.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=22.23.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --experimental-strip-types --test src/*.test.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

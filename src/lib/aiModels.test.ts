@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   MLX_MODELS,
   RETIRED_MLX_MODELS,
+  aiProvidersForRuntime,
   hasChatOverride,
   mlxModelsFor,
   modelPatch,
@@ -9,6 +10,35 @@ import {
   switchProvider,
 } from "./aiModels";
 import type { AiSettings } from "../services/types";
+
+describe("native provider capabilities", () => {
+  const mac = { native: true, isIOS: false, isMacOS: true, isPhone: false };
+  const ids = (runtime: typeof mac) => aiProvidersForRuntime(runtime).map((provider) => provider.value);
+
+  it("hides native engines in a browser even with a Mac user agent", () => {
+    const browser = ids({ ...mac, native: false });
+    for (const provider of ["local", "mlx", "foundation-models", "ds4", "ollama", "claude-cli"]) {
+      expect(browser).not.toContain(provider);
+    }
+    expect(browser).toEqual(expect.arrayContaining(["none", "openai", "openrouter"]));
+  });
+
+  it("offers Apple engines on native iPad as well as iPhone, without desktop-only providers", () => {
+    for (const isPhone of [false, true]) {
+      const ios = ids({ ...mac, isMacOS: false, isIOS: true, isPhone });
+      expect(ios).toEqual(expect.arrayContaining(["mlx", "foundation-models"]));
+      for (const provider of ["local", "ollama", "claude-cli", "ds4"]) expect(ios).not.toContain(provider);
+    }
+  });
+
+  it("keeps embedded models on non-Apple native desktop and Apple bindings on Mac", () => {
+    const desktop = ids({ ...mac, isMacOS: false });
+    expect(desktop).toContain("local");
+    expect(desktop).not.toContain("mlx");
+    expect(desktop).not.toContain("foundation-models");
+    expect(ids(mac)).toEqual(expect.arrayContaining(["local", "mlx", "foundation-models", "ds4"]));
+  });
+});
 
 describe("modelPatch", () => {
   it("mlx sets both model and local_model_path to the repo id", () => {

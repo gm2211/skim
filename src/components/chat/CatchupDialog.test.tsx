@@ -88,7 +88,9 @@ describe("CatchupDialog", () => {
     settings = { ai: { provider } };
     render(<CatchupDialog onClose={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "Run catch-up" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Run catch-up" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
+    expect(screen.queryByText("Model", { exact: true })).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: "Open AI settings" }));
 
     expect(useUiStore.getState().showSettings).toBe(true);

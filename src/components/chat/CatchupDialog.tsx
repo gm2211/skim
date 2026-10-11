@@ -274,10 +274,12 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
               Quick Catch-up
             </h3>
             <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
-              <label className="catchup-control">
-                <span className="catchup-control-label">Model</span>
-                <ModelPicker surface="catchup" disabled={loading} controlStyle={CONTROL_STYLE} />
-              </label>
+              {!providerUnavailable && (
+                <label className="catchup-control">
+                  <span className="catchup-control-label">Model</span>
+                  <ModelPicker surface="catchup" disabled={loading} controlStyle={CONTROL_STYLE} />
+                </label>
+              )}
               <label className="catchup-control">
                 <span className="catchup-control-label">Include</span>
                 <Select
@@ -323,7 +325,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
                 >
                   Stop
                 </button>
-              ) : inviting ? null : (
+              ) : inviting || providerUnavailable ? null : (
                 <button
                   onClick={run}
                   disabled={providerUnavailable}
@@ -419,7 +421,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
           )}
         </div>
 
-        <div className="border-t border-white/5 flex-shrink-0" style={{ padding: "8px 20px" }}>
+        <div className="border-t border-white/5 flex-shrink-0" style={{ padding: isPhone ? "8px 20px" : "8px 16px" }}>
           <AIDisclaimer />
         </div>
       </div>

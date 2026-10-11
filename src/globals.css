@@ -909,3 +909,11 @@ select option {
   .today-story-cell:nth-child(2) .today-story, .today-story-cell:nth-child(3) .today-story { border-top: 1px solid rgba(255, 255, 255, 0.28); }
   .today-masthead h2 { font-size: 36px; }
 }
+
+/* Pointer controls use desktop density; touch controls retain their spacing. */
+@media (min-width: 601px) and (pointer: fine) {
+  html {
+    --skim-control-height: 32px;
+    --skim-control-padding: 5px 30px 5px 10px;
+  }
+}

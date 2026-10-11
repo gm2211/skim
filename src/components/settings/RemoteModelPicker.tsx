@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { IconButton, RefreshIcon } from "../common/IconButton";
 import { listRemoteModels, type RemoteModel } from "../../services/commands";
 
 export function RemoteModelPicker({ provider, apiKey, endpoint, value, onChange }: {
@@ -31,15 +32,18 @@ export function RemoteModelPicker({ provider, apiKey, endpoint, value, onChange 
     }
   };
   return <div className="flex flex-col gap-2">
+    <div className="flex items-center gap-2">
     <input aria-label="Model" list={id} value={value} onChange={(event) => onChange(event.target.value)}
-      placeholder="Default model" className="w-full rounded-xl border border-border bg-bg-tertiary text-text-primary"
+      placeholder="Default model" className="min-w-0 flex-1 rounded-xl border border-border bg-bg-tertiary text-text-primary"
       style={{ padding: "10px 14px", fontSize: 14, minHeight: 44 }} />
     <datalist id={id}>{models.map((model) => <option key={model.id} value={model.id}>{model.display_name}</option>)}</datalist>
-    <button type="button" disabled={loading} onClick={load}
-      className="self-start rounded-lg border border-border text-accent hover:bg-bg-hover disabled:opacity-50"
-      style={{ padding: "8px 12px", minHeight: 40, fontSize: 13 }}>
-      {loading ? "Loading models…" : "Load available models"}
-    </button>
+    <IconButton label="Load available models" tooltip={loading ? "Loading models…" : "Load available models"}
+      disabled={loading} aria-busy={loading} onClick={load}
+      className="border border-border text-accent hover:bg-bg-hover">
+      <RefreshIcon spinning={loading} />
+    </IconButton>
+    </div>
+    <span role="status" className="sr-only">{loading ? "Loading models…" : ""}</span>
     {models.length > 0 && <p role="status" className="text-text-secondary text-xs">{models.length} models available. Choose a suggestion or enter any model ID.</p>}
     {error && <p role="alert" className="text-text-secondary text-xs">{error} You can still enter a model ID.</p>}
   </div>;

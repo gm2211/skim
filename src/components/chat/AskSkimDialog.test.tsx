@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { AskSkimDialog } from "./AskSkimDialog";
+import { selectChatText } from "../../test/selectChatText";
 import { useUiStore } from "../../stores/uiStore";
 import { chatWithArticles } from "../../services/commands";
 
@@ -187,4 +188,29 @@ describe("AskSkimDialog setup recovery", () => {
     expect(await screen.findByRole("button", { name: "Open AI settings" })).toBeInTheDocument();
     expect(screen.getByRole("textbox")).toHaveValue("Summarize this week");
   });
+});
+
+
+it("renders Markdown and preserves quoted Ask Skim follow-ups through failed send and retry", async () => {
+  settings = { ai: { provider: "openai", chat_provider: "same" } };
+  vi.mocked(chatWithArticles)
+    .mockResolvedValueOnce({ content: "## Evidence\n\nQuasar changed.", sources: [], provider: "openai", model: "test", article_ids: ["a"] })
+    .mockRejectedValueOnce(new Error("Unavailable"))
+    .mockResolvedValue({ content: "Explanation", sources: [], provider: "openai", model: "test", article_ids: ["a"] });
+  render(<AskSkimDialog onClose={vi.fn()} />);
+  const user = userEvent.setup();
+  await user.type(screen.getByRole("textbox"), "Find quasar{Enter}");
+  expect(await screen.findByRole("heading", { name: "Evidence" })).toBeInTheDocument();
+  selectChatText(screen.getByText("Quasar changed.").firstChild!);
+  await user.click(screen.getByRole("button", { name: "Reply to selection" }));
+  await user.type(screen.getByRole("textbox"), "Why?{Enter}");
+  await screen.findByRole("alert");
+  expect(screen.getByRole("textbox")).toHaveValue("Why?");
+  expect(screen.getByRole("note", { name: "Quoted text" })).toHaveTextContent("Quasar changed.");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+  await screen.findByText("Explanation");
+  const quoted = "Replying to Skim:\n> Quasar changed.\n\nWhy?";
+  expect(vi.mocked(chatWithArticles).mock.calls[2][1]).toBe(quoted);
+  await user.type(screen.getByRole("textbox"), "More{Enter}");
+  expect(vi.mocked(chatWithArticles).mock.calls[3][2]).toContainEqual({ role: "user", content: quoted });
 });

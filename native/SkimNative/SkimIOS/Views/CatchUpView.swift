@@ -90,8 +90,16 @@ struct CatchUpSheet: View {
                         Button("Stop", role: .cancel) { session.cancel() }
                             .accessibilityIdentifier("catch-up-stop")
                     } else {
-                        Button("Run Again") { run() }
-                            .accessibilityIdentifier("catch-up-run-again")
+                        Button {
+                            run()
+                        } label: {
+                            Label("Run Again", systemImage: "arrow.clockwise")
+                                .labelStyle(.iconOnly)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .help("Run Again")
+                        .accessibilityIdentifier("catch-up-run-again")
                     }
                 }
             }

@@ -17,6 +17,41 @@ import FoundationModels
 @Suite("NativeAI.parseAnthropicModelsResponse")
 struct NativeAIModelsResponseTests {
 
+    @Test func quotedReplyIsPassedAsContextAndRetainedInTranscript() {
+        let conversation = AIChatConversation(
+            latestQuestion: "Why does this matter?",
+            quotedText: "the exact selected sentence",
+            priorMessages: [AIChatMessage(role: .assistant, text: "First sentence. the exact selected sentence. Last sentence.")]
+        )
+
+        #expect(conversation.promptSection.contains("> the exact selected sentence"))
+        #expect(conversation.promptSection.contains("Replying to Skim:\n> the exact selected sentence\n\nWhy does this matter?"))
+        #expect(!conversation.promptSection.contains("> First sentence"))
+
+        let providerMessages = NativeAI.buildLocalChatMessages(
+            instructions: "instructions",
+            articleContext: "article",
+            conversation: AIChatConversation(
+                latestQuestion: "Why does this matter?",
+                quotedText: "the current excerpt",
+                priorMessages: [
+                    AIChatMessage(role: .user, text: "Earlier question", quotedText: "the prior excerpt"),
+                    AIChatMessage(role: .assistant, text: "Earlier answer")
+                ]
+            ),
+            webBlock: nil
+        )
+        #expect(providerMessages[1]["content"]?.contains("> the prior excerpt") == true)
+        #expect(providerMessages.last?["content"]?.contains("> the current excerpt") == true)
+        #expect(providerMessages.last?["content"]?.contains("Why does this matter?") == true)
+
+        let followup = AIChatConversation(
+            latestQuestion: "Can you expand?",
+            priorMessages: [AIChatMessage(role: .user, text: "Why?", quotedText: "the exact selected sentence")]
+        )
+        #expect(followup.promptSection.contains("Replying to Skim:\n> the exact selected sentence"))
+    }
+
     @Test func decodesModelsPreservingAPIOrder() throws {
         let json = """
         {

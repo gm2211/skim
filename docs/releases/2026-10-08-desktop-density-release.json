@@ -1,0 +1,46 @@
+{
+  "platform": "MAC_OS",
+  "version": "0.1.39",
+  "build": "39",
+  "sourceCommit": "7443fcc0fb0b86fe3fa9c8b8ac78d575dba16b38",
+  "packageSHA256": "d63a4630277b0a86a2099bf147dfe101419ac4e89981c41a46f015f4052a8d6f",
+  "deliveryUUID": "9994f539-636c-4ddc-bcd5-be78c79ad9a3",
+  "upload": "SUCCEEDED",
+  "processingState": "VALID",
+  "validation": {
+    "frontendTests": 235,
+    "uploadWorkflowTests": 3,
+    "productionMacBuild": "PASSED",
+    "packageSignatures": "PASSED",
+    "metadata": "0.1.39 (39)",
+    "helperSandboxInheritance": "PASSED",
+    "browser": "Codex in-app browser",
+    "desktopDialog": {
+      "width": 640,
+      "height": 269.6875,
+      "titleSize": 16,
+      "controlHeight": 32,
+      "horizontalOverflow": false
+    },
+    "phone": {
+      "width": 375,
+      "heights": [
+        812,
+        568
+      ],
+      "controlHeight": 44,
+      "inputFontSize": 16,
+      "horizontalOverflow": false
+    },
+    "interactions": [
+      "setup action",
+      "Escape dismissal",
+      "configured toolbar",
+      "report rendering"
+    ]
+  },
+  "installedRuntimeAcceptance": "Not performed; verified components in browser with mock data and verified signed release package.",
+  "internalBuildState": "IN_BETA_TESTING",
+  "externalBuildState": "READY_FOR_BETA_SUBMISSION",
+  "buildID": "9994f539-636c-4ddc-bcd5-be78c79ad9a3"
+}

@@ -1,12 +1,15 @@
-import { Fragment } from "react";
+import { useRef, useState } from "react";
 import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
 import { useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useTodayEdition } from "../../hooks/useTodayEdition";
 import { useUiStore } from "../../stores/uiStore";
-import { rankFor, LEAD_COUNT } from "../../lib/todayEdition";
+import { rankFor } from "../../lib/todayEdition";
+import { TodayStorySkeleton } from "./TodayStorySkeleton";
 import { TodayStory } from "./TodayStory";
 import { ModelPicker } from "../common/ModelPicker";
 import { RefreshIcon } from "../ui/icons";
+
+export const NEWSPAPER_PAGE_SIZE = 6;
 
 function formatWindowDate(startsAtSeconds: number): string {
   return new Date(startsAtSeconds * 1000).toLocaleDateString("en-US", {
@@ -18,13 +21,30 @@ function formatWindowDate(startsAtSeconds: number): string {
 
 export function TodayEditionPane() {
   const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane } = useUiStore();
-  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch } =
+  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch, aiEnabled, isPreparingSummaries, settingsUnavailable, retrySettings } =
     useTodayEdition();
 
+  const [theme, setTheme] = useState<string | null>(null);
+  const [sharedOnly, setSharedOnly] = useState(false);
+  const [pageSelection, setPageSelection] = useState({ key: "", index: 0 });
+  const scrollRef = useRef<HTMLDivElement>(null);
   const refreshFeeds = useRefreshAllFeeds();
   const isFrontPage = !isPhone && !selectedArticleId;
   const items = data?.items ?? [];
-  const briefsStart = items.findIndex((_, index) => rankFor(index) === "brief");
+  const themes = [...new Set(items.flatMap((item) => item.editorial?.theme ? [item.editorial.theme] : []))];
+  const activeTheme = themes.includes(theme ?? "") ? theme : null;
+  const visibleItems = items.map((item, index) => ({ item, index })).filter(({ item }) =>
+    (!activeTheme || item.editorial?.theme === activeTheme) &&
+    (!sharedOnly || item.member_articles.filter((member) => member.membership_type !== "duplicate").length > 1));
+  const pageKey = `${data?.edition.id ?? ""}:${activeTheme ?? ""}:${sharedOnly}`;
+  const pageCount = Math.max(1, Math.ceil(visibleItems.length / NEWSPAPER_PAGE_SIZE));
+  const pageIndex = pageSelection.key === pageKey ? Math.min(pageSelection.index, pageCount - 1) : 0;
+  const pageItems = visibleItems.slice(pageIndex * NEWSPAPER_PAGE_SIZE, (pageIndex + 1) * NEWSPAPER_PAGE_SIZE);
+  const resetPage = () => setPageSelection({ key: "", index: 0 });
+  const changePage = (index: number) => {
+    setPageSelection({ key: pageKey, index });
+    scrollRef.current?.scrollTo?.({ top: 0, behavior: "instant" });
+  };
 
   const handleOpenArticle = (articleId: string) => {
     openArticleFromToday(articleId);
@@ -79,7 +99,7 @@ export function TodayEditionPane() {
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto" style={{ padding: "0 24px 24px" }}>
+      <div ref={scrollRef} className="today-scroll flex-1 overflow-y-auto">
       <div className="today-content">
       {/* Masthead: the nameplate, then a dateline whose rule doubles as the
           day's reading progress. */}
@@ -107,11 +127,11 @@ export function TodayEditionPane() {
       </div>
 
       {/* Body */}
-        {isLoading && (
-          <div className="flex items-center justify-center h-32">
-            <span className="text-text-muted" style={{ fontSize: 14 }}>Loading...</span>
-          </div>
-        )}
+        {isLoading && <div className="today-stories" aria-label="Preparing newspaper">
+          {Array.from({ length: NEWSPAPER_PAGE_SIZE }, (_, index) => <div className={`today-story-cell today-story-cell--${rankFor(index)}`} key={index}>
+            <TodayStorySkeleton rank={rankFor(index)} />
+          </div>)}
+        </div>}
 
         {isError && (
           <div role="alert" className="text-danger" style={{ fontSize: 13, padding: "12px 4px" }}>
@@ -120,6 +140,7 @@ export function TodayEditionPane() {
           </div>
         )}
 
+        {settingsUnavailable && <div role="alert" className="today-summary-note">Could not load AI settings. <button className="today-story-control" onClick={() => void retrySettings()}>Retry AI settings</button></div>}
         {refreshFeeds.isError && <p role="alert" className="text-danger" style={{ fontSize: 13 }}>Could not refresh feeds. Please try again.</p>}
         {setConsumed.isError && <p role="alert" className="text-danger" style={{ fontSize: 13 }}>Could not save reading progress. Please try again.</p>}
 
@@ -162,30 +183,28 @@ export function TodayEditionPane() {
           </button>
         )}
 
+        {!isLoading && !isError && items.length > 0 && <>
+          {!aiEnabled && !settingsUnavailable && items.some((item) => !item.editorial) && <p className="today-summary-note">Unprepared summaries show source excerpts. <button className="today-story-control text-accent" onClick={() => useUiStore.getState().setShowSettings(true)}>Set up AI for thematic summaries</button></p>}
+          <nav className="today-themes" aria-label="Newspaper themes">
+            <button className="today-story-control" aria-pressed={!activeTheme && !sharedOnly} onClick={() => { setTheme(null); setSharedOnly(false); resetPage(); }}>All stories</button>
+            {themes.map((name) => <button key={name} className="today-story-control" aria-pressed={activeTheme === name} onClick={() => { setTheme(activeTheme === name ? null : name); resetPage(); }}>{name}</button>)}
+            <button className="today-story-control" aria-pressed={sharedOnly} onClick={() => { setSharedOnly(!sharedOnly); resetPage(); }}>Multiple reports</button>
+          </nav>
+          {visibleItems.length === 0 && <p className="today-summary-note">No stories with multiple reports in this selection.</p>}
+        </>}
         <div className="today-stories">
         {!isLoading &&
           !isError &&
-          items.map((item, index) => (
-            <Fragment key={item.story_id}>
-              {index === briefsStart && (
-                <div
-                  className="today-briefs-label text-text-muted uppercase font-bold"
-                  style={{ fontSize: 10.5, letterSpacing: 1.2, marginTop: 24 }}
-                >
-                  Also
-                </div>
-              )}
-              <div className="today-story-cell">
-              <TodayStory
+          pageItems.map(({ item }, index) => (
+              <div key={item.story_id} className={`today-story-cell today-story-cell--${rankFor(index)}`}>
+              {!item.editorial && isPreparingSummaries ? <TodayStorySkeleton rank={rankFor(index)} /> : <TodayStory
                 item={item}
                 rank={rankFor(index)}
-                isWritingLede={isWritingLedes && index < LEAD_COUNT}
                 isSaving={setConsumed.isPending}
                 onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
                 onOpenArticle={handleOpenArticle}
-              />
+              />}
               </div>
-            </Fragment>
           ))}
         </div>
 
@@ -201,6 +220,14 @@ export function TodayEditionPane() {
         )}
       </div>
       </div>
+      {!isLoading && !isError && visibleItems.length > 0 && <nav className="today-pagination" aria-label="Newspaper pages">
+        <button className="today-story-control" disabled={pageIndex === 0} onClick={() => changePage(pageIndex - 1)}>Previous page</button>
+        <div className="today-page-position">
+          <span role="status" aria-live="polite">Page {pageIndex + 1} of {pageCount}</span>
+          <button className="today-story-control text-text-muted" onClick={() => useUiStore.getState().setShowSettings(true, "sync")}>Edition size</button>
+        </div>
+        <button className="today-story-control" disabled={pageIndex + 1 >= pageCount} onClick={() => changePage(pageIndex + 1)}>Next page</button>
+      </nav>}
     </div>
   );
 }

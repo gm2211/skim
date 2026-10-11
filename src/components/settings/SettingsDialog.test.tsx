@@ -76,7 +76,7 @@ describe("Settings provider drafts", () => {
     // Input focus does not change tabs; tab navigation starts on a tab button.
     await user.click(screen.getByRole("tab", { name: "Account" }));
     await user.keyboard("{ArrowRight}");
-    expect(screen.getByRole("tab", { name: "Tools" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Preferences" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByPlaceholderText("sk-...")).not.toBeVisible();
     await user.click(screen.getByRole("tab", { name: "Account" }));
     expect(screen.getByDisplayValue("test-new-secret")).toBeInTheDocument();

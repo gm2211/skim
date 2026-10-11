@@ -562,7 +562,7 @@ export function SettingsDialog() {
                       keepPanelsMounted
                       key={local.ai.provider}
                       providerName={AI_PROVIDERS.find((provider) => provider.value === local.ai.provider)?.label ?? local.ai.provider}
-                      strings={{ heading: "AI service" }}
+                      strings={{ heading: "AI service", toolsTab: "Preferences" }}
                       onChangeProvider={() => setChoosingProvider(true)}
                       modelSettings={modelSettings}
                       accountSettings={accountSettings}

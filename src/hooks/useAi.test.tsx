@@ -6,7 +6,9 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { useSummarizeArticle } from "./useAi";
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
-beforeEach(() => vi.mocked(invoke).mockReset());
+beforeEach(() => {
+  vi.mocked(invoke).mockReset();
+});
 
 it("carries custom word count through mutation and Tauri command without losing global fallback", async () => {
   vi.mocked(invoke).mockResolvedValue({});

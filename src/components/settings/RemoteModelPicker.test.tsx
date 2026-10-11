@@ -30,7 +30,9 @@ function renderPicker(value = "", provider = "openai", onChange = vi.fn()) {
   );
 }
 
-beforeEach(() => vi.mocked(listRemoteModels).mockReset());
+beforeEach(() => {
+  vi.mocked(listRemoteModels).mockReset();
+});
 afterEach(() => vi.restoreAllMocks());
 
 describe("RemoteModelPicker", () => {

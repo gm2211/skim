@@ -24,6 +24,23 @@ test('AiAccountSettings starts on Model, exposes provider switching, and mounts 
   assert.doesNotMatch(html, /Remember and disconnect|Tool access/);
 });
 
+test('AiAccountSettings puts Account first and opens it while signed out', () => {
+  const props = {
+    providerName: 'Acme AI', onChangeProvider: () => undefined,
+    modelSettings: createElement('p', null, 'Model controls'),
+    accountSettings: createElement('p', null, 'Account controls'),
+    toolsSettings: createElement('p', null, 'Tool access'),
+  };
+  const signedOut = renderToStaticMarkup(createElement(AiAccountSettings, { ...props, signedIn: false }));
+  assert.deepEqual([...signedOut.matchAll(/role="tab"[^>]*>([^<]+)</g)].map(match => match[1]), ['Account', 'Model', 'Tools']);
+  assert.match(signedOut, /aria-selected="true"[^>]*>Account</);
+  assert.match(signedOut, /Account controls/);
+  assert.doesNotMatch(signedOut, /Model controls/);
+  const signedIn = renderToStaticMarkup(createElement(AiAccountSettings, { ...props, signedIn: true }));
+  assert.deepEqual([...signedIn.matchAll(/role="tab"[^>]*>([^<]+)</g)].map(match => match[1]), ['Model', 'Account', 'Tools']);
+  assert.match(signedIn, /Model controls/);
+});
+
 test('AiAccountSettings keeps expired recovery in Account and gives Model a compact route to it', () => {
   const html = renderToStaticMarkup(createElement(AiAccountSettings, {
     providerName: 'Acme AI', expired: true, onChangeProvider: () => undefined,

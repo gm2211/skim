@@ -16,8 +16,15 @@ export type SignInMethod =
   | { kind: 'pkce'; handshakeViaSite: boolean }
   /** User pastes a token they generated themselves (CLI or provider console). Never leaves the browser. */
   | { kind: 'paste-token'; hint: string }
-  /** User pastes a pay-as-you-go API key. Offered beside a subscription path, never instead of it. */
-  | { kind: 'api-key'; hint: string };
+  /**
+   * User pastes a pay-as-you-go API key. Offered beside a subscription path, never instead of it.
+   * `setup` optionally lists provider-owned pages, in order, that get the user a key (for example
+   * claiming plan-included API credits, then creating the key). Links only: no credentials flow.
+   */
+  | { kind: 'api-key'; hint: string; setup?: ApiKeySetupStep[] };
+
+/** One provider-owned page a user visits to get an API key. */
+export type ApiKeySetupStep = { label: string; url: string };
 
 export type ProviderAvailability =
   | { available: true }

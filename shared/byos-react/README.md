@@ -93,7 +93,9 @@ It owns the provider header, settings action, state copy, and content spacing; p
 defaults. It does not perform authentication or select providers.
 
 `AiAccountSettings` keeps the selected provider visible and exposes a 44px **Change AI service**
-action. Model is the initial tab. Account and Tools appear only when their content is supplied;
+action. Model is the initial tab. Set `signedIn={false}` when no account or API key is connected:
+Account then moves first and opens by default, and Model returns to first place once `signedIn`
+is true (the active tab follows that default until the user picks one). Account and Tools appear only when their content is supplied;
 ArrowLeft/ArrowRight, Home, and End move between tabs. Only the active tab panel is mounted.
 When `expired` is true, Model shows a short link to Account and `recoveryAction` appears inside
 Account. Provider changes, account controls, and tool actions remain application callbacks/content.
@@ -104,6 +106,7 @@ Account. Provider changes, account controls, and tool actions remain application
 <AiAccountSettings
   providerName="Example AI"
   expired={connectionExpired}
+  signedIn={hasAccountOrKey}
   onChangeProvider={openProviderPicker}
   modelSettings={<ModelEffortPicker {...pickerProps} />}
   accountSettings={<AccountControls />}

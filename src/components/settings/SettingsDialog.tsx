@@ -160,6 +160,8 @@ export function SettingsDialog() {
   const isPhone = useUiStore((s) => s.isPhone);
 
   const [local, setLocal] = useState<AppSettings | null>(null);
+  // Subscription sign-in reported by the provider's Account section once its status check resolves.
+  const [subscription, setSubscription] = useState<{ provider: string; signedIn: boolean } | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => useUiStore.getState().settingsTab);
   const [choosingProvider, setChoosingProvider] = useState(false);
   const providerPickerRef = useRef<HTMLDivElement>(null);
@@ -217,6 +219,18 @@ export function SettingsDialog() {
     setLocal({ ...local, ai: switchProvider(local.ai, provider) });
     setChoosingProvider(false);
   };
+
+  // Open Account first while the provider has neither a subscription sign-in nor a saved API key.
+  // Only the saved key counts, so typing a draft key doesn't reorder the tabs mid-entry.
+  const savedKey = settings?.ai.provider === local.ai.provider && !!settings.ai.api_key;
+  const subscriptionSignedIn = subscription?.provider === local.ai.provider ? subscription.signedIn : undefined;
+  const accountSignedIn = local.ai.provider === "xai"
+    ? (savedKey || subscriptionSignedIn)
+    : local.ai.provider === "claude-subscription"
+      ? subscriptionSignedIn
+      : needsApiKey(local.ai.provider) && local.ai.provider !== "claude-cli"
+        ? savedKey
+        : undefined;
 
   const availableProviders = aiProvidersForRuntime({ native: isTauri(), isIOS, isMacOS, isPhone });
   const providerSupported = availableProviders.some((provider) => provider.value === local.ai.provider);
@@ -288,7 +302,7 @@ export function SettingsDialog() {
   const accountSettings = (<>
                 {local.ai.provider === "xai" && (
                   <div style={{ marginBottom: 16 }}>
-                    <XaiOAuthSection />
+                    <XaiOAuthSection onSignedInChange={(signedIn) => setSubscription({ provider: "xai", signedIn })} />
                   </div>
                 )}
 
@@ -338,7 +352,7 @@ export function SettingsDialog() {
 
                 {local.ai.provider === "claude-subscription" && (
                   <div style={{ marginBottom: 20 }}>
-                    <ClaudeOAuthSection />
+                    <ClaudeOAuthSection onSignedInChange={(signedIn) => setSubscription({ provider: "claude-subscription", signedIn })} />
                   </div>
                 )}
 
@@ -561,6 +575,7 @@ export function SettingsDialog() {
                     <AiAccountSettings
                       keepPanelsMounted
                       key={local.ai.provider}
+                      signedIn={accountSignedIn}
                       providerName={AI_PROVIDERS.find((provider) => provider.value === local.ai.provider)?.label ?? local.ai.provider}
                       strings={{ heading: "AI service", toolsTab: "Preferences" }}
                       onChangeProvider={() => setChoosingProvider(true)}
@@ -837,8 +852,12 @@ function SyncTab({
 
 /** SuperGrok sign-in through BYOS's shared device-code UI. Skim's Rust side
  * plays the BYOS "site" role, making the auth.x.ai calls that browsers can't. */
-function XaiOAuthSection() {
-  const [signedIn, setSignedIn] = useState(false);
+function XaiOAuthSection({ onSignedInChange }: { onSignedInChange?: (signedIn: boolean) => void }) {
+  const [signedIn, setSignedInState] = useState(false);
+  const setSignedIn = (value: boolean) => {
+    setSignedInState(value);
+    onSignedInChange?.(value);
+  };
   const [status, setStatus] = useState<DeviceCodeStatus>("idle");
   const [device, setDevice] = useState<DeviceCode | null>(null);
   const [error, setError] = useState<string | undefined>();
@@ -905,8 +924,12 @@ function XaiOAuthSection() {
   );
 }
 
-function ClaudeOAuthSection() {
-  const [signedIn, setSignedIn] = useState(false);
+function ClaudeOAuthSection({ onSignedInChange }: { onSignedInChange?: (signedIn: boolean) => void }) {
+  const [signedIn, setSignedInState] = useState(false);
+  const setSignedIn = (value: boolean) => {
+    setSignedInState(value);
+    onSignedInChange?.(value);
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pasteCode, setPasteCode] = useState("");

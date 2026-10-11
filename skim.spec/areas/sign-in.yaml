@@ -18,8 +18,9 @@ behaviors:
       an API key, on desktop and iOS, and sign out. An entered API key takes priority. Tokens
       refresh automatically.
     details: >-
-      Device-code flow (RFC 8628) against auth.x.ai, the same flow BYOS's grok() provider offers,
-      run from Rust because auth.x.ai sends no CORS headers. xAI has no official third-party
+      Device-code flow (RFC 8628) against auth.x.ai, the same flow BYOS's grok() provider offers.
+      The UI is BYOS's DeviceCodeSignIn; Skim's Rust side plays the BYOS site-handshake role
+      because auth.x.ai sends no CORS headers and Skim has no Node server for BYOS's broker. xAI has no official third-party
       client, so Skim uses the public Grok CLI client id; xAI may return 403 for some SuperGrok
       tiers, in which case the API key path remains. Giulio chose to add this unofficial sign-in on
       2026-10-10.

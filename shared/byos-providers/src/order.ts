@@ -2,16 +2,18 @@
  * The default order a site lists AI services in, and which ones it should mark as not
  * recommended. Sites inherit this and can pass their own order instead.
  *
- * Services whose subscriptions a buyer can actually use from a site come first. Claude comes last
- * because Anthropic doesn't allow its subscriptions in third-party apps (see claude.ts).
+ * The major AI subscriptions come first (Claude, ChatGPT, Grok, Gemini), then the pay-as-you-go
+ * services: OpenRouter, Groq, Hugging Face (Giulio, 2026-10-11). A listed key with no adapter yet,
+ * such as Gemini, only reserves its place. Claude stays marked not recommended below because
+ * Anthropic doesn't allow its subscriptions in third-party apps (see claude.ts).
  */
-export type ServiceKey = 'grok' | 'chatgpt' | 'openrouter' | 'claude';
+export type ServiceKey = 'claude' | 'chatgpt' | 'grok' | 'gemini' | 'openrouter' | 'groq' | 'huggingface';
 
-export const DEFAULT_SERVICE_ORDER: readonly ServiceKey[] = ['grok', 'chatgpt', 'openrouter', 'claude'];
+export const DEFAULT_SERVICE_ORDER: readonly ServiceKey[] = ['claude', 'chatgpt', 'grok', 'gemini', 'openrouter', 'groq', 'huggingface'];
 
 /** Why a service is listed but not recommended; absent means recommended. */
 export const NOT_RECOMMENDED_REASON: Partial<Record<ServiceKey, string>> = {
-  claude: "Anthropic doesn't allow subscriptions in other apps.",
+  claude: "Anthropic doesn't allow subscription sign-in in other apps; use an API key (Max and Team plans include API credits).",
 };
 
 /** Sorts `items` by `order`; items whose key is not in `order` keep their relative place at the end. */

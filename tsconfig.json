@@ -8,6 +8,12 @@
 
     /* Bundler mode */
     "moduleResolution": "bundler",
+    "paths": {
+      "@byos/core": ["./shared/byos-core/src/index.ts"],
+      "@byos/providers": ["./shared/byos-providers/src/index.ts"],
+      "@byos/react": ["./shared/byos-react/src/index.ts"],
+      "@byos/react/styles.css": ["./shared/byos-react/src/styles.css"]
+    },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,

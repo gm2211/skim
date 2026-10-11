@@ -10,6 +10,16 @@ behaviors:
     description: >-
       A reader can switch between the extracted Reader view and the original Web view (desktop
       toolbar or arrow keys; iOS swipe).
+  - id: toolbar-overflow-menu
+    description: >-
+      Desktop: the reader toolbar stays one row. When the pane is too narrow to fit every action,
+      the Reader/Web switch, star, pin, mark read and open in browser fold into a "…" menu, and
+      only close, history, chat and Summarize stay on the row.
+    source:
+      text: >-
+        resizing is tough but icons look ugly this way - I think "ellipses.." where you put other
+        actions in a ... menu is the better way to preserve layout on narrower screens
+      reference: Giulio, project chat, 2026-10-11
   - id: open-marks-read
     description: Opening an article marks it read.
   - id: reading-time-tracked

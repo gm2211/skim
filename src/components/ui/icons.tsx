@@ -191,6 +191,15 @@ export const ImportIcon = (p: IconProps) => (
   </Icon>
 );
 
+/** Three dots: the overflow menu that holds a toolbar's lesser actions. */
+export const MoreIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+    <circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none" />
+  </Icon>
+);
+
 /** Looks an icon up by the key a palette command names. */
 export const PALETTE_ICONS: Record<string, (p: IconProps) => ReactElement> = {
   newspaper: NewspaperIcon,
@@ -218,4 +227,5 @@ export const PALETTE_ICONS: Record<string, (p: IconProps) => ReactElement> = {
   sparkle: SparkleIcon,
   eye: EyeIcon,
   import: ImportIcon,
+  more: MoreIcon,
 };

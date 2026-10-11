@@ -963,3 +963,27 @@ select option {
 .today-pagination button:disabled:hover { background: transparent; }
 
 .today-page-position { display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 2px 12px; }
+
+/* The reader toolbar's overflow menu: the actions that no longer fit on one
+   row, each as a labelled row. */
+.reader-menu {
+  background: rgba(22, 27, 34, 0.96);
+  backdrop-filter: blur(12px);
+  padding: 6px;
+  min-width: 200px;
+}
+.reader-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  transition: background-color 120ms;
+}
+.reader-menu-row:hover { background: rgba(255, 255, 255, 0.08); }
+.reader-menu-row:disabled { opacity: 0.4; }
+.reader-menu-rule { height: 1px; margin: 4px 6px; background: rgba(255, 255, 255, 0.08); }

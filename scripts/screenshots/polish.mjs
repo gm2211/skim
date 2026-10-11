@@ -93,6 +93,18 @@ const SCENES = [
     await p.locator(`${CATCHUP} .catchup-headline-link`).first().click();
     await p.waitForTimeout(700);
   } },
+  // A narrow window: the reader toolbar folds its lesser actions into "…".
+  { name: "reading-narrow", viewport: { width: 1000, height: 760 }, run: async (p) => {
+    const row = p.getByText("Why “Just Pick AWS” Is Bad Advice in 2026").first();
+    await row.click();
+    await p.waitForTimeout(600);
+    if (process.env.DEBUG_TOOLBAR) console.log(await p.evaluate(() => {
+      const r = document.querySelector('[aria-label="Article reader"]');
+      return { reader: r?.getBoundingClientRect().width, toolbar: r?.firstElementChild?.getBoundingClientRect().width, more: !!document.querySelector('[aria-label="More actions"]') };
+    }));
+    await p.getByRole("button", { name: "More actions" }).click();
+    await p.waitForTimeout(300);
+  } },
   { name: "reading", viewport: DESKTOP, run: async (p) => {
     const row = p.getByText("Why “Just Pick AWS” Is Bad Advice in 2026").first();
     await row.click();

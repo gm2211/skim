@@ -1,0 +1,98 @@
+.today-story-skeleton {
+  min-width: 0;
+}
+
+.today-story-skeleton-byline {
+  height: 11px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.today-story-skeleton-headline,
+.today-story-skeleton-summary {
+  display: grid;
+  gap: 8px;
+}
+
+.today-story-skeleton-headline {
+  gap: 7px;
+}
+
+.today-story-skeleton-bar {
+  display: block;
+  width: 82%;
+  max-width: 100%;
+  height: 0.72em;
+  border-radius: 2px;
+  background: linear-gradient(
+    100deg,
+    var(--color-bg-tertiary) 20%,
+    var(--color-border) 48%,
+    var(--color-bg-tertiary) 76%
+  );
+  background-size: 220% 100%;
+  animation: today-story-skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.today-story-skeleton-byline .today-story-skeleton-bar {
+  width: 30%;
+  min-width: 56px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.today-story-skeleton-headline .today-story-skeleton-bar:nth-child(1) { width: 94%; }
+.today-story-skeleton-headline .today-story-skeleton-bar:nth-child(2) { width: 78%; }
+.today-story-skeleton-headline .today-story-skeleton-bar:nth-child(3) { width: 56%; }
+
+.today-story-skeleton-summary {
+  margin-top: 12px;
+}
+
+.today-story-skeleton-summary .today-story-skeleton-bar {
+  width: 96%;
+  height: 0.58em;
+  opacity: 0.72;
+}
+
+.today-story-skeleton-summary .today-story-skeleton-bar:last-child {
+  width: 68%;
+}
+
+.today-story-skeleton-image {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  max-height: 440px;
+  margin-bottom: 18px;
+  border-radius: 2px;
+  background: linear-gradient(
+    100deg,
+    var(--color-bg-secondary) 20%,
+    var(--color-bg-tertiary) 48%,
+    var(--color-bg-secondary) 76%
+  );
+  background-size: 220% 100%;
+  animation: today-story-skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.today-story--brief.today-story-skeleton .today-story-skeleton-byline {
+  margin-bottom: 7px;
+}
+
+.today-story--brief.today-story-skeleton .today-story-skeleton-bar {
+  height: 0.68em;
+}
+
+@keyframes today-story-skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -120% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .today-story-skeleton .today-story-skeleton-bar,
+  .today-story-skeleton-image {
+    animation: none;
+    background: var(--color-bg-tertiary);
+  }
+}

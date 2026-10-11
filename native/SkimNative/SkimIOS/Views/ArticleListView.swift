@@ -164,12 +164,15 @@ struct ArticleListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
-        .sheet(item: $activeCatchUp) { request in
-            CatchUpSheet(request: request)
-                .environmentObject(model)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(SkimStyle.chrome)
+        // Quick Catch-up is pushed as a page, like Today, not shown as a sheet.
+        .navigationDestination(isPresented: Binding(
+            get: { activeCatchUp != nil },
+            set: { if !$0 { activeCatchUp = nil } }
+        )) {
+            if let request = activeCatchUp {
+                CatchUpPage(request: request)
+                    .environmentObject(model)
+            }
         }
         .sheet(item: $activeSummaryConfiguration) { article in
             SummaryConfigurationSheet(article: article, defaults: model.settings.ai) { summarySettings in

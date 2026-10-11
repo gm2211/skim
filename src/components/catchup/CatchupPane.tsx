@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import {
   CATCHUP_CANCELLED,
   CATCHUP_PROGRESS_EVENT,
@@ -12,28 +11,19 @@ import {
   type CatchupSource,
 } from "../../services/commands";
 import { listen } from "@tauri-apps/api/event";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useUiStore } from "../../stores/uiStore";
 import { AIDisclaimer } from "../common/AIDisclaimer";
-import { useLockBodyScroll } from "../../hooks/useLockBodyScroll";
-import { useVisualViewportSync } from "../../hooks/useVisualViewport";
-import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
-import { useDialogFocus } from "../../hooks/useDialogFocus";
+import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
 import { useSettings } from "../../hooks/useSettings";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { Select } from "../ui/Select";
 import { ModelPicker } from "../common/ModelPicker";
 import { CatchupFrontPage, CatchupGhostPage } from "./CatchupFrontPage";
 
-interface Props {
-  onClose: () => void;
-  onOpenArticle?: (articleId: string) => void;
-}
-
 const CACHE_TTL_MS = 30 * 60 * 1000;
 type CacheEntry = { report: CatchupReport; ts: number };
-// Module-scope cache keyed by scope + time range. Persists across dialog
-// open/close in the same session, expires after 30m.
+// Module-scope cache keyed by scope + time range. Persists across leaving
+// and reopening the page in the same session, expires after 30m.
 const catchupCache = new Map<string, CacheEntry>();
 const catchupErrors = new Map<string, string>();
 
@@ -54,8 +44,8 @@ export const catchupCacheKey = (scope: CatchupScope, sinceHours: CatchupSinceHou
 
 /**
  * The last scope and range the reader chose, kept outside the component so
- * reopening the dialog does not silently snap back to the defaults. Exported
- * so tests can put it back where it started.
+ * coming back to the page does not silently snap back to the defaults.
+ * Exported so tests can put it back where it started.
  */
 export const catchupSelection: { scope: CatchupScope; sinceHours: CatchupSinceHours } = {
   scope: "unread",
@@ -78,15 +68,19 @@ export function catchupScopeSummary(
   return `Read ${articles} from ${source}${window}.`;
 }
 
-export function CatchupDialog({ onClose, onOpenArticle }: Props) {
+/**
+ * Quick Catch-up as a page in the main window: it takes the list column the
+ * way Today does, fills the window while no article is open, and narrows to
+ * a column beside the reader when one is. Leaving the page keeps the written
+ * front page for half an hour, so coming back is free.
+ */
+export function CatchupPane() {
   const isPhone = useUiStore((s) => s.isPhone);
-  const showSettings = useUiStore((s) => s.showSettings);
+  const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
+  const selectedArticleId = useUiStore((s) => s.selectedArticleId);
+  const openArticleFromCatchup = useUiStore((s) => s.openArticleFromCatchup);
+  const setPhonePane = useUiStore((s) => s.setPhonePane);
   const { data: settings } = useSettings();
-  useLockBodyScroll(isPhone && !showSettings);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useDialogFocus(dialogRef, onClose, !showSettings);
-  useVisualViewportSync(dialogRef, isPhone && !showSettings);
-  const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(isPhone, onClose);
   // Defaults to everything unread: the priority scope only holds articles
   // triage has rated 4 or 5, so it is a deliberate narrowing, not a starting
   // point. Both survive closing the dialog.
@@ -205,8 +199,7 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
     };
   }, []);
 
-  // Closing the dialog (or its parent unmounting) mid-run must not leave
-  // backend work running unattended.
+  // Leaving the page mid-run must not leave backend work running unattended.
   useEffect(() => {
     return () => {
       if (activeRun.current) void cancelCatchupReport(activeRun.current);
@@ -216,19 +209,12 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
   const sourcesById = new Map<string, CatchupSource>();
   (report?.sources ?? []).forEach((s) => sourcesById.set(s.id, s));
 
-  const openArticle = (id: string) => {
-    if (onOpenArticle) {
-      onOpenArticle(id);
-      onClose();
-      return;
-    }
-    const source = sourcesById.get(id);
-    if (source?.url) openUrl(source.url);
-  };
+  // A story's source opens in the reader beside the page, which stays put.
+  const openArticle = (id: string) => openArticleFromCatchup(id);
 
   const dateline = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
-  if (showSettings) return null;
+  const isFrontPage = !isPhone && !selectedArticleId;
 
   const providerUnavailable = settings?.ai.provider === "none";
   const setupError = isAiSetupError(error);
@@ -236,43 +222,46 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
   // does not need a second button saying the same thing.
   const inviting = !providerUnavailable && !report && !loading && !error;
 
-  return createPortal(
+  return (
     <div
-      className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 dialog-fade-in ${isPhone ? "" : "flex items-center justify-center"}`}
-      onClick={onClose}
+      className={`catchup-pane ${!isPhone ? "border-r border-white/5" : ""} bg-bg-secondary/70 flex flex-col h-full overflow-hidden`}
+      style={{
+        width: isPhone || isFrontPage ? "100%" : 420,
+        minWidth: isPhone ? "100%" : isFrontPage ? 0 : 360,
+        flex: isFrontPage ? 1 : undefined,
+      }}
+      role="region"
+      aria-labelledby="catchup-title"
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="catchup-title"
-        className={`${isPhone ? "fixed left-0 right-0 overflow-hidden" : "border border-white/10 rounded-2xl shadow-2xl"} flex flex-col`}
-        style={{
-          background: "rgba(22, 27, 34, 0.98)",
-          width: isPhone ? undefined : "min(1040px, 94vw)",
-          height: isPhone ? "100dvh" : undefined,
-          top: isPhone ? 0 : undefined,
-          willChange: isPhone ? "transform, height" : undefined,
-          ...swipeToDismissStyle,
-          maxHeight: isPhone ? undefined : "92vh",
-          margin: isPhone ? 0 : "0 20px",
-          paddingTop: isPhone ? "max(var(--sat, 0px), 60px)" : 0,
-          paddingBottom: isPhone ? "max(var(--sab, 0px), 12px)" : 0,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div
-          className="relative border-b border-white/5"
-          style={{ padding: isPhone ? "16px 56px 16px 16px" : "14px 76px 14px 28px", touchAction: isPhone ? "pan-y" : undefined }}
-          {...swipeToDismissHandlers}
-        >
+      {sidebarCollapsed && !isPhone && <CollapsedSidebarTitlebar />}
+      {isPhone && (
+        <div className="flex flex-shrink-0 items-center" style={{ height: 52, paddingLeft: 8 }}>
+          <button
+            onClick={() => setPhonePane("sidebar")}
+            className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
+            title="Open sidebar"
+            aria-label="Open sidebar"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="3" y1="6" x2="21" y2="6" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* The masthead stays put above the scroll, and above the window's
+          drag strip, so the controls are always reachable. */}
+      <div className="catchup-masthead flex-shrink-0 relative z-20 border-b border-white/5">
+        <div className="catchup-content" style={{ padding: isPhone ? "4px 16px 12px" : "14px 28px 12px" }}>
           {/* The nameplate and the run's controls share one row, like a
               masthead over its toolbar; on a narrow window the controls wrap
               under the title. */}
           <div className="flex flex-wrap items-center" style={{ columnGap: 20, rowGap: 10 }}>
-            <h3 id="catchup-title" className="catchup-nameplate text-text-primary" style={{ marginRight: "auto" }}>
+            <h2 id="catchup-title" className="catchup-nameplate text-text-primary" style={{ marginRight: "auto" }}>
               Quick Catch-up
-            </h3>
+            </h2>
             <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
               {!providerUnavailable && (
                 <label className="catchup-control">
@@ -337,20 +326,12 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
               )}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="tap-target absolute text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
-            style={{ right: isPhone ? 12 : 16, top: isPhone ? 12 : "50%", transform: isPhone ? undefined : "translateY(-50%)" }}
-            title="Close"
-            aria-label="Close"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M18 6L6 18M6 6l12 12" />
-            </svg>
-          </button>
         </div>
+      </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0" style={{ padding: isPhone ? "20px 16px" : "22px 28px 28px", minHeight: isPhone ? 0 : 260 }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+        <div className="catchup-content" style={{ padding: isPhone ? "16px 16px 24px" : "20px 28px 32px" }}>
+        <div className="catchup-body">
           {providerUnavailable && <AiSetupNotice />}
 
           {!providerUnavailable && !report && !loading && !error && (
@@ -421,11 +402,11 @@ export function CatchupDialog({ onClose, onOpenArticle }: Props) {
           )}
         </div>
 
-        <div className="border-t border-white/5 flex-shrink-0" style={{ padding: isPhone ? "8px 20px" : "8px 16px" }}>
+        <div className="border-t border-white/5" style={{ marginTop: 28, padding: isPhone ? "8px 0" : "8px 0" }}>
           <AIDisclaimer />
         </div>
+        </div>
       </div>
-    </div>,
-    document.body
+    </div>
   );
 }

@@ -78,7 +78,6 @@ describe("Sidebar — All Articles regression guard", () => {
     await user.click(screen.getByTitle("Today — your finite, sectioned daily edition"));
 
     expect(useUiStore.getState().sidebarView).toEqual({ type: "today" });
-    expect(useUiStore.getState().showCatchup).toBe(false);
   });
 
   it("reserves the desktop titlebar for macOS window controls", () => {

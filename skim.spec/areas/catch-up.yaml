@@ -29,6 +29,15 @@ behaviors:
       On-device models never run the phone out of memory: Catch-up trims its input to the model's
       budget, and a request over the budget fails with advice to narrow the range or use a cloud
       provider.
+  - id: page-not-modal
+    description: >-
+      Quick Catch-up is a page in the main window, not a modal: on desktop it takes the list
+      column like Today, filling the window until a story's article is opened beside it, and the
+      sidebar lists it under Today. On iOS it is pushed onto the article list like Today. Leaving
+      and coming back keeps the written page for half an hour.
+    source:
+      text: ideally newspaper view is not a modal
+      reference: Giulio, project chat, 2026-10-11
   - id: really-nice-newspaper-view
     description: >-
       The front page is set like a printed broadsheet on desktop and iOS: a serif nameplate on one

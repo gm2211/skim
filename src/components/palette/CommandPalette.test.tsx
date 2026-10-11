@@ -52,7 +52,7 @@ describe("CommandPalette", () => {
     renderPalette();
     await user.type(screen.getByRole("combobox"), "catch");
     await user.keyboard("{Enter}");
-    await waitFor(() => expect(useUiStore.getState().showCatchup).toBe(true));
+    await waitFor(() => expect(useUiStore.getState().sidebarView).toEqual({ type: "catchup" }));
     expect(useUiStore.getState().showCommandPalette).toBe(false);
   });
 

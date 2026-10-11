@@ -495,6 +495,8 @@ select option {
 /* Quick Catch-up front page. A broadsheet in miniature: a dateline under a
    double rule, the lead beside its picture, two featured stories, then a
    two-column grid of the rest and a dense "Also" block. */
+.catchup-pane { container-type: inline-size; }
+.catchup-content { width: 100%; max-width: 1080px; margin-inline: auto; }
 .catchup-page {
   --paper-rule: rgba(255, 255, 255, 0.11);
   --paper-rule-strong: rgba(255, 255, 255, 0.28);
@@ -692,7 +694,11 @@ select option {
   box-shadow: 0 0 0 2px var(--color-accent, #4c8dff);
   outline: none;
 }
-@media (max-width: 760px) {
+/* Keyed to the pane's own width, so the page folds to one column both on a
+   phone and in the column it keeps beside an open article. */
+@container (max-width: 760px) {
+  .catchup-dateline-row { flex-direction: column; gap: 4px; }
+  .catchup-dateline-scope { text-align: left; }
   .catchup-lead { grid-template-columns: 1fr; }
   .catchup-lead > .catchup-picture { order: -1; aspect-ratio: 16 / 9; }
   .catchup-tier, .catchup-briefs { grid-template-columns: 1fr; }

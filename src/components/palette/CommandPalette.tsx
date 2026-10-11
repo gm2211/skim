@@ -36,7 +36,9 @@ function useCommands(): PaletteCommand[] {
   const toggleRead = useToggleRead();
   const setPriority = useSetPriorityOverride();
 
-  const isToday = ui.sidebarView.type === "today";
+  // Today and Quick Catch-up are pages, not lists: the list-only commands
+  // (search, filters, mark all read) have nothing to act on there.
+  const isToday = ui.sidebarView.type === "today" || ui.sidebarView.type === "catchup";
   const commands: PaletteCommand[] = [];
   const add = (group: string, command: Omit<PaletteCommand, "group">) => commands.push({ group, ...command });
 
@@ -88,7 +90,7 @@ function useCommands(): PaletteCommand[] {
 
   {
     const g = "Actions";
-    add(g, { id: "action.catchup", icon: "newspaper", title: "Quick Catch-up", keywords: ["summary", "brief"], run: () => ui.setShowCatchup(true) });
+    add(g, { id: "action.catchup", icon: "newspaper", title: "Quick Catch-up", keywords: ["summary", "brief"], run: () => ui.openCatchup() });
     add(g, { id: "action.ask", icon: "chat", title: "Ask Skim", keywords: ["ai", "search", "chat"], run: () => runAppCommand("ask-skim") });
     add(g, { id: "action.refresh", icon: "refresh", title: "Refresh all feeds", keywords: ["reload", "sync", "fetch"], run: () => refreshAll.mutate() });
     if (!isToday) {

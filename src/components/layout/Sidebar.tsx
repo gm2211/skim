@@ -2,12 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats, useTriageProgress } from "../../hooks/useInbox";
 import { useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
-import { BoltIcon, ChatIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
+import { BoltIcon, ChatIcon, NewspaperIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 import { FeedsSection } from "./FeedsSection";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
-import { CatchupDialog } from "../chat/CatchupDialog";
 import { SkimTitle } from "./SkimTitle";
 import { useAppCommand } from "../../lib/appCommands";
 
@@ -16,7 +15,7 @@ export function Sidebar() {
   const [askOpen, setAskOpen] = useState(false);
   const [askVisited, setAskVisited] = useState(false);
   const [returnToAsk, setReturnToAsk] = useState(false);
-  const { selectedArticleId, sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone, showCatchup, setShowCatchup, openArticleFromCatchup } =
+  const { selectedArticleId, sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone, openCatchup } =
     useUiStore();
   const { data: feeds } = useFeeds();
   const { data: triageStats } = useTriageStats();
@@ -140,14 +139,6 @@ export function Sidebar() {
             useUiStore.getState().setSelectedArticleId(id);
           }}
         />}
-      {showCatchup && (
-        <CatchupDialog
-          onClose={() => setShowCatchup(false)}
-          onOpenArticle={(id) => {
-            openArticleFromCatchup(id);
-          }}
-        />
-      )}
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto" style={{ padding: "8px 16px 16px 16px" }}>
@@ -170,6 +161,23 @@ export function Sidebar() {
               style={{ fontSize: 17, fontWeight: 600 }}
             >
               Today
+            </span>
+          </div>
+          <div
+            onClick={openCatchup}
+            className="flex items-center gap-3 cursor-pointer transition-colors relative z-20 hover:text-text-primary"
+            style={{ padding: "6px 0" }}
+          >
+            <NewspaperIcon
+              size={16}
+              strokeWidth="1.5"
+              className={`flex-shrink-0 ${isActive({ type: "catchup" }) ? "opacity-100" : "opacity-50"}`}
+            />
+            <span
+              className={isActive({ type: "catchup" }) ? "text-text-primary" : "text-text-secondary"}
+              style={{ fontSize: 17, fontWeight: 600 }}
+            >
+              Quick Catch-up
             </span>
           </div>
         </div>

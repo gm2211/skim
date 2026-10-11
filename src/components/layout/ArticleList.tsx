@@ -66,6 +66,7 @@ export function buildArticleFilter({
     case "inbox":
     case "recent":
     case "today":
+    case "catchup":
       break;
   }
   // Starred is a keep-this list, not a queue: you star an article because you
@@ -227,7 +228,7 @@ export function ArticleList() {
     listCollapsed,
     isPhone,
     setPhonePane,
-    setShowCatchup,
+    openCatchup,
     setShowAddFeed,
   } = useUiStore();
   const markAllRead = useMarkAllRead();
@@ -417,6 +418,8 @@ export function ArticleList() {
       }
       case "today":
         return "Today";
+      case "catchup":
+        return "Quick Catch-up";
     }
   }, [sidebarView, themes, folders]);
 
@@ -614,7 +617,7 @@ export function ArticleList() {
           </button>
         )}
         <button
-          onClick={() => setShowCatchup(true)}
+          onClick={openCatchup}
           className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
           title="Quick Catch-up"
           aria-label="Quick Catch-up"

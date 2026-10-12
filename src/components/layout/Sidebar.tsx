@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats, useTriageProgress } from "../../hooks/useInbox";
 import { useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
-import { ChatIcon, NewspaperIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
+import { BoltIcon, ChatIcon, NewspaperIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 import { FeedsSection } from "./FeedsSection";
@@ -113,13 +113,12 @@ export function Sidebar() {
         >
           <ChatIcon />
         </button>
-        {/* The newspaper is Quick Catch-up everywhere; the bolt stays with
-            Today, which has its own row just below. */}
+        {/* The newspaper is Today everywhere; the bolt is Quick Catch-up. */}
         <button
-          onClick={openCatchup}
+          onClick={() => setSidebarView({ type: "today" })}
           className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
-          title="Quick Catch-up — the front page of what you missed"
-          aria-label="Quick Catch-up"
+          title="Today — your finite, sectioned daily edition"
+          aria-label="Today"
         >
           <NewspaperIcon />
         </button>
@@ -153,11 +152,11 @@ export function Sidebar() {
             className="flex items-center gap-3 cursor-pointer transition-colors relative z-20 hover:text-text-primary"
             style={{ padding: "6px 0" }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+            <NewspaperIcon
+              size={16}
+              strokeWidth="1.5"
               className={`flex-shrink-0 ${isActive({ type: "today" }) ? "opacity-100" : "opacity-50"}`}
-            >
-              <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
-            </svg>
+            />
             <span
               className={isActive({ type: "today" }) ? "text-text-primary" : "text-text-secondary"}
               style={{ fontSize: 17, fontWeight: 600 }}
@@ -170,7 +169,7 @@ export function Sidebar() {
             className="flex items-center gap-3 cursor-pointer transition-colors relative z-20 hover:text-text-primary"
             style={{ padding: "6px 0" }}
           >
-            <NewspaperIcon
+            <BoltIcon
               size={16}
               strokeWidth="1.5"
               className={`flex-shrink-0 ${isActive({ type: "catchup" }) ? "opacity-100" : "opacity-50"}`}

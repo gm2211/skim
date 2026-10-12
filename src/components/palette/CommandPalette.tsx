@@ -81,7 +81,7 @@ function useCommands(): PaletteCommand[] {
     if (canGoForwardArticle(ui)) {
       add(g, { id: "go.forward", icon: "forward", title: "Forward to next article", keywords: ["history"], shortcut: ["mod", "]"], run: () => useUiStore.getState().goForwardArticle() });
     }
-    add(g, { id: "go.today", icon: "bolt", title: "Today", keywords: ["edition", "front page"], run: () => ui.setSidebarView({ type: "today" }) });
+    add(g, { id: "go.today", icon: "newspaper", title: "Today", keywords: ["edition", "front page"], run: () => ui.setSidebarView({ type: "today" }) });
     add(g, { id: "go.all", icon: "list", title: "All Articles", run: () => ui.setSidebarView({ type: "all" }) });
     add(g, { id: "go.starred", icon: "star", title: "Starred", keywords: ["favorites"], run: () => ui.setSidebarView({ type: "starred" }) });
     add(g, { id: "go.recent", icon: "clock", title: "Recently Read", keywords: ["history"], run: () => ui.setSidebarView({ type: "recent" }) });
@@ -90,7 +90,7 @@ function useCommands(): PaletteCommand[] {
 
   {
     const g = "Actions";
-    add(g, { id: "action.catchup", icon: "newspaper", title: "Quick Catch-up", keywords: ["summary", "brief"], run: () => ui.openCatchup() });
+    add(g, { id: "action.catchup", icon: "bolt", title: "Quick Catch-up", keywords: ["summary", "brief"], run: () => ui.openCatchup() });
     add(g, { id: "action.ask", icon: "chat", title: "Ask Skim", keywords: ["ai", "search", "chat"], run: () => runAppCommand("ask-skim") });
     add(g, { id: "action.refresh", icon: "refresh", title: "Refresh all feeds", keywords: ["reload", "sync", "fetch"], run: () => refreshAll.mutate() });
     if (!isToday) {

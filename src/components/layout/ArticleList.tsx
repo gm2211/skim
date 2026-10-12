@@ -8,7 +8,7 @@ import { useRecentArticles, useRemoveRecent } from "../../hooks/useRecent";
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useFolders } from "../../hooks/useFolders";
 import { feedsForFolder } from "../../lib/smartFolder";
-import { CheckCircleIcon, ChatIcon, NewspaperIcon, PlusIcon, SearchIcon } from "../ui/icons";
+import { BoltIcon, CheckCircleIcon, ChatIcon, PlusIcon, SearchIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
@@ -630,7 +630,7 @@ export function ArticleList() {
               title="Quick Catch-up"
               aria-label="Quick Catch-up"
             >
-              <NewspaperIcon />
+              <BoltIcon />
             </button>
             <button
               onClick={() => setAskOpen(true)}

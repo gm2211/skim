@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CommandPalette } from "./CommandPalette";
 import { useUiStore } from "../../stores/uiStore";
 import { APP_COMMAND_EVENT } from "../../lib/appCommands";
+import { useAgentChatStore } from "../../stores/agentChatStore";
 
 const refresh = vi.fn();
 const toggleStar = vi.fn();
@@ -25,8 +26,10 @@ vi.mock("../../hooks/useLearning", () => ({
   useSetPriorityOverride: () => ({ mutate: vi.fn() }),
 }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
+const askAgent = vi.fn();
 vi.mock("../../services/commands", () => ({
   getArticles: vi.fn().mockResolvedValue([{ id: "a9", feed_id: "f1", title: "Rust 2027 roadmap" }]),
+  askAgent: (...args: unknown[]) => askAgent(...args),
 }));
 
 const INITIAL_STATE = useUiStore.getState();
@@ -44,7 +47,23 @@ beforeEach(() => {
   useUiStore.setState({ ...INITIAL_STATE, showCommandPalette: true }, true);
   refresh.mockClear();
   toggleStar.mockClear();
+  askAgent.mockReset();
+  useAgentChatStore.setState({ seed: null });
 });
+
+const ANSWER = {
+  content: "Two matches:\n- [1] Rust async runtimes compared\n- [2] Tokio 2.0 released",
+  provider: "anthropic",
+  model: "m",
+  sources: [
+    { id: "r1", title: "Rust async runtimes compared", feed_title: "Lobsters", url: null, published_at: null, source_type: "article" },
+    { id: "r2", title: "Tokio 2.0 released", feed_title: "Hacker News", url: null, published_at: null, source_type: "article" },
+    { id: "r3", title: "Unrelated", feed_title: "Hacker News", url: null, published_at: null, source_type: "article" },
+  ],
+  article_ids: ["r1", "r2", "r3"],
+  actions: [],
+  steps: [{ tool: "search_articles", label: "Searched for “rust async”" }],
+};
 
 describe("CommandPalette", () => {
   it("runs the top match on Enter and closes", async () => {
@@ -120,5 +139,82 @@ describe("CommandPalette", () => {
     await user.keyboard("{ArrowUp}{ArrowUp}");
     const all = screen.getAllByRole("option");
     expect(all[all.length - 1]).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("answers a question it has no command for, with links to the articles it found", async () => {
+    const user = userEvent.setup();
+    askAgent.mockResolvedValue(ANSWER);
+    useUiStore.setState({ sidebarView: { type: "today" } });
+    renderPalette();
+    await user.type(screen.getByRole("combobox"), "where's an article about rust async");
+    expect(screen.getAllByRole("option")[0]).toHaveTextContent("Ask Skim: where's an article about rust async");
+    await user.keyboard("{Enter}");
+
+    expect(await screen.findByText(/Two matches/)).toBeInTheDocument();
+    expect(screen.getByText("Searched for “rust async”")).toBeInTheDocument();
+    expect(useUiStore.getState().showCommandPalette).toBe(true);
+    const [messages, context] = askAgent.mock.calls[0];
+    expect(messages).toEqual([{ role: "user", content: "where's an article about rust async" }]);
+    expect(context).toMatchObject({ view: "today" });
+
+    // Only the cited articles are offered, and Enter opens the first.
+    const options = screen.getAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual([
+      expect.stringContaining("Rust async runtimes compared"),
+      expect.stringContaining("Tokio 2.0 released"),
+    ]);
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(useUiStore.getState().selectedArticleId).toBe("r1"));
+    expect(useUiStore.getState().showCommandPalette).toBe(false);
+  });
+
+  it("asks follow-ups with the conversation and stable citation numbers", async () => {
+    const user = userEvent.setup();
+    askAgent.mockResolvedValue(ANSWER);
+    renderPalette();
+    await user.type(screen.getByRole("combobox"), "where's the rust piece?{Enter}");
+    await screen.findByText(/Two matches/);
+    askAgent.mockResolvedValue({ ...ANSWER, content: "It compares Tokio and smol [1]." });
+    await user.type(screen.getByRole("combobox"), "what does it say?{Enter}");
+    await screen.findByText(/compares Tokio and smol/);
+    const [messages, , priorIds] = askAgent.mock.calls[1];
+    expect(messages.map((m: { role: string }) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(priorIds).toEqual(["r1", "r2", "r3"]);
+  });
+
+  it("continues the conversation in the full chat", async () => {
+    const user = userEvent.setup();
+    askAgent.mockResolvedValue(ANSWER);
+    const events: string[] = [];
+    window.addEventListener(APP_COMMAND_EVENT, (e) => events.push((e as CustomEvent).detail));
+    useUiStore.setState({ selectedArticleId: "a1" });
+    renderPalette();
+    await user.type(screen.getByRole("combobox"), "where's the rust piece?{Enter}");
+    await screen.findByText(/Two matches/);
+    await user.click(screen.getByRole("button", { name: /Open full chat/ }));
+    await waitFor(() => expect(events).toContain("ask-skim"));
+    const seed = useAgentChatStore.getState().seed;
+    expect(seed?.context).toMatchObject({ article_id: "a1" });
+    expect(seed?.messages?.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(useUiStore.getState().showCommandPalette).toBe(false);
+  });
+
+  it("opens the article when the agent asks to", async () => {
+    const user = userEvent.setup();
+    askAgent.mockResolvedValue({ ...ANSWER, content: "Opened it.", actions: [{ type: "open_article", article_id: "r2" }] });
+    renderPalette();
+    await user.type(screen.getByRole("combobox"), "open the tokio article{Enter}");
+    await waitFor(() => expect(useUiStore.getState().selectedArticleId).toBe("r2"));
+    expect(useUiStore.getState().showCommandPalette).toBe(false);
+  });
+
+  it("goes back to commands, keeping the question, when asking fails", async () => {
+    const user = userEvent.setup();
+    askAgent.mockRejectedValue("Request failed: 500");
+    renderPalette();
+    await user.type(screen.getByRole("combobox"), "what is new in rust?{Enter}");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Request failed: 500");
+    expect(screen.getByRole("combobox")).toHaveValue("what is new in rust?");
+    expect(screen.getAllByRole("option")[0]).toHaveTextContent("Ask Skim");
   });
 });

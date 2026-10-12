@@ -443,6 +443,24 @@
       sources: ASK_SOURCES,
     }),
     chat_with_article: () => ({ content: ASK_ANSWER, provider: "anthropic", model: "claude-sonnet-5" }),
+    // The app agent: a keyword search over the fixtures, answered as a list.
+    ask_agent: async ({ messages }) => {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const question = messages[messages.length - 1].content;
+      const stop = new Set(["where", "what", "which", "article", "articles", "about", "there", "that", "this", "with", "from", "find"]);
+      const terms = question.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !stop.has(w));
+      const stem = (t) => t.replace(/s$/, "");
+      const hits = articles.filter((a) => terms.some((t) => a.title.toLowerCase().includes(stem(t)))).slice(0, 4);
+      const sources = hits.map((a) => ({ id: a.id, title: a.title, feed_title: a.feed_title, url: a.url, published_at: a.published_at, source_type: "article" }));
+      const content = hits.length
+        ? `${hits.length} articles cover this:\n\n${hits.map((a, i) => `- [${i + 1}] **${a.title}** (${a.feed_title})`).join("\n")}\n\n[1] is the most direct match.`
+        : "Nothing in your articles matches that.";
+      return {
+        content, provider: "anthropic", model: "claude-sonnet-5", sources,
+        article_ids: sources.map((s) => s.id), actions: [],
+        steps: [{ tool: "search_articles", label: `Searched for “${terms.join(" ")}”` }],
+      };
+    },
     ai_auto_organize_feeds: () => ORGANIZE_PROPOSALS,
     apply_folder_organization: () => folders,
     list_duplicate_feeds: () => [],

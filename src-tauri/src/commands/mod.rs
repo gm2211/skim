@@ -1,4 +1,5 @@
 pub mod ai;
+pub mod agent;
 pub mod aggregator;
 pub mod article_body;
 pub mod articles;

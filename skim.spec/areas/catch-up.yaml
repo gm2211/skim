@@ -11,6 +11,13 @@ behaviors:
   - id: stories-print-as-they-land
     description: >-
       Stories appear as the model produces them, with placeholders for ledes still being written.
+      The front page keeps its shape throughout: the slots the run will fill (the expected story
+      count, or seven before it is known) are drawn as ghost shapes in their tiers from the first
+      story on, and the masthead controls stay on one row, dropping their labels when narrow. A
+      lead with no picture lists its coverage by title where the picture would go.
+    source:
+      text: looks great at first but then loses shape
+      reference: Giulio, project chat, 2026-10-11
   - id: cited-sources
     description: >-
       Each story groups its coverage and cites every source it used; tapping a source opens that

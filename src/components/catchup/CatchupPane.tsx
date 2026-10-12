@@ -28,7 +28,7 @@ const catchupCache = new Map<string, CacheEntry>();
 const catchupErrors = new Map<string, string>();
 
 /** The one size every control on the masthead's toolbar shares. */
-const CONTROL_STYLE = { height: 32, minHeight: 32, fontSize: 12.5, padding: "0 30px 0 10px" } as const;
+const CONTROL_STYLE = { height: 32, minHeight: 32, fontSize: 12.5, padding: "0 30px 0 10px", maxWidth: 200 } as const;
 
 /** How far back to catch up. `null` is the whole unread backlog. */
 export const CATCHUP_RANGES: { value: CatchupSinceHours; label: string }[] = [
@@ -396,6 +396,7 @@ export function CatchupPane() {
                 status={{ message: progress?.message ?? "Writing the page…", elapsed }}
                 loading={loading}
                 written={written}
+                expected={progress?.stage === "writing" || progress?.stage === "done" ? progress.total : null}
                 onOpenArticle={openArticle}
               />
             </>

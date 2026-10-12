@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CatchupPane, catchupScopeSummary, catchupSelection } from "./CatchupPane";
 import { useUiStore } from "../../stores/uiStore";
@@ -235,10 +235,13 @@ describe("CatchupPane", () => {
     render(<CatchupPane />);
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
 
-    expect(await screen.findByText("3 sources")).toBeInTheDocument();
-    expect(screen.getByText("theverge.com · Lobsters · Hacker News")).toBeInTheDocument();
-    expect(screen.getByTitle("verl 1.0 released")).toBeInTheDocument();
-    expect(screen.getByTitle("verl 1.0: RL for LLMs at scale")).toBeInTheDocument();
+    expect(await screen.findByText("theverge.com · Lobsters · Hacker News")).toBeInTheDocument();
+    // A lead without a picture lists its coverage by title where the picture would go.
+    const coverage = screen.getByRole("complementary", { name: "Coverage" });
+    expect(within(coverage).getAllByRole("button")).toHaveLength(3);
+    expect(within(coverage).getByTitle("verl 1.0 released")).toBeInTheDocument();
+    expect(within(coverage).getByTitle("verl 1.0: RL for LLMs at scale")).toBeInTheDocument();
+    expect(within(coverage).getByText("Hacker News")).toBeInTheDocument();
   });
 
   it("names the publication rather than the feed's own format title", async () => {

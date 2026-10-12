@@ -81,6 +81,14 @@ const SCENES = [
     run: async (p) => { await runCatchup(p); await unclip(p); },
     target: CATCHUP,
   },
+  // The first story landing, with no pictures: the page must keep its shape.
+  {
+    name: "catchup-first-story",
+    viewport: TALL,
+    init: () => { window.__SKIM_CATCHUP_WRITTEN__ = 0; window.__SKIM_CATCHUP_NO_PICTURES__ = true; },
+    run: async (p) => { await runCatchup(p); await unclip(p); },
+    target: CATCHUP,
+  },
   {
     name: "catchup-reading",
     viewport: DESKTOP,

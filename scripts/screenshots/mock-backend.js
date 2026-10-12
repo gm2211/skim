@@ -378,7 +378,10 @@
       const written = window.__SKIM_CATCHUP_WRITTEN__;
       if (written == null) return CATCHUP;
       // A negative count is the first pass, still reading: no page yet.
-      const stories = written < 0 ? [] : CATCHUP.stories.map((story, i) => (i < written ? story : { ...story, lede: "" }));
+      // `window.__SKIM_CATCHUP_NO_PICTURES__` strips the pictures, the way a
+      // run over text-only feeds comes back.
+      const strip = (story) => (window.__SKIM_CATCHUP_NO_PICTURES__ ? { ...story, image_url: null } : story);
+      const stories = written < 0 ? [] : CATCHUP.stories.map((story, i) => strip(i < written ? story : { ...story, lede: "" }));
       setTimeout(() => {
         emit("catchup_progress", {
           stage: written < 0 ? "reading" : "writing",

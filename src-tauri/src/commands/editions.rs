@@ -31,6 +31,13 @@ pub async fn get_or_generate_today_edition(
         let candidates =
             today_edition::collect_candidates(&conn, starts_at, ends_at, generated_at, story_limit)
                 .map_err(|error| error.to_string())?;
+        // A short unread page grows only when more stories have arrived since
+        // it was made; otherwise keep it and skip the planning call.
+        if let Some(view) = today_edition::existing(&conn, &id).map_err(|error| error.to_string())? {
+            if !today_edition::has_new_arrivals(&conn, &view, &candidates).map_err(|error| error.to_string())? {
+                return Ok(view);
+            }
+        }
         let settings: crate::db::models::AppSettings = queries::get_setting(&conn, "app_settings")
             .map_err(|error| error.to_string())?
             .as_deref()

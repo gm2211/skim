@@ -26,7 +26,17 @@ interface Message {
   articleIds?: string[];
 }
 
+/** A chat about something on screen: it reads exactly these reports. */
+export interface PinnedChat {
+  title: string;
+  articleIds: string[];
+  intro: string;
+  placeholder: string;
+  prompts: string[];
+}
+
 interface Props {
+  pinned?: PinnedChat;
   open?: boolean;
   restoreFocusTarget?: () => HTMLElement | null;
   onClose: () => void;
@@ -40,7 +50,7 @@ const EXAMPLE_PROMPTS = [
   "Find pieces about distributed systems",
 ];
 
-export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpenArticle }: Props) {
+export function AskSkimDialog({ pinned, open = true, restoreFocusTarget, onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
   const showSettings = useUiStore((s) => s.showSettings);
   const { data: settings } = useSettings();
@@ -102,7 +112,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
     const history: ChatMessageInput[] = messages.map((m) => ({ role: m.role, content: chatPrompt(m.content, m.reply) }));
 
     try {
-      const resp: ArticleChatResponse = await chatWithArticles(scope, chatPrompt(query, reply), history, [...messages].reverse().find((message) => message.role === "assistant")?.articleIds);
+      const resp: ArticleChatResponse = await chatWithArticles(scope, chatPrompt(query, reply), history, [...messages].reverse().find((message) => message.role === "assistant")?.articleIds, pinned?.articleIds);
       setMessages((m) => [
         ...m,
         { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids },
@@ -154,9 +164,9 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
             <path d="M21 21l-4.35-4.35" />
           </svg>
           <h3 id="ask-skim-title" className="text-text-primary flex-1" style={{ fontSize: isPhone ? 20 : 16, fontWeight: 600 }}>
-            Ask Skim
+            {pinned?.title ?? "Ask Skim"}
           </h3>
-          <Select
+          {!pinned && <Select
             aria-label="Articles to search"
             value={scope}
             onChange={(e) => setScope(e.target.value as Scope)}
@@ -165,7 +175,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
             <option value="inbox">Inbox</option>
             <option value="unread">Unread</option>
             <option value="all">All</option>
-          </Select>
+          </Select>}
           <ModelPicker surface="chat" compact disabled={loading} />
           <button
             onClick={onClose}
@@ -186,13 +196,13 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
           {messages.length === 0 && !loading && !needsSetup && !isAiSetupError(error) && (
             <div className="flex flex-col items-center text-center" style={{ padding: "48px 20px 32px" }}>
               <p className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>
-                Ask anything about articles in your feed.
+                {pinned?.intro ?? "Ask anything about articles in your feed."}
               </p>
               <p className="text-text-muted" style={{ fontSize: 12.5, marginTop: 4 }}>
-                Answers cite the articles they come from. Try one of these:
+                Answers cite the {pinned ? "reports" : "articles"} they come from. Try one of these:
               </p>
               <div className="flex flex-wrap justify-center" style={{ gap: 8, marginTop: 16, maxWidth: 520 }}>
-                {EXAMPLE_PROMPTS.map((prompt) => (
+                {(pinned?.prompts ?? EXAMPLE_PROMPTS).map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
@@ -259,7 +269,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
               >
                 <path d="M21 12a9 9 0 11-6.219-8.56" />
               </svg>
-              <span style={{ fontSize: 12 }}>Searching articles…</span>
+              <span style={{ fontSize: 12 }}>{pinned ? "Reading the reports…" : "Searching articles…"}</span>
             </div>
           )}
 
@@ -276,7 +286,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
           <div className="flex items-center gap-2 min-w-0">
             <textarea
               ref={inputRef}
-              aria-label="Question about your articles"
+              aria-label={pinned ? pinned.placeholder : "Question about your articles"}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -285,7 +295,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
                   send();
                 }
               }}
-              placeholder="Ask about your articles…"
+              placeholder={pinned?.placeholder ?? "Ask about your articles…"}
               rows={2}
               className="flex-1 min-w-0 border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors resize-none"
               style={{ background: "rgba(255, 255, 255, 0.05)", padding: "10px 12px", fontSize: 13, width: 0 }}

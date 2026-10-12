@@ -115,7 +115,7 @@ describe("AskSkimDialog setup recovery", () => {
     expect(screen.getByText("Evidence [1]")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Send" }));
     await screen.findByText("Answer");
-    expect(chatWithArticles).toHaveBeenLastCalledWith("all", "Summarize that", [{ role: "user", content: "Find quasar" }, { role: "assistant", content: "Evidence [1]" }], ["a"]);
+    expect(chatWithArticles).toHaveBeenLastCalledWith("all", "Summarize that", [{ role: "user", content: "Find quasar" }, { role: "assistant", content: "Evidence [1]" }], ["a"], undefined);
   });
 
   it("explains missing MLX weights without claiming the provider is unconfigured", async () => {
@@ -145,7 +145,7 @@ describe("AskSkimDialog setup recovery", () => {
     expect(screen.getByRole("textbox")).toHaveValue("What changed today?");
     await user.click(screen.getByRole("button", { name: "Send" }));
     expect(await screen.findByText("Answer")).toBeInTheDocument();
-    expect(chatWithArticles).toHaveBeenCalledWith("unread", "What changed today?", [], undefined);
+    expect(chatWithArticles).toHaveBeenCalledWith("unread", "What changed today?", [], undefined, undefined);
   });
 
   it("uses separate chat provider even when main AI is disabled", () => {

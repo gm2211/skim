@@ -436,6 +436,24 @@ fn retrieve_chat_articles_with_references(
     retrieve_chat_articles(conn, scope, query, messages)
 }
 
+/// Most reports a pinned chat (a Today page or one of its stories) reads.
+const PINNED_CHAT_ARTICLES: usize = 30;
+
+/// A chat about something on screen reads exactly its reports, in the order
+/// given, instead of searching the library.
+fn pinned_chat_articles(
+    conn: &rusqlite::Connection,
+    ids: &[String],
+) -> Result<Vec<crate::db::models::ArticleWithFeed>, rusqlite::Error> {
+    let mut articles: Vec<crate::db::models::ArticleWithFeed> = Vec::new();
+    for id in ids {
+        if articles.len() == PINNED_CHAT_ARTICLES { break; }
+        if articles.iter().any(|article| article.article.id == *id) { continue; }
+        if let Some(article) = queries::get_article_by_id(conn, id)? { articles.push(article); }
+    }
+    Ok(articles)
+}
+
 /// Evidence selection uses user-authored topic context only. Assistant output
 /// and generated summaries never become retrieval terms or source evidence.
 fn evidence_query(query: &str, messages: &[ChatMessageInput], source: Option<&str>) -> String {
@@ -486,6 +504,7 @@ pub async fn chat_with_articles(
     query: String,
     messages: Vec<ChatMessageInput>,
     prior_article_ids: Option<Vec<String>>,
+    pinned_article_ids: Option<Vec<String>>,
 ) -> Result<ArticleChatResponse, String> {
     let trimmed_query = query.trim().to_string();
     if trimmed_query.is_empty() {
@@ -495,9 +514,14 @@ pub async fn chat_with_articles(
     let (selected, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
-        let selected = retrieve_chat_articles_with_references(&conn, &scope, &trimmed_query, &messages,
-            prior_article_ids.as_deref().unwrap_or_default())
-            .map_err(|e| e.to_string())?;
+        let pinned = pinned_article_ids.unwrap_or_default();
+        let selected = if pinned.is_empty() {
+            retrieve_chat_articles_with_references(&conn, &scope, &trimmed_query, &messages,
+                prior_article_ids.as_deref().unwrap_or_default())
+                .map_err(|e| e.to_string())?
+        } else {
+            pinned_chat_articles(&conn, &pinned).map_err(|e| e.to_string())?
+        };
         (selected, settings_json)
     };
     if selected.is_empty() {
@@ -1133,6 +1157,16 @@ mod tests {
         assert!(unknown.contains("Publication time (UTC): unknown"));
         assert!(!unknown.contains("1970-01-01"));
         assert!(publication_context(Some(i64::MAX)).contains("unknown"));
+    }
+
+    #[test]
+    fn pinned_chat_reads_exactly_the_given_reports_in_order() {
+        let conn = retrieval_database();
+        let ids = ["cached", "missing", "old", "cached"].map(String::from);
+        let selected = pinned_chat_articles(&conn, &ids).unwrap();
+        assert_eq!(selected.iter().map(|a| a.article.id.as_str()).collect::<Vec<_>>(), ["cached", "old"]);
+        let many: Vec<String> = (0..50).map(|index| format!("recent-{index}")).collect();
+        assert_eq!(pinned_chat_articles(&conn, &many).unwrap().len(), PINNED_CHAT_ARTICLES);
     }
 
     fn retrieval_database() -> rusqlite::Connection {

@@ -538,8 +538,10 @@ export const chatWithArticles = (
   query: string,
   messages: ChatMessageInput[],
   priorArticleIds?: string[],
+  /** Read exactly these reports instead of searching the library. */
+  pinnedArticleIds?: string[],
 ) =>
-  invoke<ArticleChatResponse>("chat_with_articles", { scope, query, messages, priorArticleIds: priorArticleIds ?? null });
+  invoke<ArticleChatResponse>("chat_with_articles", { scope, query, messages, priorArticleIds: priorArticleIds ?? null, pinnedArticleIds: pinnedArticleIds ?? null });
 export const webSearch = (query: string) =>
   invoke<SearchResult[]>("web_search", { query });
 

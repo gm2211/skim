@@ -44,9 +44,11 @@ struct ArticleListView: View {
                     searchBar
                 }
                 if showToday {
-                    TodayEditionView(showSettings: $showTodaySettings) {
-                        showToday = false
-                    }
+                    TodayEditionView(
+                        showSettings: $showTodaySettings,
+                        onBrowseArticles: { showToday = false },
+                        onAsk: { request in gatedAI { dismissTextEntry(); activeAIChat = request } }
+                    )
                     .environmentObject(model)
                 } else {
                     content
@@ -481,6 +483,14 @@ struct ArticleListView: View {
                 Spacer()
 
                 if showToday {
+                    if let items = model.todayEdition?.items, !items.isEmpty {
+                        BorderlessIconButton(systemName: SkimIcon.chat, title: "Ask about Today", size: 20, tapSize: 42) {
+                            gatedAI {
+                                dismissTextEntry()
+                                activeAIChat = TodayChat.page(items, model: model)
+                            }
+                        }
+                    }
                     BorderlessIconButton(systemName: SkimIcon.settings, title: "Today settings", size: 20, tapSize: 42) {
                         showTodaySettings = true
                     }

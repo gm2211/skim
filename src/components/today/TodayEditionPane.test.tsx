@@ -22,6 +22,7 @@ vi.mock("../../services/commands", () => ({
   TODAY_LEDE_PROGRESS_EVENT: "today_lede_progress",
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
+  chatWithArticles: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -179,6 +180,37 @@ describe("TodayEditionPane", () => {
     expect(screen.getByRole("button", { name: "Default snapshot title" })).toBeVisible();
     // With no picture the report's own quote carries the lead.
     expect(screen.getByText("Supporting passage from the report.")).toBeVisible();
+  });
+
+  it("asks about the whole page or one story, reading just their reports", async () => {
+    vi.mocked(commands.getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } });
+    HTMLElement.prototype.scrollTo = vi.fn();
+    vi.mocked(commands.chatWithArticles).mockResolvedValue({ content: "Answer", sources: [], provider: "ollama", model: "m", article_ids: [] });
+    const member = makeItem({}).member_articles[0];
+    const second = makeItem({
+      story_id: "story-two", snapshot_title: "Second story", representative_article_id: "two-lead", editorial: editorial("Second summary of the day."),
+      member_articles: [{ ...member, article_id: "two-other", is_representative: false }, { ...member, article_id: "two-lead" }],
+    });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({ editorial: editorial("First summary of the day.") }), second]));
+    const user = userEvent.setup();
+    renderPane();
+    await screen.findByRole("button", { name: "Second story" });
+
+    await user.click(screen.getByRole("button", { name: "Ask about Today" }));
+    const page = screen.getByRole("dialog", { name: "Ask about Today" });
+    expect(within(page).queryByRole("combobox", { name: "Articles to search" })).not.toBeInTheDocument();
+    await user.type(within(page).getByRole("textbox"), "What matters?");
+    await user.click(within(page).getByRole("button", { name: "Send" }));
+    await within(page).findByText("Answer");
+    expect(vi.mocked(commands.chatWithArticles).mock.lastCall?.[4]).toEqual(["article-default", "two-lead", "two-other"]);
+    await user.click(within(page).getByRole("button", { name: "Close" }));
+
+    await user.click(screen.getByRole("button", { name: "Ask about Second story" }));
+    const story = screen.getByRole("dialog", { name: "Ask about this story" });
+    await user.type(within(story).getByRole("textbox"), "Why?");
+    await user.click(within(story).getByRole("button", { name: "Send" }));
+    await within(story).findByText("Answer");
+    expect(vi.mocked(commands.chatWithArticles).mock.lastCall?.[4]).toEqual(["two-lead", "two-other"]);
   });
 
   it("leaves link-only feed stubs off the page", async () => {

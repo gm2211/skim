@@ -1,6 +1,28 @@
 # README demo
 
-`docs/skim-demo.gif` is generated, not recorded. Two steps:
+## Walkthrough video
+
+`docs/skim-walkthrough.mp4` and the `docs/skim-walkthrough.gif` the README shows
+are a scripted recording: one continuous session through the app with a visible
+pointer and a caption per feature.
+
+```bash
+pnpm dev                          # in one shell
+pnpm walkthrough                  # records, then encodes the MP4 and GIF
+```
+
+`record.mjs` drives the app against the same demo fixtures as the stills, so
+it needs no feeds, key or model and comes out the same every run. Frames come
+from Chromium's screencast with their paint times, into `.walkthrough/`
+(ignored by git); `build-video.mjs` resamples them to a constant frame rate.
+To change what the video shows or says, edit `CHAPTERS` in `record.mjs`;
+`CHAPTERS=today,reader node scripts/screenshots/record.mjs` records just those
+chapters while iterating. `GIF_WIDTH` and `GIF_FPS` trade GIF size for
+sharpness. Needs ffmpeg with libx264.
+
+## Stills
+
+The stills are generated the same way. Two steps:
 
 ```bash
 pnpm dev                          # in one shell

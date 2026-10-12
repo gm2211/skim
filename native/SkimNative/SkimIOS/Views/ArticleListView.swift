@@ -11,7 +11,11 @@ import FoundationModels
 
 struct ArticleListView: View {
     @EnvironmentObject private var model: AppModel
+    /// Today is showing in place of the article list, as a bottom-bar tab.
     @State private var showToday = false
+    @State private var showTodaySettings = false
+    @State private var showBottomBarEditor = false
+    @AppStorage(BottomBarItem.storageKey) private var bottomBarStorage = BottomBarItem.defaultStorage
     @State private var showImporter = false
     @State private var showFeedPicker = false
     @State private var showAddFeed = false
@@ -36,11 +40,18 @@ struct ArticleListView: View {
 
             VStack(spacing: 0) {
                 topBar
-                if isSearchActive {
+                if isSearchActive && !showToday {
                     searchBar
                 }
-                content
-                bottomFilter
+                if showToday {
+                    TodayEditionView(showSettings: $showTodaySettings) {
+                        showToday = false
+                    }
+                    .environmentObject(model)
+                } else {
+                    content
+                }
+                bottomBar
             }
             .contentShape(Rectangle())
             .simultaneousGesture(openFeedPickerGesture)
@@ -79,12 +90,15 @@ struct ArticleListView: View {
                     onToday: {
                         dismissTextEntry()
                         showFeedPicker = false
-                        showToday = true
+                        openToday()
                     },
                     onAIInbox: {
                         dismissTextEntry()
                         showFeedPicker = false
                         presentAIInbox()
+                    },
+                    onShowList: {
+                        showToday = false
                     },
                     onRefresh: {
                         Task { await model.refreshAll() }
@@ -98,8 +112,11 @@ struct ArticleListView: View {
         .animation(.smooth(duration: 0.26), value: showFeedPicker)
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
-        .navigationDestination(isPresented: $showToday) {
-            TodayEditionView()
+        .sheet(isPresented: $showBottomBarEditor) {
+            BottomBarEditor(storage: $bottomBarStorage)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(SkimStyle.chrome)
         }
         .fileImporter(
             isPresented: $showImporter,
@@ -455,7 +472,7 @@ struct ArticleListView: View {
             }
 
             HStack(alignment: .center, spacing: 18) {
-                BorderlessIconButton(systemName: "line.3.horizontal", title: "Feeds", size: 20, tapSize: 42) {
+                BorderlessIconButton(systemName: SkimIcon.feeds, title: "Feeds", size: 20, tapSize: 42) {
                     dismissTextEntry()
                     withAnimation(.smooth(duration: 0.26)) {
                         showFeedPicker = true
@@ -463,27 +480,37 @@ struct ArticleListView: View {
                 }
                 Spacer()
 
+                if showToday {
+                    BorderlessIconButton(systemName: SkimIcon.settings, title: "Today settings", size: 20, tapSize: 42) {
+                        showTodaySettings = true
+                    }
+                }
+
                 Menu {
-                    Button("Quick Catch-up", systemImage: "bolt") {
+                    Button("Quick Catch-up", systemImage: SkimIcon.catchUp) {
                         presentQuickCatchUp()
                     }
-                    Button("Chat with Articles", systemImage: "bubble.left") {
+                    Button("Chat with Articles", systemImage: SkimIcon.chat) {
                         presentArticleChat()
                     }
-                    Button("AI Inbox", systemImage: "tray") {
+                    Button("AI Inbox", systemImage: SkimIcon.aiInbox) {
                         presentAIInbox()
                     }
                     Divider()
-                    Button("Add RSS Feed", systemImage: "plus") {
+                    Button("Add RSS Feed", systemImage: SkimIcon.addFeed) {
                         dismissTextEntry()
                         showAddFeed = true
                     }
-                    Button("Settings", systemImage: "gearshape") {
+                    Button("Customize Bottom Bar", systemImage: "slider.horizontal.3") {
+                        dismissTextEntry()
+                        showBottomBarEditor = true
+                    }
+                    Button("Settings", systemImage: SkimIcon.settings) {
                         dismissTextEntry()
                         showSettings = true
                     }
                 } label: {
-                    Image(systemName: "ellipsis")
+                    Image(systemName: SkimIcon.more)
                         .font(.system(size: 23, weight: .bold))
                         .frame(width: 42, height: 42)
                         .contentShape(Rectangle())
@@ -640,63 +667,93 @@ struct ArticleListView: View {
             .safeAreaInsets.bottom ?? 0
     }
 
-    private var bottomFilter: some View {
+    private var bottomBarItems: [BottomBarItem] {
+        BottomBarItem.decode(bottomBarStorage)
+    }
+
+    /// The bottom bar: the views Giulio picked (Customize Bottom Bar), each an
+    /// icon over its name. List filters and Today swap the main view in place;
+    /// Quick Catch-up and AI Inbox open their page.
+    private var bottomBar: some View {
         HStack(spacing: 0) {
-            Button {
-                dismissTextEntry()
-                model.selectedFolderID = nil
-                model.listMode = .unread
-            } label: {
-                Label("Unread", systemImage: "checkmark.circle.fill")
-                    .labelStyle(.iconOnly)
-                    .font(.system(size: 17, weight: .medium))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(model.listMode == .unread && model.selectedFolderID == nil ? SkimStyle.accent : SkimStyle.secondary)
-
-            ForEach(ArticleListMode.allCases) { mode in
-                if mode != .unread {
-                    Button {
-                        dismissTextEntry()
-                        model.selectedFolderID = nil
-                        model.listMode = mode
-                    } label: {
-                        Label(mode.title, systemImage: mode.systemImage)
-                            .labelStyle(.iconOnly)
-                            .font(.system(size: 17, weight: .medium))
-                            .frame(maxWidth: .infinity)
+            ForEach(bottomBarItems) { item in
+                Button {
+                    selectBottomBarItem(item)
+                } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: item.systemImage)
+                            .font(.system(size: 18, weight: .medium))
+                            .frame(height: 22)
+                        Text(item.title)
+                            .font(.system(size: 10, weight: .semibold))
+                            .lineLimit(1)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(model.listMode == mode && model.selectedFolderID == nil ? SkimStyle.accent : SkimStyle.secondary)
-                }
-            }
-
-            Button {
-                withAnimation(.smooth(duration: 0.18)) {
-                    showSearch = true
-                    isSearchFocused = true
-                }
-            } label: {
-                Label("Search", systemImage: "magnifyingglass")
-                    .labelStyle(.iconOnly)
-                    .font(.system(size: 17, weight: .medium))
                     .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(isBottomBarItemSelected(item) ? SkimStyle.accent : SkimStyle.secondary)
+                .accessibilityLabel(item.title)
+                .accessibilityAddTraits(isBottomBarItemSelected(item) ? .isSelected : [])
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(isSearchActive ? SkimStyle.accent : SkimStyle.secondary)
         }
-        .padding(.horizontal, 24)
-        .frame(height: 36)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity)
-        .background(SkimStyle.chrome.opacity(0.96))
+        .background(SkimStyle.chrome.opacity(0.96).ignoresSafeArea(.all, edges: .bottom))
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(SkimStyle.separator)
                 .frame(height: 1)
         }
-        .ignoresSafeArea(.all, edges: .bottom)
-        .ignoresSafeArea(.all, edges: .bottom)
+        .contextMenu {
+            Button("Customize Bottom Bar", systemImage: "slider.horizontal.3") {
+                showBottomBarEditor = true
+            }
+        }
+    }
+
+    private func isBottomBarItemSelected(_ item: BottomBarItem) -> Bool {
+        switch item {
+        case .today:
+            return showToday
+        case .search:
+            return isSearchActive && !showToday
+        case .catchUp, .aiInbox:
+            return false
+        case .unread, .all, .starred, .recent:
+            return !showToday && !isSearchActive && model.selectedFolderID == nil && model.listMode == item.listMode
+        }
+    }
+
+    private func selectBottomBarItem(_ item: BottomBarItem) {
+        dismissTextEntry()
+        switch item {
+        case .today:
+            openToday()
+        case .search:
+            showToday = false
+            withAnimation(.smooth(duration: 0.18)) {
+                showSearch = true
+                isSearchFocused = true
+            }
+        case .catchUp:
+            presentQuickCatchUp()
+        case .aiInbox:
+            presentAIInbox()
+        case .unread, .all, .starred, .recent:
+            showToday = false
+            model.selectedFolderID = nil
+            if let mode = item.listMode {
+                model.listMode = mode
+            }
+        }
+    }
+
+    private func openToday() {
+        showSearch = false
+        model.searchQuery = ""
+        showToday = true
     }
 
     /// The magnifier-tab search box is showing and/or has a query — global search mode.
@@ -705,6 +762,9 @@ struct ArticleListView: View {
     }
 
     private var compactTitle: String {
+        if showToday {
+            return "Today"
+        }
         if isSearchActive {
             return "Search"
         }
@@ -751,6 +811,8 @@ private struct FeedPickerSheet: View {
     var onCatchUp: () -> Void
     var onToday: () -> Void
     var onAIInbox: () -> Void
+    /// A feed, folder or library view was picked: leave Today for the list.
+    var onShowList: () -> Void
     var onRefresh: () -> Void
 
     var body: some View {
@@ -777,33 +839,36 @@ private struct FeedPickerSheet: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        pickerRow(iconSystemName: "sun.max", title: "Today", count: nil, isSelected: false, action: onToday)
+                        pickerRow(iconSystemName: SkimIcon.today, title: "Today", count: nil, isSelected: false, action: onToday)
 
-                        pickerRow(iconSystemName: "square.grid.2x2", title: "All Articles", count: model.totalUnreadCount, isSelected: model.selectedFeedID == nil && model.selectedFolderID == nil && model.listMode == .all) {
+                        pickerRow(iconSystemName: SkimIcon.allArticles, title: "All Articles", count: model.totalUnreadCount, isSelected: model.selectedFeedID == nil && model.selectedFolderID == nil && model.listMode == .all) {
                             model.selectedFeedID = nil
                             model.selectedFolderID = nil
                             model.listMode = .all
+                            onShowList()
                             isPresented = false
                             Task { await model.reloadArticles() }
                         }
 
-                        pickerRow(iconSystemName: "star", title: "Starred", count: nil, isSelected: model.listMode == .starred && model.selectedFolderID == nil) {
+                        pickerRow(iconSystemName: SkimIcon.starred, title: "Starred", count: nil, isSelected: model.listMode == .starred && model.selectedFolderID == nil) {
                             model.selectedFeedID = nil
                             model.selectedFolderID = nil
                             model.listMode = .starred
+                            onShowList()
                             isPresented = false
                             Task { await model.reloadArticles() }
                         }
 
-                        pickerRow(iconSystemName: "clock", title: "Recent", count: nil, isSelected: model.selectedFeedID == nil && model.selectedFolderID == nil && model.listMode == .recent) {
+                        pickerRow(iconSystemName: SkimIcon.recent, title: "Recent", count: nil, isSelected: model.selectedFeedID == nil && model.selectedFolderID == nil && model.listMode == .recent) {
                             model.selectedFeedID = nil
                             model.selectedFolderID = nil
                             model.listMode = .recent
+                            onShowList()
                             isPresented = false
                             Task { await model.reloadArticles() }
                         }
 
-                        pickerRow(iconSystemName: "tray", title: "AI Inbox", count: model.totalUnreadCount, isSelected: false) {
+                        pickerRow(iconSystemName: SkimIcon.aiInbox, title: "AI Inbox", count: model.totalUnreadCount, isSelected: false) {
                             onAIInbox()
                         }
                     }
@@ -905,13 +970,13 @@ private struct FeedPickerSheet: View {
     private var topControls: some View {
         HStack(spacing: 22) {
             HStack(spacing: 12) {
-                BorderlessIconButton(systemName: "gearshape", title: "Settings", size: 23, tapSize: 42, action: onSettings)
+                BorderlessIconButton(systemName: SkimIcon.settings, title: "Settings", size: 23, tapSize: 42, action: onSettings)
                 SkimWordmark(size: 26)
             }
             Spacer()
-            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 23, tapSize: 42, action: onChat)
-            BorderlessIconButton(systemName: "bolt", title: "Quick Catch-up", size: 23, tapSize: 42, action: onCatchUp)
-            BorderlessIconButton(systemName: "plus", title: "Add RSS Feed", size: 23, tapSize: 42, action: onAddFeed)
+            BorderlessIconButton(systemName: SkimIcon.chat, title: "Chat", size: 23, tapSize: 42, action: onChat)
+            BorderlessIconButton(systemName: SkimIcon.catchUp, title: "Quick Catch-up", size: 23, tapSize: 42, action: onCatchUp)
+            BorderlessIconButton(systemName: SkimIcon.addFeed, title: "Add RSS Feed", size: 23, tapSize: 42, action: onAddFeed)
         }
         // Leading 11 centers the 42pt gear button on the picker rows' icon
         // column below (20pt row inset + 12pt half-tile = 32pt = 11 + 21).
@@ -1017,6 +1082,7 @@ private struct FeedPickerSheet: View {
         if model.listMode == .recent {
             model.listMode = .unread
         }
+        onShowList()
         isPresented = false
         Task { await model.reloadArticles() }
     }
@@ -1028,6 +1094,7 @@ private struct FeedPickerSheet: View {
         if model.listMode == .starred || model.listMode == .recent {
             model.listMode = .all
         }
+        onShowList()
         isPresented = false
         Task { await model.reloadArticles() }
     }
@@ -1761,8 +1828,9 @@ private enum AutoGroupClassifier {
         case "mlx": return "MLX"
         case "xai": return "Grok"
         case "openai": return "OpenAI"
-        case "custom", "openrouter": return "custom provider"
-        case "anthropic": return "Claude Pro/Max"
+        case "openrouter": return "OpenRouter"
+        case "custom": return "custom provider"
+        case "anthropic": return "Claude"
         default: return provider
         }
     }
@@ -2394,7 +2462,7 @@ private struct AddFeedSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
 
                         Link(destination: feedlyExportURL) {
-                            Label("Open Feedly export", systemImage: "arrow.up.right.square")
+                            Label("Open Feedly export", systemImage: SkimIcon.openExternal)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.bordered)
@@ -2521,7 +2589,7 @@ private struct ArticleRow: View {
                             .lineLimit(1)
                     }
                     if article.isStarred {
-                        Image(systemName: "star.fill")
+                        Image(systemName: SkimIcon.starFilled)
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Color(red: 0.91, green: 0.76, blue: 0.19))
                     }
@@ -2569,11 +2637,11 @@ private struct ArticleRow: View {
         // synchronously on the first render frame, preventing the 1-2s lag where menu
         // items appear unreadable against the article list content below.
         .contextMenu(menuItems: {
-            Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? "circle" : "checkmark.circle") {
+            Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? SkimIcon.markUnread : SkimIcon.markRead) {
                 Task { await model.setRead(article, isRead: !article.isRead) }
             }
 
-            Button(article.isStarred ? "Unfavorite" : "Mark Favorite", systemImage: article.isStarred ? "star.slash" : "star") {
+            Button(article.isStarred ? "Unstar" : "Star", systemImage: article.isStarred ? SkimIcon.unstar : SkimIcon.star) {
                 Task { await model.toggleStar(article) }
             }
 
@@ -2601,13 +2669,13 @@ private struct ArticleRow: View {
 
             Divider()
 
-            Button("Summarize", systemImage: "doc.text") {
+            Button("Summarize", systemImage: SkimIcon.summarize) {
                 onSummarize(article)
             }
 
             if let url = article.url {
                 Divider()
-                Button("Open Link", systemImage: "safari") {
+                Button("Open in Browser", systemImage: SkimIcon.openExternal) {
                     openURL(url)
                 }
             }
@@ -2731,5 +2799,154 @@ private extension String {
             .compactMap { word in word.first(where: { $0.isLetter || $0.isNumber }) }
         let value = String(words).uppercased()
         return value.isEmpty ? fallback : value
+    }
+}
+
+/// A view the bottom bar can hold. Giulio picks which ones show, and their
+/// order, in Customize Bottom Bar; the choice is kept in user defaults.
+enum BottomBarItem: String, CaseIterable, Identifiable {
+    case today
+    case unread
+    case all
+    case starred
+    case recent
+    case aiInbox
+    case catchUp
+    case search
+
+    static let storageKey = "bottomBarItems"
+    static let minimumCount = 2
+    static let maximumCount = 5
+    /// Today takes the place Starred had; Starred stays a tap away in Feeds.
+    static let defaultItems: [BottomBarItem] = [.unread, .all, .today, .search]
+    static var defaultStorage: String { encode(defaultItems) }
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .today: "Today"
+        case .unread: "Unread"
+        case .all: "All"
+        case .starred: "Starred"
+        case .recent: "Recent"
+        case .aiInbox: "AI Inbox"
+        case .catchUp: "Catch-up"
+        case .search: "Search"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .today: SkimIcon.today
+        case .unread: SkimIcon.unread
+        case .all: SkimIcon.allArticles
+        case .starred: SkimIcon.starred
+        case .recent: SkimIcon.recent
+        case .aiInbox: SkimIcon.aiInbox
+        case .catchUp: SkimIcon.catchUp
+        case .search: SkimIcon.search
+        }
+    }
+
+    /// The article-list filter this item shows, for the items that are one.
+    var listMode: ArticleListMode? {
+        switch self {
+        case .unread: .unread
+        case .all: .all
+        case .starred: .starred
+        case .recent: .recent
+        case .today, .aiInbox, .catchUp, .search: nil
+        }
+    }
+
+    static func encode(_ items: [BottomBarItem]) -> String {
+        items.map(\.rawValue).joined(separator: ",")
+    }
+
+    /// Unknown or repeated names are dropped; a list too short to navigate
+    /// falls back to the default.
+    static func decode(_ storage: String) -> [BottomBarItem] {
+        var seen: Set<BottomBarItem> = []
+        let items = storage.split(separator: ",").compactMap { BottomBarItem(rawValue: String($0)) }
+            .filter { seen.insert($0).inserted }
+        guard items.count >= minimumCount else { return defaultItems }
+        return Array(items.prefix(maximumCount))
+    }
+}
+
+/// Picks and orders the bottom bar's views: drag to reorder, tap the minus to
+/// take one out, tap a view under "More" to add it.
+private struct BottomBarEditor: View {
+    @Binding var storage: String
+    @Environment(\.dismiss) private var dismiss
+
+    private var items: [BottomBarItem] { BottomBarItem.decode(storage) }
+    private var hidden: [BottomBarItem] { BottomBarItem.allCases.filter { !items.contains($0) } }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(items) { item in
+                        row(item)
+                    }
+                    .onMove { from, to in
+                        var next = items
+                        next.move(fromOffsets: from, toOffset: to)
+                        storage = BottomBarItem.encode(next)
+                    }
+                    .onDelete { offsets in
+                        var next = items
+                        next.remove(atOffsets: offsets)
+                        storage = BottomBarItem.encode(next)
+                    }
+                    .deleteDisabled(items.count <= BottomBarItem.minimumCount)
+                } header: {
+                    Text("In the bar")
+                } footer: {
+                    Text("Up to \(BottomBarItem.maximumCount) views. Long-press the bar to come back here.")
+                }
+
+                if !hidden.isEmpty {
+                    Section("More") {
+                        ForEach(hidden) { item in
+                            Button {
+                                storage = BottomBarItem.encode(items + [item])
+                            } label: {
+                                HStack {
+                                    row(item)
+                                    Spacer()
+                                    Image(systemName: "plus.circle.fill")
+                                        .foregroundStyle(items.count < BottomBarItem.maximumCount ? SkimStyle.accent : SkimStyle.secondary)
+                                }
+                            }
+                            .disabled(items.count >= BottomBarItem.maximumCount)
+                        }
+                    }
+                }
+
+                Section {
+                    Button("Reset to Default") {
+                        storage = BottomBarItem.defaultStorage
+                    }
+                    .disabled(items == BottomBarItem.defaultItems)
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .scrollContentBackground(.hidden)
+            .navigationTitle("Bottom Bar")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func row(_ item: BottomBarItem) -> some View {
+        Label(item.title, systemImage: item.systemImage)
+            .foregroundStyle(SkimStyle.text)
     }
 }

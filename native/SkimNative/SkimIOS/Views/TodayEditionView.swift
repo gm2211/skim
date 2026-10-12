@@ -105,8 +105,12 @@ struct TodayEditionView: View {
     /// The foot of the page: where the paper turns, and which page this is.
     private var pageBar: some View {
         HStack {
+            // The front page has nothing newer: its left button is blank so
+            // the bar keeps its shape.
             Button(model.todayPage == 2 ? "Today" : "Previous page") { turn(to: model.todayPage - 1) }
                 .disabled(model.todayPage <= 1)
+                .opacity(model.todayPage <= 1 ? 0 : 1)
+                .accessibilityHidden(model.todayPage <= 1)
             Spacer()
             VStack(spacing: 1) {
                 Text(model.todayPage == 1 ? "Front page" : "Page \(model.todayPage)")
@@ -120,6 +124,7 @@ struct TodayEditionView: View {
             Spacer()
             Button(model.todayPage == 1 ? "Last week" : "Next page") { turn(to: model.todayPage + 1) }
                 .disabled(model.todayPage >= AppModel.todayPageCount)
+                .opacity(model.todayPage >= AppModel.todayPageCount ? 0.35 : 1)
         }
         .font(.system(size: 14, weight: .medium))
         .foregroundStyle(SkimStyle.text)

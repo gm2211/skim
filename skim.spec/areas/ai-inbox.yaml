@@ -53,4 +53,4 @@ behaviors:
       Desktop: themes clustered across unread articles appear as chips that filter the AI Inbox.
   - id: priority-feeds-other-features
     description: >-
-      Triage priority also scopes Quick Catch-up's Priority inbox and Ask Skim's Inbox scope.
+      Triage priority also scopes "Catch me up"'s Priority inbox and Ask Skim's Inbox scope.

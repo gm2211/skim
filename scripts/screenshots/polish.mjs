@@ -31,12 +31,13 @@ const STILL_CSS = `
   ::-webkit-scrollbar { width: 0 !important; height: 0 !important; }
 `;
 
-const CATCHUP = '[role="region"][aria-labelledby="catchup-title"]';
+// "Catch me up" is a section of the Today page; the capture takes the whole page.
+const CATCHUP = ".today-page";
 
 const openCatchup = async (p) => {
-  // The sidebar row is the one place Catch-up is reachable while the sidebar is open.
-  await p.getByText("Quick Catch-up", { exact: true }).first().click();
-  await p.locator(CATCHUP).waitFor({ state: "visible" });
+  await p.getByText("Today", { exact: true }).first().click();
+  await p.getByRole("button", { name: "Catch me up" }).click();
+  await p.locator('[role="region"][aria-label="Catch me up"]').waitFor({ state: "visible" });
   await p.waitForTimeout(300);
 };
 

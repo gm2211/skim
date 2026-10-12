@@ -84,11 +84,6 @@ struct ArticleListView: View {
                         showFeedPicker = false
                         presentArticleChat()
                     },
-                    onCatchUp: {
-                        dismissTextEntry()
-                        showFeedPicker = false
-                        presentQuickCatchUp()
-                    },
                     onToday: {
                         dismissTextEntry()
                         showFeedPicker = false
@@ -183,7 +178,7 @@ struct ArticleListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
-        // Quick Catch-up is pushed as a page, like Today, not shown as a sheet.
+        // "Catch me up" is pushed as a page over Today, not shown as a sheet.
         .navigationDestination(isPresented: Binding(
             get: { activeCatchUp != nil },
             set: { if !$0 { activeCatchUp = nil } }
@@ -384,7 +379,7 @@ struct ArticleListView: View {
                 loadArticles: {
                     let context = try await model.articlesForAIContext(preferred: articles, limit: articleLimit)
                     guard !context.isEmpty else {
-                        throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before running Quick Catch-up.")
+                        throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before catching up.")
                     }
                     return context
                 },
@@ -483,6 +478,11 @@ struct ArticleListView: View {
                 Spacer()
 
                 if showToday {
+                    // "Catch me up" lives on Today: a front page written on
+                    // demand from the articles in view, over a chosen window.
+                    BorderlessIconButton(systemName: SkimIcon.catchUp, title: "Catch me up", size: 20, tapSize: 42) {
+                        presentQuickCatchUp()
+                    }
                     if let items = model.todayEdition?.items, !items.isEmpty {
                         BorderlessIconButton(systemName: SkimIcon.chat, title: "Ask about Today", size: 20, tapSize: 42) {
                             gatedAI {
@@ -497,9 +497,6 @@ struct ArticleListView: View {
                 }
 
                 Menu {
-                    Button("Quick Catch-up", systemImage: SkimIcon.catchUp) {
-                        presentQuickCatchUp()
-                    }
                     Button("Chat with Articles", systemImage: SkimIcon.chat) {
                         presentArticleChat()
                     }
@@ -683,7 +680,7 @@ struct ArticleListView: View {
 
     /// The bottom bar: the views Giulio picked (Customize Bottom Bar), each an
     /// icon over its name. List filters and Today swap the main view in place;
-    /// Quick Catch-up and AI Inbox open their page.
+    /// AI Inbox opens its page; "Catch me up" is a button on Today itself.
     private var bottomBar: some View {
         HStack(spacing: 0) {
             ForEach(bottomBarItems) { item in
@@ -729,7 +726,7 @@ struct ArticleListView: View {
             return showToday
         case .search:
             return isSearchActive && !showToday
-        case .catchUp, .aiInbox:
+        case .aiInbox:
             return false
         case .unread, .all, .starred, .recent:
             return !showToday && !isSearchActive && model.selectedFolderID == nil && model.listMode == item.listMode
@@ -747,8 +744,6 @@ struct ArticleListView: View {
                 showSearch = true
                 isSearchFocused = true
             }
-        case .catchUp:
-            presentQuickCatchUp()
         case .aiInbox:
             presentAIInbox()
         case .unread, .all, .starred, .recent:
@@ -818,7 +813,6 @@ private struct FeedPickerSheet: View {
     var onAutoGroup: () -> Void
     var onSettings: () -> Void
     var onChat: () -> Void
-    var onCatchUp: () -> Void
     var onToday: () -> Void
     var onAIInbox: () -> Void
     /// A feed, folder or library view was picked: leave Today for the list.
@@ -985,7 +979,6 @@ private struct FeedPickerSheet: View {
             }
             Spacer()
             BorderlessIconButton(systemName: SkimIcon.chat, title: "Chat", size: 23, tapSize: 42, action: onChat)
-            BorderlessIconButton(systemName: SkimIcon.catchUp, title: "Quick Catch-up", size: 23, tapSize: 42, action: onCatchUp)
             BorderlessIconButton(systemName: SkimIcon.addFeed, title: "Add RSS Feed", size: 23, tapSize: 42, action: onAddFeed)
         }
         // Leading 11 centers the 42pt gear button on the picker rows' icon
@@ -2821,7 +2814,6 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
     case starred
     case recent
     case aiInbox
-    case catchUp
     case search
 
     static let storageKey = "bottomBarItems"
@@ -2841,7 +2833,6 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
         case .starred: "Starred"
         case .recent: "Recent"
         case .aiInbox: "AI Inbox"
-        case .catchUp: "Catch-up"
         case .search: "Search"
         }
     }
@@ -2854,7 +2845,6 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
         case .starred: SkimIcon.starred
         case .recent: SkimIcon.recent
         case .aiInbox: SkimIcon.aiInbox
-        case .catchUp: SkimIcon.catchUp
         case .search: SkimIcon.search
         }
     }
@@ -2866,7 +2856,7 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
         case .all: .all
         case .starred: .starred
         case .recent: .recent
-        case .today, .aiInbox, .catchUp, .search: nil
+        case .today, .aiInbox, .search: nil
         }
     }
 
@@ -2874,8 +2864,9 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
         items.map(\.rawValue).joined(separator: ",")
     }
 
-    /// Unknown or repeated names are dropped; a list too short to navigate
-    /// falls back to the default.
+    /// Unknown or repeated names are dropped (so a bar that still names the
+    /// old Catch-up tab just loses it); a list too short to navigate falls
+    /// back to the default.
     static func decode(_ storage: String) -> [BottomBarItem] {
         var seen: Set<BottomBarItem> = []
         let items = storage.split(separator: ",").compactMap { BottomBarItem(rawValue: String($0)) }

@@ -13,14 +13,9 @@ import {
 import { listen } from "@tauri-apps/api/event";
 import { useUiStore } from "../../stores/uiStore";
 import { AIDisclaimer } from "../common/AIDisclaimer";
-import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
 import { useSettings } from "../../hooks/useSettings";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { Select } from "../ui/Select";
-import { ModelPicker } from "../common/ModelPicker";
-import { IconButton } from "../common/IconButton";
-import { CogIcon } from "../ui/icons";
-import "../today/TodayFrontPage.css";
 import { CatchupFrontPage, CatchupGhostPage } from "./CatchupFrontPage";
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
@@ -73,17 +68,14 @@ export function catchupScopeSummary(
 }
 
 /**
- * Quick Catch-up as a page in the main window: it takes the list column the
- * way Today does, fills the window while no article is open, and narrows to
- * a column beside the reader when one is. Leaving the page keeps the written
- * front page for half an hour, so coming back is free.
+ * "Catch me up" on the Today page: a run's controls (what to include, how far
+ * back) over a front page the model writes from those articles. It sits under
+ * Today's masthead in place of the edition. Leaving it keeps the written page
+ * for half an hour, so coming back is free.
  */
-export function CatchupPane() {
+export function CatchupSection({ onLoadingChange }: { onLoadingChange?: (loading: boolean) => void }) {
   const isPhone = useUiStore((s) => s.isPhone);
-  const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
-  const selectedArticleId = useUiStore((s) => s.selectedArticleId);
   const openArticleFromCatchup = useUiStore((s) => s.openArticleFromCatchup);
-  const setPhonePane = useUiStore((s) => s.setPhonePane);
   const { data: settings } = useSettings();
   // Defaults to everything unread: the priority scope only holds articles
   // triage has rated 4 or 5, so it is a deliberate narrowing, not a starting
@@ -109,20 +101,10 @@ export function CatchupPane() {
   // clobber a newer one — and so an unmount or a scope change mid-run knows
   // what to tell the backend to cancel.
   const activeRun = useRef<string | null>(null);
-  // The model lives behind a cog, as on Today: the masthead shows only what
+  // The model lives behind Today's cog: the controls row shows only what
   // changes a run (scope, range) and the run button itself.
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const settingsRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const close = (event: MouseEvent | KeyboardEvent) => {
-      if (event instanceof KeyboardEvent ? event.key === "Escape" : !settingsRef.current?.contains(event.target as Node)) setSettingsOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    document.addEventListener("keydown", close, true);
-    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close, true); };
-  }, [settingsOpen]);
   const [stopped, setStopped] = useState(false);
+  useEffect(() => { onLoadingChange?.(loading); }, [loading, onLoadingChange]);
   const previousSettings = useRef(settings);
 
   useEffect(() => {
@@ -231,8 +213,6 @@ export function CatchupPane() {
 
   const dateline = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
-  const isFrontPage = !isPhone && !selectedArticleId;
-
   const providerUnavailable = settings?.ai.provider === "none";
   const setupError = isAiSetupError(error);
   // Before the first run the page itself invites the run, so the toolbar
@@ -240,45 +220,10 @@ export function CatchupPane() {
   const inviting = !providerUnavailable && !report && !loading && !error;
 
   return (
-    <div
-      className={`catchup-pane ${!isPhone ? "border-r border-white/5" : ""} bg-bg-secondary/70 flex flex-col h-full overflow-hidden`}
-      style={{
-        width: isPhone || isFrontPage ? "100%" : 420,
-        minWidth: isPhone ? "100%" : isFrontPage ? 0 : 360,
-        flex: isFrontPage ? 1 : undefined,
-      }}
-      role="region"
-      aria-labelledby="catchup-title"
-    >
-      {sidebarCollapsed && !isPhone && <CollapsedSidebarTitlebar />}
-      {isPhone && (
-        <div className="flex flex-shrink-0 items-center" style={{ height: 52, paddingLeft: 8 }}>
-          <button
-            onClick={() => setPhonePane("sidebar")}
-            className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
-            title="Open sidebar"
-            aria-label="Open sidebar"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <line x1="3" y1="6" x2="21" y2="6" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-              <line x1="3" y1="18" x2="21" y2="18" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {/* The masthead stays put above the scroll, and above the window's
-          drag strip, so the controls are always reachable. */}
-      <div className="catchup-masthead flex-shrink-0 relative z-20 border-b border-white/5">
-        <div className="catchup-content" style={{ padding: isPhone ? "4px 16px 12px" : "14px 28px 12px" }}>
-          {/* The nameplate and the run's controls share one row, like a
-              masthead over its toolbar; on a narrow window the controls wrap
-              under the title. */}
-          <div className="flex flex-wrap items-center" style={{ columnGap: 20, rowGap: 10 }}>
-            <h2 id="catchup-title" className="catchup-nameplate text-text-primary" style={{ marginRight: "auto" }}>
-              Quick Catch-up
-            </h2>
+    <section className="catchup-section" role="region" aria-label="Catch me up">
+      {/* The run's controls, in a row under the masthead; on a narrow window
+          they drop their labels, and the selects name themselves. */}
+      <div className="catchup-controls flex-shrink-0 relative z-20" style={{ padding: isPhone ? "4px 0 12px" : "6px 0 14px" }}>
             <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
               <label className="catchup-control">
                 <span className="catchup-control-label">Include</span>
@@ -336,38 +281,10 @@ export function CatchupPane() {
                   {report ? "Run again" : "Run catch-up"}
                 </button>
               )}
-              {!providerUnavailable && (
-                <div ref={settingsRef} className="relative">
-                  <IconButton
-                    label="Catch-up settings"
-                    aria-expanded={settingsOpen}
-                    aria-haspopup="dialog"
-                    onClick={() => setSettingsOpen(!settingsOpen)}
-                    className={`hover:text-text-primary hover:bg-white/10 ${settingsOpen ? "text-text-primary bg-white/10" : "text-text-secondary"}`}
-                  >
-                    <CogIcon size={18} />
-                  </IconButton>
-                  {settingsOpen && (
-                    <div className="today-settings" role="dialog" aria-label="Catch-up settings">
-                      <div className="today-settings-heading">Quick Catch-up</div>
-                      <div className="today-settings-row">
-                        <span>Model</span>
-                        <ModelPicker surface="catchup" compact disabled={loading} />
-                      </div>
-                      <hr />
-                      <button className="today-settings-row" onClick={() => { setSettingsOpen(false); useUiStore.getState().setShowSettings(true); }}>AI settings…</button>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
-          </div>
-        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
-        <div className="catchup-content" style={{ padding: isPhone ? "16px 16px 24px" : "20px 28px 32px" }}>
-        <div className="catchup-body">
+      <div className="catchup-body">
           {providerUnavailable && <AiSetupNotice />}
 
           {!providerUnavailable && !report && !loading && !error && (
@@ -437,13 +354,11 @@ export function CatchupPane() {
               />
             </>
           )}
-        </div>
-
-        <div className="border-t border-white/5" style={{ marginTop: 28, padding: isPhone ? "8px 0" : "8px 0" }}>
-          <AIDisclaimer />
-        </div>
-        </div>
       </div>
-    </div>
+
+      <div className="border-t border-white/5" style={{ marginTop: 28, padding: "8px 0" }}>
+        <AIDisclaimer />
+      </div>
+    </section>
   );
 }

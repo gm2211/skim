@@ -70,7 +70,7 @@ describe("Sidebar — All Articles regression guard", () => {
     expect(screen.getByText("All Articles")).toBeInTheDocument();
   });
 
-  it("the header newspaper button opens Today, not the legacy Catch-up dialog", async () => {
+  it("the header newspaper button opens Today, and no row offers Catch-up on its own", async () => {
     const user = userEvent.setup();
     useUiStore.setState({ ...INITIAL_STATE, sidebarView: { type: "all" } }, true);
     render(<Sidebar />);

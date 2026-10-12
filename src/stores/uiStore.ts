@@ -7,9 +7,12 @@ export type SettingsTab = "ai" | "sync" | "appearance" | "reading";
 
 type PhonePane = "sidebar" | "list" | "detail";
 type ArticleReturnTarget = "catchup" | "today";
+/** What the Today page shows: the day's edition, or a "Catch me up" run over a chosen window. */
+export type TodayMode = "edition" | "catchup";
 
 interface UiState {
   sidebarView: SidebarView;
+  todayMode: TodayMode;
   selectedArticleId: string | null;
   articleReturnTarget: ArticleReturnTarget | null;
   // Browser-style history of opened articles. `articleHistoryIndex` points at
@@ -42,8 +45,9 @@ interface UiState {
   setShowAddFeed: (show: boolean, tab?: AddFeedTab) => void;
   setShowSettings: (show: boolean, tab?: SettingsTab) => void;
   setShowCommandPalette: (show: boolean) => void;
-  /** Opens Quick Catch-up as a page in the main window, where the article list sits. */
+  /** Opens Today with "Catch me up" showing, in the main window where the article list sits. */
   openCatchup: () => void;
+  setTodayMode: (mode: TodayMode) => void;
   toggleSidebar: () => void;
   toggleList: () => void;
   setListFilter: (filter: ListFilter) => void;
@@ -81,6 +85,7 @@ export function canGoForwardArticle(state: Pick<UiState, "selectedArticleId" | "
 
 export const useUiStore = create<UiState>((set, get) => ({
   sidebarView: { type: "all" },
+  todayMode: "edition",
   selectedArticleId: null,
   articleReturnTarget: null,
   articleHistory: [],
@@ -101,6 +106,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setSidebarView: (view) =>
     set((state) => ({
       sidebarView: view,
+      // Picking a view from the sidebar or the palette lands on the edition.
+      todayMode: "edition",
       selectedArticleId: null,
       articleReturnTarget: null,
       // On phone, picking a feed/view from the sidebar drawer pops back to
@@ -130,7 +137,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     })),
   closeArticleDetail: () =>
     set((state) => {
-      // An article opened from Quick Catch-up or Today closes back onto that
+      // An article opened from Today, in either mode, closes back onto that
       // page, which is still the view in the list column.
       return {
         selectedArticleId: null,
@@ -172,7 +179,15 @@ export const useUiStore = create<UiState>((set, get) => ({
       settingsTab: show ? tab ?? "ai" : state.settingsTab,
     })),
   setShowCommandPalette: (show) => set({ showCommandPalette: show }),
-  openCatchup: () => get().setSidebarView({ type: "catchup" }),
+  openCatchup: () =>
+    set((state) => ({
+      sidebarView: { type: "today" },
+      todayMode: "catchup",
+      selectedArticleId: null,
+      articleReturnTarget: null,
+      phonePane: state.isPhone ? "list" : state.phonePane,
+    })),
+  setTodayMode: (mode) => set({ todayMode: mode }),
 
   toggleSidebar: () =>
     set((state) => {

@@ -21,6 +21,10 @@ vi.mock("../../services/commands", () => ({
   generateTodayEditorial: vi.fn(),
   getTodayStoryImage: vi.fn(async () => null),
   TODAY_LEDE_PROGRESS_EVENT: "today_lede_progress",
+  generateCatchupReport: vi.fn(),
+  cancelCatchupReport: vi.fn(),
+  CATCHUP_PROGRESS_EVENT: "catchup_progress",
+  CATCHUP_CANCELLED: "Catch-up cancelled",
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
   listFeeds: vi.fn(async () => []),
@@ -157,7 +161,7 @@ beforeEach(() => {
   useUiStore.setState({ selectedArticleId: null, showSettings: false });
   vi.mocked(commands.refreshAllFeeds).mockResolvedValue(1);
   vi.mocked(commands.triageArticles).mockResolvedValue({ triaged_count: 0, batches: 0, errors: [] });
-  useUiStore.setState({ isPhone: false, sidebarCollapsed: false });
+  useUiStore.setState({ isPhone: false, sidebarCollapsed: false, sidebarView: { type: "today" }, todayMode: "edition" });
   vi.mocked(commands.getSettings).mockResolvedValue(DEFAULT_SETTINGS);
   vi.mocked(commands.generateTodayEditorial).mockImplementation((_id: string) => new Promise(() => {}));
 });
@@ -329,6 +333,48 @@ describe("TodayEditionPane", () => {
     await userEvent.click(screen.getByRole("button", { name: "Today settings" }));
     expect(within(screen.getByRole("dialog", { name: "Today settings" })).getByTestId("model-picker")).toHaveAttribute("data-surface", "today");
     expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "false");
+  });
+
+  it("puts \"Catch me up\" on the page in place of the edition, and takes it off again", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    await screen.findByText("Default snapshot title");
+    expect(screen.queryByRole("region", { name: "Catch me up" })).not.toBeInTheDocument();
+
+    const bolt = screen.getByRole("button", { name: "Catch me up" });
+    expect(bolt).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(bolt);
+
+    // The masthead stays; the edition gives way to the run's controls.
+    expect(screen.getByRole("heading", { name: "Today" })).toBeInTheDocument();
+    const section = screen.getByRole("region", { name: "Catch me up" });
+    expect(within(section).getByLabelText("Include")).toBeInTheDocument();
+    expect(within(section).getByLabelText("Going back")).toBeInTheDocument();
+    expect(screen.queryByText("Default snapshot title")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Catch me up" })).toHaveAttribute("aria-pressed", "true");
+    expect(useUiStore.getState().todayMode).toBe("catchup");
+
+    // Its model sits in Today's cog, under the summary model.
+    await userEvent.click(screen.getByRole("button", { name: "Today settings" }));
+    const dialog = screen.getByRole("dialog", { name: "Today settings" });
+    expect(within(dialog).getAllByTestId("model-picker").map((picker) => picker.getAttribute("data-surface"))).toEqual(["today", "catchup"]);
+    await userEvent.keyboard("{Escape}");
+
+    await userEvent.click(screen.getByRole("button", { name: "Catch me up" }));
+    expect(screen.queryByRole("region", { name: "Catch me up" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Default snapshot title")).toBeInTheDocument();
+  });
+
+  it("opens straight onto \"Catch me up\" when asked to catch up from elsewhere", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    useUiStore.getState().openCatchup();
+    renderPane();
+    expect(screen.getByRole("region", { name: "Catch me up" })).toBeInTheDocument();
+    expect(useUiStore.getState().sidebarView).toEqual({ type: "today" });
+
+    // Picking Today from the sidebar lands back on the edition.
+    useUiStore.getState().setSidebarView({ type: "today" });
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Catch me up" })).not.toBeInTheDocument());
   });
 
   it("disables the today model picker while ledes are being written", async () => {

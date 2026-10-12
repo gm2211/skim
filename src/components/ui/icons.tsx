@@ -27,7 +27,7 @@ function Icon({ size = 18, children, ...rest }: IconProps) {
   );
 }
 
-/** A folded front page: the Quick Catch-up. */
+/** A folded front page: Today. */
 export const NewspaperIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M4 5h13a1 1 0 0 1 1 1v12a2 2 0 0 0 2 2H5a2 2 0 0 1-2-2V6a1 1 0 0 1 1-1z" />
@@ -36,7 +36,7 @@ export const NewspaperIcon = (p: IconProps) => (
   </Icon>
 );
 
-/** A bolt: Today, the day's edition. */
+/** A bolt: "Catch me up", the on-demand briefing on Today. */
 export const BoltIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M13 2L3 14h9l-1 8 10-12h-9z" />

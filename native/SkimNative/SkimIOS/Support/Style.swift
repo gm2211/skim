@@ -12,8 +12,8 @@ enum SkimStyle {
 
 /// One SF Symbol per action or destination, shared by every iOS surface so the
 /// same thing never shows two icons. Mirrors the desktop icon set
-/// (src/components/ui/icons.tsx): Today is the newspaper, Quick Catch-up the
-/// bolt, AI Inbox the tray.
+/// (src/components/ui/icons.tsx): Today is the newspaper, "Catch me up" (on
+/// Today) the bolt, AI Inbox the tray.
 enum SkimIcon {
     // Destinations
     static let today = "newspaper"

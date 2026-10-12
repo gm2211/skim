@@ -30,7 +30,7 @@ content on screen, edit `fixtures.js`. Slide order follows filename order.
 
 ## Design passes
 
-`polish.mjs` renders the screens a design pass looks at (the Quick Catch-up
+`polish.mjs` renders the screens a design pass looks at (the "Catch me up"
 front page in its empty, reading, filling-in and finished states, Today, the
 reader, the command palette, Ask Skim, Settings), each at a fixed viewport and
 DPR, so two runs can be compared side by side:

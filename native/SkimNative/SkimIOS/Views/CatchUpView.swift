@@ -38,12 +38,12 @@ struct CatchUpPage: View {
         VStack(spacing: 0) {
             HStack {
                 Button { session.cancel(); dismiss() } label: {
-                    Label("Articles", systemImage: "chevron.left")
+                    Label("Today", systemImage: "chevron.left")
                         .frame(minHeight: 44)
                 }
                 .accessibilityIdentifier("catch-up-back")
                 Spacer()
-                Text("Quick Catch-up").font(.headline)
+                Text("Catch me up").font(.headline)
                 Spacer()
                 if session.isLoading {
                     Button("Stop", role: .cancel) { session.cancel() }

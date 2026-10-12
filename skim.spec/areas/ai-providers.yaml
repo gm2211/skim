@@ -19,7 +19,7 @@ behaviors:
       lose them.
   - id: inline-model-picker
     description: >-
-      Catch-up, Ask Skim, article chat, Summarize, and Today each have an inline model picker that
+      "Catch me up" (in Today's cog), Ask Skim, article chat, Summarize, and Today each have a model picker that
       changes the model for the current provider and links to AI settings.
     details: Remote model lists are fetched live; a failed fetch falls back to the current model.
   - id: desktop-local-models

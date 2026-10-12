@@ -492,10 +492,10 @@ select option {
   animation: story-rise-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* Quick Catch-up front page. A broadsheet in miniature: a dateline under a
+/* "Catch me up" front page, on Today. A broadsheet in miniature: a dateline under a
    double rule, the lead beside its picture, two featured stories, then a
    two-column grid of the rest and a dense "Also" block. */
-.catchup-pane { container-type: inline-size; }
+.catchup-section { min-width: 0; }
 .catchup-content { width: 100%; max-width: 1080px; margin-inline: auto; }
 .catchup-page {
   --paper-rule: rgba(255, 255, 255, 0.11);

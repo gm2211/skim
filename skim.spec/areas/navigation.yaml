@@ -10,7 +10,7 @@ behaviors:
   - id: command-palette
     description: >-
       Desktop: Cmd+K opens a command palette (even while typing in a field) that fuzzy-matches
-      commands by words or initials, so "qc" finds Quick Catch-up.
+      commands by words or initials, so "catch" finds "Catch me up".
     details: >-
       It covers article actions, Go destinations, actions such as catch-up, Ask, refresh, mark all
       read, add feed, view toggles, every Settings tab, every folder and feed, and live article
@@ -39,4 +39,5 @@ behaviors:
       Desktop: Cmd+, opens Settings, Cmd+Option+S toggles the sidebar, and Escape closes dialogs.
   - id: catch-up-return
     description: >-
-      Closing an article opened from Quick Catch-up returns the reader to Quick Catch-up.
+      Closing an article opened from "Catch me up" returns the reader to Today with the catch-up
+      still showing.

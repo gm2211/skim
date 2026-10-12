@@ -1,12 +1,29 @@
 id: catch-up
-name: Quick Catch-up
+name: Catch me up
 prose: >-
-  Quick Catch-up turns unread articles from a chosen time range into a newspaper front page, written
-  by the reader's model and citing every source.
+  "Catch me up" is an action on the Today page (formerly the separate Quick Catch-up page). It turns
+  articles from a chosen time range into a newspaper front page, written by the reader's model and
+  citing every source, in the edition's place under Today's masthead.
 behaviors:
+  - id: lives-on-today
+    description: >-
+      Catch-up is not a page of its own. On desktop a bolt button on Today's top bar switches the
+      page between the day's edition and "Catch me up", which shows the run's controls and front
+      page under the Today masthead; the sidebar row, list-toolbar button and separate page are
+      gone, and the command palette's "Catch me up" opens Today with the catch-up showing. Picking
+      Today from the sidebar returns to the edition. On iOS the bolt sits on Today's title bar and
+      pushes the catch-up page, titled "Catch me up", whose back button returns to Today; the "…"
+      menu, the bottom-bar option and the feed picker no longer offer it.
+    details: >-
+      Both pages grouped articles and used the model, so they read as duplicates. Today keeps the
+      frozen daily edition, verified previews and read progress; "Catch me up" is the ad-hoc,
+      model-written briefing over a window the reader picks.
+    source:
+      text: duplicate? [...] Chose "Merge them" on the decision card asking "Merge Quick Catch-up into Today as one page?"
+      reference: Giulio, project chat and project thread "Newspaper view", 2026-10-12
   - id: newspaper-front-page
     description: >-
-      Quick Catch-up lays its stories out like a newspaper front page: a full-width lead story,
+      "Catch me up" lays its stories out like a newspaper front page: a full-width lead story,
       secondary stories, and briefs.
   - id: stories-print-as-they-land
     description: >-
@@ -20,8 +37,8 @@ behaviors:
       reference: Giulio, project chat, 2026-10-11
   - id: same-paper-as-today
     description: >-
-      The Catch-up front page follows the Today design: the masthead shows only the run's own
-      controls (Include, Going back, Run) with the model behind a cog popover, and every slot
+      The catch-up front page follows the Today design: its controls row shows only the run's own
+      controls (Include, Going back, Run) with its model behind Today's cog popover, and every slot
       without a picture gets a text treatment (a feature sets its lede as a pull quote under an
       accent rule, a story gets a rule, the lead lists its coverage), so a day with no pictures
       still reads as a full page.
@@ -57,17 +74,16 @@ behaviors:
       provider.
   - id: page-not-modal
     description: >-
-      Quick Catch-up is a page in the main window, not a modal: on desktop it takes the list
-      column like Today, filling the window until a story's article is opened beside it, and the
-      sidebar lists it under Today. On iOS it is pushed onto the article list like Today. Leaving
-      and coming back keeps the written page for half an hour.
+      Catch-up is never a modal: on desktop it shows on the Today page in the list column, filling
+      the window until a story's article is opened beside it. On iOS it is pushed from Today like a
+      page. Leaving and coming back keeps the written page for half an hour.
     source:
       text: ideally newspaper view is not a modal
       reference: Giulio, project chat, 2026-10-11
   - id: really-nice-newspaper-view
     description: >-
-      The front page is set like a printed broadsheet on desktop and iOS: a serif nameplate on one
-      masthead row with the controls, a dateline under a double rule, the lead story with its
+      The front page is set like a printed broadsheet on desktop and iOS: under Today's serif
+      nameplate, the controls on one row, a dateline under a double rule, the lead story with its
       picture, two featured stories in equal columns, the remaining stories in a two-column tier
       divided by hairlines, and an "Also" block for briefs. While the page is being written a live
       rule sweeps under the dateline; before a run, and after a stop, a ghost page carries the

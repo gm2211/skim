@@ -460,7 +460,7 @@ struct SettingsSheet: View {
             }
 
             SettingsSection(title: "Features") {
-                SettingRow(systemName: "bolt", title: "Quick Catch-up", detail: "Runs on currently visible articles.")
+                SettingRow(systemName: "bolt", title: "Catch me up", detail: "On Today. Runs on the articles in view.")
                 SettingRow(systemName: "tray", title: "AI Inbox", detail: "Currently generates a ranked triage sheet.")
                 SettingRow(systemName: "bubble.left", title: "Chat", detail: "Available for visible articles and single articles.")
             }

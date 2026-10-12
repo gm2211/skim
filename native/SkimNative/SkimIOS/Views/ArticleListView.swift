@@ -22,7 +22,6 @@ struct ArticleListView: View {
     @State private var showAutoGroup = false
     @State private var showSettings = false
     @State private var activeAIResult: AIResultRequest?
-    @State private var activeCatchUp: CatchUpRequest?
     @State private var activeAIChat: AIChatRequest?
     @State private var chatMessagesBySession: [String: [AIChatMessage]] = [:]
     @State private var activeChatInitialMessage: String? = nil
@@ -178,16 +177,6 @@ struct ArticleListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
-        // "Catch me up" is pushed as a page over Today, not shown as a sheet.
-        .navigationDestination(isPresented: Binding(
-            get: { activeCatchUp != nil },
-            set: { if !$0 { activeCatchUp = nil } }
-        )) {
-            if let request = activeCatchUp {
-                CatchUpPage(request: request)
-                    .environmentObject(model)
-            }
-        }
         .sheet(item: $activeSummaryConfiguration) { article in
             SummaryConfigurationSheet(article: article, defaults: model.settings.ai) { summarySettings in
                 runSummary(article: article, summarySettings: summarySettings)
@@ -247,15 +236,6 @@ struct ArticleListView: View {
             if requestID != nil {
                 dismissTextEntry()
             }
-        }
-        .onChange(of: activeCatchUp?.id) { _, requestID in
-            if requestID != nil {
-                dismissTextEntry()
-            }
-        }
-        .onChange(of: model.settings) { _, next in
-            activeCatchUp?.settings = next
-            activeCatchUp?.statusLabel = NativeAI.loadingStatusLabel(for: next.ai)
         }
         .onChange(of: activeAIChat?.id) { _, requestID in
             if requestID != nil {
@@ -362,32 +342,6 @@ struct ArticleListView: View {
         }
     }
 
-    private func presentQuickCatchUp() {
-        gatedAI {
-            dismissTextEntry()
-            let articles = model.articles
-            let articleLimit = NativeAI.catchUpArticleLimit
-            let catchUpCount = min(articles.count, articleLimit)
-            let subtitle = articles.isEmpty
-                ? "Latest articles (up to \(articleLimit))"
-                : "\(catchUpCount) \(catchUpCount == 1 ? "article" : "articles")"
-            // The sheet drives the two passes itself, so it only needs the
-            // articles and the settings to run them under.
-            activeCatchUp = CatchUpRequest(
-                subtitle: subtitle,
-                statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai),
-                loadArticles: {
-                    let context = try await model.articlesForAIContext(preferred: articles, limit: articleLimit)
-                    guard !context.isEmpty else {
-                        throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before catching up.")
-                    }
-                    return context
-                },
-                settings: model.settings
-            )
-        }
-    }
-
     private func presentArticleChat() {
         gatedAI {
             dismissTextEntry()
@@ -455,11 +409,6 @@ struct ArticleListView: View {
 
                 if showToday {
                     topBarTitle.frame(maxWidth: .infinity)
-                    // "Catch me up" lives on Today: a front page written on
-                    // demand from the articles in view, over a chosen window.
-                    BorderlessIconButton(systemName: SkimIcon.catchUp, title: "Catch me up", size: 20, tapSize: 42) {
-                        presentQuickCatchUp()
-                    }
                     BorderlessIconButton(systemName: SkimIcon.settings, title: "Today settings", size: 20, tapSize: 42) {
                         showTodaySettings = true
                     }

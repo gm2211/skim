@@ -1021,6 +1021,28 @@ import Testing
     #expect(kept.items.count == 3)
 }
 
+@Test func todayEditionWiderWindowReachesBackToItsStartAndSkipsWhatTodayConsumed() async throws {
+    let store = try temporaryStore()
+    let dayStart: TimeInterval = 1_728_000
+    let dayEnd = dayStart + 86_400
+    let generatedAt = dayStart + 43_200
+    _ = try await seedTodayStory(store: store, storyID: "today", sourceCount: 2, timestamp: generatedAt - 10)
+    _ = try await seedTodayStory(store: store, storyID: "yesterday", sourceCount: 1, timestamp: dayStart - 20 * 3_600)
+    _ = try await seedTodayStory(store: store, storyID: "three-days-ago", sourceCount: 1, timestamp: dayStart - 2 * 86_400 - 3_600)
+    _ = try await seedTodayStory(store: store, storyID: "last-month", sourceCount: 1, timestamp: dayStart - 20 * 86_400)
+    let today = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: dayStart), endsAt: Date(timeIntervalSince1970: dayEnd),
+        storyLimit: 5, generatedAt: Date(timeIntervalSince1970: generatedAt))
+    #expect(Set(today.items.map(\.snapshot.storyID)) == ["today"])
+    _ = try await store.setTodayEditionItemConsumed(editionID: today.id, storyID: "today", isConsumed: true)
+
+    let week = try await store.getOrGenerateTodayEdition(
+        startsAt: Date(timeIntervalSince1970: dayStart - 6 * 86_400), endsAt: Date(timeIntervalSince1970: dayEnd),
+        storyLimit: 5, generatedAt: Date(timeIntervalSince1970: generatedAt))
+    #expect(week.id != today.id)
+    #expect(Set(week.items.map(\.snapshot.storyID)) == ["yesterday", "three-days-ago"])
+}
+
 @Test func todayEditionReusesImmutableSnapshotForSameInputs() async throws {
     let store = try temporaryStore()
     let startsAt = Date(timeIntervalSince1970: 100_000)

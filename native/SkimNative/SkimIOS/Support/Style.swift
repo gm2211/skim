@@ -17,7 +17,6 @@ enum SkimStyle {
 enum SkimIcon {
     // Destinations
     static let today = "newspaper"
-    static let catchUp = "bolt"
     static let aiInbox = "tray"
     static let allArticles = "list.bullet"
     static let unread = "circle.fill"

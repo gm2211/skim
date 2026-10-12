@@ -460,7 +460,6 @@ struct SettingsSheet: View {
             }
 
             SettingsSection(title: "Features") {
-                SettingRow(systemName: "bolt", title: "Catch me up", detail: "On Today. Runs on the articles in view.")
                 SettingRow(systemName: "tray", title: "AI Inbox", detail: "Currently generates a ranked triage sheet.")
                 SettingRow(systemName: "bubble.left", title: "Chat", detail: "Available for visible articles and single articles.")
             }
@@ -663,16 +662,16 @@ struct SettingsSheet: View {
                 return "MLX inference and downloads require a real iPhone; the Simulator cannot run this backend."
             }
             if NativeMLX.isDownloadedSync(mlxSelectedRepoId) {
-                return "\(option.label) is cached locally and ready for summaries, chat, catch-up, and AI Inbox."
+                return "\(option.label) is cached locally and ready for summaries, chat, and AI Inbox."
             }
             return "Choose a model in Model, download it once, then Skim runs AI on this iPhone."
         case "claude-subscription":
-            return providerIsReady ? "Your Claude Pro/Max plan runs chat, summaries, catch-up, and AI Inbox." : "Use your Claude Pro/Max plan. Open Account to sign in."
+            return providerIsReady ? "Your Claude Pro/Max plan runs chat, summaries, and AI Inbox." : "Use your Claude Pro/Max plan. Open Account to sign in."
         case "xai":
-            return providerIsReady ? "Grok runs chat, summaries, catch-up, and AI Inbox." : "Use your SuperGrok plan or an xAI API key. Open Account to connect."
+            return providerIsReady ? "Grok runs chat, summaries, and AI Inbox." : "Use your SuperGrok plan or an xAI API key. Open Account to connect."
         default:
             return providerIsReady
-                ? "\(NativeAIProviderChoice.name(for: draft.ai.provider)) runs chat, summaries, catch-up, and AI Inbox."
+                ? "\(NativeAIProviderChoice.name(for: draft.ai.provider)) runs chat, summaries, and AI Inbox."
                 : "Open Account to add your key."
         }
     }

@@ -70,7 +70,7 @@ struct TodayEditionView: View {
         .background(SkimStyle.background.ignoresSafeArea())
         .foregroundStyle(SkimStyle.text)
         .sheet(isPresented: $showSettings) { settingsSheet }
-        .task(id: storyLimit) {
+        .task(id: "\(storyLimit)-\(model.todayDays)") {
             if ![5, 10, 20].contains(storyLimit) { storyLimit = 10; return }
             await load()
             // Renew the local-day window even if Today stays open across midnight.
@@ -89,6 +89,18 @@ struct TodayEditionView: View {
     }
 
     private func load() async { await model.loadTodayEdition(storyLimit: storyLimit) }
+
+    /// One day's date, or the span of a wider window ("October 6 – 12").
+    static func dateline(for edition: Edition) -> String {
+        let last = edition.endsAt.addingTimeInterval(-1)
+        if Calendar.current.isDate(edition.startsAt, inSameDayAs: last) {
+            return edition.startsAt.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        }
+        let from = edition.startsAt.formatted(.dateTime.month(.wide).day())
+        let sameMonth = Calendar.current.isDate(edition.startsAt, equalTo: last, toGranularity: .month)
+        let to = sameMonth ? last.formatted(.dateTime.day()) : last.formatted(.dateTime.month(.wide).day())
+        return "\(from) – \(to)"
+    }
 
     /// The edition is already ordered by importance, so position is all the
     /// page needs: the first story leads, the next few run as cards, the tail
@@ -141,6 +153,15 @@ struct TodayEditionView: View {
                     }
                 }
                 Section("Edition") {
+                    // "Going back": the same paper over a wider window.
+                    Picker("Going back", selection: $model.todayDays) {
+                        Text("Today").tag(1)
+                        Text("Past 2 days").tag(2)
+                        Text("Past 3 days").tag(3)
+                        Text("Past week").tag(7)
+                        Text("Past two weeks").tag(14)
+                    }
+                    .disabled(model.isUpdatingToday)
                     Picker("Stories per edition", selection: $storyLimit) {
                         Text("5 stories").tag(5)
                         Text("10 stories").tag(10)
@@ -175,8 +196,10 @@ struct TodayEditionView: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(edition.edition.startsAt.formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
+                Text(Self.dateline(for: edition.edition).uppercased())
                     .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
                 Spacer(minLength: 8)
                 if edition.totalItemCount > 0 {
                     HStack(spacing: 8) {

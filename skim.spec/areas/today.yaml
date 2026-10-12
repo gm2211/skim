@@ -44,16 +44,33 @@ behaviors:
       features, then "In brief". iOS sets it as a magazine: a full-bleed lead, story cards, then a
       two-up grid of briefs.
     details: >-
-      Ten stories fill one desktop page. The masthead has top margin; the only controls are a
-      "Catch me up" bolt (see catch-up), an ask button, a refresh button (the run, while catching
-      up) and a cog that opens a small settings popover (summary model, edition size, retry, AI
-      settings; while catching up also Include, Going back and the catch-up model). Missing summaries show as a note with Retry in the dateline instead of a loose
-      button.
+      Ten stories fill one desktop page. The masthead has top margin; the only controls are an
+      ask button, a refresh button and a cog that opens a small settings popover (Going back,
+      summary model, edition size, retry, AI settings). The popover is wide enough for every
+      label to sit on one line with its control inside it. Missing summaries show as a note with
+      Retry in the dateline instead of a loose button.
     source:
       text: >-
         I like A on desktop, C on mobile. There should be some margin from the top - also maybe just a
         cog icon button to show a few settings, not a model picker thrown there
       reference: Giulio, project thread "Today page design options", 2026-10-12
+  - id: going-back
+    description: >-
+      Today is the one newspaper. It defaults to today's edition, and "Going back" in its cog
+      (today, 2 days, 3 days, a week, two weeks; iOS in Today's settings sheet) makes the same
+      kind of page from everything that arrived in that window, with the dateline showing the span
+      ("October 6 – 12"). The same rules apply: grouped coverage, verified passages, read progress,
+      and a story read on another page stays off this one until a material update. There is no
+      separate catch-up page, bolt or run.
+    details: >-
+      A wider window is its own frozen edition (window plus size), so going back and returning
+      keeps each page as it was. Candidates reach to the window's start, or a day back from now,
+      whichever is earlier. The choice is per launch, not remembered.
+    source:
+      text: >-
+        I though we're getting rid of the catch up view in favor of the newspaper view where you
+        default to today but can go back in time
+      reference: Giulio, project chat, 2026-10-12
   - id: full-without-images
     description: >-
       The page looks full when reports publish no pictures: every slot has a text treatment (a

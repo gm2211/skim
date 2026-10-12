@@ -10,9 +10,9 @@ behaviors:
   - id: command-palette
     description: >-
       Desktop: Cmd+K opens a command palette (even while typing in a field) that fuzzy-matches
-      commands by words or initials, so "catch" finds "Catch me up".
+      commands by words or initials, so "mar" finds "Mark all as read".
     details: >-
-      It covers article actions, Go destinations, actions such as catch-up, Ask, refresh, mark all
+      It covers article actions, Go destinations, actions such as Ask, refresh, mark all
       read, add feed, view toggles, every Settings tab, every folder and feed, and live article
       search after two typed characters. Ctrl+N/Ctrl+P and arrow keys move the selection.
   - id: command-palette-chat
@@ -37,7 +37,7 @@ behaviors:
   - id: keyboard-shortcuts
     description: >-
       Desktop: Cmd+, opens Settings, Cmd+Option+S toggles the sidebar, and Escape closes dialogs.
-  - id: catch-up-return
+  - id: today-return
     description: >-
-      Closing an article opened from "Catch me up" returns the reader to Today with the catch-up
-      still showing.
+      Closing an article opened from Today returns the reader to Today, on the same window it was
+      showing.

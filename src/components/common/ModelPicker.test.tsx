@@ -80,7 +80,7 @@ describe("ModelPicker", () => {
       { id: "gpt-4o-mini", display_name: "GPT-4o mini" },
       { id: "gpt-4-turbo", display_name: "GPT-4 Turbo" },
     ]);
-    renderPicker("catchup", settingsWith({ provider: "openai", model: "gpt-4-turbo" }));
+    renderPicker("today", settingsWith({ provider: "openai", model: "gpt-4-turbo" }));
 
     const combo = await screen.findByRole("combobox", { name: "AI model" });
     await screen.findByRole("option", { name: "GPT-4o mini" });
@@ -152,7 +152,7 @@ describe("ModelPicker", () => {
 
   it('opens Settings from the "AI settings…" entry without saving anything', async () => {
     vi.mocked(commands.listRemoteModels).mockResolvedValue([{ id: "gpt-4o-mini", display_name: "GPT-4o mini" }]);
-    renderPicker("catchup", settingsWith({ provider: "openai", model: "gpt-4-turbo" }));
+    renderPicker("today", settingsWith({ provider: "openai", model: "gpt-4-turbo" }));
 
     const combo = await screen.findByRole("combobox", { name: "AI model" });
     await screen.findByRole("option", { name: "AI settings…" });
@@ -170,7 +170,7 @@ describe("ModelPicker", () => {
 
   it("keeps the current remote model selectable when the list fails to load", async () => {
     vi.mocked(commands.listRemoteModels).mockRejectedValue(new Error("network down"));
-    renderPicker("catchup", settingsWith({ provider: "openai", model: "gpt-4-turbo" }));
+    renderPicker("today", settingsWith({ provider: "openai", model: "gpt-4-turbo" }));
 
     await screen.findByRole("combobox", { name: "AI model" });
     await waitFor(() => expect(commands.listRemoteModels).toHaveBeenCalled());

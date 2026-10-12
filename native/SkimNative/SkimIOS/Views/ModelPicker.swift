@@ -2,7 +2,7 @@ import SkimCore
 import SwiftUI
 
 /// Inline, always-available model picker for AI surfaces outside Settings
-/// (Quick Catch-up, Ask Skim chat, Summarize, Today). Lets the user switch
+/// (Ask Skim chat, Summarize, Today). Lets the user switch
 /// which model runs without leaving the flow; a provider change still
 /// requires the full Settings sheet, reached via the trailing "AI Settings…"
 /// entry.
@@ -114,7 +114,7 @@ struct PickerChipLabel: View {
 }
 
 /// `ModelPickerMenu` bound directly to `AppModel.settings.ai`, for surfaces
-/// that mutate the shared settings in place (Quick Catch-up, chat, Today)
+/// that mutate the shared settings in place (chat, Today)
 /// rather than a local draft (Summarize's configuration sheet uses
 /// `ModelPickerMenu` directly for that reason).
 struct AppModelPicker: View {

@@ -23,7 +23,6 @@ areas:
   - areas/reader.yaml
   - areas/navigation.yaml
   - areas/today.yaml
-  - areas/catch-up.yaml
   - areas/ai-inbox.yaml
   - areas/chat.yaml
   - areas/summarize.yaml

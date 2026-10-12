@@ -22,7 +22,6 @@ struct ArticleListView: View {
     @State private var showAutoGroup = false
     @State private var showSettings = false
     @State private var activeAIResult: AIResultRequest?
-    @State private var activeCatchUp: CatchUpRequest?
     @State private var activeAIChat: AIChatRequest?
     @State private var chatMessagesBySession: [String: [AIChatMessage]] = [:]
     @State private var activeChatInitialMessage: String? = nil
@@ -83,11 +82,6 @@ struct ArticleListView: View {
                         dismissTextEntry()
                         showFeedPicker = false
                         presentArticleChat()
-                    },
-                    onCatchUp: {
-                        dismissTextEntry()
-                        showFeedPicker = false
-                        presentQuickCatchUp()
                     },
                     onToday: {
                         dismissTextEntry()
@@ -183,16 +177,6 @@ struct ArticleListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
-        // Quick Catch-up is pushed as a page, like Today, not shown as a sheet.
-        .navigationDestination(isPresented: Binding(
-            get: { activeCatchUp != nil },
-            set: { if !$0 { activeCatchUp = nil } }
-        )) {
-            if let request = activeCatchUp {
-                CatchUpPage(request: request)
-                    .environmentObject(model)
-            }
-        }
         .sheet(item: $activeSummaryConfiguration) { article in
             SummaryConfigurationSheet(article: article, defaults: model.settings.ai) { summarySettings in
                 runSummary(article: article, summarySettings: summarySettings)
@@ -252,15 +236,6 @@ struct ArticleListView: View {
             if requestID != nil {
                 dismissTextEntry()
             }
-        }
-        .onChange(of: activeCatchUp?.id) { _, requestID in
-            if requestID != nil {
-                dismissTextEntry()
-            }
-        }
-        .onChange(of: model.settings) { _, next in
-            activeCatchUp?.settings = next
-            activeCatchUp?.statusLabel = NativeAI.loadingStatusLabel(for: next.ai)
         }
         .onChange(of: activeAIChat?.id) { _, requestID in
             if requestID != nil {
@@ -367,32 +342,6 @@ struct ArticleListView: View {
         }
     }
 
-    private func presentQuickCatchUp() {
-        gatedAI {
-            dismissTextEntry()
-            let articles = model.articles
-            let articleLimit = NativeAI.catchUpArticleLimit
-            let catchUpCount = min(articles.count, articleLimit)
-            let subtitle = articles.isEmpty
-                ? "Latest articles (up to \(articleLimit))"
-                : "\(catchUpCount) \(catchUpCount == 1 ? "article" : "articles")"
-            // The sheet drives the two passes itself, so it only needs the
-            // articles and the settings to run them under.
-            activeCatchUp = CatchUpRequest(
-                subtitle: subtitle,
-                statusLabel: NativeAI.loadingStatusLabel(for: model.settings.ai),
-                loadArticles: {
-                    let context = try await model.articlesForAIContext(preferred: articles, limit: articleLimit)
-                    guard !context.isEmpty else {
-                        throw NativeAIError.unavailable("No articles are available yet. Add RSS feeds or refresh before running Quick Catch-up.")
-                    }
-                    return context
-                },
-                settings: model.settings
-            )
-        }
-    }
-
     private func presentArticleChat() {
         gatedAI {
             dismissTextEntry()
@@ -439,66 +388,43 @@ struct ArticleListView: View {
 
     private var topBar: some View {
         ZStack {
-            HStack {
-                Spacer()
-                VStack(spacing: 1) {
-                    Text(compactTitle)
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(SkimStyle.text)
-                        .lineLimit(1)
-
-                    if model.isLoading {
-                        Text("Syncing...")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(SkimStyle.secondary)
-                    } else if isSearchActive {
-                        if !model.articles.isEmpty {
-                            Text("\(model.articles.count.formatted()) results")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(SkimStyle.secondary.opacity(0.78))
-                        }
-                    } else if model.listMode == .starred && model.selectedFeedID == nil && model.selectedFolderID == nil {
-                        if !model.articles.isEmpty {
-                            Text("\(model.articles.count.formatted()) starred")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(SkimStyle.secondary.opacity(0.78))
-                        }
-                    } else if model.currentUnreadCount > 0 {
-                        Text("\(model.currentUnreadCount.formatted()) unread")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(SkimStyle.secondary.opacity(0.78))
-                    }
+            // On Today the title sits between the clusters (the way a
+            // navigation bar does when its buttons leave no room to centre it
+            // on the screen); elsewhere it is centred on the screen.
+            if !showToday {
+                HStack {
+                    Spacer()
+                    topBarTitle.frame(maxWidth: 190)
+                    Spacer()
                 }
-                .frame(maxWidth: 190)
-                Spacer()
             }
 
-            HStack(alignment: .center, spacing: 18) {
+            HStack(alignment: .center, spacing: showToday ? 12 : 18) {
                 BorderlessIconButton(systemName: SkimIcon.feeds, title: "Feeds", size: 20, tapSize: 42) {
                     dismissTextEntry()
                     withAnimation(.smooth(duration: 0.26)) {
                         showFeedPicker = true
                     }
                 }
-                Spacer()
 
                 if showToday {
-                    if let items = model.todayEdition?.items, !items.isEmpty {
-                        BorderlessIconButton(systemName: SkimIcon.chat, title: "Ask about Today", size: 20, tapSize: 42) {
+                    topBarTitle.frame(maxWidth: .infinity)
+                    BorderlessIconButton(systemName: SkimIcon.settings, title: "Today settings", size: 20, tapSize: 42) {
+                        showTodaySettings = true
+                    }
+                } else {
+                    Spacer()
+                }
+
+                Menu {
+                    if showToday, let items = model.todayEdition?.items, !items.isEmpty {
+                        Button("Ask about Today", systemImage: SkimIcon.chat) {
                             gatedAI {
                                 dismissTextEntry()
                                 activeAIChat = TodayChat.page(items, model: model)
                             }
                         }
-                    }
-                    BorderlessIconButton(systemName: SkimIcon.settings, title: "Today settings", size: 20, tapSize: 42) {
-                        showTodaySettings = true
-                    }
-                }
-
-                Menu {
-                    Button("Quick Catch-up", systemImage: SkimIcon.catchUp) {
-                        presentQuickCatchUp()
+                        Divider()
                     }
                     Button("Chat with Articles", systemImage: SkimIcon.chat) {
                         presentArticleChat()
@@ -537,6 +463,38 @@ struct ArticleListView: View {
             Rectangle()
                 .fill(SkimStyle.separator.opacity(0.4))
                 .frame(height: 1)
+        }
+    }
+
+    /// The list title with its count underneath.
+    private var topBarTitle: some View {
+        VStack(spacing: 1) {
+            Text(compactTitle)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(SkimStyle.text)
+                .lineLimit(1)
+
+            if model.isLoading {
+                Text("Syncing...")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(SkimStyle.secondary)
+            } else if isSearchActive {
+                if !model.articles.isEmpty {
+                    Text("\(model.articles.count.formatted()) results")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(SkimStyle.secondary.opacity(0.78))
+                }
+            } else if model.listMode == .starred && model.selectedFeedID == nil && model.selectedFolderID == nil {
+                if !model.articles.isEmpty {
+                    Text("\(model.articles.count.formatted()) starred")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(SkimStyle.secondary.opacity(0.78))
+                }
+            } else if model.currentUnreadCount > 0 {
+                Text("\(model.currentUnreadCount.formatted()) unread")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(SkimStyle.secondary.opacity(0.78))
+            }
         }
     }
 
@@ -683,7 +641,7 @@ struct ArticleListView: View {
 
     /// The bottom bar: the views Giulio picked (Customize Bottom Bar), each an
     /// icon over its name. List filters and Today swap the main view in place;
-    /// Quick Catch-up and AI Inbox open their page.
+    /// AI Inbox opens its page; "Catch me up" is a button on Today itself.
     private var bottomBar: some View {
         HStack(spacing: 0) {
             ForEach(bottomBarItems) { item in
@@ -729,7 +687,7 @@ struct ArticleListView: View {
             return showToday
         case .search:
             return isSearchActive && !showToday
-        case .catchUp, .aiInbox:
+        case .aiInbox:
             return false
         case .unread, .all, .starred, .recent:
             return !showToday && !isSearchActive && model.selectedFolderID == nil && model.listMode == item.listMode
@@ -747,8 +705,6 @@ struct ArticleListView: View {
                 showSearch = true
                 isSearchFocused = true
             }
-        case .catchUp:
-            presentQuickCatchUp()
         case .aiInbox:
             presentAIInbox()
         case .unread, .all, .starred, .recent:
@@ -818,7 +774,6 @@ private struct FeedPickerSheet: View {
     var onAutoGroup: () -> Void
     var onSettings: () -> Void
     var onChat: () -> Void
-    var onCatchUp: () -> Void
     var onToday: () -> Void
     var onAIInbox: () -> Void
     /// A feed, folder or library view was picked: leave Today for the list.
@@ -985,7 +940,6 @@ private struct FeedPickerSheet: View {
             }
             Spacer()
             BorderlessIconButton(systemName: SkimIcon.chat, title: "Chat", size: 23, tapSize: 42, action: onChat)
-            BorderlessIconButton(systemName: SkimIcon.catchUp, title: "Quick Catch-up", size: 23, tapSize: 42, action: onCatchUp)
             BorderlessIconButton(systemName: SkimIcon.addFeed, title: "Add RSS Feed", size: 23, tapSize: 42, action: onAddFeed)
         }
         // Leading 11 centers the 42pt gear button on the picker rows' icon
@@ -2821,7 +2775,6 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
     case starred
     case recent
     case aiInbox
-    case catchUp
     case search
 
     static let storageKey = "bottomBarItems"
@@ -2841,7 +2794,6 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
         case .starred: "Starred"
         case .recent: "Recent"
         case .aiInbox: "AI Inbox"
-        case .catchUp: "Catch-up"
         case .search: "Search"
         }
     }
@@ -2854,7 +2806,6 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
         case .starred: SkimIcon.starred
         case .recent: SkimIcon.recent
         case .aiInbox: SkimIcon.aiInbox
-        case .catchUp: SkimIcon.catchUp
         case .search: SkimIcon.search
         }
     }
@@ -2866,7 +2817,7 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
         case .all: .all
         case .starred: .starred
         case .recent: .recent
-        case .today, .aiInbox, .catchUp, .search: nil
+        case .today, .aiInbox, .search: nil
         }
     }
 
@@ -2874,8 +2825,9 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
         items.map(\.rawValue).joined(separator: ",")
     }
 
-    /// Unknown or repeated names are dropped; a list too short to navigate
-    /// falls back to the default.
+    /// Unknown or repeated names are dropped (so a bar that still names the
+    /// old Catch-up tab just loses it); a list too short to navigate falls
+    /// back to the default.
     static func decode(_ storage: String) -> [BottomBarItem] {
         var seen: Set<BottomBarItem> = []
         let items = storage.split(separator: ",").compactMap { BottomBarItem(rawValue: String($0)) }

@@ -3,7 +3,6 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { ArticleList } from "./components/layout/ArticleList";
 import { ArticleDetail } from "./components/layout/ArticleDetail";
 import { TodayEditionPane } from "./components/today/TodayEditionPane";
-import { CatchupPane } from "./components/catchup/CatchupPane";
 import { AddFeedDialog } from "./components/feed/AddFeedDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { CommandPalette } from "./components/palette/CommandPalette";
@@ -35,9 +34,9 @@ const ACTIVE_FEED_TOAST_MAX_MS = 35000;
 
 function App() {
   const { showAddFeed, showSettings, showCommandPalette, selectedArticleId, listCollapsed, sidebarCollapsed, isPhone, phonePane, sidebarView } = useUiStore();
-  // Today and Quick Catch-up take the list column as full pages.
-  const isToday = sidebarView.type === "today" || sidebarView.type === "catchup";
-  const listPane = sidebarView.type === "today" ? <TodayEditionPane /> : sidebarView.type === "catchup" ? <CatchupPane /> : <ArticleList />;
+  // Today takes the list column as a full page.
+  const isToday = sidebarView.type === "today";
+  const listPane = isToday ? <TodayEditionPane /> : <ArticleList />;
   const qc = useQueryClient();
   const [showBootDisclaimer, setShowBootDisclaimer] = useState(() => !hasAcceptedAiDisclaimer());
   const [opmlImportStatus, setOpmlImportStatus] = useState<OpmlImportStatus | null>(null);

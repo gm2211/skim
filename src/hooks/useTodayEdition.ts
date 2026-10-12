@@ -5,6 +5,7 @@ import * as commands from "../services/commands";
 import type { TodayEditionView } from "../services/types";
 import { msUntilWindowRollover, todayWindow, type TodayWindow } from "../lib/todayEdition";
 import { useSettings } from "./useSettings";
+import { useUiStore } from "../stores/uiStore";
 
 /** Merge generated text only; stale progress must never roll back reading state. */
 function mergeLedesIntoCurrent(current: TodayEditionView | undefined, incoming: TodayEditionView): TodayEditionView {
@@ -42,24 +43,27 @@ export function useTodayStoryLimit(): number {
  * window, so a stale window (rather than the id itself) is what we must not
  * cache across midnight.
  */
-function useTodayWindow(): TodayWindow {
-  const [win, setWin] = useState<TodayWindow>(() => todayWindow());
+function useTodayWindow(page: number): TodayWindow {
+  const [win, setWin] = useState<TodayWindow>(() => todayWindow(new Date(), page));
   useEffect(() => {
-    const id = window.setTimeout(() => {
-      setWin(todayWindow());
-    }, msUntilWindowRollover(win) + 1000);
     const refresh = () => {
-      const next = todayWindow();
+      const next = todayWindow(new Date(), page);
       setWin((current) => current.startsAt === next.startsAt && current.endsAt === next.endsAt ? current : next);
     };
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
+    refresh();
+    const id = window.setTimeout(refresh, msUntilWindowRollover(todayWindow(new Date(), page)) + 1000);
+    const refreshIfChanged = () => {
+      const next = todayWindow(new Date(), page);
+      setWin((current) => current.startsAt === next.startsAt && current.endsAt === next.endsAt ? current : next);
+    };
+    window.addEventListener("focus", refreshIfChanged);
+    document.addEventListener("visibilitychange", refreshIfChanged);
     return () => {
       window.clearTimeout(id);
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refreshIfChanged);
+      document.removeEventListener("visibilitychange", refreshIfChanged);
     };
-  }, [win]);
+  }, [page, win.startsAt, win.endsAt]);
   return win;
 }
 
@@ -69,7 +73,8 @@ export function useTodayEdition() {
   const settingsQuery = useSettings();
   const settings = settingsQuery.data;
   const aiEnabled = !!settings && settings.ai.provider !== "none";
-  const win = useTodayWindow();
+  const page = useUiStore((state) => state.todayPage);
+  const win = useTodayWindow(page);
   const queryKey = useMemo(() => ["todayEdition", win.startsAt, win.endsAt, storyLimit] as const, [win.startsAt, win.endsAt, storyLimit]);
 
   const query = useQuery({
@@ -188,6 +193,7 @@ export function useTodayEdition() {
   return {
     ...query,
     window: win,
+    page,
     storyLimit,
     aiEnabled,
     setConsumed,

@@ -2507,11 +2507,12 @@ async fn build_catchup_report(
         run_id,
     );
 
-    // --- Pass two: pick each lede from the articles behind it ---------------
+    // --- Pass two: write each lede from the articles behind it --------------
     //
-    // The same source-verified passage Today prints: the reader resolver turns
-    // a link-only aggregator post into the page it links to, and the lede is a
-    // passage copied from one of those reports, checked against its text.
+    // The reader resolver turns a link-only aggregator post into the page it
+    // links to, and the model writes one or two sentences from those reports.
+    // A write that fails or says nothing falls back to the source-verified
+    // passage Today prints, checked against the report's text.
 
     for index in 0..report.stories.len() {
         let (headline, article_ids) = {
@@ -2522,9 +2523,12 @@ async fn build_catchup_report(
         let evidence = super::editions::lede_source_text(&db, &article_ids).await;
         let lede = match &evidence {
             Ok(evidence) if !evidence.sources.is_empty() => {
-                match super::editions::verified_preview(provider.as_ref(), &model, &headline, evidence).await {
-                    Some(preview) => preview.excerpt,
-                    None => fallback_lede(evidence.sources.iter().map(|s| s.body.as_str())),
+                match super::editions::written_lede(provider.as_ref(), &model, &headline, evidence).await {
+                    Some(lede) => lede,
+                    None => match super::editions::verified_preview(provider.as_ref(), &model, &headline, evidence).await {
+                        Some(preview) => preview.excerpt,
+                        None => fallback_lede(evidence.sources.iter().map(|s| s.body.as_str())),
+                    },
                 }
             }
             _ => fallback_lede(

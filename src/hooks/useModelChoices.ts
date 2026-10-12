@@ -10,7 +10,7 @@ import {
 } from "../lib/aiModels";
 import { useLocalModels, useSystemInfo } from "./useModels";
 
-export type ModelSurface = "catchup" | "chat" | "summarize" | "today";
+export type ModelSurface = "chat" | "summarize" | "today";
 
 export interface ModelChoice {
   value: string;

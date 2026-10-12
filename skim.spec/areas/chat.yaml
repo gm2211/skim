@@ -28,7 +28,7 @@ behaviors:
   - id: chat-settings-cog
     description: >-
       Article chat and Ask Skim keep the model choice behind a cog in their header, not a dropdown,
-      matching the cogs on Today and Quick Catch-up.
+      matching the cog on Today.
     details: The cog's popover holds the chat model and a link to AI settings. Escape or an outside click closes it.
     source:
       text: can we have cog icon instead of model selector?

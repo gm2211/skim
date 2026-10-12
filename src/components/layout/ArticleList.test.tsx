@@ -143,14 +143,14 @@ describe("article list toolbar", () => {
   it("repeats the sidebar header's app-wide actions only while the sidebar is hidden", () => {
     useUiStore.setState({ sidebarView: { type: "all" }, isPhone: false, sidebarCollapsed: false });
     const { unmount } = render(<ArticleList />);
-    expect(screen.queryByRole("button", { name: "Quick Catch-up" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Ask Skim" })).not.toBeInTheDocument();
     expect(screen.getByTitle("Mark all as read")).toBeInTheDocument();
     unmount();
 
     useUiStore.setState({ sidebarCollapsed: true });
     render(<ArticleList />);
-    expect(screen.getByRole("button", { name: "Quick Catch-up" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ask Skim" })).toBeInTheDocument();
+    // There is no catch-up; Today is the one newspaper.
+    expect(screen.queryByRole("button", { name: /catch/i })).not.toBeInTheDocument();
   });
 });

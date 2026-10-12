@@ -14,9 +14,8 @@ behaviors:
     description: Article chat stays reachable in narrow Mac windows.
   - id: one-icon-per-action
     description: >-
-      Desktop title bar: each action has one icon and appears once. Today is the newspaper and
-      Quick Catch-up is the bolt, in the sidebar header, the sidebar rows, the list toolbar and the
-      command palette alike (iOS already uses the bolt for Catch-up). The sidebar header carries
+      Desktop title bar: each action has one icon and appears once. Today is the newspaper. The
+      sidebar header carries
       the app-wide actions (collapse, refresh, Ask Skim, Today, add feed); the list toolbar carries
       only the list's own (mark all read, search) and repeats the app-wide ones only while the
       sidebar is hidden.
@@ -28,7 +27,7 @@ behaviors:
   - id: ios-one-icon-per-action
     description: >-
       iOS uses the desktop's icon for each action and destination, one icon per thing everywhere it
-      appears: Today is the newspaper, Quick Catch-up the bolt, AI Inbox the tray, chat and Ask
+      appears: Today is the newspaper, AI Inbox the tray, chat and Ask
       Skim the speech bubble, Summarize the sparkles, All Articles the list, and leaving the app
       (open in browser, original page) the arrow-out-of-box.
     details: >-
@@ -41,12 +40,14 @@ behaviors:
     description: >-
       iOS bottom bar shows each view as an icon over its name. It defaults to Unread, All, Today and
       Search, and Giulio chooses which views appear and their order (two to five of Today, Unread,
-      All, Starred, Recent, AI Inbox, Catch-up and Search) from Customize Bottom Bar, reached by
+      All, Starred, Recent, AI Inbox and Search) from Customize Bottom Bar, reached by
       long-pressing the bar or from the "…" menu.
     details: >-
       Today opens in place of the article list, with the bar still showing, rather than as a pushed
-      page; picking a feed, folder or library view returns to the list. Catch-up and AI Inbox open
-      their pages.
+      page; picking a feed, folder or library view returns to the list. AI Inbox opens its page.
+      There is no catch-up bar option (a saved bar that still names one just loses that item);
+      on iPhone the Today title sits between the title bar's buttons and "Ask about Today" is
+      the first item of its "…" menu, so nothing covers the title.
     source:
       text: bottom row in ios can use improvement (maybe let me choose the today view instead of the favorite view)
       reference: Giulio, project chat, 2026-10-12

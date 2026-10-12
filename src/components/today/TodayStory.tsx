@@ -134,6 +134,9 @@ function Figure({ value, label }: { value: string; label: string }) {
   return <p className="today-figure"><strong>{value}</strong><span>{label}</span></p>;
 }
 
+/** Ledes shorter than this stay in one column. */
+const LEAD_COLUMNS_MIN_CHARS = 260;
+
 export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onOpenArticle, onAsk }: Props) {
   const [expanded, setExpanded] = useState(false);
   const referencesId = useId();
@@ -186,7 +189,10 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
       </h3>
 
       {rank === "feature" && !figure && quotes[0] && <PullQuote quote={quotes[0].quote} large />}
-      {body && <p className={`today-body text-text-primary ${lead ? "today-lead-summary" : ""}`}>{body}</p>}
+      {/* A lead without a picture runs its lede in two columns, but only when
+          there is enough of it: a short lede balanced across two columns can
+          push the drop cap into the second one. */}
+      {body && <p className={`today-body text-text-primary ${lead ? "today-lead-summary" : ""} ${lead && body.length >= LEAD_COLUMNS_MIN_CHARS ? "today-body--columns" : ""}`}>{body}</p>}
       {lead && figure && <Figure value={figure.value} label={figure.label} />}
       {lead && quotes.length > 0 && (
         <div className="today-lead-quotes">

@@ -316,13 +316,24 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         )
         let existing = try db.edition(id: editionID) != nil
             ? db.todayEditionSnapshot(id: editionID) : nil
-        if let existing, !existing.items.isEmpty { return existing }
+        if let existing, existing.isSettled { return existing }
 
         var candidates = try db.todayEditionCandidates(
             startsAt: startsAt,
             endsAt: endsAt,
+            generatedAt: generatedAt,
             preferences: preferences
         )
+        // A short unread page grows only when more stories have arrived since
+        // it was made; otherwise keep it and skip the planning call.
+        if let existing, !existing.items.isEmpty {
+            let covered = try db.coveredStoryIDs(editionID: editionID)
+            let arrived = candidates.contains {
+                $0.ranking.story.lastActivityAt > existing.edition.generatedAt
+                    && !covered.contains($0.ranking.story.id)
+            }
+            if !arrived { return existing }
+        }
         var semantic = false
         if let semanticEvaluator, !candidates.isEmpty,
            candidates.count <= TodaySemanticPolicy.maximumCandidates {
@@ -335,9 +346,9 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             // Actor reentrancy permits refresh or another generator while the model runs.
             if try db.edition(id: editionID) != nil {
                 let current = try db.todayEditionSnapshot(id: editionID)
-                if !current.items.isEmpty { return current }
+                if current.isSettled { return current }
             }
-            let fresh = try db.todayEditionCandidates(startsAt: startsAt, endsAt: endsAt, preferences: preferences)
+            let fresh = try db.todayEditionCandidates(startsAt: startsAt, endsAt: endsAt, generatedAt: generatedAt, preferences: preferences)
             if fingerprint == TodaySemanticPolicy.fingerprint(fresh), let response,
                let grouped = TodaySemanticPolicy.apply(response, to: fresh, at: generatedAt) {
                 candidates = grouped
@@ -373,12 +384,19 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             completedAt: isEmpty ? generatedAt : nil,
             totalSourceCount: distinctFeedIDs.count
         )
+        let covered = Set(generatedItems.flatMap { generated in generated.memberRevisions.map(\.storyID) }).count
         try db.transaction {
-            // Only an empty placeholder may be replaced after feeds arrive.
-            // Recheck under the write transaction so populated editions stay frozen.
+            // Empty and short unread editions can grow after feeds refresh.
+            // Recheck under the write transaction: a settled edition stays
+            // frozen, and a page is never swapped for one with fewer stories.
+            var carried: [EditionItem] = []
             if try db.edition(id: editionID) != nil {
-                guard try db.listEditionItems(editionID: editionID).isEmpty,
-                      !generatedItems.isEmpty else { return }
+                let current = try db.todayEditionSnapshot(id: editionID)
+                let currentlyCovered = try db.coveredStoryIDs(editionID: editionID).count
+                let grows = current.items.isEmpty
+                    || (covered > currentlyCovered && generatedItems.count >= current.items.count)
+                guard !generatedItems.isEmpty, !current.isSettled, grows else { return }
+                carried = current.items.map(\.snapshot).filter { $0.lede != nil }
                 try db.execute("DELETE FROM editions WHERE id = ?", [.text(editionID)])
             }
             try db.insertEdition(edition)
@@ -397,6 +415,14 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
                         source: source
                     )
                 }
+            }
+            // Stories that stay on a rebuilt page keep the ledes already written.
+            for item in carried {
+                guard let lede = item.lede, let source = item.ledeSourceArticleID,
+                      let hash = item.ledeSourceEvidenceHash,
+                      generatedItems.contains(where: { $0.item.storyID == item.storyID }) else { continue }
+                try? db.setEditionItemLede(editionID: editionID, storyID: item.storyID, lede: lede,
+                                           sourceArticleID: source, sourceEvidenceHash: hash)
             }
         }
         return try db.todayEditionSnapshot(id: editionID)
@@ -1289,11 +1315,25 @@ private final class SQLiteDatabase: @unchecked Sendable {
         ) { makeStory(from: $0) }
     }
 
+    /// The indexed stories an edition covers. Grouping can fold several into
+    /// one item, so these, not the items, say whether more have arrived.
+    func coveredStoryIDs(editionID: String) throws -> Set<String> {
+        Set(try query(
+            "SELECT DISTINCT member_story_id FROM edition_item_story_revisions WHERE edition_id = ?",
+            [.text(editionID)]
+        ) { String(cString: sqlite3_column_text($0, 0)) })
+    }
+
     func todayEditionCandidates(
         startsAt: Date,
         endsAt: Date,
+        generatedAt: Date? = nil,
         preferences: TodayRankingPreferences
     ) throws -> [TodayEditionCandidate] {
+        // A page made just after midnight reaches back a day, so it is not
+        // limited to what landed in the last few minutes. Stories read in an
+        // earlier edition stay off it either way.
+        let earliest = (generatedAt ?? startsAt).addingTimeInterval(-TodayEditionBuilder.lookback)
         let stories = try query(
             """
             SELECT id, title, summary, representative_article_id,
@@ -1316,7 +1356,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
               )
             ORDER BY last_activity_at DESC, id ASC
             """,
-            [.date(startsAt), .date(endsAt), .date(startsAt)]
+            [.date(earliest), .date(endsAt), .date(startsAt)]
         ) { makeStory(from: $0) }
 
         return try stories.compactMap { story in

@@ -992,6 +992,35 @@ import Testing
     #expect(try await store.listArticles(filter: ArticleFilter()) == rawBefore)
 }
 
+@Test func todayEditionAfterMidnightReachesBackADayAndGrowsUntilRead() async throws {
+    let store = try temporaryStore()
+    let startsAt = Date(timeIntervalSince1970: 100_000)
+    let endsAt = Date(timeIntervalSince1970: 186_400)
+    _ = try await seedTodayStory(store: store, storyID: "last-evening", sourceCount: 2, timestamp: 90_000)
+    _ = try await seedTodayStory(store: store, storyID: "two-days-ago", sourceCount: 1, timestamp: 1_000)
+    _ = try await seedTodayStory(store: store, storyID: "overnight", sourceCount: 1, timestamp: 100_060)
+    let first = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt, endsAt: endsAt, storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 100_100))
+    #expect(Set(first.items.map(\.snapshot.storyID)) == ["last-evening", "overnight"])
+    #expect(!first.isSettled)
+
+    let unchanged = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt, endsAt: endsAt, storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 100_200))
+    #expect(unchanged.edition.generatedAt == first.edition.generatedAt)
+
+    _ = try await seedTodayStory(store: store, storyID: "morning", sourceCount: 2, timestamp: 120_000)
+    let grown = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt, endsAt: endsAt, storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 130_000))
+    #expect(grown.id == first.id)
+    #expect(Set(grown.items.map(\.snapshot.storyID)) == ["last-evening", "overnight", "morning"])
+
+    _ = try await store.setTodayEditionItemConsumed(editionID: grown.id, storyID: "morning", isConsumed: true)
+    _ = try await seedTodayStory(store: store, storyID: "afternoon", sourceCount: 2, timestamp: 140_000)
+    let kept = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt, endsAt: endsAt, storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 150_000))
+    #expect(kept.items.count == 3)
+}
+
 @Test func todayEditionReusesImmutableSnapshotForSameInputs() async throws {
     let store = try temporaryStore()
     let startsAt = Date(timeIntervalSince1970: 100_000)

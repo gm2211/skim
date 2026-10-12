@@ -177,7 +177,7 @@ pub struct WebCitation {
 }
 
 /// Feed publication metadata must not be mistaken for an event or fetch date.
-fn publication_context(published_at: Option<i64>) -> String {
+pub(crate) fn publication_context(published_at: Option<i64>) -> String {
     let date = published_at
         .and_then(|timestamp| chrono::DateTime::from_timestamp(timestamp, 0))
         .map(|date| date.format("%Y-%m-%dT%H:%M:%SZ").to_string())
@@ -203,7 +203,7 @@ fn generated_summary_context(summary: Option<&str>) -> String {
 }
 
 /// Search terms carry topic words, not request scaffolding or assistant prose.
-fn query_keywords(query: &str) -> Vec<String> {
+pub(crate) fn query_keywords(query: &str) -> Vec<String> {
     const STOP: &[&str] = &["a", "an", "the", "and", "or", "of", "to", "in", "on", "at", "by", "for", "from", "with", "about", "this", "that", "these", "those", "it", "its", "is", "are", "was", "were", "be", "been", "what", "which", "who", "when", "where", "how", "why", "did", "does", "do", "can", "could", "would", "you", "your", "my", "me", "our", "we", "i", "find", "search", "show", "look", "looking", "please", "article", "articles", "piece", "pieces", "story", "stories", "feed", "feeds", "library", "read", "tell", "more", "catch", "up", "them", "they", "say", "said"];
     let mut terms = Vec::new();
     for word in query.split(|c: char| !c.is_alphanumeric()).map(str::to_lowercase) {
@@ -335,7 +335,7 @@ fn retrieve_chat_articles(
     retrieve_chat_articles_for_terms(conn, scope, &terms, allow_recent_fallback)
 }
 
-fn retrieve_chat_articles_for_terms(
+pub(crate) fn retrieve_chat_articles_for_terms(
     conn: &rusqlite::Connection,
     scope: &str,
     terms: &[String],
@@ -350,6 +350,7 @@ fn retrieve_chat_articles_for_terms(
         })?;
     let scope_clause = match scope {
         "unread" => "a.is_read = 0",
+        "starred" => "a.is_starred = 1",
         "inbox" => "COALESCE(t.priority, 0) >= 3",
         _ => "1 = 1",
     };
@@ -470,7 +471,7 @@ fn article_chat_evidence(source: &str, messages: &[ChatMessageInput], max_chars:
 }
 
 /// The same production selector supplies article, library, and router evidence.
-fn query_excerpt(text: &str, query: &str, max_chars: usize) -> String {
+pub(crate) fn query_excerpt(text: &str, query: &str, max_chars: usize) -> String {
     crate::db::story_policy::chat_evidence(text, &query_keywords(query).join(" "), max_chars)
 }
 
@@ -1048,7 +1049,7 @@ fn html_entities_decode(s: &str) -> String {
 }
 
 /// Resolve chat-specific AI settings, falling back to main settings
-fn resolve_chat_settings(ai: &AiSettings) -> AiSettings {
+pub(crate) fn resolve_chat_settings(ai: &AiSettings) -> AiSettings {
     let mut settings = ai.clone();
 
     if let Some(ref chat_provider) = ai.chat_provider {

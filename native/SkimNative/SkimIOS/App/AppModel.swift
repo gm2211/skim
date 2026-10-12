@@ -851,6 +851,23 @@ final class AppModel: ObservableObject {
         return selected
     }
 
+    /// The reports behind a Today chat, each with the fullest body already on
+    /// the device (reader cache or extracted page), so answers can quote them.
+    func articlesForTodayChat(_ reports: [Article]) async -> [Article] {
+        var result: [Article] = []
+        for report in reports.prefix(30) {
+            var article = (try? await store.article(id: report.id)) ?? report
+            let cached = try? await store.cachedReaderText(articleID: report.id)
+            let feedBody = ArticleReaderContentLoader.displayBody(for: article)
+            let memory = ExtractedContentCache.shared.get(report.id)
+            if let fullest = [feedBody, article.contentText, cached, memory].compactMap({ $0 }).max(by: { $0.count < $1.count }) {
+                article.contentText = fullest
+            }
+            if !result.contains(where: { $0.id == article.id }) { result.append(article) }
+        }
+        return result
+    }
+
     func articlesForAIContext(preferred: [Article], limit: Int = 45) async throws -> [Article] {
         let visible = Array(preferred.prefix(limit))
         if !visible.isEmpty {

@@ -76,7 +76,7 @@ button.today-settings-row:hover { background: var(--color-bg-hover); }
   .today-front-top { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 0; }
   .today-front-top--solo { grid-template-columns: minmax(0, 1fr); }
   .today-page .today-front-top > .today-story-cell--lead { padding-right: 32px; border-right: 1px solid var(--color-border); }
-  .today-front-top--solo > .today-story-cell--lead { border-right: 0; padding-right: 0; }
+  .today-page .today-front-top--solo > .today-story-cell--lead { border-right: 0; padding-right: 0; }
   .today-front-rail { padding-left: 28px; }
 }
 
@@ -93,6 +93,7 @@ button.today-settings-row:hover { background: var(--color-bg-hover); }
 .today-publications { font-size: 12px; color: var(--color-text-secondary); margin-right: 2px; }
 .today-page .today-front .today-story-actions > :last-of-type:not(.sr-only) { margin-left: auto; }
 .today-page .today-front .today-story-actions .today-story-control { min-height: 32px; }
+.today-story-ask { display: inline-flex; align-items: center; gap: 5px; }
 .today-page .today-front .today-story--read h3, .today-page .today-front .today-story--read .today-body { opacity: 0.5; }
 
 .today-page .today-front .today-report-image {

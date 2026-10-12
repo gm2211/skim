@@ -140,6 +140,13 @@ public struct TodayEditionSnapshot: Identifiable, Codable, Hashable, Sendable {
 
     public var id: String { edition.id }
 
+    /// An edition stops changing once it is full or the reader has started on
+    /// it. Until then a short page may be rebuilt with more stories; nothing on
+    /// it has been read, so nothing moves under the reader.
+    public var isSettled: Bool {
+        !items.isEmpty && (items.count >= edition.storyLimit || consumedItemCount > 0)
+    }
+
     public init(
         edition: Edition,
         items: [TodayEditionItem],
@@ -186,6 +193,8 @@ struct GeneratedTodayEditionItem: Sendable {
 
 enum TodayEditionBuilder {
     static let supportedStoryLimits = [5, 10, 20]
+    /// How far back an edition reaches for stories, from when it is made.
+    static let lookback: TimeInterval = 24 * 60 * 60
 
     static func stableID(
         startsAt: Date,

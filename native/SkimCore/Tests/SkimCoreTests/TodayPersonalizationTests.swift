@@ -209,10 +209,15 @@ import Testing
     #expect(populated.edition.status == .ready)
     #expect(populated.edition.completedAt == nil)
     #expect(populated.edition.generatedAt == Date(timeIntervalSince1970: 4_000))
+    // A short page grows until the reader starts on it; once a story is read it is frozen.
+    let started = try await store.setTodayEditionItemConsumed(editionID: populated.id,
+        storyID: try #require(populated.items.first).snapshot.storyID, isConsumed: true,
+        at: Date(timeIntervalSince1970: 4_500))
     let later = Article(id: "later", feedID: feed.id, feedTitle: feed.title,
         title: "Community orchestra starts summer concert series", publishedAt: Date(timeIntervalSince1970: 5_000))
     try await store.upsert(feed: feed, articles: [later])
     let frozen = try await store.getOrGenerateTodayEdition(startsAt: start, endsAt: end,
         storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 6_000))
-    #expect(frozen == populated)
+    #expect(frozen == started)
+    #expect(frozen.items.count == 1)
 }

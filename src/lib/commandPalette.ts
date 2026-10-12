@@ -10,6 +10,8 @@ export interface PaletteCommand {
   detail?: string;
   /** Which of the app's line icons to print before the title. */
   icon?: string;
+  /** Run inside the palette instead of closing it first (asking Skim). */
+  stay?: boolean;
   run: () => void;
 }
 
@@ -83,4 +85,33 @@ export function filterCommands(commands: PaletteCommand[], query: string): Palet
     .filter((entry) => entry.score >= 0)
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map((entry) => entry.command);
+}
+
+const QUESTION_STARTS = [
+  "where", "what", "whats", "what's", "which", "who", "whos", "who's", "when", "why", "how",
+  "is", "are", "was", "were", "can", "could", "should", "would", "do", "does", "did", "any", "anything",
+  "find", "show", "summarize", "summarise", "explain", "tell", "list", "give", "compare", "open", "read",
+  "search", "recommend", "suggest", "help",
+];
+
+/**
+ * Whether palette input reads as a question or request for the assistant
+ * rather than a command name, so "Ask Skim" is offered first.
+ */
+export function isQuestionLike(query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+  if (q.endsWith("?")) return true;
+  const words = q.split(/\s+/);
+  if (words.length >= 5) return true;
+  return words.length >= 2 && QUESTION_STARTS.includes(words[0].replace(/[^a-z']/g, ""));
+}
+
+/** Whether the palette should offer "Ask Skim" above the matching commands. */
+export function askFirst(commands: PaletteCommand[], query: string): boolean {
+  if (isQuestionLike(query)) return true;
+  const scores = commands.map((command) => scoreCommand(command, query)).filter((score) => score >= 0);
+  if (scores.length === 0) return true;
+  // Scattered-letter matches only: a sentence, not a mistyped command.
+  return query.trim().split(/\s+/).length >= 3 && Math.max(...scores) < 350;
 }

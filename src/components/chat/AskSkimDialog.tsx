@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { chatWithArticles, type ArticleChatResponse, type ChatSource } from "../../services/commands";
+import { askAgent, chatWithArticles, type AgentContext, type AgentStep, type ChatSource } from "../../services/commands";
+import { useAgentChatStore } from "../../stores/agentChatStore";
+import { agentAskHeading, agentContextLabel, agentExamples } from "../../lib/agentContext";
+import { AgentSteps } from "./AgentAnswer";
 import { partitionSources, type NumberedSource } from "../../lib/chatCitations";
 import type { ChatMessageInput } from "../../services/types";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -24,6 +27,7 @@ interface Message {
   reply?: ChatReply;
   sources?: ChatSource[];
   articleIds?: string[];
+  steps?: AgentStep[];
 }
 
 interface Props {
@@ -63,6 +67,29 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Set when the chat continues an agent conversation (from the command
+  // palette, or "Ask about this page / story"): answers then come from the
+  // app agent with this context instead of the scoped article search.
+  const [agentContext, setAgentContext] = useState<AgentContext | null>(null);
+  const [contextArticleTitle, setContextArticleTitle] = useState<string | null>(null);
+  const seed = useAgentChatStore((s) => s.seed);
+  const pendingSend = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !seed) return;
+    useAgentChatStore.getState().setSeed(null);
+    setAgentContext(seed.context);
+    setContextArticleTitle(seed.articleTitle ?? null);
+    setMessages(seed.messages ?? []);
+    setReply(null);
+    setError(null);
+    if (seed.autoSend && seed.prompt?.trim()) {
+      setInput("");
+      pendingSend.current = seed.prompt.trim();
+    } else {
+      setInput(seed.prompt ?? "");
+    }
+  }, [open, seed]);
 
   useEffect(() => { if (open) restoreOpener.current = true; }, [open]);
 
@@ -86,8 +113,8 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  const send = async () => {
-    const query = input.trim();
+  const send = async (text?: string) => {
+    const query = (text ?? input).trim();
     if (!query || loading || needsSetup) return;
     setError(null);
 
@@ -100,9 +127,25 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
     setLoading(true);
 
     const history: ChatMessageInput[] = messages.map((m) => ({ role: m.role, content: chatPrompt(m.content, m.reply) }));
+    const priorIds = [...messages].reverse().find((message) => message.role === "assistant")?.articleIds;
 
     try {
-      const resp: ArticleChatResponse = await chatWithArticles(scope, chatPrompt(query, reply), history, [...messages].reverse().find((message) => message.role === "assistant")?.articleIds);
+      if (agentContext) {
+        const resp = await askAgent([...history, { role: "user", content: chatPrompt(query, reply) }], agentContext, priorIds);
+        setMessages((m) => [
+          ...m,
+          { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps },
+        ]);
+        const open = resp.actions.find((action) => action.type === "open_article");
+        if (open && onOpenArticle) {
+          restoreOpener.current = false;
+          focusAfterSend.current = false;
+          onOpenArticle(open.article_id);
+          onClose();
+        }
+        return;
+      }
+      const resp = await chatWithArticles(scope, chatPrompt(query, reply), history, priorIds);
       setMessages((m) => [
         ...m,
         { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids },
@@ -117,6 +160,14 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
       setCompletedSends((count) => count + 1);
     }
   };
+
+  useEffect(() => {
+    const text = pendingSend.current;
+    if (!text || !open || !agentContext) return;
+    pendingSend.current = null;
+    void send(text);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, agentContext, messages]);
 
   return !open || showSettings ? null : createPortal(
     <div
@@ -156,7 +207,11 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
           <h3 id="ask-skim-title" className="text-text-primary flex-1" style={{ fontSize: isPhone ? 20 : 16, fontWeight: 600 }}>
             Ask Skim
           </h3>
-          <Select
+          {agentContext ? (
+            <span className="text-text-muted truncate" style={{ fontSize: 12, maxWidth: 220 }} title="What Skim can see">
+              {agentContextLabel(agentContext, contextArticleTitle)}
+            </span>
+          ) : <Select
             aria-label="Articles to search"
             value={scope}
             onChange={(e) => setScope(e.target.value as Scope)}
@@ -165,7 +220,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
             <option value="inbox">Inbox</option>
             <option value="unread">Unread</option>
             <option value="all">All</option>
-          </Select>
+          </Select>}
           <ModelPicker surface="chat" compact disabled={loading} />
           <button
             onClick={onClose}
@@ -186,13 +241,15 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
           {messages.length === 0 && !loading && !needsSetup && !isAiSetupError(error) && (
             <div className="flex flex-col items-center text-center" style={{ padding: "48px 20px 32px" }}>
               <p className="text-text-primary" style={{ fontSize: 15, fontWeight: 600 }}>
-                Ask anything about articles in your feed.
+                {agentContext
+                  ? agentAskHeading(agentContext, contextArticleTitle)
+                  : "Ask anything about articles in your feed."}
               </p>
               <p className="text-text-muted" style={{ fontSize: 12.5, marginTop: 4 }}>
                 Answers cite the articles they come from. Try one of these:
               </p>
               <div className="flex flex-wrap justify-center" style={{ gap: 8, marginTop: 16, maxWidth: 520 }}>
-                {EXAMPLE_PROMPTS.map((prompt) => (
+                {(agentContext ? agentExamples(agentContext) : EXAMPLE_PROMPTS).map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
@@ -228,6 +285,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
                   }}
                 >
                   {m.reply && <ReplyPreview reply={m.reply} />}
+                  {m.steps && <AgentSteps steps={m.steps} />}
                   <ChatMessageContent content={m.content} role={m.role} onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }} replyDisabled={loading} />
                 </div>
               </div>
@@ -291,7 +349,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
               style={{ background: "rgba(255, 255, 255, 0.05)", padding: "10px 12px", fontSize: 13, width: 0 }}
             />
             <button
-              onClick={send}
+              onClick={() => void send()}
               disabled={loading || needsSetup || !input.trim()}
               className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors flex-shrink-0"
               style={{ padding: "10px 16px", fontSize: 13 }}

@@ -8,9 +8,15 @@ import { useFolders } from "../../hooks/useFolders";
 import { useArticle, useToggleRead, useToggleStar } from "../../hooks/useArticles";
 import { useArticleInteraction, useSetPriorityOverride } from "../../hooks/useLearning";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
-import { getArticles } from "../../services/commands";
+import { askAgent, getArticles, type AgentContext } from "../../services/commands";
 import { runAppCommand } from "../../lib/appCommands";
-import { filterCommands, formatShortcutKey, type PaletteCommand } from "../../lib/commandPalette";
+import { askFirst, filterCommands, formatShortcutKey, type PaletteCommand } from "../../lib/commandPalette";
+import { agentContextLabel, type AgentMessage } from "../../lib/agentContext";
+import { partitionSources } from "../../lib/chatCitations";
+import { useAgentContext } from "../../hooks/useAgentContext";
+import { openAgentChat } from "../../stores/agentChatStore";
+import { AgentAnswer, AgentSteps } from "../chat/AgentAnswer";
+import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { PALETTE_ICONS } from "../ui/icons";
 
 const ARTICLE_RESULTS = 8;
@@ -161,6 +167,7 @@ export function CommandPalette() {
   const close = () => setShowCommandPalette(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   useDialogFocus(dialogRef, close);
 
   const [query, setQuery] = useState("");
@@ -168,19 +175,117 @@ export function CommandPalette() {
   const commands = useCommands();
   const { data: feeds } = useFeeds();
 
+  // Chat: input that is not a command is a question for the app agent, which
+  // knows the page, story or article on screen.
+  const liveContext = useAgentContext();
+  const selectedArticleId = useUiStore((s) => s.selectedArticleId);
+  const { data: openArticle } = useArticle(selectedArticleId);
+  const [chat, setChat] = useState<{ context: AgentContext; label: string; messages: AgentMessage[] } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
   const articleQuery = useDebounced(query.trim(), 150);
   const { data: foundArticles } = useQuery({
     queryKey: ["commandPaletteArticles", articleQuery],
     queryFn: () => getArticles({ search: articleQuery, limit: ARTICLE_RESULTS }),
-    enabled: articleQuery.length >= 2,
+    enabled: !chat && articleQuery.length >= 2,
     staleTime: 30_000,
   });
 
+  const openArticleById = (id: string) => {
+    const ui = useUiStore.getState();
+    if (ui.sidebarView.type === "today") ui.openArticleFromToday(id);
+    else ui.setSelectedArticleId(id);
+  };
+
+  const ask = async (text: string) => {
+    const question = text.trim();
+    if (!question || loading) return;
+    const context = chat?.context ?? liveContext;
+    const label = chat?.label ?? agentContextLabel(context, openArticle?.title);
+    const prior = chat?.messages ?? [];
+    const messages: AgentMessage[] = [...prior, { role: "user", content: question }];
+    setChat({ context, label, messages });
+    setQuery("");
+    setError(null);
+    setLoading(true);
+    const priorIds = [...prior].reverse().find((m) => m.role === "assistant")?.articleIds;
+    try {
+      const resp = await askAgent(messages.map(({ role, content }) => ({ role, content })), context, priorIds);
+      if (!mounted.current) return;
+      setChat((current) => current && {
+        ...current,
+        messages: [...current.messages, { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps }],
+      });
+      const open = resp.actions.find((action) => action.type === "open_article");
+      if (open) {
+        close();
+        window.setTimeout(() => openArticleById(open.article_id), 0);
+      }
+    } catch (e) {
+      if (!mounted.current) return;
+      setError(String(e instanceof Error ? e.message : e));
+      setChat(prior.length ? { context, label, messages: prior } : null);
+      setQuery(question);
+    } finally {
+      if (mounted.current) {
+        setLoading(false);
+        inputRef.current?.focus();
+      }
+    }
+  };
+
+  const openFullChat = (prompt?: string) => {
+    if (loading) return;
+    const context = chat?.context ?? liveContext;
+    const text = (prompt ?? query).trim();
+    close();
+    window.setTimeout(() => openAgentChat({
+      context,
+      articleTitle: context.article_id ? openArticle?.title : null,
+      messages: chat?.messages,
+      prompt: text || undefined,
+      autoSend: !!text,
+    }), 0);
+  };
+
+  const lastAnswer = chat ? [...chat.messages].reverse().find((m) => m.role === "assistant") : undefined;
+  const lastAnswerIsLatest = !!chat && !loading && chat.messages[chat.messages.length - 1] === lastAnswer;
+
   const results = useMemo(() => {
+    if (chat) {
+      // The articles the latest answer cited, ready to open.
+      if (!lastAnswer?.sources || !lastAnswerIsLatest) return [];
+      return partitionSources(lastAnswer.sources, lastAnswer.content).cited.map(({ source, number }): PaletteCommand => ({
+        id: `cited.${source.id}`,
+        group: number === null ? "Web" : `[${number}]`,
+        title: source.title,
+        detail: source.feed_title,
+        icon: source.source_type === "web" ? "globe" : "book",
+        run: () => {
+          if (source.source_type === "web") { if (source.url) void openUrl(source.url); }
+          else openArticleById(source.id);
+        },
+      }));
+    }
     const matched = filterCommands(commands, query);
-    if (query.trim().length < 2 || !foundArticles?.length) return matched;
+    const trimmed = query.trim();
+    if (trimmed.length < 2) return matched;
+    const askRow: PaletteCommand = {
+      id: "ask.agent",
+      group: "Ask Skim",
+      title: trimmed,
+      icon: "sparkle",
+      stay: true,
+      run: () => void ask(trimmed),
+    };
     const feedTitles = new Map((feeds ?? []).map((f) => [f.id, f.title]));
-    const articles: PaletteCommand[] = foundArticles.slice(0, ARTICLE_RESULTS).map((a) => ({
+    const articles: PaletteCommand[] = (foundArticles ?? []).slice(0, ARTICLE_RESULTS).map((a) => ({
       id: `articleResult.${a.id}`,
       group: "Articles",
       title: a.title,
@@ -188,10 +293,11 @@ export function CommandPalette() {
       icon: "book",
       run: () => useUiStore.getState().setSelectedArticleId(a.id),
     }));
-    return [...matched, ...articles];
-  }, [commands, feeds, foundArticles, query]);
+    return askFirst(commands, query) ? [askRow, ...matched, ...articles] : [...matched, askRow, ...articles];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat, lastAnswer, lastAnswerIsLatest, commands, feeds, foundArticles, query]);
 
-  useEffect(() => setActive(0), [query]);
+  useEffect(() => setActive(0), [query, chat?.messages.length]);
   const activeIndex = Math.min(active, Math.max(results.length - 1, 0));
 
   useEffect(() => {
@@ -200,8 +306,16 @@ export function CommandPalette() {
       ?.scrollIntoView?.({ block: "nearest" });
   }, [activeIndex]);
 
+  useEffect(() => {
+    if (chat && loading) listRef.current?.scrollTo?.({ top: listRef.current.scrollHeight });
+  }, [chat, loading]);
+
   const run = (command: PaletteCommand | undefined) => {
     if (!command) return;
+    if (command.stay) {
+      command.run();
+      return;
+    }
     close();
     // Let the palette unmount and hand focus back before the command opens
     // its own dialog or moves focus.
@@ -215,15 +329,81 @@ export function CommandPalette() {
     } else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) {
       e.preventDefault();
       setActive((i) => (results.length ? (Math.min(i, results.length - 1) - 1 + results.length) % results.length : 0));
+    } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      if (chat || query.trim()) openFullChat();
     } else if (e.key === "Enter") {
       e.preventDefault();
-      run(results[activeIndex]);
+      if (chat && query.trim()) void ask(query);
+      else run(results[activeIndex]);
+    } else if (e.key === "Backspace" && chat && !query && !loading) {
+      // Backspace on an empty follow-up returns to the command list.
+      e.preventDefault();
+      setChat(null);
+      setError(null);
     }
   };
 
   // Group headers only when browsing; a search shows one ranked list with
   // each row's group on the right.
-  const browsing = !query.trim();
+  const browsing = !chat && !query.trim();
+
+  const renderRow = (command: PaletteCommand, index: number) => {
+    const header = browsing && (index === 0 || results[index - 1].group !== command.group);
+    const selected = index === activeIndex;
+    const isAsk = command.id === "ask.agent";
+    return (
+      <div key={command.id}>
+        {header && (
+          <div className="text-text-muted uppercase" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", padding: "10px 12px 4px" }}>
+            {command.group}
+          </div>
+        )}
+        <div
+          id={`command-${index}`}
+          data-index={index}
+          role="option"
+          aria-selected={selected}
+          onMouseMove={() => { if (!selected) setActive(index); }}
+          onClick={() => run(command)}
+          className={`flex items-center gap-3 rounded-lg cursor-pointer ${selected ? "bg-white/10 text-text-primary" : "text-text-secondary"}`}
+          style={{ padding: "8px 12px", fontSize: 14 }}
+        >
+          <span
+            className={`flex items-center justify-center flex-shrink-0 ${isAsk ? "text-accent" : selected ? "text-text-primary" : "text-text-muted"}`}
+            style={{ width: 18, height: 18 }}
+          >
+            {(() => {
+              const Glyph = command.icon ? PALETTE_ICONS[command.icon] : undefined;
+              return Glyph ? <Glyph size={16} strokeWidth={1.9} /> : null;
+            })()}
+          </span>
+          {isAsk ? (
+            <span className="truncate min-w-0">
+              <span className="text-text-muted">Ask Skim: </span>{command.title}
+            </span>
+          ) : (
+            <span className="truncate min-w-0">{command.title}</span>
+          )}
+          {command.detail && (
+            <span className="text-text-muted truncate min-w-0 flex-shrink" style={{ fontSize: 12 }}>{command.detail}</span>
+          )}
+          <span className="flex-1" />
+          {!browsing && !isAsk && (
+            <span className="text-text-muted flex-shrink-0" style={{ fontSize: 11 }}>{command.group}</span>
+          )}
+          {isAsk && selected && (
+            <span className="text-text-muted flex-shrink-0" style={{ fontSize: 11 }}>{agentContextLabel(liveContext, openArticle?.title)}</span>
+          )}
+          {command.shortcut && (
+            <span className="flex items-center gap-1 flex-shrink-0">
+              {command.shortcut.map((key) => <Kbd key={key}>{formatShortcutKey(key)}</Kbd>)}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return createPortal(
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] dialog-fade-in flex justify-center" onClick={close}>
@@ -237,24 +417,31 @@ export function CommandPalette() {
         style={{
           background: "var(--color-bg-secondary)",
           width: "min(640px, 92vw)",
-          maxHeight: "min(560px, 70vh)",
-          marginTop: "14vh",
+          maxHeight: chat ? "min(640px, 76vh)" : "min(560px, 70vh)",
+          marginTop: chat ? "10vh" : "14vh",
           alignSelf: "flex-start",
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-white/5" style={{ padding: "14px 18px" }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted flex-shrink-0">
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
+          {chat ? (
+            <span className="text-accent flex-shrink-0 flex">
+              {(() => { const Sparkle = PALETTE_ICONS.sparkle; return Sparkle ? <Sparkle size={16} strokeWidth={1.9} /> : null; })()}
+            </span>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted flex-shrink-0">
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+          )}
           <input
+            ref={inputRef}
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Type a command, feed or article…"
-            aria-label="Search commands"
+            placeholder={chat ? "Ask a follow-up…" : "Type a command, or ask anything…"}
+            aria-label={chat ? "Follow-up question" : "Search commands"}
             aria-controls="command-palette-list"
             aria-activedescendant={results.length ? `command-${activeIndex}` : undefined}
             role="combobox"
@@ -265,65 +452,77 @@ export function CommandPalette() {
           <Kbd>esc</Kbd>
         </div>
 
-        <div ref={listRef} id="command-palette-list" role="listbox" className="flex-1 overflow-y-auto" style={{ padding: 6 }}>
-          {results.length === 0 && (
+        <div ref={listRef} id="command-palette-list" role="listbox" aria-label={chat ? "Conversation" : undefined} className="flex-1 overflow-y-auto" style={{ padding: 6 }}>
+          {chat && (
+            <div style={{ padding: "6px 12px 4px" }} aria-live="polite">
+              <div className="text-text-muted" style={{ fontSize: 11, marginBottom: 8 }}>{chat.label}</div>
+              {chat.messages.map((message, index) => message.role === "user" ? (
+                <p key={index} className="text-text-primary" style={{ fontSize: 15, fontWeight: 600, marginTop: index ? 18 : 0, marginBottom: 6 }}>
+                  {message.content}
+                </p>
+              ) : (
+                <div key={index}>
+                  <AgentSteps steps={message.steps ?? []} />
+                  <AgentAnswer
+                    content={message.content}
+                    sources={message.sources ?? []}
+                    onOpenArticle={(id) => { close(); window.setTimeout(() => openArticleById(id), 0); }}
+                  />
+                </div>
+              ))}
+              {loading && (
+                <div className="flex items-center gap-2 text-text-muted" style={{ padding: "4px 0" }} role="status">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="smooth-spin">
+                    <path d="M21 12a9 9 0 11-6.219-8.56" />
+                  </svg>
+                  <span style={{ fontSize: 12 }}>Looking through your articles…</span>
+                </div>
+              )}
+              {results.length > 0 && (
+                <div className="text-text-muted uppercase" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", padding: "14px 0 2px" }}>
+                  Articles
+                </div>
+              )}
+            </div>
+          )}
+          {error && (isAiSetupError(error)
+            ? <div style={{ padding: "6px 12px" }}><AiSetupNotice error={error} /></div>
+            : <p role="alert" className="text-danger" style={{ fontSize: 13, padding: "6px 12px" }}>{error}</p>)}
+          {!chat && results.length === 0 && (
             <p className="text-text-muted text-center" style={{ fontSize: 13, padding: "28px 12px" }}>
               No matching commands
             </p>
           )}
-          {results.map((command, index) => {
-            const header = browsing && (index === 0 || results[index - 1].group !== command.group);
-            const selected = index === activeIndex;
-            return (
-              <div key={command.id}>
-                {header && (
-                  <div className="text-text-muted uppercase" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", padding: "10px 12px 4px" }}>
-                    {command.group}
-                  </div>
-                )}
-                <div
-                  id={`command-${index}`}
-                  data-index={index}
-                  role="option"
-                  aria-selected={selected}
-                  onMouseMove={() => { if (!selected) setActive(index); }}
-                  onClick={() => run(command)}
-                  className={`flex items-center gap-3 rounded-lg cursor-pointer ${selected ? "bg-white/10 text-text-primary" : "text-text-secondary"}`}
-                  style={{ padding: "8px 12px", fontSize: 14 }}
-                >
-                  <span
-                    className={`flex items-center justify-center flex-shrink-0 ${selected ? "text-text-primary" : "text-text-muted"}`}
-                    style={{ width: 18, height: 18 }}
-                  >
-                    {(() => {
-                      const Glyph = command.icon ? PALETTE_ICONS[command.icon] : undefined;
-                      return Glyph ? <Glyph size={16} strokeWidth={1.9} /> : null;
-                    })()}
-                  </span>
-                  <span className="truncate min-w-0">{command.title}</span>
-                  {command.detail && (
-                    <span className="text-text-muted truncate min-w-0 flex-shrink" style={{ fontSize: 12 }}>{command.detail}</span>
-                  )}
-                  <span className="flex-1" />
-                  {!browsing && (
-                    <span className="text-text-muted flex-shrink-0" style={{ fontSize: 11 }}>{command.group}</span>
-                  )}
-                  {command.shortcut && (
-                    <span className="flex items-center gap-1 flex-shrink-0">
-                      {command.shortcut.map((key) => <Kbd key={key}>{formatShortcutKey(key)}</Kbd>)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+          {results.map(renderRow)}
         </div>
 
         <div className="flex items-center gap-4 border-t border-white/5 text-text-muted" style={{ padding: "8px 16px", fontSize: 11 }}>
-          <span className="flex items-center gap-1"><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
-          <span className="flex items-center gap-1"><Kbd>↵</Kbd> run</span>
-          <span className="flex-1" />
-          <span className="flex items-center gap-1"><Kbd>{formatShortcutKey("mod")}</Kbd><Kbd>K</Kbd> toggle</span>
+          {chat ? (
+            <>
+              {(query.trim() || results.length > 0) && (
+                <span className="flex items-center gap-1"><Kbd>↵</Kbd> {query.trim() ? "ask" : "open article"}</span>
+              )}
+              <span className="flex items-center gap-1"><Kbd>⌫</Kbd> commands</span>
+              <span className="flex-1" />
+              <button
+                type="button"
+                onClick={() => openFullChat()}
+                disabled={loading}
+                className="flex items-center gap-1 rounded-md hover:text-text-primary hover:bg-white/5 disabled:opacity-40"
+                style={{ padding: "2px 6px", fontSize: 11 }}
+              >
+                Open full chat <Kbd>{formatShortcutKey("mod")}</Kbd><Kbd>↵</Kbd>
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="flex items-center gap-1"><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
+              <span className="flex items-center gap-1"><Kbd>↵</Kbd> run</span>
+              {query.trim() && <span className="flex items-center gap-1"><Kbd>{formatShortcutKey("mod")}</Kbd><Kbd>↵</Kbd> ask in full chat</span>}
+              <span className="flex-1" />
+              <span className="flex items-center gap-1"><Kbd>{formatShortcutKey("mod")}</Kbd><Kbd>K</Kbd> toggle</span>
+            </>
+          )}
         </div>
       </div>
     </div>,

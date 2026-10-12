@@ -11,8 +11,8 @@ behaviors:
       only), OpenRouter, and Custom (any OpenAI-compatible endpoint).
   - id: ios-providers
     description: >-
-      iOS providers: Apple Intelligence (default), On-device MLX, Claude Pro/Max, Grok (xAI), OpenAI,
-      and Custom.
+      iOS providers: Apple Intelligence (default), On-device MLX, Claude Pro/Max, Grok (xAI), Claude
+      API key, OpenAI, OpenRouter, and Custom.
   - id: keys-kept-per-provider
     description: >-
       Each provider keeps its own API key, endpoint, and model, so switching away and back does not

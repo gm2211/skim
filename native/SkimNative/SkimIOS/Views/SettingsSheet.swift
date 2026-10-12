@@ -2,11 +2,84 @@ import SkimCore
 import SwiftUI
 import UIKit
 
+/// Top-level Settings tabs. Each tab is its own page, so Settings never turns
+/// into one long scroll (spec: settings/ios-settings-tabs).
+enum SettingsTab: String, CaseIterable, Identifiable {
+    case ai, library, about
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .ai: "AI"
+        case .library: "Library"
+        case .about: "About"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .ai: "sparkles"
+        case .library: "books.vertical"
+        case .about: "info.circle"
+        }
+    }
+}
+
+/// The AI service's own tabs, mirroring BYOS `AiAccountSettings` on desktop:
+/// Model, Account, and Preferences, with Account first while signed out.
+enum AIServiceTab: String, Identifiable {
+    case model, account, preferences
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .model: "Model"
+        case .account: "Account"
+        case .preferences: "Preferences"
+        }
+    }
+}
+
+/// One provider in the "Choose AI service" list, mirroring BYOS
+/// `AiProviderPicker`: a name, a one-line description, and how you connect.
+struct NativeAIProviderChoice: Identifiable {
+    var id: String
+    var name: String
+    var detail: String
+    var badge: String
+
+    /// Order: on-device first, then subscriptions, then API keys.
+    static let all: [NativeAIProviderChoice] = [
+        .init(id: "foundation-models", name: "Apple Intelligence", detail: "Apple's on-device model. Private, free, and works offline.", badge: "On device"),
+        .init(id: "mlx", name: "On-device MLX", detail: "Download a small open model and run it on this iPhone.", badge: "On device"),
+        .init(id: "claude-subscription", name: "Claude Pro/Max", detail: "Sign in with your Claude.ai account. No API key.", badge: "Subscription"),
+        .init(id: "xai", name: "Grok (xAI)", detail: "Sign in with your SuperGrok subscription, or use an xAI API key.", badge: "Subscription"),
+        .init(id: "anthropic", name: "Claude (API key)", detail: "api.anthropic.com with usage-based billing.", badge: "API key"),
+        .init(id: "openai", name: "OpenAI", detail: "GPT models with a platform API key. A ChatGPT plan does not cover app access.", badge: "API key"),
+        .init(id: "openrouter", name: "OpenRouter", detail: "Hundreds of models with one OpenRouter key.", badge: "API key"),
+        .init(id: "custom", name: "Custom", detail: "Any OpenAI-compatible endpoint.", badge: "API key")
+    ]
+
+    static func name(for id: String) -> String {
+        all.first(where: { $0.id == id })?.name ?? id
+    }
+}
+
 struct SettingsSheet: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openURL) private var openURL
     @Binding var isPresented: Bool
     @State private var draft = AppSettings()
+    @State private var activeTab: SettingsTab = .ai
+    @State private var choosingProvider = false
+    /// Nil until the reader picks a tab, so the default follows sign-in.
+    @State private var aiTab: AIServiceTab?
+    /// Whether Account leads the AI tabs. Captured when the provider is shown,
+    /// so typing a key does not reorder the tabs mid-entry.
+    @State private var accountFirst = false
+    @State private var xaiSignedIn = XAIKeychainStore.isSignedIn
 
     var onAddFeed: () -> Void = {}
     var onImportOPML: () -> Void = {}
@@ -20,19 +93,34 @@ struct SettingsSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 16) {
                     header
-                    aiSection
                     if !aiOnly {
-                        librarySection
-                        legalSection
-                        aboutSection
+                        SettingsTabBar(selection: $activeTab)
                     }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 18)
-                .padding(.bottom, 36)
+                .padding(.bottom, 14)
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 26) {
+                        switch aiOnly ? SettingsTab.ai : activeTab {
+                        case .ai:
+                            aiTabContent
+                        case .library:
+                            librarySection
+                        case .about:
+                            aboutSection
+                            legalSection
+                        }
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 6)
+                    .padding(.bottom, 36)
+                }
+                .scrollDismissesKeyboard(.interactively)
             }
             .background(SkimStyle.background.ignoresSafeArea())
             .toolbar {
@@ -52,6 +140,8 @@ struct SettingsSheet: View {
             .onAppear {
                 draft = model.settings
                 draft.ai = normalizedAISettings(draft.ai)
+                xaiSignedIn = XAIKeychainStore.isSignedIn
+                accountFirst = !providerIsReady
                 Task { await model.refreshOfflineCacheStats() }
             }
             .onChange(of: draft) { _, newValue in
@@ -63,165 +153,321 @@ struct SettingsSheet: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(aiOnly ? "AI Settings" : "Settings")
                 .font(.system(size: 31, weight: .heavy))
                 .foregroundStyle(SkimStyle.text)
 
-            Text(aiOnly ? "Choose a provider and sign in or add a key." : "Local app controls, AI status, and library maintenance.")
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(SkimStyle.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            if aiOnly {
+                Text("Choose an AI service, connect your account, and pick a model.")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.top, 12)
     }
 
-    private var aiSection: some View {
-        SettingsSection(title: "AI") {
-            Picker("Provider", selection: aiProviderBinding) {
-                ForEach(nativeAIProviders, id: \.value) { provider in
-                    Text(provider.label).tag(provider.value)
+    // MARK: - AI tab
+
+    @ViewBuilder
+    private var aiTabContent: some View {
+        if choosingProvider {
+            providerPicker
+        } else {
+            aiServiceHeader
+            AIServiceTabBar(tabs: aiTabs, selection: aiTabBinding)
+            switch activeAITab {
+            case .model:
+                SettingsSection(title: "") { modelSettings }
+            case .account:
+                SettingsSection(title: "") { accountSettings }
+            case .preferences:
+                preferencesSettings
+            }
+        }
+    }
+
+    private var aiTabs: [AIServiceTab] {
+        accountFirst ? [.account, .model, .preferences] : [.model, .account, .preferences]
+    }
+
+    private var activeAITab: AIServiceTab {
+        aiTab ?? (accountFirst ? .account : .model)
+    }
+
+    private var aiTabBinding: Binding<AIServiceTab> {
+        Binding(get: { activeAITab }, set: { aiTab = $0 })
+    }
+
+    private var providerPicker: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Choose AI service")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(SkimStyle.secondary)
+                .tracking(1.2)
+                .textCase(.uppercase)
+
+            VStack(spacing: 10) {
+                ForEach(NativeAIProviderChoice.all) { choice in
+                    ProviderChoiceRow(choice: choice, isSelected: choice.id == draft.ai.provider) {
+                        selectProvider(choice.id)
+                    }
                 }
             }
-            .pickerStyle(.menu)
-            .tint(SkimStyle.accent)
 
-            Text(selectedProviderDescription)
-                .font(.system(size: 14, weight: .regular))
-                .foregroundStyle(SkimStyle.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Button("Back to settings") {
+                choosingProvider = false
+            }
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(SkimStyle.accent)
+            .frame(minHeight: 44)
+        }
+    }
 
-            HStack(alignment: .top, spacing: 14) {
+    /// The selected service, its status, and a way to change it — BYOS
+    /// `AiAccountSettings`' header.
+    private var aiServiceHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("AI service")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .tracking(0.7)
+                        .textCase(.uppercase)
+                    Text(NativeAIProviderChoice.name(for: draft.ai.provider))
+                        .font(.system(size: 21, weight: .bold))
+                        .foregroundStyle(SkimStyle.text)
+                }
+                Spacer(minLength: 8)
+                Button {
+                    choosingProvider = true
+                } label: {
+                    Text("Change")
+                        .font(.system(size: 15, weight: .semibold))
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 36)
+                }
+                .buttonStyle(.bordered)
+                .tint(SkimStyle.accent)
+                .accessibilityLabel("Change AI service")
+            }
+
+            HStack(alignment: .top, spacing: 10) {
                 Circle()
                     .fill(providerIsReady ? Color.green.opacity(0.82) : Color.orange.opacity(0.9))
-                    .frame(width: 10, height: 10)
-                    .padding(.top, 7)
-
-                VStack(alignment: .leading, spacing: 6) {
+                    .frame(width: 9, height: 9)
+                    .padding(.top, 5)
+                VStack(alignment: .leading, spacing: 3) {
                     Text(providerStatusTitle)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(SkimStyle.text)
                     Text(providerStatusDetail)
-                        .font(.system(size: 15, weight: .regular))
+                        .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(SkimStyle.separator, lineWidth: 1)
+        }
+    }
 
-            if draft.ai.provider == "claude-subscription" {
-                // Two explicit paths: OAuth sign-in (default) or a manually
-                // pasted API token (secondary, collapsed by default). Showing
-                // both a token field and the paste-code flow at once is what
-                // caused users to paste a bearer token that has no refresh
-                // token behind it — the first 401 then wipes the Keychain.
-                ClaudeAuthSection(
-                    ai: aiSettingsBinding,
-                    apiKeyText: aiAPIKeyBinding,
-                    providerIsReady: providerIsReady,
-                    openURL: { url in openURL(url) }
-                )
-            } else if providerNeedsAPIKey {
-                SettingsTextField(
-                    title: apiKeyFieldTitle,
-                    placeholder: apiKeyFieldPlaceholder,
-                    text: aiAPIKeyBinding,
-                    isSecure: true
-                )
-            }
+    // MARK: Model
 
-            // Model selection appears only once the provider is authenticated:
-            // the list is fetched from the provider, so before sign-in there is
-            // nothing to choose from and a text field would just be showing a
-            // value the user never picked. `custom` is the exception — no
-            // discoverable list, so it stays a free-text field.
-            if draft.ai.provider == "custom" {
-                SettingsTextField(
-                    title: "Model",
-                    placeholder: defaultModelPlaceholder,
-                    text: aiModelBinding
-                )
-            } else if draft.ai.provider == "claude-subscription" && providerIsReady {
-                RemoteModelPicker(
-                    modelID: aiModelBinding,
-                    settings: draft.ai,
-                    placeholder: "Select a model",
-                    fetch: { try await NativeAI.fetchAnthropicModels(settings: $0) }
-                )
-            } else if ["xai", "openai"].contains(draft.ai.provider) && providerIsReady {
-                RemoteModelPicker(
-                    modelID: aiModelBinding,
-                    settings: draft.ai,
-                    placeholder: "Select a model",
-                    fetch: { try await NativeAI.fetchOpenAICompatibleModels(settings: $0) }
-                )
-            }
+    @ViewBuilder
+    private var modelSettings: some View {
+        switch draft.ai.provider {
+        case "foundation-models":
+            SettingRow(
+                systemName: "apple.intelligence",
+                title: "Apple Intelligence",
+                detail: "Apple picks the on-device model. There is nothing to choose or download."
+            )
+        case "mlx":
+            MLXSettingsPanel(ai: aiSettingsBinding)
 
-            if draft.ai.provider == "custom" {
-                SettingsTextField(
-                    title: "Endpoint",
-                    placeholder: "https://api.openai.com",
-                    text: aiEndpointBinding
-                )
-            }
-
-            if draft.ai.provider == "mlx" {
-                MLXSettingsPanel(ai: aiSettingsBinding)
-
-                Toggle(isOn: Binding(
-                    get: { draft.ai.localChatWebSearch ?? true },
-                    set: { value in updateAI { $0.localChatWebSearch = value } }
-                )) {
+            Toggle(isOn: Binding(
+                get: { draft.ai.localChatWebSearch ?? true },
+                set: { value in updateAI { $0.localChatWebSearch = value } }
+            )) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text("Web search in chat")
                         .font(.system(size: 16, weight: .regular))
                         .foregroundStyle(SkimStyle.text)
+                    Text("Look up current information when the article cannot answer.")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
                 }
-                .toggleStyle(.switch)
-                .tint(SkimStyle.accent)
             }
-
-            Divider()
-                .overlay(SkimStyle.separator)
-
-            WordCountPresetChips(wordCount: summaryWordCountBinding)
-
-            Stepper(value: summaryWordCountBinding, in: AIRequestPolicy.summaryWordRange, step: 25) {
-                Text("Summary length: \(AIRequestPolicy.summaryWordCount(draft.ai)) words")
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(SkimStyle.text)
-            }
+            .toggleStyle(.switch)
             .tint(SkimStyle.accent)
-
-            Picker("Tone", selection: summaryToneBinding) {
-                Text("Concise").tag("concise")
-                Text("Detailed").tag("detailed")
-                Text("Casual").tag("casual")
-                Text("Technical").tag("technical")
+        case "custom":
+            SettingsTextField(
+                title: "Model",
+                placeholder: defaultModelPlaceholder,
+                text: aiModelBinding
+            )
+        default:
+            if providerIsReady {
+                RemoteModelPicker(
+                    modelID: aiModelBinding,
+                    settings: draft.ai,
+                    placeholder: "Select a model",
+                    reloadKey: "\(draft.ai.provider)|\(draft.ai.apiKey ?? "")|\(xaiSignedIn)",
+                    fetch: modelFetcher(for: draft.ai.provider)
+                )
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Connect your account to see the models it can use.")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        aiTab = .account
+                    } label: {
+                        Text("Open Account")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(SkimStyle.accent)
+                }
             }
-            .pickerStyle(.menu)
-            .tint(SkimStyle.accent)
-
-            SettingsTextField(
-                title: "Summary prompt",
-                placeholder: "Focus on risks, implications, and what changed...",
-                text: summaryPromptBinding,
-                axis: .vertical
-            )
-
-            SettingsTextField(
-                title: "AI Inbox interests",
-                placeholder: "Prioritize distributed systems, Swift, local AI...",
-                text: triagePromptBinding,
-                axis: .vertical
-            )
-
-            Divider()
-                .overlay(SkimStyle.separator)
-
-            SettingRow(systemName: "bolt", title: "Quick Catch-up", detail: "Runs on currently visible articles.")
-            SettingRow(systemName: "tray", title: "AI Inbox", detail: "Currently generates a ranked triage sheet.")
-            SettingRow(systemName: "bubble.left", title: "Chat", detail: "Available for visible articles and single articles.")
         }
     }
+
+    private func modelFetcher(for provider: String) -> @Sendable (AISettings) async throws -> [AIModelInfo] {
+        if provider == "claude-subscription" || provider == "anthropic" {
+            return { try await NativeAI.fetchAnthropicModels(settings: $0) }
+        }
+        return { try await NativeAI.fetchOpenAICompatibleModels(settings: $0) }
+    }
+
+    // MARK: Account
+
+    @ViewBuilder
+    private var accountSettings: some View {
+        switch draft.ai.provider {
+        case "foundation-models", "mlx":
+            SettingRow(
+                systemName: "iphone",
+                title: "Runs on this iPhone",
+                detail: "No account or API key needed. Articles never leave the device."
+            )
+        case "claude-subscription":
+            // Two explicit paths: OAuth sign-in (default) or a manually
+            // pasted API token (secondary, collapsed by default). Showing
+            // both a token field and the paste-code flow at once is what
+            // caused users to paste a bearer token that has no refresh
+            // token behind it — the first 401 then wipes the Keychain.
+            ClaudeAuthSection(
+                ai: aiSettingsBinding,
+                apiKeyText: aiAPIKeyBinding,
+                providerIsReady: providerIsReady,
+                openURL: { url in openURL(url) },
+                onSignedIn: { aiTab = .model }
+            )
+        case "xai":
+            SuperGrokSignInPanel(
+                isSignedIn: $xaiSignedIn,
+                openURL: { url in openURL(url) },
+                onSignedIn: { aiTab = .model }
+            )
+            SettingsTextField(
+                title: xaiSignedIn ? "xAI API key (optional)" : "Or use an xAI API key",
+                placeholder: "xai-...",
+                text: aiAPIKeyBinding,
+                isSecure: true
+            )
+            keyHint("Create one at console.x.ai. An API key takes priority over the SuperGrok sign-in and bills your xAI account.")
+        case "custom":
+            SettingsTextField(
+                title: "Endpoint",
+                placeholder: "https://api.openai.com",
+                text: aiEndpointBinding
+            )
+            SettingsTextField(
+                title: "API key (optional)",
+                placeholder: "sk-...",
+                text: aiAPIKeyBinding,
+                isSecure: true
+            )
+            keyHint("Any OpenAI-compatible endpoint. Leave the key blank for a local server that needs none.")
+        default:
+            SettingsTextField(
+                title: apiKeyFieldTitle,
+                placeholder: apiKeyFieldPlaceholder,
+                text: aiAPIKeyBinding,
+                isSecure: true
+            )
+            keyHint(apiKeyHint)
+        }
+    }
+
+    private func keyHint(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13, weight: .regular))
+            .foregroundStyle(SkimStyle.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    // MARK: Preferences
+
+    private var preferencesSettings: some View {
+        VStack(alignment: .leading, spacing: 26) {
+            SettingsSection(title: "Summaries") {
+                WordCountPresetChips(wordCount: summaryWordCountBinding)
+
+                Stepper(value: summaryWordCountBinding, in: AIRequestPolicy.summaryWordRange, step: 25) {
+                    Text("Summary length: \(AIRequestPolicy.summaryWordCount(draft.ai)) words")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(SkimStyle.text)
+                }
+                .tint(SkimStyle.accent)
+
+                Picker("Tone", selection: summaryToneBinding) {
+                    Text("Concise").tag("concise")
+                    Text("Detailed").tag("detailed")
+                    Text("Casual").tag("casual")
+                    Text("Technical").tag("technical")
+                }
+                .pickerStyle(.menu)
+                .tint(SkimStyle.accent)
+
+                SettingsTextField(
+                    title: "Summary prompt",
+                    placeholder: "Focus on risks, implications, and what changed...",
+                    text: summaryPromptBinding,
+                    axis: .vertical
+                )
+            }
+
+            SettingsSection(title: "AI Inbox") {
+                SettingsTextField(
+                    title: "Interests",
+                    placeholder: "Prioritize distributed systems, Swift, local AI...",
+                    text: triagePromptBinding,
+                    axis: .vertical
+                )
+            }
+
+            SettingsSection(title: "Features") {
+                SettingRow(systemName: "bolt", title: "Quick Catch-up", detail: "Runs on currently visible articles.")
+                SettingRow(systemName: "tray", title: "AI Inbox", detail: "Currently generates a ranked triage sheet.")
+                SettingRow(systemName: "bubble.left", title: "Chat", detail: "Available for visible articles and single articles.")
+            }
+        }
+    }
+
+    // MARK: - Library tab
 
     private var librarySection: some View {
         SettingsSection(
@@ -310,6 +556,8 @@ struct SettingsSheet: View {
         }
     }
 
+    // MARK: - About tab
+
     private var aboutSection: some View {
         SettingsSection(title: "About") {
             SettingRow(systemName: "app", title: "Skim", detail: appVersionText, iconView: appIconView)
@@ -367,24 +615,7 @@ struct SettingsSheet: View {
         return "Version \(version) (\(build))"
     }
 
-    private var nativeAIProviders: [(value: String, label: String, description: String)] {
-        [
-            ("foundation-models", "Apple Intelligence", "Apple's on-device model. Apple exposes use cases, not selectable quality tiers or ChatGPT routing for app prompts."),
-            ("mlx", "On-device MLX", "Download and run a small MLX model on this iPhone. Offline after download."),
-            ("claude-subscription", "Claude Pro/Max", "Signs in with Claude in-app and saves the bearer token automatically."),
-            ("xai", "Grok (xAI)", "Grok models over the xAI API. Needs an API key from console.x.ai — a SuperGrok or X Premium subscription does not cover app access."),
-            ("openai", "OpenAI", "GPT models over the OpenAI API. Needs a platform API key — a ChatGPT subscription does not cover app access."),
-            ("custom", "Custom", "Any OpenAI-compatible endpoint or API-key provider.")
-        ]
-    }
-
-    private var selectedProviderDescription: String {
-        nativeAIProviders.first(where: { $0.value == draft.ai.provider })?.description ?? ""
-    }
-
-    private var providerNeedsAPIKey: Bool {
-        ["claude-subscription", "xai", "openai", "custom"].contains(draft.ai.provider)
-    }
+    // MARK: - Provider state
 
     private var providerIsReady: Bool {
         switch draft.ai.provider {
@@ -394,8 +625,8 @@ struct SettingsSheet: View {
             return NativeMLX.isAvailable && NativeMLX.isDownloadedSync(mlxSelectedRepoId)
         case "custom":
             return draft.ai.apiKey?.nilIfEmpty != nil || draft.ai.endpoint?.nilIfEmpty != nil
-        case "claude-subscription":
-            return draft.ai.apiKey?.nilIfEmpty != nil
+        case "xai":
+            return draft.ai.apiKey?.nilIfEmpty != nil || xaiSignedIn
         default:
             return draft.ai.apiKey?.nilIfEmpty != nil
         }
@@ -411,15 +642,14 @@ struct SettingsSheet: View {
             }
             return NativeMLX.isDownloadedSync(mlxSelectedRepoId) ? "On-device MLX ready" : "Download a model"
         case "claude-subscription":
-            return providerIsReady ? "Claude configured" : "Claude sign-in needed"
+            return providerIsReady ? "Signed in with Claude" : "Sign in with Claude"
         case "xai":
-            return providerIsReady ? "Grok configured" : "xAI API key needed"
-        case "openai":
-            return providerIsReady ? "OpenAI configured" : "OpenAI API key needed"
+            if draft.ai.apiKey?.nilIfEmpty != nil { return "Using your xAI API key" }
+            return xaiSignedIn ? "Signed in with SuperGrok" : "Sign in or add a key"
         case "custom":
             return providerIsReady ? "Custom provider configured" : "Provider details needed"
         default:
-            return providerIsReady ? "Provider configured" : "API key needed"
+            return providerIsReady ? "API key saved" : "API key needed"
         }
     }
 
@@ -435,23 +665,21 @@ struct SettingsSheet: View {
             if NativeMLX.isDownloadedSync(mlxSelectedRepoId) {
                 return "\(option.label) is cached locally and ready for summaries, chat, catch-up, and AI Inbox."
             }
-            return "Choose a model, download it once, then Skim can run AI locally on-device."
+            return "Choose a model in Model, download it once, then Skim runs AI on this iPhone."
         case "claude-subscription":
-            return providerIsReady ? "Skim will use your Claude Pro/Max token for chat, summaries, catch-up, and AI Inbox." : "Tap 'Sign in with Claude' below to sign in and save your bearer token automatically."
+            return providerIsReady ? "Your Claude Pro/Max plan runs chat, summaries, catch-up, and AI Inbox." : "Use your Claude Pro/Max plan. Open Account to sign in."
         case "xai":
-            return providerIsReady ? "Skim will call the xAI API for chat, summaries, catch-up, and AI Inbox." : "Create an API key at console.x.ai and paste it below. Billing runs through your xAI account, separate from a SuperGrok or X Premium plan."
-        case "openai":
-            return providerIsReady ? "Skim will call the OpenAI API for chat, summaries, catch-up, and AI Inbox." : "Create an API key at platform.openai.com and paste it below. Billing runs through your OpenAI account, separate from a ChatGPT subscription."
-        case "custom":
-            return providerIsReady ? "Skim will call this OpenAI-compatible endpoint for chat, summaries, catch-up, and AI Inbox." : "Add an API key, an endpoint, or both. For OpenAI API, use https://api.openai.com with a platform API key."
+            return providerIsReady ? "Grok runs chat, summaries, catch-up, and AI Inbox." : "Use your SuperGrok plan or an xAI API key. Open Account to connect."
         default:
-            return providerIsReady ? "Skim will use this provider for chat, summaries, catch-up, and AI Inbox." : "Paste a token or API key, then save settings."
+            return providerIsReady
+                ? "\(NativeAIProviderChoice.name(for: draft.ai.provider)) runs chat, summaries, catch-up, and AI Inbox."
+                : "Open Account to add your key."
         }
     }
 
     private var defaultModelPlaceholder: String {
         switch draft.ai.provider {
-        case "claude-subscription":
+        case "claude-subscription", "anthropic":
             return "claude-sonnet-5"
         case "xai":
             return "grok-4.3"
@@ -460,18 +688,32 @@ struct SettingsSheet: View {
         }
     }
 
-    /// Label and placeholder for the key field, so each provider names the
-    /// credential the way its own console does.
+    /// Label, placeholder, and hint for the key field, so each provider names
+    /// the credential the way its own console does.
     private var apiKeyFieldTitle: String {
         switch draft.ai.provider {
-        case "xai": return "xAI API key"
+        case "anthropic": return "Claude API key"
         case "openai": return "OpenAI API key"
-        default: return "Bearer token or API key"
+        case "openrouter": return "OpenRouter API key"
+        default: return "API key"
         }
     }
 
     private var apiKeyFieldPlaceholder: String {
-        draft.ai.provider == "xai" ? "xai-..." : "sk-..."
+        switch draft.ai.provider {
+        case "anthropic": return "sk-ant-..."
+        case "openrouter": return "sk-or-..."
+        default: return "sk-..."
+        }
+    }
+
+    private var apiKeyHint: String {
+        switch draft.ai.provider {
+        case "anthropic": return "Create one at console.anthropic.com. Usage bills your Anthropic account. To use a Claude Pro/Max plan instead, choose Claude Pro/Max."
+        case "openai": return "Create one at platform.openai.com. Usage bills your OpenAI account, separate from a ChatGPT plan."
+        case "openrouter": return "Create one at openrouter.ai/keys. One key reaches models from many providers."
+        default: return "Your key stays on this iPhone."
+        }
     }
 
     private var mlxSelectedRepoId: String {
@@ -480,34 +722,28 @@ struct SettingsSheet: View {
             ?? NativeMLX.effectiveDefaultRepoId
     }
 
-    private var aiProviderBinding: Binding<String> {
-        Binding(
-            get: { draft.ai.provider },
-            set: { value in
-                updateAI {
-                    $0.provider = value
-                    if value == "mlx" {
-                        let repoId = $0.localModelPath?.nilIfEmpty ?? $0.model?.nilIfEmpty ?? NativeMLX.effectiveDefaultRepoId
-                        $0.localModelPath = repoId
-                        $0.model = repoId
-                    } else if value == "foundation-models" {
-                        $0.localModelPath = nil
-                        $0.model = nil
-                        $0.endpoint = nil
-                    } else if ["claude-subscription", "xai", "openai"].contains(value) {
-                        // These providers have a fixed base URL and a model list
-                        // fetched after sign-in. A model id from another provider
-                        // must not survive the switch, and substituting a
-                        // hardcoded default would just show a value the user
-                        // never chose — so clear it and let the picker fill in.
-                        $0.endpoint = nil
-                        if !Self.model($0.model, belongsTo: value) { $0.model = nil }
-                    } else if value == "custom" {
-                        $0.model = $0.model?.nilIfEmpty ?? "gpt-4o-mini"
-                    }
-                }
+    private func selectProvider(_ value: String) {
+        updateAI {
+            $0 = AIProviderProfiles.switching($0, to: value)
+            if value == "mlx" {
+                let repoId = $0.localModelPath?.nilIfEmpty ?? NativeMLX.effectiveDefaultRepoId
+                $0.localModelPath = repoId
+                $0.model = repoId
+            } else if ["claude-subscription", "anthropic", "xai", "openai", "openrouter"].contains(value) {
+                // These providers have a fixed base URL and a model list
+                // fetched after sign-in. A model id from another provider
+                // must not survive the switch, and substituting a
+                // hardcoded default would just show a value the user
+                // never chose — so clear it and let the picker fill in.
+                $0.endpoint = nil
+                if !Self.model($0.model, belongsTo: value) { $0.model = nil }
+            } else if value == "custom" {
+                $0.model = $0.model?.nilIfEmpty ?? "gpt-4o-mini"
             }
-        )
+        }
+        choosingProvider = false
+        aiTab = nil
+        accountFirst = !providerIsReady
     }
 
     /// The old default Claude model id (pre-PR #73). A stored `ai.model` that matches this
@@ -520,11 +756,12 @@ struct SettingsSheet: View {
     /// Whether a stored model id plausibly belongs to `provider`.
     ///
     /// Used to drop ids that came from a different provider rather than send
-    /// them somewhere they'd 404. `custom` has no knowable list, so anything goes.
+    /// them somewhere they'd 404. `custom` and OpenRouter have no knowable
+    /// prefix, so anything goes.
     static func model(_ model: String?, belongsTo provider: String) -> Bool {
         guard let model = model?.nilIfEmpty else { return false }
         switch provider {
-        case "claude-subscription": return model.hasPrefix("claude")
+        case "claude-subscription", "anthropic": return model.hasPrefix("claude")
         case "xai": return model.hasPrefix("grok")
         case "openai": return model.hasPrefix("gpt") || model.hasPrefix("o")
         default: return true
@@ -534,23 +771,14 @@ struct SettingsSheet: View {
     private func normalizedAISettings(_ ai: AISettings) -> AISettings {
         var next = ai
         switch ai.provider {
-        case "foundation-models", "mlx", "custom":
+        case "foundation-models", "mlx", "custom", "openrouter":
             break
-        case "claude-subscription":
+        case "claude-subscription", "anthropic":
             if next.model == legacyDefaultAnthropicModel { next.model = "claude-sonnet-5" }
             // Self-heal a foreign id left behind by an earlier provider switch.
-            if !Self.model(next.model, belongsTo: "claude-subscription") { next.model = nil }
+            if !Self.model(next.model, belongsTo: ai.provider) { next.model = nil }
         case "xai", "openai":
             if !Self.model(next.model, belongsTo: ai.provider) { next.model = nil }
-        case "openrouter":
-            next.provider = "custom"
-            next.endpoint = next.endpoint?.nilIfEmpty ?? "https://openrouter.ai/api"
-            next.model = next.model?.nilIfEmpty ?? "openai/gpt-4o-mini"
-        case "anthropic":
-            next.provider = "claude-subscription"
-            next.model = next.model == legacyDefaultAnthropicModel
-                ? "claude-sonnet-5"
-                : next.model?.nilIfEmpty ?? "claude-sonnet-5"
         default:
             next.provider = "foundation-models"
             next.endpoint = nil
@@ -636,6 +864,280 @@ struct SettingsSheet: View {
     }
 }
 
+// MARK: - Tabs and provider list
+
+/// Settings' top tab bar: icon-and-label segments in one rounded track.
+private struct SettingsTabBar: View {
+    @Binding var selection: SettingsTab
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(SettingsTab.allCases) { tab in
+                let isSelected = tab == selection
+                Button {
+                    selection = tab
+                } label: {
+                    Label(tab.label, systemImage: tab.systemImage)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isSelected ? SkimStyle.text : SkimStyle.secondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 40)
+                        .background(isSelected ? SkimStyle.separator : Color.clear, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(SkimStyle.separator, lineWidth: 1)
+        }
+    }
+}
+
+/// Model / Account / Preferences, as a segmented control.
+private struct AIServiceTabBar: View {
+    var tabs: [AIServiceTab]
+    @Binding var selection: AIServiceTab
+
+    var body: some View {
+        Picker("AI settings", selection: $selection) {
+            ForEach(tabs) { tab in
+                Text(tab.label).tag(tab)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+}
+
+private struct ProviderChoiceRow: View {
+    var choice: NativeAIProviderChoice
+    var isSelected: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
+                        Text(choice.name)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(SkimStyle.text)
+                        Text(choice.badge)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(choice.badge == "Subscription" ? SkimStyle.accent : SkimStyle.secondary)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(
+                                (choice.badge == "Subscription" ? SkimStyle.accent.opacity(0.14) : SkimStyle.separator),
+                                in: Capsule()
+                            )
+                    }
+                    Text(choice.detail)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(SkimStyle.accent)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isSelected ? SkimStyle.accent.opacity(0.7) : SkimStyle.separator, lineWidth: isSelected ? 1.5 : 1)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+// MARK: - SuperGrok sign-in
+
+/// SuperGrok sign-in for the Grok provider, the native counterpart of BYOS
+/// `DeviceCodeSignIn` on desktop: show a code, open xAI's page to approve it,
+/// and wait. The token stays in this iPhone's Keychain.
+private struct SuperGrokSignInPanel: View {
+    @Binding var isSignedIn: Bool
+    var openURL: (URL) -> Void
+    var onSignedIn: () -> Void
+
+    @State private var device: XAIDeviceStart?
+    @State private var isStarting = false
+    @State private var errorMessage: String?
+    @State private var attempt: Task<Void, Never>?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if isSignedIn {
+                signedInRow
+            } else if let device {
+                pendingRow(device)
+            } else {
+                connectRow
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text("Unofficial: uses the Grok CLI sign-in. Some SuperGrok plans don't include API access; an xAI API key still works.")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(SkimStyle.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SkimStyle.chrome.opacity(0.62), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onDisappear { attempt?.cancel() }
+    }
+
+    private var connectRow: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "person.crop.circle.badge.checkmark")
+                    .font(.system(size: 21, weight: .regular))
+                    .foregroundStyle(SkimStyle.accent)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Sign in with SuperGrok")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(SkimStyle.text)
+                    Text("Use your SuperGrok subscription instead of an API key.")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Button {
+                start()
+            } label: {
+                Label(isStarting ? "Starting…" : "Sign in with SuperGrok", systemImage: "person.crop.circle")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(SkimStyle.accent)
+            .disabled(isStarting)
+        }
+    }
+
+    private func pendingRow(_ device: XAIDeviceStart) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Approve this code on xAI's page")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(SkimStyle.text)
+            Text(device.userCode)
+                .font(.system(size: 26, weight: .heavy, design: .monospaced))
+                .foregroundStyle(SkimStyle.text)
+                .textSelection(.enabled)
+                .accessibilityLabel("Code \(device.userCode)")
+            HStack(spacing: 8) {
+                ProgressView()
+                    .tint(SkimStyle.accent)
+                Text("Waiting for approval…")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+            }
+            HStack(spacing: 10) {
+                Button {
+                    openURL(device.verificationURIComplete)
+                } label: {
+                    Text("Open xAI")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(SkimStyle.accent)
+
+                Button("Cancel") {
+                    cancel()
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .frame(height: 44)
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private var signedInRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(Color.green.opacity(0.85))
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Signed in with SuperGrok")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SkimStyle.text)
+                Text("Skim refreshes your session automatically.")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+            }
+            Spacer(minLength: 8)
+            Button(role: .destructive) {
+                XAIKeychainStore.clear()
+                isSignedIn = false
+            } label: {
+                Text("Sign out")
+                    .font(.system(size: 13, weight: .semibold))
+                    .fixedSize()
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private func start() {
+        attempt?.cancel()
+        errorMessage = nil
+        isStarting = true
+        attempt = Task { @MainActor in
+            defer {
+                isStarting = false
+                device = nil
+            }
+            do {
+                let started = try await NativeXAIOAuth.beginDevice()
+                device = started
+                isStarting = false
+                openURL(started.verificationURIComplete)
+                try await NativeXAIOAuth.completeDevice(started)
+                isSignedIn = true
+                onSignedIn()
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func cancel() {
+        attempt?.cancel()
+        attempt = nil
+        device = nil
+        isStarting = false
+    }
+}
+
+
 /// Model picker for the Claude provider pane. Once a Claude credential
 /// (subscription token or API key) is configured, this fetches the live
 /// model list from Anthropic's `/v1/models` endpoint and renders it as a
@@ -648,6 +1150,8 @@ private struct RemoteModelPicker: View {
     @Binding var modelID: String
     var settings: AISettings
     var placeholder: String
+    /// Changes when the credential behind the list changes, so it refetches.
+    var reloadKey: String
     /// Provider-specific fetch — Anthropic's `/v1/models` carries display names,
     /// the OpenAI-compatible one does not.
     var fetch: @Sendable (AISettings) async throws -> [AIModelInfo]
@@ -666,7 +1170,7 @@ private struct RemoteModelPicker: View {
                 menuRow
             }
         }
-        .task(id: settings.apiKey ?? "") {
+        .task(id: reloadKey) {
             await load()
         }
     }
@@ -1236,6 +1740,7 @@ private struct ClaudeAuthSection: View {
     var apiKeyText: Binding<String>
     var providerIsReady: Bool
     var openURL: (URL) -> Void
+    var onSignedIn: () -> Void
 
     /// Whether the "API token instead" disclosure starts expanded. Defaults
     /// to expanded only when a token is already present in settings but no
@@ -1243,11 +1748,12 @@ private struct ClaudeAuthSection: View {
     /// relying on a manually pasted token and should keep seeing that field.
     @State private var showAPIToken: Bool
 
-    init(ai: Binding<AISettings>, apiKeyText: Binding<String>, providerIsReady: Bool, openURL: @escaping (URL) -> Void) {
+    init(ai: Binding<AISettings>, apiKeyText: Binding<String>, providerIsReady: Bool, openURL: @escaping (URL) -> Void, onSignedIn: @escaping () -> Void) {
         self._ai = ai
         self.apiKeyText = apiKeyText
         self.providerIsReady = providerIsReady
         self.openURL = openURL
+        self.onSignedIn = onSignedIn
         let hasManualToken = ai.wrappedValue.apiKey?.nilIfEmpty != nil
         let hasOAuthRefreshToken = ClaudeKeychainStore.loadRefreshToken() != nil
         self._showAPIToken = State(initialValue: hasManualToken && !hasOAuthRefreshToken)
@@ -1255,7 +1761,7 @@ private struct ClaudeAuthSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ClaudeOAuthPastePanel(ai: $ai, collapseWhenSignedIn: providerIsReady) { url in
+            ClaudeOAuthPastePanel(ai: $ai, onSignedIn: onSignedIn, collapseWhenSignedIn: providerIsReady) { url in
                 openURL(url)
             }
 
@@ -1380,6 +1886,7 @@ struct ClaudeOAuthPastePanel: View {
 
                 Button(role: .destructive) {
                     ai.apiKey = nil
+                    ClaudeKeychainStore.clear()
                     successMessage = nil
                     pasteFlow = nil
                 } label: {
@@ -1428,6 +1935,7 @@ struct ClaudeOAuthPastePanel: View {
             if ai.apiKey?.nilIfEmpty != nil {
                 Button(role: .destructive) {
                     ai.apiKey = nil
+                    ClaudeKeychainStore.clear()
                     successMessage = nil
                     pasteFlow = nil
                 } label: {
@@ -1586,14 +2094,16 @@ private struct SettingsSection<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(SkimStyle.secondary)
-                    .tracking(1.2)
-                    .textCase(.uppercase)
-                Spacer()
-                action
+            if !title.isEmpty || action != nil {
+                HStack {
+                    Text(title)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .tracking(1.2)
+                        .textCase(.uppercase)
+                    Spacer()
+                    action
+                }
             }
 
             VStack(alignment: .leading, spacing: 16) {

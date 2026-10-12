@@ -5,8 +5,8 @@ const words = (text: string) => text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 /**
  * Score how well `query` matches `text`: whole-text and word prefixes beat
  * substrings, which beat initials ("qc" for "Quick Catch-up"), which beat
- * scattered letters ("refrsh"). Returns -1 when the letters are not all
- * present in order. `fuzzy: false` stops after substrings.
+ * a typo ("refrsh": the letters in order, at most two extra between them).
+ * Returns -1 otherwise. `fuzzy: false` stops after substrings.
  */
 export function scoreText(text: string, query: string, fuzzy = true): number {
   const t = text.toLocaleLowerCase();
@@ -23,18 +23,23 @@ export function scoreText(text: string, query: string, fuzzy = true): number {
   const compact = q.replace(/\s+/g, '');
   if (tokens.map(w => w[0]).join('').startsWith(compact)) return 350;
 
-  // Subsequence match; tighter runs score higher.
-  let score = 0;
-  let at = 0;
-  let run = 0;
-  for (const ch of compact) {
-    const found = t.indexOf(ch, at);
-    if (found === -1) return -1;
-    run = found === at ? run + 1 : 0;
-    score += 1 + run * 2;
-    at = found + 1;
+  // A typo: the letters in order within a short stretch ("refrsh" in "refresh"), at most
+  // two extra letters, so long titles do not match scattered letters ("run" in "Reviewer conclusion").
+  let best = -1;
+  for (let start = t.indexOf(compact[0]); start !== -1; start = t.indexOf(compact[0], start + 1)) {
+    let score = 1;
+    let at = start + 1;
+    let run = 0;
+    for (const ch of compact.slice(1)) {
+      const found = t.indexOf(ch, at);
+      if (found === -1 || found - start >= compact.length + 2) { score = -1; break; }
+      run = found === at ? run + 1 : 0;
+      score += 1 + run * 2;
+      at = found + 1;
+    }
+    if (score > best) best = score;
   }
-  return Math.min(score, 300);
+  return best < 0 ? -1 : Math.min(best, 300);
 }
 
 /** Last tier: every term starts a word somewhere across title, group, keywords and detail. */

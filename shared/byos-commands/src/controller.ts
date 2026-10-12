@@ -66,6 +66,8 @@ export type PaletteController = {
   openFull: () => void;
   /** Leave an answer or filter and return to the command list. */
   back: () => boolean;
+  /** Stop an ask in flight and put its question back, e.g. when the person edits it. */
+  cancel: () => void;
   /** Apply a key from the palette input. Returns true when handled (call preventDefault). */
   handleKey: (event: Parameters<typeof paletteKeyAction>[0]) => boolean;
   /** Rebuild items now (call when application state the commands read has changed). */
@@ -146,7 +148,7 @@ export function createPaletteController(options: PaletteControllerOptions): Pale
   };
 
   const stopLookups = () => {
-    timers.forEach(clearTimeout);
+    timers.forEach(timer => clearTimeout(timer));
     timers.clear();
     aborts.forEach(abort => abort.abort());
     aborts.clear();
@@ -182,6 +184,13 @@ export function createPaletteController(options: PaletteControllerOptions): Pale
   const stopAsk = () => {
     askAbort?.abort();
     askAbort = null;
+  };
+
+  // Put the question back so it can be retried or edited.
+  const restore = (prior: readonly AskTurn[], query: string, error?: string) => {
+    state = { ...state, mode: prior.length ? 'answered' : 'search', pendingQuery: undefined, history: prior, query, error };
+    if (prior.length) set({ items: state.items });
+    else rebuild();
   };
 
   const unsubscribeRegistry = registry.subscribe(() => rebuild());
@@ -271,10 +280,7 @@ export function createPaletteController(options: PaletteControllerOptions): Pale
       } catch (error) {
         if (abort.signal.aborted) return;
         askAbort = null;
-        // Put the question back so it can be retried or edited.
-        state = { ...state, mode: prior.length ? 'answered' : 'search', pendingQuery: undefined, history: prior, query, error: message(error) };
-        if (prior.length) set({ items: state.items });
-        else rebuild();
+        restore(prior, query, message(error));
       }
     },
     openFull: () => {
@@ -290,6 +296,11 @@ export function createPaletteController(options: PaletteControllerOptions): Pale
       state = { ...state, mode: 'browse', history: [], query: '', error: undefined, message: undefined };
       rebuild();
       return true;
+    },
+    cancel: () => {
+      if (state.mode !== 'pending') return;
+      stopAsk();
+      restore(state.history.slice(0, -1), state.pendingQuery ?? '');
     },
     handleKey: event => {
       const action: PaletteKeyAction | null = paletteKeyAction(event, !state.query);

@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { Script } from 'node:vm';
 // Built output: the sources use NodeNext `.js` imports.
 import {
   ASK_COMMAND_ID, PALETTE_CSS, askFirst, byosAiCommands, createCommandRegistry, createPaletteController,
   formatShortcutKey, isPaletteShortcut, isQuestionLike, paletteKeyAction, rankCommands, scoreText,
 } from '../dist/index.js';
+import * as commands from '../dist/index.js';
 import type { AskBinding, Command } from '../dist/index.js';
 
 const noop = () => undefined;
@@ -36,7 +38,7 @@ test('ranker finds the intended command for the comparison queries (initials, ty
   for (const [query, title] of cases) assert.equal(rankCommands(SKIM, query)[0]?.title, title, query);
 });
 
-test('ranker tiers: exact > prefix > word prefix > substring > initials > scattered; no match is -1', () => {
+test('ranker tiers: exact > prefix > word prefix > substring > initials > typo; no match is -1', () => {
   assert.equal(scoreText('Starred', 'starred'), 1000);
   assert.ok(scoreText('Starred', 'star') > scoreText('Show starred', 'star'));
   assert.ok(scoreText('Show starred', 'star') > scoreText('Unstarred', 'star'));
@@ -44,6 +46,10 @@ test('ranker tiers: exact > prefix > word prefix > substring > initials > scatte
   assert.equal(scoreText('Starred', 'xyz'), -1);
   assert.equal(scoreText('Café crème', 'crè'), 600);
   assert.equal(scoreText('Create a saved car search', 'saved cars', false), -1);
+  // A typo keeps its letters close together; letters scattered across a long title do not match.
+  assert.ok(scoreText('Refresh all feeds', 'refrsh') > 0);
+  assert.equal(scoreText('Reviewer conclusion', 'run'), -1);
+  assert.equal(scoreText('An audience panel, a blind reviewer panel', 'new'), -1);
 });
 
 test('scattered letters match titles only, not long keyword or detail text', () => {
@@ -250,6 +256,23 @@ test('a failed ask restores the question with the error; closing aborts an ask i
   assert.equal(state.open, false);
 });
 
+test('cancel stops an ask in flight and puts the question back', async () => {
+  let signal: AbortSignal | undefined;
+  const ask: AskBinding = { label: 'Ask', ask: (_query, options) => { signal = options.signal; return new Promise(() => {}); } };
+  const palette = createPaletteController({ registry: createCommandRegistry([{ id: 'main', commands: () => SKIM }]), ask, schedule: sync });
+  palette.open();
+  palette.setQuery('where is my feed');
+  void palette.ask();
+  assert.equal(palette.getState().mode, 'pending');
+  palette.cancel();
+  const state = palette.getState();
+  assert.equal(signal?.aborted, true);
+  assert.equal(state.mode, 'search');
+  assert.equal(state.query, 'where is my feed');
+  assert.deepEqual(state.history, []);
+  assert.equal(state.items[0].id, 'byos.ask');
+});
+
 test('⌘↵ hands the query and history to the full chat after closing', () => {
   const calls: Array<[string, number]> = [];
   const palette = createPaletteController({
@@ -315,4 +338,16 @@ test('generated styles are current and every token has a fallback', () => {
   assert.equal(PALETTE_CSS, css);
   assert.doesNotMatch(css.replace(/^\/\*[^\n]*\*\//, ''), /\$[a-z]/);
   for (const match of css.matchAll(/var\(--byos-[a-z-]+\)/g)) assert.fail(`missing fallback: ${match[0]}`);
+});
+
+test('the classic script defines ByosCommands with every export and a working controller', () => {
+  const context: { ByosCommands?: typeof commands; setTimeout: typeof setTimeout; clearTimeout: typeof clearTimeout } = { setTimeout, clearTimeout };
+  new Script(readFileSync(new URL('../dist/classic.js', import.meta.url), 'utf8')).runInNewContext(context);
+  const classic = context.ByosCommands!;
+  assert.deepEqual(Object.keys(classic).sort(), Object.keys(commands).sort());
+  const registry = classic.createCommandRegistry([{ id: 'main', commands: () => SKIM }]);
+  const palette = classic.createPaletteController({ registry, schedule: sync });
+  palette.open();
+  palette.setQuery('qc');
+  assert.equal(palette.getState().items[0].id, 'action.catchup');
 });

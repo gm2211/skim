@@ -10,8 +10,8 @@ type ArticleReturnTarget = "today";
 
 interface UiState {
   sidebarView: SidebarView;
-  /** How many days Today's paper reaches back; 1 is today's edition. */
-  todayDays: number;
+  /** Which page of the paper Today shows: 1 is today's edition, each page after it a week earlier. */
+  todayPage: number;
   selectedArticleId: string | null;
   articleReturnTarget: ArticleReturnTarget | null;
   // Browser-style history of opened articles. `articleHistoryIndex` points at
@@ -43,7 +43,7 @@ interface UiState {
   setShowAddFeed: (show: boolean, tab?: AddFeedTab) => void;
   setShowSettings: (show: boolean, tab?: SettingsTab) => void;
   setShowCommandPalette: (show: boolean) => void;
-  setTodayDays: (days: number) => void;
+  setTodayPage: (page: number) => void;
   toggleSidebar: () => void;
   toggleList: () => void;
   setListFilter: (filter: ListFilter) => void;
@@ -81,7 +81,7 @@ export function canGoForwardArticle(state: Pick<UiState, "selectedArticleId" | "
 
 export const useUiStore = create<UiState>((set, get) => ({
   sidebarView: { type: "all" },
-  todayDays: 1,
+  todayPage: 1,
   selectedArticleId: null,
   articleReturnTarget: null,
   articleHistory: [],
@@ -166,7 +166,7 @@ export const useUiStore = create<UiState>((set, get) => ({
       settingsTab: show ? tab ?? "ai" : state.settingsTab,
     })),
   setShowCommandPalette: (show) => set({ showCommandPalette: show }),
-  setTodayDays: (days) => set({ todayDays: Math.max(1, Math.floor(days)) }),
+  setTodayPage: (page) => set({ todayPage: Math.max(1, Math.floor(page)) }),
 
   toggleSidebar: () =>
     set((state) => {

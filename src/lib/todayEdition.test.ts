@@ -12,15 +12,18 @@ afterAll(() => {
 });
 
 describe("todayWindow", () => {
-  it("reaches back whole days for a wider window and still closes at the coming midnight", () => {
+  it("turns back a week per page: page 2 is the seven days before today", () => {
     const now = new Date(2026, 9, 12, 15, 30);
-    const today = todayWindow(now);
-    const week = todayWindow(now, 7);
-    expect(week.endsAt).toBe(today.endsAt);
-    expect(new Date(week.startsAt * 1000)).toEqual(new Date(2026, 9, 6));
-    expect(formatWindowDate(today)).toBe("Monday, October 12");
-    expect(formatWindowDate(week)).toBe("October 6 – 12");
-    expect(formatWindowDate(todayWindow(now, 14))).toBe("September 29 – October 12");
+    const front = todayWindow(now);
+    const page2 = todayWindow(now, 2);
+    const page3 = todayWindow(now, 3);
+    expect(page2.endsAt).toBe(front.startsAt);
+    expect(new Date(page2.startsAt * 1000)).toEqual(new Date(2026, 9, 5));
+    expect(page3.endsAt).toBe(page2.startsAt);
+    expect(new Date(page3.startsAt * 1000)).toEqual(new Date(2026, 9, 28 - 30));
+    expect(formatWindowDate(front)).toBe("Monday, October 12");
+    expect(formatWindowDate(page2)).toBe("October 5 – 11");
+    expect(formatWindowDate(page3)).toBe("September 28 – October 4");
   });
 
   it("returns exact local midnight-to-midnight bounds on an ordinary day", () => {

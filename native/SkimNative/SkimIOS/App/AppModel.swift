@@ -134,9 +134,11 @@ final class AppModel: ObservableObject {
     @Published var offlinePreloadMessage: String?
 
     @Published var todayEdition: TodayEditionSnapshot?
-    /// How many days Today's paper reaches back; 1 is today's edition. A wider
-    /// window is the same kind of page over everything that arrived in it.
-    @Published var todayDays = 1
+    /// Which page of the paper Today shows: 1 is today's edition, and each
+    /// page turned goes back a week (page 2 is the seven days before today).
+    @Published var todayPage = 1
+    /// How many pages back the paper offers: a year of weeks.
+    static let todayPageCount = 53
     @Published var isLoadingToday = false
     @Published var isUpdatingToday = false
     @Published var todayError: String?
@@ -198,8 +200,9 @@ final class AppModel: ObservableObject {
     private func performTodayLoad(storyLimit: Int, requestID: UUID) async {
         let now = Date()
         let today = Calendar.current.startOfDay(for: now)
-        let start = Calendar.current.date(byAdding: .day, value: -(max(1, todayDays) - 1), to: today)!
-        let end = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+        let turn = max(1, todayPage) - 1
+        let start = turn == 0 ? today : Calendar.current.date(byAdding: .day, value: -7 * turn, to: today)!
+        let end = Calendar.current.date(byAdding: .day, value: turn == 0 ? 1 : -7 * (turn - 1), to: today)!
         // Keep navigation links mounted during a same-edition refresh, including
         // foreground reloads while an article reader is above Today in the stack.
         if let existing = todayEdition,

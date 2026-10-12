@@ -1,14 +1,13 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
 import { useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useTodayEdition } from "../../hooks/useTodayEdition";
 import { useUiStore } from "../../stores/uiStore";
-import { PAGE_SIZE, TODAY_RANGES, formatWindowDate, rankFor } from "../../lib/todayEdition";
+import { PAGE_SIZE, TODAY_PAGE_COUNT, formatWindowDate, rankFor } from "../../lib/todayEdition";
 import { TodayStorySkeleton } from "./TodayStorySkeleton";
 import { TodayStory } from "./TodayStory";
 import { ModelPicker } from "../common/ModelPicker";
 import { ChatIcon, NewspaperIcon, RefreshIcon } from "../ui/icons";
-import { Select } from "../ui/Select";
 import { openAgentChat } from "../../stores/agentChatStore";
 import { useAgentContext } from "../../hooks/useAgentContext";
 import { storyForAgent } from "../../lib/agentContext";
@@ -42,13 +41,12 @@ function FrontPage({ cells }: { cells: { key: string; node: React.ReactNode }[] 
 }
 
 export function TodayEditionPane() {
-  const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane, todayDays, setTodayDays } = useUiStore();
+  const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane, todayPage, setTodayPage } = useUiStore();
   const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch, aiEnabled, isPreparingSummaries, settingsUnavailable, retrySettings } =
     useTodayEdition();
 
   const [theme, setTheme] = useState<string | null>(null);
   const [sharedOnly, setSharedOnly] = useState(false);
-  const [pageSelection, setPageSelection] = useState({ key: "", index: 0 });
   const scrollRef = useRef<HTMLDivElement>(null);
   // Asks go to the app's assistant, which already knows the stories on the page.
   const agentContext = useAgentContext();
@@ -60,15 +58,30 @@ export function TodayEditionPane() {
   const visibleItems = items.map((item, index) => ({ item, index })).filter(({ item }) =>
     (!activeTheme || item.editorial?.theme === activeTheme) &&
     (!sharedOnly || item.member_articles.filter((member) => member.membership_type !== "duplicate").length > 1));
-  const pageKey = `${data?.edition.id ?? ""}:${activeTheme ?? ""}:${sharedOnly}`;
-  const pageCount = Math.max(1, Math.ceil(visibleItems.length / NEWSPAPER_PAGE_SIZE));
-  const pageIndex = pageSelection.key === pageKey ? Math.min(pageSelection.index, pageCount - 1) : 0;
-  const pageItems = visibleItems.slice(pageIndex * NEWSPAPER_PAGE_SIZE, (pageIndex + 1) * NEWSPAPER_PAGE_SIZE);
-  const resetPage = () => setPageSelection({ key: "", index: 0 });
-  const changePage = (index: number) => {
-    setPageSelection({ key: pageKey, index });
+  // The paper's pages are weeks: the front page is today, each page turned
+  // goes back a week. Turning a page starts it at the top.
+  const turnTo = (page: number) => {
+    if (page < 1 || page > TODAY_PAGE_COUNT || page === todayPage) return;
+    setTodayPage(page);
+    setTheme(null);
+    setSharedOnly(false);
     scrollRef.current?.scrollTo?.({ top: 0, behavior: "instant" });
   };
+  const canTurnBack = todayPage < TODAY_PAGE_COUNT;
+  const canTurnForward = todayPage > 1;
+  // ← and → turn the pages while the paper itself has the window.
+  useEffect(() => {
+    if (!isFrontPage) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.closest("input, textarea, select, [contenteditable]") || target.closest('[role="dialog"]'))) return;
+      if (event.key === "ArrowRight" && canTurnBack) { event.preventDefault(); turnTo(todayPage + 1); }
+      if (event.key === "ArrowLeft" && canTurnForward) { event.preventDefault(); turnTo(todayPage - 1); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOpenArticle = (articleId: string) => {
     openArticleFromToday(articleId);
@@ -127,18 +140,6 @@ export function TodayEditionPane() {
         <SettingsCog label="Today settings" heading="Today" className="text-text-secondary">
           {(close) => (
             <>
-              {/* "Going back": the same paper over a wider window. */}
-              <label className="today-settings-row">
-                <span>Going back</span>
-                <Select
-                  aria-label="Going back"
-                  value={String(todayDays)}
-                  onChange={(event) => setTodayDays(Number(event.target.value))}
-                  style={{ width: 220, maxWidth: "100%", height: 32, minHeight: 32, fontSize: 12.5, padding: "0 28px 0 10px" }}
-                >
-                  {TODAY_RANGES.map((range) => <option key={range.days} value={range.days}>{range.label}</option>)}
-                </Select>
-              </label>
               <div className="today-settings-row">
                 <span>Summary model</span>
                 <ModelPicker surface="today" compact />
@@ -212,7 +213,7 @@ export function TodayEditionPane() {
           <div className="flex flex-col items-center justify-center px-6 text-center" style={{ minHeight: 220 }}>
             <NewspaperIcon size={34} strokeWidth="1.5" className="text-text-muted mb-3 opacity-45" />
             <p className="text-text-secondary" style={{ fontSize: 14, fontWeight: 600, marginBottom: 5 }}>
-              {todayDays > 1 ? "No stories in this span" : "No stories yet today"}
+              {todayPage > 1 ? "No stories that week" : "No stories yet today"}
             </p>
             <p className="text-text-muted" style={{ fontSize: 12, lineHeight: 1.5, maxWidth: 280 }}>
               Refresh your feeds to bring in new stories.
@@ -232,13 +233,13 @@ export function TodayEditionPane() {
         {!isLoading && !isError && items.length > 0 && <>
           {!aiEnabled && !settingsUnavailable && items.some((item) => !item.editorial) && <p className="today-summary-note">Unprepared summaries show source excerpts. <button className="today-story-control text-accent" onClick={() => useUiStore.getState().setShowSettings(true)}>Set up AI for thematic summaries</button></p>}
           <nav className="today-themes" aria-label="Newspaper themes">
-            <button className="today-story-control" aria-pressed={!activeTheme && !sharedOnly} onClick={() => { setTheme(null); setSharedOnly(false); resetPage(); }}>All stories</button>
-            {themes.map((name) => <button key={name} className="today-story-control" aria-pressed={activeTheme === name} onClick={() => { setTheme(activeTheme === name ? null : name); resetPage(); }}>{name}</button>)}
-            <button className="today-story-control" aria-pressed={sharedOnly} onClick={() => { setSharedOnly(!sharedOnly); resetPage(); }}>Multiple reports</button>
+            <button className="today-story-control" aria-pressed={!activeTheme && !sharedOnly} onClick={() => { setTheme(null); setSharedOnly(false); }}>All stories</button>
+            {themes.map((name) => <button key={name} className="today-story-control" aria-pressed={activeTheme === name} onClick={() => setTheme(activeTheme === name ? null : name)}>{name}</button>)}
+            <button className="today-story-control" aria-pressed={sharedOnly} onClick={() => setSharedOnly(!sharedOnly)}>Multiple reports</button>
           </nav>
           {visibleItems.length === 0 && <p className="today-summary-note">No stories with multiple reports in this selection.</p>}
         </>}
-        {!isLoading && !isError && pageItems.length > 0 && <FrontPage cells={pageItems.map(({ item }, index) => ({
+        {!isLoading && !isError && visibleItems.length > 0 && <FrontPage cells={visibleItems.map(({ item }, index) => ({
           key: item.story_id,
           node: !item.editorial && isPreparingSummaries ? <TodayStorySkeleton rank={rankFor(index)} /> : <TodayStory
             item={item}
@@ -256,20 +257,21 @@ export function TodayEditionPane() {
             style={{ padding: "14px 16px", marginTop: 18, background: "rgba(34, 197, 94, 0.06)" }}
           >
             <p className="text-text-primary" style={{ fontSize: 13, fontWeight: 500 }}>
-              {todayDays > 1 ? "You're all caught up." : "You're all caught up for today."}
+              {todayPage > 1 ? "You're all caught up on this page." : "You're all caught up for today."}
             </p>
           </div>
         )}
       </div>
       </div>
-      {!isLoading && !isError && visibleItems.length > 0 && <nav className="today-pagination" aria-label="Newspaper pages">
-        <button className="today-story-control" disabled={pageIndex === 0} onClick={() => changePage(pageIndex - 1)}>Previous page</button>
+      {/* Turning the page goes back a week; the dateline names the week. */}
+      <nav className="today-pagination" aria-label="Newspaper pages">
+        <button className="today-story-control" disabled={!canTurnForward} onClick={() => turnTo(todayPage - 1)}>{todayPage === 2 ? "Today" : "Previous page"}</button>
         <div className="today-page-position">
-          <span role="status" aria-live="polite">Page {pageIndex + 1} of {pageCount}</span>
+          <span role="status" aria-live="polite">{todayPage === 1 ? "Front page" : `Page ${todayPage}`}<span className="text-text-muted"> · {formatWindowDate(todayWin)}</span></span>
           <button className="today-story-control text-text-muted" onClick={() => useUiStore.getState().setShowSettings(true, "sync")}>Edition size</button>
         </div>
-        <button className="today-story-control" disabled={pageIndex + 1 >= pageCount} onClick={() => changePage(pageIndex + 1)}>Next page</button>
-      </nav>}
+        <button className="today-story-control" disabled={!canTurnBack} onClick={() => turnTo(todayPage + 1)}>{todayPage === 1 ? "Last week" : "Next page"}</button>
+      </nav>
     </div>
   );
 }

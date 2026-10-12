@@ -157,7 +157,7 @@ beforeEach(() => {
   useUiStore.setState({ selectedArticleId: null, showSettings: false });
   vi.mocked(commands.refreshAllFeeds).mockResolvedValue(1);
   vi.mocked(commands.triageArticles).mockResolvedValue({ triaged_count: 0, batches: 0, errors: [] });
-  useUiStore.setState({ isPhone: false, sidebarCollapsed: false, sidebarView: { type: "today" }, todayDays: 1 });
+  useUiStore.setState({ isPhone: false, sidebarCollapsed: false, sidebarView: { type: "today" }, todayPage: 1 });
   vi.mocked(commands.getSettings).mockResolvedValue(DEFAULT_SETTINGS);
   vi.mocked(commands.generateTodayEditorial).mockImplementation((_id: string) => new Promise(() => {}));
 });
@@ -247,12 +247,11 @@ describe("TodayEditionPane", () => {
     expect(within(screen.getByLabelText("Story reports")).getByText("Supporting passage from the report.")).toBeVisible();
   });
 
-  it("shows later editorial summaries on the next newspaper page", async () => {
-    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView(Array.from({ length: 7 }, (_, index) => makeItem({
-      story_id: `story-${index}`, editorial: index === 6 ? editorial("A concise development worth knowing.") : null,
+  it("shows later editorial summaries on the same page, in the briefs", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView(Array.from({ length: 12 }, (_, index) => makeItem({
+      story_id: `story-${index}`, editorial: index === 11 ? editorial("A concise development worth knowing.") : null,
     }))));
     renderPane();
-    await userEvent.click(await screen.findByRole("button", { name: "Next page" }));
     expect(await screen.findByText("A concise development worth knowing.")).toBeVisible();
   });
 
@@ -285,26 +284,18 @@ describe("TodayEditionPane", () => {
     expect(screen.queryByText(/Raw second excerpt/)).not.toBeInTheDocument();
   });
 
-  it("paginates larger editions without dropping stories and resets on a theme filter", async () => {
+  it("shows a whole edition on one page and filters it by theme", async () => {
     const items = Array.from({ length: 25 }, (_, index) => makeItem({ story_id: `page-story-${index}`,
       snapshot_title: `Story ${index + 1}`, editorial: editorial(`Summary ${index + 1}`, index < 23 ? "Technology" : "Local") }));
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView(items));
     renderPane();
-    await screen.findByText("Page 1 of 3");
-    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(10);
-    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
-    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
-    expect(screen.getByText("Page 2 of 3")).toBeVisible();
-    expect(screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(Array.from({ length: 10 }, (_, index) => `Story ${index + 11}`));
-    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
-    expect(screen.getByText("Page 3 of 3")).toBeVisible();
-    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(5);
-    expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
+    await screen.findByText("Front page");
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(25);
     await userEvent.click(screen.getByRole("button", { name: "Local" }));
-    expect(screen.getByText("Page 1 of 1")).toBeVisible();
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(2);
     expect(screen.getByRole("heading", { name: "Story 24" })).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "All stories" }));
-    expect(screen.getByText("Page 1 of 3")).toBeVisible();
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(25);
     await userEvent.click(screen.getByRole("button", { name: "Edition size" }));
     expect(useUiStore.getState().settingsTab).toBe("sync");
     expect(useUiStore.getState().showSettings).toBe(true);
@@ -331,27 +322,34 @@ describe("TodayEditionPane", () => {
     expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "false");
   });
 
-  it("reaches back from the cog: a wider window asks for the same kind of page over that span", async () => {
+  it("turns the page back a week at a time, by button and by arrow key", async () => {
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
     await screen.findByText("Default snapshot title");
     expect(screen.queryByRole("button", { name: /catch/i })).not.toBeInTheDocument();
     const calls = vi.mocked(commands.getOrGenerateTodayEdition).mock.calls;
-    const first = calls[calls.length - 1];
-    expect(first[1] - first[0]).toBe(24 * 60 * 60);
+    const front = calls[calls.length - 1];
+    expect(front[1] - front[0]).toBe(24 * 60 * 60);
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
 
-    await userEvent.click(screen.getByRole("button", { name: "Today settings" }));
-    const dialog = screen.getByRole("dialog", { name: "Today settings" });
-    await userEvent.selectOptions(within(dialog).getByLabelText("Going back"), "7");
-    expect(useUiStore.getState().todayDays).toBe(7);
+    // Page 2 is the seven days before today.
+    await userEvent.click(screen.getByRole("button", { name: "Last week" }));
+    expect(useUiStore.getState().todayPage).toBe(2);
     await waitFor(() => {
       const last = calls[calls.length - 1];
-      expect(last[1]).toBe(first[1]);
-      expect(last[0]).toBeLessThan(first[0]);
+      expect(last[1]).toBe(front[0]);
+      expect(last[0]).toBe(front[0] - 7 * 24 * 60 * 60);
     });
-    // The masthead names the span, and Today's title stays.
+    expect(screen.getByText(/^Page 2/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Today" })).toBeInTheDocument();
-    expect(screen.getByText(/\u2013/)).toBeInTheDocument();
+    expect(screen.getAllByText(/\u2013/).length).toBeGreaterThan(0);
+
+    // → turns further back, ← comes forward; the front page has no earlier page.
+    await userEvent.keyboard("{ArrowRight}");
+    expect(useUiStore.getState().todayPage).toBe(3);
+    await userEvent.keyboard("{ArrowLeft}{ArrowLeft}{ArrowLeft}");
+    expect(useUiStore.getState().todayPage).toBe(1);
+    await waitFor(() => expect(screen.getByText("Front page")).toBeInTheDocument());
   });
 
   it("keeps the today model picker usable while ledes are being written", async () => {

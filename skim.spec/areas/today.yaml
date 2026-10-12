@@ -45,8 +45,8 @@ behaviors:
       two-up grid of briefs.
     details: >-
       Ten stories fill one desktop page. The masthead has top margin; the only controls are an
-      ask button, a refresh button and a cog that opens a small settings popover (Going back,
-      summary model, edition size, retry, AI settings). The popover is wide enough for every
+      ask button, a refresh button and a cog that opens a small settings popover (summary model,
+      edition size, retry, AI settings). The popover is wide enough for every
       label to sit on one line with its control inside it. Missing summaries show as a note with
       Retry in the dateline instead of a loose button.
     source:
@@ -54,22 +54,24 @@ behaviors:
         I like A on desktop, C on mobile. There should be some margin from the top - also maybe just a
         cog icon button to show a few settings, not a model picker thrown there
       reference: Giulio, project thread "Today page design options", 2026-10-12
-  - id: going-back
+  - id: pages-are-weeks
     description: >-
-      Today is the one newspaper. It defaults to today's edition, and "Going back" in its cog
-      (today, 2 days, 3 days, a week, two weeks; iOS in Today's settings sheet) makes the same
-      kind of page from everything that arrived in that window, with the dateline showing the span
-      ("October 6 – 12"). The same rules apply: grouped coverage, verified passages, read progress,
-      and a story read on another page stays off this one until a material update. There is no
-      separate catch-up page, bolt or run.
+      Today is the one newspaper, and its pages are time. The front page is today's edition; each
+      page turned goes back a week (page 2 is the seven days before today, page 3 the week before
+      that), set as the same Today paper over that week, with the dateline showing the span
+      ("October 5 – 11"). Previous/Next page at the foot of the page, ← and → on desktop and a
+      sideways swipe on iOS turn the pages. The same rules apply on every page: grouped coverage,
+      verified passages, read progress, and a story read on another page stays off this one until
+      a material update. There is no separate catch-up page, bolt, run or "Going back" control.
     details: >-
-      A wider window is its own frozen edition (window plus size), so going back and returning
-      keeps each page as it was. Candidates reach to the window's start, or a day back from now,
-      whichever is earlier. The choice is per launch, not remembered.
+      Each page is its own frozen edition (window plus size), so turning back and returning keeps
+      a page as it was; an earlier week's page is made when first turned to. An edition shows on
+      one page whatever its size, so a 20-story edition has more briefs rather than a second page.
+      The paper offers a year of weeks. The page is per launch, not remembered.
     source:
       text: >-
-        I though we're getting rid of the catch up view in favor of the newspaper view where you
-        default to today but can go back in time
+        in fact, maybe we should have the front page be today and each page of newspaper view be
+        like going a week in the past
       reference: Giulio, project chat, 2026-10-12
   - id: full-without-images
     description: >-

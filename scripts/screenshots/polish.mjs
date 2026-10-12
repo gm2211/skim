@@ -36,11 +36,9 @@ const openToday = async (p) => {
   await p.waitForTimeout(800);
 };
 
-/** Picks how far back Today reaches, from its cog. */
-const goBack = async (p, days) => {
-  await p.getByRole("button", { name: "Today settings" }).click();
-  await p.getByLabel("Going back").selectOption(String(days));
-  await p.keyboard.press("Escape");
+/** Turns the paper back `turns` pages (a week each). */
+const turnBack = async (p, turns = 1) => {
+  for (let i = 0; i < turns; i++) await p.keyboard.press("ArrowRight");
   await p.waitForTimeout(600);
 };
 
@@ -67,8 +65,10 @@ const unclip = async (p, selector = ".today-page") => {
 const SCENES = [
   { name: "today", viewport: DESKTOP, run: openToday },
   // The same paper over a wider window, picked from the cog.
-  { name: "today-week", viewport: DESKTOP, run: async (p) => { await openToday(p); await goBack(p, 7); } },
+  { name: "today-page-2", viewport: DESKTOP, run: async (p) => { await openToday(p); await turnBack(p, 1); } },
   { name: "today-full", viewport: TALL, run: async (p) => { await openToday(p); await unclip(p); }, target: ".today-page" },
+  // The foot of the page, where the paper turns.
+  { name: "today-foot", viewport: DESKTOP, run: async (p) => { await openToday(p); await turnBack(p, 1); }, clip: { x: 440, y: 820, width: 1000, height: 80 } },
   // The page stays in the list column while a story's article is open.
   { name: "today-article", viewport: DESKTOP, run: async (p) => {
     await openToday(p);

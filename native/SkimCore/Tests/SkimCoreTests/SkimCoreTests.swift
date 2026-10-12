@@ -1021,7 +1021,7 @@ import Testing
     #expect(kept.items.count == 3)
 }
 
-@Test func todayEditionWiderWindowReachesBackToItsStartAndSkipsWhatTodayConsumed() async throws {
+@Test func todayEditionEarlierWeekPageCoversItsWindowAndSkipsWhatTodayConsumed() async throws {
     let store = try temporaryStore()
     let dayStart: TimeInterval = 1_728_000
     let dayEnd = dayStart + 86_400
@@ -1036,8 +1036,9 @@ import Testing
     #expect(Set(today.items.map(\.snapshot.storyID)) == ["today"])
     _ = try await store.setTodayEditionItemConsumed(editionID: today.id, storyID: "today", isConsumed: true)
 
+    // Page 2: the seven days before today, turned to today, so made after it closed.
     let week = try await store.getOrGenerateTodayEdition(
-        startsAt: Date(timeIntervalSince1970: dayStart - 6 * 86_400), endsAt: Date(timeIntervalSince1970: dayEnd),
+        startsAt: Date(timeIntervalSince1970: dayStart - 7 * 86_400), endsAt: Date(timeIntervalSince1970: dayStart),
         storyLimit: 5, generatedAt: Date(timeIntervalSince1970: generatedAt))
     #expect(week.id != today.id)
     #expect(Set(week.items.map(\.snapshot.storyID)) == ["yesterday", "three-days-ago"])

@@ -43,17 +43,17 @@ export function useTodayStoryLimit(): number {
  * window, so a stale window (rather than the id itself) is what we must not
  * cache across midnight.
  */
-function useTodayWindow(days: number): TodayWindow {
-  const [win, setWin] = useState<TodayWindow>(() => todayWindow(new Date(), days));
+function useTodayWindow(page: number): TodayWindow {
+  const [win, setWin] = useState<TodayWindow>(() => todayWindow(new Date(), page));
   useEffect(() => {
     const refresh = () => {
-      const next = todayWindow(new Date(), days);
+      const next = todayWindow(new Date(), page);
       setWin((current) => current.startsAt === next.startsAt && current.endsAt === next.endsAt ? current : next);
     };
     refresh();
-    const id = window.setTimeout(refresh, msUntilWindowRollover(todayWindow(new Date(), days)) + 1000);
+    const id = window.setTimeout(refresh, msUntilWindowRollover(todayWindow(new Date(), page)) + 1000);
     const refreshIfChanged = () => {
-      const next = todayWindow(new Date(), days);
+      const next = todayWindow(new Date(), page);
       setWin((current) => current.startsAt === next.startsAt && current.endsAt === next.endsAt ? current : next);
     };
     window.addEventListener("focus", refreshIfChanged);
@@ -63,7 +63,7 @@ function useTodayWindow(days: number): TodayWindow {
       window.removeEventListener("focus", refreshIfChanged);
       document.removeEventListener("visibilitychange", refreshIfChanged);
     };
-  }, [days, win.startsAt, win.endsAt]);
+  }, [page, win.startsAt, win.endsAt]);
   return win;
 }
 
@@ -73,8 +73,8 @@ export function useTodayEdition() {
   const settingsQuery = useSettings();
   const settings = settingsQuery.data;
   const aiEnabled = !!settings && settings.ai.provider !== "none";
-  const days = useUiStore((state) => state.todayDays);
-  const win = useTodayWindow(days);
+  const page = useUiStore((state) => state.todayPage);
+  const win = useTodayWindow(page);
   const queryKey = useMemo(() => ["todayEdition", win.startsAt, win.endsAt, storyLimit] as const, [win.startsAt, win.endsAt, storyLimit]);
 
   const query = useQuery({
@@ -193,7 +193,7 @@ export function useTodayEdition() {
   return {
     ...query,
     window: win,
-    days,
+    page,
     storyLimit,
     aiEnabled,
     setConsumed,

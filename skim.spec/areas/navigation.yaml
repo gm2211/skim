@@ -39,5 +39,5 @@ behaviors:
       Desktop: Cmd+, opens Settings, Cmd+Option+S toggles the sidebar, and Escape closes dialogs.
   - id: today-return
     description: >-
-      Closing an article opened from Today returns the reader to Today, on the same window it was
+      Closing an article opened from Today returns the reader to Today, on the same page it was
       showing.

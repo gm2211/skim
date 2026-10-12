@@ -18,29 +18,28 @@ export interface TodayWindow {
  * re-derive this window (rather than caching an edition id) once the local
  * date rolls over past `endsAt`.
  */
-export function todayWindow(now: Date = new Date(), days: number = 1): TodayWindow {
+export function todayWindow(now: Date = new Date(), page: number = 1): TodayWindow {
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  // "Going back": the window opens at local midnight `days - 1` days ago and
-  // still closes at the coming midnight, so the page is the same kind of
-  // paper over a wider span.
-  const startOfWindow = new Date(startOfToday);
-  startOfWindow.setDate(startOfWindow.getDate() - (Math.max(1, Math.floor(days)) - 1));
-  const startOfNextDay = new Date(startOfToday);
-  startOfNextDay.setDate(startOfNextDay.getDate() + 1);
+  const turn = Math.max(1, Math.floor(page)) - 1;
+  // The front page is today. Each page turned goes back a week: page 2 is
+  // the seven days before today, page 3 the week before that. Local
+  // midnights throughout, so a DST day is still a whole day.
+  const start = new Date(startOfToday);
+  const end = new Date(startOfToday);
+  if (turn === 0) {
+    end.setDate(end.getDate() + 1);
+  } else {
+    start.setDate(start.getDate() - 7 * turn);
+    end.setDate(end.getDate() - 7 * (turn - 1));
+  }
   return {
-    startsAt: Math.floor(startOfWindow.getTime() / 1000),
-    endsAt: Math.floor(startOfNextDay.getTime() / 1000),
+    startsAt: Math.floor(start.getTime() / 1000),
+    endsAt: Math.floor(end.getTime() / 1000),
   };
 }
 
-/** How far back the paper can reach, as the cog offers it. */
-export const TODAY_RANGES = [
-  { days: 1, label: "Today" },
-  { days: 2, label: "Past 2 days" },
-  { days: 3, label: "Past 3 days" },
-  { days: 7, label: "Past week" },
-  { days: 14, label: "Past two weeks" },
-] as const;
+/** How many pages back the paper offers: a year of weeks. */
+export const TODAY_PAGE_COUNT = 53;
 
 /** The dateline: one day's date, or the span of a wider window. */
 export function formatWindowDate(window: TodayWindow): string {

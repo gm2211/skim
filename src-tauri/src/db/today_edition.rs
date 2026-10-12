@@ -159,9 +159,11 @@ pub(crate) fn validate_window_and_limit(
             "Today edition ends_at must be after starts_at".into(),
         ));
     }
-    if generated_at < starts_at || generated_at >= ends_at {
+    // A page is made inside its window (today's), or after it (an earlier
+    // week, turned to later); never before it opens.
+    if generated_at < starts_at {
         return Err(rusqlite::Error::InvalidParameterName(
-            "Today edition generated_at must be inside its explicit day window".into(),
+            "Today edition generated_at must not precede its window".into(),
         ));
     }
     if !matches!(story_limit, 5 | 10 | 20) {
@@ -1177,7 +1179,7 @@ mod tests {
     }
 
     #[test]
-    fn wider_window_reaches_back_to_its_start_and_skips_what_today_consumed() {
+    fn earlier_week_page_covers_its_window_and_skips_what_today_consumed() {
         let conn = setup_empty();
         add_story(&conn, "today", 2, false, GENERATED_AT - 10);
         add_story(&conn, "yesterday", 1, false, DAY_START - 20 * 60 * 60);
@@ -1188,10 +1190,12 @@ mod tests {
         assert_eq!(ids, BTreeSet::from(["today"]));
         set_item_consumed(&conn, &today.edition.id, "today", true, GENERATED_AT + 1).unwrap();
 
-        let week = get_or_generate(&conn, DAY_START - 6 * 86_400, DAY_END, GENERATED_AT, 5).unwrap();
+        // Page 2: the seven days before today, turned to today, so made after it closed.
+        let week = get_or_generate(&conn, DAY_START - 7 * 86_400, DAY_START, GENERATED_AT, 5).unwrap();
         assert_ne!(week.edition.id, today.edition.id);
         let ids: BTreeSet<&str> = week.items.iter().map(|item| item.snapshot.story_id.as_str()).collect();
-        assert_eq!(ids, BTreeSet::from(["yesterday", "three-days-ago"]), "the week reaches to its start and skips what today's page consumed");
+        assert_eq!(ids, BTreeSet::from(["yesterday", "three-days-ago"]), "the week covers its window only");
+        assert!(get_or_generate(&conn, DAY_END, DAY_END + 86_400, GENERATED_AT, 5).is_err(), "a page cannot be made before its window opens");
     }
 
     #[test]

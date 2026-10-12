@@ -304,9 +304,11 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         guard endsAt > startsAt else {
             throw SkimCoreError.database("Today edition must end after it starts")
         }
-        guard generatedAt >= startsAt, generatedAt < endsAt else {
+        // A page is made inside its window (today's), or after it (an earlier
+        // week, turned to later); never before it opens.
+        guard generatedAt >= startsAt else {
             throw SkimCoreError.database(
-                "Today generation time must fall inside the edition window"
+                "Today generation time must not precede the edition window"
             )
         }
         let editionID = TodayEditionBuilder.stableID(

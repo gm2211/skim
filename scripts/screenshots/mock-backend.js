@@ -206,19 +206,33 @@
       figure: figure && { value: figure[0], label: figure[1] },
     };
   });
-  const todayView = () => ({
-    edition: {
-      id: "ed-today", title: "Today", scope: "all", story_limit: 10, status: "completed",
-      starts_at: D.now - (D.now % 86400), ends_at: D.now - (D.now % 86400) + 86400,
-      generated_at: D.mins(5), completed_at: D.mins(4), total_source_count: 24,
-    },
-    items: TODAY_ITEMS,
-    consumed_count: TODAY_ITEMS.filter((i) => i.is_consumed).length,
-    total_count: TODAY_ITEMS.length,
+  // Earlier pages (a week each) rotate the same stories, so turning a page
+  // visibly changes the front page instead of only the dateline.
+  const pageItems = (turn) => turn === 0 ? TODAY_ITEMS : TODAY_ITEMS.map((_, n, all) => {
+    const item = all[(n + turn * 3) % all.length];
+    return { ...item, edition_id: "ed-week-" + turn, position: n, is_consumed: false, consumed_at: null };
   });
+  let todayTurn = 0;
+  const todayView = (window_) => {
+    if (window_?.startsAt) todayTurn = Math.max(0, Math.round((D.now - window_.startsAt) / (7 * 86400)));
+    const items = pageItems(todayTurn);
+    return {
+      edition: {
+        id: todayTurn === 0 ? "ed-today" : "ed-week-" + todayTurn, title: "Today", scope: "all", story_limit: 10, status: "completed",
+        starts_at: window_?.startsAt ?? D.now - (D.now % 86400), ends_at: window_?.endsAt ?? D.now - (D.now % 86400) + 86400,
+        generated_at: D.mins(5), completed_at: D.mins(4), total_source_count: 24,
+      },
+      items,
+      consumed_count: items.filter((i) => i.is_consumed).length,
+      total_count: items.length,
+    };
+  };
 
   const ASK_ANSWER =
     "Article 2 briefly reports this. The author notes that Anthropic “dropped Claude Code from the Pro tier” and that the change requires a higher-tier subscription [1]. Two other pieces mention the pricing move in passing while covering agent tooling [3][5].\n\nNo dedicated coverage of OpenAI's next model or a competing release appears in these articles. Broaden the scope to all feeds if you want that.";
+
+  const ARTICLE_ANSWER =
+    "It doesn't name one cloud for every AI startup. Its rule of thumb is GCP when the product leans on managed data and ML services, and AWS when hiring and ecosystem breadth matter more.\n\nThe bigger point is reversibility: keep the first year's architecture portable, because a migration eighteen months in can cost more than the original infrastructure budget.";
 
   const ASK_SOURCES = [12, 1, 10, 9, 16, 15, 17].map((i, n) => ({
     id: articles[i].id,
@@ -337,8 +351,8 @@
       model: "claude-sonnet-5",
       created_at: D.now,
     }),
-    get_or_generate_today_edition: () => todayView(),
-    list_today_edition_items: () => TODAY_ITEMS,
+    get_or_generate_today_edition: (args) => todayView(args),
+    list_today_edition_items: ({ editionId } = {}) => pageItems(editionId?.startsWith("ed-week-") ? Number(editionId.slice(8)) : 0),
     generate_today_ledes: () => todayView(),
     generate_today_editorial: () => todayView(),
     // Report images are opt-in so a run shows the no-image page by default.
@@ -355,18 +369,18 @@
       article_ids: ASK_SOURCES.map((s) => s.id),
       sources: ASK_SOURCES,
     }),
-    chat_with_article: () => ({ content: ASK_ANSWER, provider: "anthropic", model: "claude-sonnet-5" }),
+    chat_with_article: () => ({ content: ARTICLE_ANSWER, provider: "anthropic", model: "claude-sonnet-5" }),
     // The app agent: a keyword search over the fixtures, answered as a list.
     ask_agent: async ({ messages }) => {
       await new Promise((resolve) => setTimeout(resolve, 400));
       const question = messages[messages.length - 1].content;
-      const stop = new Set(["where", "what", "which", "article", "articles", "about", "there", "that", "this", "with", "from", "find"]);
+      const stop = new Set(["where", "what", "which", "article", "articles", "about", "there", "that", "this", "with", "from", "find", "anything"]);
       const terms = question.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !stop.has(w));
       const stem = (t) => t.replace(/s$/, "");
       const hits = articles.filter((a) => terms.some((t) => a.title.toLowerCase().includes(stem(t)))).slice(0, 4);
       const sources = hits.map((a) => ({ id: a.id, title: a.title, feed_title: a.feed_title, url: a.url, published_at: a.published_at, source_type: "article" }));
       const content = hits.length
-        ? `${hits.length} articles cover this:\n\n${hits.map((a, i) => `- [${i + 1}] **${a.title}** (${a.feed_title})`).join("\n")}\n\n[1] is the most direct match.`
+        ? `${hits.length} ${hits.length === 1 ? "article covers" : "articles cover"} this:\n\n${hits.map((a, i) => `- [${i + 1}] **${a.title}** (${a.feed_title})`).join("\n")}\n\n[1] is the most direct match.`
         : "Nothing in your articles matches that.";
       return {
         content, provider: "anthropic", model: "claude-sonnet-5", sources,

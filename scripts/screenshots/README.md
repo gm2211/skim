@@ -1,11 +1,32 @@
 # README demo
 
-`docs/skim-demo.gif` is generated, not recorded. Two steps:
+## Walkthrough video
+
+`docs/skim-walkthrough.mp4` and the `docs/skim-walkthrough.gif` the README shows
+are a scripted recording: one continuous session through the app with a visible
+pointer and a caption per feature.
 
 ```bash
 pnpm dev                          # in one shell
-pnpm screenshots                  # captures the frames
-pnpm demo                         # encodes docs/skim-demo.gif
+pnpm walkthrough                  # records, then encodes the MP4 and GIF
+```
+
+`record.mjs` drives the app against the same demo fixtures as the stills, so
+it needs no feeds, key or model and comes out the same every run. Frames come
+from Chromium's screencast with their paint times, into `.walkthrough/`
+(ignored by git); `build-video.mjs` resamples them to a constant frame rate.
+To change what the video shows or says, edit `CHAPTERS` in `record.mjs`;
+`CHAPTERS=today,reader node scripts/screenshots/record.mjs` records just those
+chapters while iterating. `GIF_WIDTH` and `GIF_FPS` trade GIF size for
+sharpness. Needs ffmpeg with libx264.
+
+## Stills
+
+The docs site carousel (`docs/index.html`) uses stills taken the same way:
+
+```bash
+pnpm dev                          # in one shell
+pnpm screenshots                  # writes docs/screenshots/*.png
 ```
 
 `capture.mjs` drives the real app in headless Chromium at a fixed viewport
@@ -15,18 +36,9 @@ one crop. It talks to `mock-backend.js` instead of the Rust backend: the Tauri
 in `fixtures.js`. That means the captures run anywhere, with no feeds, no API
 key, and no model — and they are identical every time.
 
-Output:
-
-- `docs/screenshots/*.png` — the raw app shots, also used by the docs site
-  carousel in `docs/index.html`.
-- `docs/screenshots/frames/*.png` — the same shots with a caption strip,
-  composed in the browser so the caption uses real font rendering.
-- `docs/skim-demo.gif` — the frames at a uniform hold and crossfade.
-
-To change what the demo shows, edit `STEPS` in `capture.mjs`. To change the
-content on screen, edit `fixtures.js`. Slide order follows filename order.
-
-`build-demo.mjs` needs ffmpeg on `PATH`, or `FFMPEG=/path/to/ffmpeg`.
+To change what the stills show, edit `STEPS` in `capture.mjs`. To change the
+content on screen, edit `fixtures.js` (and `mock-backend.js` for AI answers),
+which also changes the walkthrough.
 
 ## Design passes
 

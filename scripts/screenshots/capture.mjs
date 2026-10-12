@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-// Captures the README demo frames.
+// Captures the stills the docs site carousel shows (docs/index.html).
 //
-// Every frame comes out of the same browser at the same viewport and device
+// Every still comes out of the same browser at the same viewport and device
 // pixel ratio, so the slides share one zoom level and one crop — which is the
 // whole point: hand-taken screenshots of different window sizes are what made
-// the old carousel look like a ransom note.
+// the old carousel look like a ransom note. The README's video comes from
+// record.mjs instead.
 //
 // Usage:
 //   pnpm dev            # in another shell, or set SKIM_URL to a preview server
@@ -21,7 +22,6 @@ import fs from "node:fs/promises";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "../..");
 const OUT = path.join(ROOT, "docs/screenshots");
-const FRAMES = path.join(OUT, "frames");
 
 export const VIEWPORT = { width: 1440, height: 900 };
 export const SCALE = 2;
@@ -53,7 +53,7 @@ const openLeadArticle = async (p) => {
   await p.waitForTimeout(500);
 };
 
-/** Each step drives the app to one screen, then the frame is captured. */
+/** Each step drives the app to one screen, then the still is captured. */
 const STEPS = [
   {
     name: "00-reading",
@@ -79,13 +79,22 @@ const STEPS = [
     },
   },
   {
+    name: "03-today",
+    caption: "Today — your feeds as one front page, a week per page turned",
+    async run(p) {
+      await p.getByText("Today", { exact: true }).first().click();
+      await p.locator('[aria-label="Newspaper pages"]').waitFor({ state: "visible" });
+      await p.waitForTimeout(900);
+    },
+  },
+  {
     name: "04-ask",
     caption: "Ask Skim — chat across every feed, with citations",
     async run(p) {
       await p.locator('[aria-label="Ask Skim"]').first().click();
       await p.waitForTimeout(500);
       const box = p.locator("textarea, input[type=text]").last();
-      await box.fill("What broke in security this week?");
+      await box.fill("Did anything change in Claude Code pricing?");
       await box.press("Enter");
       await p.waitForTimeout(1500);
       // The transcript auto-scrolls to the composer; show the answer instead.
@@ -112,34 +121,6 @@ const STEPS = [
   },
 ];
 
-// Final frame geometry. The app shot is downscaled to FRAME_W with a caption
-// strip underneath, so every frame in the demo is pixel-identical in size.
-export const FRAME_W = 1600;
-export const FRAME_H = Math.round((FRAME_W * VIEWPORT.height) / VIEWPORT.width);
-export const CAPTION_H = 64;
-
-/**
- * Composes one demo frame: the app screenshot over a caption strip. Done in
- * the browser so the caption uses real font rendering instead of whatever
- * fonts happen to exist on the machine running ffmpeg.
- */
-async function compose(composeCtx, shot, caption, outFile) {
-  const page = await composeCtx.newPage();
-  await page.setContent(`<!doctype html><meta charset="utf-8"><style>
-    html, body { margin: 0; background: #06080c; }
-    body { width: ${FRAME_W}px; height: ${FRAME_H + CAPTION_H}px; overflow: hidden;
-      font: 500 24px/1 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    img { display: block; width: ${FRAME_W}px; height: ${FRAME_H}px; }
-    .cap { height: ${CAPTION_H}px; display: flex; align-items: center; justify-content: center;
-      color: #d7dde7; letter-spacing: 0.2px; border-top: 1px solid rgba(255,255,255,0.07); }
-  </style>
-  <img src="data:image/png;base64,${shot.toString("base64")}">
-  <div class="cap">${caption.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</div>`);
-  await page.waitForTimeout(250);
-  await page.screenshot({ path: outFile });
-  await page.close();
-}
-
 async function freshPage(ctx) {
   const p = await ctx.newPage();
   await p.addInitScript({ path: path.join(HERE, "fixtures.js") });
@@ -157,7 +138,6 @@ async function freshPage(ctx) {
 
 const main = async () => {
   await fs.mkdir(OUT, { recursive: true });
-  await fs.mkdir(FRAMES, { recursive: true });
   const browser = await chromium.launch({
     executablePath: process.env.CHROME_PATH || undefined,
   });
@@ -167,14 +147,6 @@ const main = async () => {
     colorScheme: "dark",
     reducedMotion: "reduce",
   });
-  // Composing runs at DPR 1 so the 2x app shot is downscaled into the frame
-  // rather than stretched back up.
-  const composeCtx = await browser.newContext({
-    viewport: { width: FRAME_W, height: FRAME_H + CAPTION_H },
-    deviceScaleFactor: 1,
-    colorScheme: "dark",
-  });
-
   const captions = {};
   for (const step of STEPS) {
     // A fresh page per frame: no leftover dialog or scroll position from the
@@ -186,9 +158,8 @@ const main = async () => {
     await p.mouse.move(VIEWPORT.width - 2, VIEWPORT.height - 2);
     await p.waitForTimeout(250);
     const file = path.join(OUT, `${step.name}.png`);
-    const shot = await p.screenshot({ path: file, animations: "disabled" });
+    await p.screenshot({ path: file, animations: "disabled" });
     await p.close();
-    await compose(composeCtx, shot, step.caption, path.join(FRAMES, `${step.name}.png`));
     captions[`${step.name}.png`] = step.caption;
     console.log(`captured ${step.name}.png`);
   }

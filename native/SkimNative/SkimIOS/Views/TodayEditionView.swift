@@ -2,14 +2,21 @@ import SkimCore
 import SwiftUI
 
 /// Native presentation of SkimCore's persisted edition; no ranking or snapshot logic here.
+///
+/// A magazine front page: the lead runs as a full-bleed hero, the next stories
+/// as cards, the tail as a two-up grid of briefs. Every slot has a text
+/// treatment (the lede set as a pull quote, a story accent colour) so the page
+/// stays full when the reports publish no pictures; a picture is used when the
+/// report has one.
 struct TodayEditionView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("todayStoryLimit") private var storyLimit = 10
+    @State private var showSettings = false
 
-    /// Stories that get a written lede and full-size setting; the rest of the
-    /// page runs as one-line briefs.
+    /// Stories that get a written lede and a full card; the rest of the page
+    /// runs as two-up briefs.
     private static let leadCount = 6
 
     var body: some View {
@@ -20,27 +27,19 @@ struct TodayEditionView: View {
                         .frame(minHeight: 44)
                 }
                 Spacer()
-                Text("Today").font(.headline)
-                Spacer()
-                AppModelPicker(isDisabled: model.isUpdatingToday || model.todayLedeStatus != nil)
-                Menu {
-                    Picker("Stories per edition", selection: $storyLimit) {
-                        Text("5 stories").tag(5)
-                        Text("10 stories").tag(10)
-                        Text("20 stories").tag(20)
-                    }
-                } label: {
-                    Label("\(storyLimit)", systemImage: "line.3.horizontal.decrease")
-                        .frame(minHeight: 44)
+                Button { showSettings = true } label: {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 18))
+                        .frame(width: 44, height: 44)
                 }
-                .accessibilityLabel("Stories per edition: \(storyLimit)")
-                .disabled(model.isUpdatingToday)
+                .accessibilityLabel("Today settings")
             }
             .padding(.horizontal, 16)
-            .background(SkimStyle.chrome)
+            .padding(.top, 6)
+            .background(SkimStyle.background)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 16) {
                     if model.isLoadingToday {
                         ProgressView("Loading today’s edition…")
                             .frame(maxWidth: .infinity, minHeight: 200)
@@ -60,32 +59,8 @@ struct TodayEditionView: View {
                             } else {
                                 if let status = model.todayLedeStatus {
                                     TodayWritingRule(status: status)
-                                } else if model.todayLedeNeedsRetry {
-                                    Button("Retry missing summaries") { Task { await model.retryTodayLedes() } }
-                                        .font(.subheadline)
-                                        .frame(minHeight: 44)
                                 }
-                                // The edition is already ordered by importance,
-                                // so position is all the page needs: the first
-                                // story leads, the next few run as stories, the
-                                // tail becomes briefs.
-                                ForEach(Array(edition.items.enumerated()), id: \.element.id) { position, item in
-                                    if position == Self.leadCount {
-                                        Text("ALSO")
-                                            .font(.system(size: 11, weight: .bold))
-                                            .kerning(1.2)
-                                            .foregroundStyle(SkimStyle.secondary.opacity(0.8))
-                                            .padding(.top, 8)
-                                    }
-                                    TodayStoryView(
-                                        item: item,
-                                        rank: Self.rank(for: position),
-                                        isWritingLede: model.todayLedeStatus != nil
-                                            && position < Self.leadCount,
-                                        isUpdating: model.isUpdatingToday,
-                                        onToggleConsumed: { Task { await model.setTodayConsumed(item) } }
-                                    )
-                                }
+                                frontPage(edition.items)
                                 if edition.consumedItemCount == edition.totalItemCount {
                                     Label("You’re all caught up for today.", systemImage: "checkmark.circle.fill")
                                         .font(.headline)
@@ -96,7 +71,8 @@ struct TodayEditionView: View {
                         }
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, 18)
+                .padding(.bottom, 24)
                 .frame(maxWidth: 680, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
@@ -106,6 +82,7 @@ struct TodayEditionView: View {
         .foregroundStyle(SkimStyle.text)
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showSettings) { settingsSheet }
         .task(id: storyLimit) {
             if ![5, 10, 20].contains(storyLimit) { storyLimit = 10; return }
             await load()
@@ -126,13 +103,87 @@ struct TodayEditionView: View {
 
     private func load() async { await model.loadTodayEdition(storyLimit: storyLimit) }
 
+    /// The edition is already ordered by importance, so position is all the
+    /// page needs: the first story leads, the next few run as cards, the tail
+    /// becomes briefs.
+    @ViewBuilder
+    private func frontPage(_ items: [TodayEditionItem]) -> some View {
+        let writing = model.todayLedeStatus != nil
+        ForEach(Array(items.prefix(Self.leadCount).enumerated()), id: \.element.id) { position, item in
+            TodayStoryView(
+                item: item,
+                rank: Self.rank(for: position),
+                isWritingLede: writing,
+                isUpdating: model.isUpdatingToday,
+                onToggleConsumed: { Task { await model.setTodayConsumed(item) } }
+            )
+            .padding(.horizontal, position == 0 ? -18 : 0)
+        }
+        if items.count > Self.leadCount {
+            Text("IN BRIEF")
+                .font(.system(size: 11, weight: .bold))
+                .kerning(1.4)
+                .foregroundStyle(SkimStyle.secondary)
+                .padding(.top, 8)
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], alignment: .leading, spacing: 12) {
+                ForEach(Array(items.dropFirst(Self.leadCount))) { item in
+                    TodayStoryView(
+                        item: item,
+                        rank: .brief,
+                        isWritingLede: false,
+                        isUpdating: model.isUpdatingToday,
+                        onToggleConsumed: { Task { await model.setTodayConsumed(item) } }
+                    )
+                }
+            }
+        }
+    }
+
+    private var settingsSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Summaries") {
+                    AppModelPicker(isDisabled: model.isUpdatingToday || model.todayLedeStatus != nil)
+                    if model.todayLedeNeedsRetry {
+                        Button("Retry missing summaries") {
+                            showSettings = false
+                            Task { await model.retryTodayLedes() }
+                        }
+                    }
+                }
+                Section("Edition") {
+                    Picker("Stories per edition", selection: $storyLimit) {
+                        Text("5 stories").tag(5)
+                        Text("10 stories").tag(10)
+                        Text("20 stories").tag(20)
+                    }
+                    .disabled(model.isUpdatingToday)
+                }
+            }
+            .navigationTitle("Today")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { showSettings = false }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+    }
+
     /// The masthead: the nameplate, then a dateline whose double rule doubles
     /// as the day's reading progress.
     private func editionHeader(_ edition: TodayEditionSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Today")
-                .font(.system(size: 30, weight: .bold, design: .serif))
+                .font(.system(size: 38, weight: .bold, design: .serif))
                 .foregroundStyle(SkimStyle.text)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 4)
+
+            VStack(spacing: 2) {
+                Rectangle().fill(SkimStyle.text.opacity(0.28)).frame(height: 1)
+            }
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(edition.edition.startsAt.formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
@@ -173,10 +224,18 @@ struct TodayEditionView: View {
                 Rectangle().fill(SkimStyle.text.opacity(0.11)).frame(height: 1)
             }
 
-            Text("Saved at \(edition.edition.generatedAt.formatted(date: .omitted, time: .shortened)). Stories stay fixed for this edition.")
-                .font(.system(size: 11))
-                .foregroundStyle(SkimStyle.secondary.opacity(0.8))
+            if model.todayLedeNeedsRetry && model.todayLedeStatus == nil {
+                HStack(spacing: 6) {
+                    Text("Some summaries are missing.")
+                        .foregroundStyle(Color.orange)
+                    Button("Retry") { Task { await model.retryTodayLedes() } }
+                        .foregroundStyle(SkimStyle.accent)
+                        .frame(minHeight: 44)
+                }
+                .font(.system(size: 12, weight: .medium))
+            }
         }
+        .padding(.bottom, 6)
     }
 
     private var emptyEdition: some View {
@@ -202,6 +261,108 @@ enum TodayStoryRank {
     case lead, story, brief
 }
 
+/// A stable accent per story, from its lead publication, so a page with no
+/// pictures still has colour and rhythm.
+enum TodayAccent {
+    private static let palette: [Color] = [
+        Color(red: 0.36, green: 0.49, blue: 0.98), Color(red: 0.59, green: 0.46, blue: 0.98),
+        Color(red: 0.13, green: 0.72, blue: 0.81), Color(red: 0.32, green: 0.81, blue: 0.40),
+        Color(red: 0.85, green: 0.47, blue: 0.95), Color(red: 1.0, green: 0.57, blue: 0.17),
+        Color(red: 0.99, green: 0.77, blue: 0.10), Color(red: 0.22, green: 0.85, blue: 0.66),
+        Color(red: 1.0, green: 0.42, blue: 0.42),
+    ]
+
+    static func color(for key: String) -> Color {
+        var hash: UInt32 = 0
+        for scalar in key.lowercased().unicodeScalars { hash = hash &* 31 &+ scalar.value }
+        return palette[Int(hash % UInt32(palette.count))]
+    }
+}
+
+/// Feed excerpts that are only a link stub ("Comments") are left off the page.
+enum TodayExcerpt {
+    static func isReadable(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lowered = trimmed.lowercased()
+        if lowered.hasPrefix("article url:") || lowered.hasPrefix("comments url:") || lowered.hasPrefix("comments")
+            || lowered.hasPrefix("[comments]") { return false }
+        return trimmed.count >= 40 && trimmed.split(whereSeparator: \.isWhitespace).count >= 7
+    }
+}
+
+/// The picture a story is set with: the feed's own image, else the linked
+/// page's share image. Results are remembered for the session.
+@MainActor
+final class TodayImageStore: ObservableObject {
+    static let shared = TodayImageStore()
+    @Published private(set) var images: [String: URL] = [:]
+    private var looked: Set<String> = []
+
+    func image(for item: TodayEditionItem) -> URL? { images[item.id] }
+
+    func resolve(_ item: TodayEditionItem) async {
+        guard !looked.contains(item.id) else { return }
+        looked.insert(item.id)
+        let articles = item.sourceArticles.compactMap(\.liveArticle)
+        if let feedImage = articles.compactMap(\.imageURL).first(where: Self.isPhoto) {
+            images[item.id] = feedImage
+            return
+        }
+        for article in articles.prefix(3) {
+            guard let page = article.externalURL ?? article.url,
+                  page.host?.contains("ycombinator.com") != true else { continue }
+            if let image = await Self.shareImage(of: page) {
+                images[item.id] = image
+                return
+            }
+        }
+    }
+
+    private static func isPhoto(_ url: URL) -> Bool {
+        let lowered = url.absoluteString.lowercased()
+        return ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+            && !["feedburner", "pixel", "badge", "favicon", "logo", "avatar", ".svg"].contains { lowered.contains($0) }
+    }
+
+    nonisolated private static func shareImage(of page: URL) async -> URL? {
+        var request = URLRequest(url: page, timeoutInterval: 6)
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148", forHTTPHeaderField: "User-Agent")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode ?? 0 < 400 else { return nil }
+        // The share image lives in <head>; never scan a whole long page.
+        let html = String(decoding: data.prefix(300_000), as: UTF8.self)
+        for key in ["og:image:secure_url", "og:image", "twitter:image"] {
+            if let value = metaContent(html, key: key), let url = URL(string: value, relativeTo: page)?.absoluteURL, isPhoto(url) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    nonisolated private static func metaContent(_ html: String, key: String) -> String? {
+        guard let tagPattern = try? NSRegularExpression(pattern: "<meta\\b[^>]*>", options: [.caseInsensitive]) else { return nil }
+        let range = NSRange(html.startIndex..., in: html)
+        for match in tagPattern.matches(in: html, range: range) {
+            guard let tagRange = Range(match.range, in: html) else { continue }
+            let tag = String(html[tagRange])
+            let name = attribute(tag, "property") ?? attribute(tag, "name")
+            if name?.lowercased() == key, let content = attribute(tag, "content"), !content.isEmpty {
+                return content.replacingOccurrences(of: "&amp;", with: "&")
+            }
+        }
+        return nil
+    }
+
+    nonisolated private static func attribute(_ tag: String, _ name: String) -> String? {
+        guard let pattern = try? NSRegularExpression(pattern: "\\s\(name)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')", options: [.caseInsensitive]),
+              let match = pattern.firstMatch(in: tag, range: NSRange(tag.startIndex..., in: tag)) else { return nil }
+        for group in 1...2 {
+            if let range = Range(match.range(at: group), in: tag) { return String(tag[range]).trimmingCharacters(in: .whitespaces) }
+        }
+        return nil
+    }
+}
+
 // MARK: - One story on the page
 
 private struct TodayStoryView: View {
@@ -211,22 +372,23 @@ private struct TodayStoryView: View {
     var isUpdating: Bool
     var onToggleConsumed: () -> Void
     @State private var referencesExpanded = false
+    @ObservedObject private var imageStore = TodayImageStore.shared
 
     private var lead: Bool { rank == .lead }
     private var brief: Bool { rank == .brief }
 
-    /// A written lede is the story; the mechanical excerpt is the stand-in
-    /// until one arrives, and briefs never get one.
-    private var ledeOrExcerpt: String {
-        if let lede = item.snapshot.lede?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !lede.isEmpty {
-            return lede
-        }
-        return brief ? "" : item.snapshot.snapshotSummary
+    private var lede: String? {
+        let text = item.snapshot.lede?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return text.isEmpty ? nil : text
+    }
+
+    /// The feed's own excerpt, when it reads as reporting.
+    private var excerpt: String? {
+        TodayExcerpt.isReadable(item.snapshot.snapshotSummary) ? item.snapshot.snapshotSummary : nil
     }
 
     private var awaitingLede: Bool {
-        !brief && (item.snapshot.lede ?? "").isEmpty && isWritingLede
+        !brief && lede == nil && isWritingLede
     }
 
     private var openable: TodayEditionSourceArticle? {
@@ -235,81 +397,262 @@ private struct TodayStoryView: View {
     }
 
     private var ledeSource: TodayEditionSourceArticle? {
-        guard !(item.snapshot.lede?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
-              let sourceID = item.snapshot.ledeSourceArticleID else { return nil }
+        guard lede != nil, let sourceID = item.snapshot.ledeSourceArticleID else { return nil }
         return item.sourceArticles.first(where: { $0.articleID == sourceID })
     }
 
+    private var primary: TodayEditionSourceArticle? {
+        item.sourceArticles.first(where: \.isRepresentative) ?? item.sourceArticles.first
+    }
+
+    private var publication: String {
+        primary.map { PublicationName.of(feedTitle: $0.feedTitle, url: $0.url) } ?? ""
+    }
+
+    private var accent: Color { TodayAccent.color(for: publication.isEmpty ? item.id : publication) }
+
+    private var coverage: Int { item.sourceArticles.filter { $0.membershipType != .duplicate }.count }
+
+    private var image: URL? { brief ? nil : imageStore.image(for: item) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: lead ? 10 : 7) {
-            if !lead {
-                Rectangle().fill(SkimStyle.text.opacity(0.11)).frame(height: 1)
-                    .padding(.bottom, 6)
+        Group {
+            switch rank {
+            case .lead: hero
+            case .story: card
+            case .brief: briefCard
             }
+        }
+        .opacity(item.snapshot.isConsumed ? 0.55 : 1)
+        .task(id: item.id) { if !brief { await imageStore.resolve(item) } }
+    }
 
-            headline
+    // MARK: Slots
 
-            if awaitingLede {
-                TodayLedeSkeleton(lead: lead)
-            } else if !ledeOrExcerpt.isEmpty {
-                Text(ledeOrExcerpt)
-                    .font(.system(size: lead ? 16 : brief ? 14 : 15, weight: .regular))
-                    .foregroundStyle(SkimStyle.text.opacity(0.84))
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let source = ledeSource {
-                sourceLink(source)
-            }
-
-            if let delta = item.materialDelta, !brief {
-                Text("What's new: \(delta)")
-                    .font(.system(size: 14))
-                    .foregroundStyle(SkimStyle.accent)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if !item.sourceArticles.isEmpty {
-                DisclosureGroup(isExpanded: $referencesExpanded) {
-                    ForEach(item.sourceArticles, id: \.articleID) { source in
-                        VStack(alignment: .leading, spacing: 0) {
-                            TodayByline(source: source)
-                            if source.membershipType == .duplicate {
-                                Text("Syndicated report")
-                                    .font(.caption)
-                                    .foregroundStyle(SkimStyle.secondary)
-                            }
-                        }
+    /// The lead: a full-bleed picture with the headline over it, or with no
+    /// picture a tinted panel where the report's own words take its place.
+    @ViewBuilder
+    private var hero: some View {
+        if let image {
+            ZStack(alignment: .bottomLeading) {
+                AsyncImage(url: image) { phase in
+                    if let picture = phase.image {
+                        picture.resizable().scaledToFill()
+                    } else {
+                        accent.opacity(0.25)
                     }
-                } label: {
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 440)
+                .clipped()
+                LinearGradient(colors: [.clear, SkimStyle.background.opacity(0.65), SkimStyle.background.opacity(0.96)],
+                               startPoint: .init(x: 0.5, y: 0.25), endPoint: .bottom)
+                VStack(alignment: .leading, spacing: 10) {
+                    kicker
+                    headlineLink(size: 28)
+                    if let text = lede ?? excerpt {
+                        Text(text)
+                            .font(.system(size: 15))
+                            .foregroundStyle(SkimStyle.text.opacity(0.9))
+                            .lineLimit(4)
+                    }
+                    actions
+                }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 18)
+            }
+            .frame(height: 440)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                kicker
+                headlineLink(size: 30)
+                if awaitingLede {
+                    TodayLedeSkeleton(lead: true)
+                } else if let lede {
+                    pullQuote(lede, size: 20, cite: ledeSource)
+                } else if let excerpt {
+                    bodyText(excerpt, size: 16)
+                }
+                actions
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 22)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                LinearGradient(colors: [accent.opacity(0.32), SkimStyle.surface.opacity(0.6)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            )
+        }
+    }
+
+    /// A story card: picture on top when the report has one, else the lede as
+    /// a large quote under an accent rule.
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let image {
+                AsyncImage(url: image) { phase in
+                    if let picture = phase.image { picture.resizable().scaledToFill() } else { accent.opacity(0.2) }
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 190)
+                .clipped()
+            } else {
+                Rectangle().fill(accent).frame(height: 3)
+            }
+            VStack(alignment: .leading, spacing: 9) {
+                kicker
+                if image == nil, let lede {
+                    pullQuote(lede, size: 19, cite: nil)
+                }
+                headlineLink(size: 20)
+                if awaitingLede {
+                    TodayLedeSkeleton(lead: false)
+                } else if image != nil, let text = lede ?? excerpt {
+                    bodyText(text, size: 14)
+                } else if lede == nil, let excerpt {
+                    bodyText(excerpt, size: 14)
+                }
+                if let source = ledeSource {
+                    sourceLink(source)
+                }
+                if let delta = item.materialDelta {
+                    Text("What's new: \(delta)")
+                        .font(.system(size: 14))
+                        .foregroundStyle(SkimStyle.accent)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                actions
+            }
+            .padding(16)
+        }
+        .background(
+            image == nil
+                ? AnyShapeStyle(LinearGradient(colors: [accent.opacity(0.16), SkimStyle.surface], startPoint: .topLeading, endPoint: .center))
+                : AnyShapeStyle(SkimStyle.surface)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(SkimStyle.separator, lineWidth: 1))
+    }
+
+    /// A brief: half-width, headline only, under an accent rule.
+    private var briefCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Rectangle().fill(accent).frame(height: 3)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(publication.uppercased())
+                    .font(.system(size: 10, weight: .bold))
+                    .kerning(1.0)
+                    .foregroundStyle(accent)
+                    .lineLimit(1)
+                headlineLink(size: 16)
+                Spacer(minLength: 0)
+                HStack {
                     Text("\(item.sourceArticles.count) \(item.sourceArticles.count == 1 ? "report" : "reports")")
+                        .font(.system(size: 12))
+                        .foregroundStyle(SkimStyle.secondary)
+                    Spacer()
+                    readToggle
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 4)
+        }
+        .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
+        .background(SkimStyle.surface)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(SkimStyle.separator, lineWidth: 1))
+    }
+
+    // MARK: Pieces
+
+    private var kicker: some View {
+        (Text(publication.uppercased()).foregroundColor(lead && image != nil ? Color(red: 0.61, green: 0.79, blue: 1.0) : accent)
+            + Text(coverage > 1 ? " · \(coverage) REPORTS" : "").foregroundColor(SkimStyle.secondary))
+            .font(.system(size: 11, weight: .bold))
+            .kerning(1.2)
+            .lineLimit(1)
+    }
+
+    private func bodyText(_ text: String, size: CGFloat) -> some View {
+        Text(text)
+            .font(.system(size: size))
+            .foregroundStyle(SkimStyle.text.opacity(0.84))
+            .lineSpacing(3)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// The lede is a verified excerpt from a report, so it is set as that
+    /// report's own words.
+    private func pullQuote(_ text: String, size: CGFloat, cite: TodayEditionSourceArticle?) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\u{201C}")
+                .font(.system(size: 44, weight: .bold, design: .serif))
+                .foregroundStyle(accent)
+                .frame(height: 22, alignment: .top)
+            Text(text)
+                .font(.system(size: size, design: .serif).italic())
+                .foregroundStyle(SkimStyle.text.opacity(0.95))
+                .lineSpacing(2)
+                .fixedSize(horizontal: false, vertical: true)
+            if let cite {
+                Text(PublicationName.of(feedTitle: cite.feedTitle, url: cite.url))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(SkimStyle.secondary)
+            }
+        }
+    }
+
+    private var actions: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                if !item.sourceArticles.isEmpty {
+                    Button { withAnimation { referencesExpanded.toggle() } } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .rotationEffect(.degrees(referencesExpanded ? 90 : 0))
+                            Text("\(item.sourceArticles.count) \(item.sourceArticles.count == 1 ? "report" : "reports")")
+                        }
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(SkimStyle.secondary)
                         .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityValue(referencesExpanded ? "Expanded" : "Collapsed")
                 }
-                .tint(SkimStyle.secondary)
+                Spacer()
+                readToggle
             }
-
-            Button(action: onToggleConsumed) {
-                Text(item.snapshot.isConsumed ? "Mark unread" : "Mark read")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(SkimStyle.secondary)
-                    .frame(minHeight: 44, alignment: .leading)
+            if referencesExpanded {
+                ForEach(item.sourceArticles, id: \.articleID) { source in
+                    VStack(alignment: .leading, spacing: 0) {
+                        TodayByline(source: source)
+                        if source.membershipType == .duplicate {
+                            Text("Syndicated report")
+                                .font(.caption)
+                                .foregroundStyle(SkimStyle.secondary)
+                        }
+                    }
+                }
             }
-            .disabled(isUpdating)
         }
-        .opacity(item.snapshot.isConsumed ? 0.55 : 1)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var headlineText: some View {
+    private var readToggle: some View {
+        Button(action: onToggleConsumed) {
+            Image(systemName: item.snapshot.isConsumed ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 20))
+                .foregroundStyle(item.snapshot.isConsumed ? Color.green : SkimStyle.secondary)
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .disabled(isUpdating)
+        .accessibilityLabel(item.snapshot.isConsumed ? "Mark unread" : "Mark read")
+    }
+
+    private func headlineText(size: CGFloat) -> some View {
         Text(item.snapshot.snapshotTitle)
-            .font(.system(
-                size: lead ? 28 : brief ? 16 : 20,
-                weight: .bold,
-                design: .serif
-            ))
+            .font(.system(size: size, weight: .bold, design: .serif))
             .foregroundStyle(SkimStyle.text)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
@@ -317,16 +660,16 @@ private struct TodayStoryView: View {
     }
 
     @ViewBuilder
-    private var headline: some View {
+    private func headlineLink(size: CGFloat) -> some View {
         if let source = openable {
             NavigationLink {
                 ArticleDetailView(articleID: source.articleID)
             } label: {
-                headlineText
+                headlineText(size: size)
             }
             .buttonStyle(.plain)
         } else {
-            headlineText
+            headlineText(size: size)
         }
     }
 

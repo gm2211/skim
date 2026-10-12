@@ -59,6 +59,19 @@ pub struct TodayEditorial {
     pub theme: String,
     pub summary: String,
     pub sources: Vec<TodayEditorialSource>,
+    /// The story's headline number, when it has one. Optional so editorials
+    /// saved before it existed still load.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub figure: Option<TodayEditorialFigure>,
+}
+
+/// A number the reports state, set large on the front page ("40M", "bookings
+/// exposed"). Its digits must appear in a report.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TodayEditorialFigure {
+    pub value: String,
+    pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -908,6 +921,7 @@ mod tests {
             sources: item.member_article_ids.iter().map(|id| TodayEditorialSource {
                 article_id: id.clone(), quote: format!("Evidence in {id}."),
             }).collect(),
+            figure: None,
         };
         let hashes = item.member_article_ids.iter().map(|id| (id.clone(), "saved-body-hash".into())).collect();
         save_editorial(&conn, &before.edition.id, &item.snapshot.story_id, &editorial, &hashes, "configured-model").unwrap();

@@ -242,6 +242,35 @@
     todayStory(8, "What we learned shipping a 200-node Jepsen suite", "Testing methodology at scale.", null, [22], "unique_finds"),
     todayStory(9, "Amazon's next-generation storage stack, explained", "An architecture deep dive.", null, [23], "unique_finds"),
   ];
+  // Editorial summaries: a theme, the synthesis, each report's own supporting
+  // quote and, where the reports state one, a headline number.
+  const TODAY_EDITORIALS = [
+    ["Security", "Attackers pulled live OAuth tokens from environment variables on Vercel's build platform. Vercel has rotated its platform keys and is asking customers to rotate tokens they stored there by hand.",
+      ["Every project that kept secrets in platform environment variables should treat them as exposed.", "Customers should rotate any tokens stored in project settings."], null],
+    ["AI", "Four pieces land on the same worry: agents that cannot hold state across a session fail in ways benchmarks never show. The fix they converge on is memory the agent owns, not a bigger model.",
+      ["The model is rarely the problem. The missing state is.", "Benchmarks reset the world between tasks; real work does not."], null],
+    ["Programming", "The Go port of the TypeScript compiler reaches beta with builds about ten times faster. The major version bump signals breaking changes in the compiler API.",
+      ["Builds that took a minute now finish in about six seconds."], ["10×", "faster builds in the beta"]],
+    ["Policy", "Key Republican senators are pushing back on the proposed NIH cuts and the HHS reorganization, so the restructuring is no longer a foregone conclusion.",
+      ["We are not going to rubber-stamp a plan that guts the institutes."], null],
+    ["Privacy", "Meta is capturing employee mouse movements and keystrokes to train internal models. Regulators in two countries have asked the company to explain the program.",
+      ["Employees were told the data would improve internal tools, not that it would train models."], ["2", "regulators asking questions"]],
+    ["Open source", "Cloudflare's rewrite of Next.js is the clearest example yet of a well-funded company forking a commercial open-source project now that rewriting it is cheap.",
+      ["When a rewrite costs weeks instead of years, the moat is the community, not the code."], null],
+    ["Science", "A new proof settles the Kakeya conjecture in three dimensions, closing a problem open for decades.", ["The three-dimensional case had resisted every approach since the 1970s."], null],
+    ["Programming", "Rust 1.94 stabilizes trait upcasting, a small release with one long-awaited feature.", ["Trait upcasting has been the most requested feature for years."], null],
+    ["Infrastructure", "A team describes running Jepsen across 200 nodes and what broke along the way.", ["The bugs we found were all in the glue, not the database."], ["200", "nodes under test"]],
+    ["Infrastructure", "Amazon walks through its next-generation storage stack and why it rebuilt the metadata layer.", ["The metadata path, not the disks, set our latency floor."], null],
+  ];
+  TODAY_ITEMS.forEach((item, index) => {
+    const [theme, summary, quotes, figure] = TODAY_EDITORIALS[index];
+    item.editorial = {
+      theme, summary,
+      sources: item.member_articles.filter((m) => m.membership_type !== "duplicate")
+        .map((m, n) => ({ article_id: m.article_id, quote: quotes[n] ?? quotes[0] })),
+      figure: figure && { value: figure[0], label: figure[1] },
+    };
+  });
   const todayView = () => ({
     edition: {
       id: "ed-today", title: "Today", scope: "all", story_limit: 10, status: "completed",
@@ -395,6 +424,9 @@
     get_or_generate_today_edition: () => todayView(),
     list_today_edition_items: () => TODAY_ITEMS,
     generate_today_ledes: () => todayView(),
+    generate_today_editorial: () => todayView(),
+    // Report images are opt-in so a run shows the no-image page by default.
+    get_today_story_image: ({ articleIds }) => (window.__SKIM_TODAY_IMAGES__ || {})[articleIds[0]] ?? null,
     set_today_edition_item_consumed: ({ storyId, isConsumed }) => {
       const item = TODAY_ITEMS.find((i) => i.story_id === storyId);
       if (item) item.is_consumed = isConsumed;

@@ -28,3 +28,35 @@ behaviors:
     description: >-
       Story ranking uses the reader's stars, priority overrides, and engagement, plus the shared
       story policy's importance rating.
+  - id: front-page-layout
+    description: >-
+      Desktop sets Today as a broadsheet: a lead story with a rail of three beside it, a row of three
+      features, then "In brief". iOS sets it as a magazine: a full-bleed lead, story cards, then a
+      two-up grid of briefs.
+    details: >-
+      Ten stories fill one desktop page. The masthead has top margin; the only controls are a refresh
+      button and a cog that opens a small settings popover (summary model, edition size, retry, AI
+      settings). Missing summaries show as a note with Retry in the dateline instead of a loose
+      button.
+    source:
+      text: >-
+        I like A on desktop, C on mobile. There should be some margin from the top - also maybe just a
+        cog icon button to show a few settings, not a model picker thrown there
+      reference: Giulio, project thread "Today page design options", 2026-10-12
+  - id: full-without-images
+    description: >-
+      The page looks full when reports publish no pictures: every slot has a text treatment (a
+      report's own quote set large, a headline figure, a theme or publication accent colour), and a
+      lead with no picture becomes typographic.
+    details: >-
+      Feed stubs such as Hacker News's "Comments" are never printed as a story's text. A figure is
+      shown only when its digits appear in a report.
+    source:
+      text: >-
+        biggest problem though is what to do when no images - I think that's why we have a shitty
+        layout
+      reference: Giulio, project thread "Today page design options", 2026-10-12
+  - id: report-images
+    description: >-
+      Pictures come only from the reports: the linked page's share image, else an image in the
+      report or feed item. No stock art.

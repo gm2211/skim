@@ -2335,18 +2335,39 @@ enum NativeAI {
         } else {
             request.setValue(accessToken, forHTTPHeaderField: "x-api-key")
         }
+        let model = resolveAnthropicModel(settings)
         var body: [String: Any] = [
-            "model": resolveAnthropicModel(settings),
+            "model": model,
             "system": instructions,
             "messages": messages,
-            "temperature": temperature ?? 0.2,
             "max_tokens": maxTokens
         ]
+        if anthropicModelAcceptsTemperature(model) {
+            body["temperature"] = temperature ?? 0.2
+        }
         if let tools {
             body["tools"] = tools
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
+    }
+
+    /// Claude Opus/Sonnet 4.7 and later, and every 5-series model (Sonnet 5.5, Opus 5.5,
+    /// Fable, Haiku 5.5…), answer a `temperature` field with a 400. Only send it to the
+    /// older models known to take it (Claude 3.x and 4.0–4.6); anything unrecognised gets
+    /// the API's default sampling rather than a failed request.
+    static func anthropicModelAcceptsTemperature(_ model: String) -> Bool {
+        var parts = model.lowercased().split(separator: "-").map(String.init)
+        guard parts.first == "claude" else { return false }
+        parts.removeFirst()
+        // "claude-3-5-sonnet-…" names the version first; "claude-sonnet-4-6" names the family first.
+        if let first = parts.first, Int(first) == nil { parts.removeFirst() }
+        guard let majorText = parts.first, let major = Int(majorText) else { return false }
+        if major < 4 { return true }
+        guard major == 4 else { return false }
+        // A 1–2 digit second part is the minor version; a date snapshot ("4-20250514") is 4.0.
+        let minor = parts.dropFirst().first.flatMap { $0.count <= 2 ? Int($0) : nil } ?? 0
+        return minor <= 6
     }
 
     /// Thin wrapper preserving the original single-message, no-tools signature
@@ -2781,7 +2802,7 @@ enum NativeAI {
     /// Parses the `{"error": {"type": ..., "message": ...}}` envelope used by both the
     /// Anthropic API and OpenAI-compatible providers when possible, but always falls back
     /// to a generic message — raw JSON error bodies must never reach the UI.
-    private static func friendlyErrorMessage(status: Int, data: Data, provider: String) -> String {
+    static func friendlyErrorMessage(status: Int, data: Data, provider: String) -> String {
         let isClaude = provider.hasPrefix("Claude")
         let errorType = parsedErrorType(from: data)
         let errorMessage = parsedErrorMessage(from: data)
@@ -2815,6 +2836,15 @@ enum NativeAI {
                 return isClaude
                     ? "Claude is temporarily unavailable. Try again shortly."
                     : "\(provider) is temporarily unavailable. Try again shortly."
+            }
+            // A 400 is the provider rejecting this request, and its message says why (an
+            // unsupported parameter, a prompt that is too long, an unknown model). Show that
+            // reason, not a bare status code that leaves "Try again" as the only advice.
+            if let detail = errorMessage, isInformativeErrorDetail(detail) {
+                let reason = detail.count > 240 ? String(detail.prefix(240)) + "…" : detail
+                return isClaude
+                    ? "Claude couldn't run this request: \(reason)"
+                    : "\(provider) couldn't run this request: \(reason)"
             }
             return isClaude
                 ? "Claude request failed (\(status)). Try again."

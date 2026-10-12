@@ -496,6 +496,13 @@ select option {
    double rule, the lead beside its picture, two featured stories, then a
    two-column grid of the rest and a dense "Also" block. */
 .catchup-section { min-width: 0; }
+/* The controls band: a soft panel with a hairline edge, set off from the page. */
+.catchup-controls {
+  margin: 14px 0 28px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
 .catchup-content { width: 100%; max-width: 1080px; margin-inline: auto; }
 .catchup-page {
   --paper-rule: rgba(255, 255, 255, 0.11);

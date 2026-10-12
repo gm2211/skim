@@ -221,9 +221,10 @@ export function CatchupSection({ onLoadingChange }: { onLoadingChange?: (loading
 
   return (
     <section className="catchup-section" role="region" aria-label="Catch me up">
-      {/* The run's controls, in a row under the masthead; on a narrow window
-          they drop their labels, and the selects name themselves. */}
-      <div className="catchup-controls flex-shrink-0 relative z-20" style={{ padding: isPhone ? "4px 0 12px" : "6px 0 14px" }}>
+      {/* The run's controls, in a band under the masthead so they read as
+          chrome and the paper starts below; on a narrow window they drop
+          their labels, and the selects name themselves. */}
+      <div className="catchup-controls flex-shrink-0 relative z-20" style={{ padding: isPhone ? "8px 10px" : "10px 14px" }}>
             <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
               <label className="catchup-control">
                 <span className="catchup-control-label">Include</span>

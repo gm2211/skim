@@ -23,3 +23,5 @@
 .chat-selection-reply:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .chat-reply-preview { border-left: 2px solid var(--color-accent); padding: 4px 8px; margin-bottom: 8px; font-size: 12px; }
 .chat-reply-preview blockquote { max-height: 72px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-markdown a.agent-citation { text-decoration: none; font-size: .85em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chat-markdown a.agent-citation:hover { text-decoration: underline; }

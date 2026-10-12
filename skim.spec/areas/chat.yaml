@@ -8,6 +8,23 @@ behaviors:
     details: >-
       Desktop scopes are Inbox (priority 3 and up), Unread (default), and All. Enter sends and
       Shift+Enter adds a line.
+  - id: app-agent
+    description: >-
+      Skim's assistant answers with tools over the app: it searches the library, reads articles,
+      opens one when asked, and can search the web, using the reader's configured AI provider.
+    details: >-
+      Desktop. One backend serves the command palette and the full Ask Skim chat. Tools work with
+      every provider (hosted, subscription, CLI and on-device) through a plain-text tool protocol,
+      bounded to a few tool calls per answer. Citation numbers stay stable across a conversation.
+      It opens an article only when the reader asks it to.
+  - id: context-aware-chat
+    description: >-
+      The assistant knows what the reader is looking at: on Today, the stories on the page and the
+      story of the open article; in the reader, the open article; elsewhere, the current list.
+    details: >-
+      "This article" and "this story" refer to them. The full chat names the context in its header
+      and offers questions that fit it. Other surfaces (such as Today's own Ask) can open the full
+      chat on a given page or story context.
   - id: article-chat
     description: >-
       A reader can chat with any article; answers are grounded in the article's full text and the

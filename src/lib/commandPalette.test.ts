@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterCommands, formatShortcutKey, scoreText, type PaletteCommand } from "./commandPalette";
+import { askFirst, filterCommands, formatShortcutKey, isQuestionLike, scoreText, type PaletteCommand } from "./commandPalette";
 
 const cmd = (title: string, extra: Partial<PaletteCommand> = {}): PaletteCommand => ({
   id: title,
@@ -36,5 +36,26 @@ describe("command palette matching", () => {
     expect(formatShortcutKey("mod", true)).toBe("⌘");
     expect(formatShortcutKey("mod", false)).toBe("Ctrl");
     expect(formatShortcutKey("k", true)).toBe("K");
+  });
+});
+
+describe("asking Skim from the palette", () => {
+  it("reads questions and requests as questions, command names as commands", () => {
+    for (const q of ["where's an article about rust?", "where's an article about rust", "find the piece on fusion", "summarize this story", "what changed in the AI story", "any news on the election"]) {
+      expect(isQuestionLike(q), q).toBe(true);
+    }
+    for (const q of ["refresh", "qc", "open settings", "starred", "mark all"]) {
+      expect(isQuestionLike(q), q).toBe(q === "open settings");
+    }
+  });
+
+  it("puts Ask first when nothing matches well or the input is a question", () => {
+    const commands = [cmd("Refresh all feeds"), cmd("Quick Catch-up")];
+    expect(askFirst(commands, "refresh")).toBe(false);
+    expect(askFirst(commands, "qc")).toBe(false);
+    expect(askFirst(commands, "zebra migration")).toBe(true);
+    expect(askFirst(commands, "where's the rust article")).toBe(true);
+    // Three scattered-letter words are a sentence, not a fuzzy command name.
+    expect(askFirst(commands, "rust ai chips")).toBe(true);
   });
 });

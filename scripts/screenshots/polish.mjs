@@ -31,24 +31,21 @@ const STILL_CSS = `
   ::-webkit-scrollbar { width: 0 !important; height: 0 !important; }
 `;
 
-// "Catch me up" is a section of the Today page; the capture takes the whole page.
-const CATCHUP = ".today-page";
-
-const openCatchup = async (p) => {
+const openToday = async (p) => {
   await p.getByText("Today", { exact: true }).first().click();
-  await p.getByRole("button", { name: "Catch me up" }).click();
-  await p.locator('[role="region"][aria-label="Catch me up"]').waitFor({ state: "visible" });
-  await p.waitForTimeout(300);
+  await p.waitForTimeout(800);
 };
 
-const runCatchup = async (p) => {
-  await openCatchup(p);
-  await p.getByRole("button", { name: /run catch-up/i }).first().click();
-  await p.waitForTimeout(Number(process.env.CATCHUP_WAIT_MS ?? 900));
+/** Picks how far back Today reaches, from its cog. */
+const goBack = async (p, days) => {
+  await p.getByRole("button", { name: "Today settings" }).click();
+  await p.getByLabel("Going back").selectOption(String(days));
+  await p.keyboard.press("Escape");
+  await p.waitForTimeout(600);
 };
 
 /** Lets the page grow to its content so one capture shows the whole thing. */
-const unclip = async (p, selector = CATCHUP) => {
+const unclip = async (p, selector = ".today-page") => {
   await p.evaluate((selector) => {
     const dialog = document.querySelector(selector);
     if (!dialog) return;
@@ -68,47 +65,14 @@ const unclip = async (p, selector = CATCHUP) => {
 };
 
 const SCENES = [
-  { name: "catchup-ready", viewport: DESKTOP, run: openCatchup },
-  { name: "catchup-page", viewport: DESKTOP, run: runCatchup },
-  {
-    name: "catchup-page-full",
-    viewport: TALL,
-    run: async (p) => { await runCatchup(p); await unclip(p); },
-    target: CATCHUP,
-  },
-  {
-    name: "catchup-filling",
-    viewport: TALL,
-    init: () => { window.__SKIM_CATCHUP_WRITTEN__ = 2; },
-    run: async (p) => { await runCatchup(p); await unclip(p); },
-    target: CATCHUP,
-  },
-  // The first story landing, with no pictures: the page must keep its shape.
-  {
-    name: "catchup-first-story",
-    viewport: TALL,
-    init: () => { window.__SKIM_CATCHUP_WRITTEN__ = 0; window.__SKIM_CATCHUP_NO_PICTURES__ = true; },
-    run: async (p) => { await runCatchup(p); await unclip(p); },
-    target: CATCHUP,
-  },
-  // A finished page on a day with no pictures at all.
-  {
-    name: "catchup-no-pictures",
-    viewport: TALL,
-    init: () => { window.__SKIM_CATCHUP_NO_PICTURES__ = true; },
-    run: async (p) => { await runCatchup(p); await unclip(p); },
-    target: CATCHUP,
-  },
-  {
-    name: "catchup-reading",
-    viewport: DESKTOP,
-    init: () => { window.__SKIM_CATCHUP_WRITTEN__ = -1; },
-    run: runCatchup,
-  },
+  { name: "today", viewport: DESKTOP, run: openToday },
+  // The same paper over a wider window, picked from the cog.
+  { name: "today-week", viewport: DESKTOP, run: async (p) => { await openToday(p); await goBack(p, 7); } },
+  { name: "today-full", viewport: TALL, run: async (p) => { await openToday(p); await unclip(p); }, target: ".today-page" },
   // The page stays in the list column while a story's article is open.
-  { name: "catchup-article", viewport: DESKTOP, run: async (p) => {
-    await runCatchup(p);
-    await p.locator(`${CATCHUP} .catchup-headline-link`).first().click();
+  { name: "today-article", viewport: DESKTOP, run: async (p) => {
+    await openToday(p);
+    await p.locator(".today-page .today-headline").first().click();
     await p.waitForTimeout(700);
   } },
   // A narrow window: the reader toolbar folds its lesser actions into "…".
@@ -128,19 +92,9 @@ const SCENES = [
     await row.click();
     await p.waitForTimeout(600);
   } },
-  { name: "today", viewport: DESKTOP, run: async (p) => {
-    await p.getByText("Today", { exact: true }).first().click();
-    await p.waitForTimeout(800);
-  } },
   // The cog popovers, so overflow, wrapping and contrast get a look before a ship.
   { name: "today-cog", viewport: DESKTOP, run: async (p) => {
-    await p.getByText("Today", { exact: true }).first().click();
-    await p.waitForTimeout(800);
-    await p.getByRole("button", { name: "Today settings" }).click();
-    await p.waitForTimeout(300);
-  }, clip: { x: 1000, y: 0, width: 440, height: 460 } },
-  { name: "catchup-cog", viewport: DESKTOP, run: async (p) => {
-    await openCatchup(p);
+    await openToday(p);
     await p.getByRole("button", { name: "Today settings" }).click();
     await p.waitForTimeout(300);
   }, clip: { x: 1000, y: 0, width: 440, height: 460 } },

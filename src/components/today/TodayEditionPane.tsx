@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
 import { useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useTodayEdition } from "../../hooks/useTodayEdition";
 import { useUiStore } from "../../stores/uiStore";
-import { PAGE_SIZE, rankFor } from "../../lib/todayEdition";
+import { PAGE_SIZE, TODAY_RANGES, formatWindowDate, rankFor } from "../../lib/todayEdition";
 import { TodayStorySkeleton } from "./TodayStorySkeleton";
 import { TodayStory } from "./TodayStory";
 import { ModelPicker } from "../common/ModelPicker";
-import { BoltIcon, ChatIcon, NewspaperIcon, RefreshIcon } from "../ui/icons";
-import { CatchupControls, CatchupSection, useCatchupRun } from "../catchup/CatchupSection";
+import { ChatIcon, NewspaperIcon, RefreshIcon } from "../ui/icons";
+import { Select } from "../ui/Select";
 import { openAgentChat } from "../../stores/agentChatStore";
 import { useAgentContext } from "../../hooks/useAgentContext";
 import { storyForAgent } from "../../lib/agentContext";
@@ -41,22 +41,8 @@ function FrontPage({ cells }: { cells: { key: string; node: React.ReactNode }[] 
   );
 }
 
-function formatWindowDate(startsAtSeconds: number): string {
-  return new Date(startsAtSeconds * 1000).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 export function TodayEditionPane() {
-  const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane, todayMode, setTodayMode } = useUiStore();
-  // "Catch me up" takes the edition's place under the masthead: a front page
-  // written on demand from a window the reader picks.
-  const catchingUp = todayMode === "catchup";
-  const catchup = useCatchupRun();
-  // Going back to the edition stops a run in flight; its page is kept.
-  useEffect(() => { if (!catchingUp && catchup.loading) catchup.stop(); }, [catchingUp]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane, todayDays, setTodayDays } = useUiStore();
   const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch, aiEnabled, isPreparingSummaries, settingsUnavailable, retrySettings } =
     useTodayEdition();
 
@@ -104,7 +90,7 @@ export function TodayEditionPane() {
       }}
     >
       {sidebarCollapsed && !isPhone && <CollapsedSidebarTitlebar />}
-      {/* Top bar: "Catch me up", ask, refresh and a cog for Today's few settings. */}
+      {/* Top bar: ask, refresh and a cog for Today's few settings. */}
       <div
         className="today-topbar flex flex-shrink-0 items-center gap-1 relative z-20"
         style={{ paddingLeft: 8, paddingRight: isPhone ? 8 : 20 }}
@@ -123,51 +109,36 @@ export function TodayEditionPane() {
           </button>
         )}
         <div className="flex-1" />
-        <IconButton
-          label="Catch me up"
-          aria-pressed={catchingUp}
-          onClick={() => setTodayMode(catchingUp ? "edition" : "catchup")}
-          className={`hover:text-text-primary hover:bg-white/10 ${catchingUp ? "text-accent bg-white/10" : "text-text-secondary"}`}
-        >
-          <BoltIcon size={18} />
-        </IconButton>
-        {items.length > 0 && !catchingUp && <IconButton
+        {items.length > 0 && <IconButton
           label="Ask about Today"
           onClick={() => openAgentChat({ context: { ...agentContext, story: null } })}
           className="text-text-secondary hover:text-text-primary hover:bg-white/10"
         >
           <ChatIcon size={18} />
         </IconButton>}
-        {/* Catching up, the refresh icon is the run: it spins while the
-            page is written, and a click then stops it. */}
-        {catchingUp ? (
-          <IconButton
-            label={catchup.loading ? "Stop catch-up" : catchup.report ? "Run again" : "Run catch-up"}
-            disabled={catchup.providerUnavailable}
-            onClick={() => (catchup.loading ? catchup.stop() : catchup.run())}
-            className="text-text-secondary hover:text-text-primary hover:bg-white/10"
-          >
-            <RefreshIcon size={18} className={catchup.loading ? "smooth-spin" : undefined} />
-          </IconButton>
-        ) : (
-          <IconButton
-            label={refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
-            disabled={refreshFeeds.isPending}
-            onClick={() => refreshFeeds.mutate(undefined)}
-            className="text-text-secondary hover:text-text-primary hover:bg-white/10"
-          >
-            <RefreshIcon size={18} className={refreshFeeds.isPending ? "smooth-spin" : undefined} />
-          </IconButton>
-        )}
-        <SettingsCog label="Today settings" heading={catchingUp ? "Catch me up" : "Today"} className="text-text-secondary">
+        <IconButton
+          label={refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
+          disabled={refreshFeeds.isPending}
+          onClick={() => refreshFeeds.mutate(undefined)}
+          className="text-text-secondary hover:text-text-primary hover:bg-white/10"
+        >
+          <RefreshIcon size={18} className={refreshFeeds.isPending ? "smooth-spin" : undefined} />
+        </IconButton>
+        <SettingsCog label="Today settings" heading="Today" className="text-text-secondary">
           {(close) => (
             <>
-              {catchingUp && <CatchupControls catchup={catchup} />}
-              {catchingUp && <div className="today-settings-row">
-                <span>Model</span>
-                <ModelPicker surface="catchup" compact disabled={catchup.loading} />
-              </div>}
-              {catchingUp && <hr />}
+              {/* "Going back": the same paper over a wider window. */}
+              <label className="today-settings-row">
+                <span>Going back</span>
+                <Select
+                  aria-label="Going back"
+                  value={String(todayDays)}
+                  onChange={(event) => setTodayDays(Number(event.target.value))}
+                  style={{ width: 220, maxWidth: "100%", height: 32, minHeight: 32, fontSize: 12.5, padding: "0 28px 0 10px" }}
+                >
+                  {TODAY_RANGES.map((range) => <option key={range.days} value={range.days}>{range.label}</option>)}
+                </Select>
+              </label>
               <div className="today-settings-row">
                 <span>Summary model</span>
                 <ModelPicker surface="today" compact />
@@ -192,11 +163,8 @@ export function TodayEditionPane() {
           Today
         </h2>
         <div className="today-dateline">
-          {/* Catching up, the page's own dateline carries the date, so the
-              masthead names the mode instead. */}
-          <span>{catchingUp ? "Catch me up" : formatWindowDate(todayWin.startsAt)}</span>
-          {catchingUp && <span className="today-dateline-progress"><span>A front page from the articles you choose</span></span>}
-          {!catchingUp && totalCount > 0 && (
+          <span>{formatWindowDate(todayWin)}</span>
+          {totalCount > 0 && (
             <span className="today-dateline-status">
               {totalCount} {totalCount === 1 ? "story" : "stories"}
               {themes.length > 0 && <> · {themes.length} {themes.length === 1 ? "theme" : "themes"}</>}
@@ -206,7 +174,7 @@ export function TodayEditionPane() {
               </>}
             </span>
           )}
-          {!catchingUp && totalCount > 0 && (
+          {totalCount > 0 && (
             <span className="today-dateline-progress">
               <span>{isFullyConsumed ? "All caught up" : `${consumedCount} of ${totalCount} done`}</span>
               <span className="tabular-nums" style={{ opacity: 0.7 }}>{progressPct}%</span>
@@ -214,7 +182,7 @@ export function TodayEditionPane() {
           )}
         </div>
         <div className="today-dateline-rule" role="presentation">
-          {!catchingUp && totalCount > 0 && (
+          {totalCount > 0 && (
             <div
               className={`today-dateline-fill ${isFullyConsumed ? "bg-success" : "bg-accent"}`}
               style={{ width: `${progressPct}%` }}
@@ -223,9 +191,6 @@ export function TodayEditionPane() {
         </div>
       </div>
 
-      {/* Body: the edition, or the "Catch me up" run in its place. */}
-        {catchingUp && <CatchupSection catchup={catchup} />}
-        {!catchingUp && <>
         {isLoading && <div aria-label="Preparing newspaper">
           <FrontPage cells={Array.from({ length: NEWSPAPER_PAGE_SIZE }, (_, index) => ({
             key: `skeleton-${index}`, node: <TodayStorySkeleton rank={rankFor(index)} />,
@@ -247,7 +212,7 @@ export function TodayEditionPane() {
           <div className="flex flex-col items-center justify-center px-6 text-center" style={{ minHeight: 220 }}>
             <NewspaperIcon size={34} strokeWidth="1.5" className="text-text-muted mb-3 opacity-45" />
             <p className="text-text-secondary" style={{ fontSize: 14, fontWeight: 600, marginBottom: 5 }}>
-              No stories yet today
+              {todayDays > 1 ? "No stories in this span" : "No stories yet today"}
             </p>
             <p className="text-text-muted" style={{ fontSize: 12, lineHeight: 1.5, maxWidth: 280 }}>
               Refresh your feeds to bring in new stories.
@@ -291,14 +256,13 @@ export function TodayEditionPane() {
             style={{ padding: "14px 16px", marginTop: 18, background: "rgba(34, 197, 94, 0.06)" }}
           >
             <p className="text-text-primary" style={{ fontSize: 13, fontWeight: 500 }}>
-              You&apos;re all caught up for today.
+              {todayDays > 1 ? "You're all caught up." : "You're all caught up for today."}
             </p>
           </div>
         )}
-        </>}
       </div>
       </div>
-      {!catchingUp && !isLoading && !isError && visibleItems.length > 0 && <nav className="today-pagination" aria-label="Newspaper pages">
+      {!isLoading && !isError && visibleItems.length > 0 && <nav className="today-pagination" aria-label="Newspaper pages">
         <button className="today-story-control" disabled={pageIndex === 0} onClick={() => changePage(pageIndex - 1)}>Previous page</button>
         <div className="today-page-position">
           <span role="status" aria-live="polite">Page {pageIndex + 1} of {pageCount}</span>

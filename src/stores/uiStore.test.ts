@@ -38,7 +38,7 @@ describe("article history", () => {
     ui().setSelectedArticleId("a");
     ui().setSelectedArticleId("b");
     ui().goBackArticle();
-    ui().openArticleFromCatchup("d");
+    ui().openArticleFromToday("d");
     expect(ui().articleHistory).toEqual(["a", "d"]);
     expect(canGoForwardArticle(ui())).toBe(false);
   });

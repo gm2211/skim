@@ -96,7 +96,6 @@ function useCommands(): PaletteCommand[] {
 
   {
     const g = "Actions";
-    add(g, { id: "action.catchup", icon: "bolt", title: "Catch me up", keywords: ["quick catch-up", "summary", "brief", "today"], run: () => ui.openCatchup() });
     add(g, { id: "action.ask", icon: "chat", title: "Ask Skim", keywords: ["ai", "search", "chat"], run: () => runAppCommand("ask-skim") });
     add(g, { id: "action.refresh", icon: "refresh", title: "Refresh all feeds", keywords: ["reload", "sync", "fetch"], run: () => refreshAll.mutate() });
     if (!isToday) {

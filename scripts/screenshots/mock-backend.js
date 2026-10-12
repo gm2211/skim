@@ -107,71 +107,6 @@
     return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
   };
 
-  // The Quick Catch-up front page: a handful of stories, biggest first, each
-  // backed by the articles behind it, then one-line briefs below the fold.
-  const catchupSource = (i, withPicture) => ({
-    id: articles[i].id,
-    title: articles[i].title,
-    publication: articles[i].feed_title,
-    url: articles[i].url,
-    published_at: articles[i].published_at,
-    image_url: withPicture ? picture(articles[i].id) : null,
-    icon_url: null,
-  });
-  const CATCHUP = {
-    stories: [
-      {
-        headline: "Vercel breach lifted OAuth tokens straight out of platform environment variables",
-        lede: "Attackers pulled live OAuth tokens from environment variables on Vercel's build platform, which puts every project that kept secrets there in scope. Vercel has rotated platform keys and says customer tokens should be rotated by hand; two large customers have already reported downstream access.",
-        article_ids: ["a001", "a012"],
-        image_url: picture("a001"),
-      },
-      {
-        headline: "Stateless agents, not model quality, are the bottleneck",
-        lede: "Four pieces land on the same worry this week: agents that cannot hold state across a session fail in ways their benchmarks never show, and the fixes being proposed are harnesses and proxies rather than bigger models.",
-        article_ids: ["a003", "a002", "a006"],
-        image_url: picture("a003"),
-      },
-      {
-        headline: "TypeScript 7.0 Beta ships the native compiler",
-        lede: "The Go port of the TypeScript compiler reaches beta with ten-times faster builds. The major version bump signals real breaking changes in the compiler API rather than a routine release.",
-        article_ids: ["a007", "a020"],
-        image_url: picture("a007"),
-      },
-      {
-        headline: "Senators push back on the plan to cut NIH and reorganize HHS",
-        lede: "Key Republican senators are pushing back on the proposed NIH cuts and HHS reorganization, so the restructuring is no longer a foregone conclusion.",
-        article_ids: ["a014"],
-        image_url: picture("a014"),
-      },
-      {
-        headline: "Meta records employee mouse movements and keystrokes for AI training",
-        lede: "Meta is capturing employee input to train internal models, raising workplace-surveillance concerns that regulators in two countries have already noticed.",
-        article_ids: ["a005"],
-        image_url: null,
-      },
-      {
-        headline: "Cloudflare rewrites Next.js as AI makes commercial open source cheap to fork",
-        lede: "Cloudflare's rewrite is the clearest example yet of a well-funded company forking a commercial open-source project now that the rewrite itself is cheap.",
-        article_ids: ["a010"],
-        image_url: picture("a010"),
-      },
-    ],
-    briefs: [
-      { text: "A new proof settles the Kakeya conjecture in three dimensions.", article_ids: ["a019"] },
-      { text: "Rust 1.94 stabilizes trait upcasting.", article_ids: ["a020"] },
-      { text: "Aphyr wrote up what they learned running a 200-node Jepsen suite.", article_ids: ["a022"] },
-      { text: "Amazon explains its next-generation storage stack.", article_ids: ["a023"] },
-    ],
-    sources: [
-      catchupSource(1, true), catchupSource(12, true), catchupSource(3, true), catchupSource(2, true),
-      catchupSource(6, false), catchupSource(7, true), catchupSource(20, false), catchupSource(14, true),
-      catchupSource(5, false), catchupSource(10, true), catchupSource(19, false), catchupSource(22, false),
-      catchupSource(23, true),
-    ],
-    article_count: 24,
-  };
-  window.__SKIM_CATCHUP__ = CATCHUP;
 
   // The Today edition: the day's stories, ordered by importance, each with
   // the articles behind it. Ledes are already written.
@@ -402,30 +337,6 @@
       model: "claude-sonnet-5",
       created_at: D.now,
     }),
-    // With `window.__SKIM_CATCHUP_WRITTEN__` set, the page is shown mid-run:
-    // that many stories have their lede, the next is being written, and the
-    // run never finishes, so a capture can show the page filling in.
-    generate_catchup_report: ({ runId }) => {
-      const written = window.__SKIM_CATCHUP_WRITTEN__;
-      // `window.__SKIM_CATCHUP_NO_PICTURES__` strips the pictures, the way a
-      // run over text-only feeds comes back.
-      const strip = (story) => (window.__SKIM_CATCHUP_NO_PICTURES__ ? { ...story, image_url: null } : story);
-      if (written == null) return { ...CATCHUP, stories: CATCHUP.stories.map(strip) };
-      // A negative count is the first pass, still reading: no page yet.
-      const stories = written < 0 ? [] : CATCHUP.stories.map((story, i) => strip(i < written ? story : { ...story, lede: "" }));
-      setTimeout(() => {
-        emit("catchup_progress", {
-          stage: written < 0 ? "reading" : "writing",
-          completed: Math.max(0, written),
-          total: CATCHUP.stories.length,
-          message: written < 0 ? "Reading 24 articles…" : `Writing story ${written + 1} of ${CATCHUP.stories.length}…`,
-          report: { ...CATCHUP, stories, briefs: [] },
-          run_id: runId,
-        });
-      }, 50);
-      return new Promise(() => {});
-    },
-    cancel_catchup_report: () => null,
     get_or_generate_today_edition: () => todayView(),
     list_today_edition_items: () => TODAY_ITEMS,
     generate_today_ledes: () => todayView(),

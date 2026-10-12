@@ -199,24 +199,27 @@ pub fn collect_candidates(
         let Some(story) = queries::get_story(conn, &rank.story_id)? else {
             continue;
         };
-        if story.last_activity_at < generated_at - LOOKBACK_SECONDS
-            || story.last_activity_at >= ends_at
-        {
+        // A page made just after midnight reaches back a day; a page over a
+        // wider window ("Going back") reaches to the start of that window.
+        let earliest = (generated_at - LOOKBACK_SECONDS).min(starts_at);
+        if story.last_activity_at < earliest || story.last_activity_at >= ends_at {
             continue;
         }
         let Some(revision) = queries::get_latest_story_revision(conn, &rank.story_id)? else {
             continue;
         };
         // A new syndicated copy can advance activity without adding news.
-        // Keep prior-day consumed stories off the page until a material revision
-        // arrives. Existing editions return before generation and stay frozen.
+        // Keep stories consumed on another page (an earlier day, or today's
+        // page when this one spans a wider window) off this one until a
+        // material revision arrives. Existing editions return before
+        // generation and stay frozen.
         let already_consumed_without_update: bool = conn.query_row(
             "SELECT EXISTS (
                 SELECT 1 FROM edition_items consumed
                 JOIN editions previous ON previous.id = consumed.edition_id
                 JOIN edition_item_story_revisions member ON member.edition_id = consumed.edition_id AND member.item_story_id = consumed.story_id
                 WHERE member.member_story_id = ?1 AND consumed.is_consumed = 1
-                  AND previous.ends_at <= ?2
+                  AND (previous.starts_at != ?2 OR previous.ends_at != ?3)
                   AND NOT EXISTS (
                     SELECT 1 FROM story_revisions revision
                     WHERE revision.story_id = ?1
@@ -224,7 +227,7 @@ pub fn collect_candidates(
                       AND revision.is_material_change = 1
                   )
             )",
-            params![rank.story_id, starts_at],
+            params![rank.story_id, starts_at, ends_at],
             |row| row.get(0),
         )?;
         if already_consumed_without_update {
@@ -1171,6 +1174,24 @@ mod tests {
         let edition = get_or_generate(&conn, DAY_START, DAY_END, just_after_midnight, 5).unwrap();
         let ids: BTreeSet<&str> = edition.items.iter().map(|item| item.snapshot.story_id.as_str()).collect();
         assert_eq!(ids, BTreeSet::from(["last-evening", "overnight"]));
+    }
+
+    #[test]
+    fn wider_window_reaches_back_to_its_start_and_skips_what_today_consumed() {
+        let conn = setup_empty();
+        add_story(&conn, "today", 2, false, GENERATED_AT - 10);
+        add_story(&conn, "yesterday", 1, false, DAY_START - 20 * 60 * 60);
+        add_story(&conn, "three-days-ago", 1, false, DAY_START - 2 * 86_400 - 3_600);
+        add_story(&conn, "last-month", 1, false, DAY_START - 20 * 86_400);
+        let today = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        let ids: BTreeSet<&str> = today.items.iter().map(|item| item.snapshot.story_id.as_str()).collect();
+        assert_eq!(ids, BTreeSet::from(["today"]));
+        set_item_consumed(&conn, &today.edition.id, "today", true, GENERATED_AT + 1).unwrap();
+
+        let week = get_or_generate(&conn, DAY_START - 6 * 86_400, DAY_END, GENERATED_AT, 5).unwrap();
+        assert_ne!(week.edition.id, today.edition.id);
+        let ids: BTreeSet<&str> = week.items.iter().map(|item| item.snapshot.story_id.as_str()).collect();
+        assert_eq!(ids, BTreeSet::from(["yesterday", "three-days-ago"]), "the week reaches to its start and skips what today's page consumed");
     }
 
     #[test]

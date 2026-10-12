@@ -34,7 +34,7 @@ const ACTIVE_FEED_TOAST_MAX_MS = 35000;
 
 function App() {
   const { showAddFeed, showSettings, showCommandPalette, selectedArticleId, listCollapsed, sidebarCollapsed, isPhone, phonePane, sidebarView } = useUiStore();
-  // Today takes the list column as a full page; "Catch me up" lives on it.
+  // Today takes the list column as a full page.
   const isToday = sidebarView.type === "today";
   const listPane = isToday ? <TodayEditionPane /> : <ArticleList />;
   const qc = useQueryClient();

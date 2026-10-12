@@ -46,7 +46,7 @@ const FALLBACK_AI: AiSettings = {
 };
 
 /**
- * Inline model picker shared by every AI surface (Quick Catch-up, Ask Skim,
+ * Inline model picker shared by every AI surface (Today, Ask Skim,
  * the article chat drawer, the Summarize menu, Today). It reads and writes
  * the same AppSettings blob Settings uses, changing only the model — never
  * the provider, which stays a Settings-only decision — and never re-runs

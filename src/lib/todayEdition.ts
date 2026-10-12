@@ -18,14 +18,41 @@ export interface TodayWindow {
  * re-derive this window (rather than caching an edition id) once the local
  * date rolls over past `endsAt`.
  */
-export function todayWindow(now: Date = new Date()): TodayWindow {
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfNextDay = new Date(startOfDay);
+export function todayWindow(now: Date = new Date(), days: number = 1): TodayWindow {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // "Going back": the window opens at local midnight `days - 1` days ago and
+  // still closes at the coming midnight, so the page is the same kind of
+  // paper over a wider span.
+  const startOfWindow = new Date(startOfToday);
+  startOfWindow.setDate(startOfWindow.getDate() - (Math.max(1, Math.floor(days)) - 1));
+  const startOfNextDay = new Date(startOfToday);
   startOfNextDay.setDate(startOfNextDay.getDate() + 1);
   return {
-    startsAt: Math.floor(startOfDay.getTime() / 1000),
+    startsAt: Math.floor(startOfWindow.getTime() / 1000),
     endsAt: Math.floor(startOfNextDay.getTime() / 1000),
   };
+}
+
+/** How far back the paper can reach, as the cog offers it. */
+export const TODAY_RANGES = [
+  { days: 1, label: "Today" },
+  { days: 2, label: "Past 2 days" },
+  { days: 3, label: "Past 3 days" },
+  { days: 7, label: "Past week" },
+  { days: 14, label: "Past two weeks" },
+] as const;
+
+/** The dateline: one day's date, or the span of a wider window. */
+export function formatWindowDate(window: TodayWindow): string {
+  const start = new Date(window.startsAt * 1000);
+  const last = new Date(window.endsAt * 1000 - 1);
+  if (start.toDateString() === last.toDateString()) {
+    return start.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  }
+  const sameMonth = start.getMonth() === last.getMonth() && start.getFullYear() === last.getFullYear();
+  const from = start.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+  const to = sameMonth ? String(last.getDate()) : last.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+  return `${from} – ${to}`;
 }
 
 /** Milliseconds until `now` needs a fresh window (i.e. until `endsAt`). */

@@ -150,7 +150,7 @@ describe("article list toolbar", () => {
     useUiStore.setState({ sidebarCollapsed: true });
     render(<ArticleList />);
     expect(screen.getByRole("button", { name: "Ask Skim" })).toBeInTheDocument();
-    // "Catch me up" lives on Today now, so no toolbar repeats it.
+    // There is no catch-up; Today is the one newspaper.
     expect(screen.queryByRole("button", { name: /catch/i })).not.toBeInTheDocument();
   });
 });

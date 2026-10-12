@@ -36,7 +36,7 @@ export const NewspaperIcon = (p: IconProps) => (
   </Icon>
 );
 
-/** A bolt: "Catch me up", the on-demand briefing on Today. */
+/** A bolt. */
 export const BoltIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M13 2L3 14h9l-1 8 10-12h-9z" />

@@ -1331,9 +1331,10 @@ private final class SQLiteDatabase: @unchecked Sendable {
         preferences: TodayRankingPreferences
     ) throws -> [TodayEditionCandidate] {
         // A page made just after midnight reaches back a day, so it is not
-        // limited to what landed in the last few minutes. Stories read in an
-        // earlier edition stay off it either way.
-        let earliest = (generatedAt ?? startsAt).addingTimeInterval(-TodayEditionBuilder.lookback)
+        // limited to what landed in the last few minutes; a page over a wider
+        // window ("Going back") reaches to the start of that window. Stories
+        // read on another page stay off it either way.
+        let earliest = min((generatedAt ?? startsAt).addingTimeInterval(-TodayEditionBuilder.lookback), startsAt)
         let stories = try query(
             """
             SELECT id, title, summary, representative_article_id,
@@ -1346,7 +1347,8 @@ private final class SQLiteDatabase: @unchecked Sendable {
                 JOIN edition_item_story_revisions member
                   ON member.edition_id = consumed.edition_id AND member.item_story_id = consumed.story_id
                 WHERE member.member_story_id = stories.id
-                  AND consumed.is_consumed = 1 AND previous.ends_at <= ?
+                  AND consumed.is_consumed = 1
+                  AND (previous.starts_at != ? OR previous.ends_at != ?)
                   AND NOT EXISTS (
                     SELECT 1 FROM story_revisions revision
                     WHERE revision.story_id = stories.id
@@ -1356,7 +1358,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
               )
             ORDER BY last_activity_at DESC, id ASC
             """,
-            [.date(earliest), .date(endsAt), .date(startsAt)]
+            [.date(earliest), .date(endsAt), .date(startsAt), .date(endsAt)]
         ) { makeStory(from: $0) }
 
         return try stories.compactMap { story in

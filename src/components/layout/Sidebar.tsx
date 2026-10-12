@@ -113,7 +113,6 @@ export function Sidebar() {
         >
           <ChatIcon />
         </button>
-        {/* The newspaper is Today everywhere; the bolt is "Catch me up", on Today itself. */}
         <button
           onClick={() => setSidebarView({ type: "today" })}
           className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"

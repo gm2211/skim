@@ -30,10 +30,10 @@ content on screen, edit `fixtures.js`. Slide order follows filename order.
 
 ## Design passes
 
-`polish.mjs` renders the screens a design pass looks at (the "Catch me up"
-front page in its empty, reading, filling-in and finished states, Today, the
-reader, the command palette, Ask Skim, Settings), each at a fixed viewport and
-DPR, so two runs can be compared side by side:
+`polish.mjs` renders the screens a design pass looks at (Today for one day and
+for a week back, its cog popover, the reader, the command palette, Ask Skim and
+its cog, Settings), each at a fixed viewport and DPR, so two runs can be
+compared side by side:
 
 ```bash
 pnpm dev                                        # in one shell
@@ -43,4 +43,4 @@ node scripts/screenshots/polish.mjs out/after
 
 By default it runs against the demo fixtures. `SKIM_MOCK=0` drives the real
 app over the dev bridge instead (see `docs/DEV_BROWSER.md`), and
-`SCENES=catchup-page,today` limits a run to the scenes named.
+`SCENES=today-cog,today` limits a run to the scenes named.

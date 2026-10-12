@@ -79,18 +79,6 @@ const STEPS = [
     },
   },
   {
-    name: "03-catchup",
-    caption: "Super-quick catch-up — the week in ten takeaways",
-    async run(p) {
-      await p.getByText("Today", { exact: true }).first().click();
-      await p.waitForTimeout(400);
-      await p.getByRole("button", { name: "Catch me up" }).click();
-      await p.waitForTimeout(500);
-      await p.getByRole("button", { name: /run catch-up/i }).first().click();
-      await p.waitForTimeout(1500);
-    },
-  },
-  {
     name: "04-ask",
     caption: "Ask Skim — chat across every feed, with citations",
     async run(p) {

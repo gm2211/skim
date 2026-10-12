@@ -69,11 +69,9 @@ describe("CommandPalette", () => {
   it("runs the top match on Enter and closes", async () => {
     const user = userEvent.setup();
     renderPalette();
-    await user.type(screen.getByRole("combobox"), "catch");
+    await user.type(screen.getByRole("combobox"), "today");
     await user.keyboard("{Enter}");
-    // "Catch me up" opens Today with the catch-up showing.
     await waitFor(() => expect(useUiStore.getState().sidebarView).toEqual({ type: "today" }));
-    expect(useUiStore.getState().todayMode).toBe("catchup");
     expect(useUiStore.getState().showCommandPalette).toBe(false);
   });
 

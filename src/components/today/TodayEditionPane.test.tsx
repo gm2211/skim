@@ -21,10 +21,6 @@ vi.mock("../../services/commands", () => ({
   generateTodayEditorial: vi.fn(),
   getTodayStoryImage: vi.fn(async () => null),
   TODAY_LEDE_PROGRESS_EVENT: "today_lede_progress",
-  generateCatchupReport: vi.fn(),
-  cancelCatchupReport: vi.fn(),
-  CATCHUP_PROGRESS_EVENT: "catchup_progress",
-  CATCHUP_CANCELLED: "Catch-up cancelled",
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
   listFeeds: vi.fn(async () => []),
@@ -161,7 +157,7 @@ beforeEach(() => {
   useUiStore.setState({ selectedArticleId: null, showSettings: false });
   vi.mocked(commands.refreshAllFeeds).mockResolvedValue(1);
   vi.mocked(commands.triageArticles).mockResolvedValue({ triaged_count: 0, batches: 0, errors: [] });
-  useUiStore.setState({ isPhone: false, sidebarCollapsed: false, sidebarView: { type: "today" }, todayMode: "edition" });
+  useUiStore.setState({ isPhone: false, sidebarCollapsed: false, sidebarView: { type: "today" }, todayDays: 1 });
   vi.mocked(commands.getSettings).mockResolvedValue(DEFAULT_SETTINGS);
   vi.mocked(commands.generateTodayEditorial).mockImplementation((_id: string) => new Promise(() => {}));
 });
@@ -335,49 +331,27 @@ describe("TodayEditionPane", () => {
     expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "false");
   });
 
-  it("puts \"Catch me up\" on the page in place of the edition, and takes it off again", async () => {
+  it("reaches back from the cog: a wider window asks for the same kind of page over that span", async () => {
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
     await screen.findByText("Default snapshot title");
-    expect(screen.queryByRole("region", { name: "Catch me up" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /catch/i })).not.toBeInTheDocument();
+    const calls = vi.mocked(commands.getOrGenerateTodayEdition).mock.calls;
+    const first = calls[calls.length - 1];
+    expect(first[1] - first[0]).toBe(24 * 60 * 60);
 
-    const bolt = screen.getByRole("button", { name: "Catch me up" });
-    expect(bolt).toHaveAttribute("aria-pressed", "false");
-    await userEvent.click(bolt);
-
-    // The masthead stays; the edition gives way to the catch-up page, and
-    // the refresh icon becomes the run.
-    expect(screen.getByRole("heading", { name: "Today" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Catch me up" })).toBeInTheDocument();
-    expect(screen.queryByText("Default snapshot title")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Refresh feeds" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Run (catch-up|again)$/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Catch me up" })).toHaveAttribute("aria-pressed", "true");
-    expect(useUiStore.getState().todayMode).toBe("catchup");
-
-    // What to include, how far back and the model all sit in Today's cog.
     await userEvent.click(screen.getByRole("button", { name: "Today settings" }));
     const dialog = screen.getByRole("dialog", { name: "Today settings" });
-    expect(within(dialog).getByLabelText("Include")).toBeInTheDocument();
-    expect(within(dialog).getByLabelText("Going back")).toBeInTheDocument();
-    expect(within(dialog).getAllByTestId("model-picker").map((picker) => picker.getAttribute("data-surface"))).toEqual(["catchup", "today"]);
-    await userEvent.keyboard("{Escape}");
-
-    await userEvent.click(screen.getByRole("button", { name: "Catch me up" }));
-    expect(screen.queryByRole("region", { name: "Catch me up" })).not.toBeInTheDocument();
-    expect(await screen.findByText("Default snapshot title")).toBeInTheDocument();
-  });
-
-  it("opens straight onto \"Catch me up\" when asked to catch up from elsewhere", async () => {
-    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
-    useUiStore.getState().openCatchup();
-    renderPane();
-    expect(screen.getByRole("region", { name: "Catch me up" })).toBeInTheDocument();
-    expect(useUiStore.getState().sidebarView).toEqual({ type: "today" });
-
-    // Picking Today from the sidebar lands back on the edition.
-    useUiStore.getState().setSidebarView({ type: "today" });
-    await waitFor(() => expect(screen.queryByRole("region", { name: "Catch me up" })).not.toBeInTheDocument());
+    await userEvent.selectOptions(within(dialog).getByLabelText("Going back"), "7");
+    expect(useUiStore.getState().todayDays).toBe(7);
+    await waitFor(() => {
+      const last = calls[calls.length - 1];
+      expect(last[1]).toBe(first[1]);
+      expect(last[0]).toBeLessThan(first[0]);
+    });
+    // The masthead names the span, and Today's title stays.
+    expect(screen.getByRole("heading", { name: "Today" })).toBeInTheDocument();
+    expect(screen.getByText(/\u2013/)).toBeInTheDocument();
   });
 
   it("keeps the today model picker usable while ledes are being written", async () => {

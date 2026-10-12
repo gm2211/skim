@@ -420,16 +420,21 @@ private struct TodayStoryView: View {
     private var hero: some View {
         if let image {
             ZStack(alignment: .bottomLeading) {
-                AsyncImage(url: image) { phase in
-                    if let picture = phase.image {
-                        picture.resizable().scaledToFill()
-                    } else {
-                        accent.opacity(0.25)
+                // The picture fills a fixed box; laid out on its own a filled
+                // image reports its overflowing width and widens the page.
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 440)
+                    .overlay {
+                        AsyncImage(url: image) { phase in
+                            if let picture = phase.image {
+                                picture.resizable().scaledToFill()
+                            } else {
+                                accent.opacity(0.25)
+                            }
+                        }
                     }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 440)
-                .clipped()
+                    .clipped()
                 LinearGradient(colors: [.clear, SkimStyle.background.opacity(0.65), SkimStyle.background.opacity(0.96)],
                                startPoint: .init(x: 0.5, y: 0.25), endPoint: .bottom)
                 VStack(alignment: .leading, spacing: 10) {
@@ -475,12 +480,15 @@ private struct TodayStoryView: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let image {
-                AsyncImage(url: image) { phase in
-                    if let picture = phase.image { picture.resizable().scaledToFill() } else { accent.opacity(0.2) }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 190)
-                .clipped()
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 190)
+                    .overlay {
+                        AsyncImage(url: image) { phase in
+                            if let picture = phase.image { picture.resizable().scaledToFill() } else { accent.opacity(0.2) }
+                        }
+                    }
+                    .clipped()
             } else {
                 Rectangle().fill(accent).frame(height: 3)
             }

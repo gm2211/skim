@@ -495,18 +495,25 @@ private struct CatchUpImage: View {
     var url: URL
 
     var body: some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().scaledToFill()
-            case .empty:
-                SkimStyle.surface
-            default:
-                SkimStyle.surface.opacity(0.5)
+        // Color.clear takes exactly the size it is offered; the filled picture
+        // drawn over it is clipped instead of reporting its overflowing size,
+        // which pushed the wide lead past the screen edge.
+        Color.clear
+            .overlay {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .empty:
+                        SkimStyle.surface
+                    default:
+                        SkimStyle.surface.opacity(0.5)
+                    }
+                }
             }
-        }
-        .overlay(RoundedRectangle(cornerRadius: 0).stroke(Color.white.opacity(0.06), lineWidth: 1))
-        .accessibilityHidden(true)
+            .clipped()
+            .overlay(RoundedRectangle(cornerRadius: 0).stroke(Color.white.opacity(0.06), lineWidth: 1))
+            .accessibilityHidden(true)
     }
 }
 

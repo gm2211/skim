@@ -10,7 +10,10 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 - `endpointFor(provider, credential, { appTitle })`: the browser-direct base URL, headers and web
   search mechanism for each provider.
 - `listOpenRouterModels`, `listModelsForEndpoint`, `readOpenRouterKeyInfo`: model discovery. Lists
-  always come from the provider, never a hard-coded table.
+  always come from the provider, never a hard-coded table. `listModelsForEndpoint` (Grok, Groq,
+  Hugging Face) lists dated snapshot ids such as `grok-4.20-0309-reasoning` last, then orders the
+  rest newest first by the provider's `created` time, falling back to name (`compareListedModels`,
+  `isDatedSnapshot`).
 - `buildXaiResponsesBody` / `parseXaiResponsesPayload`: Grok's `/responses` endpoint, the only place
   its web_search tool exists.
 

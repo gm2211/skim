@@ -94,13 +94,34 @@ export async function listOpenRouterModels(key: string, signal?: AbortSignal): P
     .sort((a, b) => fitRank(a.analysisFit) - fitRank(b.analysisFit) || a.name.localeCompare(b.name));
 }
 
+/** True when the id pins a dated snapshot ("grok-4.20-0309-reasoning", "gpt-4o-2024-08-06",
+ * "claude-3-5-sonnet-20241022"): a full YYYYMMDD / YYYY-MM-DD date, or a lone four-digit MMDD segment
+ * that is a real month and day. Requiring a real month keeps context-size segments such as Groq's
+ * "llama3-70b-8192" from reading as dates. */
+export function isDatedSnapshot(id: string): boolean {
+  return /(?:^|[-_:@])20\d{2}-?(?:0[1-9]|1[0-2])-?(?:0[1-9]|[12]\d|3[01])(?=$|[-_.:])/.test(id)
+    || /(?:^|[-_:@])(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])(?=$|[-_:])/.test(id);
+}
+
+type ListedModel = { name: string; snapshot: boolean; created?: number };
+
+/** Picker order for an OpenAI-compatible `/models` list, decided from what the provider sent rather
+ * than from model names we know: undated ids before pinned dated snapshots, then the provider's
+ * release time (`created`, newest first) when both rows carry it, then name. */
+export function compareListedModels(a: ListedModel, b: ListedModel): number {
+  if (a.snapshot !== b.snapshot) return a.snapshot ? 1 : -1;
+  if (a.created !== undefined && b.created !== undefined && a.created !== b.created) return b.created - a.created;
+  return a.name.localeCompare(b.name);
+}
+
 /**
  * listOpenRouterModels' sibling for xAI and Groq: the same `GET {baseUrl}/models` OpenAI-compatible
  * route every browser-direct endpoint answers (see endpoints.ts). Deliberately simpler than
  * listOpenRouterModels above rather than sharing its body: xAI/Groq's `/models` responses carry
  * neither OpenRouter's `supported_parameters` (so there is nothing to filter "tools support" or
  * "reasoning" on) nor its per-token `pricing` block, so guessing either would just be fabricating a
- * number this response never sent. Every model that answers with an id is kept and sorted by name;
+ * number this response never sent. Every model that answers with an id is kept and ordered by
+ * compareListedModels (dated snapshots last, then newest `created` first, then name);
  * `analysisFit` stays 'standard' across the board rather than reusing OpenRouter's name-sniffing
  * heuristic, which was tuned against OpenRouter's own model-name conventions (e.g. "sonar-pro") that
  * do not apply to xAI's or Groq's catalog.
@@ -108,12 +129,17 @@ export async function listOpenRouterModels(key: string, signal?: AbortSignal): P
 export async function listModelsForEndpoint(endpoint: CloudEndpoint, signal?: AbortSignal): Promise<OpenRouterModel[]> {
   const response = await fetch(`${endpoint.baseUrl}/models`, { signal, redirect: 'error', headers: { Authorization: `Bearer ${endpoint.apiKey}`, ...endpoint.headers } });
   const payload = await response.json().catch(() => ({})) as {
-    data?: Array<{ id?: string; name?: string }>;
+    data?: Array<{ id?: string; name?: string; created?: number }>;
     error?: { message?: string };
   };
   if (!response.ok) throw new Error(safeProviderErrorText(payload, endpoint.apiKey) || 'Could not load models.');
   return (payload.data ?? [])
-    .filter((model): model is { id: string; name?: string } => Boolean(model.id))
-    .map(model => ({ id: model.id, name: model.name || model.id, analysisFit: 'standard' as const, reasoning: false }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .filter((model): model is { id: string; name?: string; created?: number } => Boolean(model.id))
+    .map(model => ({
+      model: { id: model.id, name: model.name || model.id, analysisFit: 'standard' as const, reasoning: false },
+      snapshot: isDatedSnapshot(model.id),
+      created: typeof model.created === 'number' && Number.isFinite(model.created) ? model.created : undefined,
+    }))
+    .sort((a, b) => compareListedModels({ ...a, name: a.model.name }, { ...b, name: b.model.name }))
+    .map(entry => entry.model);
 }

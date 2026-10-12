@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 // Built output: sources use NodeNext `.js` imports.
-import { endpointFor, grok, groq, NOT_RECOMMENDED_REASON, openrouter, orderServices, parseSseLine, parseXaiResponsesPayload, streamChatCompletions, type ServiceKey } from '../dist/index.js';
+import { endpointFor, grok, groq, isDatedSnapshot, NOT_RECOMMENDED_REASON, openrouter, orderServices, parseSseLine, parseXaiResponsesPayload, streamChatCompletions, type ServiceKey } from '../dist/index.js';
 
 type Call = { url: string; init?: RequestInit };
 function fakeFetch(respond: (call: Call) => Response): Call[] {
@@ -77,6 +77,32 @@ test('model lists come from the provider', async () => {
   assert.deepEqual(await grok().listModels('k'), [{ id: 'grok-a', name: 'Grok A' }, { id: 'grok-b', name: 'grok-b' }]);
   assert.deepEqual(await openrouter().listModels('k'), [{ id: 'good', name: 'GPT-5.6', recommended: true }]);
   assert.ok(calls.every(call => call.init?.redirect === 'error'));
+});
+
+test('dated snapshots sink below current models, newest release first', async () => {
+  fakeFetch(() => new Response(JSON.stringify({ data: [
+    { id: 'grok-4.20-0309-non-reasoning', created: 1773000000 },
+    { id: 'grok-4.20-0309-reasoning', created: 1773000000 },
+    { id: 'grok-4.20-multi-agent-0309', created: 1773000000 },
+    { id: 'grok-4.3', created: 1776000000 },
+    { id: 'grok-4.5', created: 1780000000 },
+    { id: 'grok-4.7', created: 1790000000 },
+    { id: 'grok-4.6', created: 1785000000 },
+  ] })));
+  assert.deepEqual((await grok().listModels('k')).map(model => model.id), [
+    'grok-4.7', 'grok-4.6', 'grok-4.5', 'grok-4.3',
+    'grok-4.20-0309-non-reasoning', 'grok-4.20-0309-reasoning', 'grok-4.20-multi-agent-0309',
+  ]);
+});
+
+test('without release times, snapshots still sink and the rest stay in name order', async () => {
+  fakeFetch(() => new Response(JSON.stringify({ data: [{ id: 'gpt-4o-2024-08-06' }, { id: 'llama3-70b-8192' }, { id: 'gemma2-9b-it' }] })));
+  assert.deepEqual((await groq().listModels('k')).map(model => model.id), ['gemma2-9b-it', 'llama3-70b-8192', 'gpt-4o-2024-08-06']);
+});
+
+test('snapshot detection needs a real date, not any run of digits', () => {
+  for (const id of ['grok-4.20-0309-reasoning', 'grok-4.20-multi-agent-0309', 'gpt-4o-2024-08-06', 'claude-3-5-sonnet-20241022', 'gpt-4-1106-preview']) assert.equal(isDatedSnapshot(id), true, id);
+  for (const id of ['grok-4.7', 'grok-4.20', 'llama3-70b-8192', 'mixtral-8x7b-32768', 'meta-llama/Llama-3.1-8B-Instruct', 'qwen3-32b']) assert.equal(isDatedSnapshot(id), false, id);
 });
 
 test('provider model discovery forwards cancellation signal', async () => {

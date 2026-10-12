@@ -365,12 +365,17 @@ describe("CatchupPane", () => {
       }),
     );
     render(<CatchupPane />);
+    const user = userEvent.setup();
 
+    // The model lives behind the cog, as on Today, not in the masthead.
+    expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Catch-up settings" }));
     const picker = screen.getByTestId("model-picker");
     expect(picker).toHaveAttribute("data-surface", "catchup");
     expect(picker).toHaveAttribute("data-disabled", "false");
 
-    await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+    await user.click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
+    await user.click(screen.getByRole("button", { name: "Catch-up settings" }));
     expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "true");
 
     await act(async () => {

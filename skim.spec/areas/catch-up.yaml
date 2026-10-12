@@ -18,6 +18,18 @@ behaviors:
     source:
       text: looks great at first but then loses shape
       reference: Giulio, project chat, 2026-10-11
+  - id: same-paper-as-today
+    description: >-
+      The Catch-up front page follows the Today design: the masthead shows only the run's own
+      controls (Include, Going back, Run) with the model behind a cog popover, and every slot
+      without a picture gets a text treatment (a feature sets its lede as a pull quote under an
+      accent rule, a story gets a rule, the lead lists its coverage), so a day with no pictures
+      still reads as a full page.
+    source:
+      text: >-
+        did you ship this implementation and philosophy? there's a thread that's refining the
+        newspaper view and I'm not sure it got the memo
+      reference: Giulio, project thread "Today page design options", 2026-10-12
   - id: cited-sources
     description: >-
       Each story groups its coverage and cites every source it used; tapping a source opens that

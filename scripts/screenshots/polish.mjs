@@ -34,7 +34,8 @@ const STILL_CSS = `
 const CATCHUP = '[role="region"][aria-labelledby="catchup-title"]';
 
 const openCatchup = async (p) => {
-  await p.locator('[aria-label="Quick Catch-up"]').first().click();
+  // The sidebar row is the one place Catch-up is reachable while the sidebar is open.
+  await p.getByText("Quick Catch-up", { exact: true }).first().click();
   await p.locator(CATCHUP).waitFor({ state: "visible" });
   await p.waitForTimeout(300);
 };
@@ -86,6 +87,14 @@ const SCENES = [
     name: "catchup-first-story",
     viewport: TALL,
     init: () => { window.__SKIM_CATCHUP_WRITTEN__ = 0; window.__SKIM_CATCHUP_NO_PICTURES__ = true; },
+    run: async (p) => { await runCatchup(p); await unclip(p); },
+    target: CATCHUP,
+  },
+  // A finished page on a day with no pictures at all.
+  {
+    name: "catchup-no-pictures",
+    viewport: TALL,
+    init: () => { window.__SKIM_CATCHUP_NO_PICTURES__ = true; },
     run: async (p) => { await runCatchup(p); await unclip(p); },
     target: CATCHUP,
   },

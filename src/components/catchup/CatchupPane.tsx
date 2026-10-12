@@ -18,6 +18,9 @@ import { useSettings } from "../../hooks/useSettings";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { Select } from "../ui/Select";
 import { ModelPicker } from "../common/ModelPicker";
+import { IconButton } from "../common/IconButton";
+import { CogIcon } from "../ui/icons";
+import "../today/TodayFrontPage.css";
 import { CatchupFrontPage, CatchupGhostPage } from "./CatchupFrontPage";
 
 const CACHE_TTL_MS = 30 * 60 * 1000;
@@ -106,6 +109,19 @@ export function CatchupPane() {
   // clobber a newer one — and so an unmount or a scope change mid-run knows
   // what to tell the backend to cancel.
   const activeRun = useRef<string | null>(null);
+  // The model lives behind a cog, as on Today: the masthead shows only what
+  // changes a run (scope, range) and the run button itself.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const close = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent ? event.key === "Escape" : !settingsRef.current?.contains(event.target as Node)) setSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close, true);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close, true); };
+  }, [settingsOpen]);
   const [stopped, setStopped] = useState(false);
   const previousSettings = useRef(settings);
 
@@ -264,12 +280,6 @@ export function CatchupPane() {
               Quick Catch-up
             </h2>
             <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
-              {!providerUnavailable && (
-                <label className="catchup-control">
-                  <span className="catchup-control-label">Model</span>
-                  <ModelPicker surface="catchup" disabled={loading} controlStyle={CONTROL_STYLE} />
-                </label>
-              )}
               <label className="catchup-control">
                 <span className="catchup-control-label">Include</span>
                 <Select
@@ -325,6 +335,30 @@ export function CatchupPane() {
                 >
                   {report ? "Run again" : "Run catch-up"}
                 </button>
+              )}
+              {!providerUnavailable && (
+                <div ref={settingsRef} className="relative">
+                  <IconButton
+                    label="Catch-up settings"
+                    aria-expanded={settingsOpen}
+                    aria-haspopup="dialog"
+                    onClick={() => setSettingsOpen(!settingsOpen)}
+                    className={`hover:text-text-primary hover:bg-white/10 ${settingsOpen ? "text-text-primary bg-white/10" : "text-text-secondary"}`}
+                  >
+                    <CogIcon size={18} />
+                  </IconButton>
+                  {settingsOpen && (
+                    <div className="today-settings" role="dialog" aria-label="Catch-up settings">
+                      <div className="today-settings-heading">Quick Catch-up</div>
+                      <div className="today-settings-row">
+                        <span>Model</span>
+                        <ModelPicker surface="catchup" compact disabled={loading} />
+                      </div>
+                      <hr />
+                      <button className="today-settings-row" onClick={() => { setSettingsOpen(false); useUiStore.getState().setShowSettings(true); }}>AI settings…</button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

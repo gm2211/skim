@@ -330,8 +330,10 @@ export function CatchupFrontPage({ report, dateline, scopeSummary, status, loadi
   );
 
   // Second tier: picture on top, then the headline and lede.
+  // A feature with no picture sets its lede as a pull quote under an accent
+  // rule, so the slot reads as composed rather than as a missing image.
   const renderFeature = (story: CatchupStory, index: number, writing: boolean) => (
-    <article key={`${index}-${story.headline}`} className="story-rise-in catchup-feature">
+    <article key={`${index}-${story.headline}`} className={`story-rise-in catchup-feature ${story.image_url ? "" : "catchup-feature--text"}`}>
       {story.image_url && (
         <StoryImage
           src={story.image_url}
@@ -348,7 +350,7 @@ export function CatchupFrontPage({ report, dateline, scopeSummary, status, loadi
 
   // Everything else: text beside a small thumbnail.
   const renderStory = (story: CatchupStory, index: number, writing: boolean, wide = false) => (
-    <article key={`${index}-${story.headline}`} className={`story-rise-in catchup-story ${wide ? "catchup-story-wide" : ""}`}>
+    <article key={`${index}-${story.headline}`} className={`story-rise-in catchup-story ${wide ? "catchup-story-wide" : ""} ${story.image_url ? "" : "catchup-story--text"}`}>
       <div className="min-w-0 flex-1">
         {renderKicker(story.article_ids)}
         {renderHeadline(story, 17.5)}

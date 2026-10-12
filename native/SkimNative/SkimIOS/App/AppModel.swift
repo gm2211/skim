@@ -81,10 +81,10 @@ enum ArticleListMode: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
-        case .unread: "circle.fill"
-        case .all: "list.bullet"
-        case .recent: "clock"
-        case .starred: "star"
+        case .unread: SkimIcon.unread
+        case .all: SkimIcon.allArticles
+        case .recent: SkimIcon.recent
+        case .starred: SkimIcon.starred
         }
     }
 }

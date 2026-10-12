@@ -41,7 +41,7 @@ struct AIInboxView: View {
             } else if items.isEmpty {
                 ContentUnavailableView(
                     "Inbox zero",
-                    systemImage: "tray",
+                    systemImage: SkimIcon.aiInbox,
                     description: Text("No unread articles. Refresh your feeds to fill the AI Inbox.")
                 )
                 .foregroundStyle(SkimStyle.secondary)
@@ -72,14 +72,14 @@ struct AIInboxView: View {
             Text("AI Inbox").font(.headline)
             Spacer()
             Menu {
-                Button("Rate new articles", systemImage: "sparkles") {
+                Button("Rate new articles", systemImage: SkimIcon.rate) {
                     Task { await rateNewArticles() }
                 }
-                Button("Re-rate everything", systemImage: "arrow.clockwise") {
+                Button("Re-rate everything", systemImage: SkimIcon.refresh) {
                     Task { await rateNewArticles(rerateAll: true) }
                 }
             } label: {
-                Image(systemName: "arrow.clockwise")
+                Image(systemName: SkimIcon.refresh)
                     .frame(width: 44, height: 44)
             }
             .accessibilityLabel("Rate articles")
@@ -136,14 +136,14 @@ struct AIInboxView: View {
                         Task { await model.toggleStar(item.article); await rank() }
                     } label: {
                         Label(item.article.isStarred ? "Unsave" : "Save",
-                              systemImage: item.article.isStarred ? "star.slash" : "star")
+                              systemImage: item.article.isStarred ? SkimIcon.unstar : SkimIcon.star)
                     }
                     .tint(.yellow)
                 }
                 .contextMenu {
                     Button("Dismiss", systemImage: "checkmark") { dismissArticle(item.article) }
                     Button(item.article.isStarred ? "Unsave" : "Save",
-                           systemImage: item.article.isStarred ? "star.slash" : "star") {
+                           systemImage: item.article.isStarred ? SkimIcon.unstar : SkimIcon.star) {
                         Task { await model.toggleStar(item.article); await rank() }
                     }
                 }
@@ -293,7 +293,7 @@ private struct InboxArticleRow: View {
                             .lineLimit(1)
                     }
                     if item.article.isStarred {
-                        Image(systemName: "star.fill")
+                        Image(systemName: SkimIcon.starFilled)
                             .font(.system(size: 11))
                             .foregroundStyle(.yellow)
                     }

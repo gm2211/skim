@@ -10,6 +10,44 @@ enum SkimStyle {
     static let accent = Color(red: 0.39, green: 0.64, blue: 1.0)
 }
 
+/// One SF Symbol per action or destination, shared by every iOS surface so the
+/// same thing never shows two icons. Mirrors the desktop icon set
+/// (src/components/ui/icons.tsx): Today is the newspaper, Quick Catch-up the
+/// bolt, AI Inbox the tray.
+enum SkimIcon {
+    // Destinations
+    static let today = "newspaper"
+    static let catchUp = "bolt"
+    static let aiInbox = "tray"
+    static let allArticles = "list.bullet"
+    static let unread = "circle.fill"
+    static let starred = "star"
+    static let recent = "clock"
+    static let search = "magnifyingglass"
+    static let settings = "gearshape"
+    static let feeds = "line.3.horizontal"
+
+    // Actions
+    static let chat = "bubble.left"
+    static let summarize = "sparkles"
+    static let addFeed = "plus"
+    static let refresh = "arrow.clockwise"
+    static let more = "ellipsis"
+    static let back = "chevron.left"
+    static let reader = "book"
+    static let web = "globe"
+    static let openExternal = "arrow.up.right.square"
+    static let star = "star"
+    static let starFilled = "star.fill"
+    static let unstar = "star.slash"
+    static let markRead = "checkmark.circle"
+    static let markUnread = "circle"
+    static let pin = "pin"
+    static let unpin = "pin.slash"
+    static let rate = "list.number"
+    static let discussion = "bubble.left.and.bubble.right"
+}
+
 extension View {
     func skimGlass(cornerRadius: CGFloat = 22) -> some View {
         self

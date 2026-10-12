@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -18,6 +18,7 @@ vi.mock("../../services/commands", () => ({
   listTodayEditionItems: vi.fn(),
   setTodayEditionItemConsumed: vi.fn(),
   generateTodayEditorial: vi.fn(),
+  getTodayStoryImage: vi.fn(async () => null),
   TODAY_LEDE_PROGRESS_EVENT: "today_lede_progress",
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
@@ -71,7 +72,7 @@ function makeItem(overrides: Partial<TodayEditionItem>): TodayEditionItem {
     position: 0,
     section: "top_stories",
     snapshot_title: "Default snapshot title",
-    snapshot_summary: "Default summary",
+    snapshot_summary: "Default summary of the report, long enough to read as reporting.",
     snapshot_delta_summary: null,
     has_material_update: false,
     snapshot_source_count: 1,
@@ -166,18 +167,37 @@ afterEach(() => {
 });
 
 describe("TodayEditionPane", () => {
-  it("uses a report image, skips tracking pixels, and removes a failed image", async () => {
-    vi.mocked(commands.getArticle).mockResolvedValue({
-      id: "article-default", url: "https://example.com/news/story",
-      content_html: '<img src="/pixel.gif" width="1"><img src="/photo.jpg" width="900">',
-    } as Awaited<ReturnType<typeof commands.getArticle>>);
-    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+  it("sets the lead with the report's image and falls back to its words when the image fails", async () => {
+    vi.mocked(commands.getTodayStoryImage).mockResolvedValue("https://example.com/photo.jpg");
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({ editorial: editorial("A supported summary of what happened today.") })]));
     renderPane();
     const image = await screen.findByRole("img", { name: "Image from report: Default snapshot title" });
     expect(image).toHaveAttribute("src", "https://example.com/photo.jpg");
+    expect(commands.getTodayStoryImage).toHaveBeenCalledWith(["article-default"]);
     fireEvent.error(image);
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Default snapshot title" })).toBeVisible();
+    // With no picture the report's own quote carries the lead.
+    expect(screen.getByText("Supporting passage from the report.")).toBeVisible();
+  });
+
+  it("leaves link-only feed stubs off the page", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({ snapshot_summary: "Comments" })]));
+    renderPane();
+    await screen.findByRole("button", { name: "Default snapshot title" });
+    expect(screen.queryByText("Comments")).not.toBeInTheDocument();
+  });
+
+  it("sets a supported figure large on a feature and a report quote where it has none", async () => {
+    const items = Array.from({ length: 6 }, (_, index) => makeItem({ story_id: `s-${index}`, snapshot_title: `Story ${index + 1}`,
+      editorial: { ...editorial(`Summary ${index + 1} of the reported development.`), figure: index === 4 ? { value: "40M", label: "bookings exposed" } : null } }));
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView(items));
+    renderPane();
+    const figureStory = (await screen.findByRole("heading", { name: "Story 5" })).closest("article")!;
+    expect(within(figureStory as HTMLElement).getByText("40M")).toBeVisible();
+    expect(within(figureStory as HTMLElement).getByText("bookings exposed")).toBeVisible();
+    const quoteStory = screen.getByRole("heading", { name: "Story 6" }).closest("article")!;
+    expect(within(quoteStory as HTMLElement).getByText("Supporting passage from the report.")).toBeVisible();
   });
 
   it("shows synthesized summaries by theme and distinguishes shared coverage from syndicated copies", async () => {
@@ -195,7 +215,7 @@ describe("TodayEditionPane", () => {
     expect(screen.getByRole("heading", { name: "Shared event" })).toBeVisible();
     expect(screen.queryByRole("heading", { name: "One syndicated report" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "2 reports" }));
-    expect(screen.getByText("Supporting passage from the report.")).toBeVisible();
+    expect(within(screen.getByLabelText("Story reports")).getByText("Supporting passage from the report.")).toBeVisible();
   });
 
   it("shows later editorial summaries on the next newspaper page", async () => {
@@ -212,16 +232,16 @@ describe("TodayEditionPane", () => {
     let loadEdition!: (view: TodayEditionView) => void;
     vi.mocked(commands.getOrGenerateTodayEdition).mockReturnValue(new Promise((resolve) => { loadEdition = resolve; }));
     renderPane();
-    expect(screen.getAllByRole("status", { name: "Preparing story" })).toHaveLength(6);
+    expect(screen.getAllByRole("status", { name: "Preparing story" })).toHaveLength(10);
     expect(screen.queryByText("Loading...")).not.toBeInTheDocument();
-    const first = makeItem({ story_id: "one", snapshot_title: "First real headline", snapshot_summary: "Raw first excerpt" });
-    const second = makeItem({ story_id: "two", snapshot_title: "Second real headline", snapshot_summary: "Raw second excerpt" });
+    const first = makeItem({ story_id: "one", snapshot_title: "First real headline", snapshot_summary: "Raw first excerpt from the feed, long enough to read as reporting." });
+    const second = makeItem({ story_id: "two", snapshot_title: "Second real headline", snapshot_summary: "Raw second excerpt from the feed, long enough to read as reporting." });
     const view = makeView([first, second]);
     await act(async () => loadEdition(view));
     await waitFor(() => expect(commands.generateTodayEditorial).toHaveBeenCalledTimes(1));
     expect(screen.getAllByRole("status", { name: "Preparing story" })).toHaveLength(2);
     expect(screen.queryByText("First real headline")).not.toBeInTheDocument();
-    expect(screen.queryByText("Raw first excerpt")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Raw first excerpt/)).not.toBeInTheDocument();
     const calls = vi.mocked(listen).mock.calls;
     const callback = calls[calls.length - 1][1];
     const requestId = vi.mocked(commands.generateTodayEditorial).mock.calls[0][1];
@@ -233,30 +253,29 @@ describe("TodayEditionPane", () => {
     expect(screen.getByText("The completed, supported summary.")).toBeVisible();
     expect(screen.getAllByRole("status", { name: "Preparing story" })).toHaveLength(1);
     expect(screen.queryByText("Second real headline")).not.toBeInTheDocument();
-    expect(screen.queryByText("Raw second excerpt")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Raw second excerpt/)).not.toBeInTheDocument();
   });
 
   it("paginates larger editions without dropping stories and resets on a theme filter", async () => {
-    const items = Array.from({ length: 20 }, (_, index) => makeItem({ story_id: `page-story-${index}`,
-      snapshot_title: `Story ${index + 1}`, editorial: editorial(`Summary ${index + 1}`, index < 18 ? "Technology" : "Local") }));
+    const items = Array.from({ length: 25 }, (_, index) => makeItem({ story_id: `page-story-${index}`,
+      snapshot_title: `Story ${index + 1}`, editorial: editorial(`Summary ${index + 1}`, index < 23 ? "Technology" : "Local") }));
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView(items));
     renderPane();
-    await screen.findByText("Page 1 of 4");
-    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(6);
+    await screen.findByText("Page 1 of 3");
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(10);
     expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Next page" }));
-    expect(screen.getByText("Page 2 of 4")).toBeVisible();
-    expect(screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Story 7", "Story 8", "Story 9", "Story 10", "Story 11", "Story 12"]);
+    expect(screen.getByText("Page 2 of 3")).toBeVisible();
+    expect(screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(Array.from({ length: 10 }, (_, index) => `Story ${index + 11}`));
     await userEvent.click(screen.getByRole("button", { name: "Next page" }));
-    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
-    expect(screen.getByText("Page 4 of 4")).toBeVisible();
-    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(2);
+    expect(screen.getByText("Page 3 of 3")).toBeVisible();
+    expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(5);
     expect(screen.getByRole("button", { name: "Next page" })).toBeDisabled();
     await userEvent.click(screen.getByRole("button", { name: "Local" }));
     expect(screen.getByText("Page 1 of 1")).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Story 19" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Story 24" })).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "All stories" }));
-    expect(screen.getByText("Page 1 of 4")).toBeVisible();
+    expect(screen.getByText("Page 1 of 3")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Edition size" }));
     expect(useUiStore.getState().settingsTab).toBe("sync");
     expect(useUiStore.getState().showSettings).toBe(true);
@@ -277,7 +296,9 @@ describe("TodayEditionPane", () => {
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
     await screen.findByText("Default snapshot title");
-    expect(screen.getByTestId("model-picker")).toHaveAttribute("data-surface", "today");
+    expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Today settings" }));
+    expect(within(screen.getByRole("dialog", { name: "Today settings" })).getByTestId("model-picker")).toHaveAttribute("data-surface", "today");
     expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "false");
   });
 
@@ -288,7 +309,10 @@ describe("TodayEditionPane", () => {
     });
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
+    await userEvent.click(await screen.findByRole("button", { name: "Today settings" }));
     await waitFor(() => expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "true"));
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Today settings" })).not.toBeInTheDocument();
   });
 
   it("keeps Skim branding visible while the sidebar is collapsed", async () => {
@@ -443,21 +467,22 @@ describe("TodayEditionPane", () => {
     renderPane();
 
     fireEvent.click(await screen.findByRole("button", { name: "1 report" }));
-    expect(screen.getAllByText("example.com")).toHaveLength(2);
+    // Kicker, the story's publication list and the report itself.
+    expect(screen.getAllByText("example.com")).toHaveLength(3);
     expect(screen.queryByText("Feed One")).not.toBeInTheDocument();
   });
 
   it("renders the immutable snapshot title/summary and never a differing live field", async () => {
     const item = makeItem({
       snapshot_title: "The real snapshot headline",
-      snapshot_summary: "The real snapshot summary.",
+      snapshot_summary: "The real snapshot summary, long enough to read as reporting.",
     });
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([item]));
 
     renderPane();
 
     await screen.findByText("The real snapshot headline");
-    expect(screen.getByText("The real snapshot summary.")).toBeInTheDocument();
+    expect(screen.getByText("The real snapshot summary, long enough to read as reporting.")).toBeInTheDocument();
     // The member article's own title is printed in the byline, but the
     // headline itself must come from the frozen snapshot.
     expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent(
@@ -630,7 +655,7 @@ describe("Today summary retries", () => {
   it("leaves no-AI excerpts readable without loading or a misleading retry", async () => {
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
-    await screen.findByText("Default summary");
+    await screen.findByText("Default summary of the report, long enough to read as reporting.");
     expect(commands.generateTodayEditorial).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Retry summaries" })).not.toBeInTheDocument();
     expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();

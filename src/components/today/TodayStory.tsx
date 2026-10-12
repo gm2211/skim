@@ -1,11 +1,10 @@
-import { useId, useMemo, useState } from "react";
+import { useId, useState, type CSSProperties } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { IconButton, RefreshIcon } from "../common/IconButton";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import * as commands from "../../services/commands";
 import type { TodayEditionItem, TodayEditionMemberArticle } from "../../services/types";
-
-import { useArticle } from "../../hooks/useArticles";
-
-export type StoryRank = "lead" | "story" | "brief";
+import { firstSentence, isReadableExcerpt, themeColor, type StoryRank } from "../../lib/todayEdition";
 
 interface Props {
   item: TodayEditionItem;
@@ -103,28 +102,33 @@ function PreviewAttribution({ member, onOpenArticle }: {
   );
 }
 
-// Only images already supplied in the report are used; no unrelated stock art.
-function ReportImage({ articleId, title }: { articleId: string; title: string }) {
-  const { data: article } = useArticle(articleId);
+// Slots restyle themselves with :has(.today-report-image), so a story whose
+// picture is missing or fails to load still fills its place on the page.
+// Only images the reports themselves publish are used; no unrelated stock art.
+function ReportImage({ articleIds, title }: { articleIds: string[]; title: string }) {
+  const { data: image } = useQuery({
+    queryKey: ["todayStoryImage", ...articleIds],
+    queryFn: () => commands.getTodayStoryImage(articleIds),
+    staleTime: 10 * 60 * 1000,
+  });
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const image = useMemo(() => {
-    if (!article?.content_html) return null;
-    const doc = new DOMParser().parseFromString(article.content_html, "text/html");
-    for (const node of doc.querySelectorAll("img")) {
-      const src = node.getAttribute("src");
-      if (!src || /feedburner|pixel|badge/i.test(src)) continue;
-      const width = Number(node.getAttribute("width"));
-      const height = Number(node.getAttribute("height"));
-      if ((width > 0 && width < 100) || (height > 0 && height < 100)) continue;
-      try {
-        const url = new URL(src, article.url || undefined);
-        if (url.protocol === "https:" || url.protocol === "http:") return url.href;
-      } catch { /* An invalid source should not leave a broken illustration. */ }
-    }
-    return null;
-  }, [article?.content_html, article?.url]);
   if (!image || image === failedUrl) return null;
-  return <img className="today-report-image" src={image} alt={`Image from report: ${title}`} referrerPolicy="no-referrer" onError={() => setFailedUrl(image)} />;
+  return <img className="today-report-image" src={image} alt={`Image from report: ${title}`} referrerPolicy="no-referrer"
+    onError={() => setFailedUrl(image)} />;
+}
+
+/** A report's own sentence, set large where a picture would otherwise go. */
+function PullQuote({ quote, source, large = false }: { quote: string; source?: string; large?: boolean }) {
+  return (
+    <blockquote className={`today-pull-quote ${large ? "today-pull-quote--large" : ""}`}>
+      <p>{quote}</p>
+      {source && <cite>{source}</cite>}
+    </blockquote>
+  );
+}
+
+function Figure({ value, label }: { value: string; label: string }) {
+  return <p className="today-figure"><strong>{value}</strong><span>{label}</span></p>;
 }
 
 export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onOpenArticle }: Props) {
@@ -137,25 +141,40 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
   const articleId = item.representative_article_id ?? primary?.article_id;
   const lead = rank === "lead";
   const brief = rank === "brief";
-  const body = item.editorial?.summary.trim() || item.lede?.trim() || (brief ? "" : item.snapshot_summary);
+  const compact = rank === "rail" || brief;
+  const excerpt = isReadableExcerpt(item.snapshot_summary) ? item.snapshot_summary : "";
+  const fullBody = item.editorial?.summary.trim() || item.lede?.trim() || excerpt;
+  const body = compact && fullBody ? firstSentence(fullBody) : fullBody;
   const ledeSourceArticleId = item.lede_source_article_id;
   const ledeSource = item.lede?.trim() && ledeSourceArticleId
     ? members.find((member) => member.article_id === ledeSourceArticleId)
     : undefined;
   const coverageCount = members.filter((member) => member.membership_type !== "duplicate").length;
+  const publicationOf = (id: string) => {
+    const member = members.find((candidate) => candidate.article_id === id);
+    return member ? member.publication || member.feed_title : undefined;
+  };
+  const quotes = (item.editorial?.sources ?? []).filter((source) => source.quote.trim());
+  const figure = item.editorial?.figure;
+  const publications = [...new Set(members.filter((member) => member.membership_type !== "duplicate")
+    .map((member) => member.publication || member.feed_title))];
+  const showsImage = (lead || rank === "feature") && !!articleId && primary?.is_read !== null;
+  // Image lookups prefer the representative report, then the rest of the coverage.
+  const imageArticleIds = [articleId, ...members.map((member) => member.article_id)]
+    .filter((id, index, ids): id is string => !!id && ids.indexOf(id) === index);
+  const accent = themeColor(item.editorial?.theme);
 
   return (
-    <article className={`story-rise-in today-story today-story--${rank}`}>
-      <div className="today-byline">
+    <article className={`story-rise-in today-story today-story--${rank} ${item.is_consumed ? "today-story--read" : ""}`}
+      style={accent ? { "--today-theme": accent } as CSSProperties : undefined}>
+      {showsImage && <ReportImage key={imageArticleIds.join(",")} articleIds={imageArticleIds} title={item.snapshot_title} />}
+      <div className="today-byline today-kicker">
         {item.editorial?.theme || primary?.publication || primary?.feed_title}
         {coverageCount > 1 && <span className="today-coverage"> · {coverageCount} reports covering this story</span>}
       </div>
-      {lead && articleId && primary?.is_read !== null && <ReportImage key={articleId} articleId={articleId} title={item.snapshot_title} />}
+      {rank === "feature" && figure && <Figure value={figure.value} label={figure.label} />}
 
-      <h3
-        className={`catchup-headline text-text-primary ${lead ? "today-lead-headline" : ""}`}
-        style={{ fontSize: lead ? undefined : brief ? 15 : 19, fontWeight: 700, lineHeight: lead ? 1.12 : 1.22, letterSpacing: lead ? -0.5 : -0.15 }}
-      >
+      <h3 className={`catchup-headline text-text-primary ${lead ? "today-lead-headline" : ""}`}>
         {articleId ? (
           <button className="today-headline hover:text-accent transition-colors" onClick={() => onOpenArticle(articleId)}>
             {item.snapshot_title}
@@ -163,11 +182,18 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
         ) : item.snapshot_title}
       </h3>
 
-      {body && <p className={`today-body text-text-primary ${lead ? "today-lead-summary" : ""}`} style={{ marginTop: lead ? 10 : 7, fontSize: lead ? undefined : 13.5, lineHeight: 1.55 }}>{body}</p>}
-      {body && item.editorial && (
+      {rank === "feature" && !figure && quotes[0] && <PullQuote quote={quotes[0].quote} large />}
+      {body && <p className={`today-body text-text-primary ${lead ? "today-lead-summary" : ""}`}>{body}</p>}
+      {lead && figure && <Figure value={figure.value} label={figure.label} />}
+      {lead && quotes.length > 0 && (
+        <div className="today-lead-quotes">
+          {quotes.slice(0, 2).map((source) => <PullQuote key={source.article_id} quote={source.quote} source={publicationOf(source.article_id)} />)}
+        </div>
+      )}
+      {body && item.editorial && !compact && (
         <p className="today-summary-kind">AI summary · Based on {item.editorial.sources.length} of {members.length} {members.length === 1 ? "report" : "reports"}</p>
       )}
-      {!item.editorial && ledeSource && item.lede?.trim() && (
+      {!item.editorial && ledeSource && item.lede?.trim() && !compact && (
         <PreviewAttribution member={ledeSource} onOpenArticle={onOpenArticle} />
       )}
       {item.has_material_update && item.snapshot_delta_summary && !brief && (
@@ -177,6 +203,9 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
       )}
 
       <div className="today-story-actions">
+        {!compact && publications.length > 0 && (
+          <span className="today-publications">{publications.slice(0, 2).join(", ")}{publications.length > 2 ? ` +${publications.length - 2}` : ""}</span>
+        )}
         {members.length > 0 && (
           <button
             className="today-story-control text-text-secondary hover:text-text-primary"
@@ -195,7 +224,7 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
           aria-busy={isSaving}
           tooltip={isSaving ? "Saving…" : item.is_consumed ? "Mark as unread" : "Mark as read"}
           onClick={() => onToggleConsumed(item.story_id, !item.is_consumed)}
-          className="text-text-secondary hover:text-text-primary hover:bg-white/10"
+          className={`today-read-toggle ${item.is_consumed ? "text-success" : "text-text-secondary"} hover:text-text-primary hover:bg-white/10`}
           label={item.is_consumed ? "Mark as unread" : "Mark as read"}
           aria-pressed={item.is_consumed}
         >

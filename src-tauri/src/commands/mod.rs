@@ -6,6 +6,7 @@ pub mod chat;
 pub mod claude_oauth;
 pub mod xai_oauth;
 pub mod editions;
+pub mod story_image;
 pub mod ds4;
 pub mod feeds;
 pub mod models;

@@ -1,15 +1,47 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
 import { useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useTodayEdition } from "../../hooks/useTodayEdition";
 import { useUiStore } from "../../stores/uiStore";
-import { rankFor } from "../../lib/todayEdition";
+import { PAGE_SIZE, rankFor } from "../../lib/todayEdition";
 import { TodayStorySkeleton } from "./TodayStorySkeleton";
 import { TodayStory } from "./TodayStory";
 import { ModelPicker } from "../common/ModelPicker";
 import { RefreshIcon } from "../ui/icons";
+import { IconButton } from "../common/IconButton";
+import "./TodayFrontPage.css";
 
-export const NEWSPAPER_PAGE_SIZE = 6;
+export const NEWSPAPER_PAGE_SIZE = PAGE_SIZE;
+
+/** The page's slots: a lead with a rail beside it, a row of features, briefs. */
+function FrontPage({ cells }: { cells: { key: string; node: React.ReactNode }[] }) {
+  const cell = (index: number) => cells[index] && (
+    <div key={cells[index].key} className={`today-story-cell today-story-cell--${rankFor(index)}`}>{cells[index].node}</div>
+  );
+  const rail = [1, 2, 3].map(cell).filter(Boolean);
+  const features = [4, 5, 6].map(cell).filter(Boolean);
+  const briefs = cells.slice(7).map((_, index) => cell(index + 7));
+  return (
+    <div className="today-stories today-front">
+      <div className={`today-front-top ${rail.length ? "" : "today-front-top--solo"}`}>
+        {cell(0)}
+        {rail.length > 0 && <div className="today-front-rail">{rail}</div>}
+      </div>
+      {features.length > 0 && <div className="today-front-row" data-count={features.length}>{features}</div>}
+      {briefs.length > 0 && <section className="today-front-briefs" aria-label="In brief">
+        <h4 className="today-briefs-label">In brief</h4>
+        <div className="today-front-brief-grid">{briefs}</div>
+      </section>}
+    </div>
+  );
+}
+
+const CogIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+  </svg>
+);
 
 function formatWindowDate(startsAtSeconds: number): string {
   return new Date(startsAtSeconds * 1000).toLocaleDateString("en-US", {
@@ -28,6 +60,18 @@ export function TodayEditionPane() {
   const [sharedOnly, setSharedOnly] = useState(false);
   const [pageSelection, setPageSelection] = useState({ key: "", index: 0 });
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const close = (event: MouseEvent | KeyboardEvent) => {
+      if (event instanceof KeyboardEvent ? event.key === "Escape" : !settingsRef.current?.contains(event.target as Node)) setSettingsOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    // Capture, so the cog's own tooltip dismissal does not swallow Escape.
+    document.addEventListener("keydown", close, true);
+    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close, true); };
+  }, [settingsOpen]);
   const refreshFeeds = useRefreshAllFeeds();
   const isFrontPage = !isPhone && !selectedArticleId;
   const items = data?.items ?? [];
@@ -51,6 +95,7 @@ export function TodayEditionPane() {
   };
 
   const totalCount = data?.total_count ?? 0;
+  const missingSummaries = items.filter((item) => !item.editorial?.summary.trim()).length;
   const consumedCount = data?.consumed_count ?? 0;
   const isFullyConsumed = totalCount > 0 && consumedCount === totalCount;
   const progressPct = totalCount > 0 ? Math.round((consumedCount / totalCount) * 100) : 0;
@@ -65,14 +110,10 @@ export function TodayEditionPane() {
       }}
     >
       {sidebarCollapsed && !isPhone && <CollapsedSidebarTitlebar />}
-      {/* Top bar */}
+      {/* Top bar: refresh and a cog for Today's few settings. */}
       <div
-        className="flex flex-shrink-0 items-center gap-2 relative z-20"
-        style={{
-          height: isPhone ? 52 : 44,
-          paddingLeft: 8,
-          paddingRight: isPhone ? 8 : 16,
-        }}
+        className="today-topbar flex flex-shrink-0 items-center gap-1 relative z-20"
+        style={{ paddingLeft: 8, paddingRight: isPhone ? 8 : 20 }}
       >
         {isPhone && (
           <button
@@ -88,27 +129,62 @@ export function TodayEditionPane() {
           </button>
         )}
         <div className="flex-1" />
-        <ModelPicker surface="today" compact disabled={isWritingLedes} />
-        <button
-          className="today-story-control today-toolbar-button text-text-secondary hover:text-text-primary"
+        <IconButton
+          label={refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
           disabled={refreshFeeds.isPending}
           onClick={() => refreshFeeds.mutate(undefined)}
+          className="text-text-secondary hover:text-text-primary hover:bg-white/10"
         >
-          <RefreshIcon size={14} className={refreshFeeds.isPending ? "smooth-spin" : undefined} />
-          {refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
-        </button>
+          <RefreshIcon size={18} className={refreshFeeds.isPending ? "smooth-spin" : undefined} />
+        </IconButton>
+        <div ref={settingsRef} className="relative">
+          <IconButton
+            label="Today settings"
+            aria-expanded={settingsOpen}
+            aria-haspopup="dialog"
+            onClick={() => setSettingsOpen(!settingsOpen)}
+            className={`hover:text-text-primary hover:bg-white/10 ${settingsOpen ? "text-text-primary bg-white/10" : "text-text-secondary"}`}
+          >
+            <CogIcon />
+          </IconButton>
+          {settingsOpen && (
+            <div className="today-settings" role="dialog" aria-label="Today settings">
+              <div className="today-settings-heading">Today</div>
+              <div className="today-settings-row">
+                <span>Summary model</span>
+                <ModelPicker surface="today" compact disabled={isWritingLedes} />
+              </div>
+              <button className="today-settings-row" onClick={() => { setSettingsOpen(false); useUiStore.getState().setShowSettings(true, "sync"); }}>
+                <span>Edition size</span><span className="text-text-muted">{data?.edition.story_limit ?? 10} stories</span>
+              </button>
+              {canRetryLedes && <button className="today-settings-row" onClick={() => { setSettingsOpen(false); retryLedes(); }}>Retry missing summaries</button>}
+              <hr />
+              <button className="today-settings-row" onClick={() => { setSettingsOpen(false); useUiStore.getState().setShowSettings(true); }}>AI settings…</button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div ref={scrollRef} className="today-scroll flex-1 overflow-y-auto">
       <div className="today-content">
       {/* Masthead: the nameplate, then a dateline whose rule doubles as the
           day's reading progress. */}
-      <div className="today-masthead" style={{ padding: "6px 0 18px" }}>
+      <div className="today-masthead">
         <h2 className="today-title text-text-primary truncate">
           Today
         </h2>
         <div className="today-dateline">
           <span>{formatWindowDate(todayWin.startsAt)}</span>
+          {totalCount > 0 && (
+            <span className="today-dateline-status">
+              {totalCount} {totalCount === 1 ? "story" : "stories"}
+              {themes.length > 0 && <> · {themes.length} {themes.length === 1 ? "theme" : "themes"}</>}
+              {canRetryLedes && missingSummaries > 0 && <>
+                {" · "}<span className="today-dateline-failed">{missingSummaries} not summarized</span>
+                <button type="button" className="today-dateline-retry" onClick={retryLedes} aria-label="Retry summaries">Retry</button>
+              </>}
+            </span>
+          )}
           {totalCount > 0 && (
             <span className="today-dateline-progress">
               <span>{isFullyConsumed ? "All caught up" : `${consumedCount} of ${totalCount} done`}</span>
@@ -127,10 +203,10 @@ export function TodayEditionPane() {
       </div>
 
       {/* Body */}
-        {isLoading && <div className="today-stories" aria-label="Preparing newspaper">
-          {Array.from({ length: NEWSPAPER_PAGE_SIZE }, (_, index) => <div className={`today-story-cell today-story-cell--${rankFor(index)}`} key={index}>
-            <TodayStorySkeleton rank={rankFor(index)} />
-          </div>)}
+        {isLoading && <div aria-label="Preparing newspaper">
+          <FrontPage cells={Array.from({ length: NEWSPAPER_PAGE_SIZE }, (_, index) => ({
+            key: `skeleton-${index}`, node: <TodayStorySkeleton rank={rankFor(index)} />,
+          }))} />
         </div>}
 
         {isError && (
@@ -175,14 +251,6 @@ export function TodayEditionPane() {
           </div>
         )}
 
-        {!isLoading && !isError && canRetryLedes && (
-          <button type="button" onClick={retryLedes}
-            className="today-story-control text-text-secondary border border-white/10 bg-white/5"
-            style={{ marginTop: 14 }}>
-            Retry summaries
-          </button>
-        )}
-
         {!isLoading && !isError && items.length > 0 && <>
           {!aiEnabled && !settingsUnavailable && items.some((item) => !item.editorial) && <p className="today-summary-note">Unprepared summaries show source excerpts. <button className="today-story-control text-accent" onClick={() => useUiStore.getState().setShowSettings(true)}>Set up AI for thematic summaries</button></p>}
           <nav className="today-themes" aria-label="Newspaper themes">
@@ -192,21 +260,16 @@ export function TodayEditionPane() {
           </nav>
           {visibleItems.length === 0 && <p className="today-summary-note">No stories with multiple reports in this selection.</p>}
         </>}
-        <div className="today-stories">
-        {!isLoading &&
-          !isError &&
-          pageItems.map(({ item }, index) => (
-              <div key={item.story_id} className={`today-story-cell today-story-cell--${rankFor(index)}`}>
-              {!item.editorial && isPreparingSummaries ? <TodayStorySkeleton rank={rankFor(index)} /> : <TodayStory
-                item={item}
-                rank={rankFor(index)}
-                isSaving={setConsumed.isPending}
-                onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
-                onOpenArticle={handleOpenArticle}
-              />}
-              </div>
-          ))}
-        </div>
+        {!isLoading && !isError && pageItems.length > 0 && <FrontPage cells={pageItems.map(({ item }, index) => ({
+          key: item.story_id,
+          node: !item.editorial && isPreparingSummaries ? <TodayStorySkeleton rank={rankFor(index)} /> : <TodayStory
+            item={item}
+            rank={rankFor(index)}
+            isSaving={setConsumed.isPending}
+            onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
+            onOpenArticle={handleOpenArticle}
+          />,
+        }))} />}
 
         {isFullyConsumed && (
           <div

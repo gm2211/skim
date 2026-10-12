@@ -55,3 +55,4 @@ native/**/.build/
 .build_agent/
 src-tauri/.build_agent/
 *.tsbuildinfo
+.walkthrough/

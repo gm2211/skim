@@ -47,6 +47,19 @@ behaviors:
         did you ship this implementation and philosophy? there's a thread that's refining the
         newspaper view and I'm not sure it got the memo
       reference: Giulio, project thread "Today page design options", 2026-10-12
+  - id: written-ledes
+    description: >-
+      Under a "Catch me up" headline the model writes the lede itself: one or two sentences, at
+      most 60 words, from the full text of the articles behind the story, adding nothing that is
+      not in them. A write that fails or says nothing falls back to the source-verified passage
+      Today prints, then to the first clean sentence. Today itself keeps verbatim passages.
+    details: >-
+      Proposal pending Giulio's choice on the thread card (written ledes, recommended, or keep
+      passages). Before this, Catch-up printed a verbatim passage cut at 60 words, which read as a
+      quote trailing off rather than a briefing ("49 articles were read and I see this").
+    source:
+      text: help me understand - 49 articles were read and I see this - what's up?
+      reference: Giulio, project chat, 2026-10-12
   - id: cited-sources
     description: >-
       Each story groups its coverage and cites every source it used; tapping a source opens that

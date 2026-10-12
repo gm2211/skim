@@ -228,8 +228,36 @@ Output JSON:
     )
 }
 
-/// Pass two: write the lede under one headline, from the full text of the
-/// articles behind it.
+/// Pass two, as "Catch me up" runs it: the model writes the lede itself,
+/// one or two sentences from the full text of the articles behind the
+/// headline. Today keeps the verbatim passage; the catch-up is a briefing,
+/// so under its headline the reader expects to be told what happened.
+pub fn catchup_written_lede_system_prompt() -> String {
+    format!(
+        "You write the lede under one headline on a one-page newspaper built from a reader's RSS feed. Output JSON only.\n\n\
+         {FRONT_PAGE_STANDARD}\n\n\
+         The lede:\n\
+         - One or two sentences, at most 60 words, in plain present-tense prose, saying what happened and the specific facts behind it: who, what, the number, the date.\n\
+         - Written from the supplied article text only. Never add facts, names or numbers that are not in it; never speculate about why it matters.\n\
+         - Not a quotation, not a copy of the opening sentence, not the headline rephrased, and never an author's aside, disclaimer or greeting.\n\
+         - No publication names, no \"according to\", no hedging."
+    )
+}
+
+/// The user turn for a written lede.
+pub fn catchup_written_lede_user_prompt(headline: &str, articles_text: &str) -> String {
+    format!(
+        r#"Headline: {headline}
+
+Article text behind it:
+{articles_text}
+
+Output JSON:
+{{"lede":"One or two sentences saying what happened."}}"#
+    )
+}
+
+/// Pass two, as Today runs it: a verbatim passage picked from one source.
 pub fn catchup_lede_system_prompt() -> String {
     format!("{}\n\nOutput JSON with one string field named excerpt.", crate::db::story_policy::today_lede_prompt())
 }

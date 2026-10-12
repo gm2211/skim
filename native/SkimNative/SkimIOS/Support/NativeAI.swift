@@ -3369,7 +3369,7 @@ struct AIResultSheet: View {
                                     continueInChat(captured)
                                 }
                             } label: {
-                                Label("Chat", systemImage: "bubble.left")
+                                Label("Chat", systemImage: SkimIcon.chat)
                             }
                         }
                         if let clearAction = request.clearAction {
@@ -3382,7 +3382,7 @@ struct AIResultSheet: View {
                             Button {
                                 retryTask = Task { await run() }
                             } label: {
-                                Label("Run Again", systemImage: "arrow.clockwise")
+                                Label("Run Again", systemImage: SkimIcon.refresh)
                                     .labelStyle(.iconOnly)
                                     .frame(minWidth: 44, minHeight: 44)
                                     .contentShape(Rectangle())
@@ -3489,7 +3489,7 @@ struct AIChatSheet: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 14) {
                             if messages.isEmpty {
-                                ContentUnavailableView("Ask Skim", systemImage: "bubble.left.and.text.bubble.right", description: Text(request.placeholder))
+                                ContentUnavailableView("Ask Skim", systemImage: SkimIcon.chat, description: Text(request.placeholder))
                                     .foregroundStyle(SkimStyle.secondary)
                                     .padding(.top, 80)
                             } else {
@@ -4080,9 +4080,9 @@ private struct CitationBrowserSheet: View {
                         Button {
                             openURL(url)
                         } label: {
-                            Image(systemName: "safari")
+                            Image(systemName: SkimIcon.openExternal)
                         }
-                        .accessibilityLabel("Open in Safari")
+                        .accessibilityLabel("Open in Browser")
                     }
                 }
             }

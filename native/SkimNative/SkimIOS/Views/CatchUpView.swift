@@ -53,7 +53,7 @@ struct CatchUpPage: View {
                     Button {
                         run()
                     } label: {
-                        Label("Run Again", systemImage: "arrow.clockwise")
+                        Label("Run Again", systemImage: SkimIcon.refresh)
                             .labelStyle(.iconOnly)
                             .frame(minWidth: 44, minHeight: 44)
                             .contentShape(Rectangle())

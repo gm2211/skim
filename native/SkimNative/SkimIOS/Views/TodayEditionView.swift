@@ -8,12 +8,16 @@ import SwiftUI
 /// treatment (the lede set as a pull quote, a story accent colour) so the page
 /// stays full when the reports publish no pictures; a picture is used when the
 /// report has one.
+///
+/// Today runs inside the article list's chrome (a bottom-bar tab), which owns
+/// the title bar, so the settings button lives there and drives `showSettings`.
 struct TodayEditionView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("todayStoryLimit") private var storyLimit = 10
-    @State private var showSettings = false
+    @Binding var showSettings: Bool
+    /// Leaves Today for the article list.
+    var onBrowseArticles: () -> Void
 
     /// Stories that get a written lede and a full card; the rest of the page
     /// runs as two-up briefs.
@@ -21,23 +25,6 @@ struct TodayEditionView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button { dismiss() } label: {
-                    Label("Articles", systemImage: "chevron.left")
-                        .frame(minHeight: 44)
-                }
-                Spacer()
-                Button { showSettings = true } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 18))
-                        .frame(width: 44, height: 44)
-                }
-                .accessibilityLabel("Today settings")
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 6)
-            .background(SkimStyle.background)
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if model.isLoadingToday {
@@ -80,8 +67,6 @@ struct TodayEditionView: View {
         }
         .background(SkimStyle.background.ignoresSafeArea())
         .foregroundStyle(SkimStyle.text)
-        .navigationBarBackButtonHidden()
-        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showSettings) { settingsSheet }
         .task(id: storyLimit) {
             if ![5, 10, 20].contains(storyLimit) { storyLimit = 10; return }
@@ -240,11 +225,11 @@ struct TodayEditionView: View {
 
     private var emptyEdition: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: "sun.max").font(.largeTitle).foregroundStyle(SkimStyle.accent)
+            Image(systemName: SkimIcon.today).font(.largeTitle).foregroundStyle(SkimStyle.accent)
             Text("No stories in this edition").font(.title3.bold())
             Text("This saved edition has no stories. Refresh feeds in Articles to read new coverage. Tomorrow brings a new edition.")
                 .font(.body).foregroundStyle(SkimStyle.secondary)
-            Button("Browse articles") { dismiss() }.frame(minHeight: 44)
+            Button("Browse articles") { onBrowseArticles() }.frame(minHeight: 44)
         }
         .padding(.vertical, 28)
     }

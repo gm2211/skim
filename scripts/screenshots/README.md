@@ -22,12 +22,11 @@ sharpness. Needs ffmpeg with libx264.
 
 ## Stills
 
-The stills are generated the same way. Two steps:
+The docs site carousel (`docs/index.html`) uses stills taken the same way:
 
 ```bash
 pnpm dev                          # in one shell
-pnpm screenshots                  # captures the frames
-pnpm demo                         # encodes docs/skim-demo.gif
+pnpm screenshots                  # writes docs/screenshots/*.png
 ```
 
 `capture.mjs` drives the real app in headless Chromium at a fixed viewport
@@ -37,18 +36,9 @@ one crop. It talks to `mock-backend.js` instead of the Rust backend: the Tauri
 in `fixtures.js`. That means the captures run anywhere, with no feeds, no API
 key, and no model — and they are identical every time.
 
-Output:
-
-- `docs/screenshots/*.png` — the raw app shots, also used by the docs site
-  carousel in `docs/index.html`.
-- `docs/screenshots/frames/*.png` — the same shots with a caption strip,
-  composed in the browser so the caption uses real font rendering.
-- `docs/skim-demo.gif` — the frames at a uniform hold and crossfade.
-
-To change what the demo shows, edit `STEPS` in `capture.mjs`. To change the
-content on screen, edit `fixtures.js`. Slide order follows filename order.
-
-`build-demo.mjs` needs ffmpeg on `PATH`, or `FFMPEG=/path/to/ffmpeg`.
+To change what the stills show, edit `STEPS` in `capture.mjs`. To change the
+content on screen, edit `fixtures.js` (and `mock-backend.js` for AI answers),
+which also changes the walkthrough.
 
 ## Design passes
 

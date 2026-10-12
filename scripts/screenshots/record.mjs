@@ -41,13 +41,15 @@ const OVERLAY = () => {
       filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); transition: none; }
     #wt-cursor.down::after { content: ""; position: absolute; left: -11px; top: -11px; width: 30px; height: 30px;
       border-radius: 50%; background: rgba(120,170,255,.35); }
-    #wt-cap { position: fixed; left: 50%; bottom: 18px; z-index: 2147483646; pointer-events: none;
+    #wt-cap { position: fixed; left: 50%; bottom: 66px; z-index: 2147483646; pointer-events: none;
       transform: translateX(-50%) translateY(8px); opacity: 0; transition: opacity .35s, transform .35s;
-      max-width: 980px; padding: 11px 24px 12px; border-radius: 14px;
+      max-width: 1040px; text-wrap: balance; padding: 11px 24px 12px; border-radius: 14px;
       background: rgba(10,13,19,.92); border: 1px solid rgba(255,255,255,.12);
       box-shadow: 0 10px 40px rgba(0,0,0,.55); text-align: center;
       font: 400 17px/1.4 Inter, -apple-system, "Segoe UI", Roboto, sans-serif; color: #d9dfe9; }
     #wt-cap.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #wt-cap.top { bottom: auto; top: 70px; }
+    #wt-cap.left { left: 24px; max-width: 330px; transform: none; text-align: left; }
     #wt-cap b { display: block; font-weight: 600; font-size: 13px; letter-spacing: 1.6px;
       text-transform: uppercase; color: #7fb0ff; margin-bottom: 4px; }
     #wt-card { position: fixed; inset: 0; z-index: 2147483645; pointer-events: none; display: flex;
@@ -73,8 +75,10 @@ const OVERLAY = () => {
   addEventListener("mouseup", () => setTimeout(() => cursor.classList.remove("down"), 160), true);
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   window.__wt = {
-    caption(label, text) {
+    caption(label, text, where) {
       if (!label) { cap.classList.remove("on"); return; }
+      cap.classList.toggle("top", where === "top");
+      cap.classList.toggle("left", where === "left");
       cap.innerHTML = `<b>${esc(label)}</b>${esc(text)}`;
       cap.classList.add("on");
     },
@@ -117,7 +121,11 @@ async function glide(p, target, { click = true, steps = 28, dx = 0, dy = 0 } = {
   }
 }
 
-const caption = (p, label, text) => p.evaluate(([l, t]) => window.__wt.caption(l, t), [label, text]);
+/**
+ * Shows a caption. `where` moves it out of the way of the chapter's action:
+ * "top" when that is at the bottom, "left" beside a tall centred dialog.
+ */
+const caption = (p, label, text, where = "bottom") => p.evaluate(([l, t, w]) => window.__wt.caption(l, t, w), [label, text, where]);
 const card = (p, title, text) => p.evaluate(([l, t]) => window.__wt.card(l, t), [title, text]);
 const hold = (p, s) => p.waitForTimeout(s * 1000);
 
@@ -161,6 +169,16 @@ const CHAPTERS = [
     },
   },
   {
+    id: "pages",
+    async run(p) {
+      await caption(p, "Last week", "Turn the page to go back a week at a time: the buttons at the foot, or \u2190 and \u2192.");
+      await glide(p, p.getByRole("button", { name: "Last week" }).first());
+      await hold(p, 3.2);
+      await glide(p, p.getByRole("button", { name: "Today" }).first());
+      await hold(p, 1.0);
+    },
+  },
+  {
     id: "reader",
     async run(p) {
       await caption(p, "Reader", "Every article in a clean reader, next to the list and your folders.");
@@ -186,7 +204,7 @@ const CHAPTERS = [
   {
     id: "chat",
     async run(p) {
-      await caption(p, "Chat", "Ask follow-up questions about the article. The answer cites it.");
+      await caption(p, "Chat", "Ask follow-up questions about the article you are reading.", "top");
       await glide(p, '[aria-label="Chat with article"]');
       await hold(p, 0.8);
       const box = p.locator("textarea").last();
@@ -213,7 +231,7 @@ const CHAPTERS = [
       await caption(p, "⌘K", "Jump anywhere from the keyboard. If no command matches, Skim's assistant answers instead.");
       await p.keyboard.press("Meta+k");
       await hold(p, 0.9);
-      await p.keyboard.type("What broke in security this week?", { delay: 30 });
+      await p.keyboard.type("Anything new on AI agents?", { delay: 30 });
       await hold(p, 0.5);
       await p.keyboard.press("Enter");
       await hold(p, 3.6);
@@ -224,7 +242,7 @@ const CHAPTERS = [
   {
     id: "organize",
     async run(p) {
-      await caption(p, "Auto-organize", "Let the model file your feeds into folders.");
+      await caption(p, "Auto-organize", "Let the model file your feeds into folders. You review them before anything changes.", "left");
       await glide(p, '[title="Add folder or smart folder"]');
       await hold(p, 0.5);
       await glide(p, p.getByText("Auto-organize with AI").first());
@@ -238,7 +256,7 @@ const CHAPTERS = [
   {
     id: "settings",
     async run(p) {
-      await caption(p, "Your model", "Bring your own model: Claude, OpenAI, Grok, OpenRouter, or any compatible endpoint.");
+      await caption(p, "Your model", "Bring your own model: Claude, OpenAI, Grok, OpenRouter, or any compatible endpoint.", "left");
       await glide(p, p.getByText("Settings", { exact: true }).first());
       await hold(p, 1.2);
       await glide(p, p.getByRole("button", { name: "Change AI service" }).first());

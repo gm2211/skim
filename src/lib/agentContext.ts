@@ -65,7 +65,6 @@ export function agentContextLabel(context: AgentContext, articleTitle?: string |
   if (context.story) return `Story: ${context.story.title}`;
   switch (context.view) {
     case "today": return "Today’s front page";
-    case "catchup": return "Quick Catch-up";
     case "inbox": return "AI Inbox";
     case "starred": return "Starred";
     case "recent": return "Recently Read";

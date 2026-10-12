@@ -46,7 +46,7 @@ const FALLBACK_AI: AiSettings = {
 };
 
 /**
- * Inline model picker shared by every AI surface (Quick Catch-up, Ask Skim,
+ * Inline model picker shared by every AI surface (Today, Ask Skim,
  * the article chat drawer, the Summarize menu, Today). It reads and writes
  * the same AppSettings blob Settings uses, changing only the model — never
  * the provider, which stays a Settings-only decision — and never re-runs
@@ -103,7 +103,7 @@ export function ModelPicker({ surface, disabled, compact, label, controlStyle }:
         onChange={handleChange}
         disabled={disabled || saving}
         fullWidth={!compact}
-        style={{ ...(compact ? { maxWidth: 200, minHeight: 40, fontSize: 13 } : {}), ...controlStyle }}
+        style={{ ...(compact ? { width: 220, maxWidth: "100%", height: 32, minHeight: 32, fontSize: 12.5, padding: "0 28px 0 10px" } : {}), ...controlStyle }}
       >
         {options.map((choice) => (
           <option key={choice.value} value={choice.value} disabled={choice.disabled}>

@@ -393,66 +393,6 @@ export const countReadMatches = (query: string) =>
 export const removeRecentArticle = (articleId: string) =>
   invoke<void>("remove_recent_article", { articleId });
 
-/** A front-page story. `lede` is empty until the second pass writes it. */
-export interface CatchupStory {
-  headline: string;
-  lede: string;
-  article_ids: string[];
-  /** The picture printed with the story, from the first article that has one. */
-  image_url?: string | null;
-}
-/** A one-line item below the fold. */
-export interface CatchupBrief {
-  text: string;
-  article_ids: string[];
-}
-/** An article cited on the page, named the way it prints under a story. */
-export interface CatchupSource {
-  id: string;
-  title: string;
-  publication: string;
-  url: string | null;
-  published_at: number | null;
-  /** The article's own picture, when its feed carried one. */
-  image_url?: string | null;
-  /** The publication's icon, shown in the row of related articles. */
-  icon_url?: string | null;
-}
-export interface CatchupReport {
-  stories: CatchupStory[];
-  briefs: CatchupBrief[];
-  sources: CatchupSource[];
-  /** How many articles the chosen scope and time range actually selected. */
-  article_count: number;
-}
-/** The page as it stands, pushed after every step of the two passes. */
-export interface CatchupProgress {
-  stage: "reading" | "picking" | "writing" | "done";
-  completed: number;
-  total: number;
-  message: string;
-  report: CatchupReport;
-  /** Which run this progress belongs to; ignore progress from a stale run. */
-  run_id: string;
-}
-export const CATCHUP_PROGRESS_EVENT = "catchup_progress";
-/** What a run reads: the priority inbox, everything unread, or every article
- * in the range, read or not (for the ones marked read by accident). */
-export type CatchupScope = "inbox" | "unread" | "all";
-/** Hours back to catch up on. `null` is the whole unread backlog. */
-export type CatchupSinceHours = number | null;
-/** What a cancelled Quick Catch-up run rejects with, so the UI can tell an
- * explicit stop apart from a real failure. */
-export const CATCHUP_CANCELLED = "Catch-up cancelled";
-export const generateCatchupReport = (
-  scope: CatchupScope = "inbox",
-  sinceHours: CatchupSinceHours = null,
-  runId?: string
-) => invoke<CatchupReport>("generate_catchup_report", { scope, sinceHours, runId });
-/** Stops the run named by `runId`, or whichever run is current when omitted. */
-export const cancelCatchupReport = (runId?: string) =>
-  invoke<void>("cancel_catchup_report", { runId });
-
 // Today edition
 /** The page as it stands while the lede pass runs. */
 export interface TodayLedeProgress {

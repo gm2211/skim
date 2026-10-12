@@ -51,7 +51,7 @@ struct TodayEditionView: View {
                                 }
                                 frontPage(edition.items)
                                 if edition.consumedItemCount == edition.totalItemCount {
-                                    Label("You’re all caught up for today.", systemImage: "checkmark.circle.fill")
+                                    Label(model.todayPage == 1 ? "You’re all caught up for today." : "You’re all caught up on this page.", systemImage: "checkmark.circle.fill")
                                         .font(.headline)
                                         .foregroundStyle(SkimStyle.accent)
                                         .padding(.vertical, 12)
@@ -66,11 +66,17 @@ struct TodayEditionView: View {
                 .frame(maxWidth: .infinity)
             }
             .refreshable { await load() }
+            // A swipe turns the page: left goes back a week, right comes forward.
+            .gesture(DragGesture(minimumDistance: 48, coordinateSpace: .local).onEnded { value in
+                guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                turn(to: model.todayPage + (value.translation.width < 0 ? 1 : -1))
+            })
+            pageBar
         }
         .background(SkimStyle.background.ignoresSafeArea())
         .foregroundStyle(SkimStyle.text)
         .sheet(isPresented: $showSettings) { settingsSheet }
-        .task(id: storyLimit) {
+        .task(id: "\(storyLimit)-\(model.todayPage)") {
             if ![5, 10, 20].contains(storyLimit) { storyLimit = 10; return }
             await load()
             // Renew the local-day window even if Today stays open across midnight.
@@ -89,6 +95,56 @@ struct TodayEditionView: View {
     }
 
     private func load() async { await model.loadTodayEdition(storyLimit: storyLimit) }
+
+    /// Turns the paper to `page`: 1 is today, each page after it a week earlier.
+    private func turn(to page: Int) {
+        guard page >= 1, page <= AppModel.todayPageCount, page != model.todayPage else { return }
+        withAnimation(.smooth(duration: 0.2)) { model.todayPage = page }
+    }
+
+    /// The foot of the page: where the paper turns, and which page this is.
+    private var pageBar: some View {
+        HStack {
+            // The front page has nothing newer: its left button is blank so
+            // the bar keeps its shape.
+            Button(model.todayPage == 2 ? "Today" : "Previous page") { turn(to: model.todayPage - 1) }
+                .disabled(model.todayPage <= 1)
+                .opacity(model.todayPage <= 1 ? 0 : 1)
+                .accessibilityHidden(model.todayPage <= 1)
+            Spacer()
+            VStack(spacing: 1) {
+                Text(model.todayPage == 1 ? "Front page" : "Page \(model.todayPage)")
+                    .font(.system(size: 12, weight: .semibold))
+                if let edition = model.todayEdition {
+                    Text(Self.dateline(for: edition.edition))
+                        .font(.system(size: 11))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+            }
+            Spacer()
+            Button(model.todayPage == 1 ? "Last week" : "Next page") { turn(to: model.todayPage + 1) }
+                .disabled(model.todayPage >= AppModel.todayPageCount)
+                .opacity(model.todayPage >= AppModel.todayPageCount ? 0.35 : 1)
+        }
+        .font(.system(size: 14, weight: .medium))
+        .foregroundStyle(SkimStyle.text)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
+        .background(SkimStyle.chrome)
+        .overlay(alignment: .top) { Rectangle().fill(SkimStyle.separator.opacity(0.4)).frame(height: 1) }
+    }
+
+    /// One day's date, or the span of a wider window ("October 6 – 12").
+    static func dateline(for edition: Edition) -> String {
+        let last = edition.endsAt.addingTimeInterval(-1)
+        if Calendar.current.isDate(edition.startsAt, inSameDayAs: last) {
+            return edition.startsAt.formatted(.dateTime.weekday(.wide).month(.wide).day())
+        }
+        let from = edition.startsAt.formatted(.dateTime.month(.wide).day())
+        let sameMonth = Calendar.current.isDate(edition.startsAt, equalTo: last, toGranularity: .month)
+        let to = sameMonth ? last.formatted(.dateTime.day()) : last.formatted(.dateTime.month(.wide).day())
+        return "\(from) – \(to)"
+    }
 
     /// The edition is already ordered by importance, so position is all the
     /// page needs: the first story leads, the next few run as cards, the tail
@@ -175,8 +231,10 @@ struct TodayEditionView: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(edition.edition.startsAt.formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
+                Text(Self.dateline(for: edition.edition).uppercased())
                     .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
                 Spacer(minLength: 8)
                 if edition.totalItemCount > 0 {
                     HStack(spacing: 8) {

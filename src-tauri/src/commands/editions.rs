@@ -535,6 +535,43 @@ pub(crate) async fn verified_preview(provider: &dyn AiProvider, model: &str, hea
     evidence.preview(index, excerpt)
 }
 
+/// A lede the model writes from the evidence, for "Catch me up". `None` when
+/// the model fails or answers with something that is not a lede, so the
+/// caller can fall back to a verified passage.
+pub(crate) async fn written_lede(provider: &dyn AiProvider, model: &str, headline: &str, evidence: &LedeEvidence) -> Option<String> {
+    let response = provider.chat(ChatRequest {
+        model: model.into(),
+        messages: vec![
+            ChatMessage::text("system", prompts::catchup_written_lede_system_prompt()),
+            ChatMessage::text("user", prompts::catchup_written_lede_user_prompt(headline, &evidence.prompt_text)),
+        ],
+        temperature: Some(0.2), max_tokens: Some(300), json_mode: true, tools: None,
+    }).await.ok()?;
+    parse_written_lede(&response.content, headline)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WrittenLedeRaw {
+    lede: String,
+}
+
+/// Accepts a lede that says something: not empty, not the headline again,
+/// not over the length the page sets for it.
+pub(crate) fn parse_written_lede(content: &str, headline: &str) -> Option<String> {
+    let trimmed = content.trim();
+    let json = if let Some(body) = trimmed.strip_prefix("```json").or_else(|| trimmed.strip_prefix("```")) {
+        body.trim().strip_suffix("```")?.trim()
+    } else { trimmed };
+    let raw: WrittenLedeRaw = serde_json::from_str(json).ok()?;
+    let lede = raw.lede.split_whitespace().collect::<Vec<_>>().join(" ");
+    let words = lede.split_whitespace().count();
+    if !(6..=70).contains(&words) { return None; }
+    let fold = |text: &str| text.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect::<String>();
+    if fold(&lede) == fold(headline) { return None; }
+    Some(lede)
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ExcerptRaw {
@@ -553,6 +590,21 @@ fn parse_excerpt(content: &str, bodies: &[String]) -> Option<(usize, String)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn written_lede_accepts_a_sentence_and_rejects_noise() {
+        let headline = "Ledger confirms hidden chip in crypto wallets";
+        let good = r#"{"lede":"Ledger found an unauthorized hardware implant in a customer's wallet during its October 10 inquiry into thefts via reseller CryptoBilis, with suspected losses above $86 million."}"#;
+        assert!(parse_written_lede(good, headline).is_some());
+        assert!(parse_written_lede("```json\n{\"lede\":\"Ledger found an implant in one wallet and blames a reseller.\"}\n```", headline).is_some());
+        // The headline again, too short, empty, or not JSON: no lede.
+        assert_eq!(parse_written_lede(r#"{"lede":"Ledger confirms hidden chip in crypto wallets."}"#, headline), None);
+        assert_eq!(parse_written_lede(r#"{"lede":"Chip found."}"#, headline), None);
+        assert_eq!(parse_written_lede(r#"{"lede":""}"#, headline), None);
+        assert_eq!(parse_written_lede("Ledger found an implant.", headline), None);
+        let long = format!(r#"{{"lede":"{}"}}"#, "word ".repeat(80));
+        assert_eq!(parse_written_lede(&long, headline), None);
+    }
 
     fn editorial_evidence() -> LedeEvidence {
         LedeEvidence {

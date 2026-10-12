@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats, useTriageProgress } from "../../hooks/useInbox";
 import { useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
-import { BoltIcon, ChatIcon, NewspaperIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
+import { ChatIcon, NewspaperIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 import { FeedsSection } from "./FeedsSection";
@@ -15,7 +15,7 @@ export function Sidebar() {
   const [askOpen, setAskOpen] = useState(false);
   const [askVisited, setAskVisited] = useState(false);
   const [returnToAsk, setReturnToAsk] = useState(false);
-  const { selectedArticleId, sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone, openCatchup } =
+  const { selectedArticleId, sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone } =
     useUiStore();
   const { data: feeds } = useFeeds();
   const { data: triageStats } = useTriageStats();
@@ -113,7 +113,6 @@ export function Sidebar() {
         >
           <ChatIcon />
         </button>
-        {/* The newspaper is Today everywhere; the bolt is Quick Catch-up. */}
         <button
           onClick={() => setSidebarView({ type: "today" })}
           className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
@@ -162,23 +161,6 @@ export function Sidebar() {
               style={{ fontSize: 17, fontWeight: 600 }}
             >
               Today
-            </span>
-          </div>
-          <div
-            onClick={openCatchup}
-            className="flex items-center gap-3 cursor-pointer transition-colors relative z-20 hover:text-text-primary"
-            style={{ padding: "6px 0" }}
-          >
-            <BoltIcon
-              size={16}
-              strokeWidth="1.5"
-              className={`flex-shrink-0 ${isActive({ type: "catchup" }) ? "opacity-100" : "opacity-50"}`}
-            />
-            <span
-              className={isActive({ type: "catchup" }) ? "text-text-primary" : "text-text-secondary"}
-              style={{ fontSize: 17, fontWeight: 600 }}
-            >
-              Quick Catch-up
             </span>
           </div>
         </div>

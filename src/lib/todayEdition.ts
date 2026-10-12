@@ -18,14 +18,40 @@ export interface TodayWindow {
  * re-derive this window (rather than caching an edition id) once the local
  * date rolls over past `endsAt`.
  */
-export function todayWindow(now: Date = new Date()): TodayWindow {
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfNextDay = new Date(startOfDay);
-  startOfNextDay.setDate(startOfNextDay.getDate() + 1);
+export function todayWindow(now: Date = new Date(), page: number = 1): TodayWindow {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const turn = Math.max(1, Math.floor(page)) - 1;
+  // The front page is today. Each page turned goes back a week: page 2 is
+  // the seven days before today, page 3 the week before that. Local
+  // midnights throughout, so a DST day is still a whole day.
+  const start = new Date(startOfToday);
+  const end = new Date(startOfToday);
+  if (turn === 0) {
+    end.setDate(end.getDate() + 1);
+  } else {
+    start.setDate(start.getDate() - 7 * turn);
+    end.setDate(end.getDate() - 7 * (turn - 1));
+  }
   return {
-    startsAt: Math.floor(startOfDay.getTime() / 1000),
-    endsAt: Math.floor(startOfNextDay.getTime() / 1000),
+    startsAt: Math.floor(start.getTime() / 1000),
+    endsAt: Math.floor(end.getTime() / 1000),
   };
+}
+
+/** How many pages back the paper offers: a year of weeks. */
+export const TODAY_PAGE_COUNT = 53;
+
+/** The dateline: one day's date, or the span of a wider window. */
+export function formatWindowDate(window: TodayWindow): string {
+  const start = new Date(window.startsAt * 1000);
+  const last = new Date(window.endsAt * 1000 - 1);
+  if (start.toDateString() === last.toDateString()) {
+    return start.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  }
+  const sameMonth = start.getMonth() === last.getMonth() && start.getFullYear() === last.getFullYear();
+  const from = start.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+  const to = sameMonth ? String(last.getDate()) : last.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+  return `${from} – ${to}`;
 }
 
 /** Milliseconds until `now` needs a fresh window (i.e. until `endsAt`). */

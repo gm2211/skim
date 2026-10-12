@@ -8,7 +8,7 @@ import { useRecentArticles, useRemoveRecent } from "../../hooks/useRecent";
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useFolders } from "../../hooks/useFolders";
 import { feedsForFolder } from "../../lib/smartFolder";
-import { BoltIcon, CheckCircleIcon, ChatIcon, PlusIcon, SearchIcon } from "../ui/icons";
+import { CheckCircleIcon, ChatIcon, PlusIcon, SearchIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
@@ -66,7 +66,6 @@ export function buildArticleFilter({
     case "inbox":
     case "recent":
     case "today":
-    case "catchup":
       break;
   }
   // Starred is a keep-this list, not a queue: you star an article because you
@@ -228,7 +227,6 @@ export function ArticleList() {
     listCollapsed,
     isPhone,
     setPhonePane,
-    openCatchup,
     setShowAddFeed,
   } = useUiStore();
   const markAllRead = useMarkAllRead();
@@ -242,8 +240,8 @@ export function ArticleList() {
   const { data: folders } = useFolders();
   const [searchQuery, setSearchQuery] = useState("");
   const [askOpen, setAskOpen] = useState(false);
-  // The sidebar header carries Add feed, Quick Catch-up and Ask Skim; this
-  // toolbar shows them only when that header is off screen.
+  // The sidebar header carries Add feed and Ask Skim; this toolbar shows
+  // them only when that header is off screen.
   const appActionsHere = isPhone || sidebarCollapsed;
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -421,8 +419,6 @@ export function ArticleList() {
       }
       case "today":
         return "Today";
-      case "catchup":
-        return "Quick Catch-up";
     }
   }, [sidebarView, themes, folders]);
 
@@ -624,14 +620,6 @@ export function ArticleList() {
                 <PlusIcon />
               </button>
             )}
-            <button
-              onClick={openCatchup}
-              className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
-              title="Quick Catch-up"
-              aria-label="Quick Catch-up"
-            >
-              <BoltIcon />
-            </button>
             <button
               onClick={() => setAskOpen(true)}
               className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"

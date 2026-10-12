@@ -159,9 +159,11 @@ pub(crate) fn validate_window_and_limit(
             "Today edition ends_at must be after starts_at".into(),
         ));
     }
-    if generated_at < starts_at || generated_at >= ends_at {
+    // A page is made inside its window (today's), or after it (an earlier
+    // week, turned to later); never before it opens.
+    if generated_at < starts_at {
         return Err(rusqlite::Error::InvalidParameterName(
-            "Today edition generated_at must be inside its explicit day window".into(),
+            "Today edition generated_at must not precede its window".into(),
         ));
     }
     if !matches!(story_limit, 5 | 10 | 20) {
@@ -199,24 +201,27 @@ pub fn collect_candidates(
         let Some(story) = queries::get_story(conn, &rank.story_id)? else {
             continue;
         };
-        if story.last_activity_at < generated_at - LOOKBACK_SECONDS
-            || story.last_activity_at >= ends_at
-        {
+        // A page made just after midnight reaches back a day; a page over a
+        // wider window ("Going back") reaches to the start of that window.
+        let earliest = (generated_at - LOOKBACK_SECONDS).min(starts_at);
+        if story.last_activity_at < earliest || story.last_activity_at >= ends_at {
             continue;
         }
         let Some(revision) = queries::get_latest_story_revision(conn, &rank.story_id)? else {
             continue;
         };
         // A new syndicated copy can advance activity without adding news.
-        // Keep prior-day consumed stories off the page until a material revision
-        // arrives. Existing editions return before generation and stay frozen.
+        // Keep stories consumed on another page (an earlier day, or today's
+        // page when this one spans a wider window) off this one until a
+        // material revision arrives. Existing editions return before
+        // generation and stay frozen.
         let already_consumed_without_update: bool = conn.query_row(
             "SELECT EXISTS (
                 SELECT 1 FROM edition_items consumed
                 JOIN editions previous ON previous.id = consumed.edition_id
                 JOIN edition_item_story_revisions member ON member.edition_id = consumed.edition_id AND member.item_story_id = consumed.story_id
                 WHERE member.member_story_id = ?1 AND consumed.is_consumed = 1
-                  AND previous.ends_at <= ?2
+                  AND (previous.starts_at != ?2 OR previous.ends_at != ?3)
                   AND NOT EXISTS (
                     SELECT 1 FROM story_revisions revision
                     WHERE revision.story_id = ?1
@@ -224,7 +229,7 @@ pub fn collect_candidates(
                       AND revision.is_material_change = 1
                   )
             )",
-            params![rank.story_id, starts_at],
+            params![rank.story_id, starts_at, ends_at],
             |row| row.get(0),
         )?;
         if already_consumed_without_update {
@@ -1171,6 +1176,26 @@ mod tests {
         let edition = get_or_generate(&conn, DAY_START, DAY_END, just_after_midnight, 5).unwrap();
         let ids: BTreeSet<&str> = edition.items.iter().map(|item| item.snapshot.story_id.as_str()).collect();
         assert_eq!(ids, BTreeSet::from(["last-evening", "overnight"]));
+    }
+
+    #[test]
+    fn earlier_week_page_covers_its_window_and_skips_what_today_consumed() {
+        let conn = setup_empty();
+        add_story(&conn, "today", 2, false, GENERATED_AT - 10);
+        add_story(&conn, "yesterday", 1, false, DAY_START - 20 * 60 * 60);
+        add_story(&conn, "three-days-ago", 1, false, DAY_START - 2 * 86_400 - 3_600);
+        add_story(&conn, "last-month", 1, false, DAY_START - 20 * 86_400);
+        let today = get_or_generate(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
+        let ids: BTreeSet<&str> = today.items.iter().map(|item| item.snapshot.story_id.as_str()).collect();
+        assert_eq!(ids, BTreeSet::from(["today"]));
+        set_item_consumed(&conn, &today.edition.id, "today", true, GENERATED_AT + 1).unwrap();
+
+        // Page 2: the seven days before today, turned to today, so made after it closed.
+        let week = get_or_generate(&conn, DAY_START - 7 * 86_400, DAY_START, GENERATED_AT, 5).unwrap();
+        assert_ne!(week.edition.id, today.edition.id);
+        let ids: BTreeSet<&str> = week.items.iter().map(|item| item.snapshot.story_id.as_str()).collect();
+        assert_eq!(ids, BTreeSet::from(["yesterday", "three-days-ago"]), "the week covers its window only");
+        assert!(get_or_generate(&conn, DAY_END, DAY_END + 86_400, GENERATED_AT, 5).is_err(), "a page cannot be made before its window opens");
     }
 
     #[test]

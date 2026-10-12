@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { firstSentence, isReadableExcerpt, msUntilWindowRollover, rankFor, themeColor, todayWindow } from "./todayEdition";
+import { firstSentence, formatWindowDate, isReadableExcerpt, msUntilWindowRollover, rankFor, themeColor, todayWindow } from "./todayEdition";
 
 // Pin the timezone so local-midnight math (and the DST case below) is
 // deterministic regardless of the machine/CI runner's own TZ.
@@ -12,6 +12,20 @@ afterAll(() => {
 });
 
 describe("todayWindow", () => {
+  it("turns back a week per page: page 2 is the seven days before today", () => {
+    const now = new Date(2026, 9, 12, 15, 30);
+    const front = todayWindow(now);
+    const page2 = todayWindow(now, 2);
+    const page3 = todayWindow(now, 3);
+    expect(page2.endsAt).toBe(front.startsAt);
+    expect(new Date(page2.startsAt * 1000)).toEqual(new Date(2026, 9, 5));
+    expect(page3.endsAt).toBe(page2.startsAt);
+    expect(new Date(page3.startsAt * 1000)).toEqual(new Date(2026, 9, 28 - 30));
+    expect(formatWindowDate(front)).toBe("Monday, October 12");
+    expect(formatWindowDate(page2)).toBe("October 5 – 11");
+    expect(formatWindowDate(page3)).toBe("September 28 – October 4");
+  });
+
   it("returns exact local midnight-to-midnight bounds on an ordinary day", () => {
     const now = new Date(2024, 5, 15, 14, 30, 0); // June 15 2024, 2:30pm — no DST transition
     const win = todayWindow(now);

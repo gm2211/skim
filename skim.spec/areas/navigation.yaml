@@ -15,6 +15,25 @@ behaviors:
       It covers article actions, Go destinations, actions such as catch-up, Ask, refresh, mark all
       read, add feed, view toggles, every Settings tab, every folder and feed, and live article
       search after two typed characters. Ctrl+N/Ctrl+P and arrow keys move the selection.
+  - id: command-palette-chat
+    description: >-
+      Desktop: text the palette has no command for is a question for Skim's assistant, answered
+      inside the palette with links to the articles it cites and an "Open full chat" follow-up.
+    details: >-
+      An "Ask Skim" row is always offered for two or more typed characters; it comes first when the
+      input reads as a question or request, or when no command matches well. Enter asks; the answer
+      shows what the assistant did (searched, read, opened), and its cited articles become the
+      palette's rows. Enter on an empty input opens the selected article, typing asks a follow-up,
+      Backspace on an empty input returns to commands, and Cmd+Enter (or the footer button)
+      continues the conversation in the full Ask Skim chat. Cmd+Enter from the command list sends
+      the typed question straight to the full chat.
+    source:
+      text: >-
+        also I want cmd+k to be context aware and act as chat (with "open full chat" followup action)
+        if command I type is not in the list of commands - like I should be able to type "where's an
+        article about..." and it should use agent and tools to answer my question (in this case
+        search for the article I'm looking for)
+      reference: Giulio, project thread "Cmd+K as an AI assistant", 2026-10-12
   - id: keyboard-shortcuts
     description: >-
       Desktop: Cmd+, opens Settings, Cmd+Option+S toggles the sidebar, and Escape closes dialogs.

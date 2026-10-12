@@ -72,12 +72,13 @@ behaviors:
       report or feed item. No stock art.
   - id: ask-about-today
     description: >-
-      The reader can chat with the whole Today page or with a single story. The chat reads exactly
-      that page's or story's reports and cites them, rather than searching the library.
+      The reader can chat with the whole Today page or with a single story. The chat starts from
+      that page's or story's reports and cites them.
     details: >-
-      Desktop has an Ask button in the top bar for the page and an Ask action on each story; iOS has
-      the same in the title bar and on each story. A page chat reads each story's lead report first,
-      then the rest, up to 30 reports.
+      Desktop has an Ask button in the top bar for the page and an Ask action on each story; both
+      open the app assistant (the same one Cmd+K uses) with the page's stories, or the chosen story,
+      as its context. iOS has the same buttons in the title bar and on each story, and its chat reads
+      exactly those reports: each story's lead report first, then the rest, up to 30.
     source:
       text: I would like to be able to chat with the whole page or a single story
       reference: Giulio, project chat, 2026-10-12

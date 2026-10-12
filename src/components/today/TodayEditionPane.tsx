@@ -8,8 +8,9 @@ import { TodayStorySkeleton } from "./TodayStorySkeleton";
 import { TodayStory } from "./TodayStory";
 import { ModelPicker } from "../common/ModelPicker";
 import { ChatIcon, RefreshIcon } from "../ui/icons";
-import { AskSkimDialog, type PinnedChat } from "../chat/AskSkimDialog";
-import type { TodayEditionItem } from "../../services/types";
+import { openAgentChat } from "../../stores/agentChatStore";
+import { useAgentContext } from "../../hooks/useAgentContext";
+import { storyForAgent } from "../../lib/agentContext";
 import { IconButton } from "../common/IconButton";
 import "./TodayFrontPage.css";
 
@@ -45,36 +46,6 @@ const CogIcon = () => (
   </svg>
 );
 
-/** The reports a chat about the page reads: each story's lead report first,
- *  so every story is covered before any story's second report. */
-function pageReportIds(items: TodayEditionItem[]): string[] {
-  const leads = items.flatMap((item) => item.representative_article_id ? [item.representative_article_id] : []);
-  const rest = items.flatMap((item) => item.member_articles.filter((member) => member.membership_type !== "duplicate").map((member) => member.article_id));
-  return [...new Set([...leads, ...rest])];
-}
-
-function pageChat(items: TodayEditionItem[]): PinnedChat {
-  return {
-    title: "Ask about Today",
-    articleIds: pageReportIds(items),
-    intro: `Ask about today's ${items.length} ${items.length === 1 ? "story" : "stories"}.`,
-    placeholder: "Ask about today's stories…",
-    prompts: ["What matters most today?", "Give me the day in five bullets", "What connects these stories?"],
-  };
-}
-
-function storyChat(item: TodayEditionItem): PinnedChat {
-  const ids = [item.representative_article_id, ...item.member_articles.map((member) => member.article_id)]
-    .filter((id): id is string => !!id);
-  return {
-    title: "Ask about this story",
-    articleIds: [...new Set(ids)],
-    intro: item.snapshot_title,
-    placeholder: "Ask about this story…",
-    prompts: ["Why does this matter?", "Where do the reports disagree?", "What happens next?"],
-  };
-}
-
 function formatWindowDate(startsAtSeconds: number): string {
   return new Date(startsAtSeconds * 1000).toLocaleDateString("en-US", {
     weekday: "long",
@@ -93,7 +64,8 @@ export function TodayEditionPane() {
   const [pageSelection, setPageSelection] = useState({ key: "", index: 0 });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [ask, setAsk] = useState<{ key: string; chat: PinnedChat } | null>(null);
+  // Asks go to the app's assistant, which already knows the stories on the page.
+  const agentContext = useAgentContext();
   const settingsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!settingsOpen) return;
@@ -164,7 +136,7 @@ export function TodayEditionPane() {
         <div className="flex-1" />
         {items.length > 0 && <IconButton
           label="Ask about Today"
-          onClick={() => setAsk({ key: `page:${data?.edition.id ?? ""}`, chat: pageChat(items) })}
+          onClick={() => openAgentChat({ context: { ...agentContext, story: null } })}
           className="text-text-secondary hover:text-text-primary hover:bg-white/10"
         >
           <ChatIcon size={18} />
@@ -308,7 +280,7 @@ export function TodayEditionPane() {
             isSaving={setConsumed.isPending}
             onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
             onOpenArticle={handleOpenArticle}
-            onAsk={() => setAsk({ key: `story:${item.story_id}`, chat: storyChat(item) })}
+            onAsk={() => openAgentChat({ context: { ...agentContext, story: storyForAgent(item) } })}
           />,
         }))} />}
 
@@ -332,7 +304,6 @@ export function TodayEditionPane() {
         </div>
         <button className="today-story-control" disabled={pageIndex + 1 >= pageCount} onClick={() => changePage(pageIndex + 1)}>Next page</button>
       </nav>}
-      {ask && <AskSkimDialog key={ask.key} pinned={ask.chat} onClose={() => setAsk(null)} onOpenArticle={handleOpenArticle} />}
     </div>
   );
 }

@@ -177,7 +177,7 @@ pub struct WebCitation {
 }
 
 /// Feed publication metadata must not be mistaken for an event or fetch date.
-fn publication_context(published_at: Option<i64>) -> String {
+pub(crate) fn publication_context(published_at: Option<i64>) -> String {
     let date = published_at
         .and_then(|timestamp| chrono::DateTime::from_timestamp(timestamp, 0))
         .map(|date| date.format("%Y-%m-%dT%H:%M:%SZ").to_string())
@@ -203,7 +203,7 @@ fn generated_summary_context(summary: Option<&str>) -> String {
 }
 
 /// Search terms carry topic words, not request scaffolding or assistant prose.
-fn query_keywords(query: &str) -> Vec<String> {
+pub(crate) fn query_keywords(query: &str) -> Vec<String> {
     const STOP: &[&str] = &["a", "an", "the", "and", "or", "of", "to", "in", "on", "at", "by", "for", "from", "with", "about", "this", "that", "these", "those", "it", "its", "is", "are", "was", "were", "be", "been", "what", "which", "who", "when", "where", "how", "why", "did", "does", "do", "can", "could", "would", "you", "your", "my", "me", "our", "we", "i", "find", "search", "show", "look", "looking", "please", "article", "articles", "piece", "pieces", "story", "stories", "feed", "feeds", "library", "read", "tell", "more", "catch", "up", "them", "they", "say", "said"];
     let mut terms = Vec::new();
     for word in query.split(|c: char| !c.is_alphanumeric()).map(str::to_lowercase) {
@@ -335,7 +335,7 @@ fn retrieve_chat_articles(
     retrieve_chat_articles_for_terms(conn, scope, &terms, allow_recent_fallback)
 }
 
-fn retrieve_chat_articles_for_terms(
+pub(crate) fn retrieve_chat_articles_for_terms(
     conn: &rusqlite::Connection,
     scope: &str,
     terms: &[String],
@@ -350,6 +350,7 @@ fn retrieve_chat_articles_for_terms(
         })?;
     let scope_clause = match scope {
         "unread" => "a.is_read = 0",
+        "starred" => "a.is_starred = 1",
         "inbox" => "COALESCE(t.priority, 0) >= 3",
         _ => "1 = 1",
     };
@@ -436,24 +437,6 @@ fn retrieve_chat_articles_with_references(
     retrieve_chat_articles(conn, scope, query, messages)
 }
 
-/// Most reports a pinned chat (a Today page or one of its stories) reads.
-const PINNED_CHAT_ARTICLES: usize = 30;
-
-/// A chat about something on screen reads exactly its reports, in the order
-/// given, instead of searching the library.
-fn pinned_chat_articles(
-    conn: &rusqlite::Connection,
-    ids: &[String],
-) -> Result<Vec<crate::db::models::ArticleWithFeed>, rusqlite::Error> {
-    let mut articles: Vec<crate::db::models::ArticleWithFeed> = Vec::new();
-    for id in ids {
-        if articles.len() == PINNED_CHAT_ARTICLES { break; }
-        if articles.iter().any(|article| article.article.id == *id) { continue; }
-        if let Some(article) = queries::get_article_by_id(conn, id)? { articles.push(article); }
-    }
-    Ok(articles)
-}
-
 /// Evidence selection uses user-authored topic context only. Assistant output
 /// and generated summaries never become retrieval terms or source evidence.
 fn evidence_query(query: &str, messages: &[ChatMessageInput], source: Option<&str>) -> String {
@@ -488,7 +471,7 @@ fn article_chat_evidence(source: &str, messages: &[ChatMessageInput], max_chars:
 }
 
 /// The same production selector supplies article, library, and router evidence.
-fn query_excerpt(text: &str, query: &str, max_chars: usize) -> String {
+pub(crate) fn query_excerpt(text: &str, query: &str, max_chars: usize) -> String {
     crate::db::story_policy::chat_evidence(text, &query_keywords(query).join(" "), max_chars)
 }
 
@@ -504,7 +487,6 @@ pub async fn chat_with_articles(
     query: String,
     messages: Vec<ChatMessageInput>,
     prior_article_ids: Option<Vec<String>>,
-    pinned_article_ids: Option<Vec<String>>,
 ) -> Result<ArticleChatResponse, String> {
     let trimmed_query = query.trim().to_string();
     if trimmed_query.is_empty() {
@@ -514,14 +496,9 @@ pub async fn chat_with_articles(
     let (selected, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let settings_json = queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
-        let pinned = pinned_article_ids.unwrap_or_default();
-        let selected = if pinned.is_empty() {
-            retrieve_chat_articles_with_references(&conn, &scope, &trimmed_query, &messages,
-                prior_article_ids.as_deref().unwrap_or_default())
-                .map_err(|e| e.to_string())?
-        } else {
-            pinned_chat_articles(&conn, &pinned).map_err(|e| e.to_string())?
-        };
+        let selected = retrieve_chat_articles_with_references(&conn, &scope, &trimmed_query, &messages,
+            prior_article_ids.as_deref().unwrap_or_default())
+            .map_err(|e| e.to_string())?;
         (selected, settings_json)
     };
     if selected.is_empty() {
@@ -1072,7 +1049,7 @@ fn html_entities_decode(s: &str) -> String {
 }
 
 /// Resolve chat-specific AI settings, falling back to main settings
-fn resolve_chat_settings(ai: &AiSettings) -> AiSettings {
+pub(crate) fn resolve_chat_settings(ai: &AiSettings) -> AiSettings {
     let mut settings = ai.clone();
 
     if let Some(ref chat_provider) = ai.chat_provider {
@@ -1157,16 +1134,6 @@ mod tests {
         assert!(unknown.contains("Publication time (UTC): unknown"));
         assert!(!unknown.contains("1970-01-01"));
         assert!(publication_context(Some(i64::MAX)).contains("unknown"));
-    }
-
-    #[test]
-    fn pinned_chat_reads_exactly_the_given_reports_in_order() {
-        let conn = retrieval_database();
-        let ids = ["cached", "missing", "old", "cached"].map(String::from);
-        let selected = pinned_chat_articles(&conn, &ids).unwrap();
-        assert_eq!(selected.iter().map(|a| a.article.id.as_str()).collect::<Vec<_>>(), ["cached", "old"]);
-        let many: Vec<String> = (0..50).map(|index| format!("recent-{index}")).collect();
-        assert_eq!(pinned_chat_articles(&conn, &many).unwrap().len(), PINNED_CHAT_ARTICLES);
     }
 
     fn retrieval_database() -> rusqlite::Connection {

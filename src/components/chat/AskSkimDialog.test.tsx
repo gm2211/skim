@@ -4,11 +4,12 @@ import userEvent from "@testing-library/user-event";
 import { AskSkimDialog } from "./AskSkimDialog";
 import { selectChatText } from "../../test/selectChatText";
 import { useUiStore } from "../../stores/uiStore";
-import { chatWithArticles } from "../../services/commands";
+import { askAgent, chatWithArticles } from "../../services/commands";
+import { useAgentChatStore } from "../../stores/agentChatStore";
 
 let settings = { ai: { provider: "none", chat_provider: "same" } };
 vi.mock("../../hooks/useSettings", () => ({ useSettings: () => ({ data: settings }) }));
-vi.mock("../../services/commands", () => ({ chatWithArticles: vi.fn() }));
+vi.mock("../../services/commands", () => ({ chatWithArticles: vi.fn(), askAgent: vi.fn() }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 vi.mock("../common/ModelPicker", () => ({
   ModelPicker: (p: { surface: string; disabled?: boolean }) => (
@@ -115,7 +116,7 @@ describe("AskSkimDialog setup recovery", () => {
     expect(screen.getByText("Evidence [1]")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Send" }));
     await screen.findByText("Answer");
-    expect(chatWithArticles).toHaveBeenLastCalledWith("all", "Summarize that", [{ role: "user", content: "Find quasar" }, { role: "assistant", content: "Evidence [1]" }], ["a"], undefined);
+    expect(chatWithArticles).toHaveBeenLastCalledWith("all", "Summarize that", [{ role: "user", content: "Find quasar" }, { role: "assistant", content: "Evidence [1]" }], ["a"]);
   });
 
   it("explains missing MLX weights without claiming the provider is unconfigured", async () => {
@@ -145,7 +146,7 @@ describe("AskSkimDialog setup recovery", () => {
     expect(screen.getByRole("textbox")).toHaveValue("What changed today?");
     await user.click(screen.getByRole("button", { name: "Send" }));
     expect(await screen.findByText("Answer")).toBeInTheDocument();
-    expect(chatWithArticles).toHaveBeenCalledWith("unread", "What changed today?", [], undefined, undefined);
+    expect(chatWithArticles).toHaveBeenCalledWith("unread", "What changed today?", [], undefined);
   });
 
   it("uses separate chat provider even when main AI is disabled", () => {
@@ -213,4 +214,49 @@ it("renders Markdown and preserves quoted Ask Skim follow-ups through failed sen
   expect(vi.mocked(chatWithArticles).mock.calls[2][1]).toBe(quoted);
   await user.type(screen.getByRole("textbox"), "More{Enter}");
   expect(vi.mocked(chatWithArticles).mock.calls[3][2]).toContainEqual({ role: "user", content: quoted });
+});
+
+describe("AskSkimDialog continuing an agent conversation", () => {
+  const agentAnswer = {
+    content: "It compares Tokio and smol [1].", provider: "openai", model: "m",
+    sources: [{ id: "r1", title: "Rust async runtimes", feed_title: "Lobsters", url: null, published_at: null, source_type: "article" as const }],
+    article_ids: ["r1"], actions: [], steps: [{ tool: "get_article", label: "Read “Rust async runtimes”" }],
+  };
+
+  it("picks up the palette's conversation and answers follow-ups from the agent with the same context", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    vi.mocked(askAgent).mockResolvedValue(agentAnswer);
+    useAgentChatStore.setState({ seed: {
+      context: { view: "today", story: { story_id: "s1", title: "Async Rust", article_ids: ["r1"] } },
+      messages: [
+        { role: "user", content: "where's the rust piece?" },
+        { role: "assistant", content: "Found it: [1]", sources: agentAnswer.sources, articleIds: ["r1"] },
+      ],
+    } });
+    const user = userEvent.setup();
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(screen.getByText("Found it: [1]")).toBeInTheDocument();
+    expect(screen.getByText("Story: Async Rust")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Articles to search" })).not.toBeInTheDocument();
+    expect(useAgentChatStore.getState().seed).toBeNull();
+
+    await user.type(screen.getByRole("textbox"), "What does it say?");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText(/compares Tokio and smol/)).toBeInTheDocument();
+    expect(screen.getByText("Read “Rust async runtimes”")).toBeInTheDocument();
+    const [messages, context, priorIds] = vi.mocked(askAgent).mock.calls[0];
+    expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(context).toMatchObject({ view: "today", story: { story_id: "s1" } });
+    expect(priorIds).toEqual(["r1"]);
+    expect(chatWithArticles).not.toHaveBeenCalled();
+  });
+
+  it("sends a handed-over question straight away", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    vi.mocked(askAgent).mockResolvedValue(agentAnswer);
+    useAgentChatStore.setState({ seed: { context: { view: "all" }, prompt: "what's new in rust?", autoSend: true } });
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(await screen.findByText(/compares Tokio and smol/)).toBeInTheDocument();
+    expect(vi.mocked(askAgent).mock.calls[0][0]).toEqual([{ role: "user", content: "what's new in rust?" }]);
+  });
 });

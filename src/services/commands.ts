@@ -538,10 +538,42 @@ export const chatWithArticles = (
   query: string,
   messages: ChatMessageInput[],
   priorArticleIds?: string[],
-  /** Read exactly these reports instead of searching the library. */
-  pinnedArticleIds?: string[],
 ) =>
-  invoke<ArticleChatResponse>("chat_with_articles", { scope, query, messages, priorArticleIds: priorArticleIds ?? null, pinnedArticleIds: pinnedArticleIds ?? null });
+  invoke<ArticleChatResponse>("chat_with_articles", { scope, query, messages, priorArticleIds: priorArticleIds ?? null });
+// App agent: chat that can search, read and open articles, and knows what
+// the user is looking at. Shared by the command palette and Ask Skim.
+export interface AgentStory {
+  story_id: string;
+  title: string;
+  summary?: string | null;
+  article_ids: string[];
+}
+export interface AgentContext {
+  view?: string | null;
+  view_label?: string | null;
+  article_id?: string | null;
+  story?: AgentStory | null;
+  page_stories?: AgentStory[];
+}
+export interface AgentAction {
+  type: "open_article";
+  article_id: string;
+}
+export interface AgentStep {
+  tool: string;
+  label: string;
+}
+export interface AgentResponse {
+  content: string;
+  provider: string;
+  model: string;
+  sources: ChatSource[];
+  article_ids: string[];
+  actions: AgentAction[];
+  steps: AgentStep[];
+}
+export const askAgent = (messages: ChatMessageInput[], context: AgentContext, priorArticleIds?: string[]) =>
+  invoke<AgentResponse>("ask_agent", { messages, context, priorArticleIds: priorArticleIds ?? null });
 export const webSearch = (query: string) =>
   invoke<SearchResult[]>("web_search", { query });
 

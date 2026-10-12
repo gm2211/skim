@@ -43,6 +43,16 @@ test('ranker tiers: exact > prefix > word prefix > substring > initials > scatte
   assert.ok(scoreText('Quick Catch-up', 'qc') > scoreText('Quick Catch-up', 'qkc'));
   assert.equal(scoreText('Starred', 'xyz'), -1);
   assert.equal(scoreText('Café crème', 'crè'), 600);
+  assert.equal(scoreText('Create a saved car search', 'saved cars', false), -1);
+});
+
+test('scattered letters match titles only, not long keyword or detail text', () => {
+  const commands = [
+    cmd('new-hunt', 'Start new hunt', 'Commands', ['new search create'], { detail: 'Create a saved car search' }),
+    cmd('shortlist', 'Shortlist', 'Navigate', ['saved cars bookmarks'], { detail: '3 saved cars' }),
+  ];
+  assert.deepEqual(rankCommands(commands, 'saved cars').map(c => c.id), ['shortlist']);
+  assert.deepEqual(rankCommands(commands, 'snh').map(c => c.id), ['new-hunt']);
 });
 
 test('ranker keeps the given order for an empty query and for ties, and applies a limit', () => {

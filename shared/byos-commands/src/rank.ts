@@ -6,9 +6,9 @@ const words = (text: string) => text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
  * Score how well `query` matches `text`: whole-text and word prefixes beat
  * substrings, which beat initials ("qc" for "Quick Catch-up"), which beat
  * scattered letters ("refrsh"). Returns -1 when the letters are not all
- * present in order.
+ * present in order. `fuzzy: false` stops after substrings.
  */
-export function scoreText(text: string, query: string): number {
+export function scoreText(text: string, query: string, fuzzy = true): number {
   const t = text.toLocaleLowerCase();
   const q = query.toLocaleLowerCase().trim();
   if (!q) return 0;
@@ -19,6 +19,7 @@ export function scoreText(text: string, query: string): number {
   const terms = q.split(/\s+/);
   if (terms.length > 1 && terms.every(term => tokens.some(w => w.startsWith(term)))) return 500;
   if (t.includes(q)) return 400;
+  if (!fuzzy) return -1;
   const compact = q.replace(/\s+/g, '');
   if (tokens.map(w => w[0]).join('').startsWith(compact)) return 350;
 
@@ -41,15 +42,17 @@ export const CROSS_FIELD_SCORE = 200;
 
 /** Best score across a command's fields; a title match outranks the same kind of keyword match. */
 export function scoreCommand(command: Command, query: string): number {
-  const fields: Array<[string, number]> = [
-    [command.title, 5],
-    [`${command.group} ${command.title}`, 0],
-    ...(command.keywords ?? []).map((keyword): [string, number] => [keyword, -250]),
-    ...(command.detail ? [[command.detail, -250] as [string, number]] : []),
+  // Initials and scattered letters apply to the title only: in longer keyword or
+  // detail text they match almost anything ("saved cars" in "Create a saved car search").
+  const fields: Array<[string, number, boolean]> = [
+    [command.title, 5, true],
+    [`${command.group} ${command.title}`, 0, false],
+    ...(command.keywords ?? []).map((keyword): [string, number, boolean] => [keyword, -250, false]),
+    ...(command.detail ? [[command.detail, -250, false] as [string, number, boolean]] : []),
   ];
   let best = -1;
-  for (const [text, adjust] of fields) {
-    const score = scoreText(text, query);
+  for (const [text, adjust, fuzzy] of fields) {
+    const score = scoreText(text, query, fuzzy);
     if (score >= 0) best = Math.max(best, Math.max(0, score + adjust));
   }
   if (best >= 0) return best;

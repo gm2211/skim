@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { IconButton, RefreshIcon } from "../common/IconButton";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import * as commands from "../../services/commands";
+import { ChatIcon } from "../ui/icons";
 import type { TodayEditionItem, TodayEditionMemberArticle } from "../../services/types";
 import { firstSentence, isReadableExcerpt, themeColor, type StoryRank } from "../../lib/todayEdition";
 
@@ -12,6 +13,8 @@ interface Props {
   isSaving?: boolean;
   onToggleConsumed: (storyId: string, isConsumed: boolean) => void;
   onOpenArticle: (articleId: string) => void;
+  /** Opens a chat that reads this story's reports. */
+  onAsk?: () => void;
 }
 
 function Reference({ member, onOpenArticle }: {
@@ -131,7 +134,7 @@ function Figure({ value, label }: { value: string; label: string }) {
   return <p className="today-figure"><strong>{value}</strong><span>{label}</span></p>;
 }
 
-export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onOpenArticle }: Props) {
+export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onOpenArticle, onAsk }: Props) {
   const [expanded, setExpanded] = useState(false);
   const referencesId = useId();
   // Every report remains available on request, including syndicated copies.
@@ -215,6 +218,12 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{ transform: expanded ? "rotate(90deg)" : undefined }}><path d="m9 5 7 7-7 7" /></svg>
             {members.length} {members.length === 1 ? "report" : "reports"}
+          </button>
+        )}
+        {onAsk && (
+          <button className="today-story-control today-story-ask text-text-secondary hover:text-text-primary" onClick={onAsk} aria-label={`Ask about ${item.snapshot_title}`}>
+            <ChatIcon size={14} />
+            Ask
           </button>
         )}
         <IconButton

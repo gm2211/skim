@@ -18,6 +18,8 @@ struct TodayEditionView: View {
     @Binding var showSettings: Bool
     /// Leaves Today for the article list.
     var onBrowseArticles: () -> Void
+    /// Opens a chat about one story; the article list owns the chat sheet.
+    var onAsk: (AIChatRequest) -> Void = { _ in }
 
     /// Stories that get a written lede and a full card; the rest of the page
     /// runs as two-up briefs.
@@ -100,7 +102,8 @@ struct TodayEditionView: View {
                 rank: Self.rank(for: position),
                 isWritingLede: writing,
                 isUpdating: model.isUpdatingToday,
-                onToggleConsumed: { Task { await model.setTodayConsumed(item) } }
+                onToggleConsumed: { Task { await model.setTodayConsumed(item) } },
+                onAsk: { onAsk(TodayChat.story(item, model: model)) }
             )
             .padding(.horizontal, position == 0 ? -18 : 0)
         }
@@ -117,7 +120,8 @@ struct TodayEditionView: View {
                         rank: .brief,
                         isWritingLede: false,
                         isUpdating: model.isUpdatingToday,
-                        onToggleConsumed: { Task { await model.setTodayConsumed(item) } }
+                        onToggleConsumed: { Task { await model.setTodayConsumed(item) } },
+                        onAsk: { onAsk(TodayChat.story(item, model: model)) }
                     )
                 }
             }
@@ -356,6 +360,7 @@ private struct TodayStoryView: View {
     var isWritingLede: Bool
     var isUpdating: Bool
     var onToggleConsumed: () -> Void
+    var onAsk: () -> Void
     @State private var referencesExpanded = false
     @ObservedObject private var imageStore = TodayImageStore.shared
 
@@ -614,6 +619,7 @@ private struct TodayStoryView: View {
                     .accessibilityValue(referencesExpanded ? "Expanded" : "Collapsed")
                 }
                 Spacer()
+                askButton
                 readToggle
             }
             if referencesExpanded {
@@ -629,6 +635,17 @@ private struct TodayStoryView: View {
                 }
             }
         }
+    }
+
+    private var askButton: some View {
+        Button(action: onAsk) {
+            Image(systemName: SkimIcon.chat)
+                .font(.system(size: 17))
+                .foregroundStyle(SkimStyle.secondary)
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Ask about this story")
     }
 
     private var readToggle: some View {
@@ -697,6 +714,50 @@ private struct TodayStoryView: View {
             Link(destination: url) { label }
         } else {
             label
+        }
+    }
+}
+
+/// Chats about Today: the whole page, or one story. Each reads exactly the
+/// reports on screen instead of searching the library.
+@MainActor
+enum TodayChat {
+    static func page(_ items: [TodayEditionItem], model: AppModel) -> AIChatRequest {
+        let leads = items.compactMap { item in
+            (item.sourceArticles.first(where: \.isRepresentative) ?? item.sourceArticles.first)?.liveArticle
+        }
+        let rest = items.flatMap { $0.sourceArticles.filter { $0.membershipType != .duplicate }.compactMap(\.liveArticle) }
+        return request(
+            key: "today-page-\(items.first?.snapshot.editionID ?? "")",
+            title: "Ask about Today",
+            placeholder: "Ask about today's \(items.count) \(items.count == 1 ? "story" : "stories"): what matters most, what connects them.",
+            reports: leads + rest,
+            model: model
+        )
+    }
+
+    static func story(_ item: TodayEditionItem, model: AppModel) -> AIChatRequest {
+        let reports = item.sourceArticles.sorted { $0.isRepresentative && !$1.isRepresentative }.compactMap(\.liveArticle)
+        return request(
+            key: "today-story-\(item.snapshot.editionID)-\(item.id)",
+            title: "Ask about this story",
+            placeholder: "\(item.snapshot.snapshotTitle)\n\nAsk why it matters, where the reports disagree, or what happens next.",
+            reports: reports,
+            model: model
+        )
+    }
+
+    private static func request(key: String, title: String, placeholder: String, reports: [Article], model: AppModel) -> AIChatRequest {
+        var unique: [Article] = []
+        for report in reports where !unique.contains(where: { $0.id == report.id }) { unique.append(report) }
+        return AIChatRequest(sessionKey: key, title: title, placeholder: placeholder) { conversation in
+            let context = await model.articlesForTodayChat(unique)
+            guard !context.isEmpty else {
+                return AIChatAnswer(text: "These reports are no longer on this device. Refresh your feeds and try again.", articles: [])
+            }
+            let (text, citations) = try await NativeAI.chat(conversation: conversation, articles: context, settings: model.settings)
+            return AIChatAnswer(text: text, articles: context, webCitations: citations,
+                                articleHandles: NativeAI.libraryChatHandles(articles: context, conversation: conversation))
         }
     }
 }

@@ -16,6 +16,10 @@ pub const SECTION_WIDELY_COVERED: &str = "widely_covered";
 pub const SECTION_UNIQUE_FINDS: &str = "unique_finds";
 pub const SECTION_UPDATES: &str = "updates";
 const SCOPE_TODAY: &str = "today";
+/// How far back an edition reaches for stories. A page made just after
+/// midnight would otherwise hold only what landed in the last few minutes;
+/// stories read in an earlier edition stay off it either way.
+pub const LOOKBACK_SECONDS: i64 = 24 * 60 * 60;
 #[cfg(test)]
 const MAX_RANK_CANDIDATES: usize = 10_000;
 
@@ -131,10 +135,13 @@ pub fn get_or_generate(
 ) -> Result<TodayEditionView, rusqlite::Error> {
     validate_window_and_limit(starts_at, ends_at, generated_at, story_limit)?;
     let id = edition_id(starts_at, ends_at, story_limit);
-    if queries::get_edition(conn, &id)?.is_some() {
-        let existing = load(conn, &id)?;
-        if !existing.items.is_empty() {
-            return Ok(existing);
+    if let Some(view) = frozen(conn, &id)? {
+        return Ok(view);
+    }
+    if let Some(view) = existing(conn, &id)? {
+        let candidates = collect_candidates(conn, starts_at, ends_at, generated_at, story_limit)?;
+        if !has_new_arrivals(conn, &view, &candidates)? {
+            return Ok(view);
         }
     }
     generate(conn, &id, starts_at, ends_at, generated_at, story_limit)?;
@@ -192,7 +199,9 @@ pub fn collect_candidates(
         let Some(story) = queries::get_story(conn, &rank.story_id)? else {
             continue;
         };
-        if story.last_activity_at < starts_at || story.last_activity_at >= ends_at {
+        if story.last_activity_at < generated_at - LOOKBACK_SECONDS
+            || story.last_activity_at >= ends_at
+        {
             continue;
         }
         let Some(revision) = queries::get_latest_story_revision(conn, &rank.story_id)? else {
@@ -277,11 +286,51 @@ pub fn candidate_fingerprint(candidates: &[Candidate]) -> String {
 pub fn frozen(conn: &Connection, id: &str) -> Result<Option<TodayEditionView>, rusqlite::Error> {
     if queries::get_edition(conn, id)?.is_some() {
         let view = load(conn, id)?;
-        if !view.items.is_empty() {
+        if is_settled(&view) {
             return Ok(Some(view));
         }
     }
     Ok(None)
+}
+
+/// An edition stops changing once it is full or the reader has started on
+/// it. Until then a short page (one made when few stories had arrived) may be
+/// rebuilt with more stories; nothing on it has been read, so nothing moves
+/// under the reader.
+pub fn is_settled(view: &TodayEditionView) -> bool {
+    !view.items.is_empty()
+        && (view.total_count >= view.edition.story_limit || view.consumed_count > 0)
+}
+
+/// The edition as it stands, if there is one with stories on it.
+pub fn existing(conn: &Connection, id: &str) -> Result<Option<TodayEditionView>, rusqlite::Error> {
+    if queries::get_edition(conn, id)?.is_none() {
+        return Ok(None);
+    }
+    let view = load(conn, id)?;
+    Ok((!view.items.is_empty()).then_some(view))
+}
+
+/// The indexed stories an edition covers. Grouping can fold several into one
+/// item, so these, not the items, say whether more have arrived.
+pub fn covered_story_ids(conn: &Connection, id: &str) -> Result<BTreeSet<String>, rusqlite::Error> {
+    let mut statement = conn.prepare(
+        "SELECT DISTINCT member_story_id FROM edition_item_story_revisions WHERE edition_id = ?1",
+    )?;
+    let ids = statement.query_map(params![id], |row| row.get(0))?;
+    ids.collect()
+}
+
+/// Whether a story the page doesn't cover has arrived since it was made.
+pub fn has_new_arrivals(
+    conn: &Connection,
+    view: &TodayEditionView,
+    candidates: &[Candidate],
+) -> Result<bool, rusqlite::Error> {
+    let covered = covered_story_ids(conn, &view.edition.id)?;
+    Ok(candidates.iter().any(|candidate| {
+        candidate.timestamp > view.edition.generated_at && !covered.contains(&candidate.rank.story_id)
+    }))
 }
 
 pub fn finish_semantic(
@@ -463,17 +512,24 @@ fn persist_candidates(
         total_source_count,
     };
     let transaction = conn;
-    // Empty placeholders can recover after feed refresh. Recheck in the same
-    // transaction as replacement; never overwrite a populated frozen edition.
+    // Empty and short unread editions can grow after feeds refresh. Recheck in
+    // the same transaction as replacement; never overwrite a settled edition
+    // or swap a page for one with fewer stories.
+    let mut carried = Vec::new();
     if queries::get_edition(&transaction, id)?.is_some() {
-        let has_items: bool = transaction.query_row(
-            "SELECT EXISTS (SELECT 1 FROM edition_items WHERE edition_id = ?1)",
-            params![id],
-            |row| row.get(0),
-        )?;
-        if has_items || is_empty {
+        let current = load(&transaction, id)?;
+        let covered = selected_with_members
+            .iter()
+            .flat_map(|(candidate, _)| candidate.constituents.iter().map(|(story_id, _)| story_id))
+            .collect::<BTreeSet<_>>()
+            .len() as i64;
+        let grows = current.items.is_empty()
+            || covered > covered_story_ids(&transaction, id)?.len() as i64
+                && selected_with_members.len() as i64 >= current.total_count;
+        if is_empty || is_settled(&current) || !grows {
             return Ok(());
         }
+        carried = carried_writing(&transaction, id)?;
         transaction.execute("DELETE FROM editions WHERE id = ?1", params![id])?;
     }
     queries::insert_edition(&transaction, &edition)?;
@@ -549,6 +605,74 @@ fn persist_candidates(
                     member.is_representative as i32,
                 ],
             )?;
+        }
+    }
+    restore_writing(&transaction, id, carried)?;
+    Ok(())
+}
+
+/// Written ledes and editorials on a page that is being rebuilt with more
+/// stories, so stories that stay on it keep what was already written.
+struct CarriedWriting {
+    story_id: String,
+    lede: Option<(String, Option<String>, Option<String>, Option<i64>)>,
+    editorial: Option<(String, String, String)>,
+}
+
+fn carried_writing(conn: &Connection, id: &str) -> Result<Vec<CarriedWriting>, rusqlite::Error> {
+    let mut statement = conn.prepare(
+        "SELECT item.story_id, item.lede, item.lede_source_article_id,
+                item.lede_source_evidence_hash, item.lede_evidence_version,
+                editorial.editorial_json, editorial.source_evidence_hashes_json, editorial.model
+         FROM edition_items item
+         LEFT JOIN edition_item_editorials editorial
+           ON editorial.edition_id = item.edition_id AND editorial.story_id = item.story_id
+         WHERE item.edition_id = ?1",
+    )?;
+    let rows = statement.query_map(params![id], |row| {
+        let lede: Option<String> = row.get(1)?;
+        let editorial_json: Option<String> = row.get(5)?;
+        Ok(CarriedWriting {
+            story_id: row.get(0)?,
+            lede: match lede {
+                Some(text) => Some((text, row.get(2)?, row.get(3)?, row.get(4)?)),
+                None => None,
+            },
+            editorial: match editorial_json {
+                Some(json) => Some((json, row.get(6)?, row.get(7)?)),
+                None => None,
+            },
+        })
+    })?;
+    rows.collect()
+}
+
+fn restore_writing(conn: &Connection, id: &str, carried: Vec<CarriedWriting>) -> Result<(), rusqlite::Error> {
+    for item in carried {
+        if let Some((lede, source, hash, version)) = item.lede {
+            conn.execute(
+                "UPDATE edition_items SET lede = ?3, lede_source_article_id = ?4,
+                        lede_source_evidence_hash = ?5, lede_evidence_version = ?6
+                 WHERE edition_id = ?1 AND story_id = ?2",
+                params![id, item.story_id, lede, source, hash, version],
+            )?;
+        }
+        if let Some((json, hashes, model)) = item.editorial {
+            let Ok(editorial) = serde_json::from_str::<TodayEditorial>(&json) else { continue };
+            let Ok(hashes) = serde_json::from_str::<std::collections::BTreeMap<String, String>>(&hashes) else { continue };
+            let present: bool = conn.query_row(
+                "SELECT EXISTS(SELECT 1 FROM edition_items WHERE edition_id = ?1 AND story_id = ?2)",
+                params![id, item.story_id],
+                |row| row.get(0),
+            )?;
+            // A story whose reports changed in the rebuild gets its editorial
+            // written again rather than citing reports it no longer has.
+            if present {
+                match save_editorial(conn, id, &item.story_id, &editorial, &hashes, &model) {
+                    Ok(()) | Err(rusqlite::Error::InvalidParameterName(_)) => {}
+                    Err(error) => return Err(error),
+                }
+            }
         }
     }
     Ok(())
@@ -894,7 +1018,7 @@ mod tests {
         add_story(&conn, "top-b", 2, false, GENERATED_AT - 50);
         add_story(&conn, "top-c", 2, false, GENERATED_AT - 60);
         add_story(&conn, "top-d", 2, false, GENERATED_AT - 70);
-        add_story(&conn, "prior-day", 3, false, DAY_START - 100);
+        add_story(&conn, "prior-day", 3, false, GENERATED_AT - LOOKBACK_SECONDS - 100);
         conn
     }
 
@@ -1038,6 +1162,52 @@ mod tests {
     }
 
     #[test]
+    fn edition_made_after_midnight_reaches_back_a_day() {
+        let conn = setup_empty();
+        let just_after_midnight = DAY_START + 47 * 60;
+        add_story(&conn, "last-evening", 2, false, DAY_START - 3 * 60 * 60);
+        add_story(&conn, "overnight", 1, false, DAY_START + 60);
+        add_story(&conn, "two-days-ago", 1, false, DAY_START - 30 * 60 * 60);
+        let edition = get_or_generate(&conn, DAY_START, DAY_END, just_after_midnight, 5).unwrap();
+        let ids: BTreeSet<&str> = edition.items.iter().map(|item| item.snapshot.story_id.as_str()).collect();
+        assert_eq!(ids, BTreeSet::from(["last-evening", "overnight"]));
+    }
+
+    #[test]
+    fn short_unread_edition_grows_and_keeps_its_writing_but_a_started_one_does_not() {
+        let conn = setup_empty();
+        add_story(&conn, "early", 2, false, DAY_START + 60);
+        let first = get_or_generate(&conn, DAY_START, DAY_END, DAY_START + 120, 5).unwrap();
+        assert_eq!(first.total_count, 1);
+        assert!(!is_settled(&first));
+        let item = &first.items[0];
+        queries::set_verified_edition_item_lede(&conn, &first.edition.id, "early", "Written lede",
+            &item.member_article_ids[0], &"a".repeat(64)).unwrap();
+        let editorial = TodayEditorial {
+            theme: "Early".into(),
+            summary: "Two reports describe it.".into(),
+            sources: item.member_article_ids.iter().map(|id| TodayEditorialSource { article_id: id.clone(), quote: "Coverage.".into() }).collect(),
+            figure: None,
+        };
+        let hashes = item.member_article_ids.iter().map(|id| (id.clone(), "hash".into())).collect();
+        save_editorial(&conn, &first.edition.id, "early", &editorial, &hashes, "model").unwrap();
+
+        add_story(&conn, "later", 1, false, DAY_START + 3_600);
+        add_story(&conn, "latest", 3, false, DAY_START + 7_200);
+        let grown = get_or_generate(&conn, DAY_START, DAY_END, DAY_START + 120, 5).unwrap();
+        assert_eq!(grown.edition.id, first.edition.id);
+        assert_eq!(grown.total_count, 3);
+        let early = grown.items.iter().find(|item| item.snapshot.story_id == "early").unwrap();
+        assert_eq!(early.snapshot.lede.as_deref(), Some("Written lede"));
+        assert_eq!(early.editorial.as_ref(), Some(&editorial));
+
+        set_item_consumed(&conn, &grown.edition.id, "later", true, DAY_START + 7_300).unwrap();
+        add_story(&conn, "after-reading", 1, false, DAY_START + 8_000);
+        let kept = get_or_generate(&conn, DAY_START, DAY_END, DAY_START + 120, 5).unwrap();
+        assert_eq!(kept.total_count, 3, "a page the reader has started stays as it is");
+    }
+
+    #[test]
     fn material_update_flag_uses_frozen_revision_not_later_revisions() {
         let conn = setup_empty();
         add_story(&conn, "duplicate", 1, false, GENERATED_AT - 10);
@@ -1107,7 +1277,7 @@ mod tests {
         let fresh = collect_candidates(&conn, DAY_START, DAY_END, GENERATED_AT, 5).unwrap();
         let candidate = fresh.iter().find(|c| c.rank.story_id == "first").unwrap();
         assert_eq!(candidate.evidence, candidate.revision.summary);
-        assert_eq!(frozen(&conn, &edition.edition.id).unwrap().unwrap().items.len(), 2);
+        assert_eq!(existing(&conn, &edition.edition.id).unwrap().unwrap().items.len(), 2);
     }
 
     #[test]
@@ -1664,6 +1834,7 @@ mod tests {
         assert_eq!(populated.edition.status, EditionStatus::Ready);
         assert_eq!(populated.edition.completed_at, None);
         assert_eq!(populated.edition.generated_at, DAY_START + 10);
+        set_item_consumed(&conn, &populated.edition.id, "arrived", true, DAY_START + 15).unwrap();
         add_story(&conn, "later", 3, true, DAY_START + 20);
         let frozen = get_or_generate(&conn, DAY_START, DAY_END, DAY_START + 30, 5).unwrap();
         assert_eq!(frozen.items.len(), 1);

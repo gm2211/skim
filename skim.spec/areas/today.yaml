@@ -8,6 +8,16 @@ behaviors:
     description: >-
       Today shows an edition of 5, 10, or 20 stories (reader's choice). Stories stay fixed for the
       edition; changing the size starts a new edition, and the edition rolls over at local midnight.
+    details: >-
+      An edition draws on stories active in the 24 hours before it is made, so a page made just
+      after midnight is not limited to the last few minutes; stories read in an earlier edition stay
+      off it. Until an edition is full or the reader marks a story read, it grows when new stories
+      arrive, keeping the summaries already written. After that it is frozen for the day.
+    source:
+      text: just one story?
+      reference: >-
+        Giulio, project chat, 2026-10-12, on a Today page made at 00:47 that froze with the one
+        story active since midnight
   - id: grouped-coverage
     description: >-
       Each story groups the reports that cover the same event, shows how many reports there are, and
@@ -60,3 +70,15 @@ behaviors:
     description: >-
       Pictures come only from the reports: the linked page's share image, else an image in the
       report or feed item. No stock art.
+  - id: ask-about-today
+    description: >-
+      The reader can chat with the whole Today page or with a single story. The chat starts from
+      that page's or story's reports and cites them.
+    details: >-
+      Desktop has an Ask button in the top bar for the page and an Ask action on each story; both
+      open the app assistant (the same one Cmd+K uses) with the page's stories, or the chosen story,
+      as its context. iOS has the same buttons in the title bar and on each story, and its chat reads
+      exactly those reports: each story's lead report first, then the rest, up to 30.
+    source:
+      text: I would like to be able to chat with the whole page or a single story
+      reference: Giulio, project chat, 2026-10-12

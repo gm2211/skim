@@ -7,7 +7,10 @@ import { PAGE_SIZE, rankFor } from "../../lib/todayEdition";
 import { TodayStorySkeleton } from "./TodayStorySkeleton";
 import { TodayStory } from "./TodayStory";
 import { ModelPicker } from "../common/ModelPicker";
-import { RefreshIcon } from "../ui/icons";
+import { ChatIcon, RefreshIcon } from "../ui/icons";
+import { openAgentChat } from "../../stores/agentChatStore";
+import { useAgentContext } from "../../hooks/useAgentContext";
+import { storyForAgent } from "../../lib/agentContext";
 import { IconButton } from "../common/IconButton";
 import "./TodayFrontPage.css";
 
@@ -61,6 +64,8 @@ export function TodayEditionPane() {
   const [pageSelection, setPageSelection] = useState({ key: "", index: 0 });
   const scrollRef = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Asks go to the app's assistant, which already knows the stories on the page.
+  const agentContext = useAgentContext();
   const settingsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!settingsOpen) return;
@@ -129,6 +134,13 @@ export function TodayEditionPane() {
           </button>
         )}
         <div className="flex-1" />
+        {items.length > 0 && <IconButton
+          label="Ask about Today"
+          onClick={() => openAgentChat({ context: { ...agentContext, story: null } })}
+          className="text-text-secondary hover:text-text-primary hover:bg-white/10"
+        >
+          <ChatIcon size={18} />
+        </IconButton>}
         <IconButton
           label={refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
           disabled={refreshFeeds.isPending}
@@ -268,6 +280,7 @@ export function TodayEditionPane() {
             isSaving={setConsumed.isPending}
             onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
             onOpenArticle={handleOpenArticle}
+            onAsk={() => openAgentChat({ context: { ...agentContext, story: storyForAgent(item) } })}
           />,
         }))} />}
 

@@ -150,19 +150,19 @@ struct ArticleDetailView: View {
 
             Spacer(minLength: 4)
 
-            BorderlessIconButton(systemName: "book", title: "Reader", isActive: page == .reader, size: 24, tapSize: 42) {
+            BorderlessIconButton(systemName: SkimIcon.reader, title: "Reader", isActive: page == .reader, size: 24, tapSize: 42) {
                 page = .reader
             }
-            BorderlessIconButton(systemName: "globe", title: "Web", isActive: page == .web, size: 24, tapSize: 42) {
+            BorderlessIconButton(systemName: SkimIcon.web, title: "Web", isActive: page == .web, size: 24, tapSize: 42) {
                 page = .web
             }
-            BorderlessIconButton(systemName: "doc.text", title: "Summary", size: 24, tapSize: 42) {
+            BorderlessIconButton(systemName: SkimIcon.summarize, title: "Summarize", size: 24, tapSize: 42) {
                 presentSummary()
             }
-            BorderlessIconButton(systemName: "bubble.left", title: "Chat", size: 24, tapSize: 42) {
+            BorderlessIconButton(systemName: SkimIcon.chat, title: "Chat", size: 24, tapSize: 42) {
                 presentArticleChat()
             }
-            BorderlessIconButton(systemName: article?.isStarred == true ? "star.fill" : "star", title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 24, tapSize: 42) {
+            BorderlessIconButton(systemName: article?.isStarred == true ? SkimIcon.starFilled : SkimIcon.star, title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 24, tapSize: 42) {
                 Task { await toggleStar() }
             }
         }
@@ -203,11 +203,11 @@ struct ArticleDetailView: View {
     @ViewBuilder
     private var detailContextMenu: some View {
         if let article {
-            Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? "circle" : "checkmark.circle") {
+            Button(article.isRead ? "Mark as Unread" : "Mark as Read", systemImage: article.isRead ? SkimIcon.markUnread : SkimIcon.markRead) {
                 Task { await toggleRead() }
             }
 
-            Button(article.isStarred ? "Unfavorite" : "Mark Favorite", systemImage: article.isStarred ? "star.slash" : "star") {
+            Button(article.isStarred ? "Unstar" : "Star", systemImage: article.isStarred ? SkimIcon.unstar : SkimIcon.star) {
                 Task { await toggleStar() }
             }
 
@@ -215,25 +215,25 @@ struct ArticleDetailView: View {
 
             Button(
                 currentPriorityOverride == .pin ? "Unpin" : "Pin to Top",
-                systemImage: currentPriorityOverride == .pin ? "pin.slash" : "pin"
+                systemImage: currentPriorityOverride == .pin ? SkimIcon.unpin : SkimIcon.pin
             ) {
                 applyPriorityOverride(.pin)
             }
 
             Divider()
 
-            Button("Summarize", systemImage: "doc.text") {
+            Button("Summarize", systemImage: SkimIcon.summarize) {
                 presentSummary()
             }
 
-            Button("Chat with Article", systemImage: "bubble.left") {
+            Button("Chat with Article", systemImage: SkimIcon.chat) {
                 presentArticleChat()
             }
 
             if let url = article.url {
                 Divider()
 
-                Button("Open Link", systemImage: "safari") {
+                Button("Open in Browser", systemImage: SkimIcon.openExternal) {
                     openURL(url)
                 }
             }
@@ -795,7 +795,7 @@ private struct ReaderPage: View {
                 }
                 .lineLimit(1)
                 Spacer(minLength: 8)
-                Label("Original", systemImage: "arrow.up.right")
+                Label("Original", systemImage: SkimIcon.openExternal)
                     .labelStyle(.titleAndIcon)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(SkimStyle.secondary)
@@ -847,7 +847,7 @@ private struct ReaderPage: View {
                 Button {
                     openURL(url)
                 } label: {
-                    Label("Read on \(linkDomain(url))", systemImage: "arrow.up.right")
+                    Label("Read on \(linkDomain(url))", systemImage: SkimIcon.openExternal)
                         .labelStyle(.titleAndIcon)
                         .font(.system(size: 16, weight: .semibold))
                         .frame(maxWidth: .infinity)
@@ -908,7 +908,7 @@ private struct ReaderPage: View {
                     Button {
                         openURL(discussionURL)
                     } label: {
-                        Label("Open on \(siteName)", systemImage: "arrow.up.right")
+                        Label("Open on \(siteName)", systemImage: SkimIcon.openExternal)
                             .labelStyle(.titleAndIcon)
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(SkimStyle.text)
@@ -946,7 +946,7 @@ private struct ReaderPage: View {
                         openURL(discussionURL)
                     } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: "bubble.left.and.bubble.right")
+                            Image(systemName: SkimIcon.discussion)
                                 .font(.system(size: 18, weight: .medium))
                                 .foregroundStyle(SkimStyle.accent)
                             VStack(alignment: .leading, spacing: 2) {
@@ -958,7 +958,7 @@ private struct ReaderPage: View {
                                     .foregroundStyle(SkimStyle.secondary)
                             }
                             Spacer(minLength: 8)
-                            Image(systemName: "arrow.up.right")
+                            Image(systemName: SkimIcon.openExternal)
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(SkimStyle.secondary)
                         }
@@ -985,7 +985,7 @@ private struct ReaderPage: View {
                     Button {
                         openURL(discussionURL)
                     } label: {
-                        Label("Join the discussion on \(siteName)", systemImage: "arrow.up.right")
+                        Label("Join the discussion on \(siteName)", systemImage: SkimIcon.openExternal)
                             .labelStyle(.titleAndIcon)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(SkimStyle.accent)

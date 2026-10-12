@@ -15,9 +15,13 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 import { ModelPicker } from "../common/ModelPicker";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { ArticleLearningActions } from "../article/ArticleLearningActions";
+import { MoreIcon } from "../ui/icons";
 import { AggregatorPostView } from "../article/AggregatorPostView";
 import { parseAggregatorPost } from "../../lib/aggregatorPost";
 import { useAppCommand } from "../../lib/appCommands";
+
+/** Toolbar width under which Reader/Web and the article actions fold into a "…" menu. */
+const TOOLBAR_COMPACT_WIDTH = 700;
 
 type ViewMode = "reader" | "web";
 type SwipeTarget = "web" | "reader" | "list";
@@ -366,6 +370,14 @@ export function ArticleDetail() {
   const [perArticlePrompt, setPerArticlePrompt] = useState<string | undefined>();
   const [perArticleWordCount, setPerArticleWordCount] = useState<number | undefined>();
   const sumMenuRef = useRef<HTMLDivElement>(null);
+  // Below this width the toolbar folds its lesser actions into a "…" menu
+  // instead of wrapping onto a second ragged row.
+  // A callback ref, not a ref object: the toolbar mounts after the article
+  // loads, so the observer has to attach when the element appears.
+  const [toolbarEl, setToolbarEl] = useState<HTMLDivElement | null>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
+  const [toolbarCompact, setToolbarCompact] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
@@ -485,6 +497,32 @@ export function ArticleDetail() {
   }, [selectedArticleId, article?.id, readerUrl]);
 
   // Close summarize menu on click outside
+  useEffect(() => {
+    const el = toolbarEl;
+    if (!el || isPhone || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      setToolbarCompact(entry.contentRect.width < TOOLBAR_COMPACT_WIDTH);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [isPhone, toolbarEl]);
+
+  useEffect(() => {
+    if (!showMoreMenu) return;
+    const close = (e: MouseEvent) => {
+      if (!moreMenuRef.current?.contains(e.target as Node)) setShowMoreMenu(false);
+    };
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowMoreMenu(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [showMoreMenu]);
+
   useEffect(() => {
     if (!showSummarizeMenu || isPhone) return;
     const handler = (e: MouseEvent) => {
@@ -1025,6 +1063,19 @@ export function ArticleDetail() {
     </button>
   );
 
+  const compact = !isPhone && toolbarCompact;
+  const menuRow = (label: string, icon: React.ReactNode, onClick: () => void, active = false) => (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={() => { onClick(); setShowMoreMenu(false); }}
+      className={`reader-menu-row ${active ? "text-accent" : "text-text-secondary hover:text-text-primary"}`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+
   const renderSummarizeMenuBody = () => (
     <>
       <div style={{ marginBottom: 8 }}>
@@ -1123,6 +1174,7 @@ export function ArticleDetail() {
     <div ref={readerFocusRef} tabIndex={-1} role="region" aria-label="Article reader" onClickCapture={(e) => openArticleLink(e.nativeEvent, readerUrl)} className="flex-1 min-w-0 min-h-0 flex flex-col h-full bg-bg-primary/60 overflow-hidden">
       {/* Toolbar */}
       <div
+        ref={setToolbarEl}
         className="flex items-center justify-between relative z-20 flex-shrink-0"
         style={{ minHeight: 52, height: isPhone ? 52 : undefined, padding: isPhone ? "0 8px" : "4px 12px", gap: 8 }}
       >
@@ -1193,9 +1245,9 @@ export function ArticleDetail() {
         )}
         <div
           className="flex flex-1 items-center justify-end gap-2 min-w-0"
-          style={{ gap: 8, flexWrap: isPhone ? "nowrap" : "wrap" }}
+          style={{ gap: 8, flexWrap: "nowrap" }}
         >
-          {article.url && (
+          {article.url && !compact && (
             <>
               {modeBtn("reader", "Reader",
                 <svg width={isPhone ? 18 : 13} height={isPhone ? 18 : 13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1213,7 +1265,7 @@ export function ArticleDetail() {
             </>
           )}
 
-          {!isPhone && <div className="w-px h-5 bg-white/10" />}
+          {!isPhone && !compact && <div className="w-px h-5 bg-white/10" />}
 
           <div className="relative" ref={sumMenuRef}>
             <div className="flex">
@@ -1318,8 +1370,9 @@ export function ArticleDetail() {
             )}
           </div>
 
-          {!isPhone && <div className="w-px h-5 bg-white/10" />}
+          {!isPhone && !compact && <div className="w-px h-5 bg-white/10" />}
 
+          {!compact && (
           <button
             onClick={() => toggleStar.mutate(article.id)}
             className={`${isPhone ? "tap-target" : "tap-target rounded-lg"} hover:bg-white/10 transition-colors ${
@@ -1331,10 +1384,11 @@ export function ArticleDetail() {
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
             </svg>
           </button>
+          )}
 
-          <ArticleLearningActions articleId={article.id} />
+          {!compact && <ArticleLearningActions articleId={article.id} />}
 
-          {!isPhone && (
+          {!isPhone && !compact && (
             <button
               onClick={() => toggleRead.mutate(article.id)}
               className={`tap-target rounded-lg hover:bg-white/10 transition-colors ${
@@ -1349,7 +1403,7 @@ export function ArticleDetail() {
           )}
 
 
-          {article.url && !isPhone && (
+          {article.url && !isPhone && !compact && (
             <button
               onClick={() => { if (article.url) openUrl(article.url); }}
               className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
@@ -1359,6 +1413,64 @@ export function ArticleDetail() {
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
               </svg>
             </button>
+          )}
+
+          {compact && (
+            <div className="relative" ref={moreMenuRef}>
+              <button
+                type="button"
+                onClick={() => setShowMoreMenu((open) => !open)}
+                className={`tap-target rounded-lg hover:bg-white/10 transition-colors ${showMoreMenu ? "text-text-primary bg-white/10" : "text-text-muted hover:text-text-primary"}`}
+                title="More actions"
+                aria-label="More actions"
+                aria-haspopup="menu"
+                aria-expanded={showMoreMenu}
+              >
+                <MoreIcon size={16} />
+              </button>
+              {showMoreMenu && (
+                <div
+                  role="menu"
+                  aria-label="More actions"
+                  className="reader-menu absolute right-0 top-full mt-1 border border-white/10 rounded-xl shadow-xl z-50"
+                >
+                  {article.url && (
+                    <>
+                      {menuRow("Reader view", (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                        </svg>
+                      ), handleReader, viewMode === "reader")}
+                      {menuRow("Web view", (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="2" y1="12" x2="22" y2="12" />
+                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                        </svg>
+                      ), handleWebView, viewMode === "web")}
+                      <div className="reader-menu-rule" role="separator" />
+                    </>
+                  )}
+                  {menuRow(article.is_starred ? "Unstar" : "Star", (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill={article.is_starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                  ), () => toggleStar.mutate(article.id), article.is_starred)}
+                  <ArticleLearningActions articleId={article.id} asMenuItem onDone={() => setShowMoreMenu(false)} />
+                  {menuRow(article.is_read ? "Mark as unread" : "Mark as read", (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill={!article.is_read ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <circle cx="12" cy="12" r="5" />
+                    </svg>
+                  ), () => toggleRead.mutate(article.id), !article.is_read)}
+                  {article.url && menuRow("Open in browser", (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                    </svg>
+                  ), () => { if (article.url) openUrl(article.url); })}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

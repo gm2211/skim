@@ -10,7 +10,6 @@ describe("article history", () => {
       articleReturnTarget: null,
       articleHistory: [],
       articleHistoryIndex: -1,
-      showCatchup: false,
       isPhone: false,
     });
   });

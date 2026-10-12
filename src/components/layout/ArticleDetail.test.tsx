@@ -251,3 +251,49 @@ describe("ArticleDetail reader loading", () => {
     expect(screen.getByTitle("Article web view")).toBe(iframe);
   });
 });
+
+describe("ArticleDetail toolbar overflow", () => {
+  const observeAt = (width: number) => {
+    vi.stubGlobal("ResizeObserver", class {
+      private cb: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) { this.cb = cb; }
+      observe(el: Element) {
+        this.cb([{ target: el, contentRect: { width } } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver);
+      }
+      disconnect() {}
+    });
+  };
+
+  it("keeps every action on the row when the toolbar is wide", async () => {
+    observeAt(1000);
+    vi.mocked(getOrFetchReaderContent).mockResolvedValue({ html: "<p>Body</p>", raw_html: "" });
+    render(<ArticleDetail />);
+    await waitFor(() => expect(getOrFetchReaderContent).toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: "Reader" })).toBeInTheDocument();
+    expect(screen.getByTitle("Star")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "More actions" })).not.toBeInTheDocument();
+  });
+
+  it("folds the lesser actions into a menu when the toolbar is narrow", async () => {
+    observeAt(500);
+    vi.mocked(getOrFetchReaderContent).mockResolvedValue({ html: `<p>${"Full article ".repeat(30)}</p>`, raw_html: "<html><body>web</body></html>" });
+    const user = userEvent.setup();
+    render(<ArticleDetail />);
+    await waitFor(() => expect(getOrFetchReaderContent).toHaveBeenCalled());
+
+    expect(screen.queryByRole("button", { name: "Reader" })).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Star")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Summarize" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "More actions" }));
+    const menu = screen.getByRole("menu", { name: "More actions" });
+    expect(menu).toBeInTheDocument();
+    for (const label of ["Reader view", "Web view", "Star", /Mark as (un)?read/, "Open in browser"]) {
+      expect(screen.getByRole("menuitem", { name: label })).toBeInTheDocument();
+    }
+
+    await user.click(screen.getByRole("menuitem", { name: "Web view" }));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(await screen.findByTitle("Article web view")).toBeInTheDocument();
+  });
+});

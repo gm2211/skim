@@ -70,7 +70,7 @@ describe("Sidebar — All Articles regression guard", () => {
     expect(screen.getByText("All Articles")).toBeInTheDocument();
   });
 
-  it("the header bolt button now opens Today, not the legacy Catch-up dialog", async () => {
+  it("the header newspaper button opens Today, not the legacy Catch-up dialog", async () => {
     const user = userEvent.setup();
     useUiStore.setState({ ...INITIAL_STATE, sidebarView: { type: "all" } }, true);
     render(<Sidebar />);
@@ -78,7 +78,6 @@ describe("Sidebar — All Articles regression guard", () => {
     await user.click(screen.getByTitle("Today — your finite, sectioned daily edition"));
 
     expect(useUiStore.getState().sidebarView).toEqual({ type: "today" });
-    expect(useUiStore.getState().showCatchup).toBe(false);
   });
 
   it("reserves the desktop titlebar for macOS window controls", () => {

@@ -495,6 +495,8 @@ select option {
 /* Quick Catch-up front page. A broadsheet in miniature: a dateline under a
    double rule, the lead beside its picture, two featured stories, then a
    two-column grid of the rest and a dense "Also" block. */
+.catchup-pane { container-type: inline-size; }
+.catchup-content { width: 100%; max-width: 1080px; margin-inline: auto; }
 .catchup-page {
   --paper-rule: rgba(255, 255, 255, 0.11);
   --paper-rule-strong: rgba(255, 255, 255, 0.28);
@@ -551,6 +553,30 @@ select option {
   white-space: nowrap;
 }
 .catchup-control .catchup-control-select { max-width: 190px; }
+.catchup-ghost-picture { width: 100%; aspect-ratio: 4 / 3; height: auto; border-radius: 6px; }
+/* The lead's second column when it has no picture: its coverage, by title. */
+.catchup-lead-aside {
+  padding: 14px 16px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px var(--paper-rule);
+}
+.catchup-lead-aside-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.catchup-lead-aside-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; }
+.catchup-lead-aside-item > svg, .catchup-lead-aside-item > img, .catchup-lead-aside-item > span:first-child { flex-shrink: 0; margin-top: 1px; }
+.catchup-lead-aside-title {
+  display: block;
+  font-family: "New York", "Iowan Old Style", "Palatino", Georgia, "Times New Roman", serif;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.catchup-lead-aside-item:hover .catchup-lead-aside-title { text-decoration: underline; text-underline-offset: 3px; }
+.catchup-lead-aside-pub { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.1px; margin-top: 2px; }
+/* In a narrower pane the control labels go: the selects name themselves. */
+@container (max-width: 980px) {
+  .catchup-control-label { display: none; }
+}
 .catchup-dateline {
   margin-bottom: 20px;
 }
@@ -692,7 +718,11 @@ select option {
   box-shadow: 0 0 0 2px var(--color-accent, #4c8dff);
   outline: none;
 }
-@media (max-width: 760px) {
+/* Keyed to the pane's own width, so the page folds to one column both on a
+   phone and in the column it keeps beside an open article. */
+@container (max-width: 760px) {
+  .catchup-dateline-row { flex-direction: column; gap: 4px; }
+  .catchup-dateline-scope { text-align: left; }
   .catchup-lead { grid-template-columns: 1fr; }
   .catchup-lead > .catchup-picture { order: -1; aspect-ratio: 16 / 9; }
   .catchup-tier, .catchup-briefs { grid-template-columns: 1fr; }
@@ -957,3 +987,27 @@ select option {
 .today-pagination button:disabled:hover { background: transparent; }
 
 .today-page-position { display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 2px 12px; }
+
+/* The reader toolbar's overflow menu: the actions that no longer fit on one
+   row, each as a labelled row. */
+.reader-menu {
+  background: rgba(22, 27, 34, 0.96);
+  backdrop-filter: blur(12px);
+  padding: 6px;
+  min-width: 200px;
+}
+.reader-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  transition: background-color 120ms;
+}
+.reader-menu-row:hover { background: rgba(255, 255, 255, 0.08); }
+.reader-menu-row:disabled { opacity: 0.4; }
+.reader-menu-rule { height: 1px; margin: 4px 6px; background: rgba(255, 255, 255, 0.08); }

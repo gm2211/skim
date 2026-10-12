@@ -305,7 +305,8 @@ export type SidebarView =
   | { type: "recent" }
   | { type: "theme"; themeId: string }
   | { type: "folder"; folderId: string }
-  | { type: "today" };
+  | { type: "today" }
+  | { type: "catchup" };
 
 export interface ArticleWithInteraction extends Article {
   reading_time_sec: number;

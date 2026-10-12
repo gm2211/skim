@@ -2,12 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats, useTriageProgress } from "../../hooks/useInbox";
 import { useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
-import { BoltIcon, ChatIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
+import { BoltIcon, ChatIcon, NewspaperIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 import { FeedsSection } from "./FeedsSection";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
-import { CatchupDialog } from "../chat/CatchupDialog";
 import { SkimTitle } from "./SkimTitle";
 import { useAppCommand } from "../../lib/appCommands";
 
@@ -16,7 +15,7 @@ export function Sidebar() {
   const [askOpen, setAskOpen] = useState(false);
   const [askVisited, setAskVisited] = useState(false);
   const [returnToAsk, setReturnToAsk] = useState(false);
-  const { selectedArticleId, sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone, showCatchup, setShowCatchup, openArticleFromCatchup } =
+  const { selectedArticleId, sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone, openCatchup } =
     useUiStore();
   const { data: feeds } = useFeeds();
   const { data: triageStats } = useTriageStats();
@@ -114,13 +113,14 @@ export function Sidebar() {
         >
           <ChatIcon />
         </button>
+        {/* The newspaper is Today everywhere; the bolt is Quick Catch-up. */}
         <button
           onClick={() => setSidebarView({ type: "today" })}
           className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
           title="Today — your finite, sectioned daily edition"
           aria-label="Today"
         >
-          <BoltIcon />
+          <NewspaperIcon />
         </button>
         <button
           onClick={() => setShowAddFeed(true)}
@@ -140,14 +140,6 @@ export function Sidebar() {
             useUiStore.getState().setSelectedArticleId(id);
           }}
         />}
-      {showCatchup && (
-        <CatchupDialog
-          onClose={() => setShowCatchup(false)}
-          onOpenArticle={(id) => {
-            openArticleFromCatchup(id);
-          }}
-        />
-      )}
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto" style={{ padding: "8px 16px 16px 16px" }}>
@@ -160,16 +152,33 @@ export function Sidebar() {
             className="flex items-center gap-3 cursor-pointer transition-colors relative z-20 hover:text-text-primary"
             style={{ padding: "6px 0" }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+            <NewspaperIcon
+              size={16}
+              strokeWidth="1.5"
               className={`flex-shrink-0 ${isActive({ type: "today" }) ? "opacity-100" : "opacity-50"}`}
-            >
-              <path d="M13 2L3 14h9l-1 8 10-12h-9z" />
-            </svg>
+            />
             <span
               className={isActive({ type: "today" }) ? "text-text-primary" : "text-text-secondary"}
               style={{ fontSize: 17, fontWeight: 600 }}
             >
               Today
+            </span>
+          </div>
+          <div
+            onClick={openCatchup}
+            className="flex items-center gap-3 cursor-pointer transition-colors relative z-20 hover:text-text-primary"
+            style={{ padding: "6px 0" }}
+          >
+            <BoltIcon
+              size={16}
+              strokeWidth="1.5"
+              className={`flex-shrink-0 ${isActive({ type: "catchup" }) ? "opacity-100" : "opacity-50"}`}
+            />
+            <span
+              className={isActive({ type: "catchup" }) ? "text-text-primary" : "text-text-secondary"}
+              style={{ fontSize: 17, fontWeight: 600 }}
+            >
+              Quick Catch-up
             </span>
           </div>
         </div>
@@ -228,16 +237,13 @@ export function Sidebar() {
               Recent
             </span>
           </div>
-        </div>
-
-        {/* AI Inbox */}
-        <div style={{ marginBottom: 32, padding: "0 8px" }}>
+          {/* AI Inbox sits with the other library views, as one of them. */}
           <div
             onClick={() => setSidebarView({ type: "inbox" })}
             className={`flex items-center justify-between cursor-pointer transition-colors relative z-20 hover:text-text-primary ${
               isActive({ type: "inbox" }) ? "text-text-primary" : "text-text-secondary"
             }`}
-            style={{ padding: "6px 0", marginBottom: 8 }}
+            style={{ padding: "6px 0" }}
           >
             <div className="flex items-center gap-3">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
@@ -246,9 +252,7 @@ export function Sidebar() {
                 <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
                 <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" />
               </svg>
-              <span style={{ fontSize: 17, fontWeight: 600 }}>
-                AI Inbox
-              </span>
+              <span style={{ fontSize: 15 }}>AI Inbox</span>
             </div>
             {triageStats && triageStats.total > 0 && (
               <span className="text-text-muted tabular-nums" style={{ fontSize: 14 }}>

@@ -31,9 +31,11 @@ const STILL_CSS = `
   ::-webkit-scrollbar { width: 0 !important; height: 0 !important; }
 `;
 
+const CATCHUP = '[role="region"][aria-labelledby="catchup-title"]';
+
 const openCatchup = async (p) => {
   await p.locator('[aria-label="Quick Catch-up"]').first().click();
-  await p.locator('[role="dialog"]').waitFor({ state: "visible" });
+  await p.locator(CATCHUP).waitFor({ state: "visible" });
   await p.waitForTimeout(300);
 };
 
@@ -43,18 +45,23 @@ const runCatchup = async (p) => {
   await p.waitForTimeout(Number(process.env.CATCHUP_WAIT_MS ?? 900));
 };
 
-/** Lets the dialog grow to its content so one capture shows the whole page. */
-const unclip = async (p) => {
-  await p.evaluate(() => {
-    const dialog = document.querySelector('[role="dialog"]');
+/** Lets the page grow to its content so one capture shows the whole thing. */
+const unclip = async (p, selector = CATCHUP) => {
+  await p.evaluate((selector) => {
+    const dialog = document.querySelector(selector);
     if (!dialog) return;
     dialog.style.maxHeight = "none";
     dialog.style.height = "auto";
-    for (const el of dialog.querySelectorAll("*")) {
+    for (const el of [dialog, ...dialog.querySelectorAll("*")]) {
       const cs = getComputedStyle(el);
-      if (cs.overflowY === "auto" || cs.overflowY === "scroll") el.style.overflow = "visible";
+      if (cs.overflowY === "auto" || cs.overflowY === "scroll" || cs.overflow === "hidden") el.style.overflow = "visible";
     }
-  });
+    for (const el of document.querySelectorAll("#root, #root > *, #root > * > *")) {
+      el.style.height = "auto";
+      el.style.minHeight = "0";
+      el.style.overflow = "visible";
+    }
+  }, selector);
   await p.waitForTimeout(200);
 };
 
@@ -65,14 +72,22 @@ const SCENES = [
     name: "catchup-page-full",
     viewport: TALL,
     run: async (p) => { await runCatchup(p); await unclip(p); },
-    target: '[role="dialog"]',
+    target: CATCHUP,
   },
   {
     name: "catchup-filling",
     viewport: TALL,
     init: () => { window.__SKIM_CATCHUP_WRITTEN__ = 2; },
     run: async (p) => { await runCatchup(p); await unclip(p); },
-    target: '[role="dialog"]',
+    target: CATCHUP,
+  },
+  // The first story landing, with no pictures: the page must keep its shape.
+  {
+    name: "catchup-first-story",
+    viewport: TALL,
+    init: () => { window.__SKIM_CATCHUP_WRITTEN__ = 0; window.__SKIM_CATCHUP_NO_PICTURES__ = true; },
+    run: async (p) => { await runCatchup(p); await unclip(p); },
+    target: CATCHUP,
   },
   {
     name: "catchup-reading",
@@ -80,6 +95,24 @@ const SCENES = [
     init: () => { window.__SKIM_CATCHUP_WRITTEN__ = -1; },
     run: runCatchup,
   },
+  // The page stays in the list column while a story's article is open.
+  { name: "catchup-article", viewport: DESKTOP, run: async (p) => {
+    await runCatchup(p);
+    await p.locator(`${CATCHUP} .catchup-headline-link`).first().click();
+    await p.waitForTimeout(700);
+  } },
+  // A narrow window: the reader toolbar folds its lesser actions into "…".
+  { name: "reading-narrow", viewport: { width: 1000, height: 760 }, run: async (p) => {
+    const row = p.getByText("Why “Just Pick AWS” Is Bad Advice in 2026").first();
+    await row.click();
+    await p.waitForTimeout(600);
+    if (process.env.DEBUG_TOOLBAR) console.log(await p.evaluate(() => {
+      const r = document.querySelector('[aria-label="Article reader"]');
+      return { reader: r?.getBoundingClientRect().width, toolbar: r?.firstElementChild?.getBoundingClientRect().width, more: !!document.querySelector('[aria-label="More actions"]') };
+    }));
+    await p.getByRole("button", { name: "More actions" }).click();
+    await p.waitForTimeout(300);
+  } },
   { name: "reading", viewport: DESKTOP, run: async (p) => {
     const row = p.getByText("Why “Just Pick AWS” Is Bad Advice in 2026").first();
     await row.click();

@@ -2,10 +2,13 @@ import { useArticleInteraction, useSetPriorityOverride } from "../../hooks/useLe
 
 type ArticleLearningActionsProps = {
   articleId: string;
+  /** Rendered as a labelled row inside the toolbar's overflow menu. */
+  asMenuItem?: boolean;
+  onDone?: () => void;
 };
 
 /** Reader actions that teach Skim which articles belong in the user's inbox. */
-export function ArticleLearningActions({ articleId }: ArticleLearningActionsProps) {
+export function ArticleLearningActions({ articleId, asMenuItem = false, onDone }: ArticleLearningActionsProps) {
   const { data: interaction } = useArticleInteraction(articleId);
   const setPriority = useSetPriorityOverride();
   const priority = interaction?.priority_override ?? null;
@@ -18,7 +21,33 @@ export function ArticleLearningActions({ articleId }: ArticleLearningActionsProp
 
   const setOverride = (next: number) => {
     if (!setPriority.isPending) setPriority.mutate({ articleId, priority: next });
+    onDone?.();
   };
+
+  const size = asMenuItem ? 14 : 16;
+  const pinIcon = (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m12 17 5 5" />
+      <path d="M9 3h6l-1 6 4 4H6l4-4-1-6Z" />
+      <path d="M12 13v4" />
+    </svg>
+  );
+
+  if (asMenuItem) {
+    return (
+      <button
+        type="button"
+        role="menuitem"
+        onClick={() => setOverride(isPinned ? 3 : 5)}
+        className={`reader-menu-row ${isPinned ? "text-accent" : "text-text-secondary hover:text-text-primary"}`}
+        aria-pressed={isPinned}
+        disabled={setPriority.isPending}
+      >
+        {pinIcon}
+        {isPinned ? "Unpin" : "Pin to top"}
+      </button>
+    );
+  }
 
   return (
     <div className="flex items-center gap-1" role="group" aria-label="Learning actions">
@@ -31,11 +60,7 @@ export function ArticleLearningActions({ articleId }: ArticleLearningActionsProp
         aria-pressed={isPinned}
         disabled={setPriority.isPending}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill={isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="m12 17 5 5" />
-          <path d="M9 3h6l-1 6 4 4H6l4-4-1-6Z" />
-          <path d="M12 13v4" />
-        </svg>
+        {pinIcon}
       </button>
       {errorMessage && (
         <span role="alert" className="sr-only">Could not update learning preference: {errorMessage}</span>

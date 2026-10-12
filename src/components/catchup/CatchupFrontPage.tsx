@@ -11,6 +11,9 @@ import type { CatchupBrief, CatchupReport, CatchupSource, CatchupStory } from ".
  * can be shown mid-run with the trailing story still being written.
  */
 
+/** Past this many sources the lead's coverage column would run long; the icon row serves instead. */
+const LEAD_ASIDE_LIMIT = 4;
+
 interface Props {
   report: CatchupReport;
   /** The dateline printed over the page: when and what was read. */
@@ -22,6 +25,12 @@ interface Props {
   loading: boolean;
   /** Stories whose lede is in. While loading only these plus the next print. */
   written: number;
+  /**
+   * How many stories the run will print, once the backend has picked them.
+   * While loading, the page reserves a slot for each so its shape holds
+   * still as the stories land in.
+   */
+  expected?: number | null;
   onOpenArticle: (articleId: string) => void;
 }
 
@@ -157,7 +166,7 @@ export function CatchupGhostPage({
   );
 }
 
-export function CatchupFrontPage({ report, dateline, scopeSummary, status, loading, written, onOpenArticle }: Props) {
+export function CatchupFrontPage({ report, dateline, scopeSummary, status, loading, written, expected, onOpenArticle }: Props) {
   const sourcesById = new Map<string, CatchupSource>();
   report.sources.forEach((s) => sourcesById.set(s.id, s));
   const cited = (ids: string[]) => ids.map((id) => sourcesById.get(id)).filter((s): s is CatchupSource => !!s);
@@ -229,22 +238,95 @@ export function CatchupFrontPage({ report, dateline, scopeSummary, status, loadi
 
   // The lead: headline and lede on the left, its picture on the right, the
   // way a broadsheet runs its top story.
-  const renderLead = (story: CatchupStory, writing: boolean) => (
+  const renderLead = (story: CatchupStory, writing: boolean) => {
+    // The coverage column already names every source, so the icon row under
+    // the lede would only repeat it.
+    const coverage = cited(story.article_ids);
+    const asideShown = !story.image_url && coverage.length > 0 && coverage.length <= LEAD_ASIDE_LIMIT;
+    return (
     <article key={`0-${story.headline}`} className="story-rise-in catchup-lead">
       <div className="catchup-lead-text">
         {renderKicker(story.article_ids)}
         {renderHeadline(story, 34, true)}
         {renderLede(story, writing, 16)}
-        {renderRelated(story.article_ids, 22)}
+        {!asideShown && renderRelated(story.article_ids, 22)}
       </div>
-      {story.image_url && (
+      {story.image_url ? (
         <StoryImage
           src={story.image_url}
           onClick={open(story.article_ids)}
           style={{ width: "100%", aspectRatio: "4 / 3", borderRadius: 6 }}
         />
+      ) : (
+        renderLeadAside(story, writing)
       )}
     </article>
+    );
+  };
+
+  // A lead with no picture keeps its second column: the articles behind it,
+  // listed by title, so the page holds its shape and the column earns its
+  // place. While the story is still being written the column is a ghost.
+  const renderLeadAside = (story: CatchupStory, writing: boolean) => {
+    const sources = cited(story.article_ids);
+    if (sources.length === 0 || sources.length > LEAD_ASIDE_LIMIT) {
+      return writing ? <div className="story-skeleton-line catchup-ghost-picture" aria-hidden="true" /> : null;
+    }
+    return (
+      <aside className="catchup-lead-aside" aria-label="Coverage">
+        <h5 className="catchup-section-title">Coverage</h5>
+        <ul className="catchup-lead-aside-list">
+          {sources.map((source) => (
+            <li key={source.id}>
+              <button onClick={() => onOpenArticle(source.id)} className="catchup-lead-aside-item" title={source.title} aria-label={`${source.title}, ${source.publication}`}>
+                <PublicationIcon source={source} size={18} />
+                <span className="min-w-0">
+                  <span className="catchup-lead-aside-title text-text-primary">{source.title}</span>
+                  <span className="catchup-lead-aside-pub text-text-muted">{source.publication}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </aside>
+    );
+  };
+
+  // The slots a story has not reached yet, drawn as shimmering shapes so the
+  // page keeps the form it will have once the stories are in.
+  const ghostLine = (width: string, height = 9) => <div className="story-skeleton-line" style={{ width, height }} />;
+  const renderGhostLead = () => (
+    <div className="catchup-lead" aria-hidden="true">
+      <div className="catchup-lead-text flex flex-col" style={{ gap: 10 }}>
+        {ghostLine("38%", 20)}
+        {ghostLine("92%", 20)}
+        {ghostLine("64%", 20)}
+        <div style={{ height: 6 }} />
+        {ghostLine("100%")}
+        {ghostLine("96%")}
+        {ghostLine("88%")}
+        {ghostLine("52%")}
+      </div>
+      <div className="story-skeleton-line catchup-ghost-picture" />
+    </div>
+  );
+  const renderGhostFeature = (key: string) => (
+    <div key={key} className="catchup-feature flex flex-col" style={{ gap: 9 }} aria-hidden="true">
+      <div className="story-skeleton-line" style={{ width: "100%", aspectRatio: "21 / 9", height: "auto", borderRadius: 5, marginBottom: 4 }} />
+      {ghostLine("84%", 15)}
+      {ghostLine("100%")}
+      {ghostLine("72%")}
+    </div>
+  );
+  const renderGhostStory = (key: string) => (
+    <div key={key} className="catchup-story" aria-hidden="true">
+      <div className="min-w-0 flex-1 flex flex-col" style={{ gap: 8 }}>
+        {ghostLine("78%", 13)}
+        {ghostLine("100%")}
+        {ghostLine("64%")}
+      </div>
+      <div className="story-skeleton-line" style={{ width: 84, height: 84, flexShrink: 0, borderRadius: 5 }} />
+    </div>
   );
 
   // Second tier: picture on top, then the headline and lede.
@@ -318,12 +400,22 @@ export function CatchupFrontPage({ report, dateline, scopeSummary, status, loadi
   };
 
   const stories = report.stories.slice(0, written + 1);
-  const pending = loading ? Math.max(0, report.stories.length - written - 1) : 0;
   const writing = (index: number) => loading && index >= written;
+
+  // While the page is being written it keeps the shape it will end with:
+  // every story the run will print has a slot, and until the backend has
+  // picked them the slots are the front page's usual seven.
+  const DEFAULT_SLOTS = 7;
+  const slots = loading
+    ? Math.max(stories.length, report.stories.length, expected ?? 0) || DEFAULT_SLOTS
+    : stories.length;
+  const pending = Math.max(0, slots - stories.length);
 
   const lead = stories[0];
   const features = stories.slice(1, 3);
   const rest = stories.slice(3);
+  const ghostFeatures = Math.max(0, Math.min(2, slots - 1) - features.length);
+  const ghostStories = Math.max(0, slots - 3 - rest.length);
 
   return (
     <div className="catchup-page">
@@ -342,23 +434,24 @@ export function CatchupFrontPage({ report, dateline, scopeSummary, status, loadi
         <div className={`catchup-dateline-rule ${loading ? "story-rule-live" : ""}`} />
       </div>
 
-      {lead && renderLead(lead, writing(0))}
+      {lead ? renderLead(lead, writing(0)) : loading && slots > 0 ? renderGhostLead() : null}
 
-      {features.length > 0 && (
-        <div className="catchup-tier catchup-features" style={{ gridTemplateColumns: features.length === 1 ? "1fr" : undefined }}>
+      {features.length + ghostFeatures > 0 && (
+        <div className="catchup-tier catchup-features" style={{ gridTemplateColumns: features.length + ghostFeatures === 1 ? "1fr" : undefined }}>
           {features.map((story, i) => renderFeature(story, i + 1, writing(i + 1)))}
+          {Array.from({ length: ghostFeatures }, (_, i) => renderGhostFeature(`ghost-feature-${i}`))}
         </div>
       )}
 
-      {rest.length > 0 && (
+      {rest.length + ghostStories > 0 && (
         <div className="catchup-tier catchup-stories">
           {rest.map((story, i) => renderStory(story, i + 3, writing(i + 3), i === rest.length - 1 && rest.length % 2 === 1 && !pending))}
+          {Array.from({ length: ghostStories }, (_, i) => renderGhostStory(`ghost-story-${i}`))}
         </div>
       )}
 
       {pending > 0 && (
-        <p className="text-text-muted flex items-center" style={{ fontSize: 12, marginTop: 22, gap: 8 }}>
-          <span className="story-skeleton-line" style={{ width: 28, height: 6 }} />
+        <p className="sr-only" role="status">
           {pending === 1 ? "1 more story on the way" : `${pending} more stories on the way`}
         </p>
       )}

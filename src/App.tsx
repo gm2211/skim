@@ -3,6 +3,7 @@ import { Sidebar } from "./components/layout/Sidebar";
 import { ArticleList } from "./components/layout/ArticleList";
 import { ArticleDetail } from "./components/layout/ArticleDetail";
 import { TodayEditionPane } from "./components/today/TodayEditionPane";
+import { CatchupPane } from "./components/catchup/CatchupPane";
 import { AddFeedDialog } from "./components/feed/AddFeedDialog";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { CommandPalette } from "./components/palette/CommandPalette";
@@ -34,7 +35,9 @@ const ACTIVE_FEED_TOAST_MAX_MS = 35000;
 
 function App() {
   const { showAddFeed, showSettings, showCommandPalette, selectedArticleId, listCollapsed, sidebarCollapsed, isPhone, phonePane, sidebarView } = useUiStore();
-  const isToday = sidebarView.type === "today";
+  // Today and Quick Catch-up take the list column as full pages.
+  const isToday = sidebarView.type === "today" || sidebarView.type === "catchup";
+  const listPane = sidebarView.type === "today" ? <TodayEditionPane /> : sidebarView.type === "catchup" ? <CatchupPane /> : <ArticleList />;
   const qc = useQueryClient();
   const [showBootDisclaimer, setShowBootDisclaimer] = useState(() => !hasAcceptedAiDisclaimer());
   const [opmlImportStatus, setOpmlImportStatus] = useState<OpmlImportStatus | null>(null);
@@ -518,7 +521,7 @@ function App() {
               }}
               inert={paneIndex !== 1}
             >
-              {isToday ? <TodayEditionPane /> : <ArticleList />}
+              {listPane}
             </div>
             <div
               className="w-1/3 h-full flex-shrink-0 overflow-hidden flex"
@@ -555,7 +558,7 @@ function App() {
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <div className="flex flex-1 min-w-0">
-          {isToday ? <TodayEditionPane /> : <ArticleList />}
+          {listPane}
           {selectedArticleId ? (
             <ArticleDetail />
           ) : !isToday ? (

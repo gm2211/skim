@@ -9,19 +9,23 @@ struct CatchUpRequest: Identifiable {
     var statusLabel: String
     /// Resolves the articles the page is built from.
     var loadArticles: () async throws -> [Article]
-    /// What the sheet's own model calls run under. The sheet drives the two
-    /// passes itself so the page can fill in as it is written.
+    /// What the page's own model calls run under. The page drives the two
+    /// passes itself so it can fill in as it is written.
     var settings: AppSettings
 }
 
-// MARK: - Main sheet
+// MARK: - Main page
 
 /// Quick Catch-up, laid out like a broadsheet front page: a dateline under a
 /// double rule, the lead story with its picture, two featured stories, then
 /// the rest of the page and a dense "Also" block. On a wide screen the lead
 /// runs beside its picture and the tiers sit in two columns; on a phone the
 /// page is one column. Stories print as their ledes land.
-struct CatchUpSheet: View {
+///
+/// It is pushed onto the article list's navigation stack, like Today, rather
+/// than presented as a sheet: a front page is a place to read, not a prompt
+/// to dismiss.
+struct CatchUpPage: View {
     var request: CatchUpRequest
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var model: AppModel
@@ -31,7 +35,36 @@ struct CatchUpSheet: View {
     @State private var startedRequestID: UUID?
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            HStack {
+                Button { session.cancel(); dismiss() } label: {
+                    Label("Articles", systemImage: "chevron.left")
+                        .frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("catch-up-back")
+                Spacer()
+                Text("Quick Catch-up").font(.headline)
+                Spacer()
+                if session.isLoading {
+                    Button("Stop", role: .cancel) { session.cancel() }
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("catch-up-stop")
+                } else {
+                    Button {
+                        run()
+                    } label: {
+                        Label("Run Again", systemImage: "arrow.clockwise")
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .help("Run Again")
+                    .accessibilityIdentifier("catch-up-run-again")
+                }
+            }
+            .padding(.horizontal, 16)
+            .background(SkimStyle.chrome)
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     CatchUpControls(range: $range, isLoading: session.isLoading)
@@ -74,35 +107,13 @@ struct CatchUpSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
             }
-            .background(SkimStyle.chrome.ignoresSafeArea())
             .scrollContentBackground(.hidden)
-            .navigationTitle("Quick Catch-up")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: String.self) { articleID in
-                ArticleDetailView(articleID: articleID)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { session.cancel(); dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    if session.isLoading {
-                        Button("Stop", role: .cancel) { session.cancel() }
-                            .accessibilityIdentifier("catch-up-stop")
-                    } else {
-                        Button {
-                            run()
-                        } label: {
-                            Label("Run Again", systemImage: "arrow.clockwise")
-                                .labelStyle(.iconOnly)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .help("Run Again")
-                        .accessibilityIdentifier("catch-up-run-again")
-                    }
-                }
-            }
+        }
+        .background(SkimStyle.chrome.ignoresSafeArea())
+        .navigationBarBackButtonHidden()
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(for: String.self) { articleID in
+            ArticleDetailView(articleID: articleID)
         }
         .task(id: request.id) {
             guard startedRequestID != request.id else { return }
@@ -112,8 +123,8 @@ struct CatchUpSheet: View {
         .onDisappear { session.cancel() }
     }
 
-    /// Runs on the model picked now, not the one in place when the sheet
-    /// opened, so a change in the sheet's model picker or AI Settings takes
+    /// Runs on the model picked now, not the one in place when the page
+    /// opened, so a change in the page's model picker or AI Settings takes
     /// effect on the next run.
     private func run(range: CatchUpRange? = nil) {
         var current = request

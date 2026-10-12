@@ -237,16 +237,13 @@ export function Sidebar() {
               Recent
             </span>
           </div>
-        </div>
-
-        {/* AI Inbox */}
-        <div style={{ marginBottom: 32, padding: "0 8px" }}>
+          {/* AI Inbox sits with the other library views, as one of them. */}
           <div
             onClick={() => setSidebarView({ type: "inbox" })}
             className={`flex items-center justify-between cursor-pointer transition-colors relative z-20 hover:text-text-primary ${
               isActive({ type: "inbox" }) ? "text-text-primary" : "text-text-secondary"
             }`}
-            style={{ padding: "6px 0", marginBottom: 8 }}
+            style={{ padding: "6px 0" }}
           >
             <div className="flex items-center gap-3">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
@@ -255,9 +252,7 @@ export function Sidebar() {
                 <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
                 <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" />
               </svg>
-              <span style={{ fontSize: 17, fontWeight: 600 }}>
-                AI Inbox
-              </span>
+              <span style={{ fontSize: 15 }}>AI Inbox</span>
             </div>
             {triageStats && triageStats.total > 0 && (
               <span className="text-text-muted tabular-nums" style={{ fontSize: 14 }}>

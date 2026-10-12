@@ -7,7 +7,11 @@ behaviors:
   - id: inbox-is-reachable
     description: >-
       The AI Inbox is reachable on both platforms: desktop from the sidebar and command palette, iOS
-      from the article list actions menu.
+      from the article list actions menu. In the desktop sidebar it is a row of the All Articles
+      group beside Starred and Recent, not a section of its own.
+    source:
+      text: AI Inbox should probably be under All Articles - looks janky this way
+      reference: Giulio, project chat, 2026-10-11
   - id: ranks-by-relevance-and-importance
     description: >-
       The model assesses each unread article's relevance to the reader and its importance, and the

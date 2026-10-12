@@ -1,0 +1,151 @@
+/* Today's front page: a lead with a rail beside it, a row of features, then
+   briefs. Every slot has a text treatment (pull quote, figure, theme colour)
+   so the page stays full when reports publish no pictures; slots restyle
+   themselves with :has(.today-report-image) when one arrives. Selectors are
+   prefixed with .today-page so they win over the older newspaper rules in
+   globals.css. */
+
+.today-page .today-topbar { height: 64px; padding-top: 16px; }
+
+.today-page .today-masthead { margin: 0 0 4px; text-align: center; }
+.today-page .today-masthead .today-title {
+  font-family: "Baskerville", "New York", Georgia, serif;
+  font-size: clamp(34px, 4.6cqi, 56px);
+  letter-spacing: -0.5px;
+  line-height: 1.08;
+  margin: 0 0 14px;
+}
+.today-page .today-dateline { margin-top: 0; padding-top: 8px; border-top: 1px solid var(--color-text-muted); }
+.today-dateline-status { color: var(--color-text-muted); font-weight: 600; text-align: center; }
+.today-dateline-failed { color: var(--color-warning); }
+.today-dateline-retry {
+  margin-left: 6px; padding: 0; border: 0; background: none;
+  color: var(--color-accent); font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer;
+}
+.today-dateline-retry:hover { color: var(--color-accent-hover); }
+@container (max-width: 640px) { .today-dateline-status { display: none; } }
+
+.today-page .today-themes { justify-content: center; border-bottom: 0; margin-bottom: 18px; padding-block: 10px 0; }
+
+/* Settings popover behind the cog. */
+.today-settings {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+  width: 300px; padding: 6px;
+  border: 1px solid var(--color-border); border-radius: 12px;
+  background: var(--color-bg-tertiary);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  font-size: 13px; color: var(--color-text-primary);
+}
+.today-settings-heading {
+  padding: 8px 10px 4px; font-size: 10.5px; font-weight: 700;
+  letter-spacing: 1.2px; text-transform: uppercase; color: var(--color-text-muted);
+}
+.today-settings-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 40px; padding: 6px 10px; border-radius: 8px; text-align: left;
+}
+button.today-settings-row:hover { background: var(--color-bg-hover); }
+.today-settings hr { border: 0; border-top: 1px solid var(--color-border); margin: 6px 0; }
+
+/* Slots. */
+.today-page .today-front { display: block; }
+.today-page .today-front .today-story-cell {
+  grid-column: auto; min-width: 0; padding: 0; border: 0; border-left: 0;
+}
+.today-page .today-front .today-story-cell .today-story { border-top: 0; margin-top: 0; padding-top: 0; padding-bottom: 0; }
+.today-front-top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; padding-bottom: 26px; border-bottom: 1px solid var(--color-border); }
+.today-front-rail { display: flex; flex-direction: column; }
+.today-page .today-front-rail .today-story-cell { padding-block: 16px; border-top: 1px solid var(--color-border-light); }
+.today-page .today-front-rail .today-story-cell:first-child { padding-top: 0; border-top: 0; }
+.today-front-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 26px; border-bottom: 1px solid var(--color-border); }
+.today-front-briefs { padding-top: 22px; }
+.today-page .today-front-briefs .today-briefs-label { border-top: 0; padding-top: 0; margin-bottom: 2px; color: var(--color-text-secondary); font-size: 11px; font-weight: 700; letter-spacing: 1.6px; text-transform: uppercase; }
+.today-front-brief-grid { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 48px; }
+.today-page .today-front-brief-grid .today-story-cell { padding-block: 12px; border-bottom: 1px solid var(--color-border-light); }
+
+@container (min-width: 720px) {
+  .today-front-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; }
+  .today-front-row[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .today-front-row[data-count="1"] { grid-template-columns: minmax(0, 1fr); }
+  .today-page .today-front-row .today-story-cell { padding-inline: 24px; border-left: 1px solid var(--color-border); }
+  .today-page .today-front-row .today-story-cell:first-child { padding-left: 0; border-left: 0; }
+  .today-page .today-front-row .today-story-cell:last-child { padding-right: 0; }
+  .today-front-brief-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (min-width: 900px) {
+  .today-front-top { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 0; }
+  .today-front-top--solo { grid-template-columns: minmax(0, 1fr); }
+  .today-page .today-front-top > .today-story-cell--lead { padding-right: 32px; border-right: 1px solid var(--color-border); }
+  .today-front-top--solo > .today-story-cell--lead { border-right: 0; padding-right: 0; }
+  .today-front-rail { padding-left: 28px; }
+}
+
+/* Story type. */
+.today-page .today-front .today-kicker {
+  margin-bottom: 6px; color: var(--today-theme, var(--color-accent));
+  font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;
+}
+.today-page .today-front .today-kicker .today-coverage { color: var(--color-text-muted); font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; }
+.today-page .today-front .today-story h3 { font-family: "Baskerville", "New York", Georgia, serif; font-weight: 700; letter-spacing: -0.2px; max-width: none; }
+.today-page .today-front .today-headline { text-align: left; }
+.today-page .today-front .today-body { margin-top: 8px; font-size: 14px; line-height: 1.55; text-align: left; max-width: none; }
+.today-page .today-front .today-story-actions { justify-content: flex-start; margin-top: 10px; gap: 6px; }
+.today-publications { font-size: 12px; color: var(--color-text-secondary); margin-right: 2px; }
+.today-page .today-front .today-story-actions > :last-of-type:not(.sr-only) { margin-left: auto; }
+.today-page .today-front .today-story-actions .today-story-control { min-height: 32px; }
+.today-page .today-front .today-story--read h3, .today-page .today-front .today-story--read .today-body { opacity: 0.5; }
+
+.today-page .today-front .today-report-image {
+  display: block; width: 100%; max-height: none; aspect-ratio: 3 / 2;
+  object-fit: cover; border-radius: 4px; margin-bottom: 14px; background: var(--color-bg-tertiary);
+}
+
+/* Lead. */
+.today-page .today-front .today-story--lead h3 { font-size: clamp(30px, 3.3cqi, 44px); line-height: 1.1; }
+.today-page .today-front .today-story--lead .today-body { font-size: 17px; margin-top: 12px; }
+.today-page .today-front .today-story--lead .today-report-image { aspect-ratio: 16 / 8.2; margin-bottom: 18px; }
+.today-lead-quotes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--color-border-light); }
+.today-story--lead:has(.today-report-image) .today-lead-quotes { display: none; }
+/* With no picture the lead becomes typographic: a bigger headline, a drop cap
+   and the reports' own words beside each other. */
+.today-page .today-front .today-story--lead:not(:has(.today-report-image)) h3 { font-size: clamp(34px, 4cqi, 54px); line-height: 1.07; }
+.today-story--lead:not(:has(.today-report-image)) .today-body::first-letter {
+  float: left; padding: 6px 10px 0 0;
+  font-family: "Baskerville", "New York", Georgia, serif; font-size: 3.4em; font-weight: 700; line-height: 0.85;
+}
+@container (min-width: 900px) {
+  .today-page .today-front .today-story--lead:not(:has(.today-report-image)) .today-body { columns: 2; column-gap: 32px; font-size: 16.5px; }
+  .today-lead-quotes:has(> :nth-child(2)) { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; }
+}
+
+/* Rail. */
+.today-page .today-front .today-story--rail { padding-left: 14px; border-left: 3px solid var(--today-theme, var(--color-border)); }
+.today-page .today-front .today-story--rail h3 { font-size: 19px; line-height: 1.25; }
+.today-page .today-front .today-story--rail .today-body { font-size: 13.5px; margin-top: 6px; }
+
+/* Features. */
+.today-page .today-front .today-story--feature h3 { font-size: 21px; line-height: 1.22; }
+.today-story--feature:has(.today-report-image) .today-pull-quote { display: none; }
+
+/* Briefs. */
+.today-page .today-front .today-story--brief .today-kicker { font-size: 10px; margin-bottom: 3px; }
+.today-page .today-front .today-story--brief h3 { font-size: 16px; line-height: 1.3; }
+.today-page .today-front .today-story--brief .today-body { font-size: 13px; margin-top: 3px; color: var(--color-text-secondary); }
+.today-page .today-front .today-story--brief .today-story-actions { margin-top: 4px; }
+
+/* A report's own words where a picture would go. */
+.today-pull-quote { margin: 0; padding-left: 14px; border-left: 2px solid var(--today-theme, var(--color-accent)); }
+.today-pull-quote p { font-family: "Baskerville", "New York", Georgia, serif; font-style: italic; font-size: 16px; line-height: 1.5; color: var(--color-text-primary); opacity: 0.9; }
+.today-pull-quote cite { display: block; margin-top: 6px; font-style: normal; font-size: 11.5px; color: var(--color-text-muted); }
+.today-pull-quote--large { margin: 16px 0 4px; padding-left: 0; border-left: 0; }
+.today-pull-quote--large p { font-size: 20px; line-height: 1.38; opacity: 1; }
+.today-pull-quote--large p::before {
+  content: "\201C"; display: block; margin-bottom: 4px;
+  font-style: normal; font-size: 52px; line-height: 0.55; color: var(--today-theme, var(--color-accent));
+}
+
+/* A headline number. */
+.today-figure { display: flex; align-items: baseline; gap: 12px; margin: 4px 0 10px; }
+.today-figure strong { font-family: "Baskerville", "New York", Georgia, serif; font-size: 46px; line-height: 1; font-weight: 700; color: var(--today-theme, var(--color-accent)); }
+.today-figure span { max-width: 200px; font-size: 13px; line-height: 1.35; color: var(--color-text-secondary); }
+.today-story--lead .today-figure { margin-top: 16px; }

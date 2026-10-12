@@ -373,6 +373,8 @@ export interface TodayEditorial {
   theme: string;
   summary: string;
   sources: { article_id: string; quote: string }[];
+  /** The story's headline number, when the reports state one. */
+  figure?: { value: string; label: string } | null;
 }
 
 export interface TodayEditionItem {

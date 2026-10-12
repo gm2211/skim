@@ -1,15 +1,14 @@
 import "./TodayStorySkeleton.css";
-
-export type TodayStorySkeletonRank = "lead" | "story" | "brief";
+import type { StoryRank } from "../../lib/todayEdition";
 
 interface TodayStorySkeletonProps {
-  rank: TodayStorySkeletonRank;
+  rank: StoryRank;
 }
 
 /** Newspaper-shaped loading placeholder with no invented story content. */
 export function TodayStorySkeleton({ rank }: TodayStorySkeletonProps) {
   const lead = rank === "lead";
-  const brief = rank === "brief";
+  const brief = rank === "brief" || rank === "rail";
 
   return (
     <article
@@ -21,7 +20,7 @@ export function TodayStorySkeleton({ rank }: TodayStorySkeletonProps) {
       <div className="today-story-skeleton-byline" aria-hidden="true">
         <span className="today-story-skeleton-bar" />
       </div>
-      {lead && <div className="today-story-skeleton-image" aria-hidden="true" />}
+      {(lead || rank === "feature") && <div className="today-story-skeleton-image" aria-hidden="true" />}
       <h3 className="today-story-skeleton-headline" aria-hidden="true">
         <span className="today-story-skeleton-bar" />
         {!brief && <span className="today-story-skeleton-bar" />}

@@ -467,6 +467,10 @@ export const TODAY_LEDE_PROGRESS_EVENT = "today_lede_progress";
 export const generateTodayEditorial = (editionId: string, requestId?: string) =>
   invoke<TodayEditionView>("generate_today_editorial", requestId ? { editionId, requestId } : { editionId });
 
+/** The share or report image for a Today story, from what is already cached. */
+export const getTodayStoryImage = (articleIds: string[]) =>
+  invoke<string | null>("get_today_story_image", { articleIds });
+
 export const generateTodayLedes = (editionId: string, requestId?: string) =>
   invoke<TodayEditionView>("generate_today_ledes", requestId ? { editionId, requestId } : { editionId });
 

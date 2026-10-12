@@ -23,7 +23,7 @@ vi.mock("@tauri-apps/api/core", async (original) => ({
   isTauri: nativeRuntime,
 }));
 
-const settings = { ai: { provider: "openai", api_key: "test-openai-secret", endpoint: null, model: "saved-model" }, appearance: {}, sync: {} };
+const settings = { ai: { provider: "openai", api_key: "test-openai-secret" as string | null, endpoint: null, model: "saved-model" }, appearance: {}, sync: {} };
 vi.mock("../../hooks/useSettings", () => ({
   useSettings: () => ({ data: settings }),
   useUpdateSettings: () => ({ mutateAsync: saveSettings, isPending: false, error: null }),
@@ -43,6 +43,7 @@ beforeEach(() => {
   saveSettings.mockClear();
   nativeRuntime.mockReturnValue(true);
   settings.ai.provider = "openai";
+  settings.ai.api_key = "test-openai-secret";
   useUiStore.setState({ isPhone: false, showSettings: true });
   vi.mocked(listRemoteModels).mockResolvedValue([]);
   vi.mocked(getSystemInfo).mockResolvedValue({ total_memory_gb: 16, available_memory_gb: 12, max_model_size_gb: 8 });
@@ -76,11 +77,33 @@ describe("Settings provider drafts", () => {
     // Input focus does not change tabs; tab navigation starts on a tab button.
     await user.click(screen.getByRole("tab", { name: "Account" }));
     await user.keyboard("{ArrowRight}");
-    expect(screen.getByRole("tab", { name: "Tools" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Preferences" })).toHaveAttribute("aria-selected", "true");
     expect(screen.getByPlaceholderText("sk-...")).not.toBeVisible();
     await user.click(screen.getByRole("tab", { name: "Account" }));
     expect(screen.getByDisplayValue("test-new-secret")).toBeInTheDocument();
     expect(saveSettings).not.toHaveBeenCalled();
+  });
+  it("opens Account first while signed out and keeps Model first once connected", async () => {
+    settings.ai.api_key = null;
+    const { unmount } = renderDialog();
+    await screen.findByRole("button", { name: "Change AI service" });
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Account", "Model", "Preferences"]);
+    expect(screen.getByRole("tab", { name: "Account" })).toHaveAttribute("aria-selected", "true");
+    unmount();
+
+    settings.ai.provider = "claude-subscription";
+    vi.mocked(claudeOauthStatus).mockResolvedValueOnce(false);
+    const signedOut = renderDialog();
+    await vi.waitFor(() => expect(screen.getByRole("tab", { name: "Account" })).toHaveAttribute("aria-selected", "true"));
+    expect(screen.getAllByRole("tab")[0]).toHaveTextContent("Account");
+    signedOut.unmount();
+
+    vi.mocked(claudeOauthStatus).mockResolvedValueOnce(true);
+    renderDialog();
+    await screen.findByRole("button", { name: "Change AI service" });
+    await vi.waitFor(() => expect(claudeOauthStatus).toHaveBeenCalled());
+    expect(screen.getAllByRole("tab")[0]).toHaveTextContent("Model");
+    expect(screen.getByRole("tab", { name: "Model" })).toHaveAttribute("aria-selected", "true");
   });
   it("preserves a pending sign-in across tabs and opening provider choices", async () => {
     const user = userEvent.setup();
@@ -133,6 +156,9 @@ describe("Settings provider drafts", () => {
     await user.click(screen.getByRole("button", { name: /^Grok/ }));
     expect(screen.getByRole("button", { name: "Change AI service" })).toHaveFocus();
     expect(screen.queryByDisplayValue("test-openai-secret")).not.toBeInTheDocument();
+    // Grok has no sign-in or saved key yet, so its settings open on Account.
+    expect(screen.getByRole("tab", { name: "Account" })).toHaveAttribute("aria-selected", "true");
+    await user.click(screen.getByRole("tab", { name: "Model" }));
     expect(screen.getByRole("combobox", { name: "Model" })).toHaveValue("");
     await user.click(screen.getByRole("button", { name: "Load available models" }));
     expect(listRemoteModels).toHaveBeenCalledWith("xai", null, null);

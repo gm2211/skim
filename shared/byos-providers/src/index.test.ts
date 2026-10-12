@@ -110,6 +110,8 @@ test('Claude: API key only while subscriptions are paused; models and effort com
   assert.equal(claudeCredentialAllowed('sk-ant-oat01-x'), false);
   assert.equal(claudeCredentialAllowed('sk-ant-oat01-x', false), true);
   assert.deepEqual(claude().signIn.map(method => method.kind), ['api-key']);
+  const setup = claude().signIn[0].kind === 'api-key' ? claude().signIn[0].setup ?? [] : [];
+  assert.deepEqual(setup.map(step => new URL(step.url).host), ['claude.ai', 'platform.claude.com']);
   const calls = fakeFetch(() => new Response(JSON.stringify({ data: [
     { id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5', capabilities: { effort: { supported: true, low: { supported: true }, max: { supported: true } } } },
   ] })));
@@ -141,10 +143,10 @@ test('Claude streams text, thinking and usage from the Messages API', async () =
   assert.deepEqual(body.output_config, { effort: 'low' });
 });
 
-test('orderServices puts Grok, ChatGPT, OpenRouter, then Claude by default, and a site order wins', () => {
-  const ids = ['claude', 'chatgpt', 'grok', 'openrouter', 'other'] as const;
+test('orderServices lists subscriptions first, then OpenRouter, Groq, Hugging Face, and a site order wins', () => {
+  const ids = ['huggingface', 'openrouter', 'other', 'groq', 'grok', 'chatgpt', 'claude'] as const;
   const keyOf = (id: string) => (id === 'other' ? undefined : id as ServiceKey);
-  assert.deepEqual(orderServices(ids, keyOf), ['grok', 'chatgpt', 'openrouter', 'claude', 'other']);
-  assert.deepEqual(orderServices(ids, keyOf, ['openrouter', 'grok']), ['openrouter', 'grok', 'claude', 'chatgpt', 'other']);
+  assert.deepEqual(orderServices(ids, keyOf), ['claude', 'chatgpt', 'grok', 'openrouter', 'groq', 'huggingface', 'other']);
+  assert.deepEqual(orderServices(ids, keyOf, ['openrouter', 'grok']), ['openrouter', 'grok', 'huggingface', 'other', 'groq', 'chatgpt', 'claude']);
   assert.ok(NOT_RECOMMENDED_REASON.claude);
 });

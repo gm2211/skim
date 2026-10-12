@@ -1,4 +1,4 @@
-import type { ByosProvider, CatalogModel, ChatEvent, ChatRequest, ReasoningEffort } from '@byos/core';
+import type { ApiKeySetupStep, ByosProvider, CatalogModel, ChatEvent, ChatRequest, ReasoningEffort } from '@byos/core';
 import { ProviderRequestError, safeProviderErrorText } from './chat.js';
 import { iterateSseEvents } from './sse.js';
 
@@ -11,9 +11,21 @@ import { iterateSseEvents } from './sse.js';
  * treats a subscription (OAuth) token as unusable while `subscriptionsPaused` is true. Pass `false`
  * only if that policy changes.
  *
+ * PLAN CREDITS. Claude Max and Team plans include monthly Claude API credits
+ * (https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers). They land in a linked
+ * Claude Console organization and are spent by ordinary API keys, so the sign-in links to the claim
+ * page and the key page. Anthropic offers no third-party OAuth that mints keys, so the user still
+ * pastes the key; byos never sees a Claude.ai session.
+ *
  * TOKEN RULE: the key goes only to api.anthropic.com, from the browser.
  */
 export const ANTHROPIC_POLICY_URL = 'https://code.claude.com/docs/en/legal-and-compliance';
+export const CLAUDE_PLAN_CREDITS_URL = 'https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers';
+/** Where a user gets a key: claim Max/Team plan credits (optional), then create the key. */
+export const CLAUDE_API_KEY_SETUP: ApiKeySetupStep[] = [
+  { label: 'Claim your Max or Team plan’s API credits (optional)', url: 'https://claude.ai/settings/billing' },
+  { label: 'Create an API key in Claude Console', url: 'https://platform.claude.com/settings/keys' },
+];
 export const CLAUDE_SUBSCRIPTIONS_PAUSED_NOTE = 'Claude subscriptions are momentarily unavailable because of Anthropic’s policy. Use an API key, or pick another service.';
 
 const API = 'https://api.anthropic.com/v1';
@@ -137,7 +149,7 @@ export function claude(options: { subscriptionsPaused?: boolean } = {}): ByosPro
   return {
     id: 'claude',
     displayName: 'Claude',
-    signIn: [{ kind: 'api-key', hint: 'An Anthropic API key from console.anthropic.com' }],
+    signIn: [{ kind: 'api-key', hint: 'A Claude API key from platform.claude.com. Max and Team plans include monthly API credits for it.', setup: CLAUDE_API_KEY_SETUP }],
     // API keys work; the note tells users why there is no subscription button.
     availability: () => ({ available: true }),
     listModels: (token, signal) => listClaudeModels(token, signal, paused),

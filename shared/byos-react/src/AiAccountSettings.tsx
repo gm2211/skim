@@ -28,6 +28,8 @@ export type AiAccountSettingsProps = {
   providerName: string;
   headingId?: string;
   expired?: boolean;
+  /** False when no account or API key is connected: Account moves first and opens by default. */
+  signedIn?: boolean;
   onChangeProvider: () => void;
   modelSettings: ReactNode;
   accountSettings: ReactNode;
@@ -42,11 +44,15 @@ export type AiAccountSettingsProps = {
 export function AiAccountSettings(props: AiAccountSettingsProps) {
   const generatedId = useId();
   const headingId = props.headingId ?? `${generatedId}-heading`;
-  const [activeTab, setActiveTab] = useState<AiAccountSettingsTab>('model');
+  const signedOut = props.signedIn === false;
+  // Follow the sign-in default until the user picks a tab, so connecting moves on to Model.
+  const [selectedTab, setSelectedTab] = useState<AiAccountSettingsTab | null>(null);
+  const activeTab = selectedTab ?? (signedOut ? 'account' : 'model');
   const strings = { ...defaultAiAccountSettingsStrings, ...props.strings };
+  const modelTab = { id: 'model' as const, label: strings.modelTab, content: props.modelSettings };
+  const accountTab = { id: 'account' as const, label: strings.accountTab, content: <>{props.accountSettings}{props.recoveryAction != null && <div className="byos-account-settings-recovery">{props.recoveryAction}</div>}</> };
   const tabs: { id: AiAccountSettingsTab; label: string; content: ReactNode }[] = [
-    { id: 'model', label: strings.modelTab, content: props.modelSettings },
-    { id: 'account', label: strings.accountTab, content: <>{props.accountSettings}{props.recoveryAction != null && <div className="byos-account-settings-recovery">{props.recoveryAction}</div>}</> },
+    ...(signedOut ? [accountTab, modelTab] : [modelTab, accountTab]),
     ...(props.toolsSettings == null ? [] : [{ id: 'tools' as const, label: strings.toolsTab, content: props.toolsSettings }]),
   ];
   const active = tabs.find(tab => tab.id === activeTab) ?? tabs[0];
@@ -54,7 +60,7 @@ export function AiAccountSettings(props: AiAccountSettingsProps) {
   const panelId = props.keepPanelsMounted ? `${generatedId}-${active.id}-panel` : `${generatedId}-panel`;
 
   function selectTab(id: AiAccountSettingsTab, focus = false) {
-    setActiveTab(id);
+    setSelectedTab(id);
     if (focus) window.requestAnimationFrame(() => document.getElementById(`${generatedId}-${id}-tab`)?.focus());
   }
 

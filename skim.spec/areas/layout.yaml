@@ -12,3 +12,12 @@ behaviors:
       the list, and swipe-to-dismiss owns the gesture over the reader, including web view.
   - id: chat-reachable-when-narrow
     description: Article chat stays reachable in narrow Mac windows.
+  - id: one-icon-per-action
+    description: >-
+      Desktop title bar: each action has one icon and appears once. The sidebar header carries the
+      app-wide actions (collapse, refresh, Ask Skim, Quick Catch-up as the newspaper, add feed);
+      the list toolbar carries only the list's own (mark all read, search) and repeats the app-wide
+      ones only while the sidebar is hidden. The bolt belongs to Today alone, on its sidebar row.
+    source:
+      text: newspaper view / icon is on second tab but still lightning on first
+      reference: Giulio, project chat, 2026-10-11

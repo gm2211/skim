@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageStats, useTriageProgress } from "../../hooks/useInbox";
 import { useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
-import { BoltIcon, ChatIcon, NewspaperIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
+import { ChatIcon, NewspaperIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import type { SidebarView } from "../../services/types";
 import { FeedsSection } from "./FeedsSection";
@@ -113,13 +113,15 @@ export function Sidebar() {
         >
           <ChatIcon />
         </button>
+        {/* The newspaper is Quick Catch-up everywhere; the bolt stays with
+            Today, which has its own row just below. */}
         <button
-          onClick={() => setSidebarView({ type: "today" })}
+          onClick={openCatchup}
           className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
-          title="Today — your finite, sectioned daily edition"
-          aria-label="Today"
+          title="Quick Catch-up — the front page of what you missed"
+          aria-label="Quick Catch-up"
         >
-          <BoltIcon />
+          <NewspaperIcon />
         </button>
         <button
           onClick={() => setShowAddFeed(true)}

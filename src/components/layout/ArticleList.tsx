@@ -242,6 +242,9 @@ export function ArticleList() {
   const { data: folders } = useFolders();
   const [searchQuery, setSearchQuery] = useState("");
   const [askOpen, setAskOpen] = useState(false);
+  // The sidebar header carries Add feed, Quick Catch-up and Ask Skim; this
+  // toolbar shows them only when that header is off screen.
+  const appActionsHere = isPhone || sidebarCollapsed;
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -606,32 +609,39 @@ export function ArticleList() {
         )}
         {sidebarCollapsed && !isPhone && <SkimTitle />}
         <div className="flex-1" />
-        {!isPhone && (
-          <button
-            onClick={() => setShowAddFeed(true)}
-            className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
-            title="Add feed"
-            aria-label="Add feed"
-          >
-            <PlusIcon />
-          </button>
+        {/* App-wide actions live in the sidebar header; this row repeats
+            them only while the sidebar is hidden, so the two strips never
+            show the same icons side by side. */}
+        {appActionsHere && (
+          <>
+            {!isPhone && (
+              <button
+                onClick={() => setShowAddFeed(true)}
+                className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"
+                title="Add feed"
+                aria-label="Add feed"
+              >
+                <PlusIcon />
+              </button>
+            )}
+            <button
+              onClick={openCatchup}
+              className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
+              title="Quick Catch-up"
+              aria-label="Quick Catch-up"
+            >
+              <NewspaperIcon />
+            </button>
+            <button
+              onClick={() => setAskOpen(true)}
+              className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
+              title="Ask Skim — search your feed with AI"
+              aria-label="Ask Skim"
+            >
+              <ChatIcon />
+            </button>
+          </>
         )}
-        <button
-          onClick={openCatchup}
-          className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
-          title="Quick Catch-up"
-          aria-label="Quick Catch-up"
-        >
-          <NewspaperIcon />
-        </button>
-        <button
-          onClick={() => setAskOpen(true)}
-          className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
-          title="Ask Skim — search your feed with AI"
-          aria-label="Ask Skim"
-        >
-          <ChatIcon />
-        </button>
         <button
           onClick={handleMarkAllRead}
           className="tap-target text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-white/10"

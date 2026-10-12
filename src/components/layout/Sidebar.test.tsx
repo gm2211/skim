@@ -70,13 +70,16 @@ describe("Sidebar — All Articles regression guard", () => {
     expect(screen.getByText("All Articles")).toBeInTheDocument();
   });
 
-  it("the header bolt button now opens Today, not the legacy Catch-up dialog", async () => {
+  it("the header newspaper button opens Quick Catch-up; the bolt belongs to Today's row", async () => {
     const user = userEvent.setup();
     useUiStore.setState({ ...INITIAL_STATE, sidebarView: { type: "all" } }, true);
     render(<Sidebar />);
 
-    await user.click(screen.getByTitle("Today — your finite, sectioned daily edition"));
+    await user.click(screen.getByRole("button", { name: "Quick Catch-up" }));
+    expect(useUiStore.getState().sidebarView).toEqual({ type: "catchup" });
+    expect(screen.queryByRole("button", { name: "Today" })).not.toBeInTheDocument();
 
+    await user.click(screen.getByText("Today"));
     expect(useUiStore.getState().sidebarView).toEqual({ type: "today" });
   });
 

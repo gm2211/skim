@@ -318,7 +318,7 @@ final class TodayImageStore: ObservableObject {
         }
     }
 
-    private static func isPhoto(_ url: URL) -> Bool {
+    nonisolated private static func isPhoto(_ url: URL) -> Bool {
         let lowered = url.absoluteString.lowercased()
         return ["http", "https"].contains(url.scheme?.lowercased() ?? "")
             && !["feedburner", "pixel", "badge", "favicon", "logo", "avatar", ".svg"].contains { lowered.contains($0) }

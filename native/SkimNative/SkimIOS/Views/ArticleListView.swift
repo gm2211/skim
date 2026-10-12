@@ -434,69 +434,49 @@ struct ArticleListView: View {
 
     private var topBar: some View {
         ZStack {
-            HStack {
-                Spacer()
-                VStack(spacing: 1) {
-                    Text(compactTitle)
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(SkimStyle.text)
-                        .lineLimit(1)
-
-                    if model.isLoading {
-                        Text("Syncing...")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(SkimStyle.secondary)
-                    } else if isSearchActive {
-                        if !model.articles.isEmpty {
-                            Text("\(model.articles.count.formatted()) results")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(SkimStyle.secondary.opacity(0.78))
-                        }
-                    } else if model.listMode == .starred && model.selectedFeedID == nil && model.selectedFolderID == nil {
-                        if !model.articles.isEmpty {
-                            Text("\(model.articles.count.formatted()) starred")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(SkimStyle.secondary.opacity(0.78))
-                        }
-                    } else if model.currentUnreadCount > 0 {
-                        Text("\(model.currentUnreadCount.formatted()) unread")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(SkimStyle.secondary.opacity(0.78))
-                    }
+            // On Today the title sits between the clusters (the way a
+            // navigation bar does when its buttons leave no room to centre it
+            // on the screen); elsewhere it is centred on the screen.
+            if !showToday {
+                HStack {
+                    Spacer()
+                    topBarTitle.frame(maxWidth: 190)
+                    Spacer()
                 }
-                .frame(maxWidth: 190)
-                Spacer()
             }
 
-            HStack(alignment: .center, spacing: 18) {
+            HStack(alignment: .center, spacing: showToday ? 12 : 18) {
                 BorderlessIconButton(systemName: SkimIcon.feeds, title: "Feeds", size: 20, tapSize: 42) {
                     dismissTextEntry()
                     withAnimation(.smooth(duration: 0.26)) {
                         showFeedPicker = true
                     }
                 }
-                Spacer()
 
                 if showToday {
+                    topBarTitle.frame(maxWidth: .infinity)
                     // "Catch me up" lives on Today: a front page written on
                     // demand from the articles in view, over a chosen window.
                     BorderlessIconButton(systemName: SkimIcon.catchUp, title: "Catch me up", size: 20, tapSize: 42) {
                         presentQuickCatchUp()
                     }
-                    if let items = model.todayEdition?.items, !items.isEmpty {
-                        BorderlessIconButton(systemName: SkimIcon.chat, title: "Ask about Today", size: 20, tapSize: 42) {
+                    BorderlessIconButton(systemName: SkimIcon.settings, title: "Today settings", size: 20, tapSize: 42) {
+                        showTodaySettings = true
+                    }
+                } else {
+                    Spacer()
+                }
+
+                Menu {
+                    if showToday, let items = model.todayEdition?.items, !items.isEmpty {
+                        Button("Ask about Today", systemImage: SkimIcon.chat) {
                             gatedAI {
                                 dismissTextEntry()
                                 activeAIChat = TodayChat.page(items, model: model)
                             }
                         }
+                        Divider()
                     }
-                    BorderlessIconButton(systemName: SkimIcon.settings, title: "Today settings", size: 20, tapSize: 42) {
-                        showTodaySettings = true
-                    }
-                }
-
-                Menu {
                     Button("Chat with Articles", systemImage: SkimIcon.chat) {
                         presentArticleChat()
                     }
@@ -534,6 +514,38 @@ struct ArticleListView: View {
             Rectangle()
                 .fill(SkimStyle.separator.opacity(0.4))
                 .frame(height: 1)
+        }
+    }
+
+    /// The list title with its count underneath.
+    private var topBarTitle: some View {
+        VStack(spacing: 1) {
+            Text(compactTitle)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(SkimStyle.text)
+                .lineLimit(1)
+
+            if model.isLoading {
+                Text("Syncing...")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(SkimStyle.secondary)
+            } else if isSearchActive {
+                if !model.articles.isEmpty {
+                    Text("\(model.articles.count.formatted()) results")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(SkimStyle.secondary.opacity(0.78))
+                }
+            } else if model.listMode == .starred && model.selectedFeedID == nil && model.selectedFolderID == nil {
+                if !model.articles.isEmpty {
+                    Text("\(model.articles.count.formatted()) starred")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(SkimStyle.secondary.opacity(0.78))
+                }
+            } else if model.currentUnreadCount > 0 {
+                Text("\(model.currentUnreadCount.formatted()) unread")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(SkimStyle.secondary.opacity(0.78))
+            }
         }
     }
 

@@ -26,7 +26,7 @@ const catchupCache = new Map<string, CacheEntry>();
 const catchupErrors = new Map<string, string>();
 
 /** The one size both selects in the cog share. */
-const CONTROL_STYLE = { height: 30, minHeight: 30, fontSize: 12.5, padding: "0 28px 0 10px", maxWidth: 200 } as const;
+const CONTROL_STYLE = { width: 220, maxWidth: "100%", height: 32, minHeight: 32, fontSize: 12.5, padding: "0 28px 0 10px" } as const;
 
 /** How far back to catch up. `null` is the whole unread backlog. */
 export const CATCHUP_RANGES: { value: CatchupSinceHours; label: string }[] = [

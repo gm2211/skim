@@ -380,7 +380,7 @@ describe("TodayEditionPane", () => {
     await waitFor(() => expect(screen.queryByRole("region", { name: "Catch me up" })).not.toBeInTheDocument());
   });
 
-  it("disables the today model picker while ledes are being written", async () => {
+  it("keeps the today model picker usable while ledes are being written", async () => {
     vi.mocked(commands.getSettings).mockResolvedValue({
       ...DEFAULT_SETTINGS,
       ai: { ...DEFAULT_SETTINGS.ai, provider: "openai" },
@@ -388,7 +388,8 @@ describe("TodayEditionPane", () => {
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
     await userEvent.click(await screen.findByRole("button", { name: "Today settings" }));
-    await waitFor(() => expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "true"));
+    // The choice applies to the next pass, so the picker never reads as greyed out.
+    await waitFor(() => expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "false"));
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Today settings" })).not.toBeInTheDocument();
   });

@@ -188,8 +188,13 @@ private struct CatchUpDateline: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day().year()).uppercased())
+                // The date never wraps: it keeps its width and the status
+                // beside it is the part that folds onto a second line.
+                Text(Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()).uppercased())
                     .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
                 Spacer(minLength: 8)
                 Text(trailing.uppercased())
                     .foregroundStyle(SkimStyle.secondary.opacity(0.75))

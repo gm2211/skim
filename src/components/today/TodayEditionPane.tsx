@@ -13,6 +13,7 @@ import { openAgentChat } from "../../stores/agentChatStore";
 import { useAgentContext } from "../../hooks/useAgentContext";
 import { storyForAgent } from "../../lib/agentContext";
 import { IconButton } from "../common/IconButton";
+import { SettingsCog } from "../common/SettingsCog";
 import "./TodayFrontPage.css";
 
 export const NEWSPAPER_PAGE_SIZE = PAGE_SIZE;
@@ -40,13 +41,6 @@ function FrontPage({ cells }: { cells: { key: string; node: React.ReactNode }[] 
   );
 }
 
-const CogIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-  </svg>
-);
-
 function formatWindowDate(startsAtSeconds: number): string {
   return new Date(startsAtSeconds * 1000).toLocaleDateString("en-US", {
     weekday: "long",
@@ -70,20 +64,8 @@ export function TodayEditionPane() {
   const [sharedOnly, setSharedOnly] = useState(false);
   const [pageSelection, setPageSelection] = useState({ key: "", index: 0 });
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   // Asks go to the app's assistant, which already knows the stories on the page.
   const agentContext = useAgentContext();
-  const settingsRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!settingsOpen) return;
-    const close = (event: MouseEvent | KeyboardEvent) => {
-      if (event instanceof KeyboardEvent ? event.key === "Escape" : !settingsRef.current?.contains(event.target as Node)) setSettingsOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    // Capture, so the cog's own tooltip dismissal does not swallow Escape.
-    document.addEventListener("keydown", close, true);
-    return () => { document.removeEventListener("mousedown", close); document.removeEventListener("keydown", close, true); };
-  }, [settingsOpen]);
   const refreshFeeds = useRefreshAllFeeds();
   const isFrontPage = !isPhone && !selectedArticleId;
   const items = data?.items ?? [];
@@ -177,19 +159,9 @@ export function TodayEditionPane() {
             <RefreshIcon size={18} className={refreshFeeds.isPending ? "smooth-spin" : undefined} />
           </IconButton>
         )}
-        <div ref={settingsRef} className="relative">
-          <IconButton
-            label="Today settings"
-            aria-expanded={settingsOpen}
-            aria-haspopup="dialog"
-            onClick={() => setSettingsOpen(!settingsOpen)}
-            className={`hover:text-text-primary hover:bg-white/10 ${settingsOpen ? "text-text-primary bg-white/10" : "text-text-secondary"}`}
-          >
-            <CogIcon />
-          </IconButton>
-          {settingsOpen && (
-            <div className="today-settings" role="dialog" aria-label="Today settings">
-              <div className="today-settings-heading">{catchingUp ? "Catch me up" : "Today"}</div>
+        <SettingsCog label="Today settings" heading={catchingUp ? "Catch me up" : "Today"} className="text-text-secondary">
+          {(close) => (
+            <>
               {catchingUp && <CatchupControls catchup={catchup} />}
               {catchingUp && <div className="today-settings-row">
                 <span>Model</span>
@@ -198,17 +170,17 @@ export function TodayEditionPane() {
               {catchingUp && <hr />}
               <div className="today-settings-row">
                 <span>Summary model</span>
-                <ModelPicker surface="today" compact disabled={isWritingLedes} />
+                <ModelPicker surface="today" compact />
               </div>
-              <button className="today-settings-row" onClick={() => { setSettingsOpen(false); useUiStore.getState().setShowSettings(true, "sync"); }}>
+              <button className="today-settings-row" onClick={() => { close(); useUiStore.getState().setShowSettings(true, "sync"); }}>
                 <span>Edition size</span><span className="text-text-muted">{data?.edition.story_limit ?? 10} stories</span>
               </button>
-              {canRetryLedes && <button className="today-settings-row" onClick={() => { setSettingsOpen(false); retryLedes(); }}>Retry missing summaries</button>}
+              {canRetryLedes && <button className="today-settings-row" onClick={() => { close(); retryLedes(); }}>Retry missing summaries</button>}
               <hr />
-              <button className="today-settings-row" onClick={() => { setSettingsOpen(false); useUiStore.getState().setShowSettings(true); }}>AI settings…</button>
-            </div>
+              <button className="today-settings-row" onClick={() => { close(); useUiStore.getState().setShowSettings(true); }}>AI settings…</button>
+            </>
           )}
-        </div>
+        </SettingsCog>
       </div>
 
       <div ref={scrollRef} className="today-scroll flex-1 overflow-y-auto">

@@ -299,7 +299,7 @@
     feed_ids: feeds.filter((f) => f.__group === group).map((f) => f.id),
   }));
 
-  const SETTINGS = {
+  let SETTINGS = {
     ai: {
       provider: "anthropic",
       api_key: "sk-ant-demo",
@@ -354,6 +354,8 @@
     list_feeds: () => feeds,
     list_folders: () => folders,
     get_settings: () => SETTINGS,
+    // Persist, so a picker in a popover shows what was just chosen.
+    update_settings: ({ settings }) => { SETTINGS = settings; return null; },
     get_total_unread: () => articles.filter((a) => !a.is_read).length,
     refresh_all_feeds: () => 0,
     refresh_feed: () => 0,
@@ -488,7 +490,7 @@
 
   // Commands the UI may call that need nothing more than "ok".
   const VOID_OK = new Set([
-    "mark_articles_read", "mark_articles_unread", "mark_all_read", "update_settings",
+    "mark_articles_read", "mark_articles_unread", "mark_all_read",
     "record_reading_time", "set_article_feedback", "set_priority_override",
     "remove_recent_article", "cancel_summarize", "cancel_download", "assign_feed_to_folder",
     "reorder_folders", "delete_folder", "rename_folder", "remove_feed", "rename_feed",

@@ -132,6 +132,24 @@ const SCENES = [
     await p.getByText("Today", { exact: true }).first().click();
     await p.waitForTimeout(800);
   } },
+  // The cog popovers, so overflow, wrapping and contrast get a look before a ship.
+  { name: "today-cog", viewport: DESKTOP, run: async (p) => {
+    await p.getByText("Today", { exact: true }).first().click();
+    await p.waitForTimeout(800);
+    await p.getByRole("button", { name: "Today settings" }).click();
+    await p.waitForTimeout(300);
+  }, clip: { x: 1000, y: 0, width: 440, height: 460 } },
+  { name: "catchup-cog", viewport: DESKTOP, run: async (p) => {
+    await openCatchup(p);
+    await p.getByRole("button", { name: "Today settings" }).click();
+    await p.waitForTimeout(300);
+  }, clip: { x: 1000, y: 0, width: 440, height: 460 } },
+  { name: "chat-cog", viewport: DESKTOP, run: async (p) => {
+    await p.locator('[aria-label="Ask Skim"]').first().click();
+    await p.waitForTimeout(500);
+    await p.getByRole("button", { name: "Chat settings" }).click();
+    await p.waitForTimeout(300);
+  } },
   { name: "palette", viewport: DESKTOP, run: async (p) => {
     await p.keyboard.press("Meta+k");
     await p.waitForTimeout(400);
@@ -177,6 +195,7 @@ const main = async () => {
       await p.waitForTimeout(250);
       const file = path.join(OUT, `${scene.name}.png`);
       if (scene.target) await p.locator(scene.target).first().screenshot({ path: file, animations: "disabled" });
+      else if (scene.clip) await p.screenshot({ path: file, animations: "disabled", clip: scene.clip });
       else await p.screenshot({ path: file, animations: "disabled" });
       console.log(`  ${scene.name}`);
     } catch (e) {

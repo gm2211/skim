@@ -1,7 +1,7 @@
 /* Settings popover behind the cog. */
 .today-settings {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
-  width: 300px; padding: 6px;
+  width: 340px; max-width: calc(100vw - 24px); padding: 6px;
   border: 1px solid var(--color-border); border-radius: 12px;
   background: var(--color-bg-tertiary);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
@@ -15,5 +15,10 @@
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   width: 100%; min-height: 40px; padding: 6px 10px; border-radius: 8px; text-align: left;
 }
+/* Label on one line; the control takes what is left and never leaves the popover. */
+.today-settings-row > :first-child { flex: none; white-space: nowrap; }
+.today-settings-row > :last-child { flex: 0 1 auto; min-width: 0; max-width: 100%; }
+.today-settings-row > :last-child > span { max-width: 100%; }
+.today-settings-row select { max-width: 100%; text-overflow: ellipsis; }
 button.today-settings-row:hover { background: var(--color-bg-hover); }
 .today-settings hr { border: 0; border-top: 1px solid var(--color-border); margin: 6px 0; }

@@ -78,8 +78,10 @@ behaviors:
     details: >-
       Desktop has an Ask button in the top bar for the page and an Ask action on each story; both
       open the app assistant (the same one Cmd+K uses) with the page's stories, or the chosen story,
-      as its context. iOS has the same buttons in the title bar and on each story, and its chat reads
-      exactly those reports: each story's lead report first, then the rest, up to 30.
+      as its context. iOS has the Ask action on each story and "Ask about Today" at the top of the
+      title bar's more menu (an iPhone title bar has no room for a fourth icon beside the bolt, the
+      cog and the menu without covering the title), and its chat reads exactly those reports: each
+      story's lead report first, then the rest, up to 30.
     source:
       text: I would like to be able to chat with the whole page or a single story
       reference: Giulio, project chat, 2026-10-12

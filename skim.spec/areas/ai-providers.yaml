@@ -22,6 +22,24 @@ behaviors:
       Ask Skim, article chat, Summarize, and Today (in its cog) each have a model picker that
       changes the model for the current provider and links to AI settings.
     details: Remote model lists are fetched live; a failed fetch falls back to the current model.
+  - id: claude-models-accept-request
+    description: >-
+      Any Claude model the picker lists runs Skim's requests; Skim sends sampling settings such as
+      temperature only to models that accept them.
+    details: >-
+      Claude 4.7 and later, and every 5-series model, reject a temperature with a 400, so iOS and
+      desktop omit it for those and for any model they do not recognise. Found when Catch-up on
+      claude-sonnet-5-5 failed with "Claude request failed (400). Try again."
+    source:
+      text: 'Screenshot: Quick Catch-up, Anything unread, claude-sonnet-5-5, "Claude request failed (400). Try again."'
+      reference: Giulio, project thread "Claude 400 in Catch-up", 2026-10-12
+  - id: provider-errors-say-why
+    description: >-
+      When a provider rejects a request, the error shown says the provider's reason (for example an
+      unsupported parameter or a prompt that is too long) rather than only a status code.
+    details: >-
+      The reason is the provider's error message, never the raw JSON body. Sign-in, plan, rate-limit,
+      and outage errors keep their own friendly wording.
   - id: desktop-local-models
     description: >-
       Desktop local models come from a curated list (Qwen3.5 2B, 4B recommended, 9B, 35B-A3B on Macs

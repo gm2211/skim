@@ -121,6 +121,23 @@ mod endpoint_tests {
     use super::*;
 
     #[test]
+    fn only_older_claude_models_get_a_temperature() {
+        for model in ["claude-sonnet-5-5", "claude-opus-5-5", "claude-sonnet-5", "claude-fable-5-1", "claude-opus-4-7", "claude-opus-4-8", "claude-next"] {
+            assert!(!anthropic_accepts_temperature(model), "{model} rejects temperature");
+        }
+        for model in ["claude-sonnet-4-6", "claude-haiku-4-5", "claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"] {
+            assert!(anthropic_accepts_temperature(model), "{model} takes temperature");
+        }
+    }
+
+    #[test]
+    fn anthropic_errors_show_the_api_message() {
+        let body = r#"{"type":"error","error":{"type":"invalid_request_error","message":"temperature is not supported"}}"#;
+        assert_eq!(anthropic_error_reason(body), "temperature is not supported");
+        assert_eq!(anthropic_error_reason("plain"), "plain");
+    }
+
+    #[test]
     fn custom_endpoint_accepts_api_root_version_or_completion_url() {
         for endpoint in ["https://example.com/api", "https://example.com/api/v1/", "https://example.com/api/v1/chat/completions"] {
             let provider = OpenAiCompatibleProvider::new(endpoint, None, "custom");
@@ -383,6 +400,42 @@ fn parse_anthropic_content(content: &[AnthropicContent]) -> (String, Vec<ToolUse
     (text, tool_uses)
 }
 
+/// Claude Opus/Sonnet 4.7 and later, and every 5-series model, answer a
+/// `temperature` field with a 400. Only send it to Claude 3.x and 4.0–4.6;
+/// an unrecognised model gets the API's default sampling instead of a failure.
+pub(crate) fn anthropic_accepts_temperature(model: &str) -> bool {
+    let lower = model.to_ascii_lowercase();
+    let mut parts = lower.split('-').peekable();
+    if parts.next() != Some("claude") {
+        return false;
+    }
+    // "claude-3-5-sonnet-…" names the version first; "claude-sonnet-4-6" the family first.
+    if parts.peek().is_some_and(|p| p.parse::<u32>().is_err()) {
+        parts.next();
+    }
+    let Some(major) = parts.next().and_then(|p| p.parse::<u32>().ok()) else {
+        return false;
+    };
+    match major {
+        0..=3 => true,
+        4 => {
+            // A 1–2 digit part is the minor version; a date snapshot ("4-20250514") is 4.0.
+            let minor = parts.next().filter(|p| p.len() <= 2).and_then(|p| p.parse::<u32>().ok()).unwrap_or(0);
+            minor <= 6
+        }
+        _ => false,
+    }
+}
+
+/// The human-readable `error.message` from an Anthropic error body, or the raw
+/// body when it isn't the usual `{"error": {"message": ...}}` envelope.
+fn anthropic_error_reason(body: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| v["error"]["message"].as_str().map(str::to_string))
+        .unwrap_or_else(|| body.to_string())
+}
+
 #[async_trait]
 impl AiProvider for AnthropicProvider {
     async fn chat(&self, request: ChatRequest) -> Result<ChatResponse, String> {
@@ -398,7 +451,7 @@ impl AiProvider for AnthropicProvider {
             "max_tokens": request.max_tokens.unwrap_or(2048),
         });
 
-        if let Some(temp) = request.temperature {
+        if let Some(temp) = request.temperature.filter(|_| anthropic_accepts_temperature(&request.model)) {
             body["temperature"] = serde_json::json!(temp);
         }
         if let Some(sys) = &system_msg {
@@ -424,7 +477,7 @@ impl AiProvider for AnthropicProvider {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
             log::error!("Anthropic API error: status={}", status);
-            return Err(format!("Anthropic API error ({}): {}", status, body));
+            return Err(format!("Anthropic API error ({}): {}", status, anthropic_error_reason(&body)));
         }
 
         let api_response: AnthropicResponse = response
@@ -491,7 +544,7 @@ impl AiProvider for ClaudeSubscriptionProvider {
             "max_tokens": request.max_tokens.unwrap_or(2048),
             "system": system_blocks,
         });
-        if let Some(temp) = request.temperature {
+        if let Some(temp) = request.temperature.filter(|_| anthropic_accepts_temperature(&request.model)) {
             body["temperature"] = serde_json::json!(temp);
         }
         if let Some(tools) = &request.tools {
@@ -514,7 +567,7 @@ impl AiProvider for ClaudeSubscriptionProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            return Err(format!("Claude subscription API {}: {}", status, body));
+            return Err(format!("Claude subscription API {}: {}", status, anthropic_error_reason(&body)));
         }
 
         let api_response: AnthropicResponse = resp.json().await

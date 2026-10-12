@@ -392,9 +392,9 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             var carried: [EditionItem] = []
             if try db.edition(id: editionID) != nil {
                 let current = try db.todayEditionSnapshot(id: editionID)
+                let currentlyCovered = try db.coveredStoryIDs(editionID: editionID).count
                 let grows = current.items.isEmpty
-                    || (covered > (try db.coveredStoryIDs(editionID: editionID)).count
-                        && generatedItems.count >= current.items.count)
+                    || (covered > currentlyCovered && generatedItems.count >= current.items.count)
                 guard !generatedItems.isEmpty, !current.isSettled, grows else { return }
                 carried = current.items.map(\.snapshot).filter { $0.lede != nil }
                 try db.execute("DELETE FROM editions WHERE id = ?", [.text(editionID)])

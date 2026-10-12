@@ -1,7 +1,7 @@
 {
   "name": "@byos/react",
   "version": "0.1.0",
-  "description": "Bring-your-own-subscription React UI: device-code sign-in, model and effort picker, AI pill, and headless hooks. Themed per site through --byos-* CSS variables.",
+  "description": "Bring-your-own-subscription React UI: device-code sign-in, model and effort picker, AI pill, command palette, and headless hooks. Themed per site through --byos-* CSS variables.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,6 +25,7 @@
     "react-dom": ">=18"
   },
   "dependencies": {
+    "@byos/commands": "file:../byos-commands",
     "@byos/core": "file:../byos-core"
   },
   "devDependencies": {

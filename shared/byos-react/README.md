@@ -13,6 +13,7 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
 - `AiAccountSettings`: compact provider row and keyboard-accessible Model, Account, and optional Tools tabs. It mounts one pane at a time and places expired-account recovery in Account.
 - `AiProviderPicker`: short, application-owned provider choice list; selection does not connect or authenticate a provider.
 - `SignInWithChatGPT`: localized identity-only website sign-in presentation with approved black/white OpenAI button formats and availability/status slots. The host supplies the start route and its disclosure.
+- `CommandPaletteProvider`, `useCommands`, `usePalette`, `CommandPaletteButton`: the ⌘K palette from `@byos/commands` as React. Features register commands while mounted; the provider owns the dialog, shortcut, focus return, and Ask flow. See the [commands README](../commands/README.md).
 - `DialogCloseButton`: accessible 44px close control for host-owned dialogs; the caller handles placement and dismissal.
 - `useProviderModels`, `useEffortChoice`: headless hooks over `@byos/core`.
 

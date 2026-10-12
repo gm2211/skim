@@ -1,0 +1,100 @@
+import type { Command } from './command.js';
+
+const words = (text: string) => text.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
+/**
+ * Score how well `query` matches `text`: whole-text and word prefixes beat
+ * substrings, which beat initials ("qc" for "Quick Catch-up"), which beat
+ * scattered letters ("refrsh"). Returns -1 when the letters are not all
+ * present in order.
+ */
+export function scoreText(text: string, query: string): number {
+  const t = text.toLocaleLowerCase();
+  const q = query.toLocaleLowerCase().trim();
+  if (!q) return 0;
+  if (t === q) return 1000;
+  if (t.startsWith(q)) return 800;
+  const tokens = words(t);
+  if (tokens.some(w => w.startsWith(q))) return 600;
+  const terms = q.split(/\s+/);
+  if (terms.length > 1 && terms.every(term => tokens.some(w => w.startsWith(term)))) return 500;
+  if (t.includes(q)) return 400;
+  const compact = q.replace(/\s+/g, '');
+  if (tokens.map(w => w[0]).join('').startsWith(compact)) return 350;
+
+  // Subsequence match; tighter runs score higher.
+  let score = 0;
+  let at = 0;
+  let run = 0;
+  for (const ch of compact) {
+    const found = t.indexOf(ch, at);
+    if (found === -1) return -1;
+    run = found === at ? run + 1 : 0;
+    score += 1 + run * 2;
+    at = found + 1;
+  }
+  return Math.min(score, 300);
+}
+
+/** Last tier: every term starts a word somewhere across title, group, keywords and detail. */
+export const CROSS_FIELD_SCORE = 200;
+
+/** Best score across a command's fields; a title match outranks the same kind of keyword match. */
+export function scoreCommand(command: Command, query: string): number {
+  const fields: Array<[string, number]> = [
+    [command.title, 5],
+    [`${command.group} ${command.title}`, 0],
+    ...(command.keywords ?? []).map((keyword): [string, number] => [keyword, -250]),
+    ...(command.detail ? [[command.detail, -250] as [string, number]] : []),
+  ];
+  let best = -1;
+  for (const [text, adjust] of fields) {
+    const score = scoreText(text, query);
+    if (score >= 0) best = Math.max(best, Math.max(0, score + adjust));
+  }
+  if (best >= 0) return best;
+  const terms = query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+  if (terms.length < 2) return -1;
+  const all = words(fields.map(([text]) => text).join(' ').toLocaleLowerCase());
+  return terms.every(term => all.some(w => w.startsWith(term))) ? CROSS_FIELD_SCORE : -1;
+}
+
+/** Matching commands, best first; ties and an empty query keep the given order. */
+export function rankCommands(commands: readonly Command[], query: string, limit = Infinity): Command[] {
+  if (!query.trim()) return commands.slice(0, limit);
+  return commands
+    .map((command, index) => ({ command, index, score: scoreCommand(command, query) }))
+    .filter(entry => entry.score >= 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, limit)
+    .map(entry => entry.command);
+}
+
+const QUESTION_STARTS = new Set([
+  'where', 'what', 'whats', "what's", 'which', 'who', 'whos', "who's", 'when', 'why', 'how',
+  'is', 'are', 'was', 'were', 'can', 'could', 'should', 'would', 'do', 'does', 'did', 'any', 'anything',
+  'find', 'show', 'summarize', 'summarise', 'explain', 'tell', 'list', 'give', 'compare', 'open', 'read',
+  'search', 'recommend', 'suggest', 'help',
+]);
+
+/** Whether input reads as a question or request for the assistant rather than a command name. */
+export function isQuestionLike(query: string): boolean {
+  const q = query.trim().toLocaleLowerCase();
+  if (!q) return false;
+  if (q.endsWith('?')) return true;
+  const parts = q.split(/\s+/);
+  if (parts.length >= 5) return true;
+  return parts.length >= 2 && QUESTION_STARTS.has(parts[0].replace(/[^a-z']/g, ''));
+}
+
+/** Whether the Ask row should lead: a question with no command named by it, no match, or only scattered-letter matches for a sentence. */
+export function askFirst(commands: readonly Command[], query: string): boolean {
+  if (query.trim().endsWith('?')) return true;
+  const scores = commands.map(command => scoreCommand(command, query)).filter(score => score >= 0);
+  if (scores.length === 0) return true;
+  const best = Math.max(...scores);
+  // A command whose title starts with the query ("open settings") wins over a request-shaped phrase.
+  if (best >= 800) return false;
+  if (isQuestionLike(query)) return true;
+  return query.trim().split(/\s+/).length >= 3 && best < 350;
+}

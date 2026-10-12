@@ -109,18 +109,24 @@ describe("ChatDrawer", () => {
     expect(chatWithArticle).not.toHaveBeenCalled();
   });
 
-  it("mounts the chat model picker, disabled while a message is in flight", async () => {
+  it("keeps the model picker behind a cog, disabled while a message is in flight", async () => {
     const response = deferred<{ content: string; web_citations: []; provider: string; model: string }>();
     vi.mocked(chatWithArticle).mockReturnValueOnce(response.promise);
     render(<ChatDrawer articleId="article-1" articleTitle="Article" />);
     const user = await openAndType("Explain this");
 
+    expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Chat settings" }));
     const picker = screen.getByTestId("model-picker");
     expect(picker).toHaveAttribute("data-surface", "chat");
     expect(picker).toHaveAttribute("data-disabled", "false");
 
     await user.click(screen.getByRole("button", { name: "Send message" }));
+    expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Chat settings" }));
     expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "true");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
 
     await act(async () => response.resolve({ content: "Answer", web_citations: [], provider: "openai", model: "test" }));
   });

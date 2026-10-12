@@ -7,7 +7,7 @@ type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
   tooltipSide?: "top" | "bottom";
 };
 
-/** Compact action with a full touch target and a hover/keyboard label. */
+/** Compact action with a full touch target and a hover/keyboard label (none when `tooltip` is empty). */
 export function IconButton({ label, tooltip = label, tooltipAlign = "right", tooltipSide = "bottom", className = "", children, ...props }: Props) {
   const [dismissed, setDismissed] = useState(false);
   return (
@@ -29,9 +29,9 @@ export function IconButton({ label, tooltip = label, tooltipAlign = "right", too
       >
         {children}
       </button>
-      <span aria-hidden="true" className={`${dismissed ? "hidden" : "opacity-0 pointer-events-none group-hover/icon:opacity-100 group-hover/icon:pointer-events-auto group-focus-within/icon:opacity-100 group-focus-within/icon:pointer-events-auto"} absolute ${tooltipAlign === "left" ? "left-0" : "right-0"} ${tooltipSide === "top" ? "bottom-full pb-1" : "top-full pt-1"} z-50 w-max max-w-56`}>
+      {tooltip && <span aria-hidden="true" className={`${dismissed ? "hidden" : "opacity-0 pointer-events-none group-hover/icon:opacity-100 group-hover/icon:pointer-events-auto group-focus-within/icon:opacity-100 group-focus-within/icon:pointer-events-auto"} absolute ${tooltipAlign === "left" ? "left-0" : "right-0"} ${tooltipSide === "top" ? "bottom-full pb-1" : "top-full pt-1"} z-50 w-max max-w-56`}>
         <span className="block rounded-md border border-border bg-bg-tertiary px-2 py-1 text-xs text-text-primary shadow-lg">{tooltip}</span>
-      </span>
+      </span>}
     </span>
   );
 }

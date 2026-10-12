@@ -2186,21 +2186,29 @@ enum NativeAI {
         urlSession: URLSession = .shared,
         messages: [[String: String]]? = nil
     ) async throws -> String {
-        let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         let provider = settings.provider
-        if provider != "custom", key == nil {
-            throw NativeAIError.unavailable("Add an API key for \(providerDisplayName(provider)) in Settings.")
+        let credential = try await openAICompatibleCredential(settings)
+
+        func send(_ token: String?) async throws -> (Data, URLResponse) {
+            let request = try buildOpenAICompatibleRequest(
+                settings: settings,
+                instructions: instructions,
+                prompt: prompt,
+                maxTokens: maxTokens,
+                temperature: temperature ?? 0.2,
+                messages: messages,
+                bearerToken: token
+            )
+            return try await urlSession.data(for: request)
         }
 
-        let request = try buildOpenAICompatibleRequest(
-            settings: settings,
-            instructions: instructions,
-            prompt: prompt,
-            maxTokens: maxTokens,
-            temperature: temperature ?? 0.2,
-            messages: messages
-        )
-        let (data, response) = try await urlSession.data(for: request)
+        var (data, response) = try await send(credential.token)
+        if credential.isSubscription, (response as? HTTPURLResponse)?.statusCode == 401 {
+            guard let refreshed = try? await NativeXAIOAuth.refreshStoredTokens() else {
+                throw NativeAIError.unavailable("SuperGrok sign-in expired. Sign in again in Settings.")
+            }
+            (data, response) = try await send(refreshed)
+        }
         try validate(response: response, data: data, provider: providerDisplayName(provider))
         let decoded = try JSONDecoder().decode(OpenAIResponse.self, from: data)
         guard let content = decoded.choices.first?.message.content.nilIfEmpty else {
@@ -2215,10 +2223,11 @@ enum NativeAI {
         prompt: String,
         maxTokens: Int,
         temperature: Double = 0.2,
-        messages: [[String: String]]? = nil
+        messages: [[String: String]]? = nil,
+        bearerToken: String? = nil
     ) throws -> URLRequest {
         let provider = settings.provider
-        let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? bearerToken?.nilIfEmpty
         if provider != "custom", key == nil {
             throw NativeAIError.unavailable("Add an API key for \(providerDisplayName(provider)) in Settings.")
         }
@@ -2441,18 +2450,44 @@ enum NativeAI {
     /// in no meaningful order, and an alphabetical list is at least predictable
     /// to scan.
     static func fetchOpenAICompatibleModels(settings: AISettings) async throws -> [AIModelInfo] {
-        guard let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty else {
-            throw NativeAIError.unavailable("Add an API key for \(providerDisplayName(settings.provider)) in Settings.")
+        let credential = try await openAICompatibleCredential(settings)
+
+        func send(_ token: String?) async throws -> (Data, URLResponse) {
+            var request = URLRequest(url: modelsURL(for: settings))
+            request.httpMethod = "GET"
+            request.timeoutInterval = 15
+            if let token {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+            return try await URLSession.shared.data(for: request)
         }
 
-        var request = URLRequest(url: modelsURL(for: settings))
-        request.httpMethod = "GET"
-        request.timeoutInterval = 15
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
-
-        let (data, response) = try await URLSession.shared.data(for: request)
+        var (data, response) = try await send(credential.token)
+        if credential.isSubscription, (response as? HTTPURLResponse)?.statusCode == 401,
+           let refreshed = try? await NativeXAIOAuth.refreshStoredTokens() {
+            (data, response) = try await send(refreshed)
+        }
         try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
         return try parseOpenAICompatibleModelsResponse(data)
+    }
+
+    /// The bearer token for an OpenAI-compatible provider: the entered API key,
+    /// else (Grok only) the SuperGrok sign-in, matching desktop where an API key
+    /// takes priority. `custom` may run keyless against a local endpoint.
+    private static func openAICompatibleCredential(_ settings: AISettings) async throws -> (token: String?, isSubscription: Bool) {
+        if let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty {
+            return (key, false)
+        }
+        if settings.provider == "xai", let token = await NativeXAIOAuth.validAccessToken() {
+            return (token, true)
+        }
+        if settings.provider == "custom" {
+            return (nil, false)
+        }
+        if settings.provider == "xai" {
+            throw NativeAIError.unavailable("Sign in with SuperGrok or add an xAI API key in Settings.")
+        }
+        throw NativeAIError.unavailable("Add an API key for \(providerDisplayName(settings.provider)) in Settings.")
     }
 
     static func parseOpenAICompatibleModelsResponse(_ data: Data) throws -> [AIModelInfo] {

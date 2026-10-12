@@ -4,9 +4,18 @@ behaviors:
   - id: desktop-settings-tabs
     description: >-
       Desktop Settings has Reading, AI Provider (opened by default), Sync, and Appearance tabs.
-  - id: ios-settings-sections
+  - id: ios-settings-tabs
     description: >-
-      iOS Settings has AI (provider, status, sign-in or API key, summary defaults), Library (offline
-      preload), About (version and build), and Legal (including the AI disclaimer).
+      iOS Settings is tabbed, not one long scroll: AI, Library (feeds and offline preload), and About
+      (version, build, and the AI disclaimer).
+    source:
+      text: "I'd like for settings to be tabbed, not scrolling in ios"
+  - id: ios-ai-service-settings
+    description: >-
+      iOS AI settings follow desktop's BYOS layout: a Choose AI service list (on-device, subscription,
+      or API key), then the chosen service with a Change button and Model, Account, and Preferences
+      tabs. Account comes first while nothing is connected, and connecting moves on to Model.
+    source:
+      text: "model selection sucks in ios - does not look like we're using byos properly there - especially no clear way to use subscriptions"
   - id: polished-dropdowns
     description: Every dropdown in Settings and AI surfaces uses Skim's own styled menu.

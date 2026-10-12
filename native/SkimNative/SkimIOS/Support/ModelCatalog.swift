@@ -102,14 +102,14 @@ enum ModelCatalog {
             let current = currentID(ai) ?? NativeMLX.effectiveDefaultRepoId
             return .list(mlxChoices(options: NativeMLX.offeredOptions, downloaded: downloaded, current: current))
 
-        case "claude-subscription", "xai", "openai":
+        case "claude-subscription", "anthropic", "xai", "openai", "openrouter":
             let current = currentID(ai)
             if let cached = remoteCache[ai.provider], Date().timeIntervalSince(cached.fetchedAt) < cacheTTL {
                 return .list(cached.choices)
             }
             do {
                 let models: [AIModelInfo]
-                if ai.provider == "claude-subscription" {
+                if ai.provider == "claude-subscription" || ai.provider == "anthropic" {
                     models = try await NativeAI.fetchAnthropicModels(settings: ai)
                 } else {
                     models = try await NativeAI.fetchOpenAICompatibleModels(settings: ai)

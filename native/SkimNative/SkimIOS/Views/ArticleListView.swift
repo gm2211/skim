@@ -1828,8 +1828,9 @@ private enum AutoGroupClassifier {
         case "mlx": return "MLX"
         case "xai": return "Grok"
         case "openai": return "OpenAI"
-        case "custom", "openrouter": return "custom provider"
-        case "anthropic": return "Claude Pro/Max"
+        case "openrouter": return "OpenRouter"
+        case "custom": return "custom provider"
+        case "anthropic": return "Claude"
         default: return provider
         }
     }

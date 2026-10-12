@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9167BE3C78659C05031D238 /* SettingsSheet.swift */; };
+		17C51EA54BB8D84F05DA92F4 /* NativeXAIOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0272CBDAB77DD88C76A52E91 /* NativeXAIOAuth.swift */; };
 		18CED8EE0C6AA5C517B1D143 /* AIInboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE465769D153A0A0D17504 /* AIInboxView.swift */; };
 		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
 		1DC5A4B057212FB263947314 /* SmartFolderEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */; };
@@ -15,6 +16,7 @@
 		2A601923CBA16F4DD268D2C9 /* NativeKeychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B69429F0218849C4A4E655 /* NativeKeychain.swift */; };
 		2AB0CE0EC7CED2383AD2A4EC /* ModelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1751E6AA54B6FF0B8F3606F3 /* ModelCatalog.swift */; };
 		31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89737FFF993802E562860605 /* AIDisclaimerLabel.swift */; };
+		35C718350619957D19E09DB8 /* AISettingsBYOSTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F061CEDC44541EB5F549319 /* AISettingsBYOSTests.swift */; };
 		434D05C938D50201696ECD5A /* TodayEditionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E9B482B07ABFB0BD983D016 /* TodayEditionView.swift */; };
 		436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E28E5CED0C01EDE2E5B3FE1F /* MLXRunner.swift */; };
 		5119041EEA8B375CC712D499 /* CatchUpSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FA5DDC14791E13B92C1525F /* CatchUpSessionTests.swift */; };
@@ -44,6 +46,7 @@
 		D575AB676AA07786E29C32A0 /* CatchUpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 839B1584F0E39B5A14D96C79 /* CatchUpView.swift */; };
 		D5D2795C99FD3003AA0F056B /* NativeWebSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1B88832F456973EA297F0F /* NativeWebSearch.swift */; };
 		D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A483594667B890576E4D368D /* SkimNativeApp.swift */; };
+		DA74FEE9B4DBCE800A3B6AB4 /* AIProviderProfiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54CAAD47A242C4D4DFB941C6 /* AIProviderProfiles.swift */; };
 		DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6BA45434D97C1ACA953B839 /* NativeMLX.swift */; };
 		DFC1782BE965DCD3BBEAFEC9 /* SkimMLXEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 356F134F0CF2259CC2DA4CF9 /* SkimMLXEngine */; };
 		E0006C62ED6F6DE502164145 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9AD11F7D9C976F34C0C9347 /* RootView.swift */; };
@@ -63,12 +66,14 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		0272CBDAB77DD88C76A52E91 /* NativeXAIOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeXAIOAuth.swift; sourceTree = "<group>"; };
 		038284DEE00F91A360324653 /* Style.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Style.swift; sourceTree = "<group>"; };
 		03D45CE6B40997BAD9FD2613 /* SkimMLXEngine */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimMLXEngine; path = ../../shared/SkimMLXEngine; sourceTree = SOURCE_ROOT; };
 		093BD7166E85CDD2AC4F89C7 /* Skim iOS Tests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = "Skim iOS Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		09444431BA1054837AA91213 /* ArticleReaderContentLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleReaderContentLoader.swift; sourceTree = "<group>"; };
 		0A322079492B7E2B99DBEB26 /* ModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPicker.swift; sourceTree = "<group>"; };
 		0C79E51007F91AE5C8286F40 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0F061CEDC44541EB5F549319 /* AISettingsBYOSTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsBYOSTests.swift; sourceTree = "<group>"; };
 		1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderEditor.swift; sourceTree = "<group>"; };
 		13F4F0168DBE15FBFB319E12 /* NativeAIModelsResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIModelsResponseTests.swift; sourceTree = "<group>"; };
 		1474BA38A4E522DB5D3ECB21 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
@@ -78,6 +83,7 @@
 		4B61709B52E5986EFC1C3ECB /* AIErrorBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIErrorBox.swift; sourceTree = "<group>"; };
 		4FA32ECFFFAF834236FDF04E /* TasteModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteModel.swift; sourceTree = "<group>"; };
 		4FDE465769D153A0A0D17504 /* AIInboxView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIInboxView.swift; sourceTree = "<group>"; };
+		54CAAD47A242C4D4DFB941C6 /* AIProviderProfiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProviderProfiles.swift; sourceTree = "<group>"; };
 		55C58C12B9B2AB383B4BA89C /* SkimCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimCore; path = ../SkimCore; sourceTree = SOURCE_ROOT; };
 		5AD1C797EBFBB9448A83E919 /* ClaudeReauthSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeReauthSheet.swift; sourceTree = "<group>"; };
 		63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = AquireBold.otf; sourceTree = "<group>"; };
@@ -204,6 +210,7 @@
 		996846EA10E61EE5D576648A /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				54CAAD47A242C4D4DFB941C6 /* AIProviderProfiles.swift */,
 				7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */,
 				09444431BA1054837AA91213 /* ArticleReaderContentLoader.swift */,
 				74ABDAB8FC2EB5BC6017B9D7 /* CatchUpSession.swift */,
@@ -214,6 +221,7 @@
 				B1B69429F0218849C4A4E655 /* NativeKeychain.swift */,
 				F6BA45434D97C1ACA953B839 /* NativeMLX.swift */,
 				8A1B88832F456973EA297F0F /* NativeWebSearch.swift */,
+				0272CBDAB77DD88C76A52E91 /* NativeXAIOAuth.swift */,
 				038284DEE00F91A360324653 /* Style.swift */,
 				1474BA38A4E522DB5D3ECB21 /* WebView.swift */,
 			);
@@ -223,6 +231,7 @@
 		9A9C260A0D04A7C6FA1C365C /* SkimIOSTests */ = {
 			isa = PBXGroup;
 			children = (
+				0F061CEDC44541EB5F549319 /* AISettingsBYOSTests.swift */,
 				3D573EE676647E6FE126CFC9 /* ArticleExtractorTests.swift */,
 				7FA5DDC14791E13B92C1525F /* CatchUpSessionTests.swift */,
 				6785D2075A65E843FF20D6D3 /* ModelCatalogTests.swift */,
@@ -419,6 +428,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				35C718350619957D19E09DB8 /* AISettingsBYOSTests.swift in Sources */,
 				949AEC33EE8019F0584D6253 /* ArticleExtractorTests.swift in Sources */,
 				5119041EEA8B375CC712D499 /* CatchUpSessionTests.swift in Sources */,
 				78A8ACE709B6B0AA1990258D /* ModelCatalogTests.swift in Sources */,
@@ -436,6 +446,7 @@
 				31C97F9F9878CA51FEDC3C3B /* AIDisclaimerLabel.swift in Sources */,
 				20D5454E94949C27DBAF38C5 /* AIErrorBox.swift in Sources */,
 				18CED8EE0C6AA5C517B1D143 /* AIInboxView.swift in Sources */,
+				DA74FEE9B4DBCE800A3B6AB4 /* AIProviderProfiles.swift in Sources */,
 				61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */,
 				1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */,
 				751B168D630209B01DAFF073 /* ArticleExtractor.swift in Sources */,
@@ -453,6 +464,7 @@
 				2A601923CBA16F4DD268D2C9 /* NativeKeychain.swift in Sources */,
 				DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */,
 				D5D2795C99FD3003AA0F056B /* NativeWebSearch.swift in Sources */,
+				17C51EA54BB8D84F05DA92F4 /* NativeXAIOAuth.swift in Sources */,
 				E0006C62ED6F6DE502164145 /* RootView.swift in Sources */,
 				014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */,
 				D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */,

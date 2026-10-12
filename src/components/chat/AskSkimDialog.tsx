@@ -16,6 +16,7 @@ import { useSettings } from "../../hooks/useSettings";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { ModelPicker } from "../common/ModelPicker";
+import { SettingsCog } from "../common/SettingsCog";
 import { Select } from "../ui/Select";
 import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./ChatMessageContent";
 
@@ -221,7 +222,18 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
             <option value="unread">Unread</option>
             <option value="all">All</option>
           </Select>}
-          <ModelPicker surface="chat" compact disabled={loading} />
+          <SettingsCog label="Chat settings" heading="Ask Skim">
+            {(close) => (
+              <>
+                <div className="today-settings-row">
+                  <span>Model</span>
+                  <ModelPicker surface="chat" compact disabled={loading} />
+                </div>
+                <hr />
+                <button className="today-settings-row" onClick={() => { close(); useUiStore.getState().setShowSettings(true, "ai"); }}>AI settings…</button>
+              </>
+            )}
+          </SettingsCog>
           <button
             onClick={onClose}
             className="tap-target text-text-muted hover:text-text-primary transition-colors flex-shrink-0 rounded-lg hover:bg-white/10"

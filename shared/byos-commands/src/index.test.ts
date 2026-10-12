@@ -135,6 +135,16 @@ test('controller browses with groups, searches flat, and hides searchOnly rows a
   assert.equal(palette.getState().items[0].id, 'h2');
 });
 
+test('controller caps ranked rows for a query at its limit, in rank order', () => {
+  const hunts = Array.from({ length: 30 }, (_, i) => cmd(`h${i}`, `Toyota hunt ${i}`, 'Hunts'));
+  const registry = createCommandRegistry([{ id: 'hunts', commands: () => hunts }]);
+  const palette = createPaletteController({ registry, schedule: sync, limit: 20 });
+  palette.open();
+  assert.equal(palette.getState().items.length, 30);
+  palette.setQuery('toyota');
+  assert.deepEqual(palette.getState().items.map(c => c.id), hunts.slice(0, 20).map(c => c.id));
+});
+
 test('controller wraps arrow keys, runs the active command after closing, and keeps stay commands open', () => {
   const ran: string[] = [];
   const registry = createCommandRegistry([{ id: 'x', commands: () => [

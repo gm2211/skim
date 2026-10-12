@@ -31,13 +31,15 @@ export type CommandPaletteProviderProps = {
   schedule?: (run: () => void) => void;
   onError?: (error: unknown) => void;
   onOpenChange?: (open: boolean) => void;
+  /** Most ranked commands shown for a query. Default: all matches. */
+  limit?: number;
   /** Insert the palette styles once per document. Default true; pass false when you import @byos/commands/styles.css. */
   injectStyles?: boolean;
   className?: string;
 };
 
 /** Hosts one command palette for the tree: registry, ⌘K, dialog, focus return, and the Ask flow. */
-export function CommandPaletteProvider({ children, sources, ask, strings, renderIcon, renderAnswer, status, shortcut = true, schedule, onError, onOpenChange, injectStyles = true, className = '' }: CommandPaletteProviderProps) {
+export function CommandPaletteProvider({ children, sources, ask, strings, renderIcon, renderAnswer, status, shortcut = true, schedule, onError, onOpenChange, limit, injectStyles = true, className = '' }: CommandPaletteProviderProps) {
   const text = { ...defaultPaletteStrings, ...strings };
   const latest = useRef({ ask, onError, onOpenChange });
   latest.current = { ask, onError, onOpenChange };
@@ -58,6 +60,7 @@ export function CommandPaletteProvider({ children, sources, ask, strings, render
       registry,
       ask: binding,
       schedule,
+      limit,
       onError: error => latest.current.onError?.(error),
       onOpenChange: open => {
         if (open && typeof document !== 'undefined') {

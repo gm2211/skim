@@ -21,6 +21,8 @@ export type MountPaletteOptions = {
   /** Fill an assistant turn's element yourself (markdown, citations). Default: plain text. */
   renderAnswer?: (turn: AskTurn, element: HTMLElement) => void;
   onError?: (error: unknown) => void;
+  /** Most ranked commands shown for a query. Default: all matches. */
+  limit?: number;
 };
 
 export type MountedPalette = {
@@ -70,6 +72,7 @@ export function mountPalette(options: MountPaletteOptions = {}): MountedPalette 
     registry,
     ask: options.ask,
     onError: options.onError,
+    limit: options.limit,
     onOpenChange: open => {
       if (open) {
         const active = doc.activeElement;

@@ -80,6 +80,8 @@ export type PaletteControllerOptions = {
   schedule?: (run: () => void) => void;
   onOpenChange?: (open: boolean) => void;
   onError?: (error: unknown) => void;
+  /** Most ranked commands shown for a query. Default: all matches. */
+  limit?: number;
 };
 
 /** Id of the synthetic Ask row; renderers use it to style the row. */
@@ -120,7 +122,7 @@ export function createPaletteController(options: PaletteControllerOptions): Pale
       return { items, showGroups: true };
     }
     const all = registry.commands();
-    const ranked = rankCommands(all, trimmed);
+    const ranked = rankCommands(all, trimmed, options.limit);
     const seen = new Set(ranked.map(command => command.id));
     const found: Command[] = [];
     for (const source of registry.asyncSources()) {

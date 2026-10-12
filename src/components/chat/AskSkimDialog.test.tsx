@@ -155,7 +155,7 @@ describe("AskSkimDialog setup recovery", () => {
     expect(screen.queryByRole("button", { name: "Open AI settings" })).not.toBeInTheDocument();
   });
 
-  it("mounts the chat model picker, disabled while a question is in flight", async () => {
+  it("keeps the model picker behind a cog, disabled while a question is in flight", async () => {
     settings = { ai: { provider: "openai", chat_provider: "same" } };
     let finish: (value: Awaited<ReturnType<typeof chatWithArticles>>) => void = () => {};
     vi.mocked(chatWithArticles).mockReturnValueOnce(
@@ -166,12 +166,15 @@ describe("AskSkimDialog setup recovery", () => {
     const user = userEvent.setup();
     render(<AskSkimDialog onClose={vi.fn()} />);
 
+    expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Chat settings" }));
     const picker = screen.getByTestId("model-picker");
     expect(picker).toHaveAttribute("data-surface", "chat");
     expect(picker).toHaveAttribute("data-disabled", "false");
 
     await user.type(screen.getByRole("textbox"), "Question");
     await user.click(screen.getByRole("button", { name: "Send" }));
+    await user.click(screen.getByRole("button", { name: "Chat settings" }));
     expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "true");
 
     await act(async () => {

@@ -6,6 +6,7 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { useSettings } from "../../hooks/useSettings";
 import { ModelPicker } from "../common/ModelPicker";
+import { SettingsCog } from "../common/SettingsCog";
 import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./ChatMessageContent";
 
 interface ChatMessage {
@@ -273,7 +274,18 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
           <span className="text-text-muted" style={{ fontSize: 10 }}>ephemeral</span>
         </div>
         <div className="flex items-center gap-2">
-          <ModelPicker surface="chat" compact disabled={loading || searchLoading} />
+          <SettingsCog label="Chat settings" heading="Chat" size={isPhone ? 16 : 14}>
+            {(close) => (
+              <>
+                <div className="today-settings-row">
+                  <span>Model</span>
+                  <ModelPicker surface="chat" compact disabled={loading || searchLoading} />
+                </div>
+                <hr />
+                <button className="today-settings-row" onClick={() => { close(); useUiStore.getState().setShowSettings(true, "ai"); }}>AI settings…</button>
+              </>
+            )}
+          </SettingsCog>
           {messages.length > 0 && (
             <button
               onClick={() => { setMessages([]); setReply(null); }}

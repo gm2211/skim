@@ -1,3 +1,4 @@
+@import "../common/SettingsCog.css";
 /* Today's front page: a lead with a rail beside it, a row of features, then
    briefs. Every slot has a text treatment (pull quote, figure, theme colour)
    so the page stays full when reports publish no pictures; slots restyle
@@ -26,26 +27,6 @@
 @container (max-width: 640px) { .today-dateline-status { display: none; } }
 
 .today-page .today-themes { justify-content: center; border-bottom: 0; margin-bottom: 18px; padding-block: 10px 0; }
-
-/* Settings popover behind the cog. */
-.today-settings {
-  position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
-  width: 300px; padding: 6px;
-  border: 1px solid var(--color-border); border-radius: 12px;
-  background: var(--color-bg-tertiary);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
-  font-size: 13px; color: var(--color-text-primary);
-}
-.today-settings-heading {
-  padding: 8px 10px 4px; font-size: 10.5px; font-weight: 700;
-  letter-spacing: 1.2px; text-transform: uppercase; color: var(--color-text-muted);
-}
-.today-settings-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  width: 100%; min-height: 40px; padding: 6px 10px; border-radius: 8px; text-align: left;
-}
-button.today-settings-row:hover { background: var(--color-bg-hover); }
-.today-settings hr { border: 0; border-top: 1px solid var(--color-border); margin: 6px 0; }
 
 /* Slots. */
 .today-page .today-front { display: block; }

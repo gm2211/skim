@@ -25,6 +25,14 @@ behaviors:
       "This article" and "this story" refer to them. The full chat names the context in its header
       and offers questions that fit it. Other surfaces (such as Today's own Ask) can open the full
       chat on a given page or story context.
+  - id: chat-settings-cog
+    description: >-
+      Article chat and Ask Skim keep the model choice behind a cog in their header, not a dropdown,
+      matching the cogs on Today and Quick Catch-up.
+    details: The cog's popover holds the chat model and a link to AI settings. Escape or an outside click closes it.
+    source:
+      text: can we have cog icon instead of model selector?
+      reference: Giulio, project chat about the article chat header, 2026-10-12
   - id: article-chat
     description: >-
       A reader can chat with any article; answers are grounded in the article's full text and the

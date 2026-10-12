@@ -145,6 +145,19 @@ describe("CatchupPane", () => {
     );
   });
 
+  it("can read every article in the window, read or not", async () => {
+    render(<CatchupPane />);
+    const user = userEvent.setup();
+
+    await user.selectOptions(screen.getByLabelText("Include"), "all");
+    await user.selectOptions(screen.getByLabelText("Going back"), "72");
+    await user.click(screen.getByRole("button", { name: "Run catch-up" }));
+
+    await waitFor(() =>
+      expect(generateCatchupReport).toHaveBeenCalledWith("all", 72, expect.any(String)),
+    );
+  });
+
   it("keeps the reader's scope and range when the dialog is reopened", async () => {
     const first = render(<CatchupPane />);
     const user = userEvent.setup();
@@ -190,6 +203,9 @@ describe("CatchupPane", () => {
       );
       expect(catchupScopeSummary("unread", null, 1)).toBe(
         "Read 1 article from everything unread.",
+      );
+      expect(catchupScopeSummary("all", 72, 12)).toBe(
+        "Read 12 articles from every article from the last 3 days.",
       );
     });
   });

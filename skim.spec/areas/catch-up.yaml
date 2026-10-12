@@ -24,9 +24,16 @@ behaviors:
       article.
   - id: scope-and-range
     description: >-
-      The reader picks what to include (desktop: All unread by default, or Priority inbox for
-      priority 4-5 only) and how far back to go (6 hours, 24 hours, 3 days, a week, or anything
-      unread). Desktop remembers the last choice.
+      The reader picks what to include (desktop: All unread by default, Priority inbox for
+      priority 4-5 only, or All articles, read or not, since the time window already bounds the
+      run and an article marked read by accident still belongs on the page) and how far back to go
+      (6 hours, 24 hours, 3 days, a week, or anything unread). Desktop remembers the last choice.
+      iOS reads the list it was opened from.
+    source:
+      text: >-
+        since I can control time window I should be able to select all articles (including the
+        ones I read or accidentally marked as read)
+      reference: Giulio, project chat, 2026-10-11
   - id: stop-and-rerun
     description: >-
       A run can be stopped at any time, which cancels the model request. Changing scope or range

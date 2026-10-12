@@ -436,7 +436,9 @@ export interface CatchupProgress {
   run_id: string;
 }
 export const CATCHUP_PROGRESS_EVENT = "catchup_progress";
-export type CatchupScope = "inbox" | "unread";
+/** What a run reads: the priority inbox, everything unread, or every article
+ * in the range, read or not (for the ones marked read by accident). */
+export type CatchupScope = "inbox" | "unread" | "all";
 /** Hours back to catch up on. `null` is the whole unread backlog. */
 export type CatchupSinceHours = number | null;
 /** What a cancelled Quick Catch-up run rejects with, so the UI can tell an

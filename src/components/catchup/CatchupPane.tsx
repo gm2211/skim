@@ -64,7 +64,8 @@ export function catchupScopeSummary(
   const articles = `${articleCount} ${articleCount === 1 ? "article" : "articles"}`;
   const label = CATCHUP_RANGES.find((r) => r.value === sinceHours)?.label;
   const window = sinceHours == null || !label ? "" : ` from the ${label.toLowerCase()}`;
-  const source = scope === "inbox" ? "your priority inbox" : "everything unread";
+  const source =
+    scope === "inbox" ? "your priority inbox" : scope === "all" ? "every article" : "everything unread";
   return `Read ${articles} from ${source}${window}.`;
 }
 
@@ -282,6 +283,7 @@ export function CatchupPane() {
                 >
                   <option value="inbox">Priority inbox</option>
                   <option value="unread">All unread articles</option>
+                  <option value="all">All articles, read or not</option>
                 </Select>
               </label>
               <label className="catchup-control">

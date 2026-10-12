@@ -2345,6 +2345,10 @@ async fn build_catchup_report(
     let now = chrono::Utc::now().timestamp();
     let published_after = catchup_cutoff(since_hours, now);
     let scoped_to_inbox = scope.as_deref() == Some("inbox");
+    // "all" reads every article in the range, read or not: the time window
+    // already bounds the run, and a reader who marked something read by
+    // accident still wants it on the page.
+    let include_read = scope.as_deref() == Some("all");
 
     let (pool, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -2372,7 +2376,7 @@ async fn build_catchup_report(
             queries::get_articles(
                 &conn,
                 &crate::db::models::ArticleFilter {
-                    is_read: Some(false),
+                    is_read: if include_read { None } else { Some(false) },
                     limit: Some(CATCHUP_POOL_LIMIT as i64),
                     published_after,
                     ..Default::default()
@@ -2389,11 +2393,13 @@ async fn build_catchup_report(
     };
 
     if pool.is_empty() {
-        let message = match (scoped_to_inbox, published_after.is_some()) {
-            (true, true) => "No high-priority articles in that time range.",
-            (true, false) => "No high-priority articles to catch up on.",
-            (false, true) => "Nothing unread in that time range.",
-            (false, false) => "Nothing unread to catch up on.",
+        let message = match (scoped_to_inbox, include_read, published_after.is_some()) {
+            (true, _, true) => "No high-priority articles in that time range.",
+            (true, _, false) => "No high-priority articles to catch up on.",
+            (false, true, true) => "No articles in that time range.",
+            (false, true, false) => "No articles to catch up on.",
+            (false, false, true) => "Nothing unread in that time range.",
+            (false, false, false) => "Nothing unread to catch up on.",
         };
         emit_catchup(&app, "done", 0, 0, message, &report, run_id);
         return Ok(report);

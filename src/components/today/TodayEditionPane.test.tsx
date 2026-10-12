@@ -345,19 +345,22 @@ describe("TodayEditionPane", () => {
     expect(bolt).toHaveAttribute("aria-pressed", "false");
     await userEvent.click(bolt);
 
-    // The masthead stays; the edition gives way to the run's controls.
+    // The masthead stays; the edition gives way to the catch-up page, and
+    // the refresh icon becomes the run.
     expect(screen.getByRole("heading", { name: "Today" })).toBeInTheDocument();
-    const section = screen.getByRole("region", { name: "Catch me up" });
-    expect(within(section).getByLabelText("Include")).toBeInTheDocument();
-    expect(within(section).getByLabelText("Going back")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Catch me up" })).toBeInTheDocument();
     expect(screen.queryByText("Default snapshot title")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Refresh feeds" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Run (catch-up|again)$/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Catch me up" })).toHaveAttribute("aria-pressed", "true");
     expect(useUiStore.getState().todayMode).toBe("catchup");
 
-    // Its model sits in Today's cog, under the summary model.
+    // What to include, how far back and the model all sit in Today's cog.
     await userEvent.click(screen.getByRole("button", { name: "Today settings" }));
     const dialog = screen.getByRole("dialog", { name: "Today settings" });
-    expect(within(dialog).getAllByTestId("model-picker").map((picker) => picker.getAttribute("data-surface"))).toEqual(["today", "catchup"]);
+    expect(within(dialog).getByLabelText("Include")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Going back")).toBeInTheDocument();
+    expect(within(dialog).getAllByTestId("model-picker").map((picker) => picker.getAttribute("data-surface"))).toEqual(["catchup", "today"]);
     await userEvent.keyboard("{Escape}");
 
     await userEvent.click(screen.getByRole("button", { name: "Catch me up" }));

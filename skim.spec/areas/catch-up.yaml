@@ -37,8 +37,10 @@ behaviors:
       reference: Giulio, project chat, 2026-10-11
   - id: same-paper-as-today
     description: >-
-      The catch-up front page follows the Today design: its controls row shows only the run's own
-      controls (Include, Going back, Run) with its model behind Today's cog popover, and every slot
+      The catch-up front page follows the Today design: nothing sits between the masthead and the
+      page. What to include, how far back and the model live in Today's cog popover, and the run
+      is the refresh icon on Today's top bar (spinning while the page is written, a stop while it
+      spins); only the blank page's invitation carries a Run button. Every slot
       without a picture gets a text treatment (a feature sets its lede as a pull quote under an
       accent rule, a story gets a rule, the lead lists its coverage), so a day with no pictures
       still reads as a full page.
@@ -60,6 +62,13 @@ behaviors:
     source:
       text: help me understand - 49 articles were read and I see this - what's up?
       reference: Giulio, project chat, 2026-10-12
+  - id: controls-in-the-cog
+    description: >-
+      The Include and Going back pickers are settings, not page furniture: they sit in Today's cog
+      with the catch-up model, and "Run again" is the refresh icon on the top bar.
+    source:
+      text: all of this bit should just be in the cog config, and "Run again" should be just the refresh icon
+      reference: Giulio, project thread "Newspaper view", 2026-10-12
   - id: cited-sources
     description: >-
       Each story groups its coverage and cites every source it used; tapping a source opens that

@@ -1,7 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { CatchupSection, catchupScopeSummary, catchupSelection } from "./CatchupSection";
+import { CatchupControls, CatchupSection, catchupScopeSummary, catchupSelection, useCatchupRun } from "./CatchupSection";
+
+/**
+ * The pieces as Today composes them: the run's controls in a settings dialog,
+ * the refresh-shaped run button on the top bar, and the page itself.
+ */
+function Harness() {
+  const catchup = useCatchupRun();
+  return (
+    <>
+      <div role="group" aria-label="Today settings"><CatchupControls catchup={catchup} /></div>
+      {/* Before the first run the page's own invitation is the one run button. */}
+      {!catchup.providerUnavailable && (catchup.report || catchup.loading || catchup.error) && <button
+        aria-label={catchup.loading ? "Stop catch-up" : catchup.report ? "Run again" : "Run catch-up"}
+        onClick={() => (catchup.loading ? catchup.stop() : catchup.run())}
+      />}
+      <CatchupSection catchup={catchup} />
+    </>
+  );
+}
 import { useUiStore } from "../../stores/uiStore";
 import {
   cancelCatchupReport,
@@ -86,10 +105,9 @@ describe("CatchupSection", () => {
   it("offers AI setup before a request when no provider is configured", async () => {
     provider = "none";
     settings = { ai: { provider } };
-    render(<CatchupSection />);
+    render(<Harness />);
 
     expect(screen.queryByRole("button", { name: "Run catch-up" })).not.toBeInTheDocument();
-    expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
     expect(screen.queryByText("Model", { exact: true })).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: "Open AI settings" }));
 
@@ -100,7 +118,7 @@ describe("CatchupSection", () => {
 
   it("turns backend configuration errors into a settings action", async () => {
     vi.mocked(generateCatchupReport).mockRejectedValueOnce(new Error("No AI provider configured"));
-    render(<CatchupSection />);
+    render(<Harness />);
 
     await userEvent.setup().click(screen.getByRole("button", { name: "Run catch-up" }));
 
@@ -110,7 +128,7 @@ describe("CatchupSection", () => {
 
   it("shows generic failures with an explicit retry", async () => {
     vi.mocked(generateCatchupReport).mockRejectedValueOnce(new Error("Network unavailable"));
-    render(<CatchupSection />);
+    render(<Harness />);
 
     await userEvent.setup().click(screen.getByRole("button", { name: "Run catch-up" }));
 
@@ -119,7 +137,7 @@ describe("CatchupSection", () => {
   });
 
   it("runs only on explicit action and never on a scope change", async () => {
-    render(<CatchupSection />);
+    render(<Harness />);
 
     expect(generateCatchupReport).not.toHaveBeenCalled();
     await userEvent.setup().click(screen.getByRole("button", { name: "Run catch-up" }));
@@ -133,7 +151,7 @@ describe("CatchupSection", () => {
   });
 
   it("sends the chosen scope and time range to the backend", async () => {
-    render(<CatchupSection />);
+    render(<Harness />);
     const user = userEvent.setup();
 
     await user.selectOptions(screen.getByLabelText("Include"), "inbox");
@@ -146,7 +164,7 @@ describe("CatchupSection", () => {
   });
 
   it("can read every article in the window, read or not", async () => {
-    render(<CatchupSection />);
+    render(<Harness />);
     const user = userEvent.setup();
 
     await user.selectOptions(screen.getByLabelText("Include"), "all");
@@ -159,19 +177,19 @@ describe("CatchupSection", () => {
   });
 
   it("keeps the reader's scope and range when the dialog is reopened", async () => {
-    const first = render(<CatchupSection />);
+    const first = render(<Harness />);
     const user = userEvent.setup();
     await user.selectOptions(screen.getByLabelText("Include"), "inbox");
     await user.selectOptions(screen.getByLabelText("Going back"), "72");
     first.unmount();
 
-    render(<CatchupSection />);
+    render(<Harness />);
     expect(screen.getByLabelText("Include")).toHaveValue("inbox");
     expect(screen.getByLabelText("Going back")).toHaveValue("72");
   });
 
   it("names how many articles the run actually read", async () => {
-    render(<CatchupSection />);
+    render(<Harness />);
 
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
 
@@ -187,7 +205,7 @@ describe("CatchupSection", () => {
       sources: [],
       article_count: 0,
     });
-    render(<CatchupSection />);
+    render(<Harness />);
     const user = userEvent.setup();
 
     await user.selectOptions(screen.getByLabelText("Include"), "inbox");
@@ -211,18 +229,22 @@ describe("CatchupSection", () => {
   });
 
   it("is a section of the Today page, not a dialog or a page of its own", () => {
-    render(<CatchupSection />);
+    render(<Harness />);
 
     const section = screen.getByRole("region", { name: "Catch me up" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Quick Catch-up" })).not.toBeInTheDocument();
-    expect(within(section).getByLabelText("Include")).toBeInTheDocument();
-    expect(within(section).getByLabelText("Going back")).toBeInTheDocument();
+    // What to include and how far back live in Today's cog, not on the page.
+    expect(within(section).queryByLabelText("Include")).not.toBeInTheDocument();
+    expect(within(section).queryByRole("button", { name: /^Run/ })).not.toBeInTheDocument();
+    const dialog = screen.getByRole("group", { name: "Today settings" });
+    expect(within(dialog).getByLabelText("Include")).toBeInTheDocument();
+    expect(within(dialog).getByLabelText("Going back")).toBeInTheDocument();
   });
 
   it("prints a story as a headline, a lede and the articles behind it", async () => {
-    render(<CatchupSection />);
+    render(<Harness />);
 
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
 
@@ -243,7 +265,7 @@ describe("CatchupSection", () => {
       briefs: [],
       sources: [source, lobsters, hn],
     });
-    render(<CatchupSection />);
+    render(<Harness />);
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
 
     expect(await screen.findByText("theverge.com · Lobsters · Hacker News")).toBeInTheDocument();
@@ -256,7 +278,7 @@ describe("CatchupSection", () => {
   });
 
   it("names the publication rather than the feed's own format title", async () => {
-    render(<CatchupSection />);
+    render(<Harness />);
 
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
 
@@ -268,7 +290,7 @@ describe("CatchupSection", () => {
 
   it("prints each story as soon as it is written, with its picture and source icons", async () => {
     vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
-    render(<CatchupSection />);
+    render(<Harness />);
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
     const runId = vi.mocked(generateCatchupReport).mock.calls[0][2] as string;
 
@@ -313,7 +335,7 @@ describe("CatchupSection", () => {
         finish = resolve;
       }),
     );
-    render(<CatchupSection />);
+    render(<Harness />);
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
     const runId = vi.mocked(generateCatchupReport).mock.calls[0][2] as string;
 
@@ -352,33 +374,28 @@ describe("CatchupSection", () => {
     });
   });
 
-  it("leaves the model to Today's cog and tells the page while a run is in progress", async () => {
+  it("turns the run button into Stop while the page is written, and back after", async () => {
     let finish: (value: CatchupReport) => void = () => {};
     vi.mocked(generateCatchupReport).mockReturnValueOnce(
       new Promise<CatchupReport>((resolve) => {
         finish = resolve;
       }),
     );
-    const onLoadingChange = vi.fn();
-    render(<CatchupSection onLoadingChange={onLoadingChange} />);
+    render(<Harness />);
     const user = userEvent.setup();
 
-    expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /settings/i })).not.toBeInTheDocument();
-    expect(onLoadingChange).toHaveBeenLastCalledWith(false);
-
     await user.click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
-    expect(onLoadingChange).toHaveBeenLastCalledWith(true);
+    expect(screen.getByRole("button", { name: "Stop catch-up" })).toBeInTheDocument();
 
     await act(async () => {
       finish(report);
     });
-    await waitFor(() => expect(onLoadingChange).toHaveBeenLastCalledWith(false));
+    expect(await screen.findByRole("button", { name: "Run again" })).toBeInTheDocument();
   });
 
   it("says so plainly when nothing on the page was real news", async () => {
     vi.mocked(generateCatchupReport).mockResolvedValueOnce({ stories: [], briefs: [], sources: [], article_count: 4 });
-    render(<CatchupSection />);
+    render(<Harness />);
 
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
 
@@ -394,7 +411,7 @@ describe("CatchupSection", () => {
         finish = resolve;
       }),
     );
-    render(<CatchupSection />);
+    render(<Harness />);
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
 
     expect(await screen.findByRole("button", { name: "Stop catch-up" })).toBeInTheDocument();
@@ -413,7 +430,7 @@ describe("CatchupSection", () => {
         reject = rej;
       }),
     );
-    render(<CatchupSection />);
+    render(<Harness />);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
     const runId = vi.mocked(generateCatchupReport).mock.calls[0][2] as string;
@@ -449,7 +466,7 @@ describe("CatchupSection", () => {
 
   it("ignores catch-up progress that belongs to a run that is no longer current", async () => {
     vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
-    render(<CatchupSection />);
+    render(<Harness />);
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
 
     emitProgress({
@@ -468,7 +485,7 @@ describe("CatchupSection", () => {
 
   it("changing the range mid-run stops the run instead of starting a new one", async () => {
     vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
-    render(<CatchupSection />);
+    render(<Harness />);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
 
@@ -481,7 +498,7 @@ describe("CatchupSection", () => {
 
   it("runs again with the new range and a fresh run id after a stop", async () => {
     vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
-    render(<CatchupSection />);
+    render(<Harness />);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
     const firstRunId = vi.mocked(generateCatchupReport).mock.calls[0][2] as string;
@@ -501,7 +518,7 @@ describe("CatchupSection", () => {
 
   it("cancels the in-flight run when the dialog unmounts", async () => {
     vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
-    const { unmount } = render(<CatchupSection />);
+    const { unmount } = render(<Harness />);
     await userEvent.setup().click(screen.getByRole("button", { name: /^Run (catch-up|again)$/ }));
     const runId = vi.mocked(generateCatchupReport).mock.calls[0][2] as string;
 
@@ -512,7 +529,7 @@ describe("CatchupSection", () => {
 
   it("does not cache a stopped run's partial page", async () => {
     vi.mocked(generateCatchupReport).mockReturnValueOnce(new Promise<CatchupReport>(() => {}));
-    const first = render(<CatchupSection />);
+    const first = render(<Harness />);
     const user = userEvent.setup();
     await user.selectOptions(screen.getByLabelText("Include"), "inbox");
     await user.selectOptions(screen.getByLabelText("Going back"), "6");
@@ -532,7 +549,7 @@ describe("CatchupSection", () => {
     await user.click(screen.getByRole("button", { name: "Stop catch-up" }));
     first.unmount();
 
-    render(<CatchupSection />);
+    render(<Harness />);
     expect(screen.getByLabelText("Include")).toHaveValue("inbox");
     expect(screen.getByLabelText("Going back")).toHaveValue("6");
     expect(

@@ -45,9 +45,9 @@ behaviors:
       two-up grid of briefs.
     details: >-
       Ten stories fill one desktop page. The masthead has top margin; the only controls are a
-      "Catch me up" bolt (see catch-up), an ask button, a refresh button and a cog that opens a
-      small settings popover (summary model, catch-up model while catching up, edition size, retry,
-      AI settings). Missing summaries show as a note with Retry in the dateline instead of a loose
+      "Catch me up" bolt (see catch-up), an ask button, a refresh button (the run, while catching
+      up) and a cog that opens a small settings popover (summary model, edition size, retry, AI
+      settings; while catching up also Include, Going back and the catch-up model). Missing summaries show as a note with Retry in the dateline instead of a loose
       button.
     source:
       text: >-

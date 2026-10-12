@@ -25,8 +25,8 @@ type CacheEntry = { report: CatchupReport; ts: number };
 const catchupCache = new Map<string, CacheEntry>();
 const catchupErrors = new Map<string, string>();
 
-/** The one size every control on the masthead's toolbar shares. */
-const CONTROL_STYLE = { height: 32, minHeight: 32, fontSize: 12.5, padding: "0 30px 0 10px", maxWidth: 200 } as const;
+/** The one size both selects in the cog share. */
+const CONTROL_STYLE = { height: 30, minHeight: 30, fontSize: 12.5, padding: "0 28px 0 10px", maxWidth: 200 } as const;
 
 /** How far back to catch up. `null` is the whole unread backlog. */
 export const CATCHUP_RANGES: { value: CatchupSinceHours; label: string }[] = [
@@ -68,14 +68,12 @@ export function catchupScopeSummary(
 }
 
 /**
- * "Catch me up" on the Today page: a run's controls (what to include, how far
- * back) over a front page the model writes from those articles. It sits under
- * Today's masthead in place of the edition. Leaving it keeps the written page
- * for half an hour, so coming back is free.
+ * The state of a "Catch me up" run on the Today page: what to include and how
+ * far back (set from Today's cog), the run itself (started from Today's top
+ * bar or the blank page's invitation), and the page as it is written. Leaving
+ * it keeps the written page for half an hour, so coming back is free.
  */
-export function CatchupSection({ onLoadingChange }: { onLoadingChange?: (loading: boolean) => void }) {
-  const isPhone = useUiStore((s) => s.isPhone);
-  const openArticleFromCatchup = useUiStore((s) => s.openArticleFromCatchup);
+export function useCatchupRun() {
   const { data: settings } = useSettings();
   // Defaults to everything unread: the priority scope only holds articles
   // triage has rated 4 or 5, so it is a deliberate narrowing, not a starting
@@ -101,10 +99,7 @@ export function CatchupSection({ onLoadingChange }: { onLoadingChange?: (loading
   // clobber a newer one — and so an unmount or a scope change mid-run knows
   // what to tell the backend to cancel.
   const activeRun = useRef<string | null>(null);
-  // The model lives behind Today's cog: the controls row shows only what
-  // changes a run (scope, range) and the run button itself.
   const [stopped, setStopped] = useState(false);
-  useEffect(() => { onLoadingChange?.(loading); }, [loading, onLoadingChange]);
   const previousSettings = useRef(settings);
 
   useEffect(() => {
@@ -205,6 +200,74 @@ export function CatchupSection({ onLoadingChange }: { onLoadingChange?: (loading
     };
   }, []);
 
+  const providerUnavailable = settings?.ai.provider === "none";
+
+  return {
+    scope,
+    sinceHours,
+    report,
+    loading,
+    elapsed,
+    error,
+    progress,
+    written,
+    stopped,
+    providerUnavailable,
+    run,
+    stop,
+    // Changing what a run covers stops the one in flight; the page for the
+    // new combination surfaces from the cache or waits for a run.
+    setScope: (next: CatchupScope) => { if (loading) stop(); setScope(next); },
+    setSinceHours: (next: CatchupSinceHours) => { if (loading) stop(); setSinceHours(next); },
+  };
+}
+
+export type CatchupRun = ReturnType<typeof useCatchupRun>;
+
+/** The two rows Today's cog shows while catching up: what to include, how far back. */
+export function CatchupControls({ catchup }: { catchup: CatchupRun }) {
+  return (
+    <>
+      <label className="today-settings-row">
+        <span>Include</span>
+        <Select
+          aria-label="Include"
+          value={catchup.scope}
+          onChange={(e) => catchup.setScope(e.target.value as CatchupScope)}
+          style={CONTROL_STYLE}
+        >
+          <option value="inbox">Priority inbox</option>
+          <option value="unread">All unread articles</option>
+          <option value="all">All articles, read or not</option>
+        </Select>
+      </label>
+      <label className="today-settings-row">
+        <span>Going back</span>
+        <Select
+          aria-label="Going back"
+          value={catchup.sinceHours === null ? "all" : String(catchup.sinceHours)}
+          onChange={(e) => catchup.setSinceHours(e.target.value === "all" ? null : Number(e.target.value))}
+          style={CONTROL_STYLE}
+        >
+          {CATCHUP_RANGES.map((range) => (
+            <option key={range.label} value={range.value === null ? "all" : String(range.value)}>
+              {range.label}
+            </option>
+          ))}
+        </Select>
+      </label>
+    </>
+  );
+}
+
+/**
+ * "Catch me up" on the Today page: the front page the model writes from the
+ * chosen articles, in the edition's place under Today's masthead.
+ */
+export function CatchupSection({ catchup }: { catchup: CatchupRun }) {
+  const openArticleFromCatchup = useUiStore((s) => s.openArticleFromCatchup);
+  const { scope, sinceHours, report, loading, elapsed, error, progress, written, stopped, providerUnavailable, run } = catchup;
+
   const sourcesById = new Map<string, CatchupSource>();
   (report?.sources ?? []).forEach((s) => sourcesById.set(s.id, s));
 
@@ -213,78 +276,10 @@ export function CatchupSection({ onLoadingChange }: { onLoadingChange?: (loading
 
   const dateline = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
-  const providerUnavailable = settings?.ai.provider === "none";
   const setupError = isAiSetupError(error);
-  // Before the first run the page itself invites the run, so the toolbar
-  // does not need a second button saying the same thing.
-  const inviting = !providerUnavailable && !report && !loading && !error;
 
   return (
     <section className="catchup-section" role="region" aria-label="Catch me up">
-      {/* The run's controls, in a band under the masthead so they read as
-          chrome and the paper starts below; on a narrow window they drop
-          their labels, and the selects name themselves. */}
-      <div className="catchup-controls flex-shrink-0 relative z-20" style={{ padding: isPhone ? "8px 10px" : "10px 14px" }}>
-            <div className="flex flex-wrap items-center" style={{ gap: 8 }}>
-              <label className="catchup-control">
-                <span className="catchup-control-label">Include</span>
-                <Select
-                  aria-label="Include"
-                  value={scope}
-                  onChange={(e) => {
-                    if (loading) stop();
-                    setScope(e.target.value as CatchupScope);
-                  }}
-                  style={CONTROL_STYLE}
-                >
-                  <option value="inbox">Priority inbox</option>
-                  <option value="unread">All unread articles</option>
-                  <option value="all">All articles, read or not</option>
-                </Select>
-              </label>
-              <label className="catchup-control">
-                <span className="catchup-control-label">Going back</span>
-                <Select
-                  aria-label="Going back"
-                  value={sinceHours === null ? "all" : String(sinceHours)}
-                  onChange={(e) => {
-                    if (loading) stop();
-                    setSinceHours(e.target.value === "all" ? null : Number(e.target.value));
-                  }}
-                  style={CONTROL_STYLE}
-                >
-                  {CATCHUP_RANGES.map((range) => (
-                    <option
-                      key={range.label}
-                      value={range.value === null ? "all" : String(range.value)}
-                    >
-                      {range.label}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-              {loading ? (
-                <button
-                  onClick={stop}
-                  className="border border-white/10 hover:bg-white/10 text-text-primary rounded-lg transition-colors font-medium flex-shrink-0 whitespace-nowrap"
-                  style={{ ...CONTROL_STYLE, padding: "0 14px", fontSize: 13 }}
-                  aria-label="Stop catch-up"
-                >
-                  Stop
-                </button>
-              ) : inviting || providerUnavailable ? null : (
-                <button
-                  onClick={run}
-                  disabled={providerUnavailable}
-                  className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium flex-shrink-0 whitespace-nowrap"
-                  style={{ ...CONTROL_STYLE, padding: "0 14px", fontSize: 13 }}
-                >
-                  {report ? "Run again" : "Run catch-up"}
-                </button>
-              )}
-            </div>
-      </div>
-
       <div className="catchup-body">
           {providerUnavailable && <AiSetupNotice />}
 
@@ -297,7 +292,7 @@ export function CatchupSection({ onLoadingChange }: { onLoadingChange?: (loading
                 <p className="text-text-muted" style={{ marginTop: 8, fontSize: 13, lineHeight: 1.6 }}>
                   {stopped
                     ? "Run again to write the page, or change what it should cover first."
-                    : "Choose what to include and how far back to go. Skim reads the articles and writes you a front page: the few stories that actually happened, biggest first."}
+                    : "Skim reads your articles and writes you a front page: the few stories that actually happened, biggest first. What to include and how far back are in the settings cog."}
                 </p>
                 <button
                   onClick={run}

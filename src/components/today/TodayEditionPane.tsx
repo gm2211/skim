@@ -8,7 +8,7 @@ import { TodayStorySkeleton } from "./TodayStorySkeleton";
 import { TodayStory } from "./TodayStory";
 import { ModelPicker } from "../common/ModelPicker";
 import { BoltIcon, ChatIcon, NewspaperIcon, RefreshIcon } from "../ui/icons";
-import { CatchupSection } from "../catchup/CatchupSection";
+import { CatchupControls, CatchupSection, useCatchupRun } from "../catchup/CatchupSection";
 import { openAgentChat } from "../../stores/agentChatStore";
 import { useAgentContext } from "../../hooks/useAgentContext";
 import { storyForAgent } from "../../lib/agentContext";
@@ -60,7 +60,9 @@ export function TodayEditionPane() {
   // "Catch me up" takes the edition's place under the masthead: a front page
   // written on demand from a window the reader picks.
   const catchingUp = todayMode === "catchup";
-  const [catchupRunning, setCatchupRunning] = useState(false);
+  const catchup = useCatchupRun();
+  // Going back to the edition stops a run in flight; its page is kept.
+  useEffect(() => { if (!catchingUp && catchup.loading) catchup.stop(); }, [catchingUp]); // eslint-disable-line react-hooks/exhaustive-deps
   const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch, aiEnabled, isPreparingSummaries, settingsUnavailable, retrySettings } =
     useTodayEdition();
 
@@ -154,14 +156,27 @@ export function TodayEditionPane() {
         >
           <ChatIcon size={18} />
         </IconButton>}
-        <IconButton
-          label={refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
-          disabled={refreshFeeds.isPending}
-          onClick={() => refreshFeeds.mutate(undefined)}
-          className="text-text-secondary hover:text-text-primary hover:bg-white/10"
-        >
-          <RefreshIcon size={18} className={refreshFeeds.isPending ? "smooth-spin" : undefined} />
-        </IconButton>
+        {/* Catching up, the refresh icon is the run: it spins while the
+            page is written, and a click then stops it. */}
+        {catchingUp ? (
+          <IconButton
+            label={catchup.loading ? "Stop catch-up" : catchup.report ? "Run again" : "Run catch-up"}
+            disabled={catchup.providerUnavailable}
+            onClick={() => (catchup.loading ? catchup.stop() : catchup.run())}
+            className="text-text-secondary hover:text-text-primary hover:bg-white/10"
+          >
+            <RefreshIcon size={18} className={catchup.loading ? "smooth-spin" : undefined} />
+          </IconButton>
+        ) : (
+          <IconButton
+            label={refreshFeeds.isPending ? "Refreshing…" : "Refresh feeds"}
+            disabled={refreshFeeds.isPending}
+            onClick={() => refreshFeeds.mutate(undefined)}
+            className="text-text-secondary hover:text-text-primary hover:bg-white/10"
+          >
+            <RefreshIcon size={18} className={refreshFeeds.isPending ? "smooth-spin" : undefined} />
+          </IconButton>
+        )}
         <div ref={settingsRef} className="relative">
           <IconButton
             label="Today settings"
@@ -174,15 +189,17 @@ export function TodayEditionPane() {
           </IconButton>
           {settingsOpen && (
             <div className="today-settings" role="dialog" aria-label="Today settings">
-              <div className="today-settings-heading">Today</div>
+              <div className="today-settings-heading">{catchingUp ? "Catch me up" : "Today"}</div>
+              {catchingUp && <CatchupControls catchup={catchup} />}
+              {catchingUp && <div className="today-settings-row">
+                <span>Model</span>
+                <ModelPicker surface="catchup" compact disabled={catchup.loading} />
+              </div>}
+              {catchingUp && <hr />}
               <div className="today-settings-row">
                 <span>Summary model</span>
                 <ModelPicker surface="today" compact disabled={isWritingLedes} />
               </div>
-              {catchingUp && <div className="today-settings-row">
-                <span>Catch-up model</span>
-                <ModelPicker surface="catchup" compact disabled={catchupRunning} />
-              </div>}
               <button className="today-settings-row" onClick={() => { setSettingsOpen(false); useUiStore.getState().setShowSettings(true, "sync"); }}>
                 <span>Edition size</span><span className="text-text-muted">{data?.edition.story_limit ?? 10} stories</span>
               </button>
@@ -235,7 +252,7 @@ export function TodayEditionPane() {
       </div>
 
       {/* Body: the edition, or the "Catch me up" run in its place. */}
-        {catchingUp && <CatchupSection onLoadingChange={setCatchupRunning} />}
+        {catchingUp && <CatchupSection catchup={catchup} />}
         {!catchingUp && <>
         {isLoading && <div aria-label="Preparing newspaper">
           <FrontPage cells={Array.from({ length: NEWSPAPER_PAGE_SIZE }, (_, index) => ({

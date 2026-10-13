@@ -181,7 +181,7 @@ struct ArticleListView: View {
             SummaryConfigurationSheet(article: article, defaults: model.settings.ai) { summarySettings in
                 runSummary(article: article, summarySettings: summarySettings)
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationBackground(SkimStyle.chrome)
         }

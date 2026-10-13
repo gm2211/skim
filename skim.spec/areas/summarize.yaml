@@ -10,6 +10,20 @@ behaviors:
       Summary options are length (short ~30, medium ~150, long ~300 words, or a custom 20-1000
       words), tone (concise, detailed, casual, technical), a custom prompt, and the model.
     details: iOS keeps the options used for a summary as the new defaults.
+  - id: summary-config-sheet
+    description: >-
+      On iOS, Summarize opens a sheet led by one-tap presets (the last-used settings, Gist, Briefing,
+      Explainer, Deep dive) and a live preview of the chosen style and length, with every option
+      under a collapsible Customize section.
+    details: >-
+      Presets fill in style and length; the Summarize button still runs it. Customize holds the
+      style chips, a scrubbable length ruler in 25-word steps across 20-1000 words, the model, and
+      an optional focus prompt. The preview text is a fixed sample per style, never generated.
+    source:
+      text: Mix of D and E
+      reference: >-
+        Giulio, project thread "summary config in iOS", 2026-10-13, picking from five mockups where D
+        was presets-first and E was a live preview with a length ruler
   - id: faithful-summaries
     description: >-
       Summaries keep the source's uncertainty, attribution, negation, and timing.

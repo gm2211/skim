@@ -24,53 +24,59 @@ struct TodayEditionView: View {
     /// Stories that get a written lede and a full card; the rest of the page
     /// runs as two-up briefs.
     private static let leadCount = 6
+    private static let pageTop = "today-page-top"
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if model.isLoadingToday {
-                        TodayPageSkeleton()
-                    } else {
-                        if let error = model.todayError {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Couldn’t load Today").font(.headline)
-                                Text(error).font(.subheadline).foregroundStyle(SkimStyle.secondary)
-                                Button("Try again") { Task { await load() } }
-                                    .frame(minHeight: 44)
-                            }
-                        }
-                        if let edition = model.todayEdition {
-                            editionHeader(edition)
-                            if edition.items.isEmpty {
-                                emptyEdition
-                            } else {
-                                if let status = model.todayLedeStatus {
-                                    TodayWritingRule(status: status)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if model.isLoadingToday {
+                            TodayPageSkeleton()
+                        } else {
+                            if let error = model.todayError {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Couldn’t load Today").font(.headline)
+                                    Text(error).font(.subheadline).foregroundStyle(SkimStyle.secondary)
+                                    Button("Try again") { Task { await load() } }
+                                        .frame(minHeight: 44)
                                 }
-                                frontPage(edition.items)
-                                if edition.consumedItemCount == edition.totalItemCount {
-                                    Label(model.todayPage == 1 ? "You’re all caught up for today." : "You’re all caught up on this page.", systemImage: "checkmark.circle.fill")
-                                        .font(.headline)
-                                        .foregroundStyle(SkimStyle.accent)
-                                        .padding(.vertical, 12)
+                            }
+                            if let edition = model.todayEdition {
+                                editionHeader(edition)
+                                if edition.items.isEmpty {
+                                    emptyEdition
+                                } else {
+                                    if let status = model.todayLedeStatus {
+                                        TodayWritingRule(status: status)
+                                    }
+                                    frontPage(edition.items)
+                                    if edition.consumedItemCount == edition.totalItemCount {
+                                        Label(model.todayPage == 1 ? "You’re all caught up for today." : "You’re all caught up on this page.", systemImage: "checkmark.circle.fill")
+                                            .font(.headline)
+                                            .foregroundStyle(SkimStyle.accent)
+                                            .padding(.vertical, 12)
+                                    }
                                 }
                             }
                         }
                     }
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 24)
+                    .frame(maxWidth: 680, alignment: .leading)
+                    .frame(maxWidth: .infinity)
+                    .id(Self.pageTop)
                 }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 24)
-                .frame(maxWidth: 680, alignment: .leading)
-                .frame(maxWidth: .infinity)
+                // A turned page opens at its dateline, not at the last page's scroll offset.
+                .onChange(of: model.todayPage) { _, _ in proxy.scrollTo(Self.pageTop, anchor: .top) }
+                // Pulling the page fetches the feeds, then remakes the page from them.
+                .refreshable { await model.refreshAll() }
+                // A swipe turns the page: left goes back a week, right comes forward.
+                .gesture(DragGesture(minimumDistance: 48, coordinateSpace: .local).onEnded { value in
+                    guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                    turn(to: model.todayPage + (value.translation.width < 0 ? 1 : -1))
+                })
             }
-            // Pulling the page fetches the feeds, then remakes the page from them.
-            .refreshable { await model.refreshAll() }
-            // A swipe turns the page: left goes back a week, right comes forward.
-            .gesture(DragGesture(minimumDistance: 48, coordinateSpace: .local).onEnded { value in
-                guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-                turn(to: model.todayPage + (value.translation.width < 0 ? 1 : -1))
-            })
             pageBar
         }
         .background(SkimStyle.background.ignoresSafeArea())

@@ -88,7 +88,8 @@ behaviors:
       platforms show the page's shape as shimmering placeholders (lead, stories, briefs) with no
       invented content, never a bare spinner; on iOS a status line above them says when the feeds
       are being checked. The iOS page strip names the front page on the left and offers "Last
-      week" on the right; later pages centre the page between equal-width turns.
+      week" on the right; later pages centre the page between equal-width turns. A turned page
+      opens at its top.
     source:
       text: >-
         I like A on desktop, C on mobile. There should be some margin from the top - also maybe just a

@@ -2353,7 +2353,7 @@ enum NativeAI {
     }
 
     /// Identity line a Claude subscription (OAuth) token must open the system prompt with.
-    /// Without it, Anthropic answers Sonnet and Opus requests with a 429 `rate_limit_error`
+    /// Without it, Anthropic answers requests (Haiku 5.5 and Sonnet 5.5 alike) with a 429 `rate_limit_error`
     /// whose message is just "Error", which read as "Claude is rate-limited" to someone with
     /// no limits hit. The desktop app sends the same prefix (`claude_oauth.rs` SYSTEM_PREFIX).
     static let claudeSubscriptionSystemPrefix = "You are Claude Code, Anthropic's official CLI for Claude."

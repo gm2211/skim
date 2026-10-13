@@ -43,7 +43,7 @@ behaviors:
   - id: claude-subscription-runs-every-model
     description: >-
       Signed in with a Claude Pro/Max subscription, every Claude model the picker lists answers
-      Skim's requests on iOS and desktop, not only Haiku.
+      Skim's requests on iOS and desktop.
     details: >-
       A subscription (OAuth) request whose system prompt does not open with the Claude Code identity
       line gets a 429 "Error" from Sonnet and Opus. Desktop always sent that line; iOS did not, so Ask

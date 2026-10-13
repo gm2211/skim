@@ -26,16 +26,27 @@ behaviors:
       reference: Giulio, project chat, 2026-10-11
   - id: ios-one-icon-per-action
     description: >-
-      iOS uses the desktop's icon for each action and destination, one icon per thing everywhere it
-      appears: Today is the newspaper, AI Inbox the tray, chat and Ask
-      Skim the speech bubble, Summarize the sparkles, All Articles the list, and leaving the app
-      (open in browser, original page) the arrow-out-of-box.
+      iOS uses one icon per action and destination everywhere it appears. The bottom-bar views
+      use the icons Giulio picked: Unread the full tray, All the justified text lines, Today the
+      house, and Search the magnifying glass in a circle. Elsewhere iOS uses the desktop's icon:
+      AI Inbox the tray, chat and Ask Skim the speech bubble, Summarize the sparkles, and leaving
+      the app (open in browser, original page) the arrow-out-of-box.
     details: >-
       The mapping lives in one place in the iOS code (SkimIcon in Style.swift). Starring reads
-      Star/Unstar in every menu, matching the reader toolbar.
+      Star/Unstar in every menu, matching the reader toolbar. The bar icons were chosen from five
+      SF Symbol alternatives per tab (project file tab-icons/tab-icons.png): Unread
+      tray.full, All text.justify.left, Today house, Search magnifyingglass.circle. They apply
+      wherever iOS shows those destinations, so iOS differs from the desktop's newspaper for Today.
     source:
       text: icons inconsistent in ios view
       reference: Giulio, project chat, 2026-10-12
+  - id: ios-bar-icon-picks
+    description: >-
+      Giulio's choice of iOS bottom-bar icons from the five-option comparison sheet: Unread option
+      3, All option 4, Today option 5, Search option 2.
+    source:
+      text: 3,4,5,2
+      reference: Giulio, project chat, 2026-10-13, answering the tab-icons sheet (Unread, All, Today, Search)
   - id: ios-bottom-bar
     description: >-
       iOS bottom bar shows each view as an icon over its name. It defaults to Unread, All, Today and

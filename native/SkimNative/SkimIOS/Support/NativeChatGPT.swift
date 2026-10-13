@@ -244,7 +244,7 @@ enum NativeChatGPTOAuth {
               expiry > now.timeIntervalSince1970 - 60 else {
             throw ChatGPTOAuthError.server("ChatGPT's sign-in didn't check out. Sign in again.")
         }
-        let granted = tokens.scope ?? (claims(ofJWT: tokens.accessToken)?["scope"] as? String) ?? ""
+        let granted = tokens.scope ?? (Self.claims(ofJWT: tokens.accessToken)?["scope"] as? String) ?? ""
         guard granted.split(whereSeparator: { $0 == " " || $0 == "+" }).contains(Substring(planUsageScope)) else {
             throw ChatGPTOAuthError.planUsageNotGranted
         }
@@ -732,5 +732,12 @@ private extension Data {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

@@ -269,7 +269,7 @@ pub fn validate(tokens: &ChatGptTokens, client_id: &str, nonce: &str, now: i64) 
     });
     let has_plan_usage = granted
         .unwrap_or_default()
-        .split(|c| c == ' ' || c == '+')
+        .split([' ', '+'])
         .any(|s| s == PLAN_USAGE_SCOPE);
     if !has_plan_usage {
         return Err("ChatGPT signed you in but didn't allow Skim to use your plan. Sign in again and allow plan usage.".into());

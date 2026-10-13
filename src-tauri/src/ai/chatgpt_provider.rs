@@ -180,7 +180,7 @@ pub fn parse_models(body: &str) -> Vec<(String, String)> {
     if let Some(models) = v.get("models").and_then(|m| m.as_array()) {
         return models
             .iter()
-            .filter(|m| m.get("visibility").and_then(|v| v.as_str()).map_or(true, |v| v == "list"))
+            .filter(|m| m.get("visibility").and_then(|v| v.as_str()).is_none_or(|v| v == "list"))
             .filter_map(|m| {
                 let slug = m.get("slug").and_then(|s| s.as_str()).filter(|s| !s.is_empty())?;
                 let name = m.get("display_name").and_then(|s| s.as_str()).filter(|s| !s.is_empty()).unwrap_or(slug);

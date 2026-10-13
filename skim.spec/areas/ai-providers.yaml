@@ -40,6 +40,23 @@ behaviors:
     details: >-
       The reason is the provider's error message, never the raw JSON body. Sign-in, plan, rate-limit,
       and outage errors keep their own friendly wording.
+  - id: claude-subscription-runs-every-model
+    description: >-
+      Signed in with a Claude Pro/Max subscription, every Claude model the picker lists answers
+      Skim's requests on iOS and desktop.
+    details: >-
+      A subscription (OAuth) request whose system prompt does not open with the Claude Code identity
+      line gets a 429 "Error" from Sonnet and Opus. Desktop always sent that line; iOS did not, so Ask
+      about this story on claude-sonnet-5-5 showed "Claude is rate-limited right now" to a reader
+      with no limits hit.
+    source:
+      text: "Smthing is broken with byos and claude - I don't have rate limits"
+      reference: Giulio, project thread "Claude rate-limit error with BYOS", 2026-10-13
+  - id: rate-limit-error-only-for-real-limits
+    description: >-
+      Skim says a provider is rate-limited only when the provider says so: a retry-after time or a
+      message naming the limit. A bare 429 says the request was turned down instead.
+    details: With a retry-after header the message says how many minutes to wait.
   - id: desktop-local-models
     description: >-
       Desktop local models come from a curated list (Qwen3.5 2B, 4B recommended, 9B, 35B-A3B on Macs

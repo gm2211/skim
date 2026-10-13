@@ -2356,7 +2356,7 @@ enum NativeAI {
         let model = resolveAnthropicModel(settings)
         var body: [String: Any] = [
             "model": model,
-            "system": instructions,
+            "system": anthropicSystem(instructions: instructions, isSubscription: isSubscription),
             "messages": messages,
             "max_tokens": maxTokens
         ]
@@ -2368,6 +2368,23 @@ enum NativeAI {
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
+    }
+
+    /// Identity line a Claude subscription (OAuth) token must open the system prompt with.
+    /// Without it, Anthropic answers requests (Haiku 5.5 and Sonnet 5.5 alike) with a 429 `rate_limit_error`
+    /// whose message is just "Error", which read as "Claude is rate-limited" to someone with
+    /// no limits hit. The desktop app sends the same prefix (`claude_oauth.rs` SYSTEM_PREFIX).
+    static let claudeSubscriptionSystemPrefix = "You are Claude Code, Anthropic's official CLI for Claude."
+
+    /// The `system` field: a plain string for API keys; for a subscription token, the
+    /// identity line as its own first block followed by the app's instructions.
+    static func anthropicSystem(instructions: String, isSubscription: Bool) -> Any {
+        guard isSubscription else { return instructions }
+        var blocks: [[String: Any]] = [["type": "text", "text": claudeSubscriptionSystemPrefix]]
+        if !instructions.isEmpty {
+            blocks.append(["type": "text", "text": instructions])
+        }
+        return blocks
     }
 
     /// Claude Opus/Sonnet 4.7 and later, and every 5-series model (Sonnet 5.5, Opus 5.5,
@@ -2812,7 +2829,8 @@ enum NativeAI {
             // would look bad in App Store review) — log the full body for debugging and
             // throw a friendly, actionable message instead.
             print("[NativeAI] \(provider) request failed (\(status)): \(rawBody.prefix(2000))")
-            throw NativeAIError.unavailable(friendlyErrorMessage(status: status, data: data, provider: provider))
+            let retryAfter = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")
+            throw NativeAIError.unavailable(friendlyErrorMessage(status: status, data: data, provider: provider, retryAfter: retryAfter))
         }
     }
 
@@ -2820,7 +2838,7 @@ enum NativeAI {
     /// Parses the `{"error": {"type": ..., "message": ...}}` envelope used by both the
     /// Anthropic API and OpenAI-compatible providers when possible, but always falls back
     /// to a generic message — raw JSON error bodies must never reach the UI.
-    static func friendlyErrorMessage(status: Int, data: Data, provider: String) -> String {
+    static func friendlyErrorMessage(status: Int, data: Data, provider: String, retryAfter: String? = nil) -> String {
         let isClaude = provider.hasPrefix("Claude")
         let errorType = parsedErrorType(from: data)
         let errorMessage = parsedErrorMessage(from: data)
@@ -2835,16 +2853,28 @@ enum NativeAI {
                 ? "Your Claude plan doesn't allow this request."
                 : "Your \(provider) plan doesn't allow this request."
         case 429:
-            let base = isClaude
-                ? "Claude is rate-limited right now. Wait a bit and try again."
-                : "\(provider) is rate-limited right now. Wait a bit and try again."
+            // A real rate limit carries a `retry-after` header or says what was exceeded. A
+            // bare 429 "Error" is Claude refusing the request itself (e.g. a subscription
+            // request it doesn't accept), so don't tell someone with no limits to wait.
+            let detail = errorMessage.flatMap { isInformativeErrorDetail($0) ? $0 : nil }
+            let wait = retryAfter.flatMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+            if detail == nil, wait == nil {
+                return isClaude
+                    ? "Claude turned down this request without saying why (429). Try another model, or sign in to Claude again in Settings."
+                    : "\(provider) turned down this request without saying why (429). Try another model, or check your account in Settings."
+            }
+            let name = isClaude ? "Claude" : provider
             // If the provider included a specific, human-readable detail (e.g. a
             // subscription usage limit reset time), surface it — but never the raw
             // JSON envelope, and never a non-descriptive placeholder like "Error".
-            if let detail = errorMessage, isInformativeErrorDetail(detail) {
-                return "\(base) (\(detail))"
+            if let detail {
+                return "\(name) is rate-limited right now. Wait a bit and try again. (\(detail))"
             }
-            return base
+            if let wait, wait > 0 {
+                let minutes = (wait + 59) / 60
+                return "\(name) is rate-limited right now. Try again in \(minutes == 1 ? "a minute" : "\(minutes) minutes")."
+            }
+            return "\(name) is rate-limited right now. Wait a bit and try again."
         case 500...599:
             return isClaude
                 ? "Claude is temporarily unavailable. Try again shortly."

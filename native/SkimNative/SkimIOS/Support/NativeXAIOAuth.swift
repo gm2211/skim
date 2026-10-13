@@ -124,7 +124,16 @@ enum NativeXAIOAuth {
                 ("client_id", clientID),
                 ("device_code", start.deviceCode)
             ])
-            let (data, response) = try await urlSession.data(for: request)
+            let data: Data
+            let response: URLResponse
+            do {
+                (data, response) = try await urlSession.data(for: request)
+            } catch let error as URLError where isTransientWhileAway(error) {
+                // The reader approves in Safari, so iOS suspends Skim mid-poll and the
+                // in-flight request comes back as "The network connection was lost."
+                // That says nothing about the sign-in: poll again.
+                continue
+            }
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
             if (200..<300).contains(status) {
                 let tokens = try parseTokens(data, previousRefresh: nil)
@@ -146,6 +155,18 @@ enum NativeXAIOAuth {
             }
         }
         throw XAIOAuthError.failed("Timed out waiting for xAI sign-in.")
+    }
+
+    /// Network failures a poll can hit while Skim is suspended in the background or the
+    /// connection briefly drops; the device code is still valid, so polling continues.
+    static func isTransientWhileAway(_ error: URLError) -> Bool {
+        switch error.code {
+        case .networkConnectionLost, .timedOut, .notConnectedToInternet,
+             .cannotConnectToHost, .dnsLookupFailed, .backgroundSessionWasDisconnected:
+            return true
+        default:
+            return false
+        }
     }
 
     /// Refreshes the stored token. A definitive rejection (400/401) clears the

@@ -54,4 +54,50 @@ struct NativeAIAnthropicRequestTests {
         let message = NativeAI.friendlyErrorMessage(status: 400, data: Data("oops".utf8), provider: "Claude API")
         #expect(message == "Claude request failed (400). Try again.")
     }
+
+    // A subscription token whose system prompt doesn't open with the Claude Code identity
+    // gets a 429 "Error" on Sonnet and Opus, shown as "Claude is rate-limited" to someone
+    // with no limits hit (Ask about this story on claude-sonnet-5-5).
+    @Test func subscriptionRequestsOpenWithTheClaudeCodeIdentity() throws {
+        let request = try NativeAI.buildAnthropicRequestFull(
+            settings: AISettings(provider: "claude-subscription", model: "claude-sonnet-5-5"),
+            accessToken: "oauth-token",
+            isSubscription: true,
+            instructions: "Answer about this story.",
+            messages: [["role": "user", "content": "Can it?"]],
+            maxTokens: 100
+        )
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer oauth-token")
+        let body = try #require(request.httpBody)
+        let payload = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let system = try #require(payload["system"] as? [[String: Any]])
+        #expect(system.compactMap { $0["text"] as? String } == [
+            "You are Claude Code, Anthropic's official CLI for Claude.",
+            "Answer about this story."
+        ])
+    }
+
+    @Test func apiKeyRequestsKeepAPlainSystemString() throws {
+        let body = try payload(model: "claude-sonnet-5-5")
+        #expect(body["system"] as? String == "system")
+    }
+
+    @Test func bare429IsNotCalledARateLimit() {
+        let data = Data(#"{"type":"error","error":{"type":"rate_limit_error","message":"Error"}}"#.utf8)
+        let message = NativeAI.friendlyErrorMessage(status: 429, data: data, provider: "Claude subscription")
+        #expect(!message.contains("rate-limited"))
+        #expect(message.hasPrefix("Claude turned down this request"))
+    }
+
+    @Test func real429WithRetryAfterSaysWhenToRetry() {
+        let data = Data(#"{"type":"error","error":{"type":"rate_limit_error","message":"Error"}}"#.utf8)
+        let message = NativeAI.friendlyErrorMessage(status: 429, data: data, provider: "Claude subscription", retryAfter: "150")
+        #expect(message == "Claude is rate-limited right now. Try again in 3 minutes.")
+    }
+
+    @Test func real429WithAReasonShowsIt() {
+        let data = Data(#"{"type":"error","error":{"type":"rate_limit_error","message":"This request would exceed your account's rate limit."}}"#.utf8)
+        let message = NativeAI.friendlyErrorMessage(status: 429, data: data, provider: "Claude subscription")
+        #expect(message == "Claude is rate-limited right now. Wait a bit and try again. (This request would exceed your account's rate limit.)")
+    }
 }

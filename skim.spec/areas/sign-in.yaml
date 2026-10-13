@@ -26,6 +26,29 @@ behaviors:
       2026-10-10.
     source:
       text: 'Chose "Add it" on the decision card asking "Add an unofficial ''Sign in with SuperGrok'' option to Skim''s xAI provider?"'
+  - id: ios-sign-in-stays-in-app
+    description: >-
+      On iOS, the Claude and SuperGrok sign-in pages open in an in-app browser sheet, so the reader
+      never leaves Skim to sign in.
+    details: >-
+      SFSafariViewController, since neither flow has a callback Skim can catch: Claude shows a code
+      to copy, and SuperGrok is a device-code approval that Skim polls for and closes the sheet on.
+      The sheet does not share Safari's cookies, so the reader may need to sign in to claude.ai or
+      x.ai there.
+    source:
+      text: "I think the supergrok may be caused by switching app to safari - could we maybe have in-app browser for signin?"
+      reference: Giulio, project chat, 2026-10-13
+  - id: supergrok-sign-in-survives-leaving-the-app
+    description: >-
+      On iOS, approving the SuperGrok sign-in in Safari and coming back completes the sign-in; a
+      connection dropped while Skim was in the background does not fail it.
+    details: >-
+      iOS suspends Skim while the reader is in Safari, so the token poll in flight returned "The
+      network connection was lost." and the sign-in stopped. Network blips now poll again until the
+      code expires.
+    source:
+      text: "I complete the flow but get [The network connection was lost.]"
+      reference: Giulio, project chat, 2026-10-13
   - id: feedly-sign-in
     description: >-
       Desktop: Feedly sign-in uses OAuth with a local callback and refreshes its token before it

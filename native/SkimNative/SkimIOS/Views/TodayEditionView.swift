@@ -65,7 +65,8 @@ struct TodayEditionView: View {
                 .frame(maxWidth: 680, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
-            .refreshable { await load() }
+            // Pulling the page fetches the feeds, then remakes the page from them.
+            .refreshable { await model.refreshAll() }
             // A swipe turns the page: left goes back a week, right comes forward.
             .gesture(DragGesture(minimumDistance: 48, coordinateSpace: .local).onEnded { value in
                 guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
@@ -216,19 +217,12 @@ struct TodayEditionView: View {
         .presentationDetents([.medium])
     }
 
-    /// The masthead: the nameplate, then a dateline whose double rule doubles
-    /// as the day's reading progress.
+    /// The dateline under the title bar, which carries the nameplate: the rule,
+    /// then the page's span and the day's reading progress.
     private func editionHeader(_ edition: TodayEditionSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Today")
-                .font(.system(size: 38, weight: .bold, design: .serif))
-                .foregroundStyle(SkimStyle.text)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 4)
-
-            VStack(spacing: 2) {
-                Rectangle().fill(SkimStyle.text.opacity(0.28)).frame(height: 1)
-            }
+            Rectangle().fill(SkimStyle.text.opacity(0.28)).frame(height: 1)
+                .padding(.top, 10)
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(Self.dateline(for: edition.edition).uppercased())
@@ -285,13 +279,31 @@ struct TodayEditionView: View {
         .padding(.bottom, 6)
     }
 
+    /// An empty page says why, and offers the fetch that fills it. While the
+    /// feeds are being checked it says so instead of calling the page empty.
     private var emptyEdition: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: SkimIcon.today).font(.largeTitle).foregroundStyle(SkimStyle.accent)
-            Text("No stories in this edition").font(.title3.bold())
-            Text("This saved edition has no stories. Refresh feeds in Articles to read new coverage. Tomorrow brings a new edition.")
-                .font(.body).foregroundStyle(SkimStyle.secondary)
-            Button("Browse articles") { onBrowseArticles() }.frame(minHeight: 44)
+            if model.isCheckingFeedsForToday || model.isLoading {
+                ProgressView("Checking your feeds for today’s stories…")
+                    .frame(maxWidth: .infinity, minHeight: 160)
+            } else {
+                Image(systemName: SkimIcon.today).font(.largeTitle).foregroundStyle(SkimStyle.accent)
+                Text(model.todayPage == 1 ? "Nothing published today yet" : "No stories that week")
+                    .font(.title3.bold())
+                Text(model.todayPage == 1
+                     ? "Your feeds have published nothing in the last day. Pull down, or check them now, to look again."
+                     : "Your feeds published nothing in this week, or everything from it was read on another page.")
+                    .font(.body).foregroundStyle(SkimStyle.secondary)
+                HStack(spacing: 16) {
+                    if model.todayPage == 1 {
+                        Button("Check feeds") { Task { await model.refreshAll() } }
+                            .frame(minHeight: 44)
+                            .buttonStyle(.borderedProminent)
+                            .tint(SkimStyle.accent)
+                    }
+                    Button("Browse articles") { onBrowseArticles() }.frame(minHeight: 44)
+                }
+            }
         }
         .padding(.vertical, 28)
     }

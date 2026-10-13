@@ -18,6 +18,22 @@ behaviors:
       reference: >-
         Giulio, project chat, 2026-10-12, on a Today page made at 00:47 that froze with the one
         story active since midnight
+  - id: fetches-feeds-itself
+    description: >-
+      The front page checks the reader's feeds itself when they are stale, so it is never empty
+      only because nothing has fetched them: on iOS, which fetches feeds only when asked, opening
+      or returning to Today with feeds last fetched over 15 minutes ago fetches them and remakes
+      the page from what lands, and pulling the page down does the same. Any feed refresh remakes
+      a Today page already on screen.
+    details: >-
+      While the feeds are being checked the empty page says so instead of calling itself empty.
+      An empty front page then says nothing was published in the last day and offers "Check feeds"
+      and "Browse articles"; an empty earlier week says no stories that week.
+    source:
+      text: On ios, wasted vertical space with repeaded header, also Today not working
+      reference: >-
+        Giulio, project chat, 2026-10-13, on a Today page reading "No stories in this edition"
+        under a title bar reading "Today, 2,302 unread"
   - id: grouped-coverage
     description: >-
       Each story groups the reports that cover the same event, shows how many reports there are, and
@@ -48,7 +64,9 @@ behaviors:
       ask button, a refresh button and a cog that opens a small settings popover (summary model,
       edition size, retry, AI settings). The popover is wide enough for every
       label to sit on one line with its control inside it. Missing summaries show as a note with
-      Retry in the dateline instead of a loose button.
+      Retry in the dateline instead of a loose button. On iOS the paper has one header: the title
+      bar carries the serif "Today" nameplate between its icons, and the page below opens with the
+      dateline rule, never a second "Today" or a repeated count.
     source:
       text: >-
         I like A on desktop, C on mobile. There should be some margin from the top - also maybe just a
@@ -98,8 +116,8 @@ behaviors:
       Desktop has an Ask button in the top bar for the page and an Ask action on each story; both
       open the app assistant (the same one Cmd+K uses) with the page's stories, or the chosen story,
       as its context. iOS has the Ask action on each story and "Ask about Today" at the top of the
-      title bar's more menu (an iPhone title bar has no room for a fourth icon beside the bolt, the
-      cog and the menu without covering the title), and its chat reads exactly those reports: each
+      title bar's more menu (an iPhone title bar has no room for a fourth icon beside the nameplate,
+      the cog and the menu), and its chat reads exactly those reports: each
       story's lead report first, then the rest, up to 30.
     source:
       text: I would like to be able to chat with the whole page or a single story

@@ -140,6 +140,8 @@ final class AppModel: ObservableObject {
     /// How many pages back the paper offers: a year of weeks.
     static let todayPageCount = 53
     @Published var isLoadingToday = false
+    /// True while Today is fetching the feeds itself, before remaking the page.
+    @Published var isCheckingFeedsForToday = false
     @Published var isUpdatingToday = false
     @Published var todayError: String?
     /// Non-nil while the lede pass is still working down the page.
@@ -168,8 +170,15 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// How long Today trusts the last feed fetch. iOS fetches feeds only when
+    /// asked, so the front page would otherwise be made from yesterday's fetch
+    /// and come up empty every morning until the reader pulled Articles.
+    static let todayFeedStaleness: TimeInterval = 15 * 60
+
     // Edition generation, ranking, frozen content, and consumption live in SkimCore.
-    func loadTodayEdition(storyLimit: Int) async {
+    /// Makes the page from what the store holds, and on the front page also
+    /// fetches the feeds when they are stale, remaking the page from what lands.
+    func loadTodayEdition(storyLimit: Int, checkFeeds: Bool = true) async {
         todayTask?.cancel()
         let requestID = UUID()
         todayLoadID = requestID
@@ -178,6 +187,12 @@ final class AppModel: ObservableObject {
         let task = Task {
             await performTodayLoad(storyLimit: storyLimit, requestID: requestID)
             guard !Task.isCancelled, todayLoadID == requestID, todayError == nil else { return }
+            if checkFeeds, todayPage == 1, !isLoading, await feedsAreStale() {
+                await fetchFeedsForToday()
+                guard !Task.isCancelled, todayLoadID == requestID else { return }
+                await performTodayLoad(storyLimit: storyLimit, requestID: requestID)
+                guard !Task.isCancelled, todayLoadID == requestID, todayError == nil else { return }
+            }
             await writeTodayLedes()
         }
         todayTask = task
@@ -190,6 +205,37 @@ final class AppModel: ObservableObject {
         todayLoadID = UUID()
         todayLedeStatus = nil
         isLoadingToday = false
+        isCheckingFeedsForToday = false
+    }
+
+    /// Whether no feed has been fetched within `todayFeedStaleness`.
+    private func feedsAreStale() async -> Bool {
+        let feeds = (try? await store.listFeeds()) ?? self.feeds
+        guard !feeds.isEmpty else { return false }
+        let latest = feeds.compactMap(\.fetchedAt).max() ?? .distantPast
+        return Date().timeIntervalSince(latest) > Self.todayFeedStaleness
+    }
+
+    /// Fetches every feed for the front page, then refreshes the article list
+    /// so its counts agree with the page.
+    private func fetchFeedsForToday() async {
+        isCheckingFeedsForToday = true
+        isLoading = true
+        defer {
+            isCheckingFeedsForToday = false
+            isLoading = false
+        }
+        try? await refresher.refreshAll(store: store)
+        await reloadArticles()
+    }
+
+    /// Feeds just landed: a Today page already made regenerates from them. An
+    /// empty or short unread page grows; SkimCore leaves a settled one alone.
+    private func reloadTodayAfterFeeds() async {
+        guard todayEdition != nil || todayError != nil else { return }
+        let storyLimit = todayEdition?.edition.storyLimit
+            ?? UserDefaults.standard.integer(forKey: "todayStoryLimit")
+        await loadTodayEdition(storyLimit: [5, 10, 20].contains(storyLimit) ? storyLimit : 10, checkFeeds: false)
     }
 
     func retryTodayLedes() async {
@@ -568,13 +614,14 @@ final class AppModel: ObservableObject {
 
     func refreshAll() async {
         isLoading = true
-        defer { isLoading = false }
         do {
             try await refresher.refreshAll(store: store)
             await reloadArticles()
         } catch {
             errorMessage = error.localizedDescription
         }
+        isLoading = false
+        await reloadTodayAfterFeeds()
     }
 
     func importOPML(url: URL) async {
@@ -595,6 +642,7 @@ final class AppModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+        await reloadTodayAfterFeeds()
     }
 
     func addFeed(urlString: String) async {

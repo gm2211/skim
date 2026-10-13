@@ -26,27 +26,30 @@ behaviors:
       reference: Giulio, project chat, 2026-10-11
   - id: ios-one-icon-per-action
     description: >-
-      iOS uses one icon per action and destination everywhere it appears. The bottom-bar views
-      use the icons Giulio picked: Unread the full tray, All the justified text lines, Today the
-      house, and Search the magnifying glass in a circle. Elsewhere iOS uses the desktop's icon:
-      AI Inbox the tray, chat and Ask Skim the speech bubble, Summarize the sparkles, and leaving
+      iOS uses one icon per action and destination everywhere it appears. Unread, All and Search
+      use the icons Giulio picked for the bottom bar: Unread the full tray, All the justified text
+      lines, and Search the magnifying glass in a circle. Elsewhere iOS uses the desktop's icon:
+      Today the newspaper, AI Inbox the tray, chat and Ask Skim the speech bubble, Summarize the sparkles, and leaving
       the app (open in browser, original page) the arrow-out-of-box.
     details: >-
       The mapping lives in one place in the iOS code (SkimIcon in Style.swift). Starring reads
       Star/Unstar in every menu, matching the reader toolbar. The bar icons were chosen from five
       SF Symbol alternatives per tab (project file tab-icons/tab-icons.png): Unread
-      tray.full, All text.justify.left, Today house, Search magnifyingglass.circle. They apply
-      wherever iOS shows those destinations, so iOS differs from the desktop's newspaper for Today.
+      tray.full, All text.justify.left, Search magnifyingglass.circle. They apply wherever iOS
+      shows those destinations. Today briefly shipped as the house and went back to the newspaper
+      at Giulio's request.
     source:
       text: icons inconsistent in ios view
       reference: Giulio, project chat, 2026-10-12
   - id: ios-bar-icon-picks
     description: >-
       Giulio's choice of iOS bottom-bar icons from the five-option comparison sheet: Unread option
-      3, All option 4, Today option 5, Search option 2.
+      3, All option 4, Search option 2. Today stays the newspaper.
     source:
-      text: 3,4,5,2
-      reference: Giulio, project chat, 2026-10-13, answering the tab-icons sheet (Unread, All, Today, Search)
+      text: Also I wanted newspaper icon for today
+      reference: >-
+        Giulio, project chat, 2026-10-13, after "3,4,5,2" was read as Unread 3, All 4, Today 5
+        (house), Search 2
   - id: ios-bottom-bar
     description: >-
       iOS bottom bar shows each view as an icon over its name. It defaults to Unread, All, Today and
@@ -58,7 +61,9 @@ behaviors:
       page; picking a feed, folder or library view returns to the list. AI Inbox opens its page.
       There is no catch-up bar option (a saved bar that still names one just loses that item);
       on iPhone the Today title sits between the title bar's buttons and "Ask about Today" is
-      the first item of its "…" menu, so nothing covers the title.
+      the first item of its "…" menu, so nothing covers the title. On phones with a home
+      indicator the items sit lower in the bar, reaching part-way into the bottom inset, so the
+      space under the labels is not much bigger than the space above the icons.
     source:
       text: bottom row in ios can use improvement (maybe let me choose the today view instead of the favorite view)
       reference: Giulio, project chat, 2026-10-12

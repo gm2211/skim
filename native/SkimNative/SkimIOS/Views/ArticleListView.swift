@@ -677,6 +677,11 @@ struct ArticleListView: View {
             }
         }
         .padding(.horizontal, 12)
+        // On phones with a home indicator, sit the items lower: more room
+        // under the separator, and reach part-way into the bottom inset so the
+        // gap under the labels isn't bigger than the one above the icons.
+        .padding(.top, bottomSafeAreaInset > 0 ? 10 : 0)
+        .padding(.bottom, bottomSafeAreaInset > 0 ? -12 : 0)
         .frame(maxWidth: .infinity)
         .background(SkimStyle.chrome.opacity(0.96).ignoresSafeArea(.all, edges: .bottom))
         .overlay(alignment: .top) {

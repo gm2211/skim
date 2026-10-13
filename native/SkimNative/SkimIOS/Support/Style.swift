@@ -12,12 +12,12 @@ enum SkimStyle {
 
 /// One SF Symbol per action or destination, shared by every iOS surface so the
 /// same thing never shows two icons. Mostly mirrors the desktop icon set
-/// (src/components/ui/icons.tsx): "Catch me up" (on Today) is the bolt, AI
-/// Inbox the tray. The bottom-bar views Unread, All, Today and Search use the
-/// icons Giulio picked for iOS (2026-10-13).
+/// (src/components/ui/icons.tsx): Today is the newspaper, "Catch me up" (on
+/// Today) the bolt, AI Inbox the tray. Unread, All and Search use the icons
+/// Giulio picked for the iOS bottom bar (2026-10-13).
 enum SkimIcon {
     // Destinations
-    static let today = "house"
+    static let today = "newspaper"
     static let aiInbox = "tray"
     static let allArticles = "text.justify.left"
     static let unread = "tray.full"

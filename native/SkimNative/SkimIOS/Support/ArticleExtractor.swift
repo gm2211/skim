@@ -42,8 +42,13 @@ enum ArticleExtractor {
 
         var work = html
 
-        // 1. Remove script/style/nav/header/footer blocks entirely
-        for tag in ["script", "style", "nav", "header", "footer", "aside", "noscript"] {
+        // 1. Remove script/style/nav/header/footer blocks entirely, plus form
+        //    controls: their labels and options ("Size Small Standard Large")
+        //    are page furniture, never prose.
+        for tag in [
+            "script", "style", "nav", "header", "footer", "aside", "noscript",
+            "svg", "form", "button", "select", "label", "dialog"
+        ] {
             work = removeBlockTags(tag, from: work)
         }
 
@@ -62,8 +67,14 @@ enum ArticleExtractor {
             .decodingBasicHTMLEntities()
             .collapsingWhitespace()
 
+        // 4b. Read the container's paragraphs and headings when they carry
+        //     the story, so loose widget text between them (Ars Technica's
+        //     text-size panel) never leads the reader.
+        let prose = proseBlocks(from: work)
+        let text = prose.count >= max(200, plain.count / 2) ? prose : plain
+
         // 5. Drop leaked utility-class lines and reject all-garbage output.
-        let sanitized = sanitizeReaderText(plain)
+        let sanitized = sanitizeReaderText(text)
         if sanitized.isEmpty || looksLikeMarkup(sanitized) {
             throw Error.contentLooksLikeMarkup
         }
@@ -214,6 +225,28 @@ enum ArticleExtractor {
             range: NSRange(html.startIndex..<html.endIndex, in: html),
             withTemplate: " "
         )
+    }
+
+    /// Text of the paragraph-level blocks in `html`, in reading order, one
+    /// block per paragraph.
+    private static func proseBlocks(from html: String) -> String {
+        let pattern = #"<(p|h[1-6]|li|blockquote|pre|figcaption)\b[^>]*>(.*?)</\1\s*>"#
+        guard let regex = try? NSRegularExpression(
+            pattern: pattern,
+            options: [.caseInsensitive, .dotMatchesLineSeparators]
+        ) else { return "" }
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        return regex.matches(in: html, range: range)
+            .compactMap { match -> String? in
+                guard let inner = Range(match.range(at: 2), in: html) else { return nil }
+                let block = String(html[inner])
+                    .strippingHTMLTags()
+                    .decodingBasicHTMLEntities()
+                    .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return block.isEmpty ? nil : block
+            }
+            .joined(separator: "\n\n")
     }
 
     /// Tries to find a prominent article container by scanning for common selectors.

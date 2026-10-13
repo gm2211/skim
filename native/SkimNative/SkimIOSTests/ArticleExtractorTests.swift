@@ -75,6 +75,28 @@ struct ArticleExtractorTests {
         #expect(text.localizedCaseInsensitiveContains("quick brown fox"))
     }
 
+    /// Ars Technica opens every article with a text-size panel built from a
+    /// button, labels and selects. The reader showed that panel ("Text
+    /// settings Story text Size Small Standard Large…") instead of the story.
+    @Test func testArsTechnicaSettingsPanelDoesNotLeadTheStory() throws {
+        guard let url = Self.fixtureURL(named: "ars-technica-split-story.html"),
+              let html = try? String(contentsOf: url, encoding: .utf8)
+        else {
+            Issue.record("ars-technica-split-story.html fixture not found")
+            return
+        }
+
+        let baseURL = URL(string: "https://arstechnica.com/tech-policy/2026/10/trump-mobile-doesnt-seem-to-have-fcc-authorization-for-phone-service-senator-says/")!
+        let text = try ArticleExtractor.extract(from: html, baseURL: baseURL)
+
+        #expect(text.hasPrefix("Trump Mobile apparently failed to obtain"), "Reader text starts with: \(text.prefix(120))")
+        #expect(text.contains("Ties to Liberty Mobile raise questions"))
+        #expect(text.hasSuffix("using taxpayer funds for propaganda."))
+        for chrome in ["Text settings", "Story text", "Subscribers only", "Minimize to nav"] {
+            #expect(!text.contains(chrome), "Reader text leaked \(chrome)")
+        }
+    }
+
     /// Regression: a page with only `<main>` containing junk markup should still
     /// throw `.contentLooksLikeMarkup` — the new path must not suppress that.
     @Test func testNoJSONLDNoArticleStillThrows() {

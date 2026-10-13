@@ -26,7 +26,10 @@ behaviors:
       the page from what lands, and pulling the page down does the same. Any feed refresh remakes
       a Today page already on screen.
     details: >-
-      While the feeds are being checked the empty page says so instead of calling itself empty.
+      A page made before a fetch lands grows from what the fetch brings: a story counts as new to
+      the page when it was published, updated or fetched after the page was made, on both
+      platforms. While the feeds are being checked the empty page says so instead of calling
+      itself empty.
       An empty front page then says nothing was published in the last day and offers "Check feeds"
       and "Browse articles"; an empty earlier week says no stories that week.
     source:

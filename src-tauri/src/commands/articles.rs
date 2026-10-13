@@ -532,6 +532,14 @@ fn extract_reader_html(html: &str, effective_url: &str) -> ReaderResult {
             Err(_) => String::new(),
         };
 
+        // Readability keeps one container and its siblings. Pages that split
+        // the story into cousin blocks (Ars Technica wraps each chunk between
+        // ads in its own grid row) come back missing most of the article.
+        let readable = match extract_article_prose(html) {
+            Some(prose) if visible_text_len(&prose) * 2 > visible_text_len(&readable) * 3 => prose,
+            _ => readable,
+        };
+
         // Readability gives up on plenty of real, server-rendered articles
         // (unusual wrappers, table layouts, heavy chrome). Rather than hand
         // back nothing, try the shapes that still carry the body text.
@@ -731,13 +739,7 @@ fn find_article_body(value: &serde_json::Value) -> Option<String> {
 /// believable amount of text, so we never trade a real failure for noise.
 fn extract_main_content_block(html: &str) -> Option<String> {
     let body = first_element_inner(html, "body").unwrap_or_else(|| html.to_string());
-    let cleaned = strip_elements(
-        &body,
-        &[
-            "script", "style", "noscript", "svg", "template", "nav", "header", "footer", "aside",
-            "form", "iframe",
-        ],
-    );
+    let cleaned = strip_elements(&body, CHROME_ELEMENTS);
 
     for tag in ["article", "main"] {
         if let Some(inner) = first_element_inner(&cleaned, tag) {
@@ -769,6 +771,50 @@ fn extract_main_content_block(html: &str) -> Option<String> {
         rest = &slice[end..];
     }
     (visible_text_len(&paragraphs) >= MIN_EXTRACTED_TEXT).then_some(paragraphs)
+}
+
+/// Elements that are page furniture rather than prose. Form controls carry
+/// labels and option text ("Size Small Standard Large") that must never
+/// reach the reader pane.
+const CHROME_ELEMENTS: &[&str] = &[
+    "script", "style", "noscript", "svg", "template", "nav", "header", "footer", "aside", "form",
+    "iframe", "button", "select", "label", "dialog",
+];
+
+/// Block elements that carry an article's prose, in reading order.
+const PROSE_ELEMENTS: &[&str] = &["p", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "ul", "ol"];
+
+/// The prose blocks of the page's `<article>`, chrome removed. Used when the
+/// story is split across blocks readability cannot see as one.
+fn extract_article_prose(html: &str) -> Option<String> {
+    let article = first_element_inner(html, "article")?;
+    let cleaned = strip_elements(&article, CHROME_ELEMENTS);
+    let mut prose = String::new();
+    let mut rest = cleaned.as_str();
+    loop {
+        let Some((start, tag)) = PROSE_ELEMENTS
+            .iter()
+            .filter_map(|tag| find_open_tag(rest, tag).map(|at| (at, *tag)))
+            .min_by_key(|(at, _)| *at)
+        else {
+            break;
+        };
+        let slice = &rest[start..];
+        let closed = element_span(slice, tag).map(|(_, end)| end).unwrap_or(slice.len());
+        // An unclosed <p> ends where the next one starts.
+        let end = if tag == "p" {
+            find_open_tag(&slice[1..], "p").map(|at| at + 1).unwrap_or(slice.len()).min(closed)
+        } else {
+            closed
+        };
+        let block = &slice[..end];
+        if !visible_text(block).is_empty() {
+            prose.push_str(block);
+            prose.push('\n');
+        }
+        rest = &slice[end..];
+    }
+    (visible_text_len(&prose) >= MIN_EXTRACTED_TEXT).then_some(prose)
 }
 
 // Walk common Next.js / framework JSON shapes to find a long article-body
@@ -1201,6 +1247,47 @@ mod reader_fallback_tests {
         let extracted = extract_main_content_block(&html).unwrap();
         assert!(extracted.contains("The piece explains the ruling"));
         assert!(!extracted.contains("Related reading"));
+    }
+
+    // A real Ars Technica page: the story is split into three `post-content`
+    // blocks in separate grid rows, and the article opens with a text-size
+    // panel built from buttons, labels and selects.
+    const ARS_SPLIT_STORY: &str =
+        include_str!("../../../native/SkimNative/SkimIOSTests/Fixtures/ars-technica-split-story.html");
+
+    #[test]
+    fn split_stories_keep_every_chunk_and_drop_the_settings_panel() {
+        let result = extract_reader_html(
+            ARS_SPLIT_STORY,
+            "https://arstechnica.com/tech-policy/2026/10/trump-mobile-doesnt-seem-to-have-fcc-authorization-for-phone-service-senator-says/",
+        )
+        .unwrap();
+        let text = visible_text(&result.html);
+        assert!(text.starts_with("Trump Mobile apparently failed to obtain"), "{}", &text[..200]);
+        // First, middle and last chunks.
+        assert!(text.contains("Hassan alleged that Trump Mobile failed to follow"));
+        assert!(text.contains("Ties to Liberty Mobile raise questions"));
+        assert!(text.contains("Senator demands answers"));
+        assert!(text.ends_with("using taxpayer funds for propaganda."));
+        for chrome in ["Text settings", "Story text", "Subscribers only", "Minimize to nav"] {
+            assert!(!text.contains(chrome), "reader text leaked {chrome:?}");
+        }
+    }
+
+    #[test]
+    fn article_prose_skips_form_controls() {
+        let html = format!(
+            "<article><div><button>Text settings</button><label>Size</label>\
+             <select><option>Small</option><option>Large</option></select></div>\
+             <p>{}</p><h2>Next part</h2><p>{}</p></article>",
+            long_body(),
+            long_body()
+        );
+        let prose = extract_article_prose(&html).unwrap();
+        let text = visible_text(&prose);
+        assert!(text.starts_with("The piece explains the ruling"));
+        assert!(text.contains("Next part"));
+        assert!(!text.contains("Text settings") && !text.contains("Small"));
     }
 
     #[test]

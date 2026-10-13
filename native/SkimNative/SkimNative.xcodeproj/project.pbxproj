@@ -37,6 +37,7 @@
 		A20D6777CCE9FF23884FB7F1 /* NativeClaudeOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0090C5D509EB383DECB63AC /* NativeClaudeOAuth.swift */; };
 		AFD473138D9923FB717FE9E2 /* NativeAIGuardrailRefusalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D15E5B261AE4E05EEAE52DC /* NativeAIGuardrailRefusalTests.swift */; };
 		B953F0D786947B4765B2827E /* hackernoon-9m0.html in Resources */ = {isa = PBXBuildFile; fileRef = 7F972FCF70051CCDDFB99F04 /* hackernoon-9m0.html */; };
+		A4C1E7F2093B5D8E6F7A1B2C /* ars-technica-split-story.html in Resources */ = {isa = PBXBuildFile; fileRef = D2B8F5A1C7E3094B6A1F2E3D /* ars-technica-split-story.html */; };
 		BCE83B6AED9AC4923D1F9A6D /* NativeAIDegenerateRepetitionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC1D459A8E191D2264A703F /* NativeAIDegenerateRepetitionTests.swift */; };
 		C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BCD3DD03D305C558D07614 /* NativeAI.swift */; };
 		C1D91C8A78E543F0F69FFE82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0C79E51007F91AE5C8286F40 /* Assets.xcassets */; };
@@ -88,6 +89,7 @@
 		6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleListView.swift; sourceTree = "<group>"; };
 		7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleExtractor.swift; sourceTree = "<group>"; };
 		7F972FCF70051CCDDFB99F04 /* hackernoon-9m0.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = "hackernoon-9m0.html"; sourceTree = "<group>"; };
+		D2B8F5A1C7E3094B6A1F2E3D /* ars-technica-split-story.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = "ars-technica-split-story.html"; sourceTree = "<group>"; };
 		8387834F563CFA86721EBF1D /* LegalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegalView.swift; sourceTree = "<group>"; };
 		89737FFF993802E562860605 /* AIDisclaimerLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDisclaimerLabel.swift; sourceTree = "<group>"; };
 		8A1B88832F456973EA297F0F /* NativeWebSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeWebSearch.swift; sourceTree = "<group>"; };
@@ -148,6 +150,7 @@
 		2491A6F269A3E3AB095AC9AD /* Fixtures */ = {
 			isa = PBXGroup;
 			children = (
+				D2B8F5A1C7E3094B6A1F2E3D /* ars-technica-split-story.html */,
 				7F972FCF70051CCDDFB99F04 /* hackernoon-9m0.html */,
 			);
 			path = Fixtures;
@@ -391,6 +394,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A4C1E7F2093B5D8E6F7A1B2C /* ars-technica-split-story.html in Resources */,
 				B953F0D786947B4765B2827E /* hackernoon-9m0.html in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

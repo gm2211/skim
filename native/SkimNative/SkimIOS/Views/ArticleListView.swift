@@ -466,15 +466,25 @@ struct ArticleListView: View {
         }
     }
 
-    /// The list title with its count underneath.
+    /// The list title with its count underneath. On Today the title is the
+    /// paper's nameplate, and the only header: the page below it opens with
+    /// its dateline, not a second "Today".
     private var topBarTitle: some View {
         VStack(spacing: 1) {
             Text(compactTitle)
-                .font(.system(size: 17, weight: .bold))
+                .font(showToday
+                      ? .system(size: 26, weight: .bold, design: .serif)
+                      : .system(size: 17, weight: .bold))
                 .foregroundStyle(SkimStyle.text)
                 .lineLimit(1)
 
-            if model.isLoading {
+            if showToday {
+                if model.isLoading {
+                    Text("Checking feeds...")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+            } else if model.isLoading {
                 Text("Syncing...")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(SkimStyle.secondary)

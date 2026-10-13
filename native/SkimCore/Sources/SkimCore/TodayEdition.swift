@@ -178,6 +178,13 @@ struct TodayEditionCandidate: Sendable {
     var memberRevisions: [TodayStoryRevisionReference] = []
     var semanticScore: Double? = nil
     var semanticReason: String? = nil
+
+    /// When the story reached this device: the later of its last activity and
+    /// the fetch that brought any of its reports. A report published before a
+    /// page was made but fetched after it is still new to that page.
+    var arrivedAt: Date {
+        max(ranking.story.lastActivityAt, sourceArticles.map(\.article.fetchedAt).max() ?? .distantPast)
+    }
 }
 
 struct TodayEditionCandidateSource: Sendable, Equatable {

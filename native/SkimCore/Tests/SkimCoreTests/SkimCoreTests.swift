@@ -1021,6 +1021,26 @@ import Testing
     #expect(kept.items.count == 3)
 }
 
+/// iOS fetches feeds after Today has made its page, so reports published
+/// before the page was made still have to grow it when they land.
+@Test func todayEditionGrowsWithReportsFetchedAfterItWasMade() async throws {
+    let store = try temporaryStore()
+    let startsAt = Date(timeIntervalSince1970: 100_000)
+    let endsAt = Date(timeIntervalSince1970: 186_400)
+    _ = try await seedTodayStory(store: store, storyID: "last-evening", sourceCount: 2, timestamp: 90_000)
+    let first = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt, endsAt: endsAt, storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 130_000))
+    #expect(Set(first.items.map(\.snapshot.storyID)) == ["last-evening"])
+
+    // Published at 09:00, fetched at 09:03, after the page was made at 09:01.
+    _ = try await seedTodayStory(
+        store: store, storyID: "morning", sourceCount: 2, timestamp: 129_000, fetchedAt: 130_200)
+    let grown = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt, endsAt: endsAt, storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 130_300))
+    #expect(grown.id == first.id)
+    #expect(Set(grown.items.map(\.snapshot.storyID)) == ["last-evening", "morning"])
+}
+
 @Test func todayEditionEarlierWeekPageCoversItsWindowAndSkipsWhatTodayConsumed() async throws {
     let store = try temporaryStore()
     let dayStart: TimeInterval = 1_728_000
@@ -1429,6 +1449,7 @@ private func clusteringArticle(
     content: String? = nil,
     url: String? = nil,
     timestamp: TimeInterval,
+    fetchedAt: TimeInterval? = nil,
     isRead: Bool = false,
     isStarred: Bool = false
 ) -> Article {
@@ -1440,7 +1461,7 @@ private func clusteringArticle(
         url: url.flatMap(URL.init(string:)),
         contentText: content,
         publishedAt: Date(timeIntervalSince1970: timestamp),
-        fetchedAt: Date(timeIntervalSince1970: timestamp),
+        fetchedAt: Date(timeIntervalSince1970: fetchedAt ?? timestamp),
         isRead: isRead,
         isStarred: isStarred
     )
@@ -1474,6 +1495,7 @@ private func seedTodayStory(
     storyID: String,
     sourceCount: Int,
     timestamp: TimeInterval,
+    fetchedAt: TimeInterval? = nil,
     isUpdate: Bool = false
 ) async throws -> [String] {
     var articles: [Article] = []
@@ -1490,7 +1512,8 @@ private func seedTodayStory(
             title: "Development report concerning \(storyID.uppercased()) source \(index)",
             content: "Source \(index) reports the \(storyID) development.",
             url: "https://news.example/\(storyID)/\(index)",
-            timestamp: timestamp + TimeInterval(index)
+            timestamp: timestamp + TimeInterval(index),
+            fetchedAt: fetchedAt
         )
         try await store.upsert(feed: feed, articles: [article])
         articles.append(article)

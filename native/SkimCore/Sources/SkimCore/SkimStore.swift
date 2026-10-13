@@ -327,11 +327,12 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             preferences: preferences
         )
         // A short unread page grows only when more stories have arrived since
-        // it was made; otherwise keep it and skip the planning call.
+        // it was made (published or fetched after it); otherwise keep it and
+        // skip the planning call.
         if let existing, !existing.items.isEmpty {
             let covered = try db.coveredStoryIDs(editionID: editionID)
             let arrived = candidates.contains {
-                $0.ranking.story.lastActivityAt > existing.edition.generatedAt
+                $0.arrivedAt > existing.edition.generatedAt
                     && !covered.contains($0.ranking.story.id)
             }
             if !arrived { return existing }

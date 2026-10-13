@@ -405,7 +405,12 @@ struct SummaryConfigurationSheet: View {
         _isEditingFocus = State(initialValue: !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
-    private var presets: [SummaryPreset] { [lastUsed] + SummaryPreset.standard }
+    /// "Again" only shows when the last run differs from every standard preset.
+    private var presets: [SummaryPreset] {
+        let standard = SummaryPreset.standard
+        let repeatsStandard = standard.contains { $0.style == lastUsed.style && $0.wordCount == lastUsed.wordCount }
+        return repeatsStandard ? standard : [lastUsed] + standard
+    }
 
     /// First preset matching the current choices; "Again" wins a tie.
     private var selectedPreset: SummaryPreset? {
@@ -414,45 +419,62 @@ struct SummaryConfigurationSheet: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text(article.title)
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(SkimStyle.secondary)
-                        .lineLimit(2)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        Text(article.title)
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .lineLimit(2)
 
-                    SummaryPreviewCard(style: style, wordCount: wordCount)
+                        SummaryPreviewCard(style: style, wordCount: wordCount)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Presets")
-                            .summaryControlLabel()
-                        presetRow
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Presets")
+                                .summaryControlLabel()
+                            presetRow
+                        }
+
+                        customizeCard
+
+                        Text("These choices, including the model, are saved as your new defaults when you run.")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-
-                    customizeCard
-
-                    Text("These choices, including the model, are saved as your new defaults when you run.")
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(SkimStyle.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 4)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 4)
-                .padding(.bottom, 16)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .safeAreaInset(edge: .bottom, spacing: 0) { runButton }
-            .background(SkimStyle.chrome.ignoresSafeArea())
-            .scrollContentBackground(.hidden)
-            .navigationTitle("Summarize")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
+                .onChange(of: isFocusFieldActive) { _, isActive in
+                    guard isActive else { return }
+                    Task { @MainActor in
+                        // Wait for the keyboard and the field's reveal to settle,
+                        // then lift the whole field clear of the Summarize button.
+                        try? await Task.sleep(for: .milliseconds(350))
+                        withAnimation(.smooth(duration: 0.25)) { proxy.scrollTo(Self.focusFieldID, anchor: .bottom) }
+                    }
+                }
+                .onChange(of: customPrompt) {
+                    guard isFocusFieldActive else { return }
+                    proxy.scrollTo(Self.focusFieldID, anchor: .bottom)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .safeAreaInset(edge: .bottom, spacing: 0) { runButton }
+                .background(SkimStyle.chrome.ignoresSafeArea())
+                .scrollContentBackground(.hidden)
+                .navigationTitle("Summarize")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Cancel") { dismiss() }
+                    }
                 }
             }
         }
     }
+
+    private static let focusFieldID = "summary-focus-field"
 
     private var presetRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -567,6 +589,7 @@ struct SummaryConfigurationSheet: View {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .stroke(SkimStyle.separator, lineWidth: 1)
                             }
+                            .id(Self.focusFieldID)
                     }
                 }
                 .padding(.horizontal, 14)
@@ -716,7 +739,7 @@ private struct SummaryPresetTile: View {
             }
             .padding(.horizontal, 11)
             .padding(.vertical, 10)
-            .frame(width: 112, height: isCompact ? 56 : 92, alignment: .leading)
+            .frame(width: 124, height: isCompact ? 56 : 92, alignment: .leading)
             .background(
                 isSelected
                     ? AnyShapeStyle(LinearGradient(colors: [SkimStyle.accent.opacity(0.18), SkimStyle.accent.opacity(0.05)], startPoint: .top, endPoint: .bottom))

@@ -1,3 +1,4 @@
+import SafariServices
 import SkimCore
 import SwiftUI
 import UIKit
@@ -69,7 +70,6 @@ struct NativeAIProviderChoice: Identifiable {
 
 struct SettingsSheet: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.openURL) private var openURL
     @Binding var isPresented: Bool
     @State private var draft = AppSettings()
     @State private var activeTab: SettingsTab = .ai
@@ -372,13 +372,11 @@ struct SettingsSheet: View {
                 ai: aiSettingsBinding,
                 apiKeyText: aiAPIKeyBinding,
                 providerIsReady: providerIsReady,
-                openURL: { url in openURL(url) },
                 onSignedIn: { aiTab = .model }
             )
         case "xai":
             SuperGrokSignInPanel(
                 isSignedIn: $xaiSignedIn,
-                openURL: { url in openURL(url) },
                 onSignedIn: { aiTab = .model }
             )
             SettingsTextField(
@@ -969,10 +967,11 @@ private struct ProviderChoiceRow: View {
 /// and wait. The token stays in this iPhone's Keychain.
 private struct SuperGrokSignInPanel: View {
     @Binding var isSignedIn: Bool
-    var openURL: (URL) -> Void
     var onSignedIn: () -> Void
 
     @State private var device: XAIDeviceStart?
+    /// xAI's approval page, shown in-app so Skim stays in front and keeps polling.
+    @State private var signInPage: SignInPage?
     @State private var isStarting = false
     @State private var errorMessage: String?
     @State private var attempt: Task<Void, Never>?
@@ -1003,6 +1002,7 @@ private struct SuperGrokSignInPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(SkimStyle.chrome.opacity(0.62), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onDisappear { attempt?.cancel() }
+        .inAppSignInPage($signInPage)
     }
 
     private var connectRow: some View {
@@ -1055,7 +1055,7 @@ private struct SuperGrokSignInPanel: View {
             }
             HStack(spacing: 10) {
                 Button {
-                    openURL(device.verificationURIComplete)
+                    signInPage = SignInPage(url: device.verificationURIComplete)
                 } label: {
                     Text("Open xAI")
                         .font(.system(size: 15, weight: .semibold))
@@ -1110,12 +1110,13 @@ private struct SuperGrokSignInPanel: View {
             defer {
                 isStarting = false
                 device = nil
+                signInPage = nil
             }
             do {
                 let started = try await NativeXAIOAuth.beginDevice()
                 device = started
                 isStarting = false
-                openURL(started.verificationURIComplete)
+                signInPage = SignInPage(url: started.verificationURIComplete)
                 try await NativeXAIOAuth.completeDevice(started)
                 isSignedIn = true
                 onSignedIn()
@@ -1738,7 +1739,6 @@ private struct ClaudeAuthSection: View {
     @Binding var ai: AISettings
     var apiKeyText: Binding<String>
     var providerIsReady: Bool
-    var openURL: (URL) -> Void
     var onSignedIn: () -> Void
 
     /// Whether the "API token instead" disclosure starts expanded. Defaults
@@ -1747,11 +1747,10 @@ private struct ClaudeAuthSection: View {
     /// relying on a manually pasted token and should keep seeing that field.
     @State private var showAPIToken: Bool
 
-    init(ai: Binding<AISettings>, apiKeyText: Binding<String>, providerIsReady: Bool, openURL: @escaping (URL) -> Void, onSignedIn: @escaping () -> Void) {
+    init(ai: Binding<AISettings>, apiKeyText: Binding<String>, providerIsReady: Bool, onSignedIn: @escaping () -> Void) {
         self._ai = ai
         self.apiKeyText = apiKeyText
         self.providerIsReady = providerIsReady
-        self.openURL = openURL
         self.onSignedIn = onSignedIn
         let hasManualToken = ai.wrappedValue.apiKey?.nilIfEmpty != nil
         let hasOAuthRefreshToken = ClaudeKeychainStore.loadRefreshToken() != nil
@@ -1760,9 +1759,7 @@ private struct ClaudeAuthSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ClaudeOAuthPastePanel(ai: $ai, onSignedIn: onSignedIn, collapseWhenSignedIn: providerIsReady) { url in
-                openURL(url)
-            }
+            ClaudeOAuthPastePanel(ai: $ai, onSignedIn: onSignedIn, collapseWhenSignedIn: providerIsReady)
 
             Button {
                 withAnimation(.easeInOut(duration: 0.16)) {
@@ -1797,7 +1794,7 @@ private struct ClaudeAuthSection: View {
 
 /// Sign-in panel for Claude Pro/Max.
 ///
-/// Opens Claude's sign-in page in Safari via the paste flow (the only supported
+/// Opens Claude's sign-in page in an in-app browser via the paste flow (the only supported
 /// path). The user copies the code from the Anthropic success page and pastes it
 /// here to complete authentication.
 struct ClaudeOAuthPastePanel: View {
@@ -1809,8 +1806,6 @@ struct ClaudeOAuthPastePanel: View {
     /// Defaults to false so existing callers (e.g. ClaudeReauthSheet, which
     /// always wants the full flow front and center) are unaffected.
     var collapseWhenSignedIn: Bool = false
-    /// Used to open the Anthropic OAuth page in Safari.
-    var openURL: (URL) -> Void
 
     // MARK: State
 
@@ -1820,6 +1815,9 @@ struct ClaudeOAuthPastePanel: View {
     @State private var isWorking = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
+    /// Claude's authorize page, shown in-app: the reader copies the code there,
+    /// taps Done, and pastes it without leaving Skim.
+    @State private var signInPage: SignInPage?
 
     private var isSignedIn: Bool {
         ai.apiKey?.nilIfEmpty != nil
@@ -1847,6 +1845,7 @@ struct ClaudeOAuthPastePanel: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(SkimStyle.chrome.opacity(0.62), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .inAppSignInPage($signInPage)
     }
 
     // MARK: Sub-views
@@ -1909,7 +1908,7 @@ struct ClaudeOAuthPastePanel: View {
                 Text("Sign in with Claude")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(SkimStyle.text)
-                Text("Opens Claude's sign-in page in Safari. Paste the code shown on the Anthropic page to finish signing in.")
+                Text("Opens Claude's sign-in page here in Skim. Copy the code it shows, tap Done, and paste it below.")
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(SkimStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1983,7 +1982,7 @@ struct ClaudeOAuthPastePanel: View {
             let next = try NativeClaudeOAuth.beginPasteFlow()
             pasteFlow = next
             pastedCode = ""
-            openURL(next.authorizeURL)
+            signInPage = SignInPage(url: next.authorizeURL)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -2289,5 +2288,37 @@ private struct SettingMetric: View {
                 .textCase(.uppercase)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - In-app sign-in page
+
+/// A provider's sign-in page to show inside Skim.
+struct SignInPage: Identifiable {
+    let url: URL
+    var id: URL { url }
+}
+
+private struct SafariSignInView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let controller = SFSafariViewController(url: url)
+        controller.dismissButtonStyle = .done
+        controller.preferredControlTintColor = UIColor(SkimStyle.accent)
+        return controller
+    }
+
+    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+}
+
+extension View {
+    /// Shows sign-in pages in an in-app Safari sheet rather than switching to Safari:
+    /// leaving the app suspends Skim, which cut off the SuperGrok poll mid-request.
+    func inAppSignInPage(_ page: Binding<SignInPage?>) -> some View {
+        sheet(item: page) { page in
+            SafariSignInView(url: page.url)
+                .ignoresSafeArea()
+        }
     }
 }

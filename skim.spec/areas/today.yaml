@@ -47,6 +47,19 @@ behaviors:
     description: >-
       A story's preview is an exact passage from one named source, one to three sentences and at
       most 60 words, so it never puts words in a publisher's mouth.
+    details: >-
+      The model picks the passage; when its pick fails the check or the model can't be reached,
+      the preview is the first verified passage of one or two whole sentences taken without a
+      model, skipping a byline run into the first sentence. Apple's on-device model reads two
+      reports of up to 1,500 characters so the request fits its context. "Some summaries are
+      missing" offers Retry only for stories a retry could fill, not for stories whose reports
+      have no whole sentence to quote. Titles show first; each card's summary slot shows an
+      animated placeholder while its passage is written.
+    source:
+      text: >-
+        I only see titles not summaries, it's ok to get to titles first and do summaries async
+        (with beautiful slightly animated placeholders) but no summaries?
+      reference: Giulio, project chat, 2026-10-13, after "It retries but then shows up again"
   - id: whats-new
     description: When a story gains new coverage after the edition was made, it shows a "What's new" line.
   - id: read-progress
@@ -71,7 +84,11 @@ behaviors:
       label to sit on one line with its control inside it. Missing summaries show as a note with
       Retry in the dateline instead of a loose button. On iOS the paper has one header: the title
       bar carries the serif "Today" nameplate between its icons, and the page below opens with the
-      dateline rule, never a second "Today" or a repeated count.
+      dateline rule, never a second "Today" or a repeated count. While a page is being made, both
+      platforms show the page's shape as shimmering placeholders (lead, stories, briefs) with no
+      invented content, never a bare spinner; on iOS a status line above them says when the feeds
+      are being checked. The iOS page strip names the front page on the left and offers "Last
+      week" on the right; later pages centre the page between equal-width turns.
     source:
       text: >-
         I like A on desktop, C on mobile. There should be some margin from the top - also maybe just a

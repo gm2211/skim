@@ -50,6 +50,76 @@ public enum TodayLedePolicy {
         return selection(candidate: plain, sources: sources)
     }
 
+    /// A verified passage chosen without a model: the earliest run of one or
+    /// two whole sentences, from the first report that has one, that passes
+    /// the same check a model's choice must pass. The fallback when the
+    /// model's choice fails or the model can't be reached, so a story shows a
+    /// real passage from a named source rather than nothing; asking the same
+    /// model again at temperature 0 would fail the same way.
+    public static func extractiveSelection(sources: [String], minimumWords: Int = 6) -> Selection? {
+        for source in sources {
+            var tried = 0
+            for paragraph in paragraphs(in: source) {
+                for start in paragraph.sentences.indices where start > 0 || !paragraph.opensWithFragment {
+                    tried += 1
+                    if tried > 12 { break }
+                    for count in [2, 1] where start + count <= paragraph.sentences.count {
+                        let passage = paragraph.sentences[start..<(start + count)].joined(separator: " ")
+                        let words = passage.split(whereSeparator: \.isWhitespace).count
+                        guard words >= minimumWords, words <= 60 else { continue }
+                        if let selection = selection(candidate: passage, sources: sources) { return selection }
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    struct Paragraph: Equatable {
+        var sentences: [String]
+        /// The first sentence runs on from a line with no terminal mark (a
+        /// byline or a stub such as "Comments"), so it is not a clean lede.
+        var opensWithFragment: Bool
+    }
+
+    /// Splits text the way the passage check reads it: paragraphs at blank
+    /// lines, single line breaks as spaces, sentences at a terminal mark
+    /// (with any closing quote or bracket) followed by whitespace. Text after
+    /// the last terminal mark is no sentence. Abbreviations may split
+    /// wrongly; the check rejects those passages.
+    static func paragraphs(in text: String) -> [Paragraph] {
+        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        var result: [Paragraph] = []
+        for block in normalized.components(separatedBy: "\n\n") {
+            let lines = block.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            guard !lines.isEmpty else { continue }
+            let opensWithFragment = lines.count > 1 && !(lines[0].last.map { ".!?\"”’')]".contains($0) } ?? false)
+            let characters = Array(lines.joined(separator: " "))
+            var sentences: [String] = []
+            var current = ""
+            var index = 0
+            while index < characters.count {
+                current.append(characters[index])
+                if ".!?".contains(characters[index]) {
+                    var end = index + 1
+                    while end < characters.count, "\"”’')]".contains(characters[end]) {
+                        current.append(characters[end]); end += 1
+                    }
+                    if end >= characters.count || characters[end].isWhitespace {
+                        let sentence = current.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+                        if !sentence.isEmpty { sentences.append(sentence) }
+                        current = ""
+                    }
+                    index = end
+                    continue
+                }
+                index += 1
+            }
+            if !sentences.isEmpty { result.append(Paragraph(sentences: sentences, opensWithFragment: opensWithFragment)) }
+        }
+        return result
+    }
+
     /// Retry only a returned but invalid selection, never a failed provider request.
     public static func generateExcerpt(
         sources: [String],

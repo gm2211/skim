@@ -304,11 +304,16 @@ final class AppModel: ObservableObject {
             ($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         guard !pending.isEmpty else { return }
+        // Stories with no whole sentence in any report (a link post whose
+        // page can't be fetched) can't get a lede, and retrying won't change
+        // that, so they don't keep "Some summaries are missing" on the page.
+        var unwritable = Set<String>()
         defer {
             if todayLoadID == requestID {
                 todayLedeStatus = nil
                 todayLedeNeedsRetry = todayEdition?.items.prefix(limit).contains {
                     ($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        && !unwritable.contains($0.snapshot.storyID)
                 } ?? false
             }
         }
@@ -330,7 +335,7 @@ final class AppModel: ObservableObject {
                 return copy
             }
             let evidenceStore = store
-            guard let articles = try? await TodayReaderEvidence.resolve(
+            let resolved = try? await TodayReaderEvidence.resolve(
                 articles: feedArticles, limit: TodayLedePolicy.maxArticles,
                 cached: { article in
                     let disk = ArticleReaderContentLoader.sanitizedText(try? await evidenceStore.cachedReaderText(articleID: article.id)) ?? ""
@@ -338,18 +343,35 @@ final class AppModel: ObservableObject {
                     return memory.count > disk.count ? memory : disk
                 },
                 fetch: { article in try await ArticleReaderContentLoader.loadText(for: article).text }
-            ), !articles.isEmpty else {
-                if Task.isCancelled { return }
+            )
+            if Task.isCancelled { return }
+            // A failed fetch still leaves the feed's own text to quote from.
+            let articles = (resolved ?? []).isEmpty
+                ? feedArticles.filter { !($0.contentText ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                : resolved ?? []
+            guard !articles.isEmpty else {
+                unwritable.insert(item.snapshot.storyID)
                 continue
             }
             guard !Task.isCancelled, todayLoadID == requestID else { return }
 
-            // One story failing to write is not worth losing the page over.
-            guard let preview = try? await NativeAI.catchUpPreview(
-                headline: item.snapshot.snapshotTitle,
-                articles: articles,
-                settings: settings
-            ) else { continue }
+            // One story failing to write is not worth losing the page over. A
+            // nil preview means no report has a whole sentence to quote.
+            let preview: NativeAI.TodayPreview?
+            do {
+                preview = try await NativeAI.catchUpPreview(
+                    headline: item.snapshot.snapshotTitle,
+                    articles: articles,
+                    settings: settings
+                )
+            } catch {
+                if Task.isCancelled { return }
+                continue
+            }
+            guard let preview else {
+                unwritable.insert(item.snapshot.storyID)
+                continue
+            }
 
             guard !Task.isCancelled, todayLoadID == requestID, todayEdition?.id == editionID else { return }
             if let updated = try? await store.setTodayEditionItemLede(

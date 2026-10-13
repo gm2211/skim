@@ -682,8 +682,13 @@ enum NativeAI {
     ) async throws -> TodayPreview? {
         guard !articles.isEmpty else { return nil }
 
-        let selected = Array(articles.prefix(TodayLedePolicy.maxArticles))
-        let bodies = selected.map { String(String.UnicodeScalarView($0.plainBody.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars.prefix(TodayLedePolicy.textCharacters))) }
+        // Apple's on-device model has a small context window: four reports
+        // of 3,000 characters each overflowed it, so every lede failed and
+        // Retry failed the same way. It reads two shorter reports instead.
+        let onDevice = settings.ai.provider == "foundation-models"
+        let selected = Array(articles.prefix(onDevice ? 2 : TodayLedePolicy.maxArticles))
+        let characters = onDevice ? 1_500 : TodayLedePolicy.textCharacters
+        let bodies = selected.map { String(String.UnicodeScalarView($0.plainBody.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars.prefix(characters))) }
         let text = zip(selected, bodies).map { article, body in
             "--- \(article.title) [\(PublicationName.of(article: article))]\n\(body)"
         }.joined(separator: "\n\n")
@@ -695,11 +700,24 @@ enum NativeAI {
         \(text)
         """
         // Both attempts use the same evidence; the plain retry cannot authorize rewrites.
-        let selection = try await TodayLedePolicy.generateSelection(sources: bodies) { instructions, jsonMode in
-            try await complete(settings: settings, instructions: instructions, prompt: prompt,
-                maxTokens: 300, jsonMode: jsonMode, temperature: 0)
+        // When the model's choice fails the passage check, or the model can't
+        // be reached, the lede is the first verified passage taken without a
+        // model: asking again at temperature 0 fails the same way, which is
+        // why "Some summaries are missing" came straight back after Retry.
+        let modelSelection: TodayLedePolicy.Selection?
+        do {
+            modelSelection = try await TodayLedePolicy.generateSelection(sources: bodies) { instructions, jsonMode in
+                try await complete(settings: settings, instructions: instructions, prompt: prompt,
+                    maxTokens: 300, jsonMode: jsonMode, temperature: 0)
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            if Task.isCancelled { throw CancellationError() }
+            print("[NativeAI] Today lede request failed (\(error.localizedDescription)); using a verified source passage.")
+            modelSelection = nil
         }
-        guard let selection else { return nil }
+        guard let selection = modelSelection ?? TodayLedePolicy.extractiveSelection(sources: bodies) else { return nil }
         return TodayPreview(excerpt: selection.excerpt,
             sourceArticleID: selected[selection.sourceIndex].id,
             sourceEvidenceHash: selection.evidenceHash)

@@ -30,8 +30,7 @@ struct TodayEditionView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if model.isLoadingToday {
-                        ProgressView("Loading today’s edition…")
-                            .frame(maxWidth: .infinity, minHeight: 200)
+                        TodayPageSkeleton()
                     } else {
                         if let error = model.todayError {
                             VStack(alignment: .leading, spacing: 12) {
@@ -104,28 +103,31 @@ struct TodayEditionView: View {
     }
 
     /// The foot of the page: where the paper turns, and which page this is.
+    /// The front page has nothing newer, so it names itself on the left and
+    /// turns back on the right; later pages put the page between the turns,
+    /// with both turns the same width so the label stays centred.
     private var pageBar: some View {
-        HStack {
-            // The front page has nothing newer: its left button is blank so
-            // the bar keeps its shape.
-            Button(model.todayPage == 2 ? "Today" : "Previous page") { turn(to: model.todayPage - 1) }
-                .disabled(model.todayPage <= 1)
-                .opacity(model.todayPage <= 1 ? 0 : 1)
-                .accessibilityHidden(model.todayPage <= 1)
-            Spacer()
-            VStack(spacing: 1) {
-                Text(model.todayPage == 1 ? "Front page" : "Page \(model.todayPage)")
-                    .font(.system(size: 12, weight: .semibold))
-                if let edition = model.todayEdition {
-                    Text(Self.dateline(for: edition.edition))
-                        .font(.system(size: 11))
-                        .foregroundStyle(SkimStyle.secondary)
+        HStack(spacing: 12) {
+            if model.todayPage <= 1 {
+                pageLabel(alignment: .leading)
+                Spacer(minLength: 8)
+                Button { turn(to: 2) } label: {
+                    Label("Last week", systemImage: "chevron.right").labelStyle(TrailingIconLabel())
                 }
-            }
-            Spacer()
-            Button(model.todayPage == 1 ? "Last week" : "Next page") { turn(to: model.todayPage + 1) }
+            } else {
+                Button { turn(to: model.todayPage - 1) } label: {
+                    Label(model.todayPage == 2 ? "Today" : "Newer", systemImage: "chevron.left")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                pageLabel(alignment: .center)
+                    .layoutPriority(1)
+                Button { turn(to: model.todayPage + 1) } label: {
+                    Label("Older", systemImage: "chevron.right").labelStyle(TrailingIconLabel())
+                }
                 .disabled(model.todayPage >= AppModel.todayPageCount)
                 .opacity(model.todayPage >= AppModel.todayPageCount ? 0.35 : 1)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
         }
         .font(.system(size: 14, weight: .medium))
         .foregroundStyle(SkimStyle.text)
@@ -133,6 +135,19 @@ struct TodayEditionView: View {
         .padding(.vertical, 10)
         .background(SkimStyle.chrome)
         .overlay(alignment: .top) { Rectangle().fill(SkimStyle.separator.opacity(0.4)).frame(height: 1) }
+    }
+
+    private func pageLabel(alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 1) {
+            Text(model.todayPage == 1 ? "Front page" : "Page \(model.todayPage)")
+                .font(.system(size: 12, weight: .semibold))
+            if let edition = model.todayEdition {
+                Text(Self.dateline(for: edition.edition))
+                    .font(.system(size: 11))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+            }
+        }
     }
 
     /// One day's date, or the span of a wider window ("October 6 – 12").
@@ -284,8 +299,8 @@ struct TodayEditionView: View {
     private var emptyEdition: some View {
         VStack(alignment: .leading, spacing: 12) {
             if model.isCheckingFeedsForToday || model.isLoading {
-                ProgressView("Checking your feeds for today’s stories…")
-                    .frame(maxWidth: .infinity, minHeight: 160)
+                TodayWritingRule(status: "Checking your feeds for today’s stories")
+                TodayPageSkeleton()
             } else {
                 Image(systemName: SkimIcon.today).font(.largeTitle).foregroundStyle(SkimStyle.accent)
                 Text(model.todayPage == 1 ? "Nothing published today yet" : "No stories that week")
@@ -901,6 +916,104 @@ private struct TodayLedeSkeleton: View {
 
     private var widths: [CGFloat] {
         lead ? [1.0, 0.92, 0.68] : [1.0, 0.78]
+    }
+}
+
+/// Title then icon, for the turns that point forward ("Last week ›").
+private struct TrailingIconLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.title
+            configuration.icon.font(.system(size: 12, weight: .semibold))
+        }
+    }
+}
+
+/// The page's shape while it is being made, the iOS counterpart of the
+/// desktop's story skeletons: a full-bleed lead, story cards, then a two-up
+/// grid of briefs, all as shimmering blocks with no invented content.
+struct TodayPageSkeleton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: CGFloat = -1
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                block(height: 220, radius: 0).padding(.horizontal, -18)
+                bars([0.3], height: 8)
+                bars([0.94, 0.78, 0.56], height: 18)
+                bars([0.96, 0.96, 0.68], height: 10).padding(.top, 4)
+            }
+            ForEach(0..<3, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 10) {
+                    Rectangle().fill(SkimStyle.separator).frame(height: 3)
+                    VStack(alignment: .leading, spacing: 10) {
+                        bars([0.32], height: 8)
+                        bars([0.92, 0.64], height: 15)
+                        bars([0.96, 0.7], height: 9)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                }
+                .background(SkimStyle.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(SkimStyle.separator, lineWidth: 1))
+            }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(0..<4, id: \.self) { _ in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Rectangle().fill(SkimStyle.separator).frame(height: 3)
+                        VStack(alignment: .leading, spacing: 8) {
+                            bars([0.5], height: 7)
+                            bars([0.94, 0.8, 0.5], height: 12)
+                        }
+                        .padding(.horizontal, 12)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
+                    .background(SkimStyle.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(SkimStyle.separator, lineWidth: 1))
+                }
+            }
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) { phase = 1 }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Preparing today’s stories")
+    }
+
+    private func bars(_ widths: [CGFloat], height: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: height * 0.55) {
+            ForEach(Array(widths.enumerated()), id: \.offset) { _, width in
+                GeometryReader { proxy in
+                    block(height: height, radius: height >= 12 ? 3 : height / 2)
+                        .frame(width: proxy.size.width * width)
+                }
+                .frame(height: height)
+            }
+        }
+    }
+
+    /// A placeholder block with a highlight sweeping across it.
+    private func block(height: CGFloat, radius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(SkimStyle.separator.opacity(0.75))
+            .frame(height: height)
+            .overlay {
+                if !reduceMotion {
+                    GeometryReader { proxy in
+                        LinearGradient(
+                            colors: [.clear, SkimStyle.text.opacity(0.07), .clear],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                        .frame(width: proxy.size.width * 0.6)
+                        .offset(x: phase * proxy.size.width * 1.3)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+                }
+            }
     }
 }
 

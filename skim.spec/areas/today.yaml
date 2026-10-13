@@ -12,7 +12,9 @@ behaviors:
       An edition draws on stories active in the 24 hours before it is made, so a page made just
       after midnight is not limited to the last few minutes; stories read in an earlier edition stay
       off it. Until an edition is full or the reader marks a story read, it grows when new stories
-      arrive, keeping the summaries already written. After that it is frozen for the day.
+      arrive, keeping the summaries already written. After that it is frozen for the day. Stories
+      covered by several outlets are preferred, but a page is never left short while stories remain:
+      a morning of single-source stories fills the page.
     source:
       text: just one story?
       reference: >-

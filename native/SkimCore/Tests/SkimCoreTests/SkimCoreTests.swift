@@ -1021,6 +1021,22 @@ import Testing
     #expect(kept.items.count == 3)
 }
 
+/// A morning of single-source stories fills the page: the two-unique-finds
+/// cap prefers widely covered stories but never leaves the page short.
+@Test func todayEditionOfSingleSourceStoriesFillsThePage() async throws {
+    let store = try temporaryStore()
+    let startsAt = Date(timeIntervalSince1970: 100_000)
+    let endsAt = Date(timeIntervalSince1970: 186_400)
+    for index in 0..<7 {
+        _ = try await seedTodayStory(
+            store: store, storyID: "single-\(index)", sourceCount: 1,
+            timestamp: 110_000 + TimeInterval(index * 600))
+    }
+    let edition = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt, endsAt: endsAt, storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 120_000))
+    #expect(edition.items.count == 5)
+}
+
 /// iOS fetches feeds after Today has made its page, so reports published
 /// before the page was made still have to grow it when they land.
 @Test func todayEditionGrowsWithReportsFetchedAfterItWasMade() async throws {
@@ -1752,7 +1768,7 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
             Issue.record("Full pool exceeds budget; evaluation must not run")
             return []
         })
-    #expect(result.items.count == 2) // Existing deterministic unique-find policy.
+    #expect(result.items.count == 20) // Deterministic fallback fills the page with single-source stories.
     let other = try temporaryStore()
     try await seedTodayStory(store: other, storyID: "offline", sourceCount: 1, timestamp: 100)
     let fallback = try await other.getOrGenerateTodayEdition(
@@ -1824,10 +1840,11 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
             let winner = try await store.getOrGenerateTodayEdition(
                 startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5,
                 generatedAt: Date(timeIntervalSince1970: 500))
-            #expect(winner.items.count == 2)
+            #expect(winner.items.count == 3)
             return [TodaySemanticGroup(members: [0, 1, 2], importance: 5, confidence: 1, reason: "Late grouping")]
         })
-    #expect(result.items.count == 2)
+    // The late grouping covers no story the winner's page lacks, so it can't replace it.
+    #expect(result.items.count == 3)
     #expect(result.items.allSatisfy { $0.sourceArticles.count == 1 })
 }
 

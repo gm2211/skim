@@ -58,7 +58,7 @@ import Testing
     let start = Date(timeIntervalSince1970: 0)
     let end = Date(timeIntervalSince1970: 86_400)
     let first = try await store.getOrGenerateTodayEdition(startsAt: start, endsAt: end, storyLimit: 5, generatedAt: date)
-    #expect(first.items.map(\.snapshot.storyID) == ["story-2", "story-0"])
+    #expect(first.items.map(\.snapshot.storyID) == ["story-2", "story-0", "story-1"])
     let preferences = TodayRankingPreferences(feedWeights: ["feed-1": 1],
         pinnedArticleIDs: ["article-1"])
     let reused = try await store.getOrGenerateTodayEdition(startsAt: start, endsAt: end,
@@ -66,7 +66,7 @@ import Testing
     #expect(reused.items.map(\.snapshot) == first.items.map(\.snapshot))
     let fresh = try await store.getOrGenerateTodayEdition(startsAt: start, endsAt: end,
         storyLimit: 10, generatedAt: date, preferences: preferences)
-    #expect(fresh.items.map(\.snapshot.storyID) == ["story-1", "story-2"])
+    #expect(fresh.items.map(\.snapshot.storyID) == ["story-1", "story-2", "story-0"])
 }
 
 @Test func todayUpdateSectionUsesMembershipRatherThanSummaryText() {

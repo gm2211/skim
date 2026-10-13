@@ -26,6 +26,17 @@ behaviors:
       2026-10-10.
     source:
       text: 'Chose "Add it" on the decision card asking "Add an unofficial ''Sign in with SuperGrok'' option to Skim''s xAI provider?"'
+  - id: supergrok-sign-in-survives-leaving-the-app
+    description: >-
+      On iOS, approving the SuperGrok sign-in in Safari and coming back completes the sign-in; a
+      connection dropped while Skim was in the background does not fail it.
+    details: >-
+      iOS suspends Skim while the reader is in Safari, so the token poll in flight returned "The
+      network connection was lost." and the sign-in stopped. Network blips now poll again until the
+      code expires.
+    source:
+      text: "I complete the flow but get [The network connection was lost.]"
+      reference: Giulio, project chat, 2026-10-13
   - id: feedly-sign-in
     description: >-
       Desktop: Feedly sign-in uses OAuth with a local callback and refreshes its token before it

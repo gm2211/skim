@@ -22,6 +22,12 @@ pub async fn chatgpt_oauth_sign_in(db: State<'_, Database>) -> Result<ChatGptSta
 }
 
 #[tauri::command]
+pub async fn chatgpt_oauth_cancel() -> Result<(), String> {
+    chatgpt_oauth::cancel_sign_in();
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn chatgpt_oauth_status(db: State<'_, Database>) -> Result<ChatGptStatus, String> {
     Ok(ChatGptStatus {
         signed_in: chatgpt_oauth::stored_access_token(&db).is_some(),

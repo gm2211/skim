@@ -137,12 +137,27 @@ pub async fn run_sign_in(saved_client_id: Option<String>, host_id: &str) -> Resu
     let (listener, port) = bound.ok_or("Couldn't start ChatGPT sign-in: ports 1455 and 54321 are busy.")?;
     let flow = begin_flow(port, saved_client_id.as_deref(), host_id);
     super::claude_oauth::open_browser(&flow.authorize_url)?;
-    let target = tokio::time::timeout(Duration::from_secs(600), accept_callback(&listener))
-        .await
-        .map_err(|_| "Timed out waiting for ChatGPT sign-in".to_string())??;
+    let target = tokio::select! {
+        waited = tokio::time::timeout(Duration::from_secs(600), accept_callback(&listener)) => {
+            waited.map_err(|_| "Timed out waiting for ChatGPT sign-in".to_string())??
+        }
+        _ = cancel_signal().notified() => return Err(CANCELLED.into()),
+    };
     let (code, client_id) = parse_callback(&target, &flow)?;
     let tokens = exchange_code(&code, &client_id, &flow).await?;
     Ok((tokens, client_id))
+}
+
+pub const CANCELLED: &str = "ChatGPT sign-in was cancelled.";
+
+fn cancel_signal() -> &'static tokio::sync::Notify {
+    static SIGNAL: std::sync::OnceLock<tokio::sync::Notify> = std::sync::OnceLock::new();
+    SIGNAL.get_or_init(tokio::sync::Notify::new)
+}
+
+/// Stops a sign-in that is waiting for the browser, freeing its port.
+pub fn cancel_sign_in() {
+    cancel_signal().notify_waiters();
 }
 
 async fn accept_callback(listener: &TcpListener) -> Result<String, String> {

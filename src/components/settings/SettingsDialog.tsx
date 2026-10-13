@@ -15,6 +15,7 @@ import {
   claudeOauthSignInLoopback,
   claudeOauthSignOut,
   claudeOauthStatus,
+  chatgptOauthCancel,
   chatgptOauthSignIn,
   chatgptOauthSignOut,
   chatgptOauthStatus,
@@ -962,10 +963,15 @@ function ChatGptOAuthSection({ onSignedInChange }: { onSignedInChange?: (signedI
       setEmail(status.email);
       setSignedIn(true);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+      const message = e instanceof Error ? e.message : String(e);
+      if (message !== "ChatGPT sign-in was cancelled.") setError(message);
     } finally {
       setBusy(false);
     }
+  };
+
+  const cancel = () => {
+    chatgptOauthCancel().catch(() => undefined);
   };
 
   const signOut = async () => {
@@ -1020,6 +1026,16 @@ function ChatGptOAuthSection({ onSignedInChange }: { onSignedInChange?: (signedI
       >
         {busy ? "Waiting for ChatGPT…" : "Sign in with ChatGPT"}
       </button>
+      {busy && (
+        <button
+          type="button"
+          onClick={cancel}
+          className="rounded border border-white/15 text-text-secondary hover:bg-white/5"
+          style={{ padding: "4px 10px", fontSize: 12, marginLeft: 8 }}
+        >
+          Cancel
+        </button>
+      )}
       {error && (
         <p role="alert" className="text-red-400" style={{ marginTop: 8 }}>
           {error}

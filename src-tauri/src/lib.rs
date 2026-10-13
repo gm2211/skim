@@ -299,6 +299,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::xai_oauth::xai_oauth_status,
             commands::xai_oauth::xai_oauth_sign_out,
             commands::chatgpt_oauth::chatgpt_oauth_sign_in,
+            commands::chatgpt_oauth::chatgpt_oauth_cancel,
             commands::chatgpt_oauth::chatgpt_oauth_status,
             commands::chatgpt_oauth::chatgpt_oauth_sign_out,
     ]

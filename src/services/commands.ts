@@ -170,6 +170,7 @@ export interface ChatGptStatus {
   email: string | null;
 }
 export const chatgptOauthSignIn = () => invoke<ChatGptStatus>("chatgpt_oauth_sign_in");
+export const chatgptOauthCancel = () => invoke<void>("chatgpt_oauth_cancel");
 export const chatgptOauthStatus = () => invoke<ChatGptStatus>("chatgpt_oauth_status");
 export const chatgptOauthSignOut = () => invoke<void>("chatgpt_oauth_sign_out");
 

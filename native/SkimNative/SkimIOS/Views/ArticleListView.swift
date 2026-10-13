@@ -1804,6 +1804,7 @@ private enum AutoGroupClassifier {
         switch provider {
         case "foundation-models": return "Apple Intelligence"
         case "claude-subscription": return "Claude Pro/Max"
+        case "chatgpt-subscription": return "ChatGPT"
         case "mlx": return "MLX"
         case "xai": return "Grok"
         case "openai": return "OpenAI"

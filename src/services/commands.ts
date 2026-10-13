@@ -164,6 +164,16 @@ export const xaiOauthComplete = (start: XaiDeviceStart) =>
 export const xaiOauthStatus = () => invoke<boolean>("xai_oauth_status");
 export const xaiOauthSignOut = () => invoke<void>("xai_oauth_sign_out");
 
+// Sign in with ChatGPT (loopback PKCE; plan usage)
+export interface ChatGptStatus {
+  signedIn: boolean;
+  email: string | null;
+}
+export const chatgptOauthSignIn = () => invoke<ChatGptStatus>("chatgpt_oauth_sign_in");
+export const chatgptOauthCancel = () => invoke<void>("chatgpt_oauth_cancel");
+export const chatgptOauthStatus = () => invoke<ChatGptStatus>("chatgpt_oauth_status");
+export const chatgptOauthSignOut = () => invoke<void>("chatgpt_oauth_sign_out");
+
 // On-device AI (iOS/macOS) — tauri-plugin-skim-ai.
 // These commands are provided by an iOS Tauri plugin that may not be
 // registered yet (desktop builds, plugin not yet wired up). Every wrapper

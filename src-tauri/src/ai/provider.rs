@@ -909,6 +909,14 @@ pub fn create_provider(
             }
             Ok(Box::new(ClaudeSubscriptionProvider::new(token)))
         }
+        "chatgpt-subscription" => {
+            let token = settings
+                .oauth_access_token
+                .clone()
+                .filter(|t| !t.is_empty())
+                .ok_or("[configure-ai] Not signed in to ChatGPT.")?;
+            Ok(Box::new(super::chatgpt_provider::ChatGptSubscriptionProvider::new(token)))
+        }
         "custom" => {
             let ep = endpoint
                 .map(str::trim)

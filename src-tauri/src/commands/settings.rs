@@ -39,6 +39,15 @@ pub async fn list_remote_models(
     endpoint: Option<String>,
     db: State<'_, Database>,
 ) -> Result<Vec<RemoteModel>, String> {
+    if provider == "chatgpt-subscription" {
+        let token = crate::ai::chatgpt_oauth::stored_access_token(&db).ok_or("Sign in with ChatGPT to load models")?;
+        let client = reqwest::Client::new();
+        return Ok(crate::ai::chatgpt_provider::list_models(&client, &token)
+            .await?
+            .into_iter()
+            .map(|(id, display_name)| RemoteModel { id, display_name })
+            .collect());
+    }
     // Signed in with SuperGrok and no key typed: list with the sign-in token.
     let api_key = match api_key.filter(|key| !key.trim().is_empty()) {
         None if provider == "xai" => crate::ai::xai_oauth::stored_access_token(&db),

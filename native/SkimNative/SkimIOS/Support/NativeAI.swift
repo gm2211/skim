@@ -397,6 +397,8 @@ enum NativeAI {
             return "Running \(NativeMLX.option(for: repoId).label)..."
         case "claude-subscription":
             return "Asking Claude Pro/Max..."
+        case "chatgpt-subscription":
+            return "Asking ChatGPT..."
         case "custom":
             return "Calling \(ai.model?.nilIfEmpty ?? "custom provider")..."
         case "anthropic":
@@ -1749,6 +1751,8 @@ enum NativeAI {
             return try await completeWithFoundationModels(instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
         case "openai", "xai", "openrouter", "custom":
             return try await completeOpenAICompatible(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature)
+        case "chatgpt-subscription":
+            return try await NativeChatGPT.complete(settings: ai, instructions: instructions, prompt: prompt)
         case "anthropic", "claude-subscription":
             if enableWebSearch {
                 return try await completeAnthropicWithTools(settings: ai, instructions: instructions, prompt: prompt, maxTokens: maxTokens).text
@@ -1795,6 +1799,16 @@ enum NativeAI {
                     maxTokens: maxTokens,
                     urlSession: urlSession,
                     messages: messages
+                )
+                return (text, [])
+            }
+            if ai.provider == "chatgpt-subscription" {
+                let text = try await NativeChatGPT.complete(
+                    settings: ai,
+                    instructions: system,
+                    prompt: prompt,
+                    messages: messages,
+                    urlSession: urlSession
                 )
                 return (text, [])
             }
@@ -2963,6 +2977,7 @@ enum NativeAI {
         case "openrouter": "OpenRouter"
         case "anthropic": "Claude API"
         case "claude-subscription": "Claude subscription"
+        case "chatgpt-subscription": "ChatGPT"
         case "custom": "Custom provider"
         default: provider
         }

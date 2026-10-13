@@ -12,9 +12,10 @@ export const AI_PROVIDERS = [
   ...onDeviceOptions,
   { value: "ollama", label: "Ollama", description: "Local Ollama (default: localhost:11434)" },
   { value: "claude-subscription", label: "Claude Pro/Max (OAuth)", description: "Sign in with your Claude.ai account — no API key, no CLI. Works on desktop and iOS." },
+  { value: "chatgpt-subscription", label: "ChatGPT Plus/Pro", description: "Sign in with your ChatGPT account — no API key. Uses your plan's Codex allowance." },
   { value: "claude-cli", label: "Claude via CLI (legacy)", description: "Uses the local 'claude' CLI binary. Legacy path — prefer 'Claude Pro/Max (OAuth)'." },
   { value: "anthropic", label: "Claude (API Key)", description: "api.anthropic.com — requires API key with usage-based billing" },
-  { value: "openai", label: "OpenAI", description: "api.openai.com" },
+  { value: "openai", label: "OpenAI", description: "api.openai.com with a platform API key" },
   { value: "xai", label: "Grok (xAI)", description: "Sign in with your SuperGrok subscription, or use an xAI API key" },
   { value: "ds4", label: "DeepSeek (DS4)", description: "Dedicated local DeepSeek V4 Flash runtime — Mac with 96 GB+ recommended" },
   { value: "openrouter", label: "OpenRouter", description: "openrouter.ai - access multiple models with one API key" },
@@ -166,7 +167,7 @@ export function providerLabel(provider: string): string {
 }
 
 /** Providers whose models are looked up via the `list_remote_models` command. */
-export const REMOTE_LIST_PROVIDERS = ["openai", "xai", "openrouter", "anthropic", "custom"] as const;
+export const REMOTE_LIST_PROVIDERS = ["openai", "xai", "openrouter", "anthropic", "custom", "chatgpt-subscription"] as const;
 
 /** Whether chat has its own provider override distinct from the main AI provider. */
 export function hasChatOverride(ai: Pick<AiSettings, "chat_provider">): boolean {

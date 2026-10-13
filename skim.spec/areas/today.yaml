@@ -47,6 +47,19 @@ behaviors:
     description: >-
       A story's preview is an exact passage from one named source, one to three sentences and at
       most 60 words, so it never puts words in a publisher's mouth.
+    details: >-
+      The model picks the passage; when its pick fails the check or the model can't be reached,
+      the preview is the first verified passage of one or two whole sentences taken without a
+      model, skipping a byline run into the first sentence. Apple's on-device model reads two
+      reports of up to 1,500 characters so the request fits its context. "Some summaries are
+      missing" offers Retry only for stories a retry could fill, not for stories whose reports
+      have no whole sentence to quote. Titles show first; each card's summary slot shows an
+      animated placeholder while its passage is written.
+    source:
+      text: >-
+        I only see titles not summaries, it's ok to get to titles first and do summaries async
+        (with beautiful slightly animated placeholders) but no summaries?
+      reference: Giulio, project chat, 2026-10-13, after "It retries but then shows up again"
   - id: whats-new
     description: When a story gains new coverage after the edition was made, it shows a "What's new" line.
   - id: read-progress

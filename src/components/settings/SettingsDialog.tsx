@@ -15,6 +15,9 @@ import {
   claudeOauthSignInLoopback,
   claudeOauthSignOut,
   claudeOauthStatus,
+  chatgptOauthSignIn,
+  chatgptOauthSignOut,
+  chatgptOauthStatus,
   xaiOauthBegin,
   xaiOauthComplete,
   xaiOauthSignOut,
@@ -226,7 +229,7 @@ export function SettingsDialog() {
   const subscriptionSignedIn = subscription?.provider === local.ai.provider ? subscription.signedIn : undefined;
   const accountSignedIn = local.ai.provider === "xai"
     ? (savedKey || subscriptionSignedIn)
-    : local.ai.provider === "claude-subscription"
+    : local.ai.provider === "claude-subscription" || local.ai.provider === "chatgpt-subscription"
       ? subscriptionSignedIn
       : needsApiKey(local.ai.provider) && local.ai.provider !== "claude-cli"
         ? savedKey
@@ -356,6 +359,12 @@ export function SettingsDialog() {
                   </div>
                 )}
 
+                {local.ai.provider === "chatgpt-subscription" && (
+                  <div style={{ marginBottom: 20 }}>
+                    <ChatGptOAuthSection onSignedInChange={(signedIn) => setSubscription({ provider: "chatgpt-subscription", signedIn })} />
+                  </div>
+                )}
+
                 {needsEndpoint(local.ai.provider) && (
                   <InputField label="Endpoint URL">
                     <input
@@ -374,7 +383,7 @@ export function SettingsDialog() {
                 )}
 
 
-    {!needsApiKey(local.ai.provider) && !needsEndpoint(local.ai.provider) && local.ai.provider !== "claude-subscription" && (
+    {!needsApiKey(local.ai.provider) && !needsEndpoint(local.ai.provider) && !["claude-subscription", "chatgpt-subscription"].includes(local.ai.provider) && (
       <p className="text-text-secondary" style={{ fontSize: 13 }}>
         This on-device service runs locally. No account or API key needed.
       </p>
@@ -921,6 +930,102 @@ function XaiOAuthSection({ onSignedInChange }: { onSignedInChange?: (signedIn: b
         connectedUnavailableBody: "Your SuperGrok account is saved on this device. It can't be used right now.",
       }}
     />
+  );
+}
+
+/** Sign in with ChatGPT: OpenAI's official plan-usage sign-in. The Rust side
+ * listens on 127.0.0.1, opens the browser, and finishes when ChatGPT redirects back. */
+function ChatGptOAuthSection({ onSignedInChange }: { onSignedInChange?: (signedIn: boolean) => void }) {
+  const [signedIn, setSignedInState] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
+  const setSignedIn = (value: boolean) => {
+    setSignedInState(value);
+    onSignedInChange?.(value);
+  };
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    chatgptOauthStatus()
+      .then((status) => {
+        setSignedIn(status.signedIn);
+        setEmail(status.email);
+      })
+      .catch(() => setSignedIn(false));
+  }, []);
+
+  const signIn = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const status = await chatgptOauthSignIn();
+      setEmail(status.email);
+      setSignedIn(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const signOut = async () => {
+    await chatgptOauthSignOut();
+    setEmail(null);
+    setSignedIn(false);
+  };
+
+  const note = "Uses your plan's Codex allowance. Set a limit for Skim in ChatGPT under Settings, Usage.";
+
+  if (signedIn) {
+    return (
+      <div
+        className="rounded-lg border border-green-500/30 bg-green-500/5"
+        style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}
+      >
+        <p className="text-text-primary" style={{ fontWeight: 500, marginBottom: 4 }}>
+          Signed in with ChatGPT
+        </p>
+        <p className="text-text-muted" style={{ marginBottom: 8, overflowWrap: "anywhere" }}>
+          {email ? `Using ${email}'s ChatGPT plan.` : "Using your ChatGPT plan."} {note}
+        </p>
+        <button
+          type="button"
+          onClick={signOut}
+          className="rounded border border-red-500/40 text-red-400 hover:bg-red-500/10"
+          style={{ padding: "4px 10px", fontSize: 12 }}
+        >
+          Sign out
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-lg border border-accent/30 bg-accent/5"
+      style={{ padding: "10px 12px", fontSize: 12, lineHeight: 1.5 }}
+    >
+      <p className="text-text-primary" style={{ fontWeight: 500, marginBottom: 4 }}>
+        Sign in with ChatGPT
+      </p>
+      <p className="text-text-muted" style={{ marginBottom: 8 }}>
+        Use your ChatGPT Plus or Pro plan instead of an API key. Allow plan usage when ChatGPT asks. {note}
+      </p>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={signIn}
+        className="rounded border border-accent text-accent hover:bg-accent/10 disabled:opacity-40"
+        style={{ padding: "4px 10px", fontSize: 12 }}
+      >
+        {busy ? "Waiting for ChatGPT…" : "Sign in with ChatGPT"}
+      </button>
+      {error && (
+        <p role="alert" className="text-red-400" style={{ marginTop: 8 }}>
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

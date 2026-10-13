@@ -239,7 +239,7 @@ fn parse_callback_query(target: &str) -> Result<(String, String), String> {
     Ok((code.ok_or("Missing code")?, state.ok_or("Missing state")?))
 }
 
-fn open_browser(url: &str) -> Result<(), String> {
+pub(crate) fn open_browser(url: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open").arg(url).spawn()

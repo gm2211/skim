@@ -99,6 +99,8 @@ pub fn default_model(provider: &str) -> String {
         "anthropic" | "claude-subscription" => "claude-sonnet-4-5".to_string(),
         "ollama" => "llama3".to_string(),
         "xai" => "grok-4.3".to_string(),
+        // Resolved per account: the provider takes the first model the plan lists.
+        "chatgpt-subscription" => String::new(),
         "mlx" => {
             if cfg!(target_os = "ios") {
                 "mlx-community/LFM2.5-1.2B-Instruct-4bit".to_string()

@@ -26,10 +26,31 @@ behaviors:
       2026-10-10.
     source:
       text: 'Chose "Add it" on the decision card asking "Add an unofficial ''Sign in with SuperGrok'' option to Skim''s xAI provider?"'
+  - id: chatgpt-subscription-sign-in
+    description: >-
+      A reader can sign in with their ChatGPT Plus/Pro plan instead of an API key, on desktop and
+      iOS, pick from the models their plan lists, and sign out. Tokens refresh automatically. Skim
+      runs on the plan's Codex allowance, and a used-up allowance reads as a plan limit, not an error.
+    details: >-
+      OpenAI's official Sign in with ChatGPT with ChatGPT plan usage, offered to open-source apps
+      (developers.openai.com/siwc/token-sharing-open-source). Authorization Code + PKCE against
+      auth.openai.com with scopes "openid profile email offline_access resource.invoke
+      chatgpt.tokens.use.direct" and resource https://api.openai.com/v1. The first sign-in
+      registers Skim with client_id=dynamic_agent_client, agent_name_hint=Skim and a per-install
+      ext_agent_host_id; the issued client id is kept through sign-out and used for later sign-ins
+      and every refresh. The redirect is a loopback on 127.0.0.1:1455 (54321 if busy); OpenAI
+      refuses localhost. On iOS the page opens in the in-app browser sheet while Skim listens on the
+      loopback port, and the sheet closes when ChatGPT redirects back. Sign-in is refused unless the
+      reader grants chatgpt.tokens.use.direct. Inference uses the public Responses API with
+      store false and stream true and no sampling parameters, read until response.completed; models
+      come from GET /v1/models, keeping visibility "list", and the first one is the default.
+    source:
+      text: 'Byos should support codex subscription, especially now that they made "sign with codex" or something like that, an official thing'
+      reference: Giulio, project chat, 2026-10-13
   - id: ios-sign-in-stays-in-app
     description: >-
-      On iOS, the Claude and SuperGrok sign-in pages open in an in-app browser sheet, so the reader
-      never leaves Skim to sign in.
+      On iOS, the Claude, ChatGPT, and SuperGrok sign-in pages open in an in-app browser sheet, so
+      the reader never leaves Skim to sign in.
     details: >-
       SFSafariViewController, since neither flow has a callback Skim can catch: Claude shows a code
       to copy, and SuperGrok is a device-code approval that Skim polls for and closes the sheet on.

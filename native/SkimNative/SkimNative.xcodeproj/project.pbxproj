@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9167BE3C78659C05031D238 /* SettingsSheet.swift */; };
 		17C51EA54BB8D84F05DA92F4 /* NativeXAIOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0272CBDAB77DD88C76A52E91 /* NativeXAIOAuth.swift */; };
+		7DFE9FF95125325AC6BBE83E /* NativeChatGPT.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B26CC13AFC6C5BDED3D031D /* NativeChatGPT.swift */; };
 		18CED8EE0C6AA5C517B1D143 /* AIInboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE465769D153A0A0D17504 /* AIInboxView.swift */; };
 		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
 		1DC5A4B057212FB263947314 /* SmartFolderEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */; };
@@ -65,6 +66,7 @@
 
 /* Begin PBXFileReference section */
 		0272CBDAB77DD88C76A52E91 /* NativeXAIOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeXAIOAuth.swift; sourceTree = "<group>"; };
+		6B26CC13AFC6C5BDED3D031D /* NativeChatGPT.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChatGPT.swift; sourceTree = "<group>"; };
 		038284DEE00F91A360324653 /* Style.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Style.swift; sourceTree = "<group>"; };
 		03D45CE6B40997BAD9FD2613 /* SkimMLXEngine */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimMLXEngine; path = ../../shared/SkimMLXEngine; sourceTree = SOURCE_ROOT; };
 		093BD7166E85CDD2AC4F89C7 /* Skim iOS Tests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = "Skim iOS Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -218,6 +220,7 @@
 				F6BA45434D97C1ACA953B839 /* NativeMLX.swift */,
 				8A1B88832F456973EA297F0F /* NativeWebSearch.swift */,
 				0272CBDAB77DD88C76A52E91 /* NativeXAIOAuth.swift */,
+				6B26CC13AFC6C5BDED3D031D /* NativeChatGPT.swift */,
 				038284DEE00F91A360324653 /* Style.swift */,
 				1474BA38A4E522DB5D3ECB21 /* WebView.swift */,
 			);
@@ -457,6 +460,7 @@
 				DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */,
 				D5D2795C99FD3003AA0F056B /* NativeWebSearch.swift in Sources */,
 				17C51EA54BB8D84F05DA92F4 /* NativeXAIOAuth.swift in Sources */,
+				7DFE9FF95125325AC6BBE83E /* NativeChatGPT.swift in Sources */,
 				E0006C62ED6F6DE502164145 /* RootView.swift in Sources */,
 				014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */,
 				D8AA09587BC441D5C430CA81 /* SkimNativeApp.swift in Sources */,

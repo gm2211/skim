@@ -284,14 +284,12 @@ enum TodayEditionBuilder {
                 feedCounts[feedID, default: 0] += 1
             }
         }
-        // Relax diversity only when needed to avoid a needlessly short edition.
+        // Relax diversity only when needed to avoid a needlessly short edition:
+        // the feed cap and the two-unique-finds cap both give way. Most feeds
+        // publish stories no second outlet covers, so keeping the unique-finds
+        // cap here capped a page of single-source stories at two.
         for choice in choices where !semantic {
             guard selected.count < storyLimit else { break }
-            if choice.2 == .uniqueFinds,
-               selected.filter({ $0.2 == .uniqueFinds }).count >= 2
-            {
-                continue
-            }
             if selectedIDs.insert(choice.0.storyID).inserted {
                 selected.append(choice)
             }

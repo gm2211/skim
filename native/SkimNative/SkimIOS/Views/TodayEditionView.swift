@@ -809,7 +809,7 @@ private struct TodayStoryView: View {
             .buttonStyle(.plain)
         } else if let url = source.url {
             Link(destination: url) { label }
-                .simultaneousGesture(TapGesture().onEnded(onOpen))
+                .simultaneousGesture(TapGesture().onEnded { onOpen() })
         } else {
             label
         }
@@ -881,7 +881,7 @@ private struct TodayByline: View {
                 .buttonStyle(.plain)
             } else if let url = source.url {
                 Link(destination: url) { label }
-                    .simultaneousGesture(TapGesture().onEnded(onOpen))
+                    .simultaneousGesture(TapGesture().onEnded { onOpen() })
             } else {
                 label
             }

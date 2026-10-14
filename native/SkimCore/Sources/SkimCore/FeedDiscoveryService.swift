@@ -6,6 +6,16 @@ public struct DiscoveredFeed: Identifiable, Hashable, Sendable {
         public var title: String
         public var url: URL?
         public var publishedAt: Date?
+        public var author: String?
+        public var imageURL: URL?
+
+        public init(title: String, url: URL? = nil, publishedAt: Date? = nil, author: String? = nil, imageURL: URL? = nil) {
+            self.title = title
+            self.url = url
+            self.publishedAt = publishedAt
+            self.author = author
+            self.imageURL = imageURL
+        }
     }
 
     public var url: URL
@@ -93,7 +103,8 @@ public enum FeedDiscoveryError: Error, LocalizedError, Sendable {
 /// Mirrors src-tauri/src/feed/discovery.rs so desktop and iOS find the same feeds.
 public struct FeedDiscoveryService: Sendable {
     private let session: URLSession
-    private static let previewItems = 5
+    /// Headlines kept per feed: enough for a feed's page in the Discover view.
+    private static let previewItems = 20
     private static let maxCandidates = 12
 
     public init(session: URLSession = .shared) {
@@ -339,9 +350,19 @@ public struct FeedDiscoveryService: Sendable {
             url: feedURL,
             title: cleanText(parsed.title),
             siteURL: parsed.siteURL.flatMap { $0 == feedURL ? nil : $0 },
-            items: parsed.articles.prefix(previewItems).map {
-                DiscoveredFeed.Item(title: cleanText($0.title), url: $0.url, publishedAt: $0.publishedAt)
-            }
+            // Newest first, undated last, so a feed's page reads like a timeline.
+            items: parsed.articles
+                .sorted { ($0.publishedAt ?? .distantPast) > ($1.publishedAt ?? .distantPast) }
+                .prefix(previewItems)
+                .map {
+                    DiscoveredFeed.Item(
+                        title: cleanText($0.title),
+                        url: $0.url,
+                        publishedAt: $0.publishedAt,
+                        author: $0.author.map(cleanText).flatMap { $0.isEmpty ? nil : $0 },
+                        imageURL: $0.imageURL
+                    )
+                }
         )
     }
 

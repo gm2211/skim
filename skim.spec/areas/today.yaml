@@ -65,6 +65,21 @@ behaviors:
   - id: read-progress
     description: >-
       Each story can be marked read, and the header shows "N of M" read progress or "All caught up".
+  - id: open-or-ask-reads-story
+    description: >-
+      Opening one of a story's reports, or sending a question about the story in chat, marks the
+      story read. Opening the chat without sending anything does not.
+    details: >-
+      It only ever marks read: a story already read is left alone, and one the reader marked unread
+      again is read again only when they open or ask about it again. Marking a story read this way
+      is the same as tapping its read circle, so its reports are marked read too. In the article
+      lists, opening an article already marks it read; asking about an article from the list's
+      summary marks it read the same way, on the first question.
+    source:
+      text: Chatting with an article or tapping on it should mark it as read
+      reference: >-
+        Giulio, project thread "Mark read on tap or chat", 2026-10-14, on an iPhone Today card
+        whose read circle stayed empty after he opened and asked about it
   - id: summary-retry
     description: >-
       Missing story summaries can be retried, with progress shown while they are written.

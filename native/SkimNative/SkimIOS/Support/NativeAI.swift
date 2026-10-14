@@ -1603,7 +1603,7 @@ enum NativeAI {
 
             \(conversation.promptSection)
             """,
-            maxTokens: 650,
+            maxTokens: AIRequestPolicy.requestMaxTokens(650, provider: settings.ai.provider),
             enableWebSearch: toolsOK,
             urlSession: urlSession,
             messages: buildLocalChatMessages(
@@ -1722,7 +1722,7 @@ enum NativeAI {
 
             \(conversation.promptSection)
             """,
-            maxTokens: 850,
+            maxTokens: AIRequestPolicy.requestMaxTokens(850, provider: settings.ai.provider),
             enableWebSearch: toolsOK,
             urlSession: urlSession,
             messages: buildLocalChatMessages(

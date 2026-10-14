@@ -118,8 +118,8 @@ import SkimStoryPolicy
     }
     for entry in fixture.max_tokens {
         let plan = Int32(entry.plan_tokens)
-        let actual = entry.provider.map { provider in provider.withCString { skim_summary_request_max_tokens(plan, $0) } }
-            ?? skim_summary_request_max_tokens(plan, nil)
+        let actual = entry.provider.map { provider in provider.withCString { skim_ai_request_max_tokens(plan, $0) } }
+            ?? skim_ai_request_max_tokens(plan, nil)
         #expect(Int(actual) == entry.max_tokens)
     }
     #expect(AIRequestPolicy.summaryRequestMaxTokens(AISettings(provider: "xai", summaryLength: "long")) == 8192)

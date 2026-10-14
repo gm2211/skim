@@ -50,8 +50,8 @@ const char *skim_summary_style_prompt(const char *tone) {
 #undef SUMMARY_FIDELITY
 
 /* Hosted models where max tokens is only a ceiling: some count hidden
- * reasoning against it, so the plan budget alone cuts summaries short. */
-static int summary_provider_is_hosted(const char *provider) {
+ * reasoning against it, so a visible-text budget alone cuts answers short. */
+static int ai_provider_is_hosted(const char *provider) {
     static const char *const hosted[] = {"openai", "xai", "openrouter", "anthropic",
         "claude-subscription", "chatgpt-subscription", "claude-cli"};
     if (!provider) return 0;
@@ -60,10 +60,10 @@ static int summary_provider_is_hosted(const char *provider) {
     return 0;
 }
 
-int32_t skim_summary_request_max_tokens(int32_t plan_tokens, const char *provider) {
-    if (plan_tokens < 1) plan_tokens = 1;
-    if (!summary_provider_is_hosted(provider)) return plan_tokens;
-    return plan_tokens > 8192 ? plan_tokens : 8192;
+int32_t skim_ai_request_max_tokens(int32_t budget, const char *provider) {
+    if (budget < 1) budget = 1;
+    if (!ai_provider_is_hosted(provider)) return budget;
+    return budget > 8192 ? budget : 8192;
 }
 
 static int summary_is_space(uint8_t c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }

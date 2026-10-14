@@ -145,14 +145,17 @@ public enum AIRequestPolicy {
         return instructions
     }
 
-    /// Output-token ceiling for one summary request. Hosted providers get
-    /// headroom because some count hidden reasoning against it; the prompt's
-    /// word target controls length.
+    /// Output-token ceiling for one summary or chat request to `provider`.
+    /// Hosted providers get headroom because some count hidden reasoning
+    /// against it; the prompt controls length.
+    public static func requestMaxTokens(_ budget: Int, provider: String) -> Int {
+        let budget = Int32(clamping: budget)
+        guard !provider.contains("\0") else { return Int(skim_ai_request_max_tokens(budget, nil)) }
+        return Int(provider.withCString { skim_ai_request_max_tokens(budget, $0) })
+    }
+
     public static func summaryRequestMaxTokens(_ settings: AISettings) -> Int {
-        let plan = Int32(clamping: summaryPlan(settings).fullMaxTokens)
-        let provider = settings.provider
-        guard !provider.contains("\0") else { return Int(skim_summary_request_max_tokens(plan, nil)) }
-        return Int(provider.withCString { skim_summary_request_max_tokens(plan, $0) })
+        requestMaxTokens(summaryPlan(settings).fullMaxTokens, provider: settings.provider)
     }
 
     /// Drops an unfinished final sentence left by a token cutoff.

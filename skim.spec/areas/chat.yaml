@@ -1,6 +1,16 @@
 id: chat
 name: Ask Skim and article chat
 behaviors:
+  - id: complete-chat-answers
+    description: >-
+      Chat answers are not cut off by a token cap sized for visible text.
+    details: >-
+      Hosted providers get an output ceiling of at least 8192 tokens, because some count hidden
+      reasoning against it; on-device models keep their tier budgets. Shared with summaries through
+      skim_ai_request_max_tokens in shared/SkimStoryPolicy.
+    source:
+      text: Also, chat response was cut off - are we artificially truncating?
+      reference: Giulio, project chat, 2026-10-14
   - id: ask-skim-grounded
     description: >-
       Ask Skim answers a question from the reader's library with numbered citations to the articles

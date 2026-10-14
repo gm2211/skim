@@ -75,11 +75,11 @@ SkimSummaryPlan skim_summary_plan(const char *length, int64_t custom_words);
  * aliases detailed. Returns immutable static storage; caller must not free. */
 const char *skim_summary_style_prompt(const char *tone);
 
-/* Output-token ceiling for one summary request. On-device and self-hosted
- * providers (NULL/unknown) keep the plan budget; hosted providers get at least
- * 8192 because some count hidden reasoning against it. The prompt's word
- * target, not this ceiling, controls length. */
-int32_t skim_summary_request_max_tokens(int32_t plan_tokens, const char *provider);
+/* Output-token ceiling for one summary or chat request. On-device and
+ * self-hosted providers (NULL/unknown) keep the visible-text budget; hosted
+ * providers get at least 8192 because some count hidden reasoning against it.
+ * The prompt, not this ceiling, controls length. */
+int32_t skim_ai_request_max_tokens(int32_t budget, const char *provider);
 
 /* Bytes of a generated summary to keep (length-delimited UTF-8). Drops an
  * unfinished final sentence left by a token cutoff: the final line is cut

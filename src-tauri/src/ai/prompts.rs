@@ -161,11 +161,11 @@ Output JSON:
 }
 
 pub fn bullet_max_tokens(settings: &AiSettings) -> i64 {
-    crate::db::story_policy::summary_request_max_tokens(length_params(settings).2, &settings.provider)
+    crate::db::story_policy::ai_request_max_tokens(length_params(settings).2, &settings.provider)
 }
 
 pub fn full_max_tokens(settings: &AiSettings) -> i64 {
-    crate::db::story_policy::summary_request_max_tokens(length_params(settings).3, &settings.provider)
+    crate::db::story_policy::ai_request_max_tokens(length_params(settings).3, &settings.provider)
 }
 
 // --- Quick Catch-up: the front page -----------------------------------------

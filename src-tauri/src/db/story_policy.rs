@@ -35,7 +35,7 @@ extern "C" {
     fn skim_summary_max_words() -> i32;
     fn skim_summary_custom_words_valid(words: i64) -> i32;
     fn skim_summary_style_prompt(tone: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
-    fn skim_summary_request_max_tokens(plan_tokens: i32, provider: *const std::os::raw::c_char) -> i32;
+    fn skim_ai_request_max_tokens(budget: i32, provider: *const std::os::raw::c_char) -> i32;
     fn skim_summary_complete_length(text: *const u8, len: usize) -> usize;
     #[cfg(test)]
     fn skim_today_lede_excerpt_valid(source: *const u8, source_len: usize, excerpt: *const u8, excerpt_len: usize) -> i32;
@@ -188,12 +188,12 @@ pub fn summary_style_prompt(tone: Option<&str>) -> &'static str {
         .to_str().expect("shared summary style is UTF-8")
 }
 
-/// Output-token ceiling for one summary request to `provider`.
-pub fn summary_request_max_tokens(plan_tokens: i64, provider: &str) -> i64 {
-    let plan = i32::try_from(plan_tokens).unwrap_or(i32::MAX);
+/// Output-token ceiling for one summary or chat request to `provider`.
+pub fn ai_request_max_tokens(budget: i64, provider: &str) -> i64 {
+    let plan = i32::try_from(budget).unwrap_or(i32::MAX);
     let provider = std::ffi::CString::new(provider).ok();
     let ptr = provider.as_ref().map_or(std::ptr::null(), |provider| provider.as_ptr());
-    i64::from(unsafe { skim_summary_request_max_tokens(plan, ptr) })
+    i64::from(unsafe { skim_ai_request_max_tokens(plan, ptr) })
 }
 
 /// Drops an unfinished final sentence left by a token cutoff.
@@ -436,10 +436,10 @@ mod tests {
         }
         for case in fixture["max_tokens"].as_array().unwrap() {
             let provider = case["provider"].as_str().unwrap_or("");
-            assert_eq!(summary_request_max_tokens(case["plan_tokens"].as_i64().unwrap(), provider),
+            assert_eq!(ai_request_max_tokens(case["plan_tokens"].as_i64().unwrap(), provider),
                 case["max_tokens"].as_i64().unwrap(), "{case}");
         }
-        assert_eq!(summary_request_max_tokens(256, "xai\0mlx"), 256);
+        assert_eq!(ai_request_max_tokens(256, "xai\0mlx"), 256);
     }
 
     #[test]

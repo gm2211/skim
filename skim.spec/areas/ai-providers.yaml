@@ -52,6 +52,19 @@ behaviors:
     source:
       text: "Smthing is broken with byos and claude - I don't have rate limits"
       reference: Giulio, project thread "Claude rate-limit error with BYOS", 2026-10-13
+  - id: claude-thinking-models-answer
+    description: >-
+      Claude models that think before answering (every 5-series model) still return an answer to
+      chat, Ask Skim, and summaries rather than an empty response; when Claude does return no text,
+      the error says why (out of room, or declined) where the response tells it.
+    details: >-
+      5-series models think by default and the thinking counts against the output limit, so a
+      long article context could use Ask Skim's whole budget and come back as "The Claude response
+      was empty." iOS and desktop ask these models for low effort with at least 4,096 output tokens,
+      and a tool-use turn is replayed with its thinking blocks.
+    source:
+      text: 'Screenshot: Ask Skim on claude-sonnet-5-5, "The Claude response was empty." twice. "Empty responses"'
+      reference: Giulio, project thread "Empty responses", 2026-10-14
   - id: rate-limit-error-only-for-real-limits
     description: >-
       Skim says a provider is rate-limited only when the provider says so: a retry-after time or a

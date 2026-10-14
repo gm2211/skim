@@ -762,7 +762,7 @@ mod tests {
             self.requests.lock().unwrap().push(request);
             Ok(crate::ai::provider::ChatResponse {
                 content: self.replies.lock().unwrap().pop_front().expect("no third attempt")?,
-                model: "test".into(), usage: None, tool_uses: vec![], stop_reason: None,
+                model: "test".into(), usage: None, tool_uses: vec![], stop_reason: None, raw_content: None,
             })
         }
         fn name(&self) -> &str { "test" }

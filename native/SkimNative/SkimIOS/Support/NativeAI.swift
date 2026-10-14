@@ -2377,6 +2377,15 @@ enum NativeAI {
         if anthropicModelAcceptsTemperature(model) {
             body["temperature"] = temperature ?? 0.2
         }
+        if anthropicModelThinksByDefault(model) {
+            // 5-series models think before answering unless told otherwise, and the
+            // thinking counts against `max_tokens`. At the default effort a long article
+            // context could spend a chat's whole budget thinking and return no text
+            // ("The Claude response was empty."). Low effort keeps thinking short, and
+            // the floor leaves room for the answer after it.
+            body["output_config"] = ["effort": "low"]
+            body["max_tokens"] = max(maxTokens, anthropicThinkingMaxTokensFloor)
+        }
         if let tools {
             body["tools"] = tools
         }
@@ -2406,17 +2415,47 @@ enum NativeAI {
     /// older models known to take it (Claude 3.x and 4.0–4.6); anything unrecognised gets
     /// the API's default sampling rather than a failed request.
     static func anthropicModelAcceptsTemperature(_ model: String) -> Bool {
+        guard let version = anthropicModelVersion(model) else { return false }
+        if version.major < 4 { return true }
+        return version.major == 4 && version.minor <= 6
+    }
+
+    /// Every 5-series model (Sonnet 5.5, Opus 5.5, Haiku 5.5, Fable…) runs adaptive
+    /// thinking when the request doesn't mention it, and all of them take
+    /// `output_config.effort`. Older models think only when asked, and some (Sonnet 4.5,
+    /// Haiku 4.5) reject `effort`, so they get neither.
+    static func anthropicModelThinksByDefault(_ model: String) -> Bool {
+        guard let version = anthropicModelVersion(model) else { return false }
+        return version.major >= 5
+    }
+
+    /// Smallest `max_tokens` sent to a model that thinks by default, so thinking can't
+    /// use up the whole budget before the answer starts.
+    static let anthropicThinkingMaxTokensFloor = 4096
+
+    /// Major/minor version from a Claude model id, or nil for an id that isn't one.
+    private static func anthropicModelVersion(_ model: String) -> (major: Int, minor: Int)? {
         var parts = model.lowercased().split(separator: "-").map(String.init)
-        guard parts.first == "claude" else { return false }
+        guard parts.first == "claude" else { return nil }
         parts.removeFirst()
         // "claude-3-5-sonnet-…" names the version first; "claude-sonnet-4-6" names the family first.
         if let first = parts.first, Int(first) == nil { parts.removeFirst() }
-        guard let majorText = parts.first, let major = Int(majorText) else { return false }
-        if major < 4 { return true }
-        guard major == 4 else { return false }
-        // A 1–2 digit second part is the minor version; a date snapshot ("4-20250514") is 4.0.
+        guard let majorText = parts.first, let major = Int(majorText) else { return nil }
+        // A 1–2 digit second part is the minor version; a date snapshot ("4-20250514") is x.0.
         let minor = parts.dropFirst().first.flatMap { $0.count <= 2 ? Int($0) : nil } ?? 0
-        return minor <= 6
+        return (major, minor)
+    }
+
+    /// What to tell the reader when a response carries no text, by `stop_reason`.
+    static func anthropicEmptyResponseMessage(stopReason: String?) -> String {
+        switch stopReason {
+        case "max_tokens":
+            return "Claude ran out of room before it wrote an answer. Try again, or ask a narrower question."
+        case "refusal":
+            return "Claude declined to answer this. Try rephrasing the question."
+        default:
+            return "The Claude response was empty."
+        }
     }
 
     /// Thin wrapper preserving the original single-message, no-tools signature
@@ -2437,9 +2476,9 @@ enum NativeAI {
 
     private static func decodeAnthropicContent(data: Data) throws -> String {
         let decoded = try JSONDecoder().decode(AnthropicResponse.self, from: data)
-        let content = decoded.content.compactMap(\.text).joined(separator: "\n").nilIfEmpty
+        let content = decoded.content.filter { $0.type == "text" }.compactMap(\.text).joined(separator: "\n").nilIfEmpty
         guard let content else {
-            throw NativeAIError.unavailable("The Claude response was empty.")
+            throw NativeAIError.unavailable(anthropicEmptyResponseMessage(stopReason: decoded.stopReason))
         }
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -2704,7 +2743,7 @@ enum NativeAI {
             if toolUseBlocks.isEmpty {
                 let trimmed = joinedText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else {
-                    throw NativeAIError.unavailable("The Claude response was empty.")
+                    throw NativeAIError.unavailable(anthropicEmptyResponseMessage(stopReason: decoded.stopReason))
                 }
                 return (trimmed, citations)
             }
@@ -2715,21 +2754,29 @@ enum NativeAI {
                 return (trimmed.isEmpty ? "(No response)" : trimmed, citations)
             }
 
-            // --- Build assistant turn (text block + tool_use blocks) ---
+            // --- Build assistant turn ---
+            // Replay the response's blocks unchanged: a model that thinks puts `thinking`
+            // blocks before its tool calls, and the next request has to carry them back.
+            // Rebuilding the turn from text + tool_use alone dropped them.
             var assistantContentBlocks: [[String: Any]] = []
-            if !joinedText.isEmpty {
-                assistantContentBlocks.append(["type": "text", "text": joinedText])
-            }
-            for block in toolUseBlocks {
-                var tb: [String: Any] = ["type": "tool_use"]
-                if let id = block.id   { tb["id"]    = id }
-                if let name = block.name { tb["name"] = name }
-                if let input = block.input {
-                    tb["input"] = input.mapValues { $0.foundationObject }
-                } else {
-                    tb["input"] = [String: Any]()
+            if let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let rawBlocks = raw["content"] as? [[String: Any]], !rawBlocks.isEmpty {
+                assistantContentBlocks = rawBlocks
+            } else {
+                if !joinedText.isEmpty {
+                    assistantContentBlocks.append(["type": "text", "text": joinedText])
                 }
-                assistantContentBlocks.append(tb)
+                for block in toolUseBlocks {
+                    var tb: [String: Any] = ["type": "tool_use"]
+                    if let id = block.id   { tb["id"]    = id }
+                    if let name = block.name { tb["name"] = name }
+                    if let input = block.input {
+                        tb["input"] = input.mapValues { $0.foundationObject }
+                    } else {
+                        tb["input"] = [String: Any]()
+                    }
+                    assistantContentBlocks.append(tb)
+                }
             }
             // --- Execute each tool call ---
             var resultBlocks: [[String: Any]] = []

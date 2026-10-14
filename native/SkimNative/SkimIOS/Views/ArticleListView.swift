@@ -125,15 +125,12 @@ struct ArticleListView: View {
         .sheet(isPresented: $showAddFeed) {
             AddFeedSheet(
                 isPresented: $showAddFeed,
-                onAdd: { url in
-                    dismissTextEntry()
-                    Task { await model.addFeed(urlString: url) }
-                },
                 onImportOPML: {
                     presentImporter()
                 }
             )
-            .presentationDetents([.medium, .large])
+            .environmentObject(model)
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationBackground(SkimStyle.chrome)
         }
@@ -2320,37 +2317,60 @@ private enum FoundationModelFeedOrganizer {
 
 private struct AddFeedSheet: View {
     private enum AddSource: String {
-        case feedURL
+        case discover
         case feedly
     }
 
+    private enum AddState: Equatable {
+        case adding
+        case added
+        case failed(String)
+    }
+
+    @EnvironmentObject private var model: AppModel
     @Binding var isPresented: Bool
-    @State private var feedURL = ""
-    @State private var addSource: AddSource = .feedURL
+    @State private var query = ""
+    @State private var addSource: AddSource = .discover
+    @State private var topicID: String?
+    @State private var results: [DiscoveredFeed]?
+    @State private var resultsQuery = ""
+    @State private var isSearching = false
+    @State private var searchError: String?
+    @State private var searchTask: Task<Void, Never>?
+    @State private var addStates: [String: AddState] = [:]
+    @State private var expanded: Set<String> = []
+    @State private var previews: [String: [DiscoveredFeed.Item]] = [:]
+    @State private var previewErrors: [String: String] = [:]
     @FocusState private var isFocused: Bool
 
-    var onAdd: (String) -> Void
     var onImportOPML: () -> Void
 
     private let feedlyExportURL = URL(string: "https://feedly.com/i/back?nextUri=%2Fopml")!
 
+    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var isURLQuery: Bool { FeedDiscoveryService.looksLikeURL(trimmedQuery) }
+    private var topics: [FeedCatalog.Topic] { model.feedCatalog?.topics ?? [] }
+    private var activeTopic: FeedCatalog.Topic? { topics.first { $0.id == topicID } ?? topics.first }
+    private var addedCount: Int { addStates.values.filter { $0 == .added }.count }
+
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                HStack {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Add Feed")
+                        Text("Add Feeds")
                             .font(.system(size: 26, weight: .heavy))
                             .foregroundStyle(SkimStyle.text)
-                        Text("Add one feed or import your Feedly subscriptions.")
-                            .font(.system(size: 16, weight: .regular))
+                        Text("Search a topic, paste a site, or import from Feedly.")
+                            .font(.system(size: 15, weight: .regular))
                             .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Spacer()
 
                     Button {
-                        isPresented = false
+                        close()
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 18, weight: .semibold))
@@ -2362,108 +2382,39 @@ private struct AddFeedSheet: View {
                 }
 
                 Picker("Add source", selection: $addSource) {
-                    Text("Feed URL").tag(AddSource.feedURL)
-                    Text("Feedly").tag(AddSource.feedly)
+                    Text("Discover").tag(AddSource.discover)
+                    Text("Import").tag(AddSource.feedly)
                 }
                 .pickerStyle(.segmented)
                 .accessibilityLabel("Add source")
 
-                if addSource == .feedURL {
-                    TextField("https://example.com/feed.xml", text: $feedURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                        .textContentType(.URL)
-                        .font(.system(size: 19, weight: .regular))
-                        .foregroundStyle(SkimStyle.text)
-                        .focused($isFocused)
-                        .padding(.horizontal, 16)
-                        .frame(height: 56)
-                        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(SkimStyle.separator, lineWidth: 1)
-                        }
-
-                    HStack(spacing: 14) {
-                        Button("Import OPML") {
-                            close()
-                            onImportOPML()
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(SkimStyle.accent)
-                        .frame(minHeight: 44)
-
-                        Spacer()
-
-                        Button("Add Feed") {
-                            let value = feedURL
-                            close()
-                            onAdd(value)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .disabled(feedURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
+                if addSource == .discover {
+                    discoverSection
                 } else {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Import from Feedly")
-                            .font(.system(size: 19, weight: .bold))
-                            .foregroundStyle(SkimStyle.text)
-
-                        Button {} label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "person.crop.circle")
-                                Text("Sign in with Feedly")
-                                    .font(.body.weight(.semibold))
-                                Spacer(minLength: 8)
-                                Text("Coming soon")
-                                    .font(.caption.weight(.semibold))
-                                    .padding(.horizontal, 9)
-                                    .padding(.vertical, 5)
-                                    .background(SkimStyle.surface, in: Capsule())
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(SkimStyle.accent)
-                        .disabled(true)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Sign in with Feedly, coming soon")
-                        .accessibilityHint("Feedly sign-in is unavailable yet. Import a Feedly OPML export below.")
-
-                        Text("Feedly developer access costs $96/year.")
-                            .font(.footnote)
-                            .foregroundStyle(SkimStyle.secondary)
-
-                        Text("Sign in to Feedly, download your Feedly OPML, then choose the file here.")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundStyle(SkimStyle.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Link(destination: feedlyExportURL) {
-                            Label("Open Feedly export", systemImage: SkimIcon.openExternal)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(SkimStyle.accent)
-                        .accessibilityHint("Opens Feedly's export page")
-
-                        Button("Choose OPML file") {
-                            close()
-                            onImportOPML()
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(SkimStyle.accent)
-                        .frame(minHeight: 44, alignment: .leading)
-                    }
+                    feedlySection
                 }
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 20)
             .padding(.top, 26)
             .padding(.bottom, 24)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .safeAreaInset(edge: .bottom) {
+            if addedCount > 0 {
+                HStack {
+                    Label("Added \(addedCount) feed\(addedCount == 1 ? "" : "s")", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.green)
+                    Spacer()
+                    Button("Done") { close() }
+                        .buttonStyle(.glassProminent)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(SkimStyle.chrome)
+            }
+        }
+        .onChange(of: query) { _, _ in scheduleSearch() }
         .onChange(of: addSource) { _, source in
             if source == .feedly {
                 isFocused = false
@@ -2471,8 +2422,406 @@ private struct AddFeedSheet: View {
             }
         }
         .onDisappear {
+            searchTask?.cancel()
             isFocused = false
             dismissUIKitKeyboard()
+        }
+    }
+
+    // MARK: Discover
+
+    @ViewBuilder
+    private var discoverSection: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(SkimStyle.secondary)
+            TextField("Search topics or paste a site URL", text: $query)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.webSearch)
+                .submitLabel(.search)
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(SkimStyle.text)
+                .focused($isFocused)
+                .onSubmit { runSearch(immediately: true) }
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(SkimStyle.secondary)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 6)
+        .frame(height: 50)
+        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(isFocused ? SkimStyle.accent.opacity(0.6) : SkimStyle.separator, lineWidth: 1)
+        }
+
+        if trimmedQuery.count >= 2 {
+            searchResults
+        } else {
+            Text("Try theverge.com, r/rust, a YouTube channel, or a topic like space.")
+                .font(.system(size: 14))
+                .foregroundStyle(SkimStyle.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            topicBrowser
+        }
+    }
+
+    @ViewBuilder
+    private var topicBrowser: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(topics) { topic in
+                    let active = topic.id == activeTopic?.id
+                    Button {
+                        topicID = topic.id
+                    } label: {
+                        Text(topic.name)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(active ? SkimStyle.text : SkimStyle.secondary)
+                            .padding(.horizontal, 14)
+                            .frame(height: 36)
+                            .background(active ? SkimStyle.accent.opacity(0.18) : Color.clear, in: Capsule())
+                            .overlay { Capsule().stroke(active ? SkimStyle.accent.opacity(0.6) : SkimStyle.separator, lineWidth: 1) }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(active ? .isSelected : [])
+                }
+            }
+            .padding(.vertical, 1)
+        }
+        .scrollClipDisabled()
+
+        if let topic = activeTopic {
+            Text("POPULAR IN \(topic.name.uppercased())")
+                .font(.system(size: 12, weight: .semibold))
+                .tracking(0.8)
+                .foregroundStyle(SkimStyle.secondary)
+                .padding(.top, 2)
+            feedList(topic.feeds)
+        }
+    }
+
+    @ViewBuilder
+    private var searchResults: some View {
+        let settled = resultsQuery == trimmedQuery && !isSearching
+        Text(statusText(settled: settled))
+            .font(.system(size: 14))
+            .foregroundStyle(SkimStyle.secondary)
+        if let searchError, settled {
+            Text(searchError)
+                .font(.system(size: 15))
+                .foregroundStyle(.red)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        if isSearching && results == nil {
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+        }
+        if let results, !results.isEmpty {
+            feedList(results)
+                .opacity(settled ? 1 : 0.5)
+        }
+    }
+
+    private func statusText(settled: Bool) -> String {
+        if !settled {
+            if isURLQuery {
+                let host = FeedDiscoveryService.normalizedInputURL(trimmedQuery)?.host() ?? trimmedQuery
+                return "Looking for feeds on \(host)…"
+            }
+            return "Searching for \u{201C}\(trimmedQuery)\u{201D}…"
+        }
+        guard searchError == nil, let results else { return "" }
+        if results.isEmpty { return "No feeds found for \u{201C}\(trimmedQuery)\u{201D}." }
+        if isURLQuery { return "\(results.count) feed\(results.count == 1 ? "" : "s") found" }
+        return "Feeds matching \u{201C}\(trimmedQuery)\u{201D}"
+    }
+
+    private func feedList(_ feeds: [DiscoveredFeed]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(feeds) { feed in
+                feedRow(feed)
+                if feed.id != feeds.last?.id {
+                    Divider().overlay(SkimStyle.separator).padding(.leading, 50)
+                }
+            }
+        }
+    }
+
+    private func feedRow(_ feed: DiscoveredFeed) -> some View {
+        let isOpen = expanded.contains(feed.id)
+        let items = feed.items.isEmpty ? (previews[feed.id] ?? []) : feed.items
+        let host = (feed.siteURL ?? feed.url).host()?.replacingOccurrences(of: "www.", with: "") ?? ""
+        let meta = [host, feed.subscribers.map { "\(compactCount($0)) followers" }].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                DiscoveredFeedIcon(feed: feed)
+                Button {
+                    toggle(feed)
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 5) {
+                            Text(feed.title)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(SkimStyle.text)
+                                .lineLimit(1)
+                            Image(systemName: isOpen ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(SkimStyle.secondary)
+                        }
+                        if !meta.isEmpty {
+                            Text(meta)
+                                .font(.system(size: 13))
+                                .foregroundStyle(SkimStyle.secondary)
+                                .lineLimit(1)
+                        }
+                        if let summary = feed.summary {
+                            Text(summary)
+                                .font(.system(size: 14))
+                                .foregroundStyle(SkimStyle.text.opacity(0.75))
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(isOpen ? "Hides the latest posts" : "Shows the latest posts")
+
+                addButton(feed)
+            }
+
+            if case .failed(let message) = addStates[feed.id] {
+                Text(message)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.red)
+                    .padding(.leading, 46)
+            }
+
+            if isOpen {
+                VStack(alignment: .leading, spacing: 6) {
+                    if items.isEmpty {
+                        if let error = previewErrors[feed.id] {
+                            Text(error).foregroundStyle(.red)
+                        } else if previews[feed.id] == nil && feed.items.isEmpty {
+                            Text("Loading latest posts…").foregroundStyle(SkimStyle.secondary)
+                        } else {
+                            Text("No recent posts.").foregroundStyle(SkimStyle.secondary)
+                        }
+                    } else {
+                        ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(item.title)
+                                    .foregroundStyle(SkimStyle.text)
+                                    .lineLimit(2)
+                                Spacer(minLength: 4)
+                                if let date = item.publishedAt {
+                                    Text(shortAge(date))
+                                        .monospacedDigit()
+                                        .foregroundStyle(SkimStyle.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+                .font(.system(size: 14))
+                .padding(.leading, 10)
+                .overlay(alignment: .leading) {
+                    Rectangle().fill(SkimStyle.separator).frame(width: 1)
+                }
+                .padding(.leading, 46)
+            }
+        }
+        .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private func addButton(_ feed: DiscoveredFeed) -> some View {
+        let state = addStates[feed.id]
+        if state == .added || model.isSubscribed(feed.url) {
+            Label(state == .added ? "Added" : "Following", systemImage: "checkmark")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.green)
+                .frame(minWidth: 64, minHeight: 34, alignment: .trailing)
+        } else {
+            Button {
+                Task { await add(feed) }
+            } label: {
+                Group {
+                    if state == .adding {
+                        ProgressView().controlSize(.small).tint(.white)
+                    } else {
+                        Text("Add")
+                    }
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .frame(minWidth: 40, minHeight: 22)
+            }
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .tint(SkimStyle.accent)
+            .disabled(state == .adding)
+            .accessibilityLabel("Add \(feed.title)")
+        }
+    }
+
+    // MARK: Actions
+
+    private func scheduleSearch() {
+        searchTask?.cancel()
+        searchError = nil
+        guard trimmedQuery.count >= 2 else {
+            isSearching = false
+            results = nil
+            resultsQuery = ""
+            return
+        }
+        isSearching = true
+        runSearch(immediately: false)
+    }
+
+    private func runSearch(immediately: Bool) {
+        let q = trimmedQuery
+        guard q.count >= 2 else { return }
+        let isURL = FeedDiscoveryService.looksLikeURL(q)
+        searchTask?.cancel()
+        isSearching = true
+        searchTask = Task {
+            if !immediately {
+                try? await Task.sleep(for: .milliseconds(isURL ? 650 : 350))
+            }
+            guard !Task.isCancelled else { return }
+            var found: [DiscoveredFeed] = []
+            var failure: String?
+            if isURL {
+                do {
+                    found = try await model.discovery.discover(q)
+                } catch {
+                    failure = error.localizedDescription
+                }
+            } else {
+                found = await model.discovery.search(q, catalog: model.feedCatalog)
+            }
+            guard !Task.isCancelled else { return }
+            results = found
+            searchError = failure
+            resultsQuery = q
+            isSearching = false
+        }
+    }
+
+    private func toggle(_ feed: DiscoveredFeed) {
+        if expanded.contains(feed.id) {
+            expanded.remove(feed.id)
+            return
+        }
+        expanded.insert(feed.id)
+        guard feed.items.isEmpty, previews[feed.id] == nil else { return }
+        previewErrors[feed.id] = nil
+        Task {
+            do {
+                previews[feed.id] = try await model.discovery.preview(feed.url).items
+            } catch {
+                previewErrors[feed.id] = error.localizedDescription
+            }
+        }
+    }
+
+    private func add(_ feed: DiscoveredFeed) async {
+        addStates[feed.id] = .adding
+        do {
+            try await model.subscribe(to: feed)
+            addStates[feed.id] = .added
+        } catch {
+            addStates[feed.id] = .failed(error.localizedDescription)
+        }
+    }
+
+    private func compactCount(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: n >= 10_000_000 ? "%.0fM" : "%.1fM", Double(n) / 1_000_000).replacingOccurrences(of: ".0M", with: "M") }
+        if n >= 1_000 { return String(format: n >= 10_000 ? "%.0fK" : "%.1fK", Double(n) / 1_000).replacingOccurrences(of: ".0K", with: "K") }
+        return String(n)
+    }
+
+    private func shortAge(_ date: Date) -> String {
+        let minutes = max(1, Int(Date().timeIntervalSince(date) / 60))
+        if minutes < 60 { return "\(minutes)m" }
+        let hours = minutes / 60
+        if hours < 24 { return "\(hours)h" }
+        let days = hours / 24
+        if days < 7 { return "\(days)d" }
+        return date.formatted(.dateTime.month(.abbreviated).day())
+    }
+
+    // MARK: Import
+
+    @ViewBuilder
+    private var feedlySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Import from Feedly")
+                .font(.system(size: 19, weight: .bold))
+                .foregroundStyle(SkimStyle.text)
+
+            Button {} label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "person.crop.circle")
+                    Text("Sign in with Feedly")
+                        .font(.body.weight(.semibold))
+                    Spacer(minLength: 8)
+                    Text("Coming soon")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(SkimStyle.surface, in: Capsule())
+                }
+                .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.bordered)
+            .tint(SkimStyle.accent)
+            .disabled(true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Sign in with Feedly, coming soon")
+            .accessibilityHint("Feedly sign-in is unavailable yet. Import a Feedly OPML export below.")
+
+            Text("Feedly developer access costs $96/year.")
+                .font(.footnote)
+                .foregroundStyle(SkimStyle.secondary)
+
+            Text("Sign in to Feedly, download your Feedly OPML, then choose the file here.")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(SkimStyle.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Link(destination: feedlyExportURL) {
+                Label("Open Feedly export", systemImage: SkimIcon.openExternal)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.bordered)
+            .tint(SkimStyle.accent)
+            .accessibilityHint("Opens Feedly's export page")
+
+            Button("Choose OPML file") {
+                close()
+                onImportOPML()
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(SkimStyle.accent)
+            .frame(minHeight: 44, alignment: .leading)
         }
     }
 
@@ -2480,6 +2829,28 @@ private struct AddFeedSheet: View {
         isFocused = false
         dismissUIKitKeyboard()
         isPresented = false
+    }
+}
+
+private struct DiscoveredFeedIcon: View {
+    var feed: DiscoveredFeed
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(SkimStyle.surface)
+            AsyncImage(url: feed.iconURL) { phase in
+                if let image = phase.image {
+                    image.resizable().scaledToFit().frame(width: 20, height: 20)
+                } else {
+                    Text(feed.title.prefix(1).uppercased())
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+            }
+        }
+        .frame(width: 34, height: 34)
+        .accessibilityHidden(true)
     }
 }
 

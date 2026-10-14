@@ -8,6 +8,23 @@ behaviors:
     description: >-
       A reader can add a feed by URL. Skim resolves the feed document and its site, and accepts RSS
       2.0, Atom, and JSON Feed.
+  - id: feed-discovery
+    description: >-
+      Add Feeds opens on Discover, on desktop and iOS. Pasting a website (or `theverge.com`,
+      `r/rust`) lists every feed Skim finds on it; typing words searches feeds by topic or name;
+      an empty box browses popular feeds by topic. Each result shows its icon, site and
+      description, previews its latest posts when tapped, and adds with one tap without closing,
+      so several feeds can be added in one visit. Feeds already in the library show "Following".
+    details: >-
+      Discovery reads the page's `<link rel="alternate">` feeds plus known patterns (Reddit
+      subreddits and users, YouTube channels and playlists, GitHub repos and users, Hacker News,
+      Medium, Mastodon, Bluesky) and falls back to common paths (/feed, /rss, /atom.xml, ...) when
+      nothing else turns up. Search merges the built-in catalog (shared/feed-catalog.json) with
+      Feedly's public, keyless feed search; the catalog alone answers when Feedly is unreachable.
+      Adding a website address by URL also resolves it to its first feed.
+    source:
+      text: I'd like to have rss feed discovery and ability to easily add feeds like I can do on feedly
+      reference: Giulio, project chat, 2026-10-14
   - id: opml-import-with-preview
     description: >-
       A reader can import an OPML file and preview the feeds before importing them. iOS offers

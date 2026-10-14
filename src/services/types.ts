@@ -408,3 +408,28 @@ export interface TodayEditionView {
   consumed_count: number;
   total_count: number;
 }
+
+export interface FeedPreviewItem {
+  title: string;
+  url: string | null;
+  published_at: number | null;
+}
+
+/** A feed found by discovery, search, or the built-in catalog. */
+export interface DiscoveredFeed {
+  url: string;
+  title: string;
+  site_url: string | null;
+  description: string | null;
+  icon_url: string | null;
+  subscribers: number | null;
+  /** Latest headlines; empty until the feed has been fetched. */
+  items: FeedPreviewItem[];
+  already_subscribed: boolean;
+}
+
+export interface FeedCatalogTopic {
+  id: string;
+  name: string;
+  feeds: DiscoveredFeed[];
+}

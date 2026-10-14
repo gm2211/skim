@@ -62,6 +62,18 @@ const unclip = async (p, selector = ".today-page") => {
   await p.waitForTimeout(200);
 };
 
+const openAddFeeds = async (p) => {
+  const button = p.locator('[aria-label="Add feed"]:visible').first();
+  const opened = (await button.count()) && (await button.click({ timeout: 2000 }).then(() => true, () => false));
+  if (!opened) {
+    await p.keyboard.press("Meta+k");
+    await p.keyboard.type("Add feed");
+    await p.keyboard.press("Enter");
+  }
+  await p.locator('[role="dialog"]').first().waitFor();
+  await p.waitForTimeout(500);
+};
+
 const SCENES = [
   { name: "today", viewport: DESKTOP, run: openToday },
   // The same paper over a wider window, picked from the cog.
@@ -112,6 +124,24 @@ const SCENES = [
     await p.locator('[aria-label="Ask Skim"]').first().click();
     await p.waitForTimeout(500);
   } },
+  // Add Feeds: browse by topic, search by words, find a site's feeds, preview.
+  { name: "add-feeds", viewport: DESKTOP, run: openAddFeeds },
+  { name: "add-feeds-search", viewport: DESKTOP, run: async (p) => {
+    await openAddFeeds(p);
+    await p.getByRole("textbox", { name: /paste a website/ }).fill("rust");
+    await p.getByText("Rust Blog").first().waitFor();
+    await p.getByRole("button", { name: /^Rust Blog/ }).click();
+    await p.waitForTimeout(400);
+  } },
+  { name: "add-feeds-site", viewport: DESKTOP, run: async (p) => {
+    await openAddFeeds(p);
+    await p.getByRole("textbox", { name: /paste a website/ }).fill("theverge.com");
+    await p.getByText("3 feeds found").waitFor();
+    await p.getByRole("button", { name: "Add The Verge: Tech" }).click();
+    await p.getByRole("button", { name: /^The Verge\b/ }).first().click();
+    await p.waitForTimeout(700);
+  } },
+  { name: "add-feeds-phone", viewport: { width: 390, height: 844 }, run: openAddFeeds },
   { name: "settings", viewport: DESKTOP, run: async (p) => {
     await p.getByText("Settings", { exact: true }).first().click();
     await p.waitForTimeout(600);

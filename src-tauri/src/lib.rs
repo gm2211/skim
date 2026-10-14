@@ -192,6 +192,10 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
     tauri::generate_handler![
             // Feeds
             commands::feeds::add_feed,
+            commands::feeds::discover_feeds,
+            commands::feeds::search_feeds,
+            commands::feeds::preview_feed,
+            commands::feeds::feed_catalog,
             commands::feeds::list_feeds,
             commands::feeds::remove_feed,
             commands::feeds::rename_feed,

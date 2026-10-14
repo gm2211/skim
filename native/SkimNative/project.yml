@@ -21,6 +21,8 @@ targets:
       - SkimIOS
       - path: ../../src/assets/fonts/AquireBold.otf
         buildPhase: resources
+      - path: ../../shared/feed-catalog.json
+        buildPhase: resources
     dependencies:
       - package: SkimCore
       - package: SkimInferencePolicy

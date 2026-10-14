@@ -100,7 +100,11 @@ public struct FeedRefreshService: Sendable {
         }
 
         let baseURL = response.url ?? initialURL
-        let discovered = (FeedDiscovery.feedURLs(in: data, baseURL: baseURL) + FeedDiscovery.commonFeedURLs(baseURL: baseURL))
+        let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) ?? ""
+        let discovered = (FeedDiscoveryService.feedLinks(inHTML: html, baseURL: baseURL)
+            + FeedDiscoveryService.siteSpecificFeeds(for: baseURL)
+            + FeedDiscoveryService.siteSpecificFeeds(for: url)
+            + FeedDiscovery.commonFeedURLs(baseURL: baseURL))
             .uniquePreservingOrder()
         for candidate in discovered {
             do {
@@ -374,7 +378,7 @@ private final class FeedParserDelegate: NSObject, XMLParserDelegate {
     }
 }
 
-private extension Array where Element == URL {
+extension Array where Element == URL {
     func uniquePreservingOrder() -> [URL] {
         var seen = Set<String>()
         var result: [URL] = []

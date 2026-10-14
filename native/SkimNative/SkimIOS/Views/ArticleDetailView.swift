@@ -143,7 +143,8 @@ struct ArticleDetailView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 12) {
+        // Seven 42pt targets fit a 375pt-wide iPhone only with tight spacing.
+        HStack(spacing: 4) {
             BorderlessIconButton(systemName: "chevron.left", title: "Back", size: 24, tapSize: 42) {
                 dismiss()
             }
@@ -164,6 +165,19 @@ struct ArticleDetailView: View {
             }
             BorderlessIconButton(systemName: article?.isStarred == true ? SkimIcon.starFilled : SkimIcon.star, title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 24, tapSize: 42) {
                 Task { await toggleStar() }
+            }
+            if let article, let shareURL = article.externalURL ?? article.url {
+                // A link post shares the story it points at, not the aggregator page.
+                ShareLink(item: shareURL, subject: Text(article.title), preview: SharePreview(article.title)) {
+                    Image(systemName: SkimIcon.share)
+                        .font(.system(size: 24, weight: .regular))
+                        .symbolRenderingMode(.monochrome)
+                        .frame(width: 42, height: 42)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(SkimStyle.secondary)
+                .accessibilityLabel("Share")
             }
         }
         .padding(.horizontal, 20)
@@ -235,6 +249,10 @@ struct ArticleDetailView: View {
 
                 Button("Open in Browser", systemImage: SkimIcon.openExternal) {
                     openURL(url)
+                }
+
+                ShareLink(item: article.externalURL ?? url, subject: Text(article.title), preview: SharePreview(article.title)) {
+                    Label("Share", systemImage: SkimIcon.share)
                 }
             }
         }

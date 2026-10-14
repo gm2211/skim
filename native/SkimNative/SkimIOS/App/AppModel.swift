@@ -147,6 +147,8 @@ final class AppModel: ObservableObject {
     /// Non-nil while the lede pass is still working down the page.
     @Published var todayLedeStatus: String?
     @Published var todayLedeNeedsRetry = false
+    /// Stories whose AI summary failed this launch; Retry clears it.
+    @Published private(set) var failedTodaySummaries = Set<String>()
     private var todayTask: Task<Void, Never>?
     private var todayLoadID = UUID()
 
@@ -240,6 +242,7 @@ final class AppModel: ObservableObject {
 
     func retryTodayLedes() async {
         guard let edition = todayEdition else { return }
+        failedTodaySummaries.removeAll()
         await loadTodayEdition(storyLimit: edition.edition.storyLimit)
     }
 
@@ -300,8 +303,13 @@ final class AppModel: ObservableObject {
 
         let editionID = edition.id
         let requestID = todayLoadID
+        // A story whose summary already failed this launch, and that has a
+        // passage to show, waits for Retry rather than being asked again on
+        // every reload.
         let pending = edition.items.prefix(limit).filter {
-            ($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            $0.snapshot.editorial == nil
+                && !(failedTodaySummaries.contains($0.snapshot.storyID)
+                     && !($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         guard !pending.isEmpty else { return }
         // Stories with no whole sentence in any report (a link post whose
@@ -312,7 +320,8 @@ final class AppModel: ObservableObject {
             if todayLoadID == requestID {
                 todayLedeStatus = nil
                 todayLedeNeedsRetry = todayEdition?.items.prefix(limit).contains {
-                    ($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    $0.snapshot.editorial == nil
+                        && ($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         && !unwritable.contains($0.snapshot.storyID)
                 } ?? false
             }
@@ -323,8 +332,8 @@ final class AppModel: ObservableObject {
             guard !Task.isCancelled, todayLoadID == requestID, todayEdition?.id == editionID else { return }
 
             todayLedeStatus = pending.count == 1
-                ? "Writing the lead story…"
-                : "Writing story \(index + 1) of \(pending.count)…"
+                ? "Writing the summary…"
+                : "Writing summary \(index + 1) of \(pending.count)…"
 
             let feedArticles = item.sourceArticles.compactMap(\.liveArticle).map { article in
                 var copy = article
@@ -354,6 +363,30 @@ final class AppModel: ObservableObject {
                 continue
             }
             guard !Task.isCancelled, todayLoadID == requestID else { return }
+
+            // The AI summary first, as on the desktop. When the model can't
+            // write one that passes the check, the story keeps (or gets) a
+            // verified passage from a report instead of staying blank.
+            do {
+                let themes = Array(Set((todayEdition?.items ?? []).compactMap { $0.snapshot.editorial?.theme })).sorted()
+                if let editorial = try await NativeAI.todayEditorial(
+                    headline: item.snapshot.snapshotTitle, articles: articles, themes: themes, settings: settings
+                ) {
+                    guard !Task.isCancelled, todayLoadID == requestID, todayEdition?.id == editionID else { return }
+                    if let updated = try? await store.setTodayEditionItemEditorial(
+                        editionID: editionID, storyID: item.snapshot.storyID, editorial: editorial
+                    ) {
+                        guard !Task.isCancelled, todayLoadID == requestID else { return }
+                        todayEdition = TodayEditionMerge.ledes(current: todayEdition, response: updated)
+                        continue
+                    }
+                }
+            } catch {
+                if Task.isCancelled { return }
+                print("[Today] Summary for \(item.snapshot.storyID) failed: \(error.localizedDescription)")
+            }
+            failedTodaySummaries.insert(item.snapshot.storyID)
+            guard (item.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
 
             // One story failing to write is not worth losing the page over. A
             // nil preview means no report has a whole sentence to quote.

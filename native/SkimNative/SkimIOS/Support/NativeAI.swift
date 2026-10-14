@@ -677,6 +677,38 @@ enum NativeAI {
         return CatchUpText.fallbackLede(resolved.map(\.plainBody))
     }
 
+    /// The story's AI summary, written from its reports the way the desktop
+    /// writes it: two or three sentences with one exact supporting quote from
+    /// each report. Returns nil when no report has enough text to summarize;
+    /// throws when the model can't be reached or its answer fails the check.
+    static func todayEditorial(
+        headline: String,
+        articles: [Article],
+        themes: [String],
+        settings: AppSettings
+    ) async throws -> TodayEditorial? {
+        // Apple's on-device model has a small context window, so it reads two
+        // shorter reports, as it does for ledes.
+        let onDevice = settings.ai.provider == "foundation-models"
+        let characters = onDevice ? 1_500 : TodayLedePolicy.textCharacters
+        let reports = articles
+            .map { article in
+                TodayEditorialPolicy.Report(
+                    articleID: article.id,
+                    body: String(String.UnicodeScalarView(article.plainBody.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars.prefix(characters))))
+            }
+            .filter { TodayEditorialPolicy.usable($0.body) }
+            .prefix(onDevice ? 2 : TodayLedePolicy.maxArticles)
+        guard !reports.isEmpty else { return nil }
+        let response = try await complete(
+            settings: settings,
+            instructions: TodayEditorialPolicy.instructions,
+            prompt: TodayEditorialPolicy.prompt(headline: headline, reports: Array(reports), themes: themes),
+            maxTokens: TodayEditorialPolicy.maxTokens, jsonMode: true, temperature: 0)
+        try Task.checkCancellation()
+        return try TodayEditorialPolicy.validate(response, reports: Array(reports))
+    }
+
     static func catchUpPreview(
         headline: String,
         articles: [Article],

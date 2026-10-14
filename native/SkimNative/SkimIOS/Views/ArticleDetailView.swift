@@ -420,49 +420,56 @@ struct SummaryConfigurationSheet: View {
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        Text(article.title)
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundStyle(SkimStyle.secondary)
-                            .lineLimit(2)
+                VStack(spacing: 0) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            Text(article.title)
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundStyle(SkimStyle.secondary)
+                                .lineLimit(2)
 
-                        SummaryPreviewCard(style: style, wordCount: wordCount)
+                            SummaryPreviewCard(style: style, wordCount: wordCount)
 
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Presets")
-                                .summaryControlLabel()
-                            presetRow
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Presets")
+                                    .summaryControlLabel()
+                                presetRow
+                            }
+
+                            customizeCard
+
+                            Text("These choices, including the model, are saved as your new defaults when you run.")
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(SkimStyle.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-
-                        customizeCard
-
-                        Text("These choices, including the model, are saved as your new defaults when you run.")
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(SkimStyle.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 4)
+                        .padding(.bottom, 16)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
-                    .padding(.bottom, 16)
-                }
-                .onChange(of: isFocusFieldActive) { _, isActive in
-                    guard isActive else { return }
-                    Task { @MainActor in
-                        // Wait for the keyboard and the field's reveal to settle,
-                        // then lift the whole field clear of the Summarize button.
-                        try? await Task.sleep(for: .milliseconds(350))
-                        withAnimation(.smooth(duration: 0.25)) { proxy.scrollTo(Self.focusFieldID, anchor: .bottom) }
+                    .onChange(of: isFocusFieldActive) { _, isActive in
+                        guard isActive else { return }
+                        Task { @MainActor in
+                            // Wait for the keyboard and the field's reveal to settle,
+                            // then lift the whole field clear of the Summarize button.
+                            try? await Task.sleep(for: .milliseconds(350))
+                            withAnimation(.smooth(duration: 0.25)) { proxy.scrollTo(Self.focusFieldID, anchor: .bottom) }
+                        }
                     }
+                    .onChange(of: customPrompt) {
+                        guard isFocusFieldActive else { return }
+                        proxy.scrollTo(Self.focusFieldID, anchor: .bottom)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .scrollContentBackground(.hidden)
+
+                    // Outside the ScrollView so content always ends above it,
+                    // rather than sliding underneath an inset overlay.
+                    runButton
                 }
-                .onChange(of: customPrompt) {
-                    guard isFocusFieldActive else { return }
-                    proxy.scrollTo(Self.focusFieldID, anchor: .bottom)
-                }
-                .scrollDismissesKeyboard(.interactively)
-                .safeAreaInset(edge: .bottom, spacing: 0) { runButton }
                 .background(SkimStyle.chrome.ignoresSafeArea())
-                .scrollContentBackground(.hidden)
+                .toolbarBackground(SkimStyle.chrome, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
                 .navigationTitle("Summarize")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -785,11 +792,11 @@ private struct SummaryPreviewCard: View {
     var style: SummaryStyleOption
     var wordCount: Int
 
-    private static let visibleLines = 6
-    private static let widths: [CGFloat] = [0.96, 0.88, 0.93, 0.74, 0.9, 0.84]
+    private static let visibleLines = 4
+    private static let widths: [CGFloat] = [0.96, 0.88, 0.93, 0.74]
 
-    /// About one skeleton line per 50 words.
-    private var lineCount: Int { max(1, Int((Double(wordCount) / 50).rounded())) }
+    /// About one skeleton line per 75 words.
+    private var lineCount: Int { max(1, Int((Double(wordCount) / 75).rounded())) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -855,7 +862,7 @@ private struct SummaryLengthRuler: View {
             var word = (wordCount / step - span) * step
             while word <= wordCount + span * step {
                 defer { word += step }
-                guard word >= 0, word <= AIRequestPolicy.summaryWordRange.upperBound else { continue }
+                guard AIRequestPolicy.summaryWordRange.contains(word) else { continue }
                 let x = mid + CGFloat(word - wordCount) / CGFloat(step) * spacing
                 guard x > 2, x < size.width - 2 else { continue }
                 let isMajor = word % 100 == 0
@@ -863,9 +870,26 @@ private struct SummaryLengthRuler: View {
                 tick.move(to: CGPoint(x: x, y: baseline))
                 tick.addLine(to: CGPoint(x: x, y: baseline - (isMajor ? 20 : 10)))
                 context.stroke(tick, with: .color(Color(red: 0.23, green: 0.26, blue: 0.31)), lineWidth: 2)
-                if isMajor, abs(x - mid) > 18 {
+                if isMajor, word != AIRequestPolicy.summaryWordRange.upperBound, abs(x - mid) > 18 {
                     context.draw(
                         Text("\(word)").font(.system(size: 11)).foregroundStyle(SkimStyle.secondary),
+                        at: CGPoint(x: x, y: size.height - 6)
+                    )
+                }
+            }
+            // End stops mark the shortest and longest allowed lengths, so the
+            // empty stretch past either end reads as the edge of the scale.
+            for bound in [AIRequestPolicy.summaryWordRange.lowerBound, AIRequestPolicy.summaryWordRange.upperBound] {
+                let x = mid + CGFloat(bound - wordCount) / CGFloat(step) * spacing
+                guard x > 2, x < size.width - 2 else { continue }
+                var stop = Path()
+                stop.move(to: CGPoint(x: x, y: baseline))
+                stop.addLine(to: CGPoint(x: x, y: baseline - 26))
+                context.stroke(stop, with: .color(SkimStyle.secondary), lineWidth: 2)
+                if abs(x - mid) > 18 {
+                    context.draw(
+                        Text(bound == AIRequestPolicy.summaryWordRange.lowerBound ? "min" : "max")
+                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(SkimStyle.secondary),
                         at: CGPoint(x: x, y: size.height - 6)
                     )
                 }

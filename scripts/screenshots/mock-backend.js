@@ -312,9 +312,11 @@
     get_articles: ({ filter }) => filterArticles(filter),
     count_articles: ({ filter }) => filterArticles(filter).length,
     get_article: ({ articleId }) => articles.find((a) => a.id === articleId) || articles[0],
-    get_inbox_articles: ({ minPriority, limit, offset }) => {
+    get_inbox_articles: ({ minPriority, limit, offset, feedIds, isRead }) => {
       let out = inboxOrder;
       if (minPriority != null) out = out.filter((a) => a.priority >= minPriority);
+      if (feedIds) out = out.filter((a) => feedIds.includes(a.feed_id));
+      if (isRead === false) out = out.filter((a) => !a.is_read);
       const off = offset || 0;
       return limit != null ? out.slice(off, off + limit) : out.slice(off);
     },

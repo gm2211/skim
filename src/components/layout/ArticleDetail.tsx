@@ -6,6 +6,7 @@ import { useSettings } from "../../hooks/useSettings";
 import { canGoBackArticle, canGoForwardArticle, useUiStore } from "../../stores/uiStore";
 import { getOrFetchReaderContent, cancelSummarize } from "../../services/commands";
 import { ChatDrawer } from "../chat/ChatPanel";
+import { ReaderSelectionAsk } from "../article/ReaderSelectionAsk";
 import { useReadingTimeTracker } from "../../hooks/useLearning";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { openArticleHref, openArticleLink } from "../../lib/externalLinks";
@@ -365,6 +366,8 @@ export function ArticleDetail() {
   useReadingTimeTracker(selectedArticleId, sidebarView.type === "recent");
   const [showSummarizeMenu, setShowSummarizeMenu] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatAskAbout, setChatAskAbout] = useState<{ id: number; text: string } | null>(null);
+  const readerContentRef = useRef<HTMLDivElement>(null);
   const [perArticleLength, setPerArticleLength] = useState<string | undefined>();
   const [perArticleTone, setPerArticleTone] = useState<string | undefined>();
   const [perArticlePrompt, setPerArticlePrompt] = useState<string | undefined>();
@@ -1649,8 +1652,10 @@ export function ArticleDetail() {
               >
                 {readerRefresh.pullToRefreshIndicator}
                 <div
+                  ref={readerContentRef}
                   style={{
                     ...readerRefresh.pullToRefreshContentStyle,
+                    position: "relative",
                     maxWidth: 760,
                     width: "100%",
                     margin: "0 auto",
@@ -1705,6 +1710,13 @@ export function ArticleDetail() {
                   ) : (
                     <p className="text-text-muted" style={{ fontSize: 14 }}>No preview available.</p>
                   )}
+                  <ReaderSelectionAsk
+                    containerRef={readerContentRef}
+                    onAsk={(text) => {
+                      setChatAskAbout((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
+                      setChatOpen(true);
+                    }}
+                  />
                 </div>
               </div>
             </section>
@@ -1787,7 +1799,7 @@ export function ArticleDetail() {
       </div>
 
       {/* Chat drawer — collapsible bottom pane */}
-      <ChatDrawer articleId={article.id} articleTitle={article.title} summaryContext={summarize.data?.article_id === article.id ? ([summarize.data.bullet_summary, summarize.data.full_summary].filter(Boolean).join("\n\n") || undefined) : undefined} open={chatOpen} onOpenChange={setChatOpen} />
+      <ChatDrawer articleId={article.id} articleTitle={article.title} summaryContext={summarize.data?.article_id === article.id ? ([summarize.data.bullet_summary, summarize.data.full_summary].filter(Boolean).join("\n\n") || undefined) : undefined} open={chatOpen} onOpenChange={setChatOpen} askAbout={chatAskAbout} />
     </div>
   );
 }

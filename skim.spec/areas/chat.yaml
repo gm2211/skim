@@ -37,6 +37,19 @@ behaviors:
     description: >-
       A reader can chat with any article; answers are grounded in the article's full text and the
       conversation so far, not just the feed teaser.
+  - id: ask-about-highlight
+    description: >-
+      A reader can highlight a passage in the article and ask about it in chat: the chat opens with
+      the passage quoted above the composer, ready for a question.
+    details: >-
+      iOS adds "Ask in Chat" as the first item of the text selection menu in the reader (article
+      body, post text and comments); the article menu moved to a long press on the header so a long
+      press on the body selects text. Desktop shows a floating "Ask in chat" button over the
+      selection in the reader. The quote is sent as "About this passage from the article" and the
+      bubble labels it "From the article", distinct from replying to one of Skim's answers.
+    source:
+      text: I'd like the ability to easily highlight text and ask about it in chat
+      reference: Giulio, project thread "highlight text and ask in chat", 2026-10-14
   - id: web-search
     description: >-
       Chat can search the web when the library does not cover a question, and web sources are marked

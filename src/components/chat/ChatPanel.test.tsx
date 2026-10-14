@@ -190,4 +190,20 @@ describe("ChatDrawer quoted replies", () => {
     await screen.findByText("Retry answer");
     expect(vi.mocked(chatWithArticle).mock.calls[2][1].slice(-1)[0]).toEqual({ role: "user", content: "Why?" });
   });
+  it("quotes a passage highlighted in the article and asks about it", async () => {
+    vi.mocked(chatWithArticle).mockResolvedValue({ content: "It means X", web_citations: [], provider: "openai", model: "test" });
+    const user = userEvent.setup();
+    const view = render(<ChatDrawer articleId="article-1" articleTitle="Article" open askAbout={null} />);
+    view.rerender(<ChatDrawer articleId="article-1" articleTitle="Article" open askAbout={{ id: 1, text: "a hack of Australia's health department" }} />);
+    const note = screen.getByRole("note", { name: "Quoted text" });
+    expect(note).toHaveTextContent("From the article");
+    expect(note).toHaveTextContent("a hack of Australia's health department");
+    expect(screen.getByRole("textbox")).toHaveFocus();
+    await user.type(screen.getByRole("textbox"), "Which hack?{Enter}");
+    await screen.findByText("It means X");
+    expect(vi.mocked(chatWithArticle).mock.calls[0][1].slice(-1)[0]).toEqual({
+      role: "user",
+      content: "About this passage from the article:\n> a hack of Australia's health department\n\nWhich hack?",
+    });
+  });
 });

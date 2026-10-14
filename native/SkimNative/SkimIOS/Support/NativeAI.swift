@@ -36,6 +36,33 @@ struct AIResultAnswer {
     var articles: [Article]
 }
 
+/// Where a quoted passage in a chat question came from: a sentence of an
+/// earlier Skim answer, or a passage the reader highlighted in the article.
+enum ChatQuoteSource: Sendable, Equatable {
+    case answer
+    case article
+
+    /// Lead line before the quoted passage in the prompt.
+    var promptLead: String {
+        switch self {
+        case .answer: "Replying to Skim"
+        case .article: "About this passage from the article"
+        }
+    }
+
+    /// Caption above the quote in the composer and the sent bubble.
+    var caption: String {
+        switch self {
+        case .answer: "Replying to Skim"
+        case .article: "From the article"
+        }
+    }
+
+    func prompt(quote: String, question: String) -> String {
+        "\(promptLead):\n> \(quote.replacingOccurrences(of: "\n", with: "\n> "))\n\n\(question)"
+    }
+}
+
 struct AIChatConversation: Sendable {
     struct Turn: Sendable {
         enum Role: String, Sendable {
@@ -46,19 +73,21 @@ struct AIChatConversation: Sendable {
         var role: Role
         var text: String
         var quotedText: String?
+        var quoteSource: ChatQuoteSource = .answer
 
         var promptText: String {
             guard let quotedText, !quotedText.isEmpty else { return text }
-            return "Replying to Skim:\n> \(quotedText.replacingOccurrences(of: "\n", with: "\n> "))\n\n\(text)"
+            return quoteSource.prompt(quote: quotedText, question: text)
         }
     }
 
     var priorTurns: [Turn]
     var latestQuestion: String
     var latestQuote: String?
+    var latestQuoteSource: ChatQuoteSource
     var latestPromptText: String {
         guard let latestQuote, !latestQuote.isEmpty else { return latestQuestion }
-        return "Replying to Skim:\n> \(latestQuote.replacingOccurrences(of: "\n", with: "\n> "))\n\n\(latestQuestion)"
+        return latestQuoteSource.prompt(quote: latestQuote, question: latestQuestion)
     }
     var generatedSummaryContext: String?
     var priorArticleReferences: [Article]
@@ -66,8 +95,9 @@ struct AIChatConversation: Sendable {
     var priorArticleHandles: [Int]
     var articleHandleRegistry: [String: Int]
 
-    init(latestQuestion: String, quotedText: String? = nil, priorMessages: [AIChatMessage] = [], generatedSummaryContext: String? = nil) {
+    init(latestQuestion: String, quotedText: String? = nil, quoteSource: ChatQuoteSource = .answer, priorMessages: [AIChatMessage] = [], generatedSummaryContext: String? = nil) {
         self.generatedSummaryContext = generatedSummaryContext
+        self.latestQuoteSource = quoteSource
         let previousAnswer = priorMessages.last { $0.role == .assistant && !$0.isError }
         self.priorArticleReferences = previousAnswer?.referencedArticles ?? []
         self.priorArticleContext = previousAnswer?.contextArticles ?? []
@@ -91,7 +121,8 @@ struct AIChatConversation: Sendable {
                 Turn(
                     role: message.role == .user ? .user : .assistant,
                     text: message.text,
-                    quotedText: message.quotedText
+                    quotedText: message.quotedText,
+                    quoteSource: message.quoteSource
                 )
             }
     }
@@ -136,6 +167,9 @@ struct AIChatRequest: Identifiable {
     var title: String
     var placeholder: String
     var generatedSummaryContext: String? = nil
+    /// A passage the reader highlighted in the article; the chat opens with it
+    /// quoted above the composer, ready for a question about it.
+    var initialArticleQuote: String? = nil
     var answer: (AIChatConversation) async throws -> AIChatAnswer
 }
 
@@ -3597,6 +3631,7 @@ struct AIChatSheet: View {
     @Binding private var messages: [AIChatMessage]
     @State private var input = ""
     @State private var quotedText: String?
+    @State private var quoteSource: ChatQuoteSource = .answer
     @State private var isSending = false
     @State private var showReauth = false
     @State private var showAISettings = false
@@ -3628,6 +3663,7 @@ struct AIChatSheet: View {
                                         onOpenSettings: { showAISettings = true },
                                         onReply: isSending ? nil : { quote in
                                             quotedText = quote
+                                            quoteSource = .answer
                                             focused = true
                                         }
                                     )
@@ -3667,7 +3703,7 @@ struct AIChatSheet: View {
                     if let quotedText {
                         HStack(alignment: .top, spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Replying to Skim")
+                                Text(quoteSource.caption)
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(SkimStyle.accent)
                                 Text(quotedText)
@@ -3729,6 +3765,10 @@ struct AIChatSheet: View {
             }
             .onAppear {
                 seedInitialMessageIfNeeded()
+                if let quote = request.initialArticleQuote?.trimmingCharacters(in: .whitespacesAndNewlines), !quote.isEmpty {
+                    quotedText = quote
+                    quoteSource = .article
+                }
                 focused = true
             }
             .sheet(isPresented: $showReauth) {
@@ -3762,12 +3802,13 @@ struct AIChatSheet: View {
         guard !question.isEmpty, !isSending else { return }
         let toSend = question
         let quoteToSend = quotedText
+        let sourceToSend = quoteSource
         let priorMessages = messages
-        let conversation = AIChatConversation(latestQuestion: toSend, quotedText: quoteToSend, priorMessages: priorMessages, generatedSummaryContext: request.generatedSummaryContext ?? initialAssistantMessage)
+        let conversation = AIChatConversation(latestQuestion: toSend, quotedText: quoteToSend, quoteSource: sourceToSend, priorMessages: priorMessages, generatedSummaryContext: request.generatedSummaryContext ?? initialAssistantMessage)
         input = ""
         quotedText = nil
         focused = true
-        let userMessage = AIChatMessage(role: .user, text: toSend, quotedText: quoteToSend)
+        let userMessage = AIChatMessage(role: .user, text: toSend, quotedText: quoteToSend, quoteSource: sourceToSend)
         messages.append(userMessage)
         isSending = true
         do {
@@ -3787,6 +3828,7 @@ struct AIChatSheet: View {
             messages.removeAll { $0.id == userMessage.id }
             input = toSend
             quotedText = quoteToSend
+            quoteSource = sourceToSend
             let reauth: Bool = {
                 if case NativeAIError.requiresReauthentication = error { return true }
                 return false
@@ -3807,6 +3849,7 @@ struct AIChatMessage: Identifiable, Sendable {
     var role: Role
     var text: String
     var quotedText: String? = nil
+    var quoteSource: ChatQuoteSource = .answer
     var referencedArticles: [Article] = []
     var webCitations: [WebCitation] = []
     var contextArticles: [Article] = []
@@ -3835,7 +3878,7 @@ private struct AIChatBubble: View {
             VStack(alignment: .leading, spacing: 12) {
                 if let quote = message.quotedText {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Replying to Skim")
+                        Text(message.quoteSource.caption)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(SkimStyle.accent)
                         Text(quote)

@@ -596,7 +596,6 @@ struct SummaryConfigurationSheet: View {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .stroke(SkimStyle.separator, lineWidth: 1)
                             }
-                            .id(Self.focusFieldID)
                     }
                 }
                 .padding(.horizontal, 14)
@@ -610,6 +609,13 @@ struct SummaryConfigurationSheet: View {
                 .stroke(SkimStyle.separator, lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        // Scroll target for the Focus field: the whole card plus a gap, so the
+        // card's bottom edge stays visible above the Summarize button instead
+        // of the field sitting flush against it. The negative padding keeps
+        // the gap out of the layout.
+        .padding(.bottom, 12)
+        .id(Self.focusFieldID)
+        .padding(.bottom, -12)
     }
 
     private var customizeSummary: String {

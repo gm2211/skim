@@ -124,7 +124,7 @@ export function Sidebar() {
         <button
           onClick={() => setShowAddFeed(true)}
           className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
-          title="Add feed"
+          title="Discover and follow feeds"
           aria-label="Add feed"
         >
           <PlusIcon />
@@ -161,6 +161,27 @@ export function Sidebar() {
               style={{ fontSize: 17, fontWeight: 600 }}
             >
               Today
+            </span>
+          </div>
+        </div>
+
+        {/* Discover — find and follow new feeds. */}
+        <div style={{ marginTop: -24, marginBottom: 32, padding: "0 8px" }}>
+          <div
+            onClick={() => setSidebarView({ type: "discover" })}
+            className="flex items-center gap-3 cursor-pointer transition-colors relative z-20 hover:text-text-primary"
+            style={{ padding: "6px 0" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+              className={`flex-shrink-0 ${isActive({ type: "discover" }) ? "opacity-100" : "opacity-50"}`} aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="m15.5 8.5-2 5-5 2 2-5z" />
+            </svg>
+            <span
+              className={isActive({ type: "discover" }) ? "text-text-primary" : "text-text-secondary"}
+              style={{ fontSize: 15 }}
+            >
+              Discover feeds
             </span>
           </div>
         </div>

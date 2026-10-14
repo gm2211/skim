@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { IconButton } from "../common/IconButton";
-import { DiscoverFeeds } from "./DiscoverFeeds";
-import { useUiStore, type AddFeedTab } from "../../stores/uiStore";
+import { useUiStore } from "../../stores/uiStore";
 import {
   feedlyOauthAvailable,
   feedlyOauthLogin,
@@ -43,11 +42,7 @@ function Step({ number, title, children }: { number: number; title: string; chil
   );
 }
 
-type Tab = AddFeedTab;
-
 export function AddFeedDialog() {
-  const initialTab = useUiStore((s) => s.addFeedTab);
-  const [tab, setTab] = useState<Tab>(initialTab);
   const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
   const isPhone = useUiStore((s) => s.isPhone);
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(
@@ -59,10 +54,6 @@ export function AddFeedDialog() {
   // backdrop click, and Tab walked the list behind the dialog.
   useDialogFocus(dialogRef, () => setShowAddFeed(false));
 
-  useEffect(() => {
-    setTab(initialTab);
-  }, [initialTab]);
-
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
       <div
@@ -71,12 +62,10 @@ export function AddFeedDialog() {
         aria-modal="true"
         aria-labelledby="add-feed-title"
         tabIndex={-1}
-        className={`border border-white/10 rounded-2xl w-full ${tab === "url" ? "max-w-xl" : "max-w-md"} mx-4 shadow-2xl overflow-hidden flex flex-col`}
+        className="border border-white/10 rounded-2xl w-full max-w-md mx-4 shadow-2xl overflow-hidden flex flex-col"
         style={{
           background: "rgba(22, 27, 34, 0.95)",
           maxHeight: "calc(100dvh - 32px)",
-          // A fixed height keeps the dialog from jumping as results arrive.
-          height: tab === "url" ? "min(640px, calc(100dvh - 32px))" : undefined,
           minWidth: 0,
           ...swipeToDismissStyle,
         }}
@@ -86,7 +75,7 @@ export function AddFeedDialog() {
           style={{ padding: "16px 12px 0 24px", touchAction: isPhone ? "pan-y" : undefined }}
           {...swipeToDismissHandlers}
         >
-          <h2 id="add-feed-title" style={{ fontSize: 18, fontWeight: 600 }} className="text-text-primary">Add Feeds</h2>
+          <h2 id="add-feed-title" style={{ fontSize: 18, fontWeight: 600 }} className="text-text-primary">Import feeds</h2>
           <button
             onClick={() => setShowAddFeed(false)}
             className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
@@ -98,37 +87,9 @@ export function AddFeedDialog() {
           </button>
         </div>
 
-        {/* Tab bar */}
-        <div className="flex gap-1 shrink-0" style={{ padding: "12px 24px 0" }}>
-          <button
-            onClick={() => setTab("url")}
-            className={`rounded-lg transition-colors ${
-              tab === "url" ? "bg-white/10 text-text-primary" : "text-text-muted hover:text-text-primary"
-            }`}
-            style={{ padding: "6px 14px", fontSize: 13, fontWeight: 500 }}
-          >
-            Discover
-          </button>
-          <button
-            onClick={() => setTab("feedly")}
-            className={`rounded-lg transition-colors ${
-              tab === "feedly" ? "bg-white/10 text-text-primary" : "text-text-muted hover:text-text-primary"
-            }`}
-            style={{ padding: "6px 14px", fontSize: 13, fontWeight: 500 }}
-          >
-            Import
-          </button>
+        <div className="min-h-0 overflow-y-auto">
+          <FeedlyTab />
         </div>
-
-        {tab === "url" ? (
-          <div className="min-h-0 flex-1 flex flex-col">
-            <DiscoverFeeds onImportOpml={() => setTab("feedly")} />
-          </div>
-        ) : (
-          <div className="min-h-0 overflow-y-auto">
-            <FeedlyTab />
-          </div>
-        )}
       </div>
     </div>
   );

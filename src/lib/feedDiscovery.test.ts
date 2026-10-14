@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compactCount, displayHost, looksLikeUrl, shortAge } from "./feedDiscovery";
+import { compactCount, dayLabel, displayHost, looksLikeUrl, shortAge } from "./feedDiscovery";
 
 describe("looksLikeUrl", () => {
   it("treats addresses as URLs and words as searches", () => {
@@ -25,5 +25,14 @@ describe("formatting", () => {
     expect(shortAge(now / 1000 - 3 * 3600, now)).toBe("3h");
     expect(shortAge(now / 1000 - 2 * 86400, now)).toBe("2d");
     expect(shortAge(null, now)).toBe("");
+  });
+});
+
+describe("dayLabel", () => {
+  it("labels posts by day", () => {
+    const now = new Date(2026, 9, 14, 15).getTime();
+    expect(dayLabel(new Date(2026, 9, 14, 9).getTime() / 1000, now)).toBe("Today");
+    expect(dayLabel(new Date(2026, 9, 13, 23).getTime() / 1000, now)).toBe("Yesterday");
+    expect(dayLabel(null, now)).toBe("Earlier");
   });
 });

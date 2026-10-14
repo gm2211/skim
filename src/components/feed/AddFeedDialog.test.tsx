@@ -6,14 +6,8 @@ import { AddFeedDialog } from "./AddFeedDialog";
 import { useUiStore } from "../../stores/uiStore";
 import * as commands from "../../services/commands";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { DiscoveredFeed } from "../../services/types";
 
 vi.mock("../../services/commands", () => ({
-  addFeed: vi.fn(),
-  discoverFeeds: vi.fn(),
-  searchFeeds: vi.fn(),
-  previewFeed: vi.fn(),
-  feedCatalog: vi.fn(),
   feedlyOauthAvailable: vi.fn(),
   feedlyOauthLogin: vi.fn(),
   getFeedlyStatus: vi.fn(),
@@ -44,87 +38,6 @@ beforeEach(() => {
   vi.mocked(commands.getFeedlyStatus).mockResolvedValue(null);
   vi.mocked(commands.previewOpml).mockResolvedValue([]);
   vi.mocked(openUrl).mockResolvedValue(undefined);
-  vi.mocked(commands.feedCatalog).mockResolvedValue([
-    { id: "tech", name: "Tech", feeds: [feed({ title: "The Verge", url: "https://www.theverge.com/rss/index.xml" })] },
-    { id: "space", name: "Space", feeds: [feed({ title: "NASA", url: "https://www.nasa.gov/feed/" })] },
-  ]);
-});
-
-function feed(over: Partial<DiscoveredFeed> = {}): DiscoveredFeed {
-  return {
-    url: "https://example.com/feed.xml",
-    title: "Example",
-    site_url: "https://example.com",
-    description: null,
-    icon_url: null,
-    subscribers: null,
-    items: [],
-    already_subscribed: false,
-    ...over,
-  };
-}
-
-describe("Discover", () => {
-  beforeEach(() => useUiStore.setState({ addFeedTab: "url" }));
-
-  it("browses popular feeds by topic and adds one in place", async () => {
-    const user = userEvent.setup();
-    vi.mocked(commands.addFeed).mockResolvedValue({} as never);
-    renderDialog();
-
-    expect(await screen.findByText("The Verge")).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Space" }));
-    await user.click(screen.getByRole("button", { name: "Add NASA" }));
-
-    expect(commands.addFeed).toHaveBeenCalledWith("https://www.nasa.gov/feed/");
-    expect(await screen.findByText("Added 1 feed")).toBeInTheDocument();
-    expect(useUiStore.getState().showAddFeed).toBe(true);
-  });
-
-  it("finds a site's feeds from its address and shows their latest posts", async () => {
-    const user = userEvent.setup();
-    vi.mocked(commands.discoverFeeds).mockResolvedValue([
-      feed({ title: "Example Blog", items: [{ title: "Hello world", url: "https://example.com/1", published_at: null }] }),
-      feed({ title: "Comments", url: "https://example.com/comments.xml", already_subscribed: true }),
-    ]);
-    renderDialog();
-
-    await user.type(screen.getByRole("textbox", { name: /paste a website/ }), "example.com");
-    expect(await screen.findByText("Example Blog", {}, { timeout: 2000 })).toBeInTheDocument();
-    expect(commands.discoverFeeds).toHaveBeenCalledWith("example.com");
-    expect(commands.searchFeeds).not.toHaveBeenCalled();
-    expect(screen.getByText("Following")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /^Example Blog/ }));
-    expect(screen.getByText("Hello world")).toBeInTheDocument();
-    expect(commands.previewFeed).not.toHaveBeenCalled();
-  });
-
-  it("searches by topic words and previews a result on demand", async () => {
-    const user = userEvent.setup();
-    vi.mocked(commands.searchFeeds).mockResolvedValue([feed({ title: "Rust Blog", subscribers: 12_300 })]);
-    vi.mocked(commands.previewFeed).mockResolvedValue(
-      feed({ title: "Rust Blog", items: [{ title: "Rust 2.0", url: null, published_at: null }] }),
-    );
-    renderDialog();
-
-    await user.type(screen.getByRole("textbox", { name: /paste a website/ }), "rust lang");
-    expect(await screen.findByText("Rust Blog", {}, { timeout: 2000 })).toBeInTheDocument();
-    expect(commands.searchFeeds).toHaveBeenCalledWith("rust lang");
-    expect(screen.getByText(/12K followers/)).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: /^Rust Blog/ }));
-    expect(await screen.findByText("Rust 2.0")).toBeInTheDocument();
-  });
-
-  it("shows why discovery failed", async () => {
-    const user = userEvent.setup();
-    vi.mocked(commands.discoverFeeds).mockRejectedValue("No feeds found on that page.");
-    renderDialog();
-
-    await user.type(screen.getByRole("textbox", { name: /paste a website/ }), "nofeeds.example");
-    expect(await screen.findByText("No feeds found on that page.", {}, { timeout: 2000 })).toBeInTheDocument();
-  });
 });
 
 describe("closing the dialog", () => {

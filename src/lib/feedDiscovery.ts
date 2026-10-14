@@ -39,3 +39,19 @@ export function shortAge(publishedAt: number | null, now = Date.now()): string {
   if (days < 7) return `${days}d`;
   return new Date(publishedAt * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+
+/** "Today", "Yesterday", "Monday", "Oct 3", or "Earlier" for undated posts. */
+export function dayLabel(publishedAt: number | null, now = Date.now()): string {
+  if (!publishedAt) return "Earlier";
+  const start = (t: number) => {
+    const d = new Date(t);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  };
+  const days = Math.round((start(now) - start(publishedAt * 1000)) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  const date = new Date(publishedAt * 1000);
+  if (days < 7) return date.toLocaleDateString(undefined, { weekday: "long" });
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}

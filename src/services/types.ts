@@ -305,7 +305,8 @@ export type SidebarView =
   | { type: "recent" }
   | { type: "theme"; themeId: string }
   | { type: "folder"; folderId: string }
-  | { type: "today" };
+  | { type: "today" }
+  | { type: "discover" };
 
 export interface ArticleWithInteraction extends Article {
   reading_time_sec: number;
@@ -413,6 +414,8 @@ export interface FeedPreviewItem {
   title: string;
   url: string | null;
   published_at: number | null;
+  author: string | null;
+  image_url: string | null;
 }
 
 /** A feed found by discovery, search, or the built-in catalog. */

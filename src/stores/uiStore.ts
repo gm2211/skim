@@ -154,11 +154,20 @@ export const useUiStore = create<UiState>((set, get) => ({
               phonePane: state.isPhone ? "detail" : state.phonePane,
       };
     }),
+  // Adding feeds happens in the Discover view; only importing (OPML/Feedly)
+  // still opens the dialog.
   setShowAddFeed: (show, tab) =>
-    set((state) => ({
-      showAddFeed: show,
-      addFeedTab: show ? tab ?? "url" : state.addFeedTab,
-    })),
+    set((state) =>
+      show && (tab ?? "url") === "url"
+        ? {
+            showAddFeed: false,
+            sidebarView: { type: "discover" },
+            selectedArticleId: null,
+            articleReturnTarget: null,
+            phonePane: state.isPhone ? "list" : state.phonePane,
+          }
+        : { showAddFeed: show, addFeedTab: show ? tab ?? "feedly" : state.addFeedTab },
+    ),
   setShowSettings: (show, tab) =>
     set((state) => ({
       showSettings: show,

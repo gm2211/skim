@@ -14,7 +14,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 const CATALOG_JSON: &str = include_str!("../../../shared/feed-catalog.json");
-const PREVIEW_ITEMS: usize = 5;
+/// Headlines kept per feed: enough for a feed's page in the Discover view.
+const PREVIEW_ITEMS: usize = 20;
 const MAX_CANDIDATES: usize = 12;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -22,6 +23,8 @@ pub struct FeedPreviewItem {
     pub title: String,
     pub url: Option<String>,
     pub published_at: Option<i64>,
+    pub author: Option<String>,
+    pub image_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -224,22 +227,70 @@ pub fn common_feed_paths(page_url: &str) -> Vec<String> {
 }
 
 fn to_discovered(bytes: &[u8], feed_url: &str) -> Option<DiscoveredFeed> {
-    let (feed, articles) = parse_feed_bytes(bytes, feed_url, None).ok()?;
+    let (feed, _) = parse_feed_bytes(bytes, feed_url, None).ok()?;
+    // Parse again for what Skim's Article model drops: media thumbnails.
+    let raw = feed_rs::parser::parse(bytes).ok()?;
+    let base = url::Url::parse(feed_url).ok();
     let site_url = feed.site_url.filter(|s| s != feed_url);
+    let mut items: Vec<FeedPreviewItem> = raw
+        .entries
+        .iter()
+        .map(|entry| {
+            let html = entry
+                .content
+                .as_ref()
+                .and_then(|c| c.body.clone())
+                .or_else(|| entry.summary.as_ref().map(|s| s.content.clone()))
+                .unwrap_or_default();
+            FeedPreviewItem {
+                title: clean_text(&entry.title.as_ref().map(|t| t.content.clone()).unwrap_or_else(|| "Untitled".into())),
+                url: entry.links.first().map(|l| l.href.clone()),
+                published_at: entry.published.or(entry.updated).map(|d| d.timestamp()),
+                author: entry.authors.first().map(|a| clean_text(&a.name)).filter(|a| !a.is_empty()),
+                image_url: entry_image(entry, &html, base.as_ref()),
+            }
+        })
+        .collect();
+    // Newest first, undated last, so a feed's page reads like a timeline.
+    items.sort_by(|a, b| b.published_at.unwrap_or(i64::MIN).cmp(&a.published_at.unwrap_or(i64::MIN)));
+    items.truncate(PREVIEW_ITEMS);
     Some(DiscoveredFeed {
         url: feed_url.to_string(),
-        title: feed.title,
+        title: clean_text(&feed.title),
         icon_url: feed.icon_url,
         site_url,
         description: feed.description.map(|d| clean_text(&d)).filter(|d| !d.is_empty()),
         subscribers: None,
-        items: articles
-            .into_iter()
-            .take(PREVIEW_ITEMS)
-            .map(|a| FeedPreviewItem { title: clean_text(&a.title), url: a.url, published_at: a.published_at })
-            .collect(),
+        items,
         already_subscribed: false,
     })
+}
+
+/// An item's picture: a media thumbnail, an image enclosure, or the first
+/// `<img>` in its content.
+fn entry_image(entry: &feed_rs::model::Entry, html: &str, base: Option<&url::Url>) -> Option<String> {
+    for media in &entry.media {
+        if let Some(t) = media.thumbnails.first() {
+            return Some(t.image.uri.clone());
+        }
+        for c in &media.content {
+            let is_image = c.content_type.as_ref().map(|t| t.to_string().starts_with("image/")).unwrap_or(false);
+            if is_image {
+                if let Some(u) = &c.url {
+                    return Some(u.to_string());
+                }
+            }
+        }
+    }
+    let img = Regex::new(r#"(?is)<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']"#).unwrap();
+    let src = img.captures(html)?.get(1)?.as_str().replace("&amp;", "&");
+    if src.starts_with("data:") {
+        return None;
+    }
+    match base {
+        Some(b) => b.join(&src).ok().map(|u| u.to_string()),
+        None => Some(src),
+    }
 }
 
 fn clean_text(s: &str) -> String {
@@ -509,14 +560,18 @@ mod tests {
     fn builds_preview_from_feed_bytes() {
         let rss = br#"<?xml version="1.0"?><rss version="2.0"><channel><title>Demo &amp; Co</title>
             <link>https://demo.example</link><description>About &lt;b&gt;things&lt;/b&gt;</description>
-            <item><title>One</title><link>https://demo.example/1</link></item>
-            <item><title>Two</title><link>https://demo.example/2</link></item>
+            <item><title>One</title><link>https://demo.example/1</link><pubDate>Mon, 12 Oct 2026 10:00:00 GMT</pubDate>
+              <description>&lt;p&gt;Hi &lt;img src="/pics/1.jpg"&gt;&lt;/p&gt;</description></item>
+            <item><title>Two</title><link>https://demo.example/2</link><pubDate>Tue, 13 Oct 2026 10:00:00 GMT</pubDate></item>
             </channel></rss>"#;
         let feed = to_discovered(rss, "https://demo.example/feed").unwrap();
         assert_eq!(feed.title, "Demo & Co");
         assert_eq!(feed.description.as_deref(), Some("About things"));
         assert_eq!(feed.items.len(), 2);
-        assert_eq!(feed.items[0].title, "One");
+        // Newest first; the first <img> in content becomes the picture.
+        assert_eq!(feed.items[0].title, "Two");
+        assert_eq!(feed.items[1].image_url.as_deref(), Some("https://demo.example/pics/1.jpg"));
+        assert_eq!(feed.items[0].image_url, None);
         assert!(to_discovered(b"<html><body>hi</body></html>", "https://x.org").is_none());
     }
 

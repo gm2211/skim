@@ -220,7 +220,7 @@ fn summary_cache_key(article_id: &str, title: &str, evidence: &str, ai: &AiSetti
     }
 
     let key = SummaryKey {
-        prompt_version: 4, // Shared normalized length and bounded output budgets.
+        prompt_version: 5, // Hosted headroom and cut-off sentences dropped.
         plan: crate::db::story_policy::summary_plan(ai.summary_length.as_deref(),
             ai.summary_custom_word_count.map(i64::from)),
         article_id,
@@ -390,12 +390,13 @@ fn extract_summary_field(raw: &str) -> String {
         }
     }
 
-    // Fallback: extract text between "summary": and "notes": using string matching
+    // Fallback: extract text between "summary": and "notes": using string matching.
+    // Output cut off at the token limit lands here, so drop its unfinished sentence.
     if let Some(val) = extract_field_fuzzy(&cleaned, "summary") {
-        return val;
+        return crate::db::story_policy::summary_complete(&val).to_string();
     }
 
-    cleaned
+    crate::db::story_policy::summary_complete(&cleaned).to_string()
 }
 
 /// Extract bullet points from a JSON response, falling back to raw text.
@@ -2612,6 +2613,19 @@ pub async fn get_article_interaction(
 ) -> Result<Option<crate::db::models::ArticleInteraction>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     queries::get_article_interaction(&conn, &article_id).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod summary_extraction_tests {
+    use super::*;
+
+    #[test]
+    fn summary_cut_off_at_the_token_limit_ends_on_a_full_sentence() {
+        let raw = r#"{"summary": "**The steelman.** People pay for human craft. Because AI makes everything else chea"#;
+        assert_eq!(extract_summary_field(raw), "**The steelman.** People pay for human craft.");
+        let whole = r#"{"summary": "Complete. Still whole", "notes": ""}"#;
+        assert_eq!(extract_summary_field(whole), "Complete. Still whole");
+    }
 }
 
 #[cfg(test)]

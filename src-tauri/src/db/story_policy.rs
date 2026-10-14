@@ -35,6 +35,8 @@ extern "C" {
     fn skim_summary_max_words() -> i32;
     fn skim_summary_custom_words_valid(words: i64) -> i32;
     fn skim_summary_style_prompt(tone: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
+    fn skim_summary_request_max_tokens(plan_tokens: i32, provider: *const std::os::raw::c_char) -> i32;
+    fn skim_summary_complete_length(text: *const u8, len: usize) -> usize;
     #[cfg(test)]
     fn skim_today_lede_excerpt_valid(source: *const u8, source_len: usize, excerpt: *const u8, excerpt_len: usize) -> i32;
     fn skim_today_lede_source_index(sources: *const u8, sources_len: usize,
@@ -184,6 +186,21 @@ pub fn summary_style_prompt(tone: Option<&str>) -> &'static str {
     // C returns immutable, static NUL-terminated UTF-8 storage.
     unsafe { std::ffi::CStr::from_ptr(skim_summary_style_prompt(ptr)) }
         .to_str().expect("shared summary style is UTF-8")
+}
+
+/// Output-token ceiling for one summary request to `provider`.
+pub fn summary_request_max_tokens(plan_tokens: i64, provider: &str) -> i64 {
+    let plan = i32::try_from(plan_tokens).unwrap_or(i32::MAX);
+    let provider = std::ffi::CString::new(provider).ok();
+    let ptr = provider.as_ref().map_or(std::ptr::null(), |provider| provider.as_ptr());
+    i64::from(unsafe { skim_summary_request_max_tokens(plan, ptr) })
+}
+
+/// Drops an unfinished final sentence left by a token cutoff.
+pub fn summary_complete(text: &str) -> &str {
+    let kept = unsafe { skim_summary_complete_length(text.as_ptr(), text.len()) };
+    // C cuts only at the end of a whole character, so `kept` is a char boundary.
+    text.get(..kept.min(text.len())).unwrap_or(text)
 }
 
 pub fn today_lede_evidence_version() -> i32 {
@@ -408,6 +425,21 @@ mod tests {
         }
         assert_eq!(summary_plan(Some("custom"), None), summary_plan(None, None));
         assert_eq!(summary_plan(Some("custom\0long"), Some(1000)), summary_plan(None, None));
+    }
+
+    #[test]
+    fn summary_completion_shared_fixture_crosses_rust_abi() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../shared/fixtures/summary-completion.json")).unwrap();
+        for case in fixture["trim"].as_array().unwrap() {
+            assert_eq!(summary_complete(case["text"].as_str().unwrap()), case["kept"].as_str().unwrap(), "{case}");
+        }
+        for case in fixture["max_tokens"].as_array().unwrap() {
+            let provider = case["provider"].as_str().unwrap_or("");
+            assert_eq!(summary_request_max_tokens(case["plan_tokens"].as_i64().unwrap(), provider),
+                case["max_tokens"].as_i64().unwrap(), "{case}");
+        }
+        assert_eq!(summary_request_max_tokens(256, "xai\0mlx"), 256);
     }
 
     #[test]

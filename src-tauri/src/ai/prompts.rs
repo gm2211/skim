@@ -161,11 +161,11 @@ Output JSON:
 }
 
 pub fn bullet_max_tokens(settings: &AiSettings) -> i64 {
-    length_params(settings).2
+    crate::db::story_policy::summary_request_max_tokens(length_params(settings).2, &settings.provider)
 }
 
 pub fn full_max_tokens(settings: &AiSettings) -> i64 {
-    length_params(settings).3
+    crate::db::story_policy::summary_request_max_tokens(length_params(settings).3, &settings.provider)
 }
 
 // --- Quick Catch-up: the front page -----------------------------------------
@@ -296,6 +296,18 @@ mod summary_prompt_tests {
             assert_eq!(full_max_tokens(&settings), 256);
             assert_eq!(bullet_max_tokens(&settings), 200);
         }
+    }
+
+    #[test]
+    fn hosted_summaries_get_headroom_for_hidden_reasoning() {
+        let mut settings = crate::db::models::AppSettings::default().ai;
+        settings.summary_length = Some("long".into());
+        settings.provider = "xai".into();
+        assert_eq!(full_max_tokens(&settings), 8192);
+        assert_eq!(bullet_max_tokens(&settings), 8192);
+        settings.provider = "local".into();
+        assert_eq!(full_max_tokens(&settings), 2400);
+        assert!(article_full_summary_prompt("T", "Body.", &settings).contains("3-5 paragraphs (~300 words)"));
     }
 
     #[test]

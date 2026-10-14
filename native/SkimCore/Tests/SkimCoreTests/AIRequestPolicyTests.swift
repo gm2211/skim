@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import SkimCore
+import SkimStoryPolicy
 
 @Test func chatOverridesMatchDesktopAndKeepOtherSettings() {
     let base = AISettings(provider: "openai", apiKey: "test-main", model: "main", localModelPath: "old/local-model", endpoint: "https://main.test", chatProvider: "mlx", chatModel: "chat", chatApiKey: "test-chat", chatEndpoint: "https://chat.test", localChatWebSearch: true)
@@ -100,6 +101,29 @@ import Testing
         #expect(actual.fullMaxTokens == entry.plan.full_max_tokens)
         #expect(AIRequestPolicy.validSummaryWordCount(entry.custom_words) == entry.valid_custom)
     }
+}
+
+@Test func summaryCompletionMatchesSharedFixture() throws {
+    struct Fixture: Decodable {
+        struct Trim: Decodable { var text: String; var kept: String }
+        struct Budget: Decodable { var plan_tokens: Int; var provider: String?; var max_tokens: Int }
+        var trim: [Trim]; var max_tokens: [Budget]
+    }
+    var root = URL(fileURLWithPath: #filePath)
+    for _ in 0..<5 { root.deleteLastPathComponent() }
+    let fixture = try JSONDecoder().decode(Fixture.self, from: Data(
+        contentsOf: root.appendingPathComponent("shared/fixtures/summary-completion.json")))
+    for entry in fixture.trim {
+        #expect(AIRequestPolicy.completeSummary(entry.text) == entry.kept)
+    }
+    for entry in fixture.max_tokens {
+        let plan = Int32(entry.plan_tokens)
+        let actual = entry.provider.map { provider in provider.withCString { skim_summary_request_max_tokens(plan, $0) } }
+            ?? skim_summary_request_max_tokens(plan, nil)
+        #expect(Int(actual) == entry.max_tokens)
+    }
+    #expect(AIRequestPolicy.summaryRequestMaxTokens(AISettings(provider: "xai", summaryLength: "long")) == 8192)
+    #expect(AIRequestPolicy.summaryRequestMaxTokens(AISettings(provider: "mlx", summaryLength: "long")) == 2400)
 }
 
 @Test func explicitSummaryCountEditControlsPromptAndBudgetWithoutChangingOtherSettings() {

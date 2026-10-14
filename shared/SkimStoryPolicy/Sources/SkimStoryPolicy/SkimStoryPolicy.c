@@ -49,6 +49,67 @@ const char *skim_summary_style_prompt(const char *tone) {
 
 #undef SUMMARY_FIDELITY
 
+/* Hosted models where max tokens is only a ceiling: some count hidden
+ * reasoning against it, so the plan budget alone cuts summaries short. */
+static int summary_provider_is_hosted(const char *provider) {
+    static const char *const hosted[] = {"openai", "xai", "openrouter", "anthropic",
+        "claude-subscription", "chatgpt-subscription", "claude-cli"};
+    if (!provider) return 0;
+    for (size_t i = 0; i < sizeof hosted / sizeof hosted[0]; ++i)
+        if (strcmp(provider, hosted[i]) == 0) return 1;
+    return 0;
+}
+
+int32_t skim_summary_request_max_tokens(int32_t plan_tokens, const char *provider) {
+    if (plan_tokens < 1) plan_tokens = 1;
+    if (!summary_provider_is_hosted(provider)) return plan_tokens;
+    return plan_tokens > 8192 ? plan_tokens : 8192;
+}
+
+static int summary_is_space(uint8_t c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+
+/* Steps back over closing quotes, brackets and Markdown emphasis that may
+ * follow a sentence's final punctuation. Returns the index just past the
+ * terminator when one ends at `end`, else 0. */
+static size_t summary_sentence_end(const uint8_t *s, size_t start, size_t end) {
+    size_t i = end;
+    while (i > start) {
+        uint8_t c = s[i - 1];
+        if (c == '"' || c == '\'' || c == ')' || c == ']' || c == '*' || c == '_') { --i; continue; }
+        /* ’ and ” are E2 80 99 / E2 80 9D. */
+        if (i - start >= 3 && s[i - 3] == 0xe2 && s[i - 2] == 0x80 && (c == 0x99 || c == 0x9d)) { i -= 3; continue; }
+        break;
+    }
+    if (i == start) return 0;
+    uint8_t c = s[i - 1];
+    if (c == '.' || c == '!' || c == '?') return end;
+    /* … is E2 80 A6. */
+    if (i - start >= 3 && s[i - 3] == 0xe2 && s[i - 2] == 0x80 && c == 0xa6) return end;
+    return 0;
+}
+
+size_t skim_summary_complete_length(const uint8_t *text, size_t len) {
+    if (!text) return 0;
+    size_t end = len;
+    while (end > 0 && summary_is_space(text[end - 1])) --end;
+    if (end == 0 || summary_sentence_end(text, 0, end)) return len;
+    size_t line = end;
+    while (line > 0 && text[line - 1] != '\n') --line;
+    /* Last sentence break inside the final line: terminator, then whitespace. */
+    for (size_t i = end; i > line; --i) {
+        if (!summary_is_space(text[i - 1]) || i - 1 == line) continue;
+        size_t kept = i - 1;
+        while (kept > line && summary_is_space(text[kept - 1])) --kept;
+        if (kept > line && summary_sentence_end(text, line, kept)) return kept;
+    }
+    /* No sentence ends in the final line. Drop it only when the prose before
+     * it ends a sentence; an unpunctuated list keeps its last item. */
+    size_t prev = line;
+    while (prev > 0 && summary_is_space(text[prev - 1])) --prev;
+    if (prev > 0 && summary_sentence_end(text, 0, prev)) return prev;
+    return len;
+}
+
 static size_t lede_scalar(const uint8_t *s, size_t n, uint32_t *value) {
     if (!n) return 0;
     uint32_t c = s[0];

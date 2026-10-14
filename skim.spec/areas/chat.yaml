@@ -55,3 +55,17 @@ behaviors:
     description: >-
       After the reader fixes their AI settings, an article chat that failed works again without
       reopening the app.
+  - id: chat-easy-reading
+    description: >-
+      In the iOS chat sheet the reader can put the keyboard away to read, and a new answer opens
+      at its first line rather than its end.
+    details: >-
+      Swiping down on the conversation, tapping it, or the keyboard bar's hide button dismisses
+      the keyboard. When an answer arrives the conversation scrolls so the answer's top sits at
+      the top of the view; a sent question still scrolls to the bottom.
+    source:
+      text: >-
+        I wanna be able to easily dismiss keyboard for easier reading. Also right after generation
+        of chat response, it auto scrolls all the way to the botton and you can't see much till i
+        scroll back up
+      reference: Giulio, project chat, 2026-10-14

@@ -37,6 +37,7 @@ enum SkimIcon {
     static let reader = "book"
     static let web = "globe"
     static let openExternal = "arrow.up.right.square"
+    static let share = "square.and.arrow.up"
     static let star = "star"
     static let starFilled = "star.fill"
     static let unstar = "star.slash"

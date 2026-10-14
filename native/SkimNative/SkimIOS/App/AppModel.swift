@@ -388,15 +388,29 @@ final class AppModel: ObservableObject {
     }
 
     func setTodayConsumed(_ item: TodayEditionItem) async {
-        guard let edition = todayEdition, !isUpdatingToday else { return }
-        let requestID = todayLoadID
+        guard !isUpdatingToday else { return }
         isUpdatingToday = true
-        todayError = nil
         defer { isUpdatingToday = false }
+        await saveTodayConsumed(storyID: item.snapshot.storyID, isConsumed: !item.snapshot.isConsumed)
+    }
+
+    /// Opening a story, or asking about it in chat, reads it. Only ever marks
+    /// read, so a story the reader marked unread again stays that way until
+    /// they open it again.
+    func markTodayStoryRead(storyID: String) async {
+        guard let item = todayEdition?.items.first(where: { $0.snapshot.storyID == storyID }),
+              !item.snapshot.isConsumed else { return }
+        await saveTodayConsumed(storyID: storyID, isConsumed: true)
+    }
+
+    private func saveTodayConsumed(storyID: String, isConsumed: Bool) async {
+        guard let edition = todayEdition else { return }
+        let requestID = todayLoadID
+        todayError = nil
         do {
             let updated = try await store.setTodayEditionItemConsumed(
-                editionID: edition.id, storyID: item.snapshot.storyID,
-                isConsumed: !item.snapshot.isConsumed
+                editionID: edition.id, storyID: storyID,
+                isConsumed: isConsumed
             )
             if todayLoadID == requestID, todayEdition?.id == edition.id {
                 todayEdition = TodayEditionMerge.consumption(current: todayEdition, response: updated)

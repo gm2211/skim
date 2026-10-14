@@ -42,7 +42,7 @@ function FrontPage({ cells }: { cells: { key: string; node: React.ReactNode }[] 
 
 export function TodayEditionPane() {
   const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane, todayPage, setTodayPage } = useUiStore();
-  const { data, isLoading, isError, error, window: todayWin, setConsumed, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch, aiEnabled, isPreparingSummaries, settingsUnavailable, retrySettings } =
+  const { data, isLoading, isError, error, window: todayWin, setConsumed, markStoryRead, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch, aiEnabled, isPreparingSummaries, settingsUnavailable, retrySettings } =
     useTodayEdition();
 
   const [theme, setTheme] = useState<string | null>(null);
@@ -246,8 +246,11 @@ export function TodayEditionPane() {
             rank={rankFor(index)}
             isSaving={setConsumed.isPending}
             onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
-            onOpenArticle={handleOpenArticle}
-            onAsk={() => openAgentChat({ context: { ...agentContext, story: storyForAgent(item) } })}
+            onOpenArticle={(articleId) => { markStoryRead(item.story_id); handleOpenArticle(articleId); }}
+            onAsk={() => openAgentChat({
+              context: { ...agentContext, story: storyForAgent(item) },
+              onSend: () => markStoryRead(item.story_id),
+            })}
           />,
         }))} />}
 

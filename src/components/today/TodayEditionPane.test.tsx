@@ -210,6 +210,38 @@ describe("TodayEditionPane", () => {
     expect(story?.article_ids).toEqual(["two-lead", "two-other"]);
   });
 
+  it("marks a story read when its report is opened or a question about it is sent, not when the chat just opens", async () => {
+    vi.mocked(commands.getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } });
+    const member = makeItem({}).member_articles[0];
+    const second = makeItem({
+      story_id: "story-two", snapshot_title: "Second story", representative_article_id: "two-lead", editorial: editorial("Second summary of the day."),
+      member_article_ids: ["two-lead"], member_articles: [{ ...member, article_id: "two-lead" }],
+    });
+    const read = makeItem({ story_id: "story-read", snapshot_title: "Already read", is_consumed: true, editorial: editorial("Third summary.") });
+    const view = makeView([makeItem({ editorial: editorial("First summary of the day.") }), second, read]);
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
+    vi.mocked(commands.setTodayEditionItemConsumed).mockImplementation(async (_edition, storyId, isConsumed) =>
+      ({ ...view, items: view.items.map((item) => item.story_id === storyId ? { ...item, is_consumed: isConsumed } : item) }));
+    useUiStore.setState({ sidebarView: { type: "today" } });
+    const user = userEvent.setup();
+    renderPane();
+
+    await user.click(await screen.findByRole("button", { name: "Second story" }));
+    await waitFor(() => expect(commands.setTodayEditionItemConsumed).toHaveBeenCalledWith("today-1-2-10", "story-two", true, expect.any(Number)));
+
+    vi.mocked(commands.setTodayEditionItemConsumed).mockClear();
+    await user.click(screen.getByRole("button", { name: "Ask about Default snapshot title" }));
+    expect(commands.setTodayEditionItemConsumed).not.toHaveBeenCalled();
+    useAgentChatStore.getState().seed?.onSend?.();
+    await waitFor(() => expect(commands.setTodayEditionItemConsumed).toHaveBeenCalledWith("today-1-2-10", "story-default", true, expect.any(Number)));
+
+    vi.mocked(commands.setTodayEditionItemConsumed).mockClear();
+    await user.click(screen.getByRole("button", { name: "Already read" }));
+    await user.click(screen.getByRole("button", { name: "Ask about Already read" }));
+    useAgentChatStore.getState().seed?.onSend?.();
+    expect(commands.setTodayEditionItemConsumed).not.toHaveBeenCalled();
+  });
+
   it("leaves link-only feed stubs off the page", async () => {
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({ snapshot_summary: "Comments" })]));
     renderPane();

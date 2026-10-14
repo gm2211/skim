@@ -333,6 +333,11 @@ struct ArticleListView: View {
                         placeholder: WebAIContext.subtitle(base: article, preferWeb: false, snapshot: snapshot),
                         generatedSummaryContext: summaryText
                     ) { conversation in
+                        // Asking about an article reads it; it stays in the
+                        // unread list until the reader moves on, as when opened.
+                        if !article.isRead {
+                            await model.setRead(article, isRead: true, keepVisibleInUnreadList: true)
+                        }
                         let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot, store: model.store)
                         let (text, citations) = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
                         return AIChatAnswer(text: text, articles: [contextArticle], webCitations: citations)

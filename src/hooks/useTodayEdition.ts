@@ -88,7 +88,7 @@ export function useTodayEdition() {
       ),
   });
 
-  const setConsumed = useMutation({
+  const consumedMutation = {
     mutationFn: async ({ storyId, isConsumed }: { storyId: string; isConsumed: boolean }) => {
       const edition = query.data;
       if (!edition) {
@@ -102,7 +102,7 @@ export function useTodayEdition() {
       );
       return { view, key: queryKey };
     },
-    onSuccess: ({ view, key }) => {
+    onSuccess: ({ view, key }: { view: TodayEditionView; key: typeof queryKey }) => {
       qc.setQueryData<TodayEditionView>(key, (current) => preserveLatestLedes(view, current));
       // set_today_edition_item_consumed also marks the underlying member
       // articles read server-side — the raw article/feed views need to
@@ -114,7 +114,20 @@ export function useTodayEdition() {
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["inbox"] });
     },
-  });
+  };
+  const setConsumed = useMutation(consumedMutation);
+  // Opening a story or asking about it reads it. A separate mutation, so the
+  // page's read toggles don't all show as saving while it lands.
+  const { mutate: saveRead } = useMutation(consumedMutation);
+  const latest = useRef(query.data);
+  latest.current = query.data;
+  // Only ever marks read, and only a story on the page now: the chat can send
+  // after the page has turned.
+  const markStoryRead = useCallback((storyId: string) => {
+    const item = latest.current?.items.find((candidate) => candidate.story_id === storyId);
+    if (!item || item.is_consumed) return;
+    saveRead({ storyId, isConsumed: true });
+  }, [saveRead]);
 
   // Editorial summaries arrive after grouping and ranking, one story at a time.
   const editionId = query.data?.edition.id;
@@ -197,6 +210,7 @@ export function useTodayEdition() {
     storyLimit,
     aiEnabled,
     setConsumed,
+    markStoryRead,
     ledeProgress,
     isWritingLedes,
     settingsUnavailable: settingsQuery.isError,

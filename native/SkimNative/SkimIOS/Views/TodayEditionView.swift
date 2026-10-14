@@ -181,6 +181,7 @@ struct TodayEditionView: View {
                 isWritingLede: writing,
                 isUpdating: model.isUpdatingToday,
                 onToggleConsumed: { Task { await model.setTodayConsumed(item) } },
+                onOpen: { Task { await model.markTodayStoryRead(storyID: item.snapshot.storyID) } },
                 onAsk: { onAsk(TodayChat.story(item, model: model)) }
             )
             .padding(.horizontal, position == 0 ? -18 : 0)
@@ -199,6 +200,7 @@ struct TodayEditionView: View {
                         isWritingLede: false,
                         isUpdating: model.isUpdatingToday,
                         onToggleConsumed: { Task { await model.setTodayConsumed(item) } },
+                        onOpen: { Task { await model.markTodayStoryRead(storyID: item.snapshot.storyID) } },
                         onAsk: { onAsk(TodayChat.story(item, model: model)) }
                     )
                 }
@@ -451,6 +453,8 @@ private struct TodayStoryView: View {
     var isWritingLede: Bool
     var isUpdating: Bool
     var onToggleConsumed: () -> Void
+    /// Reading a story's report marks the story read.
+    var onOpen: () -> Void
     var onAsk: () -> Void
     @State private var referencesExpanded = false
     @ObservedObject private var imageStore = TodayImageStore.shared
@@ -716,7 +720,7 @@ private struct TodayStoryView: View {
             if referencesExpanded {
                 ForEach(item.sourceArticles, id: \.articleID) { source in
                     VStack(alignment: .leading, spacing: 0) {
-                        TodayByline(source: source)
+                        TodayByline(source: source, onOpen: onOpen)
                         if source.membershipType == .duplicate {
                             Text("Syndicated report")
                                 .font(.caption)
@@ -765,6 +769,7 @@ private struct TodayStoryView: View {
         if let source = openable {
             NavigationLink {
                 ArticleDetailView(articleID: source.articleID)
+                    .onAppear(perform: onOpen)
             } label: {
                 headlineText(size: size)
             }
@@ -797,12 +802,14 @@ private struct TodayStoryView: View {
         if source.liveArticle != nil {
             NavigationLink {
                 ArticleDetailView(articleID: source.articleID)
+                    .onAppear(perform: onOpen)
             } label: {
                 label
             }
             .buttonStyle(.plain)
         } else if let url = source.url {
             Link(destination: url) { label }
+                .simultaneousGesture(TapGesture().onEnded(onOpen))
         } else {
             label
         }
@@ -827,21 +834,27 @@ enum TodayChat {
         )
     }
 
+    /// Asking about a story reads it: the first question marks it read.
+    /// Opening the chat on its own doesn't.
     static func story(_ item: TodayEditionItem, model: AppModel) -> AIChatRequest {
         let reports = item.sourceArticles.sorted { $0.isRepresentative && !$1.isRepresentative }.compactMap(\.liveArticle)
+        let storyID = item.snapshot.storyID
         return request(
             key: "today-story-\(item.snapshot.editionID)-\(item.id)",
             title: "Ask about this story",
             placeholder: "\(item.snapshot.snapshotTitle)\n\nAsk why it matters, where the reports disagree, or what happens next.",
             reports: reports,
-            model: model
+            model: model,
+            onAsk: { await model.markTodayStoryRead(storyID: storyID) }
         )
     }
 
-    private static func request(key: String, title: String, placeholder: String, reports: [Article], model: AppModel) -> AIChatRequest {
+    private static func request(key: String, title: String, placeholder: String, reports: [Article], model: AppModel,
+                                onAsk: @escaping @MainActor () async -> Void = {}) -> AIChatRequest {
         var unique: [Article] = []
         for report in reports where !unique.contains(where: { $0.id == report.id }) { unique.append(report) }
         return AIChatRequest(sessionKey: key, title: title, placeholder: placeholder) { conversation in
+            await onAsk()
             let context = await model.articlesForTodayChat(unique)
             guard !context.isEmpty else {
                 return AIChatAnswer(text: "These reports are no longer on this device. Refresh your feeds and try again.", articles: [])
@@ -856,16 +869,19 @@ enum TodayChat {
 /// The articles a story was built from, printed the way a byline is.
 private struct TodayByline: View {
     var source: TodayEditionSourceArticle
+    var onOpen: () -> Void
 
     var body: some View {
         Group {
             if source.liveArticle != nil {
                 NavigationLink {
                     ArticleDetailView(articleID: source.articleID)
+                        .onAppear(perform: onOpen)
                 } label: { label }
                 .buttonStyle(.plain)
             } else if let url = source.url {
                 Link(destination: url) { label }
+                    .simultaneousGesture(TapGesture().onEnded(onOpen))
             } else {
                 label
             }

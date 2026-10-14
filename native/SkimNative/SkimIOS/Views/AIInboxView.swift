@@ -11,14 +11,14 @@ struct InboxRankedArticle: Identifiable {
     var score: Double
 }
 
-// MARK: - AI Inbox
+// MARK: - For you
 
-/// Unread articles ranked most relevant and important first. The AI rates each
+/// The article list sorted For you (formerly the AI Inbox): unread articles in
+/// the selected scope, most relevant and important first. The AI rates each
 /// article once on importance and relevance; taste learned on this device from
-/// reading time, saves, pins and dismissals re-ranks on every visit.
+/// reading time, chats, saves, pins and dismissals re-ranks on every visit.
 struct AIInboxView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.dismiss) private var dismiss
 
     /// Most articles rated per visit, so a big backlog doesn't stall the page.
     private static let ratingsPerVisit = 60
@@ -31,8 +31,6 @@ struct AIInboxView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-
             if isLoading && items.isEmpty {
                 ProgressView()
                     .tint(SkimStyle.accent)
@@ -40,9 +38,9 @@ struct AIInboxView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if items.isEmpty {
                 ContentUnavailableView(
-                    "Inbox zero",
+                    "Nothing unread",
                     systemImage: SkimIcon.aiInbox,
-                    description: Text("No unread articles. Refresh your feeds to fill the AI Inbox.")
+                    description: Text("For you ranks unread articles. Refresh your feeds, or sort by Newest to see read ones.")
                 )
                 .foregroundStyle(SkimStyle.secondary)
                 .frame(maxHeight: .infinity)
@@ -50,43 +48,33 @@ struct AIInboxView: View {
                 articleList
             }
         }
-        .background(SkimStyle.background.ignoresSafeArea())
+        .background(SkimStyle.chrome)
         .foregroundStyle(SkimStyle.text)
-        .navigationBarBackButtonHidden()
-        .toolbar(.hidden, for: .navigationBar)
         // Re-rank on every return (e.g. from an article) so new taste shows up.
         .onAppear { Task { await rank() } }
         .task { await rateNewArticles() }
         .onDisappear { ratingTask?.cancel() }
     }
 
-    // MARK: Header
+    // MARK: Rating controls
 
-    private var header: some View {
-        HStack {
-            Button { dismiss() } label: {
-                Label("Articles", systemImage: "chevron.left")
-                    .frame(minHeight: 44)
+    private var rateMenu: some View {
+        Menu {
+            Button("Rate new articles", systemImage: SkimIcon.rate) {
+                Task { await rateNewArticles() }
             }
-            Spacer()
-            Text("AI Inbox").font(.headline)
-            Spacer()
-            Menu {
-                Button("Rate new articles", systemImage: SkimIcon.rate) {
-                    Task { await rateNewArticles() }
-                }
-                Button("Re-rate everything", systemImage: SkimIcon.refresh) {
-                    Task { await rateNewArticles(rerateAll: true) }
-                }
-            } label: {
-                Image(systemName: SkimIcon.refresh)
-                    .frame(width: 44, height: 44)
+            Button("Re-rate everything", systemImage: SkimIcon.refresh) {
+                Task { await rateNewArticles(rerateAll: true) }
             }
-            .accessibilityLabel("Rate articles")
-            .disabled(ratingStatus != nil)
+        } label: {
+            Image(systemName: SkimIcon.refresh)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
-        .padding(.horizontal, 16)
-        .background(SkimStyle.chrome)
+        .foregroundStyle(SkimStyle.secondary)
+        .accessibilityLabel("Rate articles")
+        .disabled(ratingStatus != nil)
     }
 
     // MARK: List
@@ -95,6 +83,14 @@ struct AIInboxView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("Ranked by importance and what you read")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        rateMenu
+                    }
                     if let ratingStatus {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small).tint(SkimStyle.accent)

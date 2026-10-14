@@ -156,6 +156,13 @@ double skim_inbox_score(double importance, double relevance, int32_t has_ai,
                         double age_hours);
 /* Legacy 1-5 priority bucket derived from the two axes. */
 int32_t skim_inbox_priority(double importance, double relevance);
+/* The reader's preference for one Today story, added to skim_story_score.
+ * starred_members counts starred reports in the story; pinned is 0/1 when a
+ * report is pinned; taste_affinity is the mean AI Inbox affinity (-1..1) of
+ * the story's reports and taste_strength the inbox learning strength (0..1),
+ * so Today and the AI Inbox learn from the same signals. */
+double skim_story_preference(int64_t starred_members, int32_t pinned,
+                             double taste_affinity, double taste_strength);
 
 #ifdef __cplusplus
 }

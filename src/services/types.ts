@@ -301,7 +301,6 @@ export type SidebarView =
   | { type: "all" }
   | { type: "starred" }
   | { type: "feed"; feedId: string }
-  | { type: "inbox" }
   | { type: "recent" }
   | { type: "theme"; themeId: string }
   | { type: "folder"; folderId: string }

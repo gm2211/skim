@@ -70,8 +70,19 @@ behaviors:
       Missing story summaries can be retried, with progress shown while they are written.
   - id: ranking-signals
     description: >-
-      Story ranking uses the reader's stars, priority overrides, and engagement, plus the shared
-      story policy's importance rating.
+      Story ranking learns from the same reader signals as the AI Inbox, on both platforms: the
+      inbox taste model (reading time, chats, stars, pins, dismissals) plus the story's own stars
+      and pins, alongside coverage, freshness and the shared story policy's importance rating.
+    details: >-
+      The shared skim_story_preference adds 0.5 per starred report (at most two), 1.25 for a
+      pinned report, and up to 3 points either way (one importance level) for the mean learned
+      affinity of the story's reports, scaled by how much the inbox trusts its taste (full after
+      about 40 signals). There is no "follow story" term. Contract: shared/fixtures/inbox-ranking.json.
+    source:
+      text: Do both
+      reference: >-
+        Giulio, project chat, 2026-10-14, choosing "Do both" on the decision card "Unify Skim's
+        taste ranking across Today and the AI Inbox?"
   - id: front-page-layout
     description: >-
       Desktop sets Today as a broadsheet: a lead story with a rail of three beside it, a row of three

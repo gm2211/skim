@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import SkimStoryPolicy
 @testable import SkimCore
 
 private struct InboxFixture: Decodable {
@@ -15,11 +16,16 @@ private struct InboxFixture: Decodable {
     }
     struct Priority: Decodable { var importance: Int; var relevance: Int; var priority: Int }
     struct Terms: Decodable { var title: String; var terms: [String] }
+    struct StoryPreference: Decodable {
+        var name: String; var starred: Int64; var pinned: Bool
+        var affinity: Double; var strength: Double; var preference: Double
+    }
     var signal_weights: [Weight]
     var affinity: [Affinity]
     var strength: [Strength]
     var scores: [Score]
     var priority: [Priority]
+    var story_preference: [StoryPreference]
     var terms: [Terms]
 }
 
@@ -48,6 +54,10 @@ private struct InboxFixture: Decodable {
     }
     for c in fixture.priority {
         #expect(InboxRanking.priority(importance: c.importance, relevance: c.relevance) == c.priority)
+    }
+    for c in fixture.story_preference {
+        let p = skim_story_preference(c.starred, c.pinned ? 1 : 0, c.affinity, c.strength)
+        #expect(abs(p - c.preference) < 1e-9, "\(c.name)")
     }
     for c in fixture.terms {
         #expect(InboxRanking.terms(c.title) == c.terms)

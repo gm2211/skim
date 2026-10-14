@@ -1484,8 +1484,16 @@ pub async fn get_inbox_articles(
     is_read: Option<bool>,
     limit: Option<i64>,
     offset: Option<i64>,
+    feed_ids: Option<Vec<String>>,
 ) -> Result<Vec<crate::db::models::ArticleWithTriage>, String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // A feed or folder sorted "For you" ranks only its own articles.
+    if let Some(ids) = feed_ids.as_deref() {
+        return queries::get_inbox_articles_in_feeds(
+            &conn, Some(ids), is_read, limit.unwrap_or(1000), offset.unwrap_or(0),
+        )
+        .map_err(|e| e.to_string());
+    }
     queries::get_inbox_articles(
         &conn,
         min_priority,

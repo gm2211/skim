@@ -379,12 +379,14 @@ export const getInboxArticles = (opts?: {
   isRead?: boolean | null;
   limit?: number | null;
   offset?: number | null;
+  feedIds?: string[] | null;
 }) =>
   invoke<ArticleWithTriage[]>("get_inbox_articles", {
     minPriority: opts?.minPriority ?? null,
     isRead: opts?.isRead ?? null,
     limit: opts?.limit ?? null,
     offset: opts?.offset ?? null,
+    feedIds: opts?.feedIds ?? null,
   });
 export const getTriageStats = () => invoke<TriageStats>("get_triage_stats");
 

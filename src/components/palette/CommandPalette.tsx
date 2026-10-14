@@ -91,7 +91,7 @@ function useCommands(): PaletteCommand[] {
     add(g, { id: "go.all", icon: "list", title: "All Articles", run: () => ui.setSidebarView({ type: "all" }) });
     add(g, { id: "go.starred", icon: "star", title: "Starred", keywords: ["favorites"], run: () => ui.setSidebarView({ type: "starred" }) });
     add(g, { id: "go.recent", icon: "clock", title: "Recently Read", keywords: ["history"], run: () => ui.setSidebarView({ type: "recent" }) });
-    add(g, { id: "go.inbox", icon: "inbox", title: "AI Inbox", keywords: ["triage", "priority"], run: () => ui.setSidebarView({ type: "inbox" }) });
+    add(g, { id: "go.inbox", icon: "inbox", title: "For you", keywords: ["ai inbox", "triage", "priority", "ranked", "sort"], run: () => { ui.setSidebarView({ type: "all" }); ui.setListSort("forYou"); } });
   }
 
   {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
-import { useTriageArticles, useTriageStats, useTriageProgress } from "../../hooks/useInbox";
+import { useTriageArticles, useTriageProgress } from "../../hooks/useInbox";
 import { useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
 import { ChatIcon, NewspaperIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
@@ -15,10 +15,9 @@ export function Sidebar() {
   const [askOpen, setAskOpen] = useState(false);
   const [askVisited, setAskVisited] = useState(false);
   const [returnToAsk, setReturnToAsk] = useState(false);
-  const { selectedArticleId, sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone } =
+  const { selectedArticleId, sidebarView, setSidebarView, setShowAddFeed, setShowSettings, sidebarCollapsed, isPhone, listSort } =
     useUiStore();
   const { data: feeds } = useFeeds();
-  const { data: triageStats } = useTriageStats();
   const refreshAll = useRefreshAllFeeds();
   const triage = useTriageArticles();
   const triageProgress = useTriageProgress();
@@ -39,19 +38,19 @@ export function Sidebar() {
 
   const totalUnread = feeds?.reduce((sum, f) => sum + f.unread_count, 0) ?? 0;
 
-  // Auto-run triage + theme grouping when the user lands on the AI Inbox.
-  // Fires once per entry into the view. Skips if a run is already in flight.
+  // Auto-run triage + theme grouping when a list is sorted For you. Fires
+  // once per switch to that sort. Skips if a run is already in flight.
   const autoRanFor = useRef<string | null>(null);
   useEffect(() => {
-    if (sidebarView.type !== "inbox") {
+    if (listSort !== "forYou") {
       autoRanFor.current = null;
       return;
     }
-    if (autoRanFor.current === "inbox") return;
-    autoRanFor.current = "inbox";
+    if (autoRanFor.current === "forYou") return;
+    autoRanFor.current = "forYou";
     if (!triage.isPending) triage.mutate(false);
     if (!generateThemes.isPending) generateThemes.mutate();
-  }, [sidebarView.type, triage, generateThemes]);
+  }, [listSort, triage, generateThemes]);
 
   const isActive = (view: SidebarView) => {
     if (view.type === sidebarView.type) {
@@ -218,29 +217,6 @@ export function Sidebar() {
             >
               Recent
             </span>
-          </div>
-          {/* AI Inbox sits with the other library views, as one of them. */}
-          <div
-            onClick={() => setSidebarView({ type: "inbox" })}
-            className={`flex items-center justify-between cursor-pointer transition-colors relative z-20 hover:text-text-primary ${
-              isActive({ type: "inbox" }) ? "text-text-primary" : "text-text-secondary"
-            }`}
-            style={{ padding: "6px 0" }}
-          >
-            <div className="flex items-center gap-3">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
-                className={`flex-shrink-0 ${isActive({ type: "inbox" }) ? "opacity-100" : "opacity-50"}`}
-              >
-                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-                <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" />
-              </svg>
-              <span style={{ fontSize: 15 }}>AI Inbox</span>
-            </div>
-            {triageStats && triageStats.total > 0 && (
-              <span className="text-text-muted tabular-nums" style={{ fontSize: 14 }}>
-                {triageStats.total.toLocaleString()}
-              </span>
-            )}
           </div>
           {(triage.isPending || generateThemes.isPending) && (
             <div className="flex flex-col gap-2" style={{ padding: "4px 8px 0" }}>

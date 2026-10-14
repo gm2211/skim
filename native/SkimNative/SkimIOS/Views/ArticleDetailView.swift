@@ -343,6 +343,7 @@ struct ArticleDetailView: View {
                         placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
                         generatedSummaryContext: summaryText
                     ) { conversation in
+                        await model.recordChatMessage(about: article)
                         let contextArticle = try await WebAIContext.article(
                             base: article,
                             preferWeb: useWebContext,
@@ -965,6 +966,7 @@ private extension ArticleDetailView {
                 placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
                 generatedSummaryContext: summaryContextBySession[chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot)]
             ) { conversation in
+                await model.recordChatMessage(about: article)
                 let contextArticle = try await WebAIContext.article(
                     base: article,
                     preferWeb: useWebContext,

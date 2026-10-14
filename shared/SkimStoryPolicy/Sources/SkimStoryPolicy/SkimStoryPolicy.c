@@ -1171,3 +1171,13 @@ int32_t skim_inbox_priority(double importance, double relevance) {
     int32_t p = (int32_t)floor(mean + 0.5);
     return p < 1 ? 1 : (p > 5 ? 5 : p);
 }
+
+double skim_story_preference(int64_t starred_members, int32_t pinned,
+                             double taste_affinity, double taste_strength) {
+    const double stars = (double)(starred_members < 0 ? 0 : (starred_members > 2 ? 2 : starred_members)) * 0.5;
+    const double pin = pinned ? 1.25 : 0.0;
+    const double a = isfinite(taste_affinity) ? fmin(1.0, fmax(-1.0, taste_affinity)) : 0.0;
+    const double s = isfinite(taste_strength) ? fmin(1.0, fmax(0.0, taste_strength)) : 0.0;
+    /* Fully learned taste is worth one importance level (3 points) either way. */
+    return stars + pin + 3.0 * a * s;
+}

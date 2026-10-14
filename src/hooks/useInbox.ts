@@ -29,15 +29,12 @@ export function useTriageProgress() {
   return progress;
 }
 
-export function useInboxArticles(minPriority?: number, isRead?: boolean | null) {
-  const enabled = minPriority !== -1;
+/** The "For you" order: unread articles ranked like the AI Inbox, limited to
+ * `feedIds` when given (a feed or folder), across every feed otherwise. */
+export function useInboxArticles(enabled: boolean, feedIds?: string[] | null) {
   return useQuery({
-    queryKey: ["inbox", minPriority, isRead],
-    queryFn: () =>
-      commands.getInboxArticles({
-        minPriority: minPriority != null && minPriority > 0 ? minPriority : null,
-        isRead: isRead ?? null,
-      }),
+    queryKey: ["inbox", feedIds ?? null],
+    queryFn: () => commands.getInboxArticles({ isRead: false, feedIds: feedIds ?? null }),
     enabled,
   });
 }

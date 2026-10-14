@@ -63,7 +63,6 @@ export function buildArticleFilter({
       base.feed_ids = folderFeedIds ?? [];
       break;
     case "all":
-    case "inbox":
     case "recent":
     case "today":
       break;
@@ -78,17 +77,23 @@ export function buildArticleFilter({
 }
 
 /** Resolve the whole visible scope; the backend removes pagination before writing. */
+/** Views that can be sorted "For you": the lists of unread articles from feeds. */
+export function supportsForYou(view: SidebarView) {
+  return view.type === "all" || view.type === "feed" || view.type === "folder";
+}
+
 export function buildMarkAllReadScope({
-  sidebarView, listFilter, searchQuery, folderFeedIds, activeThemeId,
+  sidebarView, listFilter, searchQuery, folderFeedIds, activeThemeId, forYou = false,
 }: {
   sidebarView: SidebarView;
   listFilter: "all" | "unread" | "starred";
   searchQuery: string;
   folderFeedIds: string[] | null;
   activeThemeId: string | null;
+  forYou?: boolean;
 }): { filter: ArticleFilter; recentOnly: boolean } {
   const searching = searchQuery.trim().length > 0;
-  const inbox = sidebarView.type === "inbox" && !searching;
+  const inbox = forYou && supportsForYou(sidebarView) && !searching;
   const recent = sidebarView.type === "recent" && !searching;
   const filter = buildArticleFilter({
     sidebarView, listFilter: inbox || recent ? "all" : listFilter,
@@ -223,6 +228,8 @@ export function ArticleList() {
     setSelectedArticleId,
     listFilter,
     setListFilter,
+    listSort,
+    setListSort,
     sidebarCollapsed,
     listCollapsed,
     isPhone,
@@ -251,7 +258,8 @@ export function ArticleList() {
 
   const normalizedSearch = searchQuery.trim();
   const isSearchActive = normalizedSearch.length > 0;
-  const isInbox = sidebarView.type === "inbox" && !isSearchActive;
+  const canSortForYou = supportsForYou(sidebarView) && !isSearchActive;
+  const isForYou = listSort === "forYou" && canSortForYou;
   const isRecent = sidebarView.type === "recent" && !isSearchActive;
   const selectedFolderFeedIds = useMemo(() => {
     if (sidebarView.type !== "folder") return null;
@@ -280,7 +288,7 @@ export function ArticleList() {
   const [pageLimit, setPageLimit] = useState(PAGE_SIZE);
   useEffect(() => {
     setPageLimit(PAGE_SIZE);
-  }, [sidebarView, listFilter, normalizedSearch]);
+  }, [sidebarView, listFilter, listSort, normalizedSearch]);
 
   const filter: ArticleFilter = useMemo(() => {
     return buildArticleFilter({
@@ -293,20 +301,19 @@ export function ArticleList() {
   }, [sidebarView, listFilter, pageLimit, searchQuery, selectedFolderFeedIds]);
 
   const { data: regularArticles, isLoading: regularLoading } = useArticles(filter);
-  // AI Inbox is unread-only by design — ignore listFilter entirely.
-  const inboxIsRead = isInbox ? false : null;
-  const { data: inboxArticles, isLoading: inboxLoading } = useInboxArticles(
-    isInbox ? undefined : -1, // -1 disables the query when not in inbox view
-    inboxIsRead
-  );
+  // "For you" ranks unread articles only, so it ignores listFilter.
+  const forYouFeedIds = sidebarView.type === "feed"
+    ? [sidebarView.feedId]
+    : sidebarView.type === "folder" ? selectedFolderFeedIds ?? [] : null;
+  const { data: inboxArticles, isLoading: inboxLoading } = useInboxArticles(isForYou, forYouFeedIds);
   const { data: recentArticlesRaw, isLoading: recentLoading } = useRecentArticles(recentOrder);
   const recentArticles = useMemo(
     () => (isRecent ? (recentArticlesRaw as ArticleWithInteraction[] | undefined) : undefined),
     [isRecent, recentArticlesRaw],
   );
 
-  const rawArticles = isInbox ? inboxArticles : isRecent ? recentArticles : regularArticles;
-  const isLoading = isInbox ? inboxLoading : isRecent ? recentLoading : regularLoading;
+  const rawArticles = isForYou ? inboxArticles : isRecent ? recentArticles : regularArticles;
+  const isLoading = isForYou ? inboxLoading : isRecent ? recentLoading : regularLoading;
 
   // Sticky-read retention: in unread-only views, an article that just
   // got marked read would otherwise drop out on the next refetch and
@@ -324,12 +331,12 @@ export function ArticleList() {
 
   useEffect(() => {
     clearStickyArticles();
-  }, [clearStickyArticles, sidebarView, listFilter, normalizedSearch]);
+  }, [clearStickyArticles, sidebarView, listFilter, listSort, normalizedSearch]);
 
   // Only accumulate sticky entries while we are actually in an
   // unread-style view; otherwise the map would carry read items from
   // "all" into a subsequent "unread" toggle.
-  const stickyEnabled = !isSearchActive && (isInbox || listFilter === "unread");
+  const stickyEnabled = !isSearchActive && (isForYou || listFilter === "unread");
   if (rawArticles && stickyEnabled) {
     const expiresAt = Date.now() + STICKY_READ_TTL_MS;
     for (const a of rawArticles) {
@@ -382,7 +389,7 @@ export function ArticleList() {
     }
     if (injected.length === 0) return rawArticles;
     const combined = [...(rawArticles as any[]), ...injected];
-    if (isInbox) {
+    if (isForYou) {
       combined.sort((a, b) => {
         const sa = a.score ?? -Infinity;
         const sb = b.score ?? -Infinity;
@@ -395,7 +402,7 @@ export function ArticleList() {
       );
     }
     return combined as typeof rawArticles;
-  }, [rawArticles, isInbox, stickyEnabled, isSearchActive, selectedArticleId, stickyEpoch]);
+  }, [rawArticles, isForYou, stickyEnabled, isSearchActive, selectedArticleId, stickyEpoch]);
 
   const title = useMemo(() => {
     switch (sidebarView.type) {
@@ -405,8 +412,6 @@ export function ArticleList() {
         return "Starred";
       case "feed":
         return null;
-      case "inbox":
-        return "AI Inbox";
       case "recent":
         return "Recently Read";
       case "theme": {
@@ -433,45 +438,46 @@ export function ArticleList() {
     if (!articles) return articles;
     let result = articles;
     // Theme tab filter (inbox only)
-    if (isInbox && activeThemeId) {
+    if (isForYou && activeThemeId) {
       result = result.filter((a) =>
         (themeTagsByArticle.get(a.id) ?? []).some((t) => t.themeId === activeThemeId),
       );
     }
     // Search results are authoritative from Rust, including URL matches.
     return result;
-  }, [articles, isInbox, activeThemeId, themeTagsByArticle]);
+  }, [articles, isForYou, activeThemeId, themeTagsByArticle]);
 
   // True unread total for the active filter — the paged articles array is
   // capped at 200 so counting locally understates everything above that.
   const unreadFilter: ArticleFilter = useMemo(() => ({ ...filter, is_read: false, limit: null }), [filter]);
   const { data: regularUnreadCount } = useArticleCount(
     unreadFilter,
-    !isInbox && !isRecent,
+    !isForYou && !isRecent,
   );
   const unreadCount = useMemo(() => {
-    if (isInbox || isRecent) {
+    if (isForYou || isRecent) {
       return articles?.filter((a) => !a.is_read).length ?? 0;
     }
     return regularUnreadCount ?? 0;
-  }, [articles, isInbox, isRecent, regularUnreadCount]);
+  }, [articles, isForYou, isRecent, regularUnreadCount]);
 
   const articleGroups = useMemo(() => {
     if (!filteredArticles) return [];
-    if (isInbox) return groupByScore(filteredArticles as ArticleWithTriage[]);
+    if (isForYou) return groupByScore(filteredArticles as ArticleWithTriage[]);
     if (isRecent && recentOrder === "engagement") {
       return [{ label: "MOST ENGAGED", indices: filteredArticles.map((_, i) => i) }];
     }
     return groupByDate(filteredArticles);
-  }, [filteredArticles, isInbox, isRecent, recentOrder]);
+  }, [filteredArticles, isForYou, isRecent, recentOrder]);
 
   const handleMarkAllRead = () => {
-    if (sidebarView.type === "all" && !isSearchActive && listFilter !== "starred") {
+    if (sidebarView.type === "all" && !isSearchActive && listFilter !== "starred" && !(isForYou && activeThemeId)) {
       markAllRead.mutate(null, { onSuccess: clearStickyArticles });
       return;
     }
     markAllRead.mutate(buildMarkAllReadScope({
       sidebarView, listFilter, searchQuery, folderFeedIds: selectedFolderFeedIds, activeThemeId,
+      forYou: isForYou,
     }), { onSuccess: clearStickyArticles });
   };
 
@@ -526,11 +532,11 @@ export function ArticleList() {
         showSourceActions: false,
       };
     }
-    if (isInbox) {
+    if (isForYou) {
       return {
-        title: "AI Inbox is empty",
-        body: "Add feeds or import Feedly so Skim has articles to triage.",
-        showSourceActions: true,
+        title: "Nothing unread here",
+        body: "For you ranks unread articles. Switch to Newest to browse read ones.",
+        showSourceActions: false,
       };
     }
     if (listFilter === "unread") {
@@ -545,13 +551,13 @@ export function ArticleList() {
       body: "Refresh your feeds, add another RSS feed, or import from Feedly.",
       showSourceActions: true,
     };
-  }, [hasFeeds, searchQuery, isRecent, sidebarView.type, listFilter, isInbox]);
+  }, [hasFeeds, searchQuery, isRecent, sidebarView.type, listFilter, isForYou]);
 
   // Infinite scroll: grow pageLimit when the user nears the bottom of the
   // list. Only applies to the paged (regular) query; inbox/recent queries
   // have their own server-side caps.
   const scrollRef = useRef<HTMLDivElement>(null);
-  const canPaginate = !isInbox && !isRecent;
+  const canPaginate = !isForYou && !isRecent;
   const handleScroll = useCallback(() => {
     if (!canPaginate) return;
     const el = scrollRef.current;
@@ -698,6 +704,34 @@ export function ArticleList() {
 
       </div>
 
+      {/* Sort: newest first, or ranked for the reader (the old AI Inbox) */}
+      {canSortForYou && (
+        <div
+          className="flex items-center gap-2 border-b border-white/5"
+          style={{ padding: "8px 24px" }}
+          role="group"
+          aria-label="Sort articles"
+        >
+          <span className="text-text-muted" style={{ fontSize: 12 }}>Sort:</span>
+          {(["newest", "forYou"] as const).map((o) => (
+            <button
+              key={o}
+              onClick={() => setListSort(o)}
+              aria-pressed={listSort === o}
+              title={o === "forYou" ? "Unread articles ranked by importance and what you read" : "Newest first"}
+              className={`rounded-full transition-colors ${
+                listSort === o
+                  ? "bg-accent/20 text-accent"
+                  : "bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary"
+              }`}
+              style={{ padding: "4px 12px", fontSize: 12, fontWeight: 500 }}
+            >
+              {o === "forYou" ? "For you" : "Newest"}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Recent sort toggle */}
       {isRecent && (
         <div
@@ -722,8 +756,8 @@ export function ArticleList() {
         </div>
       )}
 
-      {/* Theme tabs — only in AI Inbox */}
-      {isInbox && themes && themes.length > 0 && (
+      {/* Theme tabs — only when sorted For you */}
+      {isForYou && themes && themes.length > 0 && (
         <div
           className="flex items-center gap-2 border-b border-white/5 overflow-x-auto"
           style={{ padding: "8px 24px" }}
@@ -787,7 +821,7 @@ export function ArticleList() {
                 {group.indices.map((i) => {
                   const article = filteredArticles[i];
                   const ranked = article as ArticleWithTriage;
-                  const triageData = isInbox ? {
+                  const triageData = isForYou ? {
                     priority: ranked.priority ?? 3,
                     reason: ranked.reason ?? "",
                     importance: ranked.importance,
@@ -798,7 +832,7 @@ export function ArticleList() {
                       key={article.id}
                       article={article}
                       triage={triageData}
-                      themeTags={isInbox ? themeTagsByArticle.get(article.id) : undefined}
+                      themeTags={isForYou ? themeTagsByArticle.get(article.id) : undefined}
                       isSelected={selectedArticleId === article.id}
                       onSelect={() => setSelectedArticleId(article.id)}
                       onContextMenu={(e) => handleArticleContextMenu(e, i)}
@@ -874,8 +908,8 @@ export function ArticleList() {
         />
       )}
 
-      {/* Bottom filter toolbar — hidden in AI Inbox (unread-only by design) */}
-      {!isInbox && (
+      {/* Bottom filter toolbar — hidden For you (unread-only by design) */}
+      {!isForYou && (
       <div
         className="flex items-center justify-center gap-6 border-t border-white/5"
         style={{ padding: "12px 16px" }}

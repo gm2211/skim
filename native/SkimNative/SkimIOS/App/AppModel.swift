@@ -58,6 +58,13 @@ struct LibraryChatScope: Sendable {
     }
 }
 
+/// How the article list is ordered. For you ranks unread articles the way the
+/// AI Inbox did: importance and relevance from the model, plus learned taste.
+enum ArticleListSort: String, Hashable {
+    case newest
+    case forYou
+}
+
 enum ArticleListMode: String, CaseIterable, Identifiable {
     case unread
     case all
@@ -120,6 +127,7 @@ final class AppModel: ObservableObject {
     @Published var folders: [FeedFolder] = []
     @Published var articles: [Article] = []
     @Published var listMode: ArticleListMode = .unread
+    @Published var listSort: ArticleListSort = .newest
     @Published var selectedFeedID: String?
     @Published var selectedFolderID: String?
     @Published var searchQuery = ""
@@ -276,7 +284,8 @@ final class AppModel: ObservableObject {
             }
             let edition = try await store.getOrGenerateTodayEdition(
                 startsAt: start, endsAt: end, storyLimit: storyLimit,
-                generatedAt: now, preferences: tasteStore.todayRankingPreferences(),
+                generatedAt: now,
+                preferences: tasteStore.todayRankingPreferences(starred: await starredForTaste()),
                 semanticEvaluator: evaluator
             )
             guard !Task.isCancelled, todayLoadID == requestID else { return }
@@ -420,9 +429,26 @@ final class AppModel: ObservableObject {
         )
     }
 
-    /// Unread articles the AI Inbox ranks, newest first.
+    func recordChatMessage(about article: Article) {
+        tasteStore.recordChatMessage(articleID: article.id, feedID: article.feedID,
+                                     feedTitle: article.feedTitle, title: article.title)
+    }
+
+    /// Unread and All lists (of every feed, one feed or a folder) can be sorted For you.
+    var canSortForYou: Bool {
+        !isSearchActive && (listMode == .unread || listMode == .all)
+    }
+
+    var isForYou: Bool { listSort == .forYou && canSortForYou }
+
+    /// Unread articles in the selected feed or folder (every feed when none is
+    /// selected) for the For you ranking, newest first.
     func inboxCandidates(limit: Int = 300) async throws -> [Article] {
-        try await store.listArticles(filter: ArticleFilter(readState: .unread, limit: limit))
+        if let folderFeeds = selectedFolderFeedIDs {
+            let articles = try await store.listArticles(filter: ArticleFilter(readState: .unread, limit: 2_000))
+            return Array(articles.filter { folderFeeds.contains($0.feedID) }.prefix(limit))
+        }
+        return try await store.listArticles(filter: ArticleFilter(feedID: selectedFeedID, readState: .unread, limit: limit))
     }
 
     /// Saved articles teach the inbox what the reader values.
@@ -439,10 +465,6 @@ final class AppModel: ObservableObject {
 
     func setPriorityOverride(articleID: String, feedID: String, feedTitle: String, override: ArticlePriorityOverride) {
         tasteStore.setPriorityOverride(articleID: articleID, feedID: feedID, feedTitle: feedTitle, override: override)
-    }
-
-    func getPreferenceProfile() -> PreferenceProfile {
-        tasteStore.getPreferenceProfile()
     }
 
     var title: String {

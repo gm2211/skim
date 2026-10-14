@@ -1385,8 +1385,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
                     representativeFeedID: representativeFeedID,
                     distinctFeedCount: distinctFeedCount,
                     articleCount: sources.count,
-                    preferenceSignal: (state?.isFollowed == true ? 3 : 0)
-                        + preferences.signal(for: sources.map(\.article))
+                    preferenceSignal: preferences.signal(for: sources.map(\.article))
                 ),
                 revision: revision,
                 sourceArticles: sources

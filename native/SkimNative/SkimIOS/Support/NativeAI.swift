@@ -4126,8 +4126,16 @@ private struct WebCitationChip: View {
 }
 
 /// Simple left-to-right, top-to-bottom wrapping layout for chip rows.
+/// A chip wider than the row is capped at the row width (its label then
+/// truncates) so a long source title can't widen the chat bubble.
 private struct ChatFlowLayout: Layout {
     var spacing: CGFloat = 8
+
+    private func chipSize(_ subview: LayoutSubview, maxWidth: CGFloat) -> CGSize {
+        let ideal = subview.sizeThatFits(.unspecified)
+        guard ideal.width > maxWidth else { return ideal }
+        return subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+    }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
@@ -4137,7 +4145,7 @@ private struct ChatFlowLayout: Layout {
         var rowHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = chipSize(subview, maxWidth: maxWidth)
             if rowWidth + size.width > maxWidth, rowWidth > 0 {
                 totalHeight += rowHeight + spacing
                 totalWidth = max(totalWidth, rowWidth)
@@ -4159,7 +4167,7 @@ private struct ChatFlowLayout: Layout {
         var rowHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = chipSize(subview, maxWidth: maxWidth)
             if x + size.width > maxWidth, x > 0 {
                 x = 0
                 y += rowHeight + spacing

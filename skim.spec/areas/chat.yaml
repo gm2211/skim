@@ -44,6 +44,9 @@ behaviors:
     details: >-
       Supported by Claude providers on desktop; desktop MLX and iOS expose a "Web search in chat"
       setting.
+      A web source chip whose title is longer than the chat bubble truncates with an ellipsis and
+      stays inside the bubble, so it never widens the chat (Giulio, 2026-10-14: "Chat body width
+      sligthly messed up by long source - maybe ellipses?").
   - id: answer-first-on-small-models
     description: >-
       On-device models answer first, stay grounded in exact source passages, and drop chatbot

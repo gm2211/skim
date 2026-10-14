@@ -89,6 +89,22 @@ export const SidebarIcon = (p: IconProps) => (
   </Icon>
 );
 
+/** A box with an arrow leaving it: share. */
+export const ShareIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M8 10H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-2" />
+    <path d="M12 15V2" />
+    <path d="M8 6l4-4 4 4" />
+  </Icon>
+);
+
+/** A bare tick: done. */
+export const TickIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M20 6L9 17l-5-5" />
+  </Icon>
+);
+
 export const StarIcon = (p: IconProps) => (
   <Icon {...p}>
     <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z" />

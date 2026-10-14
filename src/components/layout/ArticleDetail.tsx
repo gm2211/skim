@@ -15,7 +15,8 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 import { ModelPicker } from "../common/ModelPicker";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { ArticleLearningActions } from "../article/ArticleLearningActions";
-import { MoreIcon } from "../ui/icons";
+import { MoreIcon, ShareIcon, TickIcon } from "../ui/icons";
+import { shareArticle } from "../../lib/shareArticle";
 import { AggregatorPostView } from "../article/AggregatorPostView";
 import { parseAggregatorPost } from "../../lib/aggregatorPost";
 import { useAppCommand } from "../../lib/appCommands";
@@ -378,6 +379,8 @@ export function ArticleDetail() {
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const [toolbarCompact, setToolbarCompact] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  // Brief "Link copied" tick where the webview has no share sheet.
+  const [linkCopied, setLinkCopied] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
@@ -1064,6 +1067,16 @@ export function ArticleDetail() {
   );
 
   const compact = !isPhone && toolbarCompact;
+  // Share the story itself: a Reddit or HN link post shares the page it links to.
+  const shareUrl = readerUrl ?? article.url;
+  const handleShare = async () => {
+    if (!shareUrl) return;
+    const outcome = await shareArticle({ url: shareUrl, title: article.title });
+    if (outcome === "copied") {
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1600);
+    }
+  };
   const menuRow = (label: string, icon: React.ReactNode, onClick: () => void, active = false) => (
     <button
       type="button"
@@ -1386,6 +1399,18 @@ export function ArticleDetail() {
           </button>
           )}
 
+          {shareUrl && !compact && (
+            <button
+              type="button"
+              onClick={handleShare}
+              className={`tap-target ${isPhone ? "" : "rounded-lg"} hover:bg-white/10 transition-colors ${linkCopied ? "text-success" : "text-text-muted hover:text-text-primary"}`}
+              title={linkCopied ? "Link copied" : "Share"}
+              aria-label={linkCopied ? "Link copied" : "Share"}
+            >
+              {linkCopied ? <TickIcon size={isPhone ? 18 : 16} /> : <ShareIcon size={isPhone ? 18 : 16} />}
+            </button>
+          )}
+
           {!compact && <ArticleLearningActions articleId={article.id} />}
 
           {!isPhone && !compact && (
@@ -1468,6 +1493,7 @@ export function ArticleDetail() {
                       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
                     </svg>
                   ), () => { if (article.url) openUrl(article.url); })}
+                  {shareUrl && menuRow("Share", <ShareIcon size={14} />, () => { void handleShare(); })}
                 </div>
               )}
             </div>

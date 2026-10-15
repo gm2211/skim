@@ -1381,8 +1381,8 @@ struct AutoGroupIcon: View {
             .overlay(alignment: .topTrailing) {
                 // Big enough that all three sparkles read at sidebar size; one alone looks like a plus.
                 Image(systemName: "sparkles")
-                    .font(.system(size: size * 0.8, weight: .bold))
-                    .offset(x: size * 0.55, y: -size * 0.5)
+                    .font(.system(size: size * 0.9, weight: .bold))
+                    .offset(x: size * 0.6, y: -size * 0.85)
             }
             .accessibilityHidden(true)
     }

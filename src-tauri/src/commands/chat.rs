@@ -122,7 +122,7 @@ pub async fn chat_with_article(
         chat_messages,
         model.clone(),
         Some(0.5),
-        Some(2048),
+        Some(crate::db::story_policy::ai_request_max_tokens(2048, &provider_kind)),
     )
     .await?;
     web_citations.extend(local_citations);
@@ -576,7 +576,7 @@ pub async fn chat_with_articles(
         chat_messages,
         model.clone(),
         Some(0.4),
-        Some(2048),
+        Some(crate::db::story_policy::ai_request_max_tokens(2048, &provider_kind)),
     )
     .await?;
 

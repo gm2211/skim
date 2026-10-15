@@ -145,6 +145,26 @@ public enum AIRequestPolicy {
         return instructions
     }
 
+    /// Output-token ceiling for one summary or chat request to `provider`.
+    /// Hosted providers get headroom because some count hidden reasoning
+    /// against it; the prompt controls length.
+    public static func requestMaxTokens(_ budget: Int, provider: String) -> Int {
+        let budget = Int32(clamping: budget)
+        guard !provider.contains("\0") else { return Int(skim_ai_request_max_tokens(budget, nil)) }
+        return Int(provider.withCString { skim_ai_request_max_tokens(budget, $0) })
+    }
+
+    public static func summaryRequestMaxTokens(_ settings: AISettings) -> Int {
+        requestMaxTokens(summaryPlan(settings).fullMaxTokens, provider: settings.provider)
+    }
+
+    /// Drops an unfinished final sentence left by a token cutoff.
+    public static func completeSummary(_ text: String) -> String {
+        let bytes = Array(text.utf8)
+        let kept = bytes.withUnsafeBufferPointer { skim_summary_complete_length($0.baseAddress, $0.count) }
+        return kept == bytes.count ? text : String(decoding: bytes.prefix(kept), as: UTF8.self)
+    }
+
     public static func summarySourceFingerprint(_ source: String) -> String {
         SHA256.hash(data: Data(source.utf8)).map { String(format: "%02x", $0) }.joined()
     }

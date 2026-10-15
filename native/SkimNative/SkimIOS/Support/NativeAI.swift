@@ -1214,7 +1214,7 @@ enum NativeAI {
             // Pass wordCount into instructions so the system prompt carries the full directive.
             // The user turn contains only the article body to avoid FM echoing the instruction
             // text back as part of the response (a known issue with some Foundation Models builds).
-            let result = try await complete(
+            let result = AIRequestPolicy.completeSummary(try await complete(
                 settings: settings,
                 instructions: summaryInstructions(settings.ai, wordCount: wordCount),
                 prompt: """
@@ -1222,8 +1222,8 @@ enum NativeAI {
 
                 \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
                 """,
-                maxTokens: AIRequestPolicy.summaryPlan(settings.ai).fullMaxTokens
-            )
+                maxTokens: AIRequestPolicy.summaryRequestMaxTokens(settings.ai)
+            ))
             try Task.checkCancellation()
             guard publication.publish({ SummaryLRUCache.shared.set(key, value: result) }) else { throw CancellationError() }
             return result
@@ -1258,9 +1258,9 @@ enum NativeAI {
             \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
             """
             let instructions = summaryInstructions(settings.ai, wordCount: wordCount)
-            let maxTok = AIRequestPolicy.summaryPlan(settings.ai).fullMaxTokens
+            let maxTok = AIRequestPolicy.summaryRequestMaxTokens(settings.ai)
 
-            let result: String
+            var result: String
             if settings.ai.provider == "mlx" {
                 result = try await NativeMLX.stream(
                     settings: settings.ai,
@@ -1280,6 +1280,7 @@ enum NativeAI {
                     maxTokens: maxTok
                 )
             }
+            result = AIRequestPolicy.completeSummary(result)
 
             try Task.checkCancellation()
             guard publication.publish({ SummaryLRUCache.shared.set(key, value: result) }) else { throw CancellationError() }
@@ -1297,7 +1298,7 @@ enum NativeAI {
         let wordCount = summaryTargetWordCount(ai)
         return [
             article.id,
-            "summary-v4",
+            "summary-v5",
             AIRequestPolicy.summaryPlan(ai).cacheIdentity,
             AIRequestPolicy.summarySourceFingerprint(articleDigest([article], limit: 1, wordsPerArticle: 2200)),
             ai.provider,
@@ -1634,7 +1635,7 @@ enum NativeAI {
 
             \(conversation.promptSection)
             """,
-            maxTokens: 650,
+            maxTokens: AIRequestPolicy.requestMaxTokens(650, provider: settings.ai.provider),
             enableWebSearch: toolsOK,
             urlSession: urlSession,
             messages: buildLocalChatMessages(
@@ -1753,7 +1754,7 @@ enum NativeAI {
 
             \(conversation.promptSection)
             """,
-            maxTokens: 850,
+            maxTokens: AIRequestPolicy.requestMaxTokens(850, provider: settings.ai.provider),
             enableWebSearch: toolsOK,
             urlSession: urlSession,
             messages: buildLocalChatMessages(

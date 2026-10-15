@@ -194,7 +194,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
       >
         {/* Header */}
         <div
-          className="flex items-center gap-3 border-b border-border flex-wrap"
+          className={`flex items-center gap-3 border-b border-border ${isPhone ? "" : "flex-wrap"}`}
           style={{ padding: "12px 16px", touchAction: isPhone ? "pan-y" : undefined }}
           {...swipeToDismissHandlers}
         >
@@ -202,7 +202,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
           </svg>
-          <h3 id="ask-skim-title" className="text-text-primary flex-1" style={{ fontSize: isPhone ? 20 : 16, fontWeight: 600 }}>
+          <h3 id="ask-skim-title" className="text-text-primary flex-1 whitespace-nowrap" style={{ fontSize: isPhone ? 18 : 16, fontWeight: 600 }}>
             Ask Skim
           </h3>
           {agentContext ? (

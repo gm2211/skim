@@ -83,8 +83,16 @@ export interface FolderProposal {
   feed_ids: string[];
 }
 export type AutoOrganizeScope = "all" | "unassigned";
-export const aiAutoOrganizeFeeds = (scope: AutoOrganizeScope = "all") =>
-  invoke<FolderProposal[]>("ai_auto_organize_feeds", { scope });
+/** With `current` and `feedback`, the AI revises that grouping instead of starting over. */
+export const aiAutoOrganizeFeeds = (
+  scope: AutoOrganizeScope = "all",
+  revision?: { current: FolderProposal[]; feedback: string },
+) =>
+  invoke<FolderProposal[]>("ai_auto_organize_feeds", {
+    scope,
+    current: revision?.current ?? null,
+    feedback: revision?.feedback ?? null,
+  });
 export const aiMatchFeedsForTopic = (description: string) =>
   invoke<string[]>("ai_match_feeds_for_topic", { description });
 export const applyFolderOrganization = (

@@ -440,7 +440,13 @@
         steps: [{ tool: "search_articles", label: `Searched for “${terms.join(" ")}”` }],
       };
     },
-    ai_auto_organize_feeds: () => ORGANIZE_PROPOSALS,
+    // With feedback, stand in for a revision by folding the second folder into the first.
+    ai_auto_organize_feeds: (args) => {
+      const current = args && args.feedback && args.current;
+      if (!current || current.length < 2) return ORGANIZE_PROPOSALS;
+      const [first, second, ...rest] = current;
+      return [{ name: first.name, feed_ids: [...first.feed_ids, ...second.feed_ids] }, ...rest];
+    },
     apply_folder_organization: () => folders,
     list_duplicate_feeds: () => [],
     get_feedly_status: () => null,

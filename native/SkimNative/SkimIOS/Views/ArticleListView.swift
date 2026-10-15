@@ -130,7 +130,8 @@ struct ArticleListView: View {
         .sheet(isPresented: $showAutoGroup) {
             AutoGroupSheet(isPresented: $showAutoGroup)
                 .environmentObject(model)
-                .presentationDetents([.medium, .large])
+                // Full height only: at .medium the proposals list collapses to nothing.
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
@@ -894,12 +895,12 @@ private struct FeedPickerSheet: View {
                             .tracking(1.1)
                         Spacer()
                         Button(action: onAutoGroup) {
-                            Image(systemName: "folder.badge.plus")
-                                .font(.system(size: 16, weight: .regular))
+                            AutoGroupIcon(size: 16)
                                 .foregroundStyle(SkimStyle.secondary)
                                 .frame(width: 36, height: 36)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Auto-group feeds with AI")
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 14)
@@ -1365,6 +1366,22 @@ private enum AutoGroupNameStyle: String, CaseIterable, Identifiable {
     }
 }
 
+/// A folder with AI sparkles: auto-grouping sorts feeds with AI, it doesn't just add a folder.
+struct AutoGroupIcon: View {
+    var size: CGFloat
+
+    var body: some View {
+        Image(systemName: "folder")
+            .font(.system(size: size, weight: .regular))
+            .overlay(alignment: .topTrailing) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: size * 0.62, weight: .semibold))
+                    .offset(x: size * 0.42, y: -size * 0.38)
+            }
+            .accessibilityHidden(true)
+    }
+}
+
 private struct AutoGroupProposal: Identifiable {
     var id: String { "\(baseName)-\(feeds.map(\.id).joined(separator: ","))" }
     var baseName: String
@@ -1392,6 +1409,9 @@ private struct AutoGroupSheet: View {
     @State private var usedFallback = false
     @State private var draggingFeedID: String?
     @State private var dropTargetProposalID: String?
+    @State private var feedbackText = ""
+    @State private var isRevising = false
+    @FocusState private var feedbackFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -1400,10 +1420,12 @@ private struct AutoGroupSheet: View {
                     Text("Auto-group feeds")
                         .font(.system(size: 27, weight: .heavy))
                         .foregroundStyle(SkimStyle.text)
-                    Text("Use AI to classify feeds into folder proposals, then choose the folder naming style.")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(SkimStyle.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if !isEditingFeedback {
+                        Text("Use AI to classify feeds into folder proposals, then choose the folder naming style.")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 Spacer()
@@ -1420,38 +1442,40 @@ private struct AutoGroupSheet: View {
                 .buttonStyle(.plain)
             }
 
-            aiStatus
+            if !isEditingFeedback {
+                aiStatus
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Folder naming")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(SkimStyle.secondary)
-                    .textCase(.uppercase)
-                    .tracking(1.1)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Folder naming")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .textCase(.uppercase)
+                        .tracking(1.1)
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 9) {
-                        ForEach(AutoGroupNameStyle.allCases) { style in
-                            Button {
-                                withAnimation(.smooth(duration: 0.18)) {
-                                    nameStyle = style
-                                }
-                            } label: {
-                                Text(style.label)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(nameStyle == style ? SkimStyle.text : SkimStyle.secondary)
-                                    .padding(.horizontal, 13)
-                                    .frame(height: 36)
-                                    .background(
-                                        nameStyle == style ? SkimStyle.surface.opacity(0.95) : SkimStyle.surface.opacity(0.34),
-                                        in: Capsule()
-                                    )
-                                    .overlay {
-                                        Capsule()
-                                            .stroke(nameStyle == style ? SkimStyle.accent.opacity(0.7) : SkimStyle.separator, lineWidth: 1)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 9) {
+                            ForEach(AutoGroupNameStyle.allCases) { style in
+                                Button {
+                                    withAnimation(.smooth(duration: 0.18)) {
+                                        nameStyle = style
                                     }
+                                } label: {
+                                    Text(style.label)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(nameStyle == style ? SkimStyle.text : SkimStyle.secondary)
+                                        .padding(.horizontal, 13)
+                                        .frame(height: 36)
+                                        .background(
+                                            nameStyle == style ? SkimStyle.surface.opacity(0.95) : SkimStyle.surface.opacity(0.34),
+                                            in: Capsule()
+                                        )
+                                        .overlay {
+                                            Capsule()
+                                                .stroke(nameStyle == style ? SkimStyle.accent.opacity(0.7) : SkimStyle.separator, lineWidth: 1)
+                                        }
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -1491,71 +1515,78 @@ private struct AutoGroupSheet: View {
                 .scrollIndicators(.hidden)
             }
 
-            if !proposals.isEmpty && !isRunningAI {
+            if !proposals.isEmpty {
+                feedbackField
+            }
+
+            if !proposals.isEmpty && !isRunningAI && !isEditingFeedback {
                 AIDisclaimerLabel()
                     .padding(.top, 2)
             }
 
-            HStack(spacing: 12) {
-                Button {
-                    Task { await runAI() }
-                } label: {
-                    HStack(spacing: 8) {
-                        if isRunningAI {
-                            ProgressView()
-                                .controlSize(.mini)
-                                .tint(SkimStyle.text)
-                        }
-                        Text(aiActionTitle)
-                    }
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(isRunningAI ? SkimStyle.secondary : SkimStyle.text)
-                .padding(.horizontal, 15)
-                .frame(height: 42)
-                .background(SkimStyle.surface.opacity(0.85), in: Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(SkimStyle.separator, lineWidth: 1)
-                }
-                .disabled(isRunningAI || isApplying)
-
-                Spacer()
-
-                if !proposals.isEmpty {
+            if !isEditingFeedback {
+                HStack(spacing: 12) {
                     Button {
-                        Task { await applyProposals() }
+                        Task { await runAI() }
                     } label: {
                         HStack(spacing: 8) {
-                            if isApplying {
+                            if isRunningAI {
                                 ProgressView()
                                     .controlSize(.mini)
                                     .tint(SkimStyle.text)
                             }
-                            Text(isApplying ? "Applying…" : "Apply")
+                            Text(aiActionTitle)
                         }
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(SkimStyle.text)
+                    .foregroundStyle(isRunningAI ? SkimStyle.secondary : SkimStyle.text)
                     .padding(.horizontal, 15)
                     .frame(height: 42)
-                    .background(SkimStyle.accent.opacity(isApplying ? 0.45 : 0.95), in: Capsule())
+                    .background(SkimStyle.surface.opacity(0.85), in: Capsule())
                     .overlay {
                         Capsule()
-                            .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                            .stroke(SkimStyle.separator, lineWidth: 1)
                     }
                     .disabled(isRunningAI || isApplying)
-                }
 
-                Button("Done") {
-                    isPresented = false
+                    Spacer()
+
+                    if !proposals.isEmpty {
+                        Button {
+                            Task { await applyProposals() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isApplying {
+                                    ProgressView()
+                                        .controlSize(.mini)
+                                        .tint(SkimStyle.text)
+                                }
+                                Text(isApplying ? "Applying…" : "Apply")
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SkimStyle.text)
+                        .padding(.horizontal, 15)
+                        .frame(height: 42)
+                        .background(SkimStyle.accent.opacity(isApplying ? 0.45 : 0.95), in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                        }
+                        .disabled(isRunningAI || isApplying)
+                    }
+
+                    Button("Done") {
+                        isPresented = false
+                    }
+                    .buttonStyle(.glassProminent)
                 }
-                .buttonStyle(.glassProminent)
+                .padding(.top, 2)
             }
-            .padding(.top, 2)
         }
+        .animation(.smooth(duration: 0.2), value: isEditingFeedback)
         .padding(.horizontal, 24)
         .padding(.top, 24)
         .padding(.bottom, 18)
@@ -1572,7 +1603,7 @@ private struct AutoGroupSheet: View {
                 ProgressView()
                     .controlSize(.small)
                     .tint(SkimStyle.accent)
-                Text("Asking \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider))...")
+                Text("\(isRevising ? "Revising with" : "Asking") \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider))...")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(SkimStyle.secondary)
             }
@@ -1603,6 +1634,85 @@ private struct AutoGroupSheet: View {
             .padding(.vertical, 12)
             .background(SkimStyle.surface.opacity(0.66), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+    }
+
+    /// While typing feedback the keyboard takes half the sheet; drop the chrome so the
+    /// proposals being discussed stay visible above the box.
+    private var isEditingFeedback: Bool {
+        feedbackFocused && !isRunningAI
+    }
+
+    private var trimmedFeedback: String {
+        feedbackText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Free-text feedback on the proposal ("merge Coding into SoftwareEngineering"),
+    /// sent to the AI together with the current grouping so it revises rather than restarts.
+    private var feedbackField: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            TextField("Tell AI what to change…", text: $feedbackText, axis: .vertical)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(SkimStyle.text)
+                .lineLimit(1...4)
+                .focused($feedbackFocused)
+                .submitLabel(.send)
+                .onSubmit { Task { await reviseWithFeedback() } }
+                .onChange(of: feedbackText) { _, newValue in
+                    // A multi-line field takes Return as a newline; treat it as Send instead.
+                    guard newValue.contains("\n") else { return }
+                    feedbackText = newValue.replacingOccurrences(of: "\n", with: " ")
+                    Task { await reviseWithFeedback() }
+                }
+                .padding(.vertical, 10)
+                .padding(.leading, 14)
+
+            Button {
+                Task { await reviseWithFeedback() }
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(trimmedFeedback.isEmpty || isRunningAI ? SkimStyle.secondary.opacity(0.5) : SkimStyle.accent)
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+            .disabled(trimmedFeedback.isEmpty || isRunningAI || isApplying)
+            .accessibilityLabel("Revise grouping")
+            .padding(.trailing, 2)
+        }
+        .background(SkimStyle.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(feedbackFocused ? SkimStyle.accent.opacity(0.6) : SkimStyle.separator, lineWidth: 1)
+        }
+    }
+
+    private func reviseWithFeedback() async {
+        let feedback = trimmedFeedback
+        guard !feedback.isEmpty, !proposals.isEmpty, !isRunningAI else { return }
+        dismissUIKitKeyboard()
+        feedbackFocused = false
+
+        let current = proposals.map { (name: $0.displayName(style: nameStyle), feeds: $0.feeds) }
+        isRevising = true
+        isRunningAI = true
+        aiMessage = nil
+
+        do {
+            proposals = try await AutoGroupClassifier.revisedProposals(
+                current: current,
+                feedback: feedback,
+                feeds: model.feeds,
+                settings: model.settings
+            )
+            usedFallback = false
+            feedbackText = ""
+            aiMessage = "Revised with \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider)): \u{201C}\(feedback)\u{201D}"
+        } catch {
+            aiMessage = "Couldn't revise the grouping: \(error.localizedDescription)\nYour feedback is still in the box below."
+        }
+
+        isRunningAI = false
+        isRevising = false
     }
 
     private var aiActionTitle: String {
@@ -1831,6 +1941,91 @@ private enum AutoGroupClassifier {
         }
     }
 
+    /// Revise `current` following the reader's free-text `feedback`. Unlike a fresh run this
+    /// skips the folder-count checks: "merge X into Y" legitimately leaves fewer folders.
+    static func revisedProposals(
+        current: [(name: String, feeds: [Feed])],
+        feedback: String,
+        feeds: [Feed],
+        settings: AppSettings
+    ) async throws -> [AutoGroupProposal] {
+        let uniqueFeeds = deduplicate(feeds)
+        guard !uniqueFeeds.isEmpty else { return [] }
+        let currentJSON = currentGroupingJSON(current, feeds: uniqueFeeds)
+
+        let revised: [AutoGroupProposal]
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
+            revised = try await FoundationModelFeedOrganizer.proposals(
+                for: uniqueFeeds,
+                revising: (currentJSON: currentJSON, feedback: feedback)
+            )
+            return keepUnplacedFeeds(revised, current: current)
+        }
+#endif
+        let content = try await NativeAI.complete(
+            settings: settings,
+            instructions: revisionInstructions,
+            prompt: revisionPrompt(feeds: uniqueFeeds, currentJSON: currentJSON, feedback: feedback),
+            maxTokens: max(512, uniqueFeeds.count * 4 + 160),
+            jsonMode: true
+        )
+        revised = try decodeProposals(from: content, feeds: uniqueFeeds, modelID: settings.ai.model ?? settings.ai.provider)
+        return keepUnplacedFeeds(revised, current: current)
+    }
+
+    static let revisionInstructions = """
+    You revise a proposed grouping of RSS feeds into folders, following the reader's feedback. Output ONLY valid JSON. No prose. No markdown fences.
+    Each feed goes in exactly one folder. Keep folders the feedback doesn't mention as they are.
+    Refer to feeds by their numeric handle.
+    """
+
+    /// The current grouping as `{"folders":[{"name":…,"feeds":[handles]}]}`, using the
+    /// same zero-based handles as the feed listing.
+    static func currentGroupingJSON(_ current: [(name: String, feeds: [Feed])], feeds: [Feed]) -> String {
+        var handles: [String: Int] = [:]
+        for (index, feed) in feeds.enumerated() where handles[feed.id] == nil {
+            handles[feed.id] = index
+        }
+        let folders: [[String: Any]] = current.map { folder in
+            ["name": folder.name, "feeds": folder.feeds.compactMap { handles[$0.id] }]
+        }
+        let data = (try? JSONSerialization.data(withJSONObject: ["folders": folders], options: [.sortedKeys])) ?? Data()
+        return String(data: data, encoding: .utf8) ?? #"{"folders":[]}"#
+    }
+
+    static func revisionPrompt(feeds: [Feed], currentJSON: String, feedback: String) -> String {
+        """
+        Feeds (handle TAB title [TAB site]):
+        \(listing(for: feeds))
+
+        Current grouping:
+        \(currentJSON)
+
+        Reader's feedback: "\(feedback)"
+
+        Output the full revised grouping, every feed exactly once, as ONLY this JSON shape:
+        {"folders":[{"name":"Tech","feeds":[0,3,7]}]}
+        """
+    }
+
+    /// A revision must not lose feeds: any feed the AI left out goes back into its
+    /// previous folder (matched by name), so applying never drops it.
+    static func keepUnplacedFeeds(_ revised: [AutoGroupProposal], current: [(name: String, feeds: [Feed])]) -> [AutoGroupProposal] {
+        var result = revised
+        let placed = Set(revised.flatMap { $0.feeds.map(\.id) })
+        for previous in current {
+            let missing = previous.feeds.filter { !placed.contains($0.id) }
+            guard !missing.isEmpty else { continue }
+            if let index = result.firstIndex(where: { $0.baseName.caseInsensitiveCompare(previous.name) == .orderedSame }) {
+                result[index].feeds.append(contentsOf: missing)
+            } else {
+                result.append(AutoGroupProposal(baseName: previous.name, feeds: missing))
+            }
+        }
+        return result
+    }
+
     static func providerLabel(for provider: String) -> String {
         switch provider {
         case "foundation-models": return "Apple Intelligence"
@@ -1916,7 +2111,7 @@ private enum AutoGroupClassifier {
         """
     }
 
-    private static func listing(for feeds: [Feed]) -> String {
+    fileprivate static func listing(for feeds: [Feed]) -> String {
         feeds.enumerated()
             .map { index, feed in
                 let title = feed.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2252,7 +2447,10 @@ private enum FoundationModelFeedOrganizer {
     /// Groups feeds using Foundation Models `@Generable` guided generation.
     /// Bypasses JSON parsing and the `repairTriageJSON` path entirely — the schema
     /// guarantees well-formed output.
-    static func proposals(for feeds: [Feed]) async throws -> [AutoGroupProposal] {
+    static func proposals(
+        for feeds: [Feed],
+        revising revision: (currentJSON: String, feedback: String)? = nil
+    ) async throws -> [AutoGroupProposal] {
         guard !feeds.isEmpty else { return [] }
 
         let model = SystemLanguageModel(useCase: .contentTagging)
@@ -2265,7 +2463,7 @@ private enum FoundationModelFeedOrganizer {
 
         let session = LanguageModelSession(
             model: model,
-            instructions: """
+            instructions: revision != nil ? AutoGroupClassifier.revisionInstructions : """
             You group RSS feeds into topical folders.
             Each feed must appear in exactly one folder. Use 4–8 folders when possible.
             Use short folder names of 2–4 words. Refer to each feed only by its zero-based numeric handle.
@@ -2274,7 +2472,9 @@ private enum FoundationModelFeedOrganizer {
 
         let maxTokens = max(512, feeds.count * 6 + 160)
         let response = try await session.respond(
-            to: prompt(for: feeds),
+            to: revision.map {
+                AutoGroupClassifier.revisionPrompt(feeds: feeds, currentJSON: $0.currentJSON, feedback: $0.feedback)
+            } ?? prompt(for: feeds),
             generating: NativeAI.FMAutoGroupProposal.self,
             options: GenerationOptions(
                 sampling: .greedy,

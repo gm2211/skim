@@ -254,6 +254,20 @@ describe("AskSkimDialog continuing an agent conversation", () => {
     expect(chatWithArticles).not.toHaveBeenCalled();
   });
 
+  it("runs the opener's send hook when a question is sent, not when the chat opens", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    vi.mocked(askAgent).mockResolvedValue(agentAnswer);
+    const onSend = vi.fn();
+    useAgentChatStore.setState({ seed: { context: { view: "today", story: { story_id: "s1", title: "Async Rust", article_ids: ["r1"] } }, onSend } });
+    const user = userEvent.setup();
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(onSend).not.toHaveBeenCalled();
+    await user.type(screen.getByRole("textbox"), "What does it say?");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText(/compares Tokio and smol/)).toBeInTheDocument();
+    expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
   it("sends a handed-over question straight away", async () => {
     settings = { ai: { provider: "openai", chat_provider: "same" } };
     vi.mocked(askAgent).mockResolvedValue(agentAnswer);

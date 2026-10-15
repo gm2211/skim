@@ -75,11 +75,13 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
   const [contextArticleTitle, setContextArticleTitle] = useState<string | null>(null);
   const seed = useAgentChatStore((s) => s.seed);
   const pendingSend = useRef<string | null>(null);
+  const onSeedSend = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!open || !seed) return;
     useAgentChatStore.getState().setSeed(null);
     setAgentContext(seed.context);
+    onSeedSend.current = seed.onSend ?? null;
     setContextArticleTitle(seed.articleTitle ?? null);
     setMessages(seed.messages ?? []);
     setReply(null);
@@ -132,6 +134,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
 
     try {
       if (agentContext) {
+        onSeedSend.current?.();
         const resp = await askAgent([...history, { role: "user", content: chatPrompt(query, reply) }], agentContext, priorIds);
         setMessages((m) => [
           ...m,

@@ -111,7 +111,7 @@ const STEPS = [
     name: "05-organize",
     caption: "Auto-organize — the model files your feeds into folders",
     async run(p) {
-      await p.locator('[title="Add folder or smart folder"]').first().click();
+      await p.locator('[aria-label="Folders"]').first().click();
       await p.waitForTimeout(300);
       await p.getByText("Auto-organize with AI").first().click();
       await p.waitForTimeout(500);

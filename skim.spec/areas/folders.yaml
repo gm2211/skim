@@ -30,13 +30,21 @@ behaviors:
       reference: Giulio, project thread "Free text feedback on feed grouping", 2026-10-15
   - id: auto-organize-icon
     description: >-
-      The button that opens auto-grouping shows a folder with several AI sparkles of different sizes,
-      not a folder with a plus, so it doesn't read as "new folder". iOS shows it next to FEEDS and in
-      Settings; desktop shows it as its own button next to the add-folder button in the sidebar.
+      The sidebar has one folders button, next to FEEDS, showing a folder with several AI sparkles
+      (not a plus). It opens a menu: New folder, New smart folder, and Auto-organize with AI ("Organize
+      with AI" on iOS, so it fits on one line), on both desktop and iOS. iOS also lists Auto-group
+      Feeds in Settings.
     details: >-
-      Giulio, 2026-10-15: "there should be more than one sparkle to make it clear it's not a plus".
+      Giulio, 2026-10-15: "there should be more than one sparkle to make it clear it's not a plus",
+      then "not two icons... we move menu to the sparkly icon and get rid of the plus icon".
     source:
       text: >-
-        That I can suggest they were creating a new folder, but in reality we're using AI to group
-        things so maybe we should show a folder icon and then like the kind of sparkles of AI
+        not two icons, thanks - plus icon with menu makes sense - the problem is that on ios it goes
+        straight to AI - wonder though if to keep things simple, we move menu to the sparkly icon and
+        get rid of the plus icon
       reference: Giulio, project chat, 2026-10-15
+  - id: ios-manual-folders
+    description: >-
+      iOS: a reader can create an empty folder or a smart folder from the folders menu, and move a feed
+      into or out of a regular folder from the feed's long-press menu. Empty regular folders still show
+      in the sidebar.

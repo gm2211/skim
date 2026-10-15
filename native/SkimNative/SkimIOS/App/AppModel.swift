@@ -937,6 +937,38 @@ final class AppModel: ObservableObject {
         await saveSettings(next)
     }
 
+    /// A folder not yet saved, sorted after the existing ones.
+    func newFolderDraft(name: String, isSmart: Bool = false) -> FeedFolder {
+        FeedFolder(
+            id: "folder-\(UUID().uuidString.lowercased())",
+            name: name,
+            sortOrder: (folders.map(\.sortOrder).max() ?? -1) + 1,
+            isSmart: isSmart
+        )
+    }
+
+    /// Creates an empty regular folder.
+    func createFolder(name: String) async {
+        do {
+            try await store.upsertFolder(newFolderDraft(name: name))
+            folders = try await store.listFolders()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Puts a feed in a regular folder, or takes it out of its folder when `folderID` is nil.
+    func moveFeed(id feedID: String, toFolder folderID: String?) async {
+        do {
+            try await store.setFeedFolder(feedID: feedID, folderID: folderID)
+            await reloadArticles()
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     /// Applies an auto-group proposal: creates missing folders, assigns feeds, persists all.
     /// `proposal` maps folder name → array of feed IDs to assign.
     func applyOrganization(proposal: [(folderName: String, feedIDs: [String])]) async {

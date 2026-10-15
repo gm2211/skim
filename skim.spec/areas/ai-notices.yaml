@@ -22,6 +22,8 @@ behaviors:
     details: >-
       Desktop uses a cog that opens Settings on the AI Provider tab; iOS uses a gear that opens
       the AI-only settings sheet and retries the failed call when it closes.
+      Model menus list "AI Settings…" first, so it stays one tap away however
+      many models a provider lists.
     source:
       text: everywhere we have an ai call, I should be able to quickly access ai provider config
       reference: >-

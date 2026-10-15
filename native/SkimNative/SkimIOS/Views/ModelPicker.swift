@@ -5,7 +5,7 @@ import UIKit
 /// Inline, always-available model picker for AI surfaces outside Settings
 /// (Ask Skim chat, Summarize, Today). Lets the user switch
 /// which model runs without leaving the flow; a provider change still
-/// requires the full Settings sheet, reached via the trailing "AI Settings…"
+/// requires the full Settings sheet, reached via the leading "AI Settings…"
 /// entry.
 struct ModelPickerMenu: View {
     @Binding var ai: AISettings
@@ -31,24 +31,29 @@ struct ModelPickerMenu: View {
 
     var body: some View {
         Menu {
+            // First, so it is one tap away however many models follow
+            // (OpenRouter lists hundreds).
+            if let onOpenSettings {
+                Button {
+                    onOpenSettings()
+                } label: {
+                    Label("AI Settings…", systemImage: "gearshape")
+                }
+                Divider()
+            }
+
             if isReadOnlyOverride {
                 Text("Chat override: \(ModelCatalog.currentLabel(effectiveAI))")
                 Text("Change it in AI Settings.")
             } else {
                 choiceItems
             }
-
-            if let onOpenSettings {
-                Divider()
-                Button {
-                    onOpenSettings()
-                } label: {
-                    Label("AI Settings…", systemImage: "gearshape")
-                }
-            }
         } label: {
             PickerChipLabel(title: ModelCatalog.currentLabel(effectiveAI), systemImage: "cpu")
         }
+        // Keep the written order even when the menu opens upward, which
+        // would otherwise put the first item at the bottom.
+        .menuOrder(.fixed)
         .buttonStyle(.plain)
         .disabled(isDisabled)
         .accessibilityLabel("AI model: \(ModelCatalog.currentLabel(effectiveAI))")

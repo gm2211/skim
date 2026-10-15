@@ -75,6 +75,19 @@ SkimSummaryPlan skim_summary_plan(const char *length, int64_t custom_words);
  * aliases detailed. Returns immutable static storage; caller must not free. */
 const char *skim_summary_style_prompt(const char *tone);
 
+/* Output-token ceiling for one summary or chat request. On-device and
+ * self-hosted providers (NULL/unknown) keep the visible-text budget; hosted
+ * providers get at least 8192 because some count hidden reasoning against it.
+ * The prompt, not this ceiling, controls length. */
+int32_t skim_ai_request_max_tokens(int32_t budget, const char *provider);
+
+/* Bytes of a generated summary to keep (length-delimited UTF-8). Drops an
+ * unfinished final sentence left by a token cutoff: the final line is cut
+ * back to its last sentence end, or dropped when it has none and the text
+ * before it ends a sentence. Text that ends a sentence, or an unpunctuated
+ * list, is kept whole (returns len). NULL text yields 0. */
+size_t skim_summary_complete_length(const uint8_t *text, size_t len);
+
 /* Evidence and editorial policy for a newspaper story's lede. Output encoding
    and source loading remain platform adapters. */
 const char *skim_today_lede_prompt(void);
@@ -156,6 +169,13 @@ double skim_inbox_score(double importance, double relevance, int32_t has_ai,
                         double age_hours);
 /* Legacy 1-5 priority bucket derived from the two axes. */
 int32_t skim_inbox_priority(double importance, double relevance);
+/* The reader's preference for one Today story, added to skim_story_score.
+ * starred_members counts starred reports in the story; pinned is 0/1 when a
+ * report is pinned; taste_affinity is the mean AI Inbox affinity (-1..1) of
+ * the story's reports and taste_strength the inbox learning strength (0..1),
+ * so Today and the AI Inbox learn from the same signals. */
+double skim_story_preference(int64_t starred_members, int32_t pinned,
+                             double taste_affinity, double taste_strength);
 
 #ifdef __cplusplus
 }

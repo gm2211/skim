@@ -301,11 +301,11 @@ export type SidebarView =
   | { type: "all" }
   | { type: "starred" }
   | { type: "feed"; feedId: string }
-  | { type: "inbox" }
   | { type: "recent" }
   | { type: "theme"; themeId: string }
   | { type: "folder"; folderId: string }
-  | { type: "today" };
+  | { type: "today" }
+  | { type: "discover" };
 
 export interface ArticleWithInteraction extends Article {
   reading_time_sec: number;
@@ -407,4 +407,31 @@ export interface TodayEditionView {
   items: TodayEditionItem[];
   consumed_count: number;
   total_count: number;
+}
+
+export interface FeedPreviewItem {
+  title: string;
+  url: string | null;
+  published_at: number | null;
+  author: string | null;
+  image_url: string | null;
+}
+
+/** A feed found by discovery, search, or the built-in catalog. */
+export interface DiscoveredFeed {
+  url: string;
+  title: string;
+  site_url: string | null;
+  description: string | null;
+  icon_url: string | null;
+  subscribers: number | null;
+  /** Latest headlines; empty until the feed has been fetched. */
+  items: FeedPreviewItem[];
+  already_subscribed: boolean;
+}
+
+export interface FeedCatalogTopic {
+  id: string;
+  name: string;
+  feeds: DiscoveredFeed[];
 }

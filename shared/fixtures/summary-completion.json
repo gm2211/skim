@@ -1,0 +1,33 @@
+{
+  "trim": [
+    {"text": "**The steelman.** Some people will pay a premium because AI makes everything else cheap. Chea", "kept": "**The steelman.** Some people will pay a premium because AI makes everything else cheap."},
+    {"text": "Done here.", "kept": "Done here."},
+    {"text": "Trailing space stays.  \n", "kept": "Trailing space stays.  \n"},
+    {"text": "One. Two \"quoted.\" Thr", "kept": "One. Two \"quoted.\""},
+    {"text": "Curly “quoted.” Thr", "kept": "Curly “quoted.”"},
+    {"text": "Wait… then", "kept": "Wait…"},
+    {"text": "First paragraph ends.\n\nChea", "kept": "First paragraph ends."},
+    {"text": "- apples\n- pears\n- bana", "kept": "- apples\n- pears\n- bana"},
+    {"text": "- Prices rose. The Fe", "kept": "- Prices rose."},
+    {"text": "Version 3.5 is out", "kept": "Version 3.5 is out"},
+    {"text": "Ends with a header:", "kept": "Ends with a header:"},
+    {"text": "**Bold.** Body ends.**", "kept": "**Bold.** Body ends.**"},
+    {"text": "", "kept": ""}
+  ],
+  "max_tokens": [
+    {"plan_tokens": 256, "provider": "xai", "max_tokens": 8192},
+    {"plan_tokens": 2400, "provider": "anthropic", "max_tokens": 8192},
+    {"plan_tokens": 1200, "provider": "openai", "max_tokens": 8192},
+    {"plan_tokens": 256, "provider": "openrouter", "max_tokens": 8192},
+    {"plan_tokens": 256, "provider": "claude-subscription", "max_tokens": 8192},
+    {"plan_tokens": 256, "provider": "chatgpt-subscription", "max_tokens": 8192},
+    {"plan_tokens": 256, "provider": "claude-cli", "max_tokens": 8192},
+    {"plan_tokens": 256, "provider": "mlx", "max_tokens": 256},
+    {"plan_tokens": 1200, "provider": "foundation-models", "max_tokens": 1200},
+    {"plan_tokens": 2400, "provider": "local", "max_tokens": 2400},
+    {"plan_tokens": 600, "provider": "custom", "max_tokens": 600},
+    {"plan_tokens": 600, "provider": "ollama", "max_tokens": 600},
+    {"plan_tokens": 600, "provider": null, "max_tokens": 600},
+    {"plan_tokens": 0, "provider": "mlx", "max_tokens": 1}
+  ]
+}

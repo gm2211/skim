@@ -44,6 +44,29 @@ struct NativeAIAnthropicRequestTests {
         #expect(body["temperature"] as? Double == 0.3)
     }
 
+    // claude-sonnet-5-5 thinks before answering by default, and that thinking counts
+    // against max_tokens. Ask Skim's 850-token budget could go entirely on thinking,
+    // which came back as "The Claude response was empty." on iPhone.
+    @Test(arguments: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-sonnet-5", "claude-fable-5-1"])
+    func modelsThatThinkByDefaultGetLowEffortAndRoomToAnswer(model: String) throws {
+        let body = try payload(model: model)
+        #expect((body["output_config"] as? [String: Any])?["effort"] as? String == "low")
+        #expect(body["max_tokens"] as? Int == NativeAI.anthropicThinkingMaxTokensFloor)
+    }
+
+    @Test(arguments: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5", "claude-3-5-sonnet-20241022", "claude-some-future-model"])
+    func olderModelsGetNoEffortAndKeepTheirBudget(model: String) throws {
+        let body = try payload(model: model)
+        #expect(body["output_config"] == nil)
+        #expect(body["max_tokens"] as? Int == 100)
+    }
+
+    @Test func emptyAnswerSaysWhyWhenItCan() {
+        #expect(NativeAI.anthropicEmptyResponseMessage(stopReason: "max_tokens").hasPrefix("Claude ran out of room"))
+        #expect(NativeAI.anthropicEmptyResponseMessage(stopReason: "refusal").hasPrefix("Claude declined"))
+        #expect(NativeAI.anthropicEmptyResponseMessage(stopReason: "end_turn") == "The Claude response was empty.")
+    }
+
     @Test func badRequestShowsTheAPIReason() {
         let data = Data(#"{"type":"error","error":{"type":"invalid_request_error","message":"temperature is not supported for this model"}}"#.utf8)
         let message = NativeAI.friendlyErrorMessage(status: 400, data: data, provider: "Claude subscription")

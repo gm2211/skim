@@ -3,8 +3,9 @@ name: Article list
 behaviors:
   - id: sidebar-views
     description: >-
-      Desktop: the sidebar lists Today, All Articles (with unread count), Starred, Recent, and AI
-      Inbox, followed by feeds and folders, with Settings at the bottom.
+      Desktop: the sidebar lists Today, All Articles (with unread count), Starred and Recent,
+      followed by feeds and folders, with Settings at the bottom. The AI Inbox is the list's For
+      you sort (ai-inbox.inbox-is-reachable), not a sidebar row.
   - id: list-filters
     description: >-
       The list filters to Unread (default), Starred, or All. The Starred view shows starred articles

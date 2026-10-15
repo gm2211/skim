@@ -62,6 +62,18 @@ const unclip = async (p, selector = ".today-page") => {
   await p.waitForTimeout(200);
 };
 
+const openDiscover = async (p) => {
+  const button = p.locator('[aria-label="Add feed"]:visible').first();
+  const opened = (await button.count()) && (await button.click({ timeout: 2000 }).then(() => true, () => false));
+  if (!opened) {
+    await p.keyboard.press("Meta+k");
+    await p.keyboard.type("Add feed");
+    await p.keyboard.press("Enter");
+  }
+  await p.locator(".discover-page").first().waitFor();
+  await p.waitForTimeout(600);
+};
+
 const SCENES = [
   { name: "today", viewport: DESKTOP, run: openToday },
   // The same paper over a wider window, picked from the cog.
@@ -111,6 +123,46 @@ const SCENES = [
   { name: "ask", viewport: DESKTOP, run: async (p) => {
     await p.locator('[aria-label="Ask Skim"]').first().click();
     await p.waitForTimeout(500);
+  } },
+  // Discover: browse topics, open a topic, open a feed's page, find a site's feeds.
+  { name: "discover", viewport: DESKTOP, run: openDiscover },
+  { name: "discover-topic", viewport: DESKTOP, run: async (p) => {
+    await openDiscover(p);
+    await p.locator(".discover-card").first().click();
+    await p.waitForTimeout(500);
+  } },
+  { name: "discover-feed", viewport: DESKTOP, run: async (p) => {
+    await openDiscover(p);
+    await p.locator(".discover-card").first().click();
+    await p.getByRole("button", { name: /^Ars Technica,/ }).click();
+    await p.getByRole("button", { name: "Follow Ars Technica" }).click();
+    await p.waitForTimeout(900);
+  } },
+  { name: "discover-site", viewport: DESKTOP, run: async (p) => {
+    await openDiscover(p);
+    await p.getByRole("textbox", { name: /paste a website/ }).fill("theverge.com");
+    await p.getByText("3 feeds found").waitFor();
+    await p.getByRole("button", { name: "Follow The Verge: Tech" }).click();
+    await p.waitForTimeout(700);
+  } },
+  { name: "discover-search", viewport: DESKTOP, run: async (p) => {
+    await openDiscover(p);
+    await p.getByRole("textbox", { name: /paste a website/ }).fill("rust");
+    await p.getByText("Rust Blog").first().waitFor();
+    await p.waitForTimeout(300);
+  } },
+  { name: "discover-narrow", viewport: { width: 1000, height: 760 }, run: openDiscover },
+  { name: "discover-phone", viewport: { width: 390, height: 844 }, run: openDiscover },
+  { name: "discover-phone-feed", viewport: { width: 390, height: 844 }, run: async (p) => {
+    await openDiscover(p);
+    await p.locator(".discover-card").first().click();
+    await p.getByRole("button", { name: /^The Verge,/ }).click();
+    await p.waitForTimeout(800);
+  } },
+  { name: "import-dialog", viewport: DESKTOP, run: async (p) => {
+    await openDiscover(p);
+    await p.getByRole("button", { name: "Import OPML" }).click();
+    await p.waitForTimeout(400);
   } },
   { name: "settings", viewport: DESKTOP, run: async (p) => {
     await p.getByText("Settings", { exact: true }).first().click();

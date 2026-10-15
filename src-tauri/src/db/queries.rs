@@ -1406,6 +1406,30 @@ pub fn get_inbox_articles_since(
     limit: i64,
     offset: i64,
 ) -> Result<Vec<ArticleWithTriage>, rusqlite::Error> {
+    ranked_inbox_articles(conn, min_priority, is_read, published_after, None, limit, offset)
+}
+
+/// The "For you" order of one article list: articles in `feed_ids` (every
+/// feed when `None`) ranked like the AI Inbox.
+pub fn get_inbox_articles_in_feeds(
+    conn: &Connection,
+    feed_ids: Option<&[String]>,
+    is_read: Option<bool>,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<ArticleWithTriage>, rusqlite::Error> {
+    ranked_inbox_articles(conn, None, is_read, None, feed_ids, limit, offset)
+}
+
+fn ranked_inbox_articles(
+    conn: &Connection,
+    min_priority: Option<i32>,
+    is_read: Option<bool>,
+    published_after: Option<i64>,
+    feed_ids: Option<&[String]>,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<ArticleWithTriage>, rusqlite::Error> {
     let mut sql = String::from(
         "SELECT a.id, a.feed_id, a.title, a.url, a.author, a.content_html, a.content_text,
                 a.published_at, a.fetched_at, a.is_read, a.is_starred, a.feedly_entry_id, a.comments_url,
@@ -1434,6 +1458,17 @@ pub fn get_inbox_articles_since(
             " AND COALESCE(a.published_at, a.fetched_at) >= ?{}",
             param_values.len()
         ));
+    }
+    if let Some(ids) = feed_ids {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut placeholders = Vec::with_capacity(ids.len());
+        for id in ids {
+            param_values.push(Box::new(id.clone()));
+            placeholders.push(format!("?{}", param_values.len()));
+        }
+        sql.push_str(&format!(" AND a.feed_id IN ({})", placeholders.join(", ")));
     }
     // Bound the candidate pool; ranking happens below with learned taste.
     sql.push_str(" ORDER BY COALESCE(a.published_at, a.fetched_at) DESC LIMIT 5000");
@@ -2271,6 +2306,16 @@ mod story_persistence_tests {
         let page = get_inbox_articles_since(&conn, None, Some(false), None, 1, 1).unwrap();
         assert_eq!(page.len(), 1);
         assert_eq!(page[0].article.id, "article-1");
+    }
+
+    #[test]
+    fn for_you_ranks_only_the_chosen_feeds() {
+        let conn = setup();
+        let in_feed = get_inbox_articles_in_feeds(&conn, Some(&["feed-1".to_string()]), Some(false), 100, 0).unwrap();
+        assert_eq!(in_feed.len(), 2);
+        assert!(get_inbox_articles_in_feeds(&conn, Some(&["other".to_string()]), Some(false), 100, 0).unwrap().is_empty());
+        assert!(get_inbox_articles_in_feeds(&conn, Some(&[]), Some(false), 100, 0).unwrap().is_empty());
+        assert_eq!(get_inbox_articles_in_feeds(&conn, None, Some(false), 100, 0).unwrap().len(), 2);
     }
 
     #[test]

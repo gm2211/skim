@@ -24,6 +24,8 @@ interface Props {
   summaryContext?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** A passage highlighted in the article; each new `id` quotes it in the composer. */
+  askAbout?: { id: number; text: string } | null;
 }
 
 const COLLAPSED_HEIGHT = 44;
@@ -31,7 +33,7 @@ const PHONE_COLLAPSED_HEIGHT = 52;
 const DEFAULT_HEIGHT = 280;
 const MIN_HEIGHT = 140;
 
-export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, onOpenChange }: Props) {
+export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, onOpenChange, askAbout }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
   const { data: settings } = useSettings();
   const chatProvider = settings?.ai.chat_provider;
@@ -70,6 +72,13 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     setSearchLoading(false);
     setError(null);
   }, [articleId]);
+
+  // Quote a passage the reader highlighted, ready for a question about it.
+  useEffect(() => {
+    if (!askAbout) return;
+    setReply({ role: "article", text: askAbout.text });
+    inputRef.current?.focus({ preventScroll: true });
+  }, [askAbout?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A setup error is stale once AI settings change: drop the card so the
   // input is reachable again and the next send uses the new settings.
@@ -371,6 +380,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
                       padding: "4px 8px",
                       background: "rgba(255,255,255,0.02)",
                       maxWidth: "85%",
+                      overflowWrap: "anywhere",
                     }}
                   >
                     <div

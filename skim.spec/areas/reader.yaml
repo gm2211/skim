@@ -28,9 +28,16 @@ behaviors:
       article is opened from Recent).
   - id: aggregator-comments
     description: >-
-      Hacker News, Reddit and Lobsters items end with a Discussion section: the top comments with
-      their points, an action to open the thread on the site, and, when comments can't be loaded, a
-      card that opens the conversation there instead of an error.
+      Hacker News, Reddit and Lobsters items end with a Discussion section that shows the thread
+      itself: top comments with author and points, their replies nested beneath them (direct
+      replies shown, deeper levels folded behind an "N replies" toggle), a "Show more comments"
+      action that reveals further top-level threads, and an action to open the thread on the site.
+      When Reddit refuses its JSON API, comments come from the thread's RSS feed instead (no points
+      or nesting). Only when no comments can be loaded does a card open the conversation on the
+      site instead of an error.
+    source:
+      text: I love this, but could we also extract comments and show them here?
+      reference: Giulio, project thread "Inline Reddit comments", 2026-10-14
   - id: aggregator-post-layout
     description: >-
       Reddit, Hacker News and Lobsters items get a purpose-built reader layout instead of the

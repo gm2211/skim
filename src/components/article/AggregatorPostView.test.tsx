@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { AggregatorPostView, type ReaderCopyState } from "./AggregatorPostView";
+import { AggregatorPostView, buildCommentTree, type ReaderCopyState } from "./AggregatorPostView";
 import { fetchAggregatorDetails } from "../../services/commands";
 import type { AggregatorPost } from "../../lib/aggregatorPost";
 
@@ -89,5 +89,56 @@ describe("AggregatorPostView", () => {
 
     expect(await screen.findByRole("button", { name: /Read on blog\.example\.com/ })).toBeInTheDocument();
     expect(screen.getByText("No comments yet")).toBeInTheDocument();
+  });
+
+  it("shows direct replies and folds deeper ones behind a toggle", async () => {
+    vi.mocked(fetchAggregatorDetails).mockResolvedValue({
+      kind: "reddit",
+      selftext: null,
+      external_url: null,
+      comments: [
+        { id: "a", author: "ann", score: 40, body: "Top comment", depth: 0 },
+        { id: "a1", author: "bo", score: 12, body: "Direct reply", depth: 1 },
+        { id: "a11", author: "cy", score: 3, body: "Deep reply", depth: 2 },
+        { id: "a111", author: "di", score: 1, body: "Deeper reply", depth: 3 },
+        { id: "b", author: "ed", score: 9, body: "Second comment", depth: 0 },
+      ],
+    });
+    renderView(redditLinkPost);
+
+    expect(await screen.findByText("Direct reply")).toBeInTheDocument();
+    expect(screen.queryByText("Deep reply")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "2 replies" }));
+    expect(screen.getByText("Deep reply")).toBeInTheDocument();
+    expect(screen.queryByText("Deeper reply")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "1 reply" }));
+    expect(screen.getByText("Deeper reply")).toBeInTheDocument();
+    expect(screen.getByText("Second comment")).toBeInTheDocument();
+  });
+
+  it("reveals more top-level threads a page at a time", async () => {
+    vi.mocked(fetchAggregatorDetails).mockResolvedValue({
+      kind: "hacker_news",
+      selftext: null,
+      external_url: null,
+      comments: Array.from({ length: 12 }, (_, i) => ({ id: `c${i}`, author: `user${i}`, score: null, body: `Comment ${i}`, depth: 0 })),
+    });
+    renderView({ ...redditLinkPost, kind: "hacker_news", siteName: "Hacker News", discussionUrl: "https://news.ycombinator.com/item?id=1" });
+
+    expect(await screen.findByText("Comment 7")).toBeInTheDocument();
+    expect(screen.queryByText("Comment 8")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show more comments" }));
+    expect(screen.getByText("Comment 11")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show more comments" })).not.toBeInTheDocument();
+  });
+
+  it("rebuilds reply trees from flattened comments", () => {
+    const tree = buildCommentTree([
+      { id: "a", author: "a", score: null, body: "", depth: 0 },
+      { id: "a1", author: "a", score: null, body: "", depth: 1 },
+      { id: "a2", author: "a", score: null, body: "", depth: 1 },
+      { id: "b", author: "a", score: null, body: "", depth: 0 },
+    ]);
+    expect(tree.map((node) => [node.comment.id, node.replies.map((reply) => reply.comment.id)])).toEqual([["a", ["a1", "a2"]], ["b", []]]);
   });
 });

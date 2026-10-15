@@ -33,11 +33,20 @@ import type {
   TodayEditionItem,
   AggregatorDetails,
   Ds4Status,
+  DiscoveredFeed,
+  FeedCatalogTopic,
 } from "./types";
 
 // Feeds
 export const addFeed = (url: string) => invoke<Feed>("add_feed", { url });
 export const listFeeds = () => invoke<Feed[]>("list_feeds");
+export const discoverFeeds = (query: string) =>
+  invoke<DiscoveredFeed[]>("discover_feeds", { query });
+export const searchFeeds = (query: string) =>
+  invoke<DiscoveredFeed[]>("search_feeds", { query });
+export const previewFeed = (url: string) =>
+  invoke<DiscoveredFeed>("preview_feed", { url });
+export const feedCatalog = () => invoke<FeedCatalogTopic[]>("feed_catalog");
 export const removeFeed = (feedId: string) =>
   invoke<void>("remove_feed", { feedId });
 export const renameFeed = (feedId: string, title: string) =>
@@ -74,8 +83,16 @@ export interface FolderProposal {
   feed_ids: string[];
 }
 export type AutoOrganizeScope = "all" | "unassigned";
-export const aiAutoOrganizeFeeds = (scope: AutoOrganizeScope = "all") =>
-  invoke<FolderProposal[]>("ai_auto_organize_feeds", { scope });
+/** With `current` and `feedback`, the AI revises that grouping instead of starting over. */
+export const aiAutoOrganizeFeeds = (
+  scope: AutoOrganizeScope = "all",
+  revision?: { current: FolderProposal[]; feedback: string },
+) =>
+  invoke<FolderProposal[]>("ai_auto_organize_feeds", {
+    scope,
+    current: revision?.current ?? null,
+    feedback: revision?.feedback ?? null,
+  });
 export const aiMatchFeedsForTopic = (description: string) =>
   invoke<string[]>("ai_match_feeds_for_topic", { description });
 export const applyFolderOrganization = (
@@ -379,12 +396,14 @@ export const getInboxArticles = (opts?: {
   isRead?: boolean | null;
   limit?: number | null;
   offset?: number | null;
+  feedIds?: string[] | null;
 }) =>
   invoke<ArticleWithTriage[]>("get_inbox_articles", {
     minPriority: opts?.minPriority ?? null,
     isRead: opts?.isRead ?? null,
     limit: opts?.limit ?? null,
     offset: opts?.offset ?? null,
+    feedIds: opts?.feedIds ?? null,
   });
 export const getTriageStats = () => invoke<TriageStats>("get_triage_stats");
 

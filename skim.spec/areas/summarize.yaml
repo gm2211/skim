@@ -27,6 +27,19 @@ behaviors:
   - id: faithful-summaries
     description: >-
       Summaries keep the source's uncertainty, attribution, negation, and timing.
+  - id: complete-summaries
+    description: >-
+      A summary never ends mid-word or mid-sentence, even when the model stops at its output limit.
+    details: >-
+      Hosted providers get an output ceiling of at least 8192 tokens, because some count hidden
+      reasoning against it; the prompt's word target still sets the length. On-device models keep
+      the plan's budget. If output is still cut off, the unfinished final sentence is dropped. Both
+      rules live in shared/SkimStoryPolicy with the shared/fixtures/summary-completion.json fixture.
+    source:
+      text: What's the prompt for summaries - i noticed they frequently end with "the steelman"
+      reference: >-
+        Giulio, project thread on the summary prompt, 2026-10-14, with a screenshot of an iOS
+        summary cut off at "everything else cheap. Chea"
   - id: cancel-and-cache
     description: >-
       An in-flight summary can be cancelled, and finished summaries are cached per article.

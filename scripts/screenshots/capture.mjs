@@ -71,9 +71,9 @@ const STEPS = [
   },
   {
     name: "02-triage",
-    caption: "AI Inbox — every unread article scored 1 to 5",
+    caption: "For you — every unread article scored 1 to 5",
     async run(p) {
-      await p.getByText("AI Inbox", { exact: true }).first().click();
+      await p.getByRole("button", { name: "For you", exact: true }).first().click();
       await p.waitForTimeout(900);
       await openLeadArticle(p);
     },

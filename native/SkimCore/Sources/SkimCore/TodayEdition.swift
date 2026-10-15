@@ -1,28 +1,30 @@
 import Foundation
+import SkimStoryPolicy
 
 /// Personalization captured when generating an edition. Reopening an existing
 /// edition preserves its frozen selection even if these preferences change.
+/// Taste is the AI Inbox's, weighed by the shared `skim_story_preference`.
 public struct TodayRankingPreferences: Sendable {
-    public var feedWeights: [String: Double]
+    public var taste: InboxTaste
     public var pinnedArticleIDs: Set<String>
 
     public init(
-        feedWeights: [String: Double] = [:],
+        taste: InboxTaste = InboxTaste(),
         pinnedArticleIDs: Set<String> = []
     ) {
-        self.feedWeights = feedWeights
+        self.taste = taste
         self.pinnedArticleIDs = pinnedArticleIDs
     }
 
     func signal(for articles: [Article]) -> Double {
-        let stars = Double(min(2, articles.filter(\.isStarred).count)) * 0.5
-        let pin = articles.contains { pinnedArticleIDs.contains($0.id) } ? 1.25 : 0
-        let feedIDs = Set(articles.map(\.feedID)).sorted()
-        let taste = feedIDs.reduce(0.0) { total, id in
-            let weight = feedWeights[id] ?? 0
-            return total + (weight.isFinite ? max(-1, min(1, weight)) : 0)
-        } / Double(max(1, feedIDs.count))
-        return stars + pin + taste
+        let affinity = articles.isEmpty ? 0 : articles
+            .map { taste.affinity(feedID: $0.feedID, title: $0.title) }
+            .reduce(0, +) / Double(articles.count)
+        return skim_story_preference(
+            Int64(articles.filter(\.isStarred).count),
+            articles.contains { pinnedArticleIDs.contains($0.id) } ? 1 : 0,
+            affinity, taste.strength
+        )
     }
 }
 

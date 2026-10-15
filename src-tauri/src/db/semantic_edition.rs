@@ -538,6 +538,7 @@ mod tests {
                 usage: None,
                 tool_uses: vec![],
                 stop_reason: None,
+                raw_content: None,
             })
         }
         fn name(&self) -> &str {
@@ -1091,6 +1092,7 @@ mod tests {
                 usage: None,
                 tool_uses: vec![],
                 stop_reason: None,
+                raw_content: None,
             })
         }
         fn name(&self) -> &str {

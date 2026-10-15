@@ -8,6 +8,30 @@ behaviors:
     description: >-
       A reader can add a feed by URL. Skim resolves the feed document and its site, and accepts RSS
       2.0, Atom, and JSON Feed.
+  - id: feed-discovery
+    description: >-
+      Adding feeds happens in Discover, a full browsing view (not a modal) on desktop and iOS,
+      opened from the sidebar's "Discover feeds" row or the + button. Its home has a search box
+      ("Type a name, topic, or paste a URL"), featured topics and a topic list. A topic page lists
+      its top feeds; a feed page shows the feed's recent posts grouped by day. Every feed row and
+      feed page has a Follow button that adds the feed in place; feeds already in the library show
+      "Following".
+    details: >-
+      Pasting a website (or `theverge.com`, `r/rust`) lists every feed Skim finds on it; typing
+      words searches feeds by topic or name. Discovery reads the page's `<link rel="alternate">`
+      feeds plus known patterns (Reddit subreddits and users, YouTube channels and playlists,
+      GitHub repos and users, Hacker News, Medium, Mastodon, Bluesky) and falls back to common paths
+      (/feed, /rss, /atom.xml, ...) when nothing else turns up. Topics and search merge the built-in
+      catalog (shared/feed-catalog.json) with Feedly's public, keyless feed search; the catalog
+      alone answers when Feedly is unreachable. Adding a website address by URL also resolves it to
+      its first feed. OPML and Feedly import moved to an Import button in Discover's header. The
+      original ask was "I'd like to have rss feed discovery and ability to easily add feeds like I
+      can do on feedly" (Giulio, project chat, 2026-10-14).
+    source:
+      text: >-
+        Add feeds should not be a modal - it should be a dedicated browsing view where I can see
+        categories of feeds, open feeds and also start "following" feeds
+      reference: Giulio, feed discovery thread, 2026-10-14
   - id: opml-import-with-preview
     description: >-
       A reader can import an OPML file and preview the feeds before importing them. iOS offers

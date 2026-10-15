@@ -68,3 +68,37 @@ struct NativeAIGuardrailRefusalTests {
         #expect(NativeAI.isGuardrailRefusal(error) == true)
     }
 }
+
+// MARK: - AI Inbox ratings
+
+// A ratings response cut off by max_tokens used to fail the whole batch with
+// "The AI model didn't return usable ratings". The entries the model finished
+// are still good ratings.
+@Suite("NativeAI.parseInboxRatings")
+struct NativeAIInboxRatingsParseTests {
+    @Test func truncatedResponseKeepsTheFinishedEntries() {
+        let raw = #"{"triage":[{"id":1,"importance":4,"relevance":3,"reason":"Rate cut {surprise}"},{"id":2,"importance":2,"relevance":5,"reason":"Matches \"AI\" interest"},{"id":3,"importance":5,"rel"#
+        let ratings = NativeAI.parseInboxRatings(raw, count: 3)
+        #expect(ratings.keys.sorted() == [1, 2])
+        #expect(ratings[1] == NativeAI.InboxRating(importance: 4, relevance: 3, reason: "Rate cut {surprise}"))
+        #expect(ratings[2]?.relevance == 5)
+    }
+
+    @Test func fencedTruncatedResponseIsSalvaged() {
+        let raw = "```json\n{\"triage\":[{\"id\":\"1\",\"priority\":4,\"reason\":\"x\"},{\"id\":2"
+        #expect(NativeAI.parseInboxRatings(raw, count: 2).keys.sorted() == [1])
+    }
+
+    @Test func completeResponseStillParses() {
+        let raw = #"{"triage":[{"id":1,"importance":3,"relevance":3,"reason":"ok"}]}"#
+        #expect(NativeAI.parseInboxRatings(raw, count: 1).count == 1)
+    }
+
+    @Test func proseWithoutJSONHasNoRatings() {
+        #expect(NativeAI.parseInboxRatings("I can't rate these.", count: 2).isEmpty)
+    }
+
+    @Test func budgetLeavesRoomForReasons() {
+        #expect(NativeAI.inboxRatingsMaxTokens(count: 20) == 1900)
+    }
+}

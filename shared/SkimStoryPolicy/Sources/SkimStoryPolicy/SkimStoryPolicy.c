@@ -49,6 +49,67 @@ const char *skim_summary_style_prompt(const char *tone) {
 
 #undef SUMMARY_FIDELITY
 
+/* Hosted models where max tokens is only a ceiling: some count hidden
+ * reasoning against it, so a visible-text budget alone cuts answers short. */
+static int ai_provider_is_hosted(const char *provider) {
+    static const char *const hosted[] = {"openai", "xai", "openrouter", "anthropic",
+        "claude-subscription", "chatgpt-subscription", "claude-cli"};
+    if (!provider) return 0;
+    for (size_t i = 0; i < sizeof hosted / sizeof hosted[0]; ++i)
+        if (strcmp(provider, hosted[i]) == 0) return 1;
+    return 0;
+}
+
+int32_t skim_ai_request_max_tokens(int32_t budget, const char *provider) {
+    if (budget < 1) budget = 1;
+    if (!ai_provider_is_hosted(provider)) return budget;
+    return budget > 8192 ? budget : 8192;
+}
+
+static int summary_is_space(uint8_t c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+
+/* Steps back over closing quotes, brackets and Markdown emphasis that may
+ * follow a sentence's final punctuation. Returns the index just past the
+ * terminator when one ends at `end`, else 0. */
+static size_t summary_sentence_end(const uint8_t *s, size_t start, size_t end) {
+    size_t i = end;
+    while (i > start) {
+        uint8_t c = s[i - 1];
+        if (c == '"' || c == '\'' || c == ')' || c == ']' || c == '*' || c == '_') { --i; continue; }
+        /* ’ and ” are E2 80 99 / E2 80 9D. */
+        if (i - start >= 3 && s[i - 3] == 0xe2 && s[i - 2] == 0x80 && (c == 0x99 || c == 0x9d)) { i -= 3; continue; }
+        break;
+    }
+    if (i == start) return 0;
+    uint8_t c = s[i - 1];
+    if (c == '.' || c == '!' || c == '?') return end;
+    /* … is E2 80 A6. */
+    if (i - start >= 3 && s[i - 3] == 0xe2 && s[i - 2] == 0x80 && c == 0xa6) return end;
+    return 0;
+}
+
+size_t skim_summary_complete_length(const uint8_t *text, size_t len) {
+    if (!text) return 0;
+    size_t end = len;
+    while (end > 0 && summary_is_space(text[end - 1])) --end;
+    if (end == 0 || summary_sentence_end(text, 0, end)) return len;
+    size_t line = end;
+    while (line > 0 && text[line - 1] != '\n') --line;
+    /* Last sentence break inside the final line: terminator, then whitespace. */
+    for (size_t i = end; i > line; --i) {
+        if (!summary_is_space(text[i - 1]) || i - 1 == line) continue;
+        size_t kept = i - 1;
+        while (kept > line && summary_is_space(text[kept - 1])) --kept;
+        if (kept > line && summary_sentence_end(text, line, kept)) return kept;
+    }
+    /* No sentence ends in the final line. Drop it only when the prose before
+     * it ends a sentence; an unpunctuated list keeps its last item. */
+    size_t prev = line;
+    while (prev > 0 && summary_is_space(text[prev - 1])) --prev;
+    if (prev > 0 && summary_sentence_end(text, 0, prev)) return prev;
+    return len;
+}
+
 static size_t lede_scalar(const uint8_t *s, size_t n, uint32_t *value) {
     if (!n) return 0;
     uint32_t c = s[0];
@@ -1170,4 +1231,14 @@ int32_t skim_inbox_priority(double importance, double relevance) {
     const double mean = (1.0 + 4.0 * inbox_unit(importance) + 1.0 + 4.0 * inbox_unit(relevance)) / 2.0;
     int32_t p = (int32_t)floor(mean + 0.5);
     return p < 1 ? 1 : (p > 5 ? 5 : p);
+}
+
+double skim_story_preference(int64_t starred_members, int32_t pinned,
+                             double taste_affinity, double taste_strength) {
+    const double stars = (double)(starred_members < 0 ? 0 : (starred_members > 2 ? 2 : starred_members)) * 0.5;
+    const double pin = pinned ? 1.25 : 0.0;
+    const double a = isfinite(taste_affinity) ? fmin(1.0, fmax(-1.0, taste_affinity)) : 0.0;
+    const double s = isfinite(taste_strength) ? fmin(1.0, fmax(0.0, taste_strength)) : 0.0;
+    /* Fully learned taste is worth one importance level (3 points) either way. */
+    return stars + pin + 3.0 * a * s;
 }

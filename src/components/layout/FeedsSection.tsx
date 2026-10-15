@@ -1167,6 +1167,9 @@ function AutoOrganizeDialog({
   const [scope, setScope] = useState<"all" | "unassigned">("unassigned");
   const [caseStyle, setCaseStyle] = useState<CaseStyle>("title");
   const [runSeq, setRunSeq] = useState(0);
+  const [feedback, setFeedback] = useState("");
+  const [revising, setRevising] = useState(false);
+  const [revisedWith, setRevisedWith] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading) return;
@@ -1190,18 +1193,8 @@ function AutoOrganizeDialog({
       try {
         const result = await aiAutoOrganizeFeeds(scope);
         if (cancelled) return;
-        setProposals(result);
-        const initSel: Record<number, Set<string>> = {};
-        const initNames: Record<number, string> = {};
-        result.forEach((p, i) => {
-          initSel[i] = new Set(p.feed_ids);
-          // Apply current case style to the LLM's raw proposal names so the
-          // preview matches what the user will see post-apply.
-          initNames[i] = applyCase(p.name, caseStyle);
-        });
-        setSelected(initSel);
-        setNames(initNames);
-        setHasRun(true);
+        showProposals(result);
+        setRevisedWith(null);
       } catch (e) {
         if (!cancelled) setError(String(e instanceof Error ? e.message : e));
       } finally {
@@ -1212,6 +1205,43 @@ function AutoOrganizeDialog({
       cancelled = true;
     };
   }, [scope, runSeq]);
+
+  const showProposals = (result: FolderProposal[]) => {
+    setProposals(result);
+    const initSel: Record<number, Set<string>> = {};
+    const initNames: Record<number, string> = {};
+    result.forEach((p, i) => {
+      initSel[i] = new Set(p.feed_ids);
+      // Apply current case style to the LLM's raw proposal names so the
+      // preview matches what the user will see post-apply.
+      initNames[i] = applyCase(p.name, caseStyle);
+    });
+    setSelected(initSel);
+    setNames(initNames);
+    setHasRun(true);
+  };
+
+  // Free-text feedback ("merge Coding into Software Engineering") goes to the
+  // AI with the grouping as it stands now, names as edited, so it revises it.
+  const revise = async () => {
+    const text = feedback.trim();
+    if (!text || loading || revising || proposals.length === 0) return;
+    const current: FolderProposal[] = proposals
+      .map((p, idx) => ({ name: (names[idx] ?? p.name).trim() || p.name, feed_ids: p.feed_ids }))
+      .filter((p) => p.feed_ids.length > 0);
+    setRevising(true);
+    setError(null);
+    try {
+      const result = await aiAutoOrganizeFeeds(scope, { current, feedback: text });
+      showProposals(result);
+      setRevisedWith(text);
+      setFeedback("");
+    } catch (e) {
+      setError(`Couldn't revise the grouping: ${String(e instanceof Error ? e.message : e)}`);
+    } finally {
+      setRevising(false);
+    }
+  };
 
   // Re-apply case styling to current names whenever style changes.
   useEffect(() => {
@@ -1347,7 +1377,7 @@ function AutoOrganizeDialog({
               </Select>
               <button
                 onClick={() => setRunSeq((n) => n + 1)}
-                disabled={loading}
+                disabled={loading || revising}
                 className="ml-auto bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium"
                 style={{ padding: "4px 12px", fontSize: 12 }}
                 title="Run AI with current scope"
@@ -1360,6 +1390,16 @@ function AutoOrganizeDialog({
 
         {/* Scrolling proposals list */}
         <div className="flex-1 min-h-0 overflow-y-auto" style={{ padding: "4px 24px 16px" }}>
+          {revising && (
+            <div className="text-text-muted text-center" style={{ fontSize: 12, padding: "0 0 10px" }}>
+              Revising with your feedback…
+            </div>
+          )}
+          {!revising && revisedWith && (
+            <div className="text-text-muted" style={{ fontSize: 12, padding: "0 0 10px" }}>
+              Revised: “{revisedWith}”
+            </div>
+          )}
           {loading && (
             <div className="text-center" style={{ padding: "40px 0" }}>
               <div className="text-text-muted" style={{ fontSize: 13 }}>
@@ -1447,6 +1487,34 @@ function AutoOrganizeDialog({
             </p>
           )}
         </div>
+        {hasRun && proposals.length > 0 && !loading && (
+          <form
+            className="flex flex-shrink-0 items-center gap-2 border-t border-white/5"
+            style={{ padding: "10px 20px" }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              void revise();
+            }}
+          >
+            <input
+              aria-label="Feedback on the grouping"
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              disabled={revising}
+              placeholder="Tell AI what to change, e.g. put Joel on Software in Blogs"
+              className="flex-1 min-w-0 bg-white/5 text-text-primary placeholder:text-text-muted rounded-lg border border-white/10 focus:border-accent/50 outline-none"
+              style={{ fontSize: 13, padding: "7px 10px" }}
+            />
+            <button
+              type="submit"
+              disabled={revising || !feedback.trim()}
+              className="flex-shrink-0 bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium"
+              style={{ padding: "7px 12px", fontSize: 13 }}
+            >
+              {revising ? "Revising…" : "Revise"}
+            </button>
+          </form>
+        )}
         <div className="flex flex-shrink-0 justify-between items-center gap-2 border-t border-white/5" style={{ padding: "12px 20px" }}>
           <span className="text-text-muted" style={{ fontSize: 12 }}>
             {proposals.length} folders · {totalSelected} feeds
@@ -1461,7 +1529,7 @@ function AutoOrganizeDialog({
             </button>
             <button
               onClick={handleApply}
-              disabled={saving || loading || proposals.length === 0}
+              disabled={saving || loading || revising || proposals.length === 0}
               className="bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
               style={{ padding: "8px 16px", fontSize: 13 }}
             >

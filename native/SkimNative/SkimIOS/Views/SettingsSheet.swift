@@ -498,7 +498,7 @@ struct SettingsSheet: View {
 
             SettingsAction(systemName: "plus", title: "Add RSS Feed", action: onAddFeed)
             SettingsAction(systemName: "square.and.arrow.down", title: "Import OPML", action: onImportOPML)
-            SettingsAction(systemName: "folder.badge.plus", title: "Auto-group Feeds", action: onAutoGroup)
+            SettingsAction(systemName: "folder", title: "Auto-group Feeds", customIcon: AnyView(AutoGroupIcon(size: 18)), action: onAutoGroup)
 
             Divider()
                 .overlay(SkimStyle.separator)
@@ -2267,14 +2267,21 @@ private struct SettingsIconAction: View {
 private struct SettingsAction: View {
     var systemName: String
     var title: String
+    var customIcon: AnyView? = nil
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: systemName)
-                    .font(.system(size: 20, weight: .regular))
-                    .frame(width: 26)
+                Group {
+                    if let customIcon {
+                        customIcon
+                    } else {
+                        Image(systemName: systemName)
+                            .font(.system(size: 20, weight: .regular))
+                    }
+                }
+                .frame(width: 26)
                 Text(title)
                     .font(.system(size: 17, weight: .semibold))
                 Spacer()

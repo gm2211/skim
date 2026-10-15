@@ -19,3 +19,21 @@ behaviors:
       or by reorganizing everything. The reader can choose a name casing style, skip individual
       proposed folders, and then apply or cancel. iOS shows a local fallback preview when AI is
       unavailable.
+  - id: auto-organize-feedback
+    description: >-
+      In the auto-group sheet (iOS) and the Auto-organize dialog (desktop), the reader can type free
+      text feedback on the proposed folders, such as "merge Coding into SoftwareEngineering" or "put
+      Joel on Software in Blogs", and the AI revises the current proposal accordingly instead of
+      starting over. A feed the revision leaves out stays in its previous folder.
+    source:
+      text: Should be able to give free text feedback to the grouping
+      reference: Giulio, project thread "Free text feedback on feed grouping", 2026-10-15
+  - id: auto-organize-icon
+    description: >-
+      On iOS the button that opens auto-grouping shows a folder with AI sparkles, not a folder with a
+      plus, so it doesn't read as "new folder".
+    source:
+      text: >-
+        That I can suggest they were creating a new folder, but in reality we're using AI to group
+        things so maybe we should show a folder icon and then like the kind of sparkles of AI
+      reference: Giulio, project chat, 2026-10-15

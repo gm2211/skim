@@ -868,12 +868,12 @@ private struct FeedPickerSheet: View {
                             .tracking(1.1)
                         Spacer()
                         Button(action: onAutoGroup) {
-                            Image(systemName: "folder.badge.plus")
-                                .font(.system(size: 16, weight: .regular))
+                            AutoGroupIcon(size: 16)
                                 .foregroundStyle(SkimStyle.secondary)
                                 .frame(width: 36, height: 36)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Auto-group feeds with AI")
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 14)
@@ -1339,6 +1339,23 @@ private enum AutoGroupNameStyle: String, CaseIterable, Identifiable {
     }
 }
 
+/// A folder with AI sparkles: auto-grouping sorts feeds with AI, it doesn't just add a folder.
+struct AutoGroupIcon: View {
+    var size: CGFloat
+
+    var body: some View {
+        Image(systemName: "folder")
+            .font(.system(size: size, weight: .regular))
+            .overlay(alignment: .topTrailing) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: size * 0.62, weight: .semibold))
+                    .offset(x: size * 0.42, y: -size * 0.38)
+            }
+            .padding(.trailing, size * 0.3)
+            .accessibilityHidden(true)
+    }
+}
+
 private struct AutoGroupProposal: Identifiable {
     var id: String { "\(baseName)-\(feeds.map(\.id).joined(separator: ","))" }
     var baseName: String
@@ -1366,6 +1383,9 @@ private struct AutoGroupSheet: View {
     @State private var usedFallback = false
     @State private var draggingFeedID: String?
     @State private var dropTargetProposalID: String?
+    @State private var feedbackText = ""
+    @State private var isRevising = false
+    @FocusState private var feedbackFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -1465,6 +1485,10 @@ private struct AutoGroupSheet: View {
                 .scrollIndicators(.hidden)
             }
 
+            if !proposals.isEmpty {
+                feedbackField
+            }
+
             if !proposals.isEmpty && !isRunningAI {
                 AIDisclaimerLabel()
                     .padding(.top, 2)
@@ -1546,7 +1570,7 @@ private struct AutoGroupSheet: View {
                 ProgressView()
                     .controlSize(.small)
                     .tint(SkimStyle.accent)
-                Text("Asking \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider))...")
+                Text("\(isRevising ? "Revising with" : "Asking") \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider))...")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(SkimStyle.secondary)
             }
@@ -1577,6 +1601,79 @@ private struct AutoGroupSheet: View {
             .padding(.vertical, 12)
             .background(SkimStyle.surface.opacity(0.66), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+    }
+
+    private var trimmedFeedback: String {
+        feedbackText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Free-text feedback on the proposal ("merge Coding into SoftwareEngineering"),
+    /// sent to the AI together with the current grouping so it revises rather than restarts.
+    private var feedbackField: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            TextField("Tell AI what to change, e.g. merge Coding into SoftwareEngineering", text: $feedbackText, axis: .vertical)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(SkimStyle.text)
+                .lineLimit(1...4)
+                .focused($feedbackFocused)
+                .submitLabel(.send)
+                .onSubmit { Task { await reviseWithFeedback() } }
+                .onChange(of: feedbackText) { _, newValue in
+                    // A multi-line field takes Return as a newline; treat it as Send instead.
+                    guard newValue.contains("\n") else { return }
+                    feedbackText = newValue.replacingOccurrences(of: "\n", with: " ")
+                    Task { await reviseWithFeedback() }
+                }
+                .padding(.vertical, 10)
+                .padding(.leading, 14)
+
+            Button {
+                Task { await reviseWithFeedback() }
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(trimmedFeedback.isEmpty || isRunningAI ? SkimStyle.secondary.opacity(0.5) : SkimStyle.accent)
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+            .disabled(trimmedFeedback.isEmpty || isRunningAI || isApplying)
+            .accessibilityLabel("Revise grouping")
+            .padding(.trailing, 2)
+        }
+        .background(SkimStyle.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(feedbackFocused ? SkimStyle.accent.opacity(0.6) : SkimStyle.separator, lineWidth: 1)
+        }
+    }
+
+    private func reviseWithFeedback() async {
+        let feedback = trimmedFeedback
+        guard !feedback.isEmpty, !proposals.isEmpty, !isRunningAI else { return }
+        dismissUIKitKeyboard()
+        feedbackFocused = false
+
+        let current = proposals.map { (name: $0.displayName(style: nameStyle), feeds: $0.feeds) }
+        isRevising = true
+        isRunningAI = true
+        aiMessage = nil
+
+        do {
+            proposals = try await AutoGroupClassifier.revisedProposals(
+                current: current,
+                feedback: feedback,
+                feeds: model.feeds,
+                settings: model.settings
+            )
+            usedFallback = false
+            feedbackText = ""
+            aiMessage = "Revised with \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider)): \u{201C}\(feedback)\u{201D}"
+        } catch {
+            aiMessage = "Couldn't revise the grouping: \(error.localizedDescription)\nYour feedback is still in the box below."
+        }
+
+        isRunningAI = false
+        isRevising = false
     }
 
     private var aiActionTitle: String {
@@ -1805,6 +1902,91 @@ private enum AutoGroupClassifier {
         }
     }
 
+    /// Revise `current` following the reader's free-text `feedback`. Unlike a fresh run this
+    /// skips the folder-count checks: "merge X into Y" legitimately leaves fewer folders.
+    static func revisedProposals(
+        current: [(name: String, feeds: [Feed])],
+        feedback: String,
+        feeds: [Feed],
+        settings: AppSettings
+    ) async throws -> [AutoGroupProposal] {
+        let uniqueFeeds = deduplicate(feeds)
+        guard !uniqueFeeds.isEmpty else { return [] }
+        let currentJSON = currentGroupingJSON(current, feeds: uniqueFeeds)
+
+        let revised: [AutoGroupProposal]
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
+            revised = try await FoundationModelFeedOrganizer.proposals(
+                for: uniqueFeeds,
+                revising: (currentJSON: currentJSON, feedback: feedback)
+            )
+            return keepUnplacedFeeds(revised, current: current)
+        }
+#endif
+        let content = try await NativeAI.complete(
+            settings: settings,
+            instructions: revisionInstructions,
+            prompt: revisionPrompt(feeds: uniqueFeeds, currentJSON: currentJSON, feedback: feedback),
+            maxTokens: max(512, uniqueFeeds.count * 4 + 160),
+            jsonMode: true
+        )
+        revised = try decodeProposals(from: content, feeds: uniqueFeeds, modelID: settings.ai.model ?? settings.ai.provider)
+        return keepUnplacedFeeds(revised, current: current)
+    }
+
+    static let revisionInstructions = """
+    You revise a proposed grouping of RSS feeds into folders, following the reader's feedback. Output ONLY valid JSON. No prose. No markdown fences.
+    Each feed goes in exactly one folder. Keep folders the feedback doesn't mention as they are.
+    Refer to feeds by their numeric handle.
+    """
+
+    /// The current grouping as `{"folders":[{"name":…,"feeds":[handles]}]}`, using the
+    /// same zero-based handles as the feed listing.
+    static func currentGroupingJSON(_ current: [(name: String, feeds: [Feed])], feeds: [Feed]) -> String {
+        var handles: [String: Int] = [:]
+        for (index, feed) in feeds.enumerated() where handles[feed.id] == nil {
+            handles[feed.id] = index
+        }
+        let folders: [[String: Any]] = current.map { folder in
+            ["name": folder.name, "feeds": folder.feeds.compactMap { handles[$0.id] }]
+        }
+        let data = (try? JSONSerialization.data(withJSONObject: ["folders": folders], options: [.sortedKeys])) ?? Data()
+        return String(data: data, encoding: .utf8) ?? #"{"folders":[]}"#
+    }
+
+    static func revisionPrompt(feeds: [Feed], currentJSON: String, feedback: String) -> String {
+        """
+        Feeds (handle TAB title [TAB site]):
+        \(listing(for: feeds))
+
+        Current grouping:
+        \(currentJSON)
+
+        Reader's feedback: "\(feedback)"
+
+        Output the full revised grouping, every feed exactly once, as ONLY this JSON shape:
+        {"folders":[{"name":"Tech","feeds":[0,3,7]}]}
+        """
+    }
+
+    /// A revision must not lose feeds: any feed the AI left out goes back into its
+    /// previous folder (matched by name), so applying never drops it.
+    static func keepUnplacedFeeds(_ revised: [AutoGroupProposal], current: [(name: String, feeds: [Feed])]) -> [AutoGroupProposal] {
+        var result = revised
+        let placed = Set(revised.flatMap { $0.feeds.map(\.id) })
+        for previous in current {
+            let missing = previous.feeds.filter { !placed.contains($0.id) }
+            guard !missing.isEmpty else { continue }
+            if let index = result.firstIndex(where: { $0.baseName.caseInsensitiveCompare(previous.name) == .orderedSame }) {
+                result[index].feeds.append(contentsOf: missing)
+            } else {
+                result.append(AutoGroupProposal(baseName: previous.name, feeds: missing))
+            }
+        }
+        return result
+    }
+
     static func providerLabel(for provider: String) -> String {
         switch provider {
         case "foundation-models": return "Apple Intelligence"
@@ -1890,7 +2072,7 @@ private enum AutoGroupClassifier {
         """
     }
 
-    private static func listing(for feeds: [Feed]) -> String {
+    fileprivate static func listing(for feeds: [Feed]) -> String {
         feeds.enumerated()
             .map { index, feed in
                 let title = feed.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2226,7 +2408,10 @@ private enum FoundationModelFeedOrganizer {
     /// Groups feeds using Foundation Models `@Generable` guided generation.
     /// Bypasses JSON parsing and the `repairTriageJSON` path entirely — the schema
     /// guarantees well-formed output.
-    static func proposals(for feeds: [Feed]) async throws -> [AutoGroupProposal] {
+    static func proposals(
+        for feeds: [Feed],
+        revising revision: (currentJSON: String, feedback: String)? = nil
+    ) async throws -> [AutoGroupProposal] {
         guard !feeds.isEmpty else { return [] }
 
         let model = SystemLanguageModel(useCase: .contentTagging)
@@ -2239,7 +2424,7 @@ private enum FoundationModelFeedOrganizer {
 
         let session = LanguageModelSession(
             model: model,
-            instructions: """
+            instructions: revision != nil ? AutoGroupClassifier.revisionInstructions : """
             You group RSS feeds into topical folders.
             Each feed must appear in exactly one folder. Use 4–8 folders when possible.
             Use short folder names of 2–4 words. Refer to each feed only by its zero-based numeric handle.
@@ -2248,7 +2433,9 @@ private enum FoundationModelFeedOrganizer {
 
         let maxTokens = max(512, feeds.count * 6 + 160)
         let response = try await session.respond(
-            to: prompt(for: feeds),
+            to: revision.map {
+                AutoGroupClassifier.revisionPrompt(feeds: feeds, currentJSON: $0.currentJSON, feedback: $0.feedback)
+            } ?? prompt(for: feeds),
             generating: NativeAI.FMAutoGroupProposal.self,
             options: GenerationOptions(
                 sampling: .greedy,

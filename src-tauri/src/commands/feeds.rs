@@ -1281,7 +1281,11 @@ pub async fn ai_auto_organize_feeds(
     db: State<'_, Database>,
     model_state: State<'_, SharedModelState>,
     scope: Option<String>,
+    current: Option<Vec<FolderProposal>>,
+    feedback: Option<String>,
 ) -> Result<Vec<FolderProposal>, String> {
+    let feedback = feedback.map(|f| f.trim().to_string()).filter(|f| !f.is_empty());
+    let current = current.filter(|c| !c.is_empty());
     let (feeds, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let all_feeds = queries::list_feeds(&conn).map_err(|e| e.to_string())?;
@@ -1319,15 +1323,28 @@ pub async fn ai_auto_organize_feeds(
     // Target 4-8 folders, assume worst case all feeds referenced once.
     let max_tokens = (feeds.len() as i64 * 4 + 8 * 20).max(512);
 
-    let system = "You group RSS feeds into 4-8 topical folders. Output JSON only. \
-                  Each feed goes in exactly one folder. Short folder names (2-4 words). \
-                  Refer to feeds by their numeric handle.";
-    let user = format!(
-        r#"Feeds (handle TAB title [TAB category]):
+    let revision = match (current.as_deref(), feedback.as_deref()) {
+        (Some(current), Some(feedback)) => Some((current, feedback)),
+        _ => None,
+    };
+    let system = if revision.is_some() {
+        "You revise a proposed grouping of RSS feeds into folders, following the reader's feedback. \
+         Output JSON only. Each feed goes in exactly one folder. Keep folders the feedback doesn't \
+         mention as they are. Refer to feeds by their numeric handle."
+    } else {
+        "You group RSS feeds into 4-8 topical folders. Output JSON only. \
+         Each feed goes in exactly one folder. Short folder names (2-4 words). \
+         Refer to feeds by their numeric handle."
+    };
+    let user = match revision {
+        Some((current, feedback)) => organize_revision_prompt(&feeds, &listing, current, feedback),
+        None => format!(
+            r#"Feeds (handle TAB title [TAB category]):
 {listing}
 Output JSON:
 {{"folders":[{{"name":"Tech","feeds":[0,3,7]}}]}}"#
-    );
+        ),
+    };
 
     let req = ChatRequest {
         model,
@@ -1364,7 +1381,54 @@ Output JSON:
         })
         .collect();
 
-    Ok(proposals)
+    Ok(match revision {
+        Some((current, _)) => keep_unplaced_feeds(proposals, current),
+        None => proposals,
+    })
+}
+
+/// The user turn for revising `current` with the reader's `feedback`. Folders
+/// are written with the same numeric handles as the feed listing.
+fn organize_revision_prompt(feeds: &[Feed], listing: &str, current: &[FolderProposal], feedback: &str) -> String {
+    let handle: std::collections::HashMap<&str, usize> =
+        feeds.iter().enumerate().map(|(i, f)| (f.id.as_str(), i)).collect();
+    let folders: Vec<serde_json::Value> = current
+        .iter()
+        .map(|p| {
+            let handles: Vec<usize> = p.feed_ids.iter().filter_map(|id| handle.get(id.as_str()).copied()).collect();
+            serde_json::json!({ "name": p.name, "feeds": handles })
+        })
+        .collect();
+    let current_json = serde_json::json!({ "folders": folders });
+    format!(
+        r#"Feeds (handle TAB title [TAB category]):
+{listing}
+Current grouping:
+{current_json}
+
+Reader's feedback: "{feedback}"
+
+Output the full revised grouping as JSON, every feed exactly once:
+{{"folders":[{{"name":"Tech","feeds":[0,3,7]}}]}}"#
+    )
+}
+
+/// A revision must not lose feeds: any feed in `current` that the AI left out
+/// goes back into its previous folder (by name), so applying never drops it.
+fn keep_unplaced_feeds(mut revised: Vec<FolderProposal>, current: &[FolderProposal]) -> Vec<FolderProposal> {
+    let placed: std::collections::HashSet<String> =
+        revised.iter().flat_map(|p| p.feed_ids.iter().cloned()).collect();
+    for previous in current {
+        let missing: Vec<String> = previous.feed_ids.iter().filter(|id| !placed.contains(*id)).cloned().collect();
+        if missing.is_empty() {
+            continue;
+        }
+        match revised.iter_mut().find(|p| p.name.eq_ignore_ascii_case(&previous.name)) {
+            Some(folder) => folder.feed_ids.extend(missing),
+            None => revised.push(FolderProposal { name: previous.name.clone(), feed_ids: missing }),
+        }
+    }
+    revised
 }
 
 /// Given a natural-language description, return feed IDs that match.
@@ -1490,4 +1554,54 @@ pub async fn apply_folder_organization(
     }
 
     Ok(created)
+}
+
+#[cfg(test)]
+mod organize_revision_tests {
+    use super::*;
+
+    fn feed(id: &str, title: &str) -> Feed {
+        Feed {
+            id: id.into(),
+            title: title.into(),
+            url: format!("https://{id}.example/rss"),
+            site_url: None,
+            description: None,
+            icon_url: None,
+            feedly_id: None,
+            created_at: 0,
+            updated_at: 0,
+            last_fetched_at: None,
+            folder_id: None,
+            opml_category: None,
+        }
+    }
+
+    fn folder(name: &str, ids: &[&str]) -> FolderProposal {
+        FolderProposal { name: name.into(), feed_ids: ids.iter().map(|s| s.to_string()).collect() }
+    }
+
+    #[test]
+    fn revision_prompt_carries_current_grouping_as_handles_and_the_feedback() {
+        let feeds = vec![feed("a", "Joel on Software"), feed("b", "programming"), feed("c", "Ars")];
+        let listing = feeds_listing_for_llm(&feeds);
+        let current = vec![folder("Coding", &["b"]), folder("SoftwareEngineering", &["a"]), folder("News", &["c"])];
+        let prompt = organize_revision_prompt(&feeds, &listing, &current, "merge Coding into SoftwareEngineering");
+        assert!(prompt.contains(r#"{"feeds":[1],"name":"Coding"}"#), "{prompt}");
+        assert!(prompt.contains(r#"{"feeds":[0],"name":"SoftwareEngineering"}"#), "{prompt}");
+        assert!(prompt.contains(r#"Reader's feedback: "merge Coding into SoftwareEngineering""#));
+        assert!(prompt.contains("0\tJoel on Software"));
+    }
+
+    #[test]
+    fn feeds_the_revision_left_out_go_back_to_their_previous_folder() {
+        let current = vec![folder("Coding", &["a", "b"]), folder("News", &["c"]), folder("Blogs", &["d"])];
+        let revised = vec![folder("Software", &["a", "b"]), folder("news", &[])];
+        let kept = keep_unplaced_feeds(revised, &current);
+        assert_eq!(kept[0].feed_ids, vec!["a", "b"]);
+        assert_eq!(kept[1].name, "news");
+        assert_eq!(kept[1].feed_ids, vec!["c"]);
+        assert_eq!(kept[2].name, "Blogs");
+        assert_eq!(kept[2].feed_ids, vec!["d"]);
+    }
 }

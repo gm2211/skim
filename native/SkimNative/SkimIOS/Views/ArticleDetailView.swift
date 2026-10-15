@@ -1058,6 +1058,8 @@ private struct ReaderPage<HeaderMenu: View, HeaderMenuPreview: View>: View {
 
     @State private var comments: [AggregatorComment] = []
     @State private var commentsState: ArticleLoadState = .idle
+    // Top-level threads shown; "Show more comments" reveals the next page.
+    @State private var visibleThreadCount = ReaderPage.threadsPerPage
     @State private var extractedBody: ArticleLoadState = .idle
     // Tracks whether the 3s auto-extract timeout has fired (shows fallback button)
     @State private var autoExtractTimedOut = false
@@ -1096,6 +1098,7 @@ private struct ReaderPage<HeaderMenu: View, HeaderMenuPreview: View>: View {
         .onChange(of: article?.id) { _, _ in
             comments = []
             commentsState = .idle
+            visibleThreadCount = ReaderPage.threadsPerPage
             extractedBody = .idle
             autoExtractTimedOut = false
             redditSelftext = nil
@@ -1401,13 +1404,32 @@ private struct ReaderPage<HeaderMenu: View, HeaderMenuPreview: View>: View {
                     .padding(.top, 14)
                 }
             case .loaded:
+                let threads = AggregatorCommentThread.threads(from: comments)
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
+                    ForEach(Array(threads.prefix(visibleThreadCount).enumerated()), id: \.element.id) { index, thread in
                         if index > 0 {
                             Rectangle().fill(SkimStyle.separator.opacity(0.6)).frame(height: 0.5)
                         }
-                        CommentRow(comment: comment, onAsk: onAskAboutSelection, onSelectionChange: { if hasTextSelection != $0 { hasTextSelection = $0 } })
+                        CommentThreadView(thread: thread, onAsk: onAskAboutSelection, onSelectionChange: { if hasTextSelection != $0 { hasTextSelection = $0 } })
+                            .padding(.vertical, 14)
                     }
+                }
+                if threads.count > visibleThreadCount {
+                    Button {
+                        visibleThreadCount += ReaderPage.threadsPerPage
+                    } label: {
+                        Text("Show more comments")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(SkimStyle.text)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(SkimStyle.separator, lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, 6)
                 }
                 if let discussionURL {
                     Button {
@@ -1543,13 +1565,17 @@ private struct ReaderPage<HeaderMenu: View, HeaderMenuPreview: View>: View {
         return await AggregatorService().fetchRedditExternalURL(from: redditURL)
     }
 
+    /// Top-level threads fetched per discussion, shown a page at a time.
+    static let commentFetchLimit = 30
+    static let threadsPerPage = 8
+
     private func loadComments(for article: Article) async {
         commentsState = .loading
         let service = AggregatorService()
         // For Reddit self-posts, fetch the post body alongside comments
         if article.aggregatorKind == .reddit {
             async let selftextTask = service.fetchRedditSelftext(for: article)
-            async let commentsTask = service.fetchComments(for: article, limit: 10)
+            async let commentsTask = service.fetchComments(for: article, limit: ReaderPage.commentFetchLimit)
             let (fetchedSelftext, fetched) = await (selftextTask, commentsTask)
             redditSelftext = fetchedSelftext
             if let text = ArticleReaderContentLoader.sanitizedText(fetchedSelftext) {
@@ -1558,7 +1584,7 @@ private struct ReaderPage<HeaderMenu: View, HeaderMenuPreview: View>: View {
             comments = fetched
             commentsState = fetched.isEmpty ? .failed("No comments returned.") : .loaded("")
         } else {
-            let fetched = await service.fetchComments(for: article, limit: 10)
+            let fetched = await service.fetchComments(for: article, limit: ReaderPage.commentFetchLimit)
             comments = fetched
             commentsState = fetched.isEmpty ? .failed("No comments returned.") : .loaded("")
         }
@@ -1640,6 +1666,54 @@ private struct ReaderPage<HeaderMenu: View, HeaderMenuPreview: View>: View {
 
 // MARK: - Comment row
 
+/// A comment and its replies. Top-level comments open with their direct
+/// replies showing; deeper levels stay folded behind a "N replies" toggle so a
+/// long thread doesn't bury the next top-level comment.
+private struct CommentThreadView: View {
+    var thread: AggregatorCommentThread
+    var onAsk: ((String) -> Void)? = nil
+    var onSelectionChange: (Bool) -> Void = { _ in }
+    @State private var expanded: Bool
+
+    init(thread: AggregatorCommentThread, onAsk: ((String) -> Void)? = nil, onSelectionChange: @escaping (Bool) -> Void = { _ in }) {
+        self.thread = thread
+        self.onAsk = onAsk
+        self.onSelectionChange = onSelectionChange
+        _expanded = State(initialValue: thread.comment.depth == 0)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CommentRow(comment: thread.comment, onAsk: onAsk, onSelectionChange: onSelectionChange)
+            if !thread.replies.isEmpty {
+                if expanded {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ForEach(thread.replies) { reply in
+                            // AnyView breaks the recursive opaque type.
+                            AnyView(CommentThreadView(thread: reply, onAsk: onAsk, onSelectionChange: onSelectionChange))
+                        }
+                    }
+                    .padding(.leading, 14)
+                    .overlay(alignment: .leading) {
+                        Rectangle().fill(SkimStyle.separator).frame(width: 2)
+                    }
+                } else {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { expanded = true }
+                    } label: {
+                        Label(thread.replyCount == 1 ? "1 reply" : "\(thread.replyCount) replies", systemImage: "chevron.right")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(SkimStyle.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 private struct CommentRow: View {
     var comment: AggregatorComment
     var onAsk: ((String) -> Void)? = nil
@@ -1667,7 +1741,6 @@ private struct CommentRow: View {
             )
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 14)
     }
 }
 

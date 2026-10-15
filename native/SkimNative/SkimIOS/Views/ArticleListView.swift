@@ -642,7 +642,10 @@ struct ArticleListView: View {
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(SkimStyle.secondary)
                             .tracking(1.15)
-                            .padding(.horizontal, 72)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .padding(.leading, 72)
+                            .padding(.trailing, 18)
                             .padding(.top, 13)
                             .padding(.bottom, 7)
                     }

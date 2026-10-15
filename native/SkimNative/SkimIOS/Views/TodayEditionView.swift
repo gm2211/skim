@@ -525,12 +525,13 @@ private struct TodayStoryView: View {
     @ViewBuilder
     private var hero: some View {
         if let image {
-            ZStack(alignment: .bottomLeading) {
-                // The picture fills a fixed box; laid out on its own a filled
-                // image reports its overflowing width and widens the page.
+            // Picture on top and the words below it: over the picture a long
+            // summary pushed the headline into the image, where any text in
+            // the picture itself collided with it.
+            VStack(alignment: .leading, spacing: 0) {
                 Color.clear
                     .frame(maxWidth: .infinity)
-                    .frame(height: 440)
+                    .frame(height: 260)
                     .overlay {
                         AsyncImage(url: image) { phase in
                             if let picture = phase.image {
@@ -541,8 +542,11 @@ private struct TodayStoryView: View {
                         }
                     }
                     .clipped()
-                LinearGradient(colors: [.clear, SkimStyle.background.opacity(0.65), SkimStyle.background.opacity(0.96)],
-                               startPoint: .init(x: 0.5, y: 0.25), endPoint: .bottom)
+                    .overlay(alignment: .bottom) {
+                        LinearGradient(colors: [.clear, SkimStyle.background.opacity(0.9)],
+                                       startPoint: .top, endPoint: .bottom)
+                            .frame(height: 70)
+                    }
                 VStack(alignment: .leading, spacing: 10) {
                     kicker
                     headlineLink(size: 28)
@@ -558,9 +562,9 @@ private struct TodayStoryView: View {
                     actions
                 }
                 .padding(.horizontal, 18)
+                .padding(.top, 4)
                 .padding(.bottom, 18)
             }
-            .frame(height: 440)
         } else {
             VStack(alignment: .leading, spacing: 12) {
                 kicker

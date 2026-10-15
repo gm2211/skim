@@ -219,6 +219,9 @@ struct DiscoverView: View {
                 ForEach(topics.prefix(3)) { topic in
                     NavigationLink {
                         DiscoverTopicView(topicID: topic.id)
+                        // Pushed views don't inherit objects set below the stack.
+                        .environmentObject(model)
+                        .environmentObject(follow)
                     } label: {
                         FeaturedTopicCard(topic: topic)
                     }
@@ -236,6 +239,9 @@ struct DiscoverView: View {
             ForEach(topics) { topic in
                 NavigationLink {
                     DiscoverTopicView(topicID: topic.id)
+                        // Pushed views don't inherit objects set below the stack.
+                        .environmentObject(model)
+                        .environmentObject(follow)
                 } label: {
                     HStack(spacing: 14) {
                         TopicTile(id: topic.id, size: 46)
@@ -504,6 +510,8 @@ private struct DiscoverPostRow: View {
 
 /// A list of feeds, each opening its page and carrying a Follow button.
 struct DiscoverFeedList: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var follow: DiscoverFollowState
     let feeds: [DiscoveredFeed]
     var backTitle = "Back"
 
@@ -513,6 +521,8 @@ struct DiscoverFeedList: View {
                 HStack(spacing: 12) {
                     NavigationLink {
                         DiscoverFeedView(feed: feed, backTitle: backTitle)
+                            .environmentObject(model)
+                            .environmentObject(follow)
                     } label: {
                         HStack(spacing: 12) {
                             DiscoverFeedIcon(feed: feed, size: 44)

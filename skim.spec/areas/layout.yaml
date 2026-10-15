@@ -19,6 +19,11 @@ behaviors:
       the app-wide actions (collapse, refresh, Ask Skim, Today, add feed); the list toolbar carries
       only the list's own (mark all read, search) and repeats the app-wide ones only while the
       sidebar is hidden.
+    details: >-
+      While the sidebar is hidden (and in the phone-width layout) the list toolbar repeats Ask
+      Skim, Today and add feed in the sidebar header's order, so Today is always one click away.
+      Giulio flagged the narrow view missing the newspaper button on 2026-10-15 ("this view is
+      lacking the newspaper button").
     source:
       text: >-
         newspaper view / icon is on second tab but still lightning on first [...] today should

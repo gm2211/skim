@@ -8,7 +8,7 @@ import { useRecentArticles, useRemoveRecent } from "../../hooks/useRecent";
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useFolders } from "../../hooks/useFolders";
 import { feedsForFolder } from "../../lib/smartFolder";
-import { CheckCircleIcon, ChatIcon, PlusIcon, SearchIcon } from "../ui/icons";
+import { CheckCircleIcon, ChatIcon, NewspaperIcon, PlusIcon, SearchIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
@@ -235,6 +235,7 @@ export function ArticleList() {
     isPhone,
     setPhonePane,
     setShowAddFeed,
+    setSidebarView,
   } = useUiStore();
   const markAllRead = useMarkAllRead();
   const markRead = useMarkRead();
@@ -616,6 +617,22 @@ export function ArticleList() {
             show the same icons side by side. */}
         {appActionsHere && (
           <>
+            <button
+              onClick={() => setAskOpen(true)}
+              className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
+              title="Ask Skim — search your feed with AI"
+              aria-label="Ask Skim"
+            >
+              <ChatIcon />
+            </button>
+            <button
+              onClick={() => setSidebarView({ type: "today" })}
+              className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
+              title="Today — your finite, sectioned daily edition"
+              aria-label="Today"
+            >
+              <NewspaperIcon />
+            </button>
             {!isPhone && (
               <button
                 onClick={() => setShowAddFeed(true)}
@@ -626,14 +643,6 @@ export function ArticleList() {
                 <PlusIcon />
               </button>
             )}
-            <button
-              onClick={() => setAskOpen(true)}
-              className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
-              title="Ask Skim — search your feed with AI"
-              aria-label="Ask Skim"
-            >
-              <ChatIcon />
-            </button>
           </>
         )}
         <button

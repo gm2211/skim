@@ -175,4 +175,22 @@ describe("article list toolbar", () => {
     // There is no catch-up; Today is the one newspaper.
     expect(screen.queryByRole("button", { name: /catch/i })).not.toBeInTheDocument();
   });
+
+  it("reaches Today from the list header while the sidebar is hidden", async () => {
+    useUiStore.setState({ sidebarView: { type: "all" }, isPhone: false, sidebarCollapsed: false });
+    const { unmount } = render(<ArticleList />);
+    expect(screen.queryByRole("button", { name: "Today" })).not.toBeInTheDocument();
+    unmount();
+
+    useUiStore.setState({ sidebarCollapsed: true });
+    render(<ArticleList />);
+    await userEvent.click(screen.getByRole("button", { name: "Today" }));
+    expect(useUiStore.getState().sidebarView).toEqual({ type: "today" });
+  });
+
+  it("offers Today in the phone list header too", () => {
+    useUiStore.setState({ sidebarView: { type: "all" }, isPhone: true, sidebarCollapsed: false });
+    render(<ArticleList />);
+    expect(screen.getByRole("button", { name: "Today" })).toBeInTheDocument();
+  });
 });

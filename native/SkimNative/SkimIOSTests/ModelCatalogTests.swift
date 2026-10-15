@@ -2,6 +2,7 @@ import Testing
 import Foundation
 import SkimCore
 @testable import Skim
+import UIKit
 
 /// Pure-function coverage for `ModelCatalog` (skim-vexn): the shared model
 /// resolution/apply logic behind every inline model picker surface. No
@@ -188,5 +189,35 @@ struct ModelCatalogTests {
         var ai = AISettings(provider: "claude-subscription", model: "claude-sonnet-5")
         ai.chatProvider = "same"
         #expect(ModelCatalog.hasChatOverride(ai) == false)
+    }
+}
+
+/// Menu rows ignore `lineLimit`, so long model ids are shortened up front.
+@Suite("ModelPickerMenu titles")
+struct ModelPickerMenuTitleTests {
+    private let body = UIFont.systemFont(ofSize: 17)
+
+    @Test func shortIdsAreUnchanged() {
+        #expect(ModelPickerMenu.singleLineTitle("cohere/command-a-plus", font: body) == "cohere/command-a-plus")
+    }
+
+    @Test func longIdsKeepBothEndsAndFitOneRow() {
+        let id = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+        let title = ModelPickerMenu.singleLineTitle(id, font: body)
+        #expect(title.contains("…"))
+        #expect(title.hasPrefix("nvidia/"))
+        #expect(title.hasSuffix(":free"))
+        let width = (title as NSString).size(withAttributes: [.font: body]).width
+        #expect(width <= ModelPickerMenu.menuRowTextWidth)
+    }
+
+    @Test func budgetScalesWithDynamicType() {
+        let id = "openai/gpt-6-luna-pro:batch"
+        let large = UIFont.systemFont(ofSize: 34)
+        let title = ModelPickerMenu.singleLineTitle(id, font: large)
+        #expect(title != id)
+        let width = (title as NSString).size(withAttributes: [.font: large]).width
+        #expect(width <= ModelPickerMenu.menuRowTextWidth * 2)
+        #expect(width > ModelPickerMenu.menuRowTextWidth)
     }
 }

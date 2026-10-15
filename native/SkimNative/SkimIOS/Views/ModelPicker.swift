@@ -1,5 +1,6 @@
 import SkimCore
 import SwiftUI
+import UIKit
 
 /// Inline, always-available model picker for AI surfaces outside Settings
 /// (Ask Skim chat, Summarize, Today). Lets the user switch
@@ -84,6 +85,7 @@ struct ModelPickerMenu: View {
                     }
                 }
                 .disabled(!choice.isAvailable)
+                .accessibilityLabel(choice.label)
             }
         case .fixed(let label):
             menuTitle(label)
@@ -91,11 +93,36 @@ struct ModelPickerMenu: View {
     }
 
     /// One line per model, eliding the middle of long ids
-    /// ("grok-4.20-…-non-reasoning") instead of wrapping them onto two lines.
+    /// ("openai/gpt-6-…pro:batch") instead of wrapping them onto two lines.
+    /// Menu rows are drawn by UIKit, which ignores `lineLimit`, so the string
+    /// itself is shortened; VoiceOver still reads the full id.
     private func menuTitle(_ label: String) -> some View {
-        Text(label)
-            .lineLimit(1)
-            .truncationMode(.middle)
+        Text(Self.singleLineTitle(label, font: .preferredFont(forTextStyle: .body)))
+    }
+
+    /// Text width a menu row fits on one line at the 17pt body size; on an
+    /// iPhone longer ids wrap. Scaled with the font for Dynamic Type.
+    static let menuRowTextWidth: CGFloat = 190
+
+    /// `label` unchanged if it fits one menu row in `font`, else with its
+    /// middle replaced by "…" so the provider prefix and the variant suffix
+    /// (":batch", "-pro") both stay visible.
+    static func singleLineTitle(_ label: String, font: UIFont) -> String {
+        let maxWidth = menuRowTextWidth * font.pointSize / 17
+        func width(_ text: String) -> CGFloat {
+            (text as NSString).size(withAttributes: [.font: font]).width
+        }
+        guard width(label) > maxWidth else { return label }
+        let characters = Array(label)
+        var keep = characters.count - 1
+        while keep > 1 {
+            let head = String(characters.prefix((keep + 1) / 2))
+            let tail = String(characters.suffix(keep / 2))
+            let candidate = head + "…" + tail
+            if width(candidate) <= maxWidth { return candidate }
+            keep -= 1
+        }
+        return String(characters.prefix(1)) + "…"
     }
 }
 

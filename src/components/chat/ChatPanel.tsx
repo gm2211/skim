@@ -371,6 +371,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
                       padding: "4px 8px",
                       background: "rgba(255,255,255,0.02)",
                       maxWidth: "85%",
+                      overflowWrap: "anywhere",
                     }}
                   >
                     <div

@@ -3687,11 +3687,13 @@ struct AIChatSheet: View {
                         }
                         .padding(18)
                     }
-                    .onChange(of: messages.count) { _, _ in
+                    .scrollDismissesKeyboard(.interactively)
+                    .simultaneousGesture(TapGesture().onEnded { focused = false })
+                    .onChange(of: messages.last?.id) { _, _ in
                         scrollToLatest(proxy)
                     }
-                    .onChange(of: isSending) { _, _ in
-                        scrollToLatest(proxy)
+                    .onChange(of: isSending) { _, sending in
+                        if sending { scrollToLatest(proxy) }
                     }
                 }
 
@@ -3758,6 +3760,15 @@ struct AIChatSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     AppModelPicker(isDisabled: isSending, forChat: true)
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button {
+                        focused = false
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                    }
+                    .accessibilityLabel("Hide keyboard")
+                }
             }
             .onAppear {
                 seedInitialMessageIfNeeded()
@@ -3780,11 +3791,19 @@ struct AIChatSheet: View {
         messages = [AIChatMessage(role: .assistant, text: seed)]
     }
 
+    /// A new answer is scrolled so its first line sits at the top, so the
+    /// reader starts at the beginning instead of the end of a long reply.
+    /// A question (and the "Thinking..." row) scrolls to the bottom.
     private func scrollToLatest(_ proxy: ScrollViewProxy) {
+        let answerID = messages.last.flatMap { $0.role == .assistant ? $0.id : nil }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(80))
             withAnimation(.smooth(duration: 0.22)) {
-                proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+                if let answerID {
+                    proxy.scrollTo(answerID, anchor: .top)
+                } else {
+                    proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+                }
             }
         }
     }
@@ -4158,8 +4177,16 @@ private struct WebCitationChip: View {
 }
 
 /// Simple left-to-right, top-to-bottom wrapping layout for chip rows.
+/// A chip wider than the row is capped at the row width (its label then
+/// truncates) so a long source title can't widen the chat bubble.
 private struct ChatFlowLayout: Layout {
     var spacing: CGFloat = 8
+
+    private func chipSize(_ subview: LayoutSubview, maxWidth: CGFloat) -> CGSize {
+        let ideal = subview.sizeThatFits(.unspecified)
+        guard ideal.width > maxWidth else { return ideal }
+        return subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+    }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
@@ -4169,7 +4196,7 @@ private struct ChatFlowLayout: Layout {
         var rowHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = chipSize(subview, maxWidth: maxWidth)
             if rowWidth + size.width > maxWidth, rowWidth > 0 {
                 totalHeight += rowHeight + spacing
                 totalWidth = max(totalWidth, rowWidth)
@@ -4191,7 +4218,7 @@ private struct ChatFlowLayout: Layout {
         var rowHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = chipSize(subview, maxWidth: maxWidth)
             if x + size.width > maxWidth, x > 0 {
                 x = 0
                 y += rowHeight + spacing

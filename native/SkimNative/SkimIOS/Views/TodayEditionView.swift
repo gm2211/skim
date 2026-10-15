@@ -42,7 +42,7 @@ struct TodayEditionView: View {
                                     HStack(spacing: 20) {
                                         Button("Try again") { Task { await load() } }
                                             .frame(minHeight: 44)
-                                        AISettingsButton(titled: true, onDismiss: { Task { await load() } })
+                                        AISettingsButton(titled: true, font: .body, color: SkimStyle.accent, onDismiss: { Task { await load() } })
                                     }
                                 }
                             }
@@ -308,8 +308,7 @@ struct TodayEditionView: View {
                         .foregroundStyle(SkimStyle.accent)
                         .frame(minHeight: 44)
                     Text("·").foregroundStyle(SkimStyle.secondary)
-                    AISettingsButton(titled: true)
-                        .foregroundStyle(SkimStyle.accent)
+                    AISettingsButton(titled: true, font: .system(size: 12, weight: .medium), color: SkimStyle.accent)
                 }
                 .font(.system(size: 12, weight: .medium))
             }

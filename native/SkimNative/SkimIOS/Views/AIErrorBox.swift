@@ -62,12 +62,17 @@ struct AIErrorBox: View {
 }
 
 
-/// A gear for the toolbar or header of any surface that calls AI. It opens AI
-/// provider settings in a sheet over that surface, so closing it returns there;
-/// `onDismiss` lets the caller retry once settings close.
+/// A gear for the header of any surface that calls AI. It opens AI provider
+/// settings in a sheet over that surface, so closing it returns there;
+/// `onDismiss` lets the caller retry once settings close. Style it with
+/// `font` and `color`, not modifiers: those would also restyle the sheet. In a
+/// toolbar, present the sheet from the surface instead (a sheet attached
+/// inside a ToolbarItem does not present).
 struct AISettingsButton: View {
     /// Shows "AI Settings" as text, for use beside an error or a Retry button.
     var titled = false
+    var font: Font = .system(size: 15, weight: .semibold)
+    var color: Color = SkimStyle.secondary
     var onDismiss: (() -> Void)? = nil
 
     @State private var showAISettings = false
@@ -76,16 +81,19 @@ struct AISettingsButton: View {
         Button {
             showAISettings = true
         } label: {
-            if titled {
-                Text("AI Settings")
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-            } else {
-                Label("AI Settings", systemImage: "gearshape")
-                    .labelStyle(.iconOnly)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .contentShape(Rectangle())
+            Group {
+                if titled {
+                    Text("AI Settings")
+                        .frame(minHeight: 44)
+                } else {
+                    Label("AI Settings", systemImage: "gearshape")
+                        .labelStyle(.iconOnly)
+                        .frame(minWidth: 44, minHeight: 44)
+                }
             }
+            .font(font)
+            .foregroundStyle(color)
+            .contentShape(Rectangle())
         }
         // Borderless so it stays its own tap target inside a List row.
         .buttonStyle(.borderless)

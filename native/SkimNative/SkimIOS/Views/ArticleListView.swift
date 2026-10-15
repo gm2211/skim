@@ -1527,20 +1527,22 @@ private struct AutoGroupSheet: View {
 
                 Spacer()
 
-                AISettingsButton(onDismiss: { if aiFailed { Task { await runAI() } } })
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(SkimStyle.secondary)
+                // The gear sits under the close button so the title keeps its width.
+                VStack(spacing: 0) {
+                    Button {
+                        dismissUIKitKeyboard()
+                        isPresented = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
 
-                Button {
-                    dismissUIKitKeyboard()
-                    isPresented = false
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(SkimStyle.secondary)
-                        .frame(width: 44, height: 44)
+                    AISettingsButton(font: .system(size: 18, weight: .semibold),
+                                     onDismiss: { if aiFailed { Task { await runAI() } } })
                 }
-                .buttonStyle(.plain)
             }
 
             if !isEditingFeedback {
@@ -1731,9 +1733,7 @@ private struct AutoGroupSheet: View {
                 }
 
                 if aiFailed {
-                    AISettingsButton(titled: true, onDismiss: { Task { await runAI() } })
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(SkimStyle.accent)
+                    AISettingsButton(titled: true, color: SkimStyle.accent, onDismiss: { Task { await runAI() } })
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

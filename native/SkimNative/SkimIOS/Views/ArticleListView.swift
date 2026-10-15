@@ -341,11 +341,16 @@ struct ArticleListView: View {
             activeAIChat = AIChatRequest(
                 sessionKey: scope.sessionKey,
                 title: "Chat with Articles",
-                placeholder: "Find or ask about articles in this view."
+                placeholder: "Find or ask about articles in this view.",
+                suggestedPrompts: LibraryChatPolicy.starterPrompts
             ) { conversation in
                 let context = try await model.articlesForLibraryChat(scope: scope, conversation: conversation)
                 guard !context.isEmpty else {
-                    return AIChatAnswer(text: "No matching articles found in this view. Try another title, topic, source, or URL.", articles: [])
+                    let briefing = LibraryChatPolicy.retrievalTopic(query: conversation.latestQuestion,
+                        priorUserQueries: conversation.priorTurns.filter { $0.role == .user }.map(\.text)).allowRecentFallback
+                    return AIChatAnswer(text: briefing
+                        ? "There are no articles in this view to catch up on yet."
+                        : "No matching articles found in this view. Try another title, topic, source, or URL.", articles: [])
                 }
                 let (text, citations) = try await NativeAI.chat(conversation: conversation, articles: context, settings: model.settings)
                 return AIChatAnswer(text: text, articles: context, webCitations: citations,

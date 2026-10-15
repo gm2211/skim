@@ -18,6 +18,20 @@ behaviors:
     details: >-
       Desktop scopes are Inbox (priority 3 and up), Unread (default), and All. Enter sends and
       Shift+Enter adds a line.
+  - id: chat-starter-prompts
+    description: >-
+      An empty library chat offers a few built-in starter questions, and tapping one asks it right
+      away.
+    details: >-
+      Desktop Ask Skim and iOS Chat with Articles show the same three: the top 10 things to know
+      from today's articles, what the reader missed this week, and where sources disagree on the
+      biggest stories. Each is a broad catch-up, so it reads the newest articles in the chosen
+      scope (up to 15) instead of searching for its words; questions made only of briefing words
+      ("today", "top 10", "should know") do the same. A context example that ends in an ellipsis
+      is filled into the composer for the reader to finish.
+    source:
+      text: We should have some prompts like this builtin
+      reference: Giulio, project thread with a screenshot of "What are top 10 things i should know from today's articles", 2026-10-15
   - id: app-agent
     description: >-
       Skim's assistant answers with tools over the app: it searches the library, reads articles,

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { askAgent, chatWithArticles, type AgentContext, type AgentStep, type ChatSource } from "../../services/commands";
 import { useAgentChatStore } from "../../stores/agentChatStore";
 import { agentAskHeading, agentContextLabel, agentExamples } from "../../lib/agentContext";
+import { CHAT_STARTER_PROMPTS, isPromptTemplate } from "../../lib/chatStarterPrompts";
 import { AgentSteps } from "./AgentAnswer";
 import { partitionSources, type NumberedSource } from "../../lib/chatCitations";
 import type { ChatMessageInput } from "../../services/types";
@@ -37,13 +38,6 @@ interface Props {
   onClose: () => void;
   onOpenArticle?: (articleId: string) => void;
 }
-
-/** Questions that show what the answer looks like; clicking one asks it. */
-const EXAMPLE_PROMPTS = [
-  "What are this week's biggest AI stories?",
-  "Which article covered work ethic?",
-  "Find pieces about distributed systems",
-];
 
 export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
@@ -200,7 +194,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
       >
         {/* Header */}
         <div
-          className="flex items-center gap-3 border-b border-border flex-wrap"
+          className={`flex items-center gap-3 border-b border-border ${isPhone ? "" : "flex-wrap"}`}
           style={{ padding: "12px 16px", touchAction: isPhone ? "pan-y" : undefined }}
           {...swipeToDismissHandlers}
         >
@@ -208,7 +202,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
           </svg>
-          <h3 id="ask-skim-title" className="text-text-primary flex-1" style={{ fontSize: isPhone ? 20 : 16, fontWeight: 600 }}>
+          <h3 id="ask-skim-title" className="text-text-primary flex-1 whitespace-nowrap" style={{ fontSize: isPhone ? 18 : 16, fontWeight: 600 }}>
             Ask Skim
           </h3>
           {agentContext ? (
@@ -264,11 +258,15 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
                 Answers cite the articles they come from. Try one of these:
               </p>
               <div className="flex flex-wrap justify-center" style={{ gap: 8, marginTop: 16, maxWidth: 520 }}>
-                {(agentContext ? agentExamples(agentContext) : EXAMPLE_PROMPTS).map((prompt) => (
+                {(agentContext ? agentExamples(agentContext) : CHAT_STARTER_PROMPTS).map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
                     onClick={() => {
+                      if (!isPromptTemplate(prompt)) {
+                        void send(prompt);
+                        return;
+                      }
                       setInput(prompt);
                       inputRef.current?.focus();
                     }}

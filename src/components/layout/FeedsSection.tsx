@@ -382,7 +382,7 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
           style={{
             top: showAddMenu.y,
             left: showAddMenu.x,
-            background: "rgba(22, 27, 34, 0.98)",
+            background: "rgb(22, 27, 34)",
             minWidth: 220,
           }}
           onClick={(e) => e.stopPropagation()}

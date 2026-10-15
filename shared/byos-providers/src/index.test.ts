@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 // Built output: sources use NodeNext `.js` imports.
-import { endpointFor, grok, groq, NOT_RECOMMENDED_REASON, openrouter, orderServices, parseSseLine, parseXaiResponsesPayload, streamChatCompletions, type ServiceKey } from '../dist/index.js';
+import { endpointFor, grok, groq, isChatModel, NOT_RECOMMENDED_REASON, openrouter, orderServices, parseSseLine, parseXaiResponsesPayload, streamChatCompletions, type ServiceKey } from '../dist/index.js';
 
 type Call = { url: string; init?: RequestInit };
 function fakeFetch(respond: (call: Call) => Response): Call[] {
@@ -74,9 +74,27 @@ test('model lists come from the provider', async () => {
   const calls = fakeFetch(({ url }) => url.endsWith('/models') && url.includes('x.ai')
     ? new Response(JSON.stringify({ data: [{ id: 'grok-b' }, { id: 'grok-a', name: 'Grok A' }] }))
     : new Response(JSON.stringify({ data: [{ id: 'good', name: 'GPT-5.6', supported_parameters: ['tools'] }, { id: 'no-tools' }] })));
-  assert.deepEqual(await grok().listModels('k'), [{ id: 'grok-a', name: 'Grok A' }, { id: 'grok-b', name: 'grok-b' }]);
+  assert.deepEqual(await grok().listModels('k'), [{ id: 'grok-b', name: 'grok-b' }, { id: 'grok-a', name: 'Grok A' }]);
   assert.deepEqual(await openrouter().listModels('k'), [{ id: 'good', name: 'GPT-5.6', recommended: true }]);
   assert.ok(calls.every(call => call.init?.redirect === 'error'));
+});
+
+test('model lists keep the provider order and drop repeats and non-chat models', async () => {
+  fakeFetch(() => new Response(JSON.stringify({ data: [
+    { id: 'grok-4.7', created: 1790000000 },
+    { id: 'grok-4.20-0309-reasoning', created: 1773000000 },
+    { id: 'grok-imagine-image-2.0' },
+    { id: 'grok-4.3', created: 1776000000 },
+    { id: 'grok-imagine-video-1.5-lite' },
+    { id: 'grok-4.7' },
+    { id: 'grok-build-0.1' },
+  ] })));
+  assert.deepEqual((await grok().listModels('k')).map(model => model.id), ['grok-4.7', 'grok-4.20-0309-reasoning', 'grok-4.3', 'grok-build-0.1']);
+});
+
+test('non-chat models are recognized by id words, not substrings', () => {
+  for (const id of ['grok-4.7', 'grok-build-0.1', 'llama-3.2-11b-vision-instruct', 'gpt-5', 'qwen3-32b']) assert.equal(isChatModel(id), true, id);
+  for (const id of ['grok-imagine-image', 'grok-imagine-video-1.5', 'dall-e-3', 'gpt-image-1', 'text-embedding-3-small', 'whisper-large-v3', 'playai-tts', 'omni-moderation-latest']) assert.equal(isChatModel(id), false, id);
 });
 
 test('provider model discovery forwards cancellation signal', async () => {

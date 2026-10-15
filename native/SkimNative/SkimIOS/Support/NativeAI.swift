@@ -2717,9 +2717,26 @@ enum NativeAI {
         throw NativeAIError.unavailable("Add an API key for \(providerDisplayName(settings.provider)) in Settings.")
     }
 
+    /// Keeps the provider's own order (Giulio, 2026-10-15), dropping repeats and
+    /// models that can't answer chat, such as xAI's grok-imagine-* image/video ones.
     static func parseOpenAICompatibleModelsResponse(_ data: Data) throws -> [AIModelInfo] {
-        try JSONDecoder().decode(AIModelsResponse.self, from: data).data
-            .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
+        var seen = Set<String>()
+        return try JSONDecoder().decode(AIModelsResponse.self, from: data).data
+            .filter { isChatModel($0.id) && seen.insert($0.id).inserted }
+    }
+
+    /// Id words that mark a model as image, video, audio, embedding or moderation
+    /// rather than text chat. `/models` lists carry no modality, so the id is all
+    /// we have. Mirrors `is_chat_model` in the desktop app.
+    private static let nonChatModelWords: Set<String> = [
+        "imagine", "image", "video", "embed", "embedding", "tts", "whisper", "dall", "moderation",
+        "transcribe", "sora", "realtime", "audio", "speech",
+    ]
+
+    static func isChatModel(_ id: String) -> Bool {
+        !id.lowercased()
+            .split(whereSeparator: { !($0.isASCII && ($0.isLetter || $0.isNumber)) })
+            .contains { nonChatModelWords.contains(String($0)) }
     }
 
     /// Derives the `/v1/models` URL from the same base the completion path uses,

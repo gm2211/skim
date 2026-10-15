@@ -31,6 +31,19 @@ fn models_url(provider: &str, endpoint: Option<&str>) -> Result<String, String> 
     }
 }
 
+/// Id words that mark a model as image, video, audio, embedding or moderation
+/// rather than text chat. `/models` lists carry no modality, so the id is all we have.
+const NON_CHAT_MODEL_WORDS: &[&str] = &[
+    "imagine", "image", "video", "embed", "embedding", "tts", "whisper", "dall", "moderation",
+    "transcribe", "sora", "realtime", "audio", "speech",
+];
+
+pub(crate) fn is_chat_model(id: &str) -> bool {
+    !id.to_ascii_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|word| NON_CHAT_MODEL_WORDS.contains(&word))
+}
+
 // Use the credentials being edited, without persisting them before Save.
 #[tauri::command]
 pub async fn list_remote_models(
@@ -88,8 +101,10 @@ pub async fn list_remote_models(
         .await
         .map_err(|_| "Provider returned an unsupported model list")?
         .data;
-    models.sort_by(|a, b| a.id.cmp(&b.id));
-    models.dedup_by(|a, b| a.id == b.id);
+    // Keep the provider's own order (Giulio, 2026-10-15): drop only repeats and
+    // models that can't answer chat, such as xAI's grok-imagine-* image/video ones.
+    let mut seen = std::collections::HashSet::new();
+    models.retain(|model| is_chat_model(&model.id) && seen.insert(model.id.clone()));
     for model in &mut models {
         if model.display_name.is_empty() {
             model.display_name = model.id.clone();
@@ -119,6 +134,16 @@ mod model_list_tests {
         }
         assert!(models_url("custom", None).is_err());
         assert!(models_url("none", None).is_err());
+    }
+
+    #[test]
+    fn non_chat_models_are_hidden() {
+        for id in ["grok-4.7", "grok-4.20-0309-reasoning", "grok-build-0.1", "gpt-5", "llama-3.2-11b-vision-instruct"] {
+            assert!(is_chat_model(id), "{id}");
+        }
+        for id in ["grok-imagine-image", "grok-imagine-video-1.5-lite", "dall-e-3", "gpt-image-1", "text-embedding-3-small", "whisper-large-v3", "playai-tts", "omni-moderation-latest"] {
+            assert!(!is_chat_model(id), "{id}");
+        }
     }
 }
 

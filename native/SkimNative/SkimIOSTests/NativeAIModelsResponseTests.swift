@@ -52,6 +52,22 @@ struct NativeAIModelsResponseTests {
         #expect(followup.promptSection.contains("Replying to Skim:\n> the exact selected sentence"))
     }
 
+    @Test func articlePassageIsQuotedAsArticleContext() {
+        let conversation = AIChatConversation(
+            latestQuestion: "Which hack?",
+            quotedText: "a hack of the health department",
+            quoteSource: .article
+        )
+        #expect(conversation.promptSection.contains("About this passage from the article:\n> a hack of the health department\n\nWhich hack?"))
+        #expect(!conversation.promptSection.contains("Replying to Skim"))
+
+        let followup = AIChatConversation(
+            latestQuestion: "And then?",
+            priorMessages: [AIChatMessage(role: .user, text: "Which hack?", quotedText: "a hack of the health department", quoteSource: .article)]
+        )
+        #expect(followup.promptSection.contains("About this passage from the article:\n> a hack of the health department"))
+    }
+
     @Test func decodesModelsPreservingAPIOrder() throws {
         let json = """
         {

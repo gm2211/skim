@@ -5,22 +5,23 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import "./chat-markdown.css";
 
 export interface ChatReply {
-  role: "user" | "assistant";
+  /** "article" is a passage the reader highlighted in the article itself. */
+  role: "user" | "assistant" | "article";
   text: string;
 }
 
 /** Keep quoted text in every subsequent history turn, not just the first send. */
 export function chatPrompt(content: string, reply?: ChatReply | null): string {
   if (!reply) return content;
-  const author = reply.role === "assistant" ? "Skim" : "my message";
-  return `Replying to ${author}:\n${reply.text.split("\n").map((line) => `> ${line}`).join("\n")}\n\n${content}`;
+  const lead = reply.role === "article" ? "About this passage from the article" : `Replying to ${reply.role === "assistant" ? "Skim" : "my message"}`;
+  return `${lead}:\n${reply.text.split("\n").map((line) => `> ${line}`).join("\n")}\n\n${content}`;
 }
 
 export function ReplyPreview({ reply, onRemove }: { reply: ChatReply; onRemove?: () => void }) {
   return (
     <div className="chat-reply-preview" role={onRemove ? "note" : undefined} aria-label="Quoted text">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-text-secondary">Replying to {reply.role === "assistant" ? "Skim" : "you"}</span>
+        <span className="text-text-secondary">{reply.role === "article" ? "From the article" : `Replying to ${reply.role === "assistant" ? "Skim" : "you"}`}</span>
         {onRemove && <button type="button" onClick={onRemove} className="tap-target rounded-lg hover:bg-white/10" aria-label="Remove quoted text">×</button>}
       </div>
       <blockquote>{reply.text}</blockquote>
@@ -30,7 +31,7 @@ export function ReplyPreview({ reply, onRemove }: { reply: ChatReply; onRemove?:
 
 export function ChatMessageContent({ content, role, onReply, replyDisabled = false }: {
   content: string;
-  role: ChatReply["role"];
+  role: "user" | "assistant";
   onReply: (reply: ChatReply) => void;
   replyDisabled?: boolean;
 }) {

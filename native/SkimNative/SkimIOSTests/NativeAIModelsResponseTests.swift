@@ -152,7 +152,7 @@ struct NativeAIModelsResponseTests {
 
     @Test func openAICompatibleHidesImageAndVideoModels() throws {
         let json = """
-        { "data": [ { "id": "grok-4.7" }, { "id": "grok-imagine-image-2.0" }, { "id": "grok-imagine-video-1.5-lite" }, { "id": "grok-build-0.1" } ] }
+        { "data": [ { "id": "grok-4.7" }, { "id": "grok-imagine-image-2.0" }, { "id": "grok-imagine-video-1.5-lite" }, { "id": "grok-build-0.1" }, { "id": "gemini-nano-banana" }, { "id": "imagen-4.0-generate-001" } ] }
         """
         let models = try NativeAI.parseOpenAICompatibleModelsResponse(Data(json.utf8))
         #expect(models.map(\.id) == ["grok-4.7", "grok-build-0.1"])

@@ -35,7 +35,7 @@ fn models_url(provider: &str, endpoint: Option<&str>) -> Result<String, String> 
 /// rather than text chat. `/models` lists carry no modality, so the id is all we have.
 const NON_CHAT_MODEL_WORDS: &[&str] = &[
     "imagine", "image", "video", "embed", "embedding", "tts", "whisper", "dall", "moderation",
-    "transcribe", "sora", "realtime", "audio", "speech",
+    "transcribe", "sora", "realtime", "audio", "speech", "imagen", "banana", "veo", "lyria",
 ];
 
 pub(crate) fn is_chat_model(id: &str) -> bool {
@@ -58,6 +58,7 @@ pub async fn list_remote_models(
         return Ok(crate::ai::chatgpt_provider::list_models(&client, &token)
             .await?
             .into_iter()
+            .filter(|(id, _)| is_chat_model(id))
             .map(|(id, display_name)| RemoteModel { id, display_name })
             .collect());
     }
@@ -154,7 +155,7 @@ mod model_list_tests {
         for id in ["grok-4.7", "grok-4.20-0309-reasoning", "grok-build-0.1", "gpt-5", "llama-3.2-11b-vision-instruct"] {
             assert!(is_chat_model(id), "{id}");
         }
-        for id in ["grok-imagine-image", "grok-imagine-video-1.5-lite", "dall-e-3", "gpt-image-1", "text-embedding-3-small", "whisper-large-v3", "playai-tts", "omni-moderation-latest"] {
+        for id in ["grok-imagine-image", "grok-imagine-video-1.5-lite", "dall-e-3", "gpt-image-1", "text-embedding-3-small", "whisper-large-v3", "playai-tts", "omni-moderation-latest", "gemini-nano-banana", "imagen-4.0-generate-001", "veo-3.1"] {
             assert!(!is_chat_model(id), "{id}");
         }
     }

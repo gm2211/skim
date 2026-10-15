@@ -3732,9 +3732,14 @@ struct AIChatSheet: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 14) {
                             if messages.isEmpty {
+                                // Centered in the visible space above the input bar, so the
+                                // hint stays in view when the keyboard shrinks the sheet.
                                 ContentUnavailableView("Ask Skim", systemImage: SkimIcon.chat, description: Text(request.placeholder))
                                     .foregroundStyle(SkimStyle.secondary)
-                                    .padding(.top, 80)
+                                    .frame(maxWidth: .infinity)
+                                    .containerRelativeFrame(.vertical, alignment: .center) { height, _ in
+                                        max(height - 36, 0)
+                                    }
                             } else {
                                 ForEach(messages) { message in
                                     AIChatBubble(
@@ -3818,6 +3823,21 @@ struct AIChatSheet: View {
                             .padding(.vertical, 12)
                             .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
+                        // Inline rather than on the keyboard bar: iOS 26 floats keyboard
+                        // toolbar items over the send button.
+                        if focused {
+                            Button {
+                                focused = false
+                            } label: {
+                                Image(systemName: "keyboard.chevron.compact.down")
+                                    .font(.system(size: 20, weight: .regular))
+                                    .foregroundStyle(SkimStyle.secondary)
+                                    .frame(width: 32, height: 32)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Hide keyboard")
+                        }
+
                         Button {
                             Task { await send() }
                         } label: {
@@ -3843,15 +3863,6 @@ struct AIChatSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     AppModelPicker(isDisabled: isSending, forChat: true)
-                }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button {
-                        focused = false
-                    } label: {
-                        Image(systemName: "keyboard.chevron.compact.down")
-                    }
-                    .accessibilityLabel("Hide keyboard")
                 }
             }
             .onAppear {

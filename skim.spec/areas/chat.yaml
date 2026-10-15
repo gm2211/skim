@@ -83,7 +83,7 @@ behaviors:
       In the iOS chat sheet the reader can put the keyboard away to read, and a new answer opens
       at its first line rather than its end.
     details: >-
-      Swiping down on the conversation, tapping it, or the keyboard bar's hide button dismisses
+      Swiping down on the conversation, tapping it, or the hide button beside the input dismisses
       the keyboard. When an answer arrives the conversation scrolls so the answer's top sits at
       the top of the view; a sent question still scrolls to the bottom.
     source:

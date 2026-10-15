@@ -3663,6 +3663,7 @@ struct AIChatSheet: View {
                         }
                         .padding(18)
                     }
+                    .scrollDismissesKeyboard(.interactively)
                     .onChange(of: messages.count) { _, _ in
                         scrollToLatest(proxy)
                     }
@@ -3737,7 +3738,8 @@ struct AIChatSheet: View {
             }
             .onAppear {
                 seedInitialMessageIfNeeded()
-                focused = true
+                // The keyboard would cover the starter questions, so wait for a tap.
+                focused = !(messages.isEmpty && !request.suggestedPrompts.isEmpty)
             }
             .sheet(isPresented: $showReauth) {
                 ClaudeReauthSheet()

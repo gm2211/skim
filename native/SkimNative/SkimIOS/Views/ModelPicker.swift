@@ -105,19 +105,37 @@ struct ModelPickerMenu: View {
         Text(Self.singleLineTitle(label, font: .preferredFont(forTextStyle: .body)))
     }
 
-    /// Text width a menu row fits on one line at the 17pt body size; on an
-    /// iPhone longer ids wrap. Scaled with the font for Dynamic Type.
-    static let menuRowTextWidth: CGFloat = 190
+    /// Text width a menu row fits on one line at the 17pt body size, beside
+    /// the checkmark column; on an iPhone longer ids wrap. Scaled with the
+    /// font for Dynamic Type.
+    static let menuRowTextWidth: CGFloat = 150
 
-    /// `label` unchanged if it fits one menu row in `font`, else with its
-    /// middle replaced by "…" so the provider prefix and the variant suffix
-    /// (":batch", "-pro") both stay visible.
+    /// `label` unchanged if it fits one menu row in `font`. Otherwise an id
+    /// such as "liquid/lfm-2.5-24b-a2b" keeps its provider prefix whole and
+    /// loses the middle of the model name, favoring its tail, where the size,
+    /// variant or ":free" that tells models apart sits ("liquid/lfm…24b-a2b").
+    /// Ids without a short prefix lose their middle evenly.
     static func singleLineTitle(_ label: String, font: UIFont) -> String {
         let maxWidth = menuRowTextWidth * font.pointSize / 17
         func width(_ text: String) -> CGFloat {
             (text as NSString).size(withAttributes: [.font: font]).width
         }
         guard width(label) > maxWidth else { return label }
+
+        if let slash = label.firstIndex(of: "/") {
+            let prefix = String(label[...slash])
+            let model = Array(label[label.index(after: slash)...])
+            if width(prefix) <= maxWidth * 0.4 {
+                var keep = model.count - 1
+                while keep > 1 {
+                    let head = keep * 2 / 5
+                    let candidate = prefix + String(model.prefix(head)) + "…" + String(model.suffix(keep - head))
+                    if width(candidate) <= maxWidth { return candidate }
+                    keep -= 1
+                }
+            }
+        }
+
         let characters = Array(label)
         var keep = characters.count - 1
         while keep > 1 {

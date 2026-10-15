@@ -1226,12 +1226,15 @@ private struct RemoteModelPicker: View {
                     Button {
                         modelID = entry.id
                     } label: {
+                        // One line per model, as in the inline model menus.
+                        let title = ModelPickerMenu.singleLineTitle(entry.displayName, font: .preferredFont(forTextStyle: .body))
                         if entry.id == modelID {
-                            Label(entry.displayName, systemImage: "checkmark")
+                            Label(title, systemImage: "checkmark")
                         } else {
-                            Text(entry.displayName)
+                            Text(title)
                         }
                     }
+                    .accessibilityLabel(entry.displayName)
                 }
             } label: {
                 HStack {

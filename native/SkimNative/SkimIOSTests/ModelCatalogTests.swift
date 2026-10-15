@@ -198,7 +198,19 @@ struct ModelPickerMenuTitleTests {
     private let body = UIFont.systemFont(ofSize: 17)
 
     @Test func shortIdsAreUnchanged() {
-        #expect(ModelPickerMenu.singleLineTitle("cohere/command-a-plus", font: body) == "cohere/command-a-plus")
+        #expect(ModelPickerMenu.singleLineTitle("openai/gpt-6", font: body) == "openai/gpt-6")
+    }
+
+    @Test func longIdsKeepTheWholeProviderPrefixAndTheModelTail() {
+        let title = ModelPickerMenu.singleLineTitle("liquid/lfm-2.5-24b-a2b", font: body)
+        #expect(title.hasPrefix("liquid/"))
+        #expect(title.hasSuffix("a2b"))
+        #expect(title.contains("…"))
+        let title2 = ModelPickerMenu.singleLineTitle("google/gemini-4-argon:batch", font: body)
+        #expect(title2.hasPrefix("google/"))
+        #expect(title2.hasSuffix(":batch"))
+        let width = (title2 as NSString).size(withAttributes: [.font: body]).width
+        #expect(width <= ModelPickerMenu.menuRowTextWidth)
     }
 
     @Test func longIdsKeepBothEndsAndFitOneRow() {

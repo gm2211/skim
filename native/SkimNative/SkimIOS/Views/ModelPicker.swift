@@ -106,15 +106,16 @@ struct ModelPickerMenu: View {
     }
 
     /// Text width a menu row fits on one line at the 17pt body size, beside
-    /// the checkmark column; on an iPhone longer ids wrap. Scaled with the
-    /// font for Dynamic Type.
+    /// the checkmark column (checked on an iPhone 17 Pro: 190 wrapped, 150
+    /// does not). Scaled with the font for Dynamic Type.
     static let menuRowTextWidth: CGFloat = 150
 
-    /// `label` unchanged if it fits one menu row in `font`. Otherwise an id
-    /// such as "liquid/lfm-2.5-24b-a2b" keeps its provider prefix whole and
-    /// loses the middle of the model name, favoring its tail, where the size,
-    /// variant or ":free" that tells models apart sits ("liquid/lfm…24b-a2b").
-    /// Ids without a short prefix lose their middle evenly.
+    /// `label` unchanged if it fits one menu row in `font`. Otherwise its
+    /// middle gives way to "…" and most of the row goes to the tail, where the
+    /// size, version or ":batch" that tells models apart sits. A short provider
+    /// prefix stays whole ("google/…argon:batch"); a long one keeps its first
+    /// letters ("anth…haiku-5.5:batch"). The cut never leaves a stray "-", "."
+    /// or "_" beside the "…".
     static func singleLineTitle(_ label: String, font: UIFont) -> String {
         let maxWidth = menuRowTextWidth * font.pointSize / 17
         func width(_ text: String) -> CGFloat {
@@ -122,30 +123,32 @@ struct ModelPickerMenu: View {
         }
         guard width(label) > maxWidth else { return label }
 
-        if let slash = label.firstIndex(of: "/") {
-            let prefix = String(label[...slash])
-            let model = Array(label[label.index(after: slash)...])
-            if width(prefix) <= maxWidth * 0.4 {
-                var keep = model.count - 1
-                while keep > 1 {
-                    let head = keep * 2 / 5
-                    let candidate = prefix + String(model.prefix(head)) + "…" + String(model.suffix(keep - head))
-                    if width(candidate) <= maxWidth { return candidate }
-                    keep -= 1
-                }
+        let characters = Array(label)
+        let headCount: Int
+        if let slash = characters.firstIndex(of: "/"),
+           width(String(characters[...slash])) <= maxWidth * 0.4 {
+            headCount = slash + 1
+        } else {
+            var count = 1
+            while count < characters.count, width(String(characters.prefix(count + 1))) <= maxWidth * 0.3 {
+                count += 1
             }
+            headCount = count
+        }
+        var head = String(characters.prefix(headCount))
+        if !head.hasSuffix("/") {
+            while let last = head.last, "-._".contains(last), head.count > 1 { head.removeLast() }
         }
 
-        let characters = Array(label)
-        var keep = characters.count - 1
-        while keep > 1 {
-            let head = String(characters.prefix((keep + 1) / 2))
-            let tail = String(characters.suffix(keep / 2))
+        var tailCount = characters.count - headCount - 1
+        while tailCount > 0 {
+            var tail = String(characters.suffix(tailCount))
+            while let first = tail.first, "-._/".contains(first), tail.count > 1 { tail.removeFirst() }
             let candidate = head + "…" + tail
             if width(candidate) <= maxWidth { return candidate }
-            keep -= 1
+            tailCount -= 1
         }
-        return String(characters.prefix(1)) + "…"
+        return head + "…"
     }
 }
 

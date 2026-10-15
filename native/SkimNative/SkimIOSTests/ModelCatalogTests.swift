@@ -201,16 +201,25 @@ struct ModelPickerMenuTitleTests {
         #expect(ModelPickerMenu.singleLineTitle("openai/gpt-6", font: body) == "openai/gpt-6")
     }
 
-    @Test func longIdsKeepTheWholeProviderPrefixAndTheModelTail() {
-        let title = ModelPickerMenu.singleLineTitle("liquid/lfm-2.5-24b-a2b", font: body)
-        #expect(title.hasPrefix("liquid/"))
-        #expect(title.hasSuffix("a2b"))
-        #expect(title.contains("…"))
-        let title2 = ModelPickerMenu.singleLineTitle("google/gemini-4-argon:batch", font: body)
-        #expect(title2.hasPrefix("google/"))
-        #expect(title2.hasSuffix(":batch"))
-        let width = (title2 as NSString).size(withAttributes: [.font: body]).width
-        #expect(width <= ModelPickerMenu.menuRowTextWidth)
+    @Test func longIdsKeepAShortProviderPrefixAndTheDistinguishingTail() {
+        for (id, prefix, suffix) in [
+            ("liquid/lfm-2.5-24b-a2b", "liquid/", "a2b"),
+            ("google/gemini-4-argon:batch", "google/", "argon:batch"),
+            ("anthropic/claude-haiku-5.5:batch", "anth", "5.5:batch"),
+        ] {
+            let title = ModelPickerMenu.singleLineTitle(id, font: body)
+            #expect(title.hasPrefix(prefix), "\(title)")
+            #expect(title.hasSuffix(suffix), "\(title)")
+            #expect(!title.contains("….") && !title.contains("…-") && !title.contains("-…"), "\(title)")
+            let width = (title as NSString).size(withAttributes: [.font: body]).width
+            #expect(width <= ModelPickerMenu.menuRowTextWidth, "\(title)")
+        }
+    }
+
+    @Test func siblingModelsStayDistinct() {
+        let haiku = ModelPickerMenu.singleLineTitle("anthropic/claude-haiku-5.5:batch", font: body)
+        let sonnet = ModelPickerMenu.singleLineTitle("anthropic/claude-sonnet-5.5:batch", font: body)
+        #expect(haiku != sonnet)
     }
 
     @Test func longIdsKeepBothEndsAndFitOneRow() {

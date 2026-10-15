@@ -73,6 +73,10 @@ struct SettingsSheet: View {
     @EnvironmentObject private var model: AppModel
     @Binding var isPresented: Bool
     @State private var draft = AppSettings()
+    /// The settings as loaded on appear (provider normalized for display). Not
+    /// saved until the reader changes something, so opening and closing the
+    /// sheet never rewrites a provider such as "none".
+    @State private var loadedDraft: AppSettings?
     @State private var activeTab: SettingsTab = .ai
     @State private var choosingProvider = false
     /// Nil until the reader picks a tab, so the default follows sign-in.
@@ -140,14 +144,18 @@ struct SettingsSheet: View {
                 }
             }
             .onAppear {
-                draft = model.settings
-                draft.ai = normalizedAISettings(draft.ai)
+                var loaded = model.settings
+                loaded.ai = normalizedAISettings(loaded.ai)
+                loadedDraft = loaded
+                draft = loaded
                 xaiSignedIn = XAIKeychainStore.isSignedIn
                 chatgptSignedIn = ChatGPTKeychainStore.isSignedIn
                 accountFirst = !providerIsReady
                 Task { await model.refreshOfflineCacheStats() }
             }
             .onChange(of: draft) { _, newValue in
+                if let loadedDraft, newValue == loadedDraft { return }
+                loadedDraft = nil
                 Task {
                     await model.saveSettings(newValue)
                 }
@@ -249,6 +257,8 @@ struct SettingsSheet: View {
                 } label: {
                     Text("Change")
                         .font(.system(size: 15, weight: .semibold))
+                        // Explicit, so a presenter's foregroundStyle cannot gray or whiten it.
+                        .foregroundStyle(SkimStyle.accent)
                         .padding(.horizontal, 14)
                         .frame(minHeight: 36)
                 }

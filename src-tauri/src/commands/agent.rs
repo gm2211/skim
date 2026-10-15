@@ -546,7 +546,7 @@ mod tests {
         async fn chat(&self, request: ChatRequest) -> Result<ProviderChatResponse, String> {
             self.seen.lock().unwrap().push(request.messages.clone());
             let content = self.replies.lock().unwrap().pop().unwrap_or_else(|| "TOOL {\"name\":\"recent_articles\"}".into());
-            Ok(ProviderChatResponse { content, model: "m".into(), usage: None, tool_uses: Vec::new(), stop_reason: None })
+            Ok(ProviderChatResponse { content, model: "m".into(), usage: None, tool_uses: Vec::new(), stop_reason: None, raw_content: None })
         }
         fn name(&self) -> &str { "scripted" }
     }

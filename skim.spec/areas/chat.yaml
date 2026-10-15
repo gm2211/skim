@@ -1,6 +1,16 @@
 id: chat
 name: Ask Skim and article chat
 behaviors:
+  - id: complete-chat-answers
+    description: >-
+      Chat answers are not cut off by a token cap sized for visible text.
+    details: >-
+      Hosted providers get an output ceiling of at least 8192 tokens, because some count hidden
+      reasoning against it; on-device models keep their tier budgets. Shared with summaries through
+      skim_ai_request_max_tokens in shared/SkimStoryPolicy.
+    source:
+      text: Also, chat response was cut off - are we artificially truncating?
+      reference: Giulio, project chat, 2026-10-14
   - id: ask-skim-grounded
     description: >-
       Ask Skim answers a question from the reader's library with numbered citations to the articles
@@ -37,6 +47,19 @@ behaviors:
     description: >-
       A reader can chat with any article; answers are grounded in the article's full text and the
       conversation so far, not just the feed teaser.
+  - id: ask-about-highlight
+    description: >-
+      A reader can highlight a passage in the article and ask about it in chat: the chat opens with
+      the passage quoted above the composer, ready for a question.
+    details: >-
+      iOS adds "Ask in Chat" as the first item of the text selection menu in the reader (article
+      body, post text and comments); the article menu moved to a long press on the header so a long
+      press on the body selects text. Desktop shows a floating "Ask in chat" button over the
+      selection in the reader. The quote is sent as "About this passage from the article" and the
+      bubble labels it "From the article", distinct from replying to one of Skim's answers.
+    source:
+      text: I'd like the ability to easily highlight text and ask about it in chat
+      reference: Giulio, project thread "highlight text and ask in chat", 2026-10-14
   - id: web-search
     description: >-
       Chat can search the web when the library does not cover a question, and web sources are marked
@@ -44,6 +67,9 @@ behaviors:
     details: >-
       Supported by Claude providers on desktop; desktop MLX and iOS expose a "Web search in chat"
       setting.
+      A web source chip whose title is longer than the chat bubble truncates with an ellipsis and
+      stays inside the bubble, so it never widens the chat (Giulio, 2026-10-14: "Chat body width
+      sligthly messed up by long source - maybe ellipses?").
   - id: answer-first-on-small-models
     description: >-
       On-device models answer first, stay grounded in exact source passages, and drop chatbot
@@ -52,3 +78,17 @@ behaviors:
     description: >-
       After the reader fixes their AI settings, an article chat that failed works again without
       reopening the app.
+  - id: chat-easy-reading
+    description: >-
+      In the iOS chat sheet the reader can put the keyboard away to read, and a new answer opens
+      at its first line rather than its end.
+    details: >-
+      Swiping down on the conversation, tapping it, or the hide button beside the input dismisses
+      the keyboard. When an answer arrives the conversation scrolls so the answer's top sits at
+      the top of the view; a sent question still scrolls to the bottom.
+    source:
+      text: >-
+        I wanna be able to easily dismiss keyboard for easier reading. Also right after generation
+        of chat response, it auto scrolls all the way to the botton and you can't see much till i
+        scroll back up
+      reference: Giulio, project chat, 2026-10-14

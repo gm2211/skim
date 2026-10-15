@@ -4,6 +4,7 @@ import { ArticleList } from "./components/layout/ArticleList";
 import { ArticleDetail } from "./components/layout/ArticleDetail";
 import { TodayEditionPane } from "./components/today/TodayEditionPane";
 import { AddFeedDialog } from "./components/feed/AddFeedDialog";
+import { DiscoverView } from "./components/discover/DiscoverView";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { CommandPalette } from "./components/palette/CommandPalette";
 import { useUiStore } from "./stores/uiStore";
@@ -36,7 +37,8 @@ function App() {
   const { showAddFeed, showSettings, showCommandPalette, selectedArticleId, listCollapsed, sidebarCollapsed, isPhone, phonePane, sidebarView } = useUiStore();
   // Today takes the list column as a full page.
   const isToday = sidebarView.type === "today";
-  const listPane = isToday ? <TodayEditionPane /> : <ArticleList />;
+  const isDiscover = sidebarView.type === "discover";
+  const listPane = isToday ? <TodayEditionPane /> : isDiscover ? <DiscoverView /> : <ArticleList />;
   const qc = useQueryClient();
   const [showBootDisclaimer, setShowBootDisclaimer] = useState(() => !hasAcceptedAiDisclaimer());
   const [opmlImportStatus, setOpmlImportStatus] = useState<OpmlImportStatus | null>(null);
@@ -553,12 +555,12 @@ function App() {
         data-tauri-drag-region
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
-      {sidebarCollapsed && listCollapsed && !isToday && <CollapsedSidebarTitlebar />}
+      {sidebarCollapsed && listCollapsed && !isToday && !isDiscover && <CollapsedSidebarTitlebar />}
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <div className="flex flex-1 min-w-0">
           {listPane}
-          {selectedArticleId ? (
+          {isDiscover ? null : selectedArticleId ? (
             <ArticleDetail />
           ) : !isToday ? (
             <div

@@ -29,7 +29,7 @@ behaviors:
       iOS uses one icon per action and destination everywhere it appears. Unread, All and Search
       use the icons Giulio picked for the bottom bar: Unread the full tray, All the justified text
       lines, and Search the magnifying glass in a circle. Elsewhere iOS uses the desktop's icon:
-      Today the newspaper, AI Inbox the tray, chat and Ask Skim the speech bubble, Summarize the sparkles, and leaving
+      Today the newspaper, For you (the AI Inbox) the tray, chat and Ask Skim the speech bubble, Summarize the sparkles, and leaving
       the app (open in browser, original page) the arrow-out-of-box.
     details: >-
       The mapping lives in one place in the iOS code (SkimIcon in Style.swift). Starring reads
@@ -54,11 +54,12 @@ behaviors:
     description: >-
       iOS bottom bar shows each view as an icon over its name. It defaults to Unread, All, Today and
       Search, and Giulio chooses which views appear and their order (two to five of Today, Unread,
-      All, Starred, Recent, AI Inbox and Search) from Customize Bottom Bar, reached by
+      All, Starred, Recent, For you and Search) from Customize Bottom Bar, reached by
       long-pressing the bar or from the "…" menu.
     details: >-
       Today opens in place of the article list, with the bar still showing, rather than as a pushed
-      page; picking a feed, folder or library view returns to the list. AI Inbox opens its page.
+      page; picking a feed, folder or library view returns to the list. For you sorts the list in
+      place, and Unread, All, Starred or Recent go back to Newest.
       There is no catch-up bar option (a saved bar that still names one just loses that item);
       on iPhone the Today title sits between the title bar's buttons and "Ask about Today" is
       the first item of its "…" menu, so nothing covers the title. On phones with a home

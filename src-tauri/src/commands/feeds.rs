@@ -6,6 +6,7 @@ use crate::db::queries;
 use crate::db::story_clustering;
 use crate::db::Database;
 use crate::feed::fetch_and_parse_feed;
+use crate::feed::discovery::{self, CatalogTopic, DiscoveredFeed};
 use crate::feed::feedly;
 use crate::feed::feedly_oauth;
 use serde::{Deserialize, Serialize};
@@ -136,8 +137,16 @@ pub async fn add_feed(db: State<'_, Database>, url: String) -> Result<Feed, Stri
         }
     }
 
-    let (feed, articles) =
-        fetch_and_parse_feed(&url, None).await?;
+    // A website address (or `theverge.com`) is resolved to its first feed.
+    let url = if discovery::looks_like_url(&url) { discovery::normalize_input_url(&url) } else { url };
+    let (feed, articles) = match fetch_and_parse_feed(&url, None).await {
+        Ok(parsed) => parsed,
+        Err(direct_err) => {
+            let found = discovery::discover(&url).await.map_err(|_| direct_err)?;
+            let first = found.first().ok_or_else(|| "No feeds found on that page.".to_string())?;
+            fetch_and_parse_feed(&first.url, None).await?
+        }
+    };
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
 
@@ -165,6 +174,63 @@ pub async fn add_feed(db: State<'_, Database>, url: String) -> Result<Feed, Stri
         .map_err(|e| e.to_string())?;
 
     Ok(feed)
+}
+
+fn mark_subscribed(db: &Database, feeds: &mut [DiscoveredFeed]) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let existing: std::collections::HashSet<String> = queries::list_feeds(&conn)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|f| normalize_feed_url(&f.url))
+        .collect();
+    for feed in feeds.iter_mut() {
+        feed.already_subscribed = existing.contains(&normalize_feed_url(&feed.url));
+    }
+    Ok(())
+}
+
+/// Finds the feeds behind a website or feed address, with preview headlines.
+#[tauri::command]
+pub async fn discover_feeds(db: State<'_, Database>, query: String) -> Result<Vec<DiscoveredFeed>, String> {
+    let mut found = discovery::discover(&query).await?;
+    mark_subscribed(&db, &mut found)?;
+    Ok(found)
+}
+
+/// Searches feeds by topic or site name.
+#[tauri::command]
+pub async fn search_feeds(db: State<'_, Database>, query: String) -> Result<Vec<DiscoveredFeed>, String> {
+    let mut found = discovery::search(&query).await?;
+    mark_subscribed(&db, &mut found)?;
+    Ok(found)
+}
+
+/// Fetches one feed's latest headlines so the reader can look before adding.
+#[tauri::command]
+pub async fn preview_feed(db: State<'_, Database>, url: String) -> Result<DiscoveredFeed, String> {
+    let mut feed = vec![discovery::preview(&url).await?];
+    mark_subscribed(&db, &mut feed)?;
+    Ok(feed.remove(0))
+}
+
+#[derive(Debug, Serialize)]
+pub struct CatalogTopicView {
+    pub id: String,
+    pub name: String,
+    pub feeds: Vec<DiscoveredFeed>,
+}
+
+/// The built-in catalog of popular feeds by topic.
+#[tauri::command]
+pub async fn feed_catalog(db: State<'_, Database>) -> Result<Vec<CatalogTopicView>, String> {
+    let topics: Vec<CatalogTopic> = discovery::catalog();
+    let mut out = Vec::new();
+    for topic in topics {
+        let mut feeds: Vec<DiscoveredFeed> = topic.feeds.iter().map(discovery::catalog_entry).collect();
+        mark_subscribed(&db, &mut feeds)?;
+        out.push(CatalogTopicView { id: topic.id, name: topic.name, feeds });
+    }
+    Ok(out)
 }
 
 #[tauri::command]

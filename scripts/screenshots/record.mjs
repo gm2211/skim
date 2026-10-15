@@ -220,8 +220,8 @@ const CHAPTERS = [
   {
     id: "inbox",
     async run(p) {
-      await caption(p, "AI Inbox", "A model scores every unread article from 1 to 5, so the important ones rise to the top.");
-      await glide(p, p.getByText("AI Inbox", { exact: true }).first());
+      await caption(p, "For you", "Sort any list For you: a model scores every unread article from 1 to 5, so the important ones rise to the top.");
+      await glide(p, p.getByRole("button", { name: "For you", exact: true }).first());
       await hold(p, 3.4);
     },
   },

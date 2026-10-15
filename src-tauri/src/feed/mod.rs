@@ -1,3 +1,4 @@
+pub mod discovery;
 pub mod feedly;
 pub mod feedly_oauth;
 pub mod fetcher;

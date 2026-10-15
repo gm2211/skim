@@ -25,6 +25,42 @@
     __i: i,
   }));
 
+
+  const DISCOVER_CATALOG = [{"id": "tech", "name": "Tech", "feeds": [{"title": "The Verge", "url": "https://www.theverge.com/rss/index.xml", "site": "https://www.theverge.com", "description": "Technology, science, art, and culture."}, {"title": "Ars Technica", "url": "https://feeds.arstechnica.com/arstechnica/index", "site": "https://arstechnica.com", "description": "In-depth tech news, reviews, and analysis."}, {"title": "TechCrunch", "url": "https://techcrunch.com/feed/", "site": "https://techcrunch.com", "description": "Startups, venture capital, and tech industry news."}, {"title": "Wired", "url": "https://www.wired.com/feed/rss", "site": "https://www.wired.com", "description": "How technology is changing every aspect of our lives."}, {"title": "Engadget", "url": "https://www.engadget.com/rss.xml", "site": "https://www.engadget.com", "description": "Gadgets and consumer electronics."}, {"title": "Hacker News", "url": "https://news.ycombinator.com/rss", "site": "https://news.ycombinator.com", "description": "Front page links from Y Combinator's community."}]}, {"id": "programming", "name": "Programming", "feeds": [{"title": "Lobsters", "url": "https://lobste.rs/rss", "site": "https://lobste.rs", "description": "A computing-focused link aggregator."}, {"title": "Hacker News: Best", "url": "https://hnrss.org/best", "site": "https://news.ycombinator.com/best", "description": "The highest-voted recent Hacker News stories."}, {"title": "Simon Willison", "url": "https://simonwillison.net/atom/everything/", "site": "https://simonwillison.net", "description": "Notes on LLMs, Python, Datasette, and the web."}, {"title": "Julia Evans", "url": "https://jvns.ca/atom.xml", "site": "https://jvns.ca", "description": "Friendly explanations of how computers work."}, {"title": "Martin Fowler", "url": "https://martinfowler.com/feed.atom", "site": "https://martinfowler.com", "description": "Software design, architecture, and agile delivery."}, {"title": "The GitHub Blog", "url": "https://github.blog/feed/", "site": "https://github.blog", "description": "Updates, ideas, and engineering from GitHub."}, {"title": "This Week in Rust", "url": "https://this-week-in-rust.org/rss.xml", "site": "https://this-week-in-rust.org", "description": "Weekly Rust community news."}]}, {"id": "ai", "name": "AI", "feeds": [{"title": "Hugging Face Blog", "url": "https://huggingface.co/blog/feed.xml", "site": "https://huggingface.co/blog", "description": "Open models, datasets, and machine learning tools."}, {"title": "Import AI", "url": "https://importai.substack.com/feed", "site": "https://importai.substack.com", "description": "Jack Clark's weekly newsletter on AI research and policy."}, {"title": "Google AI", "url": "https://blog.google/technology/ai/rss/", "site": "https://blog.google/technology/ai/", "description": "AI news and research from Google."}, {"title": "MIT Technology Review: AI", "url": "https://www.technologyreview.com/topic/artificial-intelligence/feed", "site": "https://www.technologyreview.com/topic/artificial-intelligence/", "description": "Reporting on artificial intelligence."}, {"title": "The Gradient", "url": "https://thegradient.pub/rss/", "site": "https://thegradient.pub", "description": "Essays and perspectives on AI research."}]}, {"id": "science", "name": "Science", "feeds": [{"title": "Quanta Magazine", "url": "https://www.quantamagazine.org/feed/", "site": "https://www.quantamagazine.org", "description": "Mathematics, physics, biology, and computer science."}, {"title": "Nature", "url": "https://www.nature.com/nature.rss", "site": "https://www.nature.com", "description": "The international journal of science."}, {"title": "ScienceDaily", "url": "https://www.sciencedaily.com/rss/all.xml", "site": "https://www.sciencedaily.com", "description": "Breaking science news from research institutions."}, {"title": "New Scientist", "url": "https://www.newscientist.com/feed/home/", "site": "https://www.newscientist.com", "description": "Science and technology news."}]}, {"id": "space", "name": "Space", "feeds": [{"title": "NASA", "url": "https://www.nasa.gov/feed/", "site": "https://www.nasa.gov", "description": "News and features from NASA."}, {"title": "Space.com", "url": "https://www.space.com/feeds/all", "site": "https://www.space.com", "description": "Space exploration, astronomy, and skywatching."}, {"title": "SpaceNews", "url": "https://spacenews.com/feed/", "site": "https://spacenews.com", "description": "The space industry and space policy."}, {"title": "The Planetary Society", "url": "https://www.planetary.org/rss/articles", "site": "https://www.planetary.org", "description": "Planetary science and space advocacy."}]}, {"id": "news", "name": "World news", "feeds": [{"title": "BBC News: World", "url": "https://feeds.bbci.co.uk/news/world/rss.xml", "site": "https://www.bbc.com/news/world", "description": "International news from the BBC."}, {"title": "NPR News", "url": "https://feeds.npr.org/1001/rss.xml", "site": "https://www.npr.org", "description": "Top stories from NPR."}, {"title": "The Guardian: World", "url": "https://www.theguardian.com/world/rss", "site": "https://www.theguardian.com/world", "description": "World news from The Guardian."}, {"title": "Al Jazeera", "url": "https://www.aljazeera.com/xml/rss/all.xml", "site": "https://www.aljazeera.com", "description": "News from around the world."}, {"title": "The New York Times", "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", "site": "https://www.nytimes.com", "description": "Top stories from the Times home page."}]}, {"id": "business", "name": "Business", "feeds": [{"title": "Stratechery", "url": "https://stratechery.com/feed/", "site": "https://stratechery.com", "description": "Ben Thompson on the strategy and business of technology."}, {"title": "The Economist: Latest", "url": "https://www.economist.com/latest/rss.xml", "site": "https://www.economist.com", "description": "The latest from The Economist."}, {"title": "Harvard Business Review", "url": "https://feeds.hbr.org/harvardbusiness", "site": "https://hbr.org", "description": "Management ideas and research."}, {"title": "Marginal Revolution", "url": "https://marginalrevolution.com/feed", "site": "https://marginalrevolution.com", "description": "Economics blog by Tyler Cowen and Alex Tabarrok."}]}, {"id": "design", "name": "Design", "feeds": [{"title": "Smashing Magazine", "url": "https://www.smashingmagazine.com/feed/", "site": "https://www.smashingmagazine.com", "description": "Web design and front-end development."}, {"title": "CSS-Tricks", "url": "https://css-tricks.com/feed/", "site": "https://css-tricks.com", "description": "Tips, tricks, and techniques on CSS."}, {"title": "A List Apart", "url": "https://alistapart.com/main/feed/", "site": "https://alistapart.com", "description": "Design, development, and meaning of web content."}, {"title": "Dezeen", "url": "https://www.dezeen.com/feed/", "site": "https://www.dezeen.com", "description": "Architecture and design magazine."}, {"title": "Nielsen Norman Group", "url": "https://www.nngroup.com/feed/rss/", "site": "https://www.nngroup.com", "description": "Evidence-based user experience research."}]}, {"id": "apple", "name": "Apple", "feeds": [{"title": "Daring Fireball", "url": "https://daringfireball.net/feeds/main", "site": "https://daringfireball.net", "description": "John Gruber on Apple, technology, and design."}, {"title": "MacRumors", "url": "https://feeds.macrumors.com/MacRumors-All", "site": "https://www.macrumors.com", "description": "Apple news and rumors."}, {"title": "9to5Mac", "url": "https://9to5mac.com/feed/", "site": "https://9to5mac.com", "description": "Apple news, reviews, and how-tos."}, {"title": "Six Colors", "url": "https://sixcolors.com/feed/", "site": "https://sixcolors.com", "description": "Jason Snell and Dan Moren on Apple and technology."}, {"title": "Apple Newsroom", "url": "https://www.apple.com/newsroom/rss-feed.rss", "site": "https://www.apple.com/newsroom/", "description": "Official news from Apple."}]}, {"id": "gaming", "name": "Gaming", "feeds": [{"title": "Polygon", "url": "https://www.polygon.com/rss/index.xml", "site": "https://www.polygon.com", "description": "Video games, entertainment, and culture."}, {"title": "Rock Paper Shotgun", "url": "https://www.rockpapershotgun.com/feed", "site": "https://www.rockpapershotgun.com", "description": "PC gaming news and reviews."}, {"title": "Kotaku", "url": "https://kotaku.com/rss", "site": "https://kotaku.com", "description": "Gaming news and culture."}, {"title": "IGN", "url": "https://feeds.ign.com/ign/all", "site": "https://www.ign.com", "description": "Games, movies, and TV."}]}];
+  const discoverPic = (a, b) =>
+    "data:image/svg+xml;utf8," + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='300' height='200'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${a}'/><stop offset='1' stop-color='${b}'/></linearGradient></defs><rect width='300' height='200' fill='url(#g)'/><circle cx='220' cy='70' r='38' fill='rgba(255,255,255,0.25)'/><path d='M0 160 L90 100 L170 150 L240 110 L300 140 L300 200 L0 200Z' fill='rgba(0,0,0,0.22)'/></svg>`);
+  const DISCOVER_ITEMS = [
+    { title: "The quiet return of the RSS reader", author: "Nilay Patel", image_url: discoverPic("#f97316", "#be185d"), url: "https://example.com/1", published_at: D.mins(42) },
+    { title: "What we learned shipping a feed parser in Rust", author: "Emma Roth", image_url: discoverPic("#3b82f6", "#1e1b4b"), url: "https://example.com/2", published_at: D.mins(60 * 5) },
+    { title: "A field guide to Atom, RSS 2.0 and JSON Feed", author: "Tom Warren", image_url: null, url: "https://example.com/3", published_at: D.mins(60 * 26) },
+    { title: "Why your blog should still have a feed, even in 2026, and how to make one people actually subscribe to", author: "Dan Seifert", image_url: discoverPic("#10b981", "#064e3b"), url: "https://example.com/4", published_at: D.mins(60 * 29) },
+    { title: "Notes from a week without algorithms", author: null, image_url: discoverPic("#a855f7", "#312e81"), url: "https://example.com/5", published_at: D.mins(60 * 24 * 4) },
+    { title: "The best e-readers for people who mostly read the web", author: "Sean Hollister", image_url: discoverPic("#64748b", "#0f172a"), url: "https://example.com/6", published_at: D.mins(60 * 24 * 9) },
+  ];
+  const DISCOVER_SEARCH_EXTRA = [
+    { title: "Inside Rust", url: "https://blog.rust-lang.org/inside-rust/feed.xml", site: "https://blog.rust-lang.org/inside-rust", description: "Updates from the Rust project's teams and working groups.", subscribers: 8400 },
+    { title: "Rust Blog", url: "https://blog.rust-lang.org/feed.xml", site: "https://blog.rust-lang.org", description: "Empowering everyone to build reliable and efficient software.", subscribers: 52100 },
+  ];
+  const discoverEntry = (f) => ({
+    url: f.url,
+    title: f.title,
+    site_url: f.site,
+    description: f.description || null,
+    icon_url: null,
+    subscribers: f.subscribers ?? null,
+    items: [],
+    already_subscribed: feeds.some((x) => x.url === f.url) || f.title === "Hacker News",
+  });
+  const DISCOVER_SITE = (query) => {
+    const host = query.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+    const site = "https://" + host;
+    return [
+      { ...discoverEntry({ title: "The Verge", url: site + "/rss/index.xml", site, description: "The Verge is about technology and how it makes us feel." }), items: DISCOVER_ITEMS },
+      { ...discoverEntry({ title: "The Verge: Tech", url: site + "/rss/tech/index.xml", site, description: "Tech news from The Verge." }), items: DISCOVER_ITEMS.slice(1) },
+      { ...discoverEntry({ title: "The Verge: Science", url: site + "/rss/science/index.xml", site, description: "Science coverage from The Verge." }), items: DISCOVER_ITEMS.slice(2) },
+    ];
+  };
+
   const articles = D.ARTICLES.map(([title, feedId, ago, author, priority, reason, themeId], i) => {
     const feed = feeds.find((f) => f.id === feedId);
     return {
@@ -301,6 +337,20 @@
 
   const HANDLERS = {
     list_feeds: () => feeds,
+    // Feed discovery: the built-in catalog, a canned search, and a canned site.
+    feed_catalog: () => DISCOVER_CATALOG.map((t) => ({ ...t, feeds: t.feeds.map(discoverEntry) })),
+    search_feeds: ({ query }) => {
+      const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+      const hits = DISCOVER_CATALOG.flatMap((t) => t.feeds.filter((f) =>
+        words.every((w) => `${f.title} ${f.description} ${t.name}`.toLowerCase().includes(w))));
+      return [...hits.map(discoverEntry), ...DISCOVER_SEARCH_EXTRA.map(discoverEntry)];
+    },
+    discover_feeds: ({ query }) => DISCOVER_SITE(query),
+    preview_feed: ({ url }) => ({ ...discoverEntry({ title: "", url, site: url, description: "" }), items: DISCOVER_ITEMS }),
+    add_feed: async ({ url }) => {
+      await new Promise((r) => setTimeout(r, 400));
+      return { id: "new-" + url, title: url, url };
+    },
     list_folders: () => folders,
     get_settings: () => SETTINGS,
     // Persist, so a picker in a popover shows what was just chosen.
@@ -312,9 +362,11 @@
     get_articles: ({ filter }) => filterArticles(filter),
     count_articles: ({ filter }) => filterArticles(filter).length,
     get_article: ({ articleId }) => articles.find((a) => a.id === articleId) || articles[0],
-    get_inbox_articles: ({ minPriority, limit, offset }) => {
+    get_inbox_articles: ({ minPriority, limit, offset, feedIds, isRead }) => {
       let out = inboxOrder;
       if (minPriority != null) out = out.filter((a) => a.priority >= minPriority);
+      if (feedIds) out = out.filter((a) => feedIds.includes(a.feed_id));
+      if (isRead === false) out = out.filter((a) => !a.is_read);
       const off = offset || 0;
       return limit != null ? out.slice(off, off + limit) : out.slice(off);
     },

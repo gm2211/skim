@@ -26,7 +26,6 @@ struct ArticleListView: View {
     @State private var chatMessagesBySession: [String: [AIChatMessage]] = [:]
     @State private var activeChatInitialMessage: String? = nil
     @State private var activeSummaryConfiguration: Article?
-    @State private var showAIInbox = false
     @State private var showSearch = false
     @FocusState private var isSearchFocused: Bool
     /// Shown when user triggers an AI feature before accepting the disclaimer.
@@ -122,20 +121,11 @@ struct ArticleListView: View {
             guard case .success(let urls) = result, let url = urls.first else { return }
             Task { await model.importOPML(url: url) }
         }
-        .sheet(isPresented: $showAddFeed) {
-            AddFeedSheet(
-                isPresented: $showAddFeed,
-                onAdd: { url in
-                    dismissTextEntry()
-                    Task { await model.addFeed(urlString: url) }
-                },
-                onImportOPML: {
-                    presentImporter()
-                }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(SkimStyle.chrome)
+        .navigationDestination(isPresented: $showAddFeed) {
+            DiscoverView(onImportOPML: {
+                presentImporter()
+            })
+            .environmentObject(model)
         }
         .sheet(isPresented: $showAutoGroup) {
             AutoGroupSheet(isPresented: $showAutoGroup)
@@ -196,10 +186,6 @@ struct ArticleListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
                 .onDisappear { activeChatInitialMessage = nil }
-        }
-        .navigationDestination(isPresented: $showAIInbox) {
-            AIInboxView()
-                .environmentObject(model)
         }
         .fullScreenCover(isPresented: $showAIDisclaimerGate) {
             AIBootDisclaimerView { dontShowAgain in
@@ -367,11 +353,28 @@ struct ArticleListView: View {
         }
     }
 
+    /// Sort the current list For you (what the AI Inbox used to be). Starred
+    /// and Recent are not ranked lists, so they switch to Unread.
     private func presentAIInbox() {
         gatedAI {
             dismissTextEntry()
-            showAIInbox = true
+            showToday = false
+            if !model.canSortForYou {
+                model.searchQuery = ""
+                if model.listMode != .unread && model.listMode != .all { model.listMode = .unread }
+                Task { await model.reloadArticles() }
+            }
+            model.listSort = .forYou
         }
+    }
+
+    private var listSortBinding: Binding<ArticleListSort> {
+        Binding(
+            get: { model.listSort },
+            set: { sort in
+                if sort == .forYou { presentAIInbox() } else { model.listSort = .newest }
+            }
+        )
     }
 
     private var openFeedPickerGesture: some Gesture {
@@ -434,11 +437,21 @@ struct ArticleListView: View {
                     Button("Chat with Articles", systemImage: SkimIcon.chat) {
                         presentArticleChat()
                     }
-                    Button("AI Inbox", systemImage: SkimIcon.aiInbox) {
-                        presentAIInbox()
+                    if !showToday && model.canSortForYou {
+                        Picker(selection: listSortBinding) {
+                            Label("Newest", systemImage: SkimIcon.recent).tag(ArticleListSort.newest)
+                            Label("For you", systemImage: SkimIcon.aiInbox).tag(ArticleListSort.forYou)
+                        } label: {
+                            Label("Sort", systemImage: "arrow.up.arrow.down")
+                        }
+                        .pickerStyle(.menu)
+                    } else {
+                        Button("For you", systemImage: SkimIcon.aiInbox) {
+                            presentAIInbox()
+                        }
                     }
                     Divider()
-                    Button("Add RSS Feed", systemImage: SkimIcon.addFeed) {
+                    Button("Discover Feeds", systemImage: SkimIcon.addFeed) {
                         dismissTextEntry()
                         showAddFeed = true
                     }
@@ -582,7 +595,7 @@ struct ArticleListView: View {
                 }
 
                 VStack(spacing: 10) {
-                    Button("Add RSS Feed") {
+                    Button("Discover Feeds") {
                         dismissTextEntry()
                         showAddFeed = true
                     }
@@ -600,6 +613,12 @@ struct ArticleListView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 32)
             .padding(.bottom, 18)
+        } else if model.isForYou {
+            AIInboxView()
+                .environmentObject(model)
+                // A new feed or folder is a new ranking.
+                .id("\(model.selectedFeedID ?? "")|\(model.selectedFolderID ?? "")")
+                .simultaneousGesture(openFeedPickerGesture)
         } else {
             List {
                 ForEach(groupedArticles, id: \.label) { group in
@@ -623,7 +642,10 @@ struct ArticleListView: View {
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(SkimStyle.secondary)
                             .tracking(1.15)
-                            .padding(.horizontal, 72)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .padding(.leading, 72)
+                            .padding(.trailing, 18)
                             .padding(.top, 13)
                             .padding(.bottom, 7)
                     }
@@ -708,9 +730,9 @@ struct ArticleListView: View {
         case .search:
             return isSearchActive && !showToday
         case .aiInbox:
-            return false
+            return !showToday && model.isForYou
         case .unread, .all, .starred, .recent:
-            return !showToday && !isSearchActive && model.selectedFolderID == nil && model.listMode == item.listMode
+            return !showToday && !isSearchActive && !model.isForYou && model.selectedFolderID == nil && model.listMode == item.listMode
         }
     }
 
@@ -729,6 +751,7 @@ struct ArticleListView: View {
             presentAIInbox()
         case .unread, .all, .starred, .recent:
             showToday = false
+            model.listSort = .newest
             model.selectedFolderID = nil
             if let mode = item.listMode {
                 model.listMode = mode
@@ -853,8 +876,11 @@ private struct FeedPickerSheet: View {
                             Task { await model.reloadArticles() }
                         }
 
-                        pickerRow(iconSystemName: SkimIcon.aiInbox, title: "AI Inbox", count: model.totalUnreadCount, isSelected: false) {
+                        pickerRow(iconSystemName: SkimIcon.aiInbox, title: "For you", count: model.totalUnreadCount, isSelected: model.selectedFeedID == nil && model.selectedFolderID == nil && model.isForYou) {
+                            model.selectedFeedID = nil
+                            model.selectedFolderID = nil
                             onAIInbox()
+                            isPresented = false
                         }
                     }
                     .padding(.top, 14)
@@ -960,7 +986,7 @@ private struct FeedPickerSheet: View {
             }
             Spacer()
             BorderlessIconButton(systemName: SkimIcon.chat, title: "Chat", size: 23, tapSize: 42, action: onChat)
-            BorderlessIconButton(systemName: SkimIcon.addFeed, title: "Add RSS Feed", size: 23, tapSize: 42, action: onAddFeed)
+            BorderlessIconButton(systemName: SkimIcon.addFeed, title: "Discover Feeds", size: 23, tapSize: 42, action: onAddFeed)
         }
         // Leading 11 centers the 42pt gear button on the picker rows' icon
         // column below (20pt row inset + 12pt half-tile = 32pt = 11 + 21).
@@ -2323,171 +2349,6 @@ private enum FoundationModelFeedOrganizer {
 }
 #endif
 
-private struct AddFeedSheet: View {
-    private enum AddSource: String {
-        case feedURL
-        case feedly
-    }
-
-    @Binding var isPresented: Bool
-    @State private var feedURL = ""
-    @State private var addSource: AddSource = .feedURL
-    @FocusState private var isFocused: Bool
-
-    var onAdd: (String) -> Void
-    var onImportOPML: () -> Void
-
-    private let feedlyExportURL = URL(string: "https://feedly.com/i/back?nextUri=%2Fopml")!
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Add Feed")
-                            .font(.system(size: 26, weight: .heavy))
-                            .foregroundStyle(SkimStyle.text)
-                        Text("Add one feed or import your Feedly subscriptions.")
-                            .font(.system(size: 16, weight: .regular))
-                            .foregroundStyle(SkimStyle.secondary)
-                    }
-
-                    Spacer()
-
-                    Button {
-                        isPresented = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(SkimStyle.secondary)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
-                }
-
-                Picker("Add source", selection: $addSource) {
-                    Text("Feed URL").tag(AddSource.feedURL)
-                    Text("Feedly").tag(AddSource.feedly)
-                }
-                .pickerStyle(.segmented)
-                .accessibilityLabel("Add source")
-
-                if addSource == .feedURL {
-                    TextField("https://example.com/feed.xml", text: $feedURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                        .textContentType(.URL)
-                        .font(.system(size: 19, weight: .regular))
-                        .foregroundStyle(SkimStyle.text)
-                        .focused($isFocused)
-                        .padding(.horizontal, 16)
-                        .frame(height: 56)
-                        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(SkimStyle.separator, lineWidth: 1)
-                        }
-
-                    HStack(spacing: 14) {
-                        Button("Import OPML") {
-                            close()
-                            onImportOPML()
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(SkimStyle.accent)
-                        .frame(minHeight: 44)
-
-                        Spacer()
-
-                        Button("Add Feed") {
-                            let value = feedURL
-                            close()
-                            onAdd(value)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .disabled(feedURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Import from Feedly")
-                            .font(.system(size: 19, weight: .bold))
-                            .foregroundStyle(SkimStyle.text)
-
-                        Button {} label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "person.crop.circle")
-                                Text("Sign in with Feedly")
-                                    .font(.body.weight(.semibold))
-                                Spacer(minLength: 8)
-                                Text("Coming soon")
-                                    .font(.caption.weight(.semibold))
-                                    .padding(.horizontal, 9)
-                                    .padding(.vertical, 5)
-                                    .background(SkimStyle.surface, in: Capsule())
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(SkimStyle.accent)
-                        .disabled(true)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Sign in with Feedly, coming soon")
-                        .accessibilityHint("Feedly sign-in is unavailable yet. Import a Feedly OPML export below.")
-
-                        Text("Feedly developer access costs $96/year.")
-                            .font(.footnote)
-                            .foregroundStyle(SkimStyle.secondary)
-
-                        Text("Sign in to Feedly, download your Feedly OPML, then choose the file here.")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundStyle(SkimStyle.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Link(destination: feedlyExportURL) {
-                            Label("Open Feedly export", systemImage: SkimIcon.openExternal)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(SkimStyle.accent)
-                        .accessibilityHint("Opens Feedly's export page")
-
-                        Button("Choose OPML file") {
-                            close()
-                            onImportOPML()
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(SkimStyle.accent)
-                        .frame(minHeight: 44, alignment: .leading)
-                    }
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 26)
-            .padding(.bottom, 24)
-        }
-        .onChange(of: addSource) { _, source in
-            if source == .feedly {
-                isFocused = false
-                dismissUIKitKeyboard()
-            }
-        }
-        .onDisappear {
-            isFocused = false
-            dismissUIKitKeyboard()
-        }
-    }
-
-    private func close() {
-        isFocused = false
-        dismissUIKitKeyboard()
-        isPresented = false
-    }
-}
-
 private struct FeedIcon: View {
     var feed: Feed
     var size: CGFloat = 24
@@ -2814,7 +2675,7 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
         case .all: "All"
         case .starred: "Starred"
         case .recent: "Recent"
-        case .aiInbox: "AI Inbox"
+        case .aiInbox: "For you"
         case .search: "Search"
         }
     }

@@ -1990,3 +1990,24 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     #expect(await operationThrows { try await store.persistEdition(written.edition, items: changed) })
     #expect(try await store.todayEdition(id: original.id) == written)
 }
+
+@Test func todayEditorialIsStoredCarriedAndMerged() async throws {
+    let store = try temporaryStore()
+    try await seedTodayStory(store: store, storyID: "editorial", sourceCount: 2, timestamp: 100)
+    let edition = try await store.getOrGenerateTodayEdition(startsAt: Date(timeIntervalSince1970: 0),
+        endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 500))
+    let item = try #require(edition.items.first)
+    let member = try #require(item.sourceArticles.first?.articleID)
+    let editorial = TodayEditorial(theme: "Space", summary: "The mission launched.", sources: [.init(articleID: member, quote: "The mission launched on 10 September.")])
+    let written = try await store.setTodayEditionItemEditorial(editionID: edition.id, storyID: item.snapshot.storyID, editorial: editorial)
+    #expect(written.items.first?.snapshot.editorial == editorial)
+    #expect(try await store.todayEdition(id: edition.id)?.items.first?.snapshot.editorial == editorial)
+    let outside = TodayEditorial(theme: "Space", summary: "x", sources: [.init(articleID: "outside", quote: "q")])
+    #expect(await operationThrows { try await store.setTodayEditionItemEditorial(editionID: edition.id, storyID: item.snapshot.storyID, editorial: outside) })
+    // A later page update keeps the summary already on screen.
+    let merged = TodayEditionMerge.consumption(current: written, response: edition)
+    #expect(merged.items.first?.snapshot.editorial == editorial)
+    #expect(TodayEditionMerge.ledes(current: edition, response: written).items.first?.snapshot.editorial == editorial)
+    // Re-persisting the frozen snapshot is not a conflict.
+    try await store.persistEdition(written.edition, items: written.items.map(\.snapshot))
+}

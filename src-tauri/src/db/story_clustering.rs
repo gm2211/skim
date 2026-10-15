@@ -770,21 +770,38 @@ pub fn rank_stories(
         return Ok(Vec::new());
     }
     let since = now.saturating_sub(ROLLING_WINDOW_SECONDS);
+    // Today learns from the same reader signals as the AI Inbox: reading
+    // time, chats, stars, pins and dismissals, weighted by the shared policy.
+    let taste = super::inbox_rank::load_taste(conn)?;
+    let strength = taste.strength();
+    let mut reports: HashMap<String, Vec<(String, String)>> = HashMap::new();
+    {
+        let mut members = conn.prepare(
+            "SELECT sa.story_id, member.feed_id, member.title
+             FROM stories s
+             JOIN story_articles sa ON sa.story_id = s.id
+             JOIN articles member ON member.id = sa.article_id
+             WHERE s.last_activity_at >= ?1",
+        )?;
+        let rows = members.query_map(params![since], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+        })?;
+        for row in rows {
+            let (story_id, feed_id, title) = row?;
+            reports.entry(story_id).or_default().push((feed_id, title));
+        }
+    }
     let mut statement = conn.prepare(
         "SELECT s.id, s.last_activity_at, representative.feed_id,
                 COUNT(DISTINCT CASE WHEN sa.membership_type <> 'duplicate'
                                     THEN member.feed_id END),
                 COUNT(member.id),
-                COALESCE(state.is_followed, 0),
                 COALESCE(SUM(CASE WHEN member.is_starred = 1 THEN 1 ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN interaction.feedback = 'more' THEN 1
-                                  WHEN interaction.feedback = 'less' THEN -1 ELSE 0 END), 0),
-                COALESCE(MAX(interaction.priority_override), 0)
+                COALESCE(MAX(CASE WHEN interaction.priority_override >= 5 THEN 1 ELSE 0 END), 0)
          FROM stories s
          JOIN story_articles sa ON sa.story_id = s.id
          JOIN articles member ON member.id = sa.article_id
          LEFT JOIN articles representative ON representative.id = s.representative_article_id
-         LEFT JOIN story_user_state state ON state.story_id = s.id
          LEFT JOIN article_interactions interaction ON interaction.article_id = member.id
          WHERE s.last_activity_at >= ?1
          GROUP BY s.id
@@ -792,19 +809,18 @@ pub fn rank_stories(
     )?;
     let mut candidates = statement
         .query_map(params![since], |row| {
+            let story_id: String = row.get(0)?;
             let last_activity: i64 = row.get(1)?;
             let distinct_sources: i64 = row.get(3)?;
             let age = now.saturating_sub(last_activity).max(0) as f64;
-            let followed: i64 = row.get(5)?;
-            let starred: i64 = row.get(6)?;
-            let feedback: i64 = row.get(7)?;
-            let priority: i64 = row.get(8)?;
-            let preference = followed as f64 * 3.0
-                + starred.min(2) as f64 * 0.5
-                + feedback as f64
-                + priority as f64 * 0.25;
+            let starred: i64 = row.get(5)?;
+            let pinned: i64 = row.get(6)?;
+            let affinity = reports.get(&story_id).map_or(0.0, |members| {
+                taste.story_affinity(members.iter().map(|(feed, title)| (feed.as_str(), title.as_str())))
+            });
+            let preference = super::inbox_rank::story_preference(starred, pinned != 0, affinity, strength);
             Ok(RankCandidate {
-                story_id: row.get(0)?,
+                story_id,
                 score: story_policy::score(distinct_sources, age, ROLLING_WINDOW_SECONDS as f64, preference),
                 distinct_sources,
                 raw_articles: row.get(4)?,
@@ -976,6 +992,26 @@ mod tests {
         assert_eq!(insert_and_cluster(&conn, &first).story_id, insert_and_cluster(&conn, &second).story_id);
         let conflicting = article("other", "feed-3", "Rocket launches with BlueOrigin", "https://three.test/rocket", "The rocket launched successfully.", 1002);
         assert!(!entity_guard(&article_features(&second), &article_features(&conflicting)));
+    }
+
+    #[test]
+    fn today_ranks_with_the_inbox_taste_model() {
+        let conn = setup();
+        // Forty deep reads in one feed: the taste model fully trusts it.
+        for index in 0..40 {
+            let id = format!("history-{index}");
+            queries::insert_article(&conn, &article(&id, "feed-1", &format!("Volcano eruption update {index}"),
+                &format!("https://one.test/history/{index}"), "Lava flows.", 10)).unwrap();
+            queries::record_reading_time(&conn, &id, 300, 20).unwrap();
+        }
+        let liked = insert_and_cluster(&conn, &article("z-liked", "feed-1", "Volcano eruption reshapes island coast",
+            "https://one.test/volcano", "The volcano erupted again.", 1000));
+        let other = insert_and_cluster(&conn, &article("a-other", "feed-3", "Quarterly bond yields tick upward",
+            "https://three.test/bonds", "Bond yields rose.", 1000));
+        let ranked = rank_stories(&conn, 1001, 2).unwrap();
+        let score = |id: &str| ranked.iter().find(|story| story.story_id == id).unwrap().score;
+        assert!(score(&liked.story_id) > score(&other.story_id) + 2.0,
+            "liked {} vs other {}", score(&liked.story_id), score(&other.story_id));
     }
 
     #[test]

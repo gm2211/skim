@@ -262,6 +262,7 @@ impl AiProvider for ChatGptSubscriptionProvider {
             usage: None,
             tool_uses: Vec::new(),
             stop_reason: None,
+            raw_content: None,
         })
     }
 

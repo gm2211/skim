@@ -36,6 +36,33 @@ struct AIResultAnswer {
     var articles: [Article]
 }
 
+/// Where a quoted passage in a chat question came from: a sentence of an
+/// earlier Skim answer, or a passage the reader highlighted in the article.
+enum ChatQuoteSource: Sendable, Equatable {
+    case answer
+    case article
+
+    /// Lead line before the quoted passage in the prompt.
+    var promptLead: String {
+        switch self {
+        case .answer: "Replying to Skim"
+        case .article: "About this passage from the article"
+        }
+    }
+
+    /// Caption above the quote in the composer and the sent bubble.
+    var caption: String {
+        switch self {
+        case .answer: "Replying to Skim"
+        case .article: "From the article"
+        }
+    }
+
+    func prompt(quote: String, question: String) -> String {
+        "\(promptLead):\n> \(quote.replacingOccurrences(of: "\n", with: "\n> "))\n\n\(question)"
+    }
+}
+
 struct AIChatConversation: Sendable {
     struct Turn: Sendable {
         enum Role: String, Sendable {
@@ -46,19 +73,21 @@ struct AIChatConversation: Sendable {
         var role: Role
         var text: String
         var quotedText: String?
+        var quoteSource: ChatQuoteSource = .answer
 
         var promptText: String {
             guard let quotedText, !quotedText.isEmpty else { return text }
-            return "Replying to Skim:\n> \(quotedText.replacingOccurrences(of: "\n", with: "\n> "))\n\n\(text)"
+            return quoteSource.prompt(quote: quotedText, question: text)
         }
     }
 
     var priorTurns: [Turn]
     var latestQuestion: String
     var latestQuote: String?
+    var latestQuoteSource: ChatQuoteSource
     var latestPromptText: String {
         guard let latestQuote, !latestQuote.isEmpty else { return latestQuestion }
-        return "Replying to Skim:\n> \(latestQuote.replacingOccurrences(of: "\n", with: "\n> "))\n\n\(latestQuestion)"
+        return latestQuoteSource.prompt(quote: latestQuote, question: latestQuestion)
     }
     var generatedSummaryContext: String?
     var priorArticleReferences: [Article]
@@ -66,8 +95,9 @@ struct AIChatConversation: Sendable {
     var priorArticleHandles: [Int]
     var articleHandleRegistry: [String: Int]
 
-    init(latestQuestion: String, quotedText: String? = nil, priorMessages: [AIChatMessage] = [], generatedSummaryContext: String? = nil) {
+    init(latestQuestion: String, quotedText: String? = nil, quoteSource: ChatQuoteSource = .answer, priorMessages: [AIChatMessage] = [], generatedSummaryContext: String? = nil) {
         self.generatedSummaryContext = generatedSummaryContext
+        self.latestQuoteSource = quoteSource
         let previousAnswer = priorMessages.last { $0.role == .assistant && !$0.isError }
         self.priorArticleReferences = previousAnswer?.referencedArticles ?? []
         self.priorArticleContext = previousAnswer?.contextArticles ?? []
@@ -91,7 +121,8 @@ struct AIChatConversation: Sendable {
                 Turn(
                     role: message.role == .user ? .user : .assistant,
                     text: message.text,
-                    quotedText: message.quotedText
+                    quotedText: message.quotedText,
+                    quoteSource: message.quoteSource
                 )
             }
     }
@@ -136,6 +167,9 @@ struct AIChatRequest: Identifiable {
     var title: String
     var placeholder: String
     var generatedSummaryContext: String? = nil
+    /// A passage the reader highlighted in the article; the chat opens with it
+    /// quoted above the composer, ready for a question about it.
+    var initialArticleQuote: String? = nil
     var answer: (AIChatConversation) async throws -> AIChatAnswer
 }
 
@@ -677,6 +711,38 @@ enum NativeAI {
         return CatchUpText.fallbackLede(resolved.map(\.plainBody))
     }
 
+    /// The story's AI summary, written from its reports the way the desktop
+    /// writes it: two or three sentences with one exact supporting quote from
+    /// each report. Returns nil when no report has enough text to summarize;
+    /// throws when the model can't be reached or its answer fails the check.
+    static func todayEditorial(
+        headline: String,
+        articles: [Article],
+        themes: [String],
+        settings: AppSettings
+    ) async throws -> TodayEditorial? {
+        // Apple's on-device model has a small context window, so it reads two
+        // shorter reports, as it does for ledes.
+        let onDevice = settings.ai.provider == "foundation-models"
+        let characters = onDevice ? 1_500 : TodayLedePolicy.textCharacters
+        let reports = articles
+            .map { article in
+                TodayEditorialPolicy.Report(
+                    articleID: article.id,
+                    body: String(String.UnicodeScalarView(article.plainBody.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars.prefix(characters))))
+            }
+            .filter { TodayEditorialPolicy.usable($0.body) }
+            .prefix(onDevice ? 2 : TodayLedePolicy.maxArticles)
+        guard !reports.isEmpty else { return nil }
+        let response = try await complete(
+            settings: settings,
+            instructions: TodayEditorialPolicy.instructions,
+            prompt: TodayEditorialPolicy.prompt(headline: headline, reports: Array(reports), themes: themes),
+            maxTokens: TodayEditorialPolicy.maxTokens, jsonMode: true, temperature: 0)
+        try Task.checkCancellation()
+        return try TodayEditorialPolicy.validate(response, reports: Array(reports))
+    }
+
     static func catchUpPreview(
         headline: String,
         articles: [Article],
@@ -1019,7 +1085,7 @@ enum NativeAI {
             Output ONLY JSON:
             {"triage":[{"id":1,"importance":3,"relevance":3,"reason":"short reason"}]}
             """,
-            maxTokens: articles.count * 45 + 200,
+            maxTokens: inboxRatingsMaxTokens(count: articles.count),
             jsonMode: true,
             temperature: 0.3
         )
@@ -1032,8 +1098,16 @@ enum NativeAI {
         return ratings
     }
 
+    /// Output budget for rating `count` articles. An entry with its reason runs to about
+    /// 50 tokens; 45 per article left no slack, so a model that wrote longer reasons
+    /// was cut off mid-array and the whole batch failed to parse.
+    static func inboxRatingsMaxTokens(count: Int) -> Int {
+        count * 80 + 300
+    }
+
     /// Tolerant decode of `{"triage":[{id, importance, relevance, reason}]}`;
     /// numbers may arrive as strings and single-axis `priority` fills both axes.
+    /// A response cut off mid-array still yields the entries it finished.
     static func parseInboxRatings(_ raw: String, count: Int) -> [Int: InboxRating] {
         func int(_ value: Any?) -> Int? {
             if let n = value as? Int { return n }
@@ -1042,14 +1116,16 @@ enum NativeAI {
             return nil
         }
         let cleaned = repairTriageJSON(raw)
-        guard let data = cleaned.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data)
-        else { return [:] }
         let entries: [[String: Any]]
-        if let object = json as? [String: Any] {
-            entries = (object["triage"] ?? object["ratings"] ?? object["articles"]) as? [[String: Any]] ?? []
+        if let data = cleaned.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) {
+            if let object = json as? [String: Any] {
+                entries = (object["triage"] ?? object["ratings"] ?? object["articles"]) as? [[String: Any]] ?? []
+            } else {
+                entries = json as? [[String: Any]] ?? []
+            }
         } else {
-            entries = json as? [[String: Any]] ?? []
+            entries = completeTriageEntries(raw)
         }
         var out: [Int: InboxRating] = [:]
         for entry in entries {
@@ -1067,6 +1143,45 @@ enum NativeAI {
             )
         }
         return out
+    }
+
+    /// The objects a truncated `{"triage":[{…},{…},{"id":` response finished, in order.
+    /// Scans from the first `[` and keeps each balanced `{…}` directly inside it.
+    static func completeTriageEntries(_ raw: String) -> [[String: Any]] {
+        guard let arrayStart = raw.firstIndex(of: "[") else { return [] }
+        var entries: [[String: Any]] = []
+        var depth = 0
+        var inString = false
+        var escaped = false
+        var objectStart: String.Index?
+        var idx = raw.index(after: arrayStart)
+        while idx < raw.endIndex {
+            let ch = raw[idx]
+            if escaped {
+                escaped = false
+            } else if ch == "\\" && inString {
+                escaped = true
+            } else if ch == "\"" {
+                inString.toggle()
+            } else if !inString {
+                if ch == "{" {
+                    if depth == 0 { objectStart = idx }
+                    depth += 1
+                } else if ch == "}" {
+                    depth -= 1
+                    if depth == 0, let start = objectStart,
+                       let data = String(raw[start...idx]).data(using: .utf8),
+                       let entry = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        entries.append(entry)
+                    }
+                    if depth < 0 { break }
+                } else if ch == "]" && depth == 0 {
+                    break
+                }
+            }
+            idx = raw.index(after: idx)
+        }
+        return entries
     }
 
     // MARK: - Structured triage JSON (used by auto-group and future JSON consumers)
@@ -1182,7 +1297,7 @@ enum NativeAI {
             // Pass wordCount into instructions so the system prompt carries the full directive.
             // The user turn contains only the article body to avoid FM echoing the instruction
             // text back as part of the response (a known issue with some Foundation Models builds).
-            let result = try await complete(
+            let result = AIRequestPolicy.completeSummary(try await complete(
                 settings: settings,
                 instructions: summaryInstructions(settings.ai, wordCount: wordCount),
                 prompt: """
@@ -1190,8 +1305,8 @@ enum NativeAI {
 
                 \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
                 """,
-                maxTokens: AIRequestPolicy.summaryPlan(settings.ai).fullMaxTokens
-            )
+                maxTokens: AIRequestPolicy.summaryRequestMaxTokens(settings.ai)
+            ))
             try Task.checkCancellation()
             guard publication.publish({ SummaryLRUCache.shared.set(key, value: result) }) else { throw CancellationError() }
             return result
@@ -1226,9 +1341,9 @@ enum NativeAI {
             \(articleDigest([article], limit: 1, wordsPerArticle: 2200))
             """
             let instructions = summaryInstructions(settings.ai, wordCount: wordCount)
-            let maxTok = AIRequestPolicy.summaryPlan(settings.ai).fullMaxTokens
+            let maxTok = AIRequestPolicy.summaryRequestMaxTokens(settings.ai)
 
-            let result: String
+            var result: String
             if settings.ai.provider == "mlx" {
                 result = try await NativeMLX.stream(
                     settings: settings.ai,
@@ -1248,6 +1363,7 @@ enum NativeAI {
                     maxTokens: maxTok
                 )
             }
+            result = AIRequestPolicy.completeSummary(result)
 
             try Task.checkCancellation()
             guard publication.publish({ SummaryLRUCache.shared.set(key, value: result) }) else { throw CancellationError() }
@@ -1265,7 +1381,7 @@ enum NativeAI {
         let wordCount = summaryTargetWordCount(ai)
         return [
             article.id,
-            "summary-v4",
+            "summary-v5",
             AIRequestPolicy.summaryPlan(ai).cacheIdentity,
             AIRequestPolicy.summarySourceFingerprint(articleDigest([article], limit: 1, wordsPerArticle: 2200)),
             ai.provider,
@@ -1602,7 +1718,7 @@ enum NativeAI {
 
             \(conversation.promptSection)
             """,
-            maxTokens: 650,
+            maxTokens: AIRequestPolicy.requestMaxTokens(650, provider: settings.ai.provider),
             enableWebSearch: toolsOK,
             urlSession: urlSession,
             messages: buildLocalChatMessages(
@@ -1721,7 +1837,7 @@ enum NativeAI {
 
             \(conversation.promptSection)
             """,
-            maxTokens: 850,
+            maxTokens: AIRequestPolicy.requestMaxTokens(850, provider: settings.ai.provider),
             enableWebSearch: toolsOK,
             urlSession: urlSession,
             messages: buildLocalChatMessages(
@@ -2377,6 +2493,15 @@ enum NativeAI {
         if anthropicModelAcceptsTemperature(model) {
             body["temperature"] = temperature ?? 0.2
         }
+        if anthropicModelThinksByDefault(model) {
+            // 5-series models think before answering unless told otherwise, and the
+            // thinking counts against `max_tokens`. At the default effort a long article
+            // context could spend a chat's whole budget thinking and return no text
+            // ("The Claude response was empty."). Low effort keeps thinking short, and
+            // the floor leaves room for the answer after it.
+            body["output_config"] = ["effort": "low"]
+            body["max_tokens"] = max(maxTokens, anthropicThinkingMaxTokensFloor)
+        }
         if let tools {
             body["tools"] = tools
         }
@@ -2406,17 +2531,47 @@ enum NativeAI {
     /// older models known to take it (Claude 3.x and 4.0–4.6); anything unrecognised gets
     /// the API's default sampling rather than a failed request.
     static func anthropicModelAcceptsTemperature(_ model: String) -> Bool {
+        guard let version = anthropicModelVersion(model) else { return false }
+        if version.major < 4 { return true }
+        return version.major == 4 && version.minor <= 6
+    }
+
+    /// Every 5-series model (Sonnet 5.5, Opus 5.5, Haiku 5.5, Fable…) runs adaptive
+    /// thinking when the request doesn't mention it, and all of them take
+    /// `output_config.effort`. Older models think only when asked, and some (Sonnet 4.5,
+    /// Haiku 4.5) reject `effort`, so they get neither.
+    static func anthropicModelThinksByDefault(_ model: String) -> Bool {
+        guard let version = anthropicModelVersion(model) else { return false }
+        return version.major >= 5
+    }
+
+    /// Smallest `max_tokens` sent to a model that thinks by default, so thinking can't
+    /// use up the whole budget before the answer starts.
+    static let anthropicThinkingMaxTokensFloor = 4096
+
+    /// Major/minor version from a Claude model id, or nil for an id that isn't one.
+    private static func anthropicModelVersion(_ model: String) -> (major: Int, minor: Int)? {
         var parts = model.lowercased().split(separator: "-").map(String.init)
-        guard parts.first == "claude" else { return false }
+        guard parts.first == "claude" else { return nil }
         parts.removeFirst()
         // "claude-3-5-sonnet-…" names the version first; "claude-sonnet-4-6" names the family first.
         if let first = parts.first, Int(first) == nil { parts.removeFirst() }
-        guard let majorText = parts.first, let major = Int(majorText) else { return false }
-        if major < 4 { return true }
-        guard major == 4 else { return false }
-        // A 1–2 digit second part is the minor version; a date snapshot ("4-20250514") is 4.0.
+        guard let majorText = parts.first, let major = Int(majorText) else { return nil }
+        // A 1–2 digit second part is the minor version; a date snapshot ("4-20250514") is x.0.
         let minor = parts.dropFirst().first.flatMap { $0.count <= 2 ? Int($0) : nil } ?? 0
-        return minor <= 6
+        return (major, minor)
+    }
+
+    /// What to tell the reader when a response carries no text, by `stop_reason`.
+    static func anthropicEmptyResponseMessage(stopReason: String?) -> String {
+        switch stopReason {
+        case "max_tokens":
+            return "Claude ran out of room before it wrote an answer. Try again, or ask a narrower question."
+        case "refusal":
+            return "Claude declined to answer this. Try rephrasing the question."
+        default:
+            return "The Claude response was empty."
+        }
     }
 
     /// Thin wrapper preserving the original single-message, no-tools signature
@@ -2437,9 +2592,9 @@ enum NativeAI {
 
     private static func decodeAnthropicContent(data: Data) throws -> String {
         let decoded = try JSONDecoder().decode(AnthropicResponse.self, from: data)
-        let content = decoded.content.compactMap(\.text).joined(separator: "\n").nilIfEmpty
+        let content = decoded.content.filter { $0.type == "text" }.compactMap(\.text).joined(separator: "\n").nilIfEmpty
         guard let content else {
-            throw NativeAIError.unavailable("The Claude response was empty.")
+            throw NativeAIError.unavailable(anthropicEmptyResponseMessage(stopReason: decoded.stopReason))
         }
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -2704,7 +2859,7 @@ enum NativeAI {
             if toolUseBlocks.isEmpty {
                 let trimmed = joinedText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !trimmed.isEmpty else {
-                    throw NativeAIError.unavailable("The Claude response was empty.")
+                    throw NativeAIError.unavailable(anthropicEmptyResponseMessage(stopReason: decoded.stopReason))
                 }
                 return (trimmed, citations)
             }
@@ -2715,21 +2870,29 @@ enum NativeAI {
                 return (trimmed.isEmpty ? "(No response)" : trimmed, citations)
             }
 
-            // --- Build assistant turn (text block + tool_use blocks) ---
+            // --- Build assistant turn ---
+            // Replay the response's blocks unchanged: a model that thinks puts `thinking`
+            // blocks before its tool calls, and the next request has to carry them back.
+            // Rebuilding the turn from text + tool_use alone dropped them.
             var assistantContentBlocks: [[String: Any]] = []
-            if !joinedText.isEmpty {
-                assistantContentBlocks.append(["type": "text", "text": joinedText])
-            }
-            for block in toolUseBlocks {
-                var tb: [String: Any] = ["type": "tool_use"]
-                if let id = block.id   { tb["id"]    = id }
-                if let name = block.name { tb["name"] = name }
-                if let input = block.input {
-                    tb["input"] = input.mapValues { $0.foundationObject }
-                } else {
-                    tb["input"] = [String: Any]()
+            if let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let rawBlocks = raw["content"] as? [[String: Any]], !rawBlocks.isEmpty {
+                assistantContentBlocks = rawBlocks
+            } else {
+                if !joinedText.isEmpty {
+                    assistantContentBlocks.append(["type": "text", "text": joinedText])
                 }
-                assistantContentBlocks.append(tb)
+                for block in toolUseBlocks {
+                    var tb: [String: Any] = ["type": "tool_use"]
+                    if let id = block.id   { tb["id"]    = id }
+                    if let name = block.name { tb["name"] = name }
+                    if let input = block.input {
+                        tb["input"] = input.mapValues { $0.foundationObject }
+                    } else {
+                        tb["input"] = [String: Any]()
+                    }
+                    assistantContentBlocks.append(tb)
+                }
             }
             // --- Execute each tool call ---
             var resultBlocks: [[String: Any]] = []
@@ -3597,6 +3760,7 @@ struct AIChatSheet: View {
     @Binding private var messages: [AIChatMessage]
     @State private var input = ""
     @State private var quotedText: String?
+    @State private var quoteSource: ChatQuoteSource = .answer
     @State private var isSending = false
     @State private var showReauth = false
     @State private var showAISettings = false
@@ -3617,9 +3781,14 @@ struct AIChatSheet: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 14) {
                             if messages.isEmpty {
+                                // Centered in the visible space above the input bar, so the
+                                // hint stays in view when the keyboard shrinks the sheet.
                                 ContentUnavailableView("Ask Skim", systemImage: SkimIcon.chat, description: Text(request.placeholder))
                                     .foregroundStyle(SkimStyle.secondary)
-                                    .padding(.top, 80)
+                                    .frame(maxWidth: .infinity)
+                                    .containerRelativeFrame(.vertical, alignment: .center) { height, _ in
+                                        max(height - 36, 0)
+                                    }
                             } else {
                                 ForEach(messages) { message in
                                     AIChatBubble(
@@ -3628,6 +3797,7 @@ struct AIChatSheet: View {
                                         onOpenSettings: { showAISettings = true },
                                         onReply: isSending ? nil : { quote in
                                             quotedText = quote
+                                            quoteSource = .answer
                                             focused = true
                                         }
                                     )
@@ -3655,11 +3825,13 @@ struct AIChatSheet: View {
                         }
                         .padding(18)
                     }
-                    .onChange(of: messages.count) { _, _ in
+                    .scrollDismissesKeyboard(.interactively)
+                    .simultaneousGesture(TapGesture().onEnded { focused = false })
+                    .onChange(of: messages.last?.id) { _, _ in
                         scrollToLatest(proxy)
                     }
-                    .onChange(of: isSending) { _, _ in
-                        scrollToLatest(proxy)
+                    .onChange(of: isSending) { _, sending in
+                        if sending { scrollToLatest(proxy) }
                     }
                 }
 
@@ -3667,7 +3839,7 @@ struct AIChatSheet: View {
                     if let quotedText {
                         HStack(alignment: .top, spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Replying to Skim")
+                                Text(quoteSource.caption)
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(SkimStyle.accent)
                                 Text(quotedText)
@@ -3700,6 +3872,21 @@ struct AIChatSheet: View {
                             .padding(.vertical, 12)
                             .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
+                        // Inline rather than on the keyboard bar: iOS 26 floats keyboard
+                        // toolbar items over the send button.
+                        if focused {
+                            Button {
+                                focused = false
+                            } label: {
+                                Image(systemName: "keyboard.chevron.compact.down")
+                                    .font(.system(size: 20, weight: .regular))
+                                    .foregroundStyle(SkimStyle.secondary)
+                                    .frame(width: 32, height: 32)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Hide keyboard")
+                        }
+
                         Button {
                             Task { await send() }
                         } label: {
@@ -3729,6 +3916,10 @@ struct AIChatSheet: View {
             }
             .onAppear {
                 seedInitialMessageIfNeeded()
+                if let quote = request.initialArticleQuote?.trimmingCharacters(in: .whitespacesAndNewlines), !quote.isEmpty {
+                    quotedText = quote
+                    quoteSource = .article
+                }
                 focused = true
             }
             .sheet(isPresented: $showReauth) {
@@ -3748,11 +3939,19 @@ struct AIChatSheet: View {
         messages = [AIChatMessage(role: .assistant, text: seed)]
     }
 
+    /// A new answer is scrolled so its first line sits at the top, so the
+    /// reader starts at the beginning instead of the end of a long reply.
+    /// A question (and the "Thinking..." row) scrolls to the bottom.
     private func scrollToLatest(_ proxy: ScrollViewProxy) {
+        let answerID = messages.last.flatMap { $0.role == .assistant ? $0.id : nil }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(80))
             withAnimation(.smooth(duration: 0.22)) {
-                proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+                if let answerID {
+                    proxy.scrollTo(answerID, anchor: .top)
+                } else {
+                    proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+                }
             }
         }
     }
@@ -3762,12 +3961,13 @@ struct AIChatSheet: View {
         guard !question.isEmpty, !isSending else { return }
         let toSend = question
         let quoteToSend = quotedText
+        let sourceToSend = quoteSource
         let priorMessages = messages
-        let conversation = AIChatConversation(latestQuestion: toSend, quotedText: quoteToSend, priorMessages: priorMessages, generatedSummaryContext: request.generatedSummaryContext ?? initialAssistantMessage)
+        let conversation = AIChatConversation(latestQuestion: toSend, quotedText: quoteToSend, quoteSource: sourceToSend, priorMessages: priorMessages, generatedSummaryContext: request.generatedSummaryContext ?? initialAssistantMessage)
         input = ""
         quotedText = nil
         focused = true
-        let userMessage = AIChatMessage(role: .user, text: toSend, quotedText: quoteToSend)
+        let userMessage = AIChatMessage(role: .user, text: toSend, quotedText: quoteToSend, quoteSource: sourceToSend)
         messages.append(userMessage)
         isSending = true
         do {
@@ -3787,6 +3987,7 @@ struct AIChatSheet: View {
             messages.removeAll { $0.id == userMessage.id }
             input = toSend
             quotedText = quoteToSend
+            quoteSource = sourceToSend
             let reauth: Bool = {
                 if case NativeAIError.requiresReauthentication = error { return true }
                 return false
@@ -3807,6 +4008,7 @@ struct AIChatMessage: Identifiable, Sendable {
     var role: Role
     var text: String
     var quotedText: String? = nil
+    var quoteSource: ChatQuoteSource = .answer
     var referencedArticles: [Article] = []
     var webCitations: [WebCitation] = []
     var contextArticles: [Article] = []
@@ -3835,7 +4037,7 @@ private struct AIChatBubble: View {
             VStack(alignment: .leading, spacing: 12) {
                 if let quote = message.quotedText {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Replying to Skim")
+                        Text(message.quoteSource.caption)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(SkimStyle.accent)
                         Text(quote)
@@ -4126,8 +4328,16 @@ private struct WebCitationChip: View {
 }
 
 /// Simple left-to-right, top-to-bottom wrapping layout for chip rows.
+/// A chip wider than the row is capped at the row width (its label then
+/// truncates) so a long source title can't widen the chat bubble.
 private struct ChatFlowLayout: Layout {
     var spacing: CGFloat = 8
+
+    private func chipSize(_ subview: LayoutSubview, maxWidth: CGFloat) -> CGSize {
+        let ideal = subview.sizeThatFits(.unspecified)
+        guard ideal.width > maxWidth else { return ideal }
+        return subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+    }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let maxWidth = proposal.width ?? .infinity
@@ -4137,7 +4347,7 @@ private struct ChatFlowLayout: Layout {
         var rowHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = chipSize(subview, maxWidth: maxWidth)
             if rowWidth + size.width > maxWidth, rowWidth > 0 {
                 totalHeight += rowHeight + spacing
                 totalWidth = max(totalWidth, rowWidth)
@@ -4159,7 +4369,7 @@ private struct ChatFlowLayout: Layout {
         var rowHeight: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let size = chipSize(subview, maxWidth: maxWidth)
             if x + size.width > maxWidth, x > 0 {
                 x = 0
                 y += rowHeight + spacing

@@ -213,7 +213,7 @@ struct TodayEditionView: View {
             Form {
                 Section("Summaries") {
                     AppModelPicker(isDisabled: model.isUpdatingToday || model.todayLedeStatus != nil)
-                    if model.todayLedeNeedsRetry {
+                    if model.todayLedeNeedsRetry || !model.failedTodaySummaries.isEmpty {
                         Button("Retry missing summaries") {
                             showSettings = false
                             Task { await model.retryTodayLedes() }
@@ -467,13 +467,19 @@ private struct TodayStoryView: View {
         return text.isEmpty ? nil : text
     }
 
+    /// The story's AI summary, written from its reports.
+    private var summary: String? {
+        let text = item.snapshot.editorial?.summary.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return text.isEmpty ? nil : text
+    }
+
     /// The feed's own excerpt, when it reads as reporting.
     private var excerpt: String? {
         TodayExcerpt.isReadable(item.snapshot.snapshotSummary) ? item.snapshot.snapshotSummary : nil
     }
 
     private var awaitingLede: Bool {
-        !brief && lede == nil && isWritingLede
+        !brief && summary == nil && isWritingLede
     }
 
     private var openable: TodayEditionSourceArticle? {
@@ -482,7 +488,7 @@ private struct TodayStoryView: View {
     }
 
     private var ledeSource: TodayEditionSourceArticle? {
-        guard lede != nil, let sourceID = item.snapshot.ledeSourceArticleID else { return nil }
+        guard summary == nil, lede != nil, let sourceID = item.snapshot.ledeSourceArticleID else { return nil }
         return item.sourceArticles.first(where: { $0.articleID == sourceID })
     }
 
@@ -519,12 +525,13 @@ private struct TodayStoryView: View {
     @ViewBuilder
     private var hero: some View {
         if let image {
-            ZStack(alignment: .bottomLeading) {
-                // The picture fills a fixed box; laid out on its own a filled
-                // image reports its overflowing width and widens the page.
+            // Picture on top and the words below it: over the picture a long
+            // summary pushed the headline into the image, where any text in
+            // the picture itself collided with it.
+            VStack(alignment: .leading, spacing: 0) {
                 Color.clear
                     .frame(maxWidth: .infinity)
-                    .frame(height: 440)
+                    .frame(height: 260)
                     .overlay {
                         AsyncImage(url: image) { phase in
                             if let picture = phase.image {
@@ -535,29 +542,38 @@ private struct TodayStoryView: View {
                         }
                     }
                     .clipped()
-                LinearGradient(colors: [.clear, SkimStyle.background.opacity(0.65), SkimStyle.background.opacity(0.96)],
-                               startPoint: .init(x: 0.5, y: 0.25), endPoint: .bottom)
+                    .overlay(alignment: .bottom) {
+                        LinearGradient(colors: [.clear, SkimStyle.background.opacity(0.9)],
+                                       startPoint: .top, endPoint: .bottom)
+                            .frame(height: 70)
+                    }
                 VStack(alignment: .leading, spacing: 10) {
                     kicker
                     headlineLink(size: 28)
-                    if let text = lede ?? excerpt {
+                    if awaitingLede {
+                        TodayLedeSkeleton(lead: true)
+                    } else if let text = summary ?? lede ?? excerpt {
                         Text(text)
                             .font(.system(size: 15))
                             .foregroundStyle(SkimStyle.text.opacity(0.9))
-                            .lineLimit(4)
+                            .lineLimit(summary == nil ? 4 : 6)
+                        summaryNote
                     }
                     actions
                 }
                 .padding(.horizontal, 18)
+                .padding(.top, 4)
                 .padding(.bottom, 18)
             }
-            .frame(height: 440)
         } else {
             VStack(alignment: .leading, spacing: 12) {
                 kicker
                 headlineLink(size: 30)
                 if awaitingLede {
                     TodayLedeSkeleton(lead: true)
+                } else if let summary {
+                    bodyText(summary, size: 17)
+                    summaryNote
                 } else if let lede {
                     pullQuote(lede, size: 20, cite: ledeSource)
                 } else if let excerpt {
@@ -594,12 +610,15 @@ private struct TodayStoryView: View {
             }
             VStack(alignment: .leading, spacing: 9) {
                 kicker
-                if image == nil, let lede {
+                if image == nil, summary == nil, !awaitingLede, let lede {
                     pullQuote(lede, size: 19, cite: nil)
                 }
                 headlineLink(size: 20)
                 if awaitingLede {
                     TodayLedeSkeleton(lead: false)
+                } else if let summary {
+                    bodyText(summary, size: 14)
+                    summaryNote
                 } else if image != nil, let text = lede ?? excerpt {
                     bodyText(text, size: 14)
                 } else if lede == nil, let excerpt {
@@ -672,6 +691,19 @@ private struct TodayStoryView: View {
             .foregroundStyle(SkimStyle.text.opacity(0.84))
             .lineSpacing(3)
             .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Says the text above is the model's, and how many reports it read, as
+    /// the desktop does.
+    @ViewBuilder
+    private var summaryNote: some View {
+        if let editorial = item.snapshot.editorial, summary != nil {
+            let read = editorial.sources.count
+            let total = item.sourceArticles.count
+            Text("AI summary · Based on \(read) of \(total) \(total == 1 ? "report" : "reports")")
+                .font(.system(size: 11.5))
+                .foregroundStyle(SkimStyle.secondary)
+        }
     }
 
     /// The lede is a verified excerpt from a report, so it is set as that

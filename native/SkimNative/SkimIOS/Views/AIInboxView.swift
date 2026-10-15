@@ -11,14 +11,14 @@ struct InboxRankedArticle: Identifiable {
     var score: Double
 }
 
-// MARK: - AI Inbox
+// MARK: - For you
 
-/// Unread articles ranked most relevant and important first. The AI rates each
+/// The article list sorted For you (formerly the AI Inbox): unread articles in
+/// the selected scope, most relevant and important first. The AI rates each
 /// article once on importance and relevance; taste learned on this device from
-/// reading time, saves, pins and dismissals re-ranks on every visit.
+/// reading time, chats, saves, pins and dismissals re-ranks on every visit.
 struct AIInboxView: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.dismiss) private var dismiss
 
     /// Most articles rated per visit, so a big backlog doesn't stall the page.
     private static let ratingsPerVisit = 60
@@ -31,8 +31,6 @@ struct AIInboxView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-
             if isLoading && items.isEmpty {
                 ProgressView()
                     .tint(SkimStyle.accent)
@@ -40,9 +38,9 @@ struct AIInboxView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if items.isEmpty {
                 ContentUnavailableView(
-                    "Inbox zero",
+                    "Nothing unread",
                     systemImage: SkimIcon.aiInbox,
-                    description: Text("No unread articles. Refresh your feeds to fill the AI Inbox.")
+                    description: Text("For you ranks unread articles. Refresh your feeds, or sort by Newest to see read ones.")
                 )
                 .foregroundStyle(SkimStyle.secondary)
                 .frame(maxHeight: .infinity)
@@ -50,43 +48,33 @@ struct AIInboxView: View {
                 articleList
             }
         }
-        .background(SkimStyle.background.ignoresSafeArea())
+        .background(SkimStyle.chrome)
         .foregroundStyle(SkimStyle.text)
-        .navigationBarBackButtonHidden()
-        .toolbar(.hidden, for: .navigationBar)
         // Re-rank on every return (e.g. from an article) so new taste shows up.
         .onAppear { Task { await rank() } }
         .task { await rateNewArticles() }
         .onDisappear { ratingTask?.cancel() }
     }
 
-    // MARK: Header
+    // MARK: Rating controls
 
-    private var header: some View {
-        HStack {
-            Button { dismiss() } label: {
-                Label("Articles", systemImage: "chevron.left")
-                    .frame(minHeight: 44)
+    private var rateMenu: some View {
+        Menu {
+            Button("Rate new articles", systemImage: SkimIcon.rate) {
+                Task { await rateNewArticles() }
             }
-            Spacer()
-            Text("AI Inbox").font(.headline)
-            Spacer()
-            Menu {
-                Button("Rate new articles", systemImage: SkimIcon.rate) {
-                    Task { await rateNewArticles() }
-                }
-                Button("Re-rate everything", systemImage: SkimIcon.refresh) {
-                    Task { await rateNewArticles(rerateAll: true) }
-                }
-            } label: {
-                Image(systemName: SkimIcon.refresh)
-                    .frame(width: 44, height: 44)
+            Button("Re-rate everything", systemImage: SkimIcon.refresh) {
+                Task { await rateNewArticles(rerateAll: true) }
             }
-            .accessibilityLabel("Rate articles")
-            .disabled(ratingStatus != nil)
+        } label: {
+            Image(systemName: SkimIcon.refresh)
+                .font(.system(size: 15, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
-        .padding(.horizontal, 16)
-        .background(SkimStyle.chrome)
+        .foregroundStyle(SkimStyle.secondary)
+        .accessibilityLabel("Rate articles")
+        .disabled(ratingStatus != nil)
     }
 
     // MARK: List
@@ -95,6 +83,14 @@ struct AIInboxView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("Ranked by importance and what you read")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                        rateMenu
+                    }
                     if let ratingStatus {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small).tint(SkimStyle.accent)
@@ -223,30 +219,53 @@ struct AIInboxView: View {
             likedTitles: model.tasteStore.likedTitles()
         )
         var rated = 0
+        var unrated = 0
+        var firstError: Error?
         defer { ratingStatus = nil }
         for start in stride(from: 0, to: pending.count, by: batchSize) {
             guard !Task.isCancelled else { return }
             let batch = Array(pending[start..<min(start + batchSize, pending.count)])
-            ratingStatus = "Rating \(rated + 1)–\(rated + batch.count) of \(pending.count)…"
-            do {
-                let ratings = try await NativeAI.inboxRatings(
-                    articles: batch, readerContext: readerContext, settings: model.settings)
-                let now = Date()
-                var stored: [String: InboxAIScore] = [:]
-                for (handle, rating) in ratings {
-                    stored[batch[handle - 1].id] = InboxAIScore(
-                        importance: rating.importance, relevance: rating.relevance,
-                        reason: rating.reason, scoredAt: now)
+            ratingStatus = "Rating \(rated + unrated + 1)–\(rated + unrated + batch.count) of \(pending.count)…"
+            // A batch that fails is retried as two halves, so one bad response
+            // costs at most that batch, never the rest of the visit.
+            var parts: [(articles: [Article], canSplit: Bool)] = [(batch, true)]
+            while !parts.isEmpty {
+                let (part, canSplit) = parts.removeFirst()
+                do {
+                    let ratings = try await NativeAI.inboxRatings(
+                        articles: part, readerContext: readerContext, settings: model.settings)
+                    store(ratings, for: part)
+                    rated += ratings.count
+                    unrated += part.count - ratings.count
+                    await rank()
+                } catch {
+                    if Task.isCancelled { return }
+                    if canSplit, part.count > 1 {
+                        let half = part.count / 2
+                        parts = [(Array(part[..<half]), false), (Array(part[half...]), false)] + parts
+                    } else {
+                        firstError = firstError ?? error
+                        unrated += part.count
+                    }
                 }
-                model.inboxScores.set(stored)
-                rated += batch.count
-                await rank()
-            } catch {
-                if Task.isCancelled { return }
-                errorMessage = error.localizedDescription
-                return
             }
         }
+        if let firstError, rated == 0 {
+            errorMessage = firstError.localizedDescription
+        } else if unrated > 0 {
+            errorMessage = "Rated \(rated) of \(pending.count). The rest stay ranked by what you read; rate again to retry them."
+        }
+    }
+
+    private func store(_ ratings: [Int: NativeAI.InboxRating], for batch: [Article]) {
+        let now = Date()
+        var stored: [String: InboxAIScore] = [:]
+        for (handle, rating) in ratings {
+            stored[batch[handle - 1].id] = InboxAIScore(
+                importance: rating.importance, relevance: rating.relevance,
+                reason: rating.reason, scoredAt: now)
+        }
+        model.inboxScores.set(stored)
     }
 }
 

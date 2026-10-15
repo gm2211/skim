@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { fetchAggregatorDetails } from "../../services/commands";
@@ -6,6 +6,42 @@ import type { AggregatorComment } from "../../services/types";
 import { displayDomain, faviconFor, type AggregatorPost } from "../../lib/aggregatorPost";
 
 export type ReaderCopyState = "loading" | "ready" | "unavailable";
+
+/** Top-level threads fetched per discussion; the reader reveals them a page at a time. */
+const DISCUSSION_FETCH_LIMIT = 30;
+const THREADS_PER_PAGE = 8;
+
+export interface CommentNode {
+  comment: AggregatorComment;
+  replies: CommentNode[];
+}
+
+/** Rebuild the reply tree from comments flattened in thread order with depths. */
+export function buildCommentTree(comments: AggregatorComment[]): CommentNode[] {
+  const roots: CommentNode[] = [];
+  const stack: CommentNode[] = [];
+  for (const comment of comments) {
+    const node: CommentNode = { comment, replies: [] };
+    while (stack.length > 0 && stack[stack.length - 1].comment.depth >= comment.depth) stack.pop();
+    const parent = stack[stack.length - 1];
+    if (parent) parent.replies.push(node);
+    else roots.push(node);
+    stack.push(node);
+  }
+  return roots;
+}
+
+function countReplies(node: CommentNode): number {
+  return node.replies.reduce((total, reply) => total + 1 + countReplies(reply), 0);
+}
+
+function detailsQuery(url: string) {
+  return {
+    queryKey: ["aggregatorDetails", url],
+    queryFn: () => fetchAggregatorDetails(url, DISCUSSION_FETCH_LIMIT),
+    staleTime: 5 * 60 * 1000,
+  };
+}
 
 function open(url: string) {
   void openUrl(url).catch((err) => console.error("Failed to open link", err));
@@ -134,7 +170,7 @@ function LinkCard({ url, thumbnailUrl, state }: { url: string; thumbnailUrl: str
 
 function CommentRow({ comment }: { comment: AggregatorComment }) {
   return (
-    <li className="flex flex-col gap-1.5" style={{ padding: "14px 0" }}>
+    <div className="flex flex-col gap-1.5">
       <div className="flex items-center gap-2 text-xs">
         <span className="text-text-secondary font-semibold">{comment.author}</span>
         {comment.score != null && (
@@ -142,19 +178,49 @@ function CommentRow({ comment }: { comment: AggregatorComment }) {
         )}
       </div>
       <p className="text-text-primary whitespace-pre-wrap break-words" style={{ fontSize: 15, lineHeight: 1.6 }}>{comment.body}</p>
-    </li>
+    </div>
+  );
+}
+
+/**
+ * A comment and its replies. Top-level comments open with their direct
+ * replies showing; deeper levels stay folded behind a "N replies" toggle so a
+ * long thread doesn't bury the next top-level comment.
+ */
+function CommentThread({ node }: { node: CommentNode }) {
+  const [expanded, setExpanded] = useState(node.comment.depth === 0);
+  const hidden = countReplies(node);
+  return (
+    <div className="aggregator-comment flex flex-col gap-3">
+      <CommentRow comment={node.comment} />
+      {node.replies.length > 0 && (expanded ? (
+        <div className="flex flex-col gap-4 border-l-2 border-white/10" style={{ paddingLeft: 14 }}>
+          {node.replies.map((reply) => <CommentThread key={reply.comment.id} node={reply} />)}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="self-start inline-flex items-center gap-1.5 text-accent hover:underline"
+          style={{ fontSize: 13 }}
+          aria-expanded={false}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+          {hidden === 1 ? "1 reply" : `${formatCount(hidden)} replies`}
+        </button>
+      ))}
+    </div>
   );
 }
 
 function Discussion({ post, url }: { post: AggregatorPost; url: string }) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ["aggregatorDetails", url],
-    queryFn: () => fetchAggregatorDetails(url, 10),
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data, isLoading, isError } = useQuery(detailsQuery(url));
+  const [visibleThreads, setVisibleThreads] = useState(THREADS_PER_PAGE);
   const points = data?.points ?? post.points;
   const count = data?.comment_count ?? post.commentCount;
   const comments = data?.comments ?? [];
+  const threads = buildCommentTree(comments);
+  const moreThreads = threads.length - visibleThreads;
   const stats = [points != null ? plural(points, "point") : null, count != null ? plural(count, "comment") : null].filter(Boolean).join(" · ");
   const failed = !isLoading && (isError || !data);
 
@@ -205,8 +271,20 @@ function Discussion({ post, url }: { post: AggregatorPost; url: string }) {
       ) : (
         <>
           <ul className="flex flex-col divide-y divide-white/[0.06]">
-            {comments.map((comment) => <CommentRow key={comment.id} comment={comment} />)}
+            {threads.slice(0, visibleThreads).map((node) => (
+              <li key={node.comment.id} style={{ padding: "14px 0" }}><CommentThread node={node} /></li>
+            ))}
           </ul>
+          {moreThreads > 0 && (
+            <button
+              type="button"
+              onClick={() => setVisibleThreads((value) => value + THREADS_PER_PAGE)}
+              className="w-full rounded-lg border border-white/10 text-text-primary hover:bg-white/[0.06] transition-colors"
+              style={{ padding: "9px 12px", fontSize: 14, marginTop: 4, marginBottom: 10 }}
+            >
+              Show more comments
+            </button>
+          )}
           <button
             type="button"
             onClick={() => open(url)}
@@ -237,12 +315,7 @@ export function AggregatorPostView({
   children?: ReactNode;
 }) {
   const discussionUrl = post.discussionUrl;
-  const { data } = useQuery({
-    queryKey: ["aggregatorDetails", discussionUrl],
-    queryFn: () => fetchAggregatorDetails(discussionUrl!, 10),
-    enabled: !!discussionUrl,
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data } = useQuery({ ...detailsQuery(discussionUrl ?? ""), enabled: !!discussionUrl });
   const linkUrl = post.linkUrl ?? data?.external_url ?? null;
   const selfText = !post.selfHtml && !linkUrl ? data?.selftext ?? null : null;
 

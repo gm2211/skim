@@ -1,6 +1,7 @@
 import PDFKit
 import SkimCore
 import SwiftUI
+import UIKit
 
 private enum DetailPage: String, CaseIterable {
     case reader
@@ -26,6 +27,9 @@ struct ArticleDetailView: View {
     @State private var showAIDisclaimerGate = false
     @State private var pendingAIAction: (() -> Void)?
     @State private var webSnapshot = WebViewSnapshot()
+    // True while a passage of the reader text is selected, so dragging a
+    // selection handle never reads as the swipe-back gesture.
+    @State private var hasReaderSelection = false
 
     // Reading-time tracking
     @State private var openedAt: Date?
@@ -39,8 +43,16 @@ struct ArticleDetailView: View {
                 topBar
 
                 TabView(selection: $page) {
-                    ReaderPage(article: article, isLoading: isLoading)
-                        .contextMenu(menuItems: { detailContextMenu }, preview: { contextMenuPreview })
+                    // The article menu sits on the header only: a long press on
+                    // the body selects text, which can then go to chat.
+                    ReaderPage(
+                        article: article,
+                        isLoading: isLoading,
+                        hasTextSelection: $hasReaderSelection,
+                        onAskAboutSelection: { presentArticleChat(quote: $0) },
+                        headerMenu: { detailContextMenu },
+                        headerMenuPreview: { contextMenuPreview }
+                    )
                         .tag(DetailPage.reader)
 
                     WebPage(article: article, snapshot: $webSnapshot)
@@ -188,6 +200,7 @@ struct ArticleDetailView: View {
         DragGesture(minimumDistance: 24, coordinateSpace: .local)
             .onEnded { value in
                 guard page == .reader,
+                      !hasReaderSelection,
                       abs(value.translation.width) > abs(value.translation.height)
                 else { return }
 
@@ -361,6 +374,7 @@ struct ArticleDetailView: View {
                         placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
                         generatedSummaryContext: summaryText
                     ) { conversation in
+                        await model.recordChatMessage(about: article)
                         let contextArticle = try await WebAIContext.article(
                             base: article,
                             preferWeb: useWebContext,
@@ -972,17 +986,21 @@ private extension String {
 }
 
 private extension ArticleDetailView {
-    func presentArticleChat() {
+    /// Opens the article chat. `quote` is a passage highlighted in the reader;
+    /// the chat then opens with it quoted, ready for a question about it.
+    func presentArticleChat(quote: String? = nil) {
         guard let article else { return }
-        let useWebContext = page == .web
+        let useWebContext = quote == nil && page == .web
         let webSnapshot = webSnapshot
         gatedAI {
             activeAIChat = AIChatRequest(
                 sessionKey: chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
                 title: useWebContext ? "Chat with Web Page" : "Chat with Article",
                 placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
-                generatedSummaryContext: summaryContextBySession[chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot)]
+                generatedSummaryContext: summaryContextBySession[chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot)],
+                initialArticleQuote: quote
             ) { conversation in
+                await model.recordChatMessage(about: article)
                 let contextArticle = try await WebAIContext.article(
                     base: article,
                     preferWeb: useWebContext,
@@ -1027,15 +1045,21 @@ private enum ArticleLoadState {
     }
 }
 
-private struct ReaderPage: View {
+private struct ReaderPage<HeaderMenu: View, HeaderMenuPreview: View>: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openURL) private var openURL
 
     var article: Article?
     var isLoading: Bool
+    @Binding var hasTextSelection: Bool
+    var onAskAboutSelection: (String) -> Void
+    @ViewBuilder var headerMenu: () -> HeaderMenu
+    @ViewBuilder var headerMenuPreview: () -> HeaderMenuPreview
 
     @State private var comments: [AggregatorComment] = []
     @State private var commentsState: ArticleLoadState = .idle
+    // Top-level threads shown; "Show more comments" reveals the next page.
+    @State private var visibleThreadCount = ReaderPage.threadsPerPage
     @State private var extractedBody: ArticleLoadState = .idle
     // Tracks whether the 3s auto-extract timeout has fired (shows fallback button)
     @State private var autoExtractTimedOut = false
@@ -1053,6 +1077,8 @@ private struct ReaderPage: View {
                         .frame(maxWidth: .infinity, minHeight: 260)
                 } else if let article {
                     articleHeader(article)
+                        .contentShape(Rectangle())
+                        .contextMenu(menuItems: headerMenu, preview: headerMenuPreview)
                     if article.aggregatorKind != nil {
                         aggregatorSection(article)
                     } else {
@@ -1072,6 +1098,7 @@ private struct ReaderPage: View {
         .onChange(of: article?.id) { _, _ in
             comments = []
             commentsState = .idle
+            visibleThreadCount = ReaderPage.threadsPerPage
             extractedBody = .idle
             autoExtractTimedOut = false
             redditSelftext = nil
@@ -1142,37 +1169,19 @@ private struct ReaderPage: View {
 
         VStack(alignment: .leading, spacing: 24) {
             if let selftext = redditSelftext {
-                Text(selftext)
-                    .font(.system(size: 19, weight: .regular))
-                    .lineSpacing(7)
-                    .foregroundStyle(SkimStyle.text)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                readerText(selftext)
             }
 
             if redditSelftext == nil, let externalURL {
                 if case .loaded(let text) = extractedBody {
                     linkSourceRow(url: externalURL)
-                    Text(text)
-                        .font(.system(size: 19, weight: .regular))
-                        .lineSpacing(7)
-                        .foregroundStyle(SkimStyle.text)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    readerText(text)
                 } else {
                     linkCard(url: externalURL, article: article)
                 }
             } else if redditSelftext == nil, case .loaded(let text) = extractedBody {
                 // A self post's text saved for offline reading.
-                Text(text)
-                    .font(.system(size: 19, weight: .regular))
-                    .lineSpacing(7)
-                    .foregroundStyle(SkimStyle.text)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                readerText(text)
             }
 
             discussionSection(article)
@@ -1395,13 +1404,32 @@ private struct ReaderPage: View {
                     .padding(.top, 14)
                 }
             case .loaded:
+                let threads = AggregatorCommentThread.threads(from: comments)
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
+                    ForEach(Array(threads.prefix(visibleThreadCount).enumerated()), id: \.element.id) { index, thread in
                         if index > 0 {
                             Rectangle().fill(SkimStyle.separator.opacity(0.6)).frame(height: 0.5)
                         }
-                        CommentRow(comment: comment)
+                        CommentThreadView(thread: thread, onAsk: onAskAboutSelection, onSelectionChange: { if hasTextSelection != $0 { hasTextSelection = $0 } })
+                            .padding(.vertical, 14)
                     }
+                }
+                if threads.count > visibleThreadCount {
+                    Button {
+                        visibleThreadCount += ReaderPage.threadsPerPage
+                    } label: {
+                        Text("Show more comments")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(SkimStyle.text)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(SkimStyle.separator, lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, 6)
                 }
                 if let discussionURL {
                     Button {
@@ -1421,6 +1449,19 @@ private struct ReaderPage: View {
 
     // MARK: - Standard body
 
+    /// Article text a reader can highlight; "Ask in Chat" in the selection
+    /// menu sends the passage to the article chat.
+    private func readerText(_ text: String) -> some View {
+        ReaderSelectableText(
+            text: text,
+            fontSize: 19,
+            lineSpacing: 7,
+            onAsk: onAskAboutSelection,
+            onSelectionChange: { if hasTextSelection != $0 { hasTextSelection = $0 } }
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     @ViewBuilder
     private func articleBody(_ article: Article) -> some View {
         let rssFeedBody = ArticleReaderContentLoader.displayBody(for: article)
@@ -1430,21 +1471,9 @@ private struct ReaderPage: View {
         // 2. Use the RSS body if it meets the threshold and isn't boilerplate.
         // 3. Otherwise, show state based on auto-extract progress.
         if case .loaded(let text) = extractedBody {
-            Text(text)
-                .font(.system(size: 19, weight: .regular))
-                .lineSpacing(7)
-                .foregroundStyle(SkimStyle.text)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            readerText(text)
         } else if ArticleReaderContentLoader.isSufficientRSSBody(article) {
-            Text(rssFeedBody)
-                .font(.system(size: 19, weight: .regular))
-                .lineSpacing(7)
-                .foregroundStyle(SkimStyle.text)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            readerText(rssFeedBody)
         } else {
             // RSS body is thin — show auto-extract UI states
             switch extractedBody {
@@ -1536,13 +1565,17 @@ private struct ReaderPage: View {
         return await AggregatorService().fetchRedditExternalURL(from: redditURL)
     }
 
+    /// Top-level threads fetched per discussion, shown a page at a time.
+    static var commentFetchLimit: Int { 30 }
+    static var threadsPerPage: Int { 8 }
+
     private func loadComments(for article: Article) async {
         commentsState = .loading
         let service = AggregatorService()
         // For Reddit self-posts, fetch the post body alongside comments
         if article.aggregatorKind == .reddit {
             async let selftextTask = service.fetchRedditSelftext(for: article)
-            async let commentsTask = service.fetchComments(for: article, limit: 10)
+            async let commentsTask = service.fetchComments(for: article, limit: ReaderPage.commentFetchLimit)
             let (fetchedSelftext, fetched) = await (selftextTask, commentsTask)
             redditSelftext = fetchedSelftext
             if let text = ArticleReaderContentLoader.sanitizedText(fetchedSelftext) {
@@ -1551,7 +1584,7 @@ private struct ReaderPage: View {
             comments = fetched
             commentsState = fetched.isEmpty ? .failed("No comments returned.") : .loaded("")
         } else {
-            let fetched = await service.fetchComments(for: article, limit: 10)
+            let fetched = await service.fetchComments(for: article, limit: ReaderPage.commentFetchLimit)
             comments = fetched
             commentsState = fetched.isEmpty ? .failed("No comments returned.") : .loaded("")
         }
@@ -1633,8 +1666,58 @@ private struct ReaderPage: View {
 
 // MARK: - Comment row
 
+/// A comment and its replies. Top-level comments open with their direct
+/// replies showing; deeper levels stay folded behind a "N replies" toggle so a
+/// long thread doesn't bury the next top-level comment.
+private struct CommentThreadView: View {
+    var thread: AggregatorCommentThread
+    var onAsk: ((String) -> Void)? = nil
+    var onSelectionChange: (Bool) -> Void = { _ in }
+    @State private var expanded: Bool
+
+    init(thread: AggregatorCommentThread, onAsk: ((String) -> Void)? = nil, onSelectionChange: @escaping (Bool) -> Void = { _ in }) {
+        self.thread = thread
+        self.onAsk = onAsk
+        self.onSelectionChange = onSelectionChange
+        _expanded = State(initialValue: thread.comment.depth == 0)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CommentRow(comment: thread.comment, onAsk: onAsk, onSelectionChange: onSelectionChange)
+            if !thread.replies.isEmpty {
+                if expanded {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ForEach(thread.replies) { reply in
+                            // AnyView breaks the recursive opaque type.
+                            AnyView(CommentThreadView(thread: reply, onAsk: onAsk, onSelectionChange: onSelectionChange))
+                        }
+                    }
+                    .padding(.leading, 14)
+                    .overlay(alignment: .leading) {
+                        Rectangle().fill(SkimStyle.separator).frame(width: 2)
+                    }
+                } else {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { expanded = true }
+                    } label: {
+                        Label(thread.replyCount == 1 ? "1 reply" : "\(thread.replyCount) replies", systemImage: "chevron.right")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(SkimStyle.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 private struct CommentRow: View {
     var comment: AggregatorComment
+    var onAsk: ((String) -> Void)? = nil
+    var onSelectionChange: (Bool) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1649,15 +1732,101 @@ private struct CommentRow: View {
                         .foregroundStyle(SkimStyle.secondary.opacity(0.8))
                 }
             }
-            Text(comment.body)
-                .font(.system(size: 16))
-                .foregroundStyle(SkimStyle.text)
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+            ReaderSelectableText(
+                text: comment.body,
+                fontSize: 16,
+                lineSpacing: 4,
+                onAsk: onAsk,
+                onSelectionChange: onSelectionChange
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 14)
+    }
+}
+
+// MARK: - Selectable reader text
+
+/// Reader text on a UITextView: on iOS, SwiftUI `Text` with text selection can
+/// only copy a whole block, while this lets the reader highlight any passage.
+/// The selection menu leads with "Ask in Chat", which hands the passage over.
+private struct ReaderSelectableText: UIViewRepresentable {
+    var text: String
+    var fontSize: CGFloat
+    var lineSpacing: CGFloat
+    var onAsk: ((String) -> Void)?
+    var onSelectionChange: (Bool) -> Void
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.delegate = context.coordinator
+        view.backgroundColor = .clear
+        view.isEditable = false
+        view.isSelectable = true
+        view.isScrollEnabled = false
+        view.dataDetectorTypes = []
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.onAsk = onAsk
+        context.coordinator.onSelectionChange = onSelectionChange
+        let style = "\(fontSize)/\(lineSpacing)"
+        guard view.text != text || context.coordinator.renderedStyle != style else { return }
+        context.coordinator.renderedStyle = style
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = lineSpacing
+        view.attributedText = NSAttributedString(string: text, attributes: [
+            .font: UIFont.systemFont(ofSize: fontSize),
+            .foregroundColor: UIColor(SkimStyle.text),
+            .paragraphStyle: paragraph,
+        ])
+        view.invalidateIntrinsicContentSize()
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width.isFinite else { return nil }
+        return CGSize(width: width, height: ceil(uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height))
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(onAsk: onAsk, onSelectionChange: onSelectionChange) }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var onAsk: ((String) -> Void)?
+        var onSelectionChange: (Bool) -> Void
+        var renderedStyle = ""
+
+        init(onAsk: ((String) -> Void)?, onSelectionChange: @escaping (Bool) -> Void) {
+            self.onAsk = onAsk
+            self.onSelectionChange = onSelectionChange
+        }
+
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            onSelectionChange(textView.selectedRange.length > 0)
+        }
+
+        func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            menu(for: textView, suggestedActions: suggestedActions)
+        }
+
+        func textView(_ textView: UITextView, editMenuForTextInRanges ranges: [NSValue], suggestedActions: [UIMenuElement]) -> UIMenu? {
+            menu(for: textView, suggestedActions: suggestedActions)
+        }
+
+        private func menu(for textView: UITextView, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            guard let onAsk, textView.selectedRange.length > 0 else { return UIMenu(children: suggestedActions) }
+            let ask = UIAction(title: "Ask in Chat", image: UIImage(systemName: SkimIcon.chat)) { [weak textView] _ in
+                guard let textView, let selection = textView.selectedTextRange,
+                      let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !quote.isEmpty else { return }
+                textView.selectedTextRange = nil
+                self.onSelectionChange(false)
+                onAsk(quote)
+            }
+            return UIMenu(children: [ask] + suggestedActions)
+        }
     }
 }
 

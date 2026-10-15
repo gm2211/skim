@@ -7,10 +7,6 @@ import { useUiStore } from "../../stores/uiStore";
 import * as commands from "../../services/commands";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-vi.mock("../../hooks/useFeeds", () => ({
-  useAddFeed: () => ({ mutateAsync: vi.fn(), isPending: false, isError: false }),
-}));
-
 vi.mock("../../services/commands", () => ({
   feedlyOauthAvailable: vi.fn(),
   feedlyOauthLogin: vi.fn(),

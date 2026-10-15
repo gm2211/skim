@@ -1,17 +1,26 @@
 id: ai-inbox
 name: AI Inbox
 prose: >-
-  The AI Inbox is where the model ranks unread articles for the reader. It learns from what the
-  reader does and puts the most relevant and important articles first.
+  The AI Inbox is the "For you" sort of the article list: the model ranks unread articles for the
+  reader, learns from what the reader does, and puts the most relevant and important articles
+  first. It is no longer a separate place; Today and For you rank with the same learned taste.
 behaviors:
   - id: inbox-is-reachable
     description: >-
-      The AI Inbox is reachable on both platforms: desktop from the sidebar and command palette, iOS
-      from the article list actions menu. In the desktop sidebar it is a row of the All Articles
-      group beside Starred and Recent, not a section of its own.
+      The AI Inbox is the "For you" sort of the article list, not a destination of its own. Unread
+      and All lists of every feed, one feed or a folder can be sorted Newest or For you; a list
+      sorted For you shows only unread articles. Desktop has a Sort control under the list's search
+      box and a "For you" command in the palette; iOS has Sort in the list's actions menu, a For you
+      row in the feed picker and an optional For you bottom bar item.
+    details: >-
+      Choosing For you from Starred or Recent switches to Unread first, since those lists are not
+      ranked. Desktop no longer has an AI Inbox row in the sidebar.
     source:
-      text: AI Inbox should probably be under All Articles - looks janky this way
-      reference: Giulio, project chat, 2026-10-11
+      text: Do both
+      reference: >-
+        Giulio, project chat, 2026-10-14, choosing "Do both" on the decision card "Unify Skim's
+        taste ranking across Today and the AI Inbox?" (Today uses the inbox taste model, and the
+        AI Inbox becomes a For you sort of the article list)
   - id: ranks-by-relevance-and-importance
     description: >-
       The model assesses each unread article's relevance to the reader and its importance, and the
@@ -34,6 +43,7 @@ behaviors:
     description: >-
       Ranking learns on the device from the reader's behavior: articles opened and how long they
       were read, chats, stars (saves), Pin to top, and inbox articles dismissed without being opened.
+      Both platforms count each chat message about an article as a minute of reading.
     details: >-
       Each signal is weighted by the shared policy and tallied per feed and per title word into an
       affinity of -1 to 1. The affinity carries up to half of the relevance axis once there are
@@ -50,7 +60,21 @@ behaviors:
       can run it again.
   - id: theme-chips
     description: >-
-      Desktop: themes clustered across unread articles appear as chips that filter the AI Inbox.
+      Desktop: themes clustered across unread articles appear as chips that filter a list sorted
+      For you.
   - id: priority-feeds-other-features
     description: >-
       Triage priority also scopes Ask Skim's Inbox scope.
+  - id: ratings-survive-a-bad-batch
+    description: >-
+      One bad model response costs at most the articles in it: ratings the model finished before
+      it was cut off are kept, and the other batches are still rated.
+    details: >-
+      Articles are rated in batches (20 on iOS, 30 on desktop for hosted models) with an output
+      budget of 80 tokens per article plus 300. A response cut off mid-array keeps every entry it
+      finished. Desktop already moved on to the next batch after a failure; iOS now does too, and
+      first retries a failed batch as two halves. The error shows only when nothing could be
+      rated; otherwise iOS says how many were rated and leaves the rest for the next run.
+      Reported with a screenshot of "The AI model didn't return usable ratings" over a list of
+      "Not rated yet" articles (Giulio, 2026-10-15). Claude 5-series models also spent the
+      budget on thinking; ai-providers/claude-thinking-models-answer (#263) covers that.

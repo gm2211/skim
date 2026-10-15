@@ -818,6 +818,9 @@ private struct FeedPickerSheet: View {
     @EnvironmentObject private var model: AppModel
     @Binding var isPresented: Bool
     @State private var scrollTopOffset: CGFloat = 0
+    @State private var newFolderKind: NewFolderKind?
+    @State private var newFolderName = ""
+    @State private var smartFolderDraft: FeedFolder?
     var onAddFeed: () -> Void
     var onImportOPML: () -> Void
     var onAutoGroup: () -> Void
@@ -899,13 +902,26 @@ private struct FeedPickerSheet: View {
                             .textCase(.uppercase)
                             .tracking(1.1)
                         Spacer()
-                        Button(action: onAutoGroup) {
+                        // One button for everything folder-related, as on desktop.
+                        Menu {
+                            Button("New Folder", systemImage: "folder") {
+                                newFolderName = ""
+                                newFolderKind = .regular
+                            }
+                            Button("New Smart Folder…", systemImage: "folder.badge.gearshape") {
+                                newFolderName = ""
+                                newFolderKind = .smart
+                            }
+                            Divider()
+                            Button("Auto-organize with AI", systemImage: "sparkles", action: onAutoGroup)
+                        } label: {
                             AutoGroupIcon(size: 16)
                                 .foregroundStyle(SkimStyle.secondary)
                                 .frame(width: 36, height: 36)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Auto-group feeds with AI")
+                        .accessibilityLabel("Folders")
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 14)
@@ -922,6 +938,7 @@ private struct FeedPickerSheet: View {
                                         count: model.unreadCounts[feed.id],
                                         isSelected: model.selectedFeedID == feed.id
                                     ) { selectFeed(feed) }
+                                    .contextMenu { MoveToFolderMenu(model: model, feed: feed) }
                                 }
                             }
                             .padding(.bottom, 34)
@@ -929,7 +946,8 @@ private struct FeedPickerSheet: View {
                             // Grouped by folder
                             ForEach(model.folders) { folder in
                                 let folderFeeds = model.feedsInFolder(id: folder.id)
-                                if !folderFeeds.isEmpty {
+                                // An empty regular folder still shows, so a new one is there to move feeds into.
+                                if !folderFeeds.isEmpty || !folder.isSmart {
                                     FolderSection(
                                         folder: folder,
                                         feeds: folderFeeds,
@@ -963,6 +981,7 @@ private struct FeedPickerSheet: View {
                                                 count: model.unreadCounts[feed.id],
                                                 isSelected: model.selectedFeedID == feed.id
                                             ) { selectFeed(feed) }
+                                            .contextMenu { MoveToFolderMenu(model: model, feed: feed) }
                                         }
                                     }
                                 }
@@ -982,6 +1001,44 @@ private struct FeedPickerSheet: View {
         }
         .contentShape(Rectangle())
         .simultaneousGesture(dismissGesture)
+        .alert(
+            newFolderKind == .smart ? "New Smart Folder" : "New Folder",
+            isPresented: Binding(get: { newFolderKind != nil }, set: { if !$0 { newFolderKind = nil } })
+        ) {
+            TextField("Folder name", text: $newFolderName)
+            Button("Cancel", role: .cancel) { newFolderKind = nil }
+            Button(newFolderKind == .smart ? "Next" : "Create") {
+                let kind = newFolderKind
+                newFolderKind = nil
+                let name = newFolderName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { return }
+                if kind == .smart {
+                    // Saved by the editor, so cancelling it leaves no empty folder behind.
+                    smartFolderDraft = model.newFolderDraft(name: name, isSmart: true)
+                } else {
+                    Task { await model.createFolder(name: name) }
+                }
+            }
+        } message: {
+            Text(newFolderKind == .smart
+                 ? "Next, choose the rules that pick its feeds."
+                 : "Move feeds into it from a feed's menu, or let AI auto-organize them.")
+        }
+        .sheet(item: $smartFolderDraft) { draft in
+            SmartFolderEditor(
+                isPresented: Binding(get: { smartFolderDraft != nil }, set: { if !$0 { smartFolderDraft = nil } }),
+                folder: draft
+            )
+            .environmentObject(model)
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(SkimStyle.chrome)
+        }
+    }
+
+    private enum NewFolderKind {
+        case regular
+        case smart
     }
 
     private var topControls: some View {
@@ -1263,6 +1320,7 @@ private struct FolderSection: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .contextMenu { MoveToFolderMenu(model: model, feed: feed) }
                     }
                 }
             }
@@ -1368,6 +1426,36 @@ private enum AutoGroupNameStyle: String, CaseIterable, Identifiable {
                 let trimmed = word.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? [] : [trimmed]
             }
+    }
+}
+
+/// Long-press menu on a feed: move it into a regular folder, or out of its folder.
+private struct MoveToFolderMenu: View {
+    @ObservedObject var model: AppModel
+    let feed: Feed
+
+    var body: some View {
+        let regularFolders = model.folders.filter { !$0.isSmart }
+        Menu("Move to Folder", systemImage: "folder") {
+            ForEach(regularFolders) { folder in
+                Button {
+                    Task { await model.moveFeed(id: feed.id, toFolder: folder.id) }
+                } label: {
+                    if feed.folderID == folder.id {
+                        Label(folder.name, systemImage: "checkmark")
+                    } else {
+                        Text(folder.name)
+                    }
+                }
+            }
+            if feed.folderID != nil {
+                Divider()
+                Button("Remove from Folder", systemImage: "folder.badge.minus") {
+                    Task { await model.moveFeed(id: feed.id, toFolder: nil) }
+                }
+            }
+        }
+        .disabled(regularFolders.isEmpty)
     }
 }
 

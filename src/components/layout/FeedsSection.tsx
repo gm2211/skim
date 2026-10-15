@@ -258,37 +258,24 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
         </div>
       )}
 
-      {/* Header with + menu */}
+      {/* Header with the folders menu */}
       <div className="flex items-center justify-between" style={{ padding: "0 8px", marginBottom: 12 }}>
         <span style={{ fontSize: 17, fontWeight: 600 }} className="text-text-primary">
           Feeds
         </span>
         <div className="flex items-center gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              closeAllMenus();
-              setAutoOrganizeOpen(true);
-            }}
-            className="text-text-muted hover:text-text-primary transition-colors"
-            title="Auto-organize feeds with AI"
-            aria-label="Auto-organize feeds with AI"
-          >
-            <AutoOrganizeIcon size={20} />
-          </button>
+          {/* One button for folders: new folder, smart folder, or auto-organize with AI. */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               const rect = e.currentTarget.getBoundingClientRect();
-              setShowAddMenu({ x: rect.right - 180, y: rect.bottom + 4 });
+              setShowAddMenu({ x: rect.right - 220, y: rect.bottom + 4 });
             }}
             className="text-text-muted hover:text-text-primary transition-colors"
-            title="Add folder or smart folder"
+            title="Folders: new folder, smart folder, or auto-organize with AI"
+            aria-label="Folders"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-              <path d="M12 10v6M9 13h6" />
-            </svg>
+            <AutoOrganizeIcon size={20} />
           </button>
         </div>
       </div>

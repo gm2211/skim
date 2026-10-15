@@ -243,7 +243,7 @@ const CHAPTERS = [
     id: "organize",
     async run(p) {
       await caption(p, "Auto-organize", "Let the model file your feeds into folders. You review them before anything changes.", "left");
-      await glide(p, '[title="Add folder or smart folder"]');
+      await glide(p, '[aria-label="Folders"]');
       await hold(p, 0.5);
       await glide(p, p.getByText("Auto-organize with AI").first());
       await hold(p, 0.8);

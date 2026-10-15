@@ -48,6 +48,17 @@ describe("AskSkimDialog setup recovery", () => {
     expect(onOpenArticle).toHaveBeenCalledWith("source-2");
   });
 
+  it("asks a starter question as soon as it is clicked", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    const user = userEvent.setup();
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    const starter = "What are the top 10 things I should know from today's articles?";
+    await user.click(screen.getByRole("button", { name: starter }));
+    expect(chatWithArticles).toHaveBeenCalledWith("unread", starter, [], undefined);
+    expect(await screen.findByText("Answer")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "What did I miss this week?" })).toBeNull();
+  });
+
   it("restores composer focus after a fast response and restores opener only on ordinary close", async () => {
     settings = { ai: { provider: "openai", chat_provider: "same" } };
     const opener = document.createElement("button");

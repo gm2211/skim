@@ -231,8 +231,10 @@ fn word_match(text: &str, term: &str) -> bool {
 /// evidence for an unmatched topic-specific question.
 fn is_broad_catchup(query: &str) -> bool {
     let terms = query_keywords(query);
-    let broad = ["latest", "news", "recent", "today", "today's", "week", "weeks", "week's", "biggest", "important", "top", "catchup", "briefing", "brief", "overview", "summarize", "summary", "happening", "new", "missed", "have", "has", "happened", "been", "since", "yesterday"];
-    !is_find_request(query) && terms.iter().all(|term| broad.contains(&term.as_str()))
+    let broad = ["latest", "news", "recent", "today", "today's", "week", "weeks", "week's", "biggest", "important", "top", "catchup", "briefing", "brief", "overview", "summarize", "summary", "happening", "new", "missed", "have", "has", "happened", "been", "since", "yesterday",
+        "things", "know", "should", "need", "miss", "sources", "disagree"];
+    // Counts such as "top 10" carry no topic.
+    !is_find_request(query) && terms.iter().all(|term| broad.contains(&term.as_str()) || term.chars().all(|c| c.is_ascii_digit()))
 }
 
 /// Separate an operation on the current topic from a newly named subject.
@@ -315,11 +317,18 @@ fn retrieval_topic(query: &str, messages: &[ChatMessageInput]) -> (Vec<String>, 
             if is_contextual_followup(&message.content) { continue; }
             let previous = topic_keywords(&message.content);
             if !previous.is_empty() || (message.content.to_lowercase().contains("catch") && is_broad_catchup(&message.content)) {
-                return (previous, is_broad_catchup(&message.content));
+                return broad_catchup_reads_recent(previous, is_broad_catchup(&message.content));
             }
         }
     }
-    (terms, is_broad_catchup(query))
+    broad_catchup_reads_recent(terms, is_broad_catchup(query))
+}
+
+/// A briefing ("top 10 things from today") reads the most recent articles in
+/// scope. Its words are not a topic, so searching for "today" or "top" would
+/// only find articles that happen to contain them.
+fn broad_catchup_reads_recent(terms: Vec<String>, broad: bool) -> (Vec<String>, bool) {
+    if broad { (Vec::new(), true) } else { (terms, false) }
 }
 
 /// Search every scoped row before limiting the results. Returning IDs first keeps
@@ -395,7 +404,7 @@ pub(crate) fn retrieve_chat_articles_for_terms(
         // (e.g. "latest news") do not occur literally in any article.
         let sql = format!("SELECT a.id FROM articles a JOIN feeds f ON f.id = a.feed_id
             LEFT JOIN article_triage t ON t.article_id = a.id WHERE {scope_clause}
-            ORDER BY COALESCE(a.published_at, a.fetched_at) DESC, a.id LIMIT 8");
+            ORDER BY COALESCE(a.published_at, a.fetched_at) DESC, a.id LIMIT 15");
         let mut statement = conn.prepare(&sql)?;
         ids = statement.query_map([], |row| row.get::<_, String>(0))?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1295,7 +1304,7 @@ mod tests {
         conn.execute_batch("INSERT INTO article_triage(article_id,priority,reason,created_at) VALUES ('cached',4,'Important',1)").unwrap();
         assert_eq!(ids(retrieve_chat_articles(&conn, "inbox", "find quasar", &[]).unwrap()), vec!["cached"]);
         assert!(retrieve_chat_articles(&conn, "all", "find nonexistenttopic", &[]).unwrap().is_empty());
-        assert_eq!(retrieve_chat_articles(&conn, "all", "catch me up", &[]).unwrap().len(), 8);
+        assert_eq!(retrieve_chat_articles(&conn, "all", "catch me up", &[]).unwrap().len(), 15);
     }
 
     #[test]
@@ -1329,8 +1338,8 @@ mod tests {
         for query in ["summarize that", "explain it", "compare those", "what changed"] {
             assert!(retrieve_chat_articles(&conn, "all", query, &history).unwrap().is_empty(), "{query}");
         }
-        assert_eq!(retrieve_chat_articles(&conn, "all", "catch me up", &history).unwrap().len(), 8);
-        assert_eq!(retrieve_chat_articles(&conn, "all", "latest news", &history).unwrap().len(), 8);
+        assert_eq!(retrieve_chat_articles(&conn, "all", "catch me up", &history).unwrap().len(), 15);
+        assert_eq!(retrieve_chat_articles(&conn, "all", "latest news", &history).unwrap().len(), 15);
     }
 
     #[test]
@@ -1342,7 +1351,7 @@ mod tests {
         assert_eq!(ids(retrieve_chat_articles_with_references(&conn, "unread", "summarize that", &history, &prior).unwrap()), vec!["cached"]);
         assert!(retrieve_chat_articles_with_references(&conn, "unread", "summarize neutrino", &history, &prior).unwrap().is_empty());
         assert!(retrieve_chat_articles_with_references(&conn, "unread", "find quasar", &history, &prior).unwrap().is_empty());
-        assert_eq!(retrieve_chat_articles_with_references(&conn, "unread", "latest news", &history, &prior).unwrap().len(), 8);
+        assert_eq!(retrieve_chat_articles_with_references(&conn, "unread", "latest news", &history, &prior).unwrap().len(), 15);
         let text = format!("{}Quasar evidence at the end.", "introductory text ".repeat(400));
         let topic = retrieval_topic("summarize that", &history).0.join(" ");
         assert!(query_excerpt(&text, &topic, 200).contains("Quasar evidence"));
@@ -1421,10 +1430,25 @@ mod tests {
     }
 
     #[test]
+    fn starter_briefings_read_the_newest_articles_instead_of_matching_their_words() {
+        let conn = retrieval_database();
+        conn.execute("UPDATE articles SET title='Top 10 things you should know today' WHERE id='old'", []).unwrap();
+        for query in ["What are the top 10 things I should know from today's articles?", "What did I miss this week?",
+            "Where do sources disagree on the biggest stories?"] {
+            assert_eq!(retrieval_topic(query, &[]), (Vec::new(), true), "{query}");
+            let rows = ids(retrieve_chat_articles(&conn, "all", query, &[]).unwrap());
+            assert_eq!(rows.len(), 15, "{query}");
+            assert_eq!(rows[0], "recent-1099", "{query}");
+            assert!(!rows.contains(&"old".into()), "{query}");
+        }
+        assert!(!is_broad_catchup("What should I know about neutrino detectors?"));
+    }
+
+    #[test]
     fn unmatched_specific_questions_do_not_receive_unrelated_recent_articles() {
         let conn = retrieval_database();
         assert!(retrieve_chat_articles(&conn, "all", "What happened to zirconium?", &[]).unwrap().is_empty());
-        assert_eq!(retrieve_chat_articles(&conn, "all", "What are the latest news stories?", &[]).unwrap().len(), 8);
+        assert_eq!(retrieve_chat_articles(&conn, "all", "What are the latest news stories?", &[]).unwrap().len(), 15);
         let history = vec![ChatMessageInput { role: "user".into(), content: "find zirconium".into() }];
         assert!(retrieve_chat_articles(&conn, "all", "tell me more", &history).unwrap().is_empty());
     }

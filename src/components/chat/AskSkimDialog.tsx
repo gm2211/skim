@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { askAgent, chatWithArticles, type AgentContext, type AgentStep, type ChatSource } from "../../services/commands";
 import { useAgentChatStore } from "../../stores/agentChatStore";
 import { agentAskHeading, agentContextLabel, agentExamples } from "../../lib/agentContext";
+import { CHAT_STARTER_PROMPTS, isPromptTemplate } from "../../lib/chatStarterPrompts";
 import { AgentSteps } from "./AgentAnswer";
 import { partitionSources, type NumberedSource } from "../../lib/chatCitations";
 import type { ChatMessageInput } from "../../services/types";
@@ -37,13 +38,6 @@ interface Props {
   onClose: () => void;
   onOpenArticle?: (articleId: string) => void;
 }
-
-/** Questions that show what the answer looks like; clicking one asks it. */
-const EXAMPLE_PROMPTS = [
-  "What are this week's biggest AI stories?",
-  "Which article covered work ethic?",
-  "Find pieces about distributed systems",
-];
 
 export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpenArticle }: Props) {
   const isPhone = useUiStore((s) => s.isPhone);
@@ -264,11 +258,15 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
                 Answers cite the articles they come from. Try one of these:
               </p>
               <div className="flex flex-wrap justify-center" style={{ gap: 8, marginTop: 16, maxWidth: 520 }}>
-                {(agentContext ? agentExamples(agentContext) : EXAMPLE_PROMPTS).map((prompt) => (
+                {(agentContext ? agentExamples(agentContext) : CHAT_STARTER_PROMPTS).map((prompt) => (
                   <button
                     key={prompt}
                     type="button"
                     onClick={() => {
+                      if (!isPromptTemplate(prompt)) {
+                        void send(prompt);
+                        return;
+                      }
                       setInput(prompt);
                       inputRef.current?.focus();
                     }}

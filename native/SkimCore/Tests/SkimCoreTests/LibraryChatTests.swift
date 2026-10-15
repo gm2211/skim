@@ -218,3 +218,15 @@ private func temporaryChatStore() throws -> SkimStore {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
     return try SkimStore(databaseURL: directory.appendingPathComponent("skim.sqlite"))
 }
+
+@Test func libraryChatStarterPromptsReadRecentArticlesInsteadOfMatchingTheirWords() {
+    for prompt in LibraryChatPolicy.starterPrompts {
+        let topic = LibraryChatPolicy.retrievalTopic(query: prompt, priorUserQueries: [])
+        #expect(topic.terms.isEmpty, "\(prompt)")
+        #expect(topic.allowRecentFallback, "\(prompt)")
+        #expect(!LibraryChatPolicy.isContextualFollowup(prompt), "\(prompt)")
+    }
+    let specific = LibraryChatPolicy.retrievalTopic(query: "What should I know about neutrino detectors?", priorUserQueries: [])
+    #expect(specific.terms.contains("neutrino"))
+    #expect(!specific.allowRecentFallback)
+}

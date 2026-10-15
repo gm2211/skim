@@ -136,6 +136,8 @@ struct AIChatRequest: Identifiable {
     var title: String
     var placeholder: String
     var generatedSummaryContext: String? = nil
+    /// Questions offered while the chat is empty; tapping one asks it.
+    var suggestedPrompts: [String] = []
     var answer: (AIChatConversation) async throws -> AIChatAnswer
 }
 
@@ -3619,7 +3621,13 @@ struct AIChatSheet: View {
                             if messages.isEmpty {
                                 ContentUnavailableView("Ask Skim", systemImage: SkimIcon.chat, description: Text(request.placeholder))
                                     .foregroundStyle(SkimStyle.secondary)
-                                    .padding(.top, 80)
+                                    .padding(.top, request.suggestedPrompts.isEmpty ? 80 : 32)
+                                if !request.suggestedPrompts.isEmpty && !isSending {
+                                    ChatStarterPrompts(prompts: request.suggestedPrompts) { prompt in
+                                        input = prompt
+                                        Task { await send() }
+                                    }
+                                }
                             } else {
                                 ForEach(messages) { message in
                                     AIChatBubble(
@@ -3794,6 +3802,44 @@ struct AIChatSheet: View {
             messages.append(AIChatMessage(role: .assistant, text: error.localizedDescription, isError: true, needsReauth: reauth, remedy: AIErrorRemedy.classify(error)))
         }
         isSending = false
+    }
+}
+
+/// Tappable starter questions for an empty chat.
+private struct ChatStarterPrompts: View {
+    var prompts: [String]
+    var onSelect: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Try asking")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(SkimStyle.secondary)
+                .padding(.leading, 4)
+            ForEach(prompts, id: \.self) { prompt in
+                Button {
+                    onSelect(prompt)
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(SkimStyle.accent)
+                        Text(prompt)
+                            .font(.system(size: 16))
+                            .foregroundStyle(SkimStyle.text)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Asks this question")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

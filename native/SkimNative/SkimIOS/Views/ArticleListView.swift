@@ -354,7 +354,8 @@ struct ArticleListView: View {
             activeAIChat = AIChatRequest(
                 sessionKey: scope.sessionKey,
                 title: "Chat with Articles",
-                placeholder: "Find or ask about articles in this view."
+                placeholder: "Find or ask about articles in this view.",
+                suggestedPrompts: LibraryChatPolicy.starterPrompts
             ) { conversation in
                 let context = try await model.articlesForLibraryChat(scope: scope, conversation: conversation)
                 guard !context.isEmpty else {

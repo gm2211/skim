@@ -43,29 +43,52 @@ pub(crate) fn extract_discussion_links(xml: &[u8]) -> HashMap<String, String> {
     result
 }
 
-pub async fn fetch_and_parse_feed(
-    feed_url: &str,
-    existing_feed_id: Option<&str>,
-) -> Result<(Feed, Vec<Article>), String> {
-    let client = reqwest::Client::builder()
+pub(crate) fn http_client(timeout_secs: u64) -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
         .user_agent("Skim/0.1 RSS Reader")
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(timeout_secs))
         .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))
+}
 
+/// Fetches a URL and returns the final URL after redirects and the body.
+pub(crate) async fn fetch_bytes(
+    client: &reqwest::Client,
+    url: &str,
+) -> Result<(String, Vec<u8>), String> {
     let response = client
-        .get(feed_url)
+        .get(url)
         .send()
         .await
         .map_err(|e| format!("Failed to fetch feed: {}", e))?;
-
+    let final_url = response.url().to_string();
+    if !response.status().is_success() {
+        return Err(format!("Failed to fetch feed: HTTP {}", response.status().as_u16()));
+    }
     let bytes = response
         .bytes()
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
+    Ok((final_url, bytes.to_vec()))
+}
 
-    let discussion_links = extract_discussion_links(&bytes);
-    let parsed = parser::parse(&bytes[..])
+pub async fn fetch_and_parse_feed(
+    feed_url: &str,
+    existing_feed_id: Option<&str>,
+) -> Result<(Feed, Vec<Article>), String> {
+    let client = http_client(30)?;
+    let (_, bytes) = fetch_bytes(&client, feed_url).await?;
+    parse_feed_bytes(&bytes, feed_url, existing_feed_id)
+}
+
+/// Parses an RSS, Atom, or JSON Feed document fetched from `feed_url`.
+pub(crate) fn parse_feed_bytes(
+    bytes: &[u8],
+    feed_url: &str,
+    existing_feed_id: Option<&str>,
+) -> Result<(Feed, Vec<Article>), String> {
+    let discussion_links = extract_discussion_links(bytes);
+    let parsed = parser::parse(bytes)
         .map_err(|e| format!("Failed to parse feed: {}", e))?;
 
     let now = Utc::now().timestamp();

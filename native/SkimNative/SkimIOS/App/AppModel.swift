@@ -165,6 +165,11 @@ final class AppModel: ObservableObject {
     let inboxScores = InboxScoreStore()
     private let importer = OPMLImportService()
     private let refresher = FeedRefreshService()
+    let discovery = FeedDiscoveryService()
+    /// Popular feeds by topic, bundled from shared/feed-catalog.json.
+    lazy var feedCatalog: FeedCatalog? = Bundle.main.url(forResource: "feed-catalog", withExtension: "json")
+        .flatMap { try? Data(contentsOf: $0) }
+        .flatMap { try? FeedCatalog(data: $0) }
     private let readLingerDuration: TimeInterval = 30 * 60
     private var recentlyReadArticles: [String: (article: Article, expiresAt: Date)] = [:]
     private var readLingerTask: Task<Void, Never>?
@@ -755,6 +760,25 @@ final class AppModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// True when a feed with this address is already in the library.
+    func isSubscribed(_ url: URL) -> Bool {
+        feeds.contains { FeedDiscoveryService.sameFeed($0.url, url) }
+    }
+
+    /// Subscribes to a discovered feed without leaving the Add Feeds sheet.
+    func subscribe(to discovered: DiscoveredFeed) async throws {
+        guard !isSubscribed(discovered.url) else { return }
+        let feed = Feed(
+            id: stableID(prefix: "feed", value: discovered.url.absoluteString),
+            title: discovered.title,
+            url: discovered.url,
+            siteURL: discovered.siteURL
+        )
+        try await refresher.refresh(feed: feed, store: store)
+        await reloadArticles()
+        await reloadTodayAfterFeeds()
     }
 
     func setRead(_ article: Article, isRead: Bool, keepVisibleInUnreadList: Bool = false) async {

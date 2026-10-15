@@ -496,7 +496,7 @@ struct SettingsSheet: View {
             Divider()
                 .overlay(SkimStyle.separator)
 
-            SettingsAction(systemName: "plus", title: "Add RSS Feed", action: onAddFeed)
+            SettingsAction(systemName: "plus", title: "Discover Feeds", action: onAddFeed)
             SettingsAction(systemName: "square.and.arrow.down", title: "Import OPML", action: onImportOPML)
             SettingsAction(systemName: "folder.badge.plus", title: "Auto-group Feeds", action: onAutoGroup)
 

@@ -241,9 +241,12 @@ export function TodayEditionPane() {
         </>}
         {!isLoading && !isError && visibleItems.length > 0 && <FrontPage cells={visibleItems.map(({ item }, index) => ({
           key: item.story_id,
-          node: !item.editorial && isPreparingSummaries ? <TodayStorySkeleton rank={rankFor(index)} /> : <TodayStory
+          // Cards show at once with the feed's text; each AI summary takes
+          // its place as soon as it is written.
+          node: <TodayStory
             item={item}
             rank={rankFor(index)}
+            isWritingSummary={!item.editorial && isPreparingSummaries}
             isSaving={setConsumed.isPending}
             onToggleConsumed={(storyId, isConsumed) => setConsumed.mutate({ storyId, isConsumed })}
             onOpenArticle={(articleId) => { markStoryRead(item.story_id); handleOpenArticle(articleId); }}

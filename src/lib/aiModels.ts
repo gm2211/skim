@@ -167,7 +167,7 @@ export function providerLabel(provider: string): string {
 }
 
 /** Providers whose models are looked up via the `list_remote_models` command. */
-export const REMOTE_LIST_PROVIDERS = ["openai", "xai", "openrouter", "anthropic", "custom", "chatgpt-subscription"] as const;
+export const REMOTE_LIST_PROVIDERS = ["openai", "xai", "openrouter", "anthropic", "custom", "chatgpt-subscription", "claude-subscription"] as const;
 
 /** Whether chat has its own provider override distinct from the main AI provider. */
 export function hasChatOverride(ai: Pick<AiSettings, "chat_provider">): boolean {

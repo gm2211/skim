@@ -156,7 +156,7 @@ export function useModelChoices(
     };
   }
 
-  // Fixed providers: ds4, foundation-models, claude-subscription, claude-cli,
+  // Fixed providers: ds4, foundation-models, claude-cli,
   // ollama, none — free text or nothing, never inline-editable here.
   const current = ai.model ?? "";
   const label = current || providerLabel(provider);

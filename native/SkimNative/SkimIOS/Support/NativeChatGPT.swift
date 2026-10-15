@@ -129,11 +129,12 @@ enum NativeChatGPTOAuth {
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "nonce", value: nonce),
             URLQueryItem(name: "code_challenge", value: codeChallenge(for: verifier)),
-            URLQueryItem(name: "code_challenge_method", value: "S256")
+            URLQueryItem(name: "code_challenge_method", value: "S256"),
+            // Every sign-in names this install, returning ones included.
+            URLQueryItem(name: "ext_agent_host_id", value: hostID)
         ]
         if savedClientID == nil {
             items.append(URLQueryItem(name: "agent_name_hint", value: agentName))
-            items.append(URLQueryItem(name: "ext_agent_host_id", value: hostID))
         }
         var components = URLComponents(string: authorizeURL)!
         components.queryItems = items
@@ -160,6 +161,9 @@ enum NativeChatGPTOAuth {
         }
         guard let code = value("code") else { throw ChatGPTOAuthError.missingCode }
         // A new registration returns the issued client id; a returning account keeps its own.
+        if let issued = value("client_id"), let saved = flow.savedClientID, issued != saved {
+            throw ChatGPTOAuthError.stateMismatch
+        }
         guard let clientID = value("client_id") ?? flow.savedClientID, clientID != registrationClientID else {
             throw ChatGPTOAuthError.server("ChatGPT didn't return a client id. Sign in again.")
         }
@@ -191,7 +195,7 @@ enum NativeChatGPTOAuth {
         let tokens: ChatGPTTokenSet
         do {
             tokens = try await exchange(code: code, clientID: clientID, flow: flow)
-        } catch ChatGPTOAuthError.invalidClient {
+        } catch ChatGPTOAuthError.invalidClient, ChatGPTOAuthError.rejected {
             // The saved registration is gone; the next sign-in registers again.
             ChatGPTKeychainStore.forgetClientID()
             throw ChatGPTOAuthError.server("Your ChatGPT connection was reset. Sign in again.")

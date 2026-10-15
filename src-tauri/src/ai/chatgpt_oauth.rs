@@ -77,10 +77,11 @@ pub fn begin_flow(port: u16, saved_client_id: Option<&str>, host_id: &str) -> Si
         ("nonce", nonce.as_str()),
         ("code_challenge", challenge.as_str()),
         ("code_challenge_method", "S256"),
+        // Every sign-in names this install, returning ones included.
+        ("ext_agent_host_id", host_id),
     ];
     if saved_client_id.is_none() {
         params.push(("agent_name_hint", AGENT_NAME));
-        params.push(("ext_agent_host_id", host_id));
     }
     let query = params
         .iter()
@@ -117,7 +118,13 @@ pub fn parse_callback(target: &str, flow: &SignInFlow) -> Result<(String, String
         return Err(format!("ChatGPT sign-in failed: {}", value("error_description").unwrap_or(error)));
     }
     let code = value("code").ok_or("ChatGPT didn't finish signing in. Start again.")?;
-    let client_id = value("client_id")
+    let issued = value("client_id");
+    if let (Some(issued), Some(saved)) = (&issued, &flow.saved_client_id) {
+        if issued != saved {
+            return Err("ChatGPT sign-in didn't match. Start again.".into());
+        }
+    }
+    let client_id = issued
         .or_else(|| flow.saved_client_id.clone())
         .filter(|id| id != REGISTRATION_CLIENT_ID)
         .ok_or("ChatGPT didn't return a client id. Sign in again.")?;
@@ -144,11 +151,32 @@ pub async fn run_sign_in(saved_client_id: Option<String>, host_id: &str) -> Resu
         _ = cancel_signal().notified() => return Err(CANCELLED.into()),
     };
     let (code, client_id) = parse_callback(&target, &flow)?;
-    let tokens = exchange_code(&code, &client_id, &flow).await?;
+    let tokens = exchange_code(&code, &client_id, &flow).await.map_err(|e| match e {
+        TokenError::Rejected(_) => REJECTED.to_string(),
+        TokenError::Other(message) => message,
+    })?;
     Ok((tokens, client_id))
 }
 
 pub const CANCELLED: &str = "ChatGPT sign-in was cancelled.";
+/// The code exchange was refused (`invalid_grant` / `invalid_client`). The
+/// caller forgets the saved registration so the next sign-in registers afresh.
+pub const REJECTED: &str = "ChatGPT didn't accept that sign-in. Sign in again.";
+
+/// A token endpoint failure: `Rejected` when the grant or client is unusable.
+#[derive(Debug)]
+pub enum TokenError {
+    Rejected(String),
+    Other(String),
+}
+
+impl std::fmt::Display for TokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenError::Rejected(m) | TokenError::Other(m) => f.write_str(m),
+        }
+    }
+}
 
 fn cancel_signal() -> &'static tokio::sync::Notify {
     static SIGNAL: std::sync::OnceLock<tokio::sync::Notify> = std::sync::OnceLock::new();
@@ -186,7 +214,7 @@ async fn accept_callback(listener: &TcpListener) -> Result<String, String> {
     }
 }
 
-async fn exchange_code(code: &str, client_id: &str, flow: &SignInFlow) -> Result<ChatGptTokens, String> {
+async fn exchange_code(code: &str, client_id: &str, flow: &SignInFlow) -> Result<ChatGptTokens, TokenError> {
     let text = post_form(&[
         ("grant_type", "authorization_code"),
         ("client_id", client_id),
@@ -196,8 +224,8 @@ async fn exchange_code(code: &str, client_id: &str, flow: &SignInFlow) -> Result
         ("resource", RESOURCE),
     ])
     .await?;
-    let tokens = parse_tokens(&text, None)?;
-    validate(&tokens, client_id, &flow.nonce, chrono::Utc::now().timestamp())?;
+    let tokens = parse_tokens(&text, None).map_err(TokenError::Other)?;
+    validate(&tokens, client_id, &flow.nonce, chrono::Utc::now().timestamp()).map_err(TokenError::Other)?;
     Ok(tokens)
 }
 
@@ -208,22 +236,23 @@ pub async fn refresh_access_token(refresh_token: &str, client_id: &str) -> Resul
         ("refresh_token", refresh_token),
         ("resource", RESOURCE),
     ])
-    .await?;
+    .await
+    .map_err(|e| e.to_string())?;
     parse_tokens(&text, Some(refresh_token))
 }
 
-async fn post_form(fields: &[(&str, &str)]) -> Result<String, String> {
+async fn post_form(fields: &[(&str, &str)]) -> Result<String, TokenError> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| TokenError::Other(e.to_string()))?;
     let resp = client
         .post(TOKEN_URL)
         .header("Accept", "application/json")
         .form(fields)
         .send()
         .await
-        .map_err(|e| format!("Could not reach ChatGPT sign-in: {e}"))?;
+        .map_err(|e| TokenError::Other(format!("Could not reach ChatGPT sign-in: {e}")))?;
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
     if status.is_success() {
@@ -232,7 +261,13 @@ async fn post_form(fields: &[(&str, &str)]) -> Result<String, String> {
     let v: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
     let error = v.get("error").and_then(|e| e.as_str()).unwrap_or("");
     let detail = v.get("error_description").and_then(|e| e.as_str()).filter(|d| !d.is_empty()).unwrap_or(error);
-    Err(format!("ChatGPT sign-in failed ({}): {}", status.as_u16(), if detail.is_empty() { "no detail" } else { detail }))
+    let message = format!("ChatGPT sign-in failed ({}): {}", status.as_u16(), if detail.is_empty() { "no detail" } else { detail });
+    log::warn!("{message}");
+    Err(if matches!(error, "invalid_grant" | "invalid_client") {
+        TokenError::Rejected(message)
+    } else {
+        TokenError::Other(message)
+    })
 }
 
 pub fn parse_tokens(text: &str, previous_refresh: Option<&str>) -> Result<ChatGptTokens, String> {
@@ -345,6 +380,12 @@ pub fn persist(db: &crate::db::Database, tokens: &ChatGptTokens, client_id: &str
     set(CLIENT_ID_KEY, client_id)
 }
 
+/// Drops the saved registration, so the next sign-in registers Skim again.
+pub fn forget_client_id(db: &crate::db::Database) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    crate::db::queries::set_setting(&conn, CLIENT_ID_KEY, "").map_err(|e| e.to_string())
+}
+
 /// Signs out: drops the tokens, keeps the host id and the issued client id.
 pub fn clear(db: &crate::db::Database) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -388,6 +429,7 @@ mod tests {
         let flow = begin_flow(1455, Some("client-1"), "h");
         assert_eq!(query(&flow.authorize_url, "client_id").as_deref(), Some("client-1"));
         assert_eq!(query(&flow.authorize_url, "agent_name_hint"), None);
+        assert_eq!(query(&flow.authorize_url, "ext_agent_host_id").as_deref(), Some("h"));
     }
 
     #[test]
@@ -398,6 +440,12 @@ mod tests {
         assert!(parse_callback("/auth/callback?code=c1&state=x&client_id=issued", &flow).is_err());
         let denied = format!("/auth/callback?error=access_denied&state={}", flow.state);
         assert_eq!(parse_callback(&denied, &flow).unwrap_err(), "ChatGPT sign-in was cancelled.");
+
+        let returning = begin_flow(1455, Some("client-1"), "h");
+        let omitted = format!("/auth/callback?code=c2&state={}", returning.state);
+        assert_eq!(parse_callback(&omitted, &returning).unwrap(), ("c2".into(), "client-1".into()));
+        let other = format!("/auth/callback?code=c2&state={}&client_id=client-2", returning.state);
+        assert!(parse_callback(&other, &returning).is_err());
     }
 
     #[test]

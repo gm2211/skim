@@ -21,7 +21,12 @@ behaviors:
     description: >-
       Ask Skim, article chat, Summarize, and Today (in its cog) each have a model picker that
       changes the model for the current provider and links to AI settings.
-    details: Remote model lists are fetched live; a failed fetch falls back to the current model.
+    details: >-
+      Remote model lists are fetched live; a failed fetch falls back to the current model. Claude
+      Pro/Max lists Anthropic's /v1/models with its sign-in token on desktop and iOS.
+    source:
+      text: "also why am i not getting dropdown with model names ?"
+      reference: Giulio, project chat, 2026-10-15 (desktop Claude Pro/Max showed a plain text box)
   - id: model-list-provider-order
     description: >-
       Model pickers list a provider's models in the order its API returns them, and leave out

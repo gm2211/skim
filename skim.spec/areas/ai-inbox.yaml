@@ -65,3 +65,16 @@ behaviors:
   - id: priority-feeds-other-features
     description: >-
       Triage priority also scopes Ask Skim's Inbox scope.
+  - id: ratings-survive-a-bad-batch
+    description: >-
+      One bad model response costs at most the articles in it: ratings the model finished before
+      it was cut off are kept, and the other batches are still rated.
+    details: >-
+      Articles are rated in batches (20 on iOS, 30 on desktop for hosted models) with an output
+      budget of 80 tokens per article plus 300. A response cut off mid-array keeps every entry it
+      finished. Desktop already moved on to the next batch after a failure; iOS now does too, and
+      first retries a failed batch as two halves. The error shows only when nothing could be
+      rated; otherwise iOS says how many were rated and leaves the rest for the next run.
+      Reported with a screenshot of "The AI model didn't return usable ratings" over a list of
+      "Not rated yet" articles (Giulio, 2026-10-15). Claude 5-series models also spent the
+      budget on thinking; ai-providers/claude-thinking-models-answer (#263) covers that.

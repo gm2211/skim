@@ -11,9 +11,8 @@ https://claude.ai/artifact/1sXmN1AvVjp7jVRefdCShW
   search mechanism for each provider.
 - `listOpenRouterModels`, `listModelsForEndpoint`, `readOpenRouterKeyInfo`: model discovery. Lists
   always come from the provider, never a hard-coded table. `listModelsForEndpoint` (Grok, Groq,
-  Hugging Face) lists dated snapshot ids such as `grok-4.20-0309-reasoning` last, then orders the
-  rest newest first by the provider's `created` time, falling back to name (`compareListedModels`,
-  `isDatedSnapshot`).
+  Hugging Face) keeps the order the provider returns and drops image, video, audio and embedding
+  models such as `grok-imagine-image` (`isChatModel`).
 - `buildXaiResponsesBody` / `parseXaiResponsesPayload`: Grok's `/responses` endpoint, the only place
   its web_search tool exists.
 

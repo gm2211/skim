@@ -1000,6 +1000,7 @@ select option {
 
 .today-pagination { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; border-top: 1px solid var(--color-border); padding: 8px 16px; background: var(--color-bg-secondary); font-size: 12px; }
 .today-pagination .today-story-control { min-height: 44px; }
+.today-pagination > .today-story-control { white-space: nowrap; flex-shrink: 0; }
 .today-pagination button:disabled { opacity: .4; cursor: default; }
 .today-pagination button:disabled:hover { background: transparent; }
 

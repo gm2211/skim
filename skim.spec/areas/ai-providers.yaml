@@ -22,6 +22,16 @@ behaviors:
       Ask Skim, article chat, Summarize, and Today (in its cog) each have a model picker that
       changes the model for the current provider and links to AI settings.
     details: Remote model lists are fetched live; a failed fetch falls back to the current model.
+  - id: model-list-provider-order
+    description: >-
+      Model pickers list a provider's models in the order its API returns them, and leave out
+      models that cannot answer chat, such as image and video models.
+    details: >-
+      Desktop, iOS and BYOS all keep the `/models` order, dropping only repeats and ids naming
+      image, video, audio, embedding or moderation models (for example xAI's grok-imagine-*).
+    source:
+      text: "model order is not right - we should follow order from api response - this should have been fixed in BYOS - check"
+      reference: Giulio, project thread "Model picker order", 2026-10-15
   - id: claude-models-accept-request
     description: >-
       Any Claude model the picker lists runs Skim's requests; Skim sends sampling settings such as

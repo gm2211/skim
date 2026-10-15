@@ -96,3 +96,14 @@
     background: var(--color-bg-tertiary);
   }
 }
+
+/* A summary being written under a card that already shows its text. */
+.today-summary-writing {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.today-summary-writing .today-story-skeleton-bar:last-child {
+  width: 56%;
+}

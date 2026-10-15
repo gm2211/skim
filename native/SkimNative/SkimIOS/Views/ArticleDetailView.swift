@@ -1559,8 +1559,8 @@ private struct ReaderPage: View {
     }
 
     /// Top-level threads fetched per discussion, shown a page at a time.
-    static let commentFetchLimit = 30
-    static let threadsPerPage = 8
+    static var commentFetchLimit: Int { 30 }
+    static var threadsPerPage: Int { 8 }
 
     private func loadComments(for article: Article) async {
         commentsState = .loading

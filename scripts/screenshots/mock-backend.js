@@ -403,10 +403,18 @@
       model: "claude-sonnet-5",
       created_at: D.now,
     }),
-    get_or_generate_today_edition: (args) => todayView(args),
+    // __SKIM_SLOW_EDITORIAL__ (ms) shows the page while summaries are still being written.
+    get_or_generate_today_edition: (args) => {
+      const view = todayView(args);
+      if (!window.__SKIM_SLOW_EDITORIAL__) return view;
+      return { ...view, items: view.items.map((item) => ({ ...item, editorial: null })) };
+    },
     list_today_edition_items: ({ editionId } = {}) => pageItems(editionId?.startsWith("ed-week-") ? Number(editionId.slice(8)) : 0),
     generate_today_ledes: () => todayView(),
-    generate_today_editorial: () => todayView(),
+    generate_today_editorial: async () => {
+      if (window.__SKIM_SLOW_EDITORIAL__) await new Promise((resolve) => setTimeout(resolve, window.__SKIM_SLOW_EDITORIAL__));
+      return todayView();
+    },
     // Report images are opt-in so a run shows the no-image page by default.
     get_today_story_image: ({ articleIds }) => (window.__SKIM_TODAY_IMAGES__ || {})[articleIds[0]] ?? null,
     set_today_edition_item_consumed: ({ storyId, isConsumed }) => {

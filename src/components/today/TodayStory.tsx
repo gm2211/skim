@@ -6,6 +6,7 @@ import * as commands from "../../services/commands";
 import { ChatIcon } from "../ui/icons";
 import type { TodayEditionItem, TodayEditionMemberArticle } from "../../services/types";
 import { firstSentence, isReadableExcerpt, themeColor, type StoryRank } from "../../lib/todayEdition";
+import "./TodayStorySkeleton.css";
 
 interface Props {
   item: TodayEditionItem;
@@ -15,6 +16,8 @@ interface Props {
   onOpenArticle: (articleId: string) => void;
   /** Opens a chat that reads this story's reports. */
   onAsk?: () => void;
+  /** The story's AI summary is being written; its slot shimmers meanwhile. */
+  isWritingSummary?: boolean;
 }
 
 function Reference({ member, onOpenArticle }: {
@@ -137,20 +140,28 @@ function Figure({ value, label }: { value: string; label: string }) {
 /** Ledes shorter than this stay in one column. */
 const LEAD_COLUMNS_MIN_CHARS = 260;
 
-export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onOpenArticle, onAsk }: Props) {
+export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onOpenArticle, onAsk, isWritingSummary = false }: Props) {
   const [expanded, setExpanded] = useState(false);
   const referencesId = useId();
   // Every report remains available on request, including syndicated copies.
   // The collapsed newspaper presents the story once.
   const members = item.member_articles;
   const primary = members.find((member) => member.is_representative) ?? members[0];
-  const articleId = item.representative_article_id ?? primary?.article_id;
+  // A report the app no longer keeps can't open in the reader, so the
+  // headline opens one it still has, or the web page when none is left.
+  const live = (id: string | null | undefined) => members.find((member) => member.article_id === id && member.is_read !== null);
+  const opens = live(item.representative_article_id) ?? live(primary?.article_id) ?? members.find((member) => member.is_read !== null);
+  const articleId = opens?.article_id ?? item.representative_article_id ?? primary?.article_id;
+  const webUrl = opens ? undefined : (primary?.url ?? members.find((member) => member.url)?.url ?? undefined);
   const lead = rank === "lead";
   const brief = rank === "brief";
   const compact = rank === "rail" || brief;
   const excerpt = isReadableExcerpt(item.snapshot_summary) ? item.snapshot_summary : "";
-  const fullBody = item.editorial?.summary.trim() || item.lede?.trim() || excerpt;
-  const body = compact && fullBody ? firstSentence(fullBody) : fullBody;
+  const summary = item.editorial?.summary.trim() ?? "";
+  const fullBody = summary || item.lede?.trim() || excerpt;
+  // Briefs keep one sentence. The rail runs the whole AI summary; cut to its
+  // first sentence it read like the feed's own snippet.
+  const body = fullBody && (brief || (compact && !summary)) ? firstSentence(fullBody) : fullBody;
   const ledeSourceArticleId = item.lede_source_article_id;
   const ledeSource = item.lede?.trim() && ledeSourceArticleId
     ? members.find((member) => member.article_id === ledeSourceArticleId)
@@ -181,8 +192,9 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
       {rank === "feature" && figure && <Figure value={figure.value} label={figure.label} />}
 
       <h3 className={`catchup-headline text-text-primary ${lead ? "today-lead-headline" : ""}`}>
-        {articleId ? (
-          <button className="today-headline hover:text-accent transition-colors" onClick={() => onOpenArticle(articleId)}>
+        {opens || webUrl ? (
+          <button className="today-headline hover:text-accent transition-colors"
+            onClick={() => { if (opens) onOpenArticle(opens.article_id); else if (webUrl) void openUrl(webUrl); }}>
             {item.snapshot_title}
           </button>
         ) : item.snapshot_title}
@@ -199,7 +211,13 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
           {quotes.slice(0, 2).map((source) => <PullQuote key={source.article_id} quote={source.quote} source={publicationOf(source.article_id)} />)}
         </div>
       )}
-      {body && item.editorial && !compact && (
+      {isWritingSummary && !summary && (
+        <div className="today-summary-writing" role="status" aria-label="Writing summary">
+          <span className="today-story-skeleton-bar" />
+          <span className="today-story-skeleton-bar" />
+        </div>
+      )}
+      {body && item.editorial && !brief && (
         <p className="today-summary-kind">AI summary · Based on {item.editorial.sources.length} of {members.length} {members.length === 1 ? "report" : "reports"}</p>
       )}
       {!item.editorial && ledeSource && item.lede?.trim() && !compact && (

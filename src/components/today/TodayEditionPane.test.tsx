@@ -287,7 +287,7 @@ describe("TodayEditionPane", () => {
     expect(await screen.findByText("A concise development worth knowing.")).toBeVisible();
   });
 
-  it("opens with shapes and reveals only each completed story as progress arrives", async () => {
+  it("opens with shapes, shows cards with feed text at once, and swaps in each summary as it is written", async () => {
     vi.mocked(commands.getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } });
     let loadEdition!: (view: TodayEditionView) => void;
     vi.mocked(commands.getOrGenerateTodayEdition).mockReturnValue(new Promise((resolve) => { loadEdition = resolve; }));
@@ -299,9 +299,11 @@ describe("TodayEditionPane", () => {
     const view = makeView([first, second]);
     await act(async () => loadEdition(view));
     await waitFor(() => expect(commands.generateTodayEditorial).toHaveBeenCalledTimes(1));
-    expect(screen.getAllByRole("status", { name: "Preparing story" })).toHaveLength(2);
-    expect(screen.queryByText("First real headline")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Raw first excerpt/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "Preparing story" })).not.toBeInTheDocument();
+    expect(screen.getByText("First real headline")).toBeVisible();
+    expect(screen.getByText("Second real headline")).toBeVisible();
+    expect(screen.getByText(/Raw first excerpt/)).toBeVisible();
+    expect(screen.getAllByRole("status", { name: "Writing summary" })).toHaveLength(2);
     const calls = vi.mocked(listen).mock.calls;
     const callback = calls[calls.length - 1][1];
     const requestId = vi.mocked(commands.generateTodayEditorial).mock.calls[0][1];
@@ -309,11 +311,10 @@ describe("TodayEditionPane", () => {
     await act(async () => callback({ event: "today_lede_progress", id: 1, payload: {
       edition_id: view.edition.id, request_id: requestId, completed: 1, total: 2, message: "Writing story 2", view: progressed,
     } }));
-    expect(screen.getByText("First real headline")).toBeVisible();
     expect(screen.getByText("The completed, supported summary.")).toBeVisible();
-    expect(screen.getAllByRole("status", { name: "Preparing story" })).toHaveLength(1);
-    expect(screen.queryByText("Second real headline")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Raw second excerpt/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Raw first excerpt/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole("status", { name: "Writing summary" })).toHaveLength(1);
+    expect(screen.getByText(/Raw second excerpt/)).toBeVisible();
   });
 
   it("shows a whole edition on one page and filters it by theme", async () => {
@@ -504,6 +505,41 @@ describe("TodayEditionPane", () => {
     fireEvent.click(container.querySelector(".today-reference") as HTMLElement);
     expect(openUrl).toHaveBeenCalledTimes(2);
     expect(useUiStore.getState().selectedArticleId).toBeNull();
+  });
+
+  it("opens a kept report from the headline when the representative was deleted", async () => {
+    const base = makeItem({}).member_articles[0];
+    const item = makeItem({ snapshot_title: "Pruned lead story", representative_article_id: "gone", member_articles: [
+      { ...base, article_id: "gone", url: "https://example.com/gone", is_read: null },
+      { ...base, article_id: "kept", is_representative: false, is_read: false },
+    ] });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([item]));
+    renderPane();
+    fireEvent.click(await screen.findByRole("button", { name: "Pruned lead story" }));
+    expect(useUiStore.getState().selectedArticleId).toBe("kept");
+    expect(openUrl).not.toHaveBeenCalled();
+  });
+
+  it("opens the web page from the headline when every report was deleted", async () => {
+    const item = makeItem({ snapshot_title: "Fully pruned story", representative_article_id: "gone", member_articles: [
+      { ...makeItem({}).member_articles[0], article_id: "gone", url: "https://example.com/gone", is_read: null },
+    ] });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([item]));
+    renderPane();
+    fireEvent.click(await screen.findByRole("button", { name: "Fully pruned story" }));
+    expect(openUrl).toHaveBeenCalledWith("https://example.com/gone");
+    expect(useUiStore.getState().selectedArticleId).toBeNull();
+  });
+
+  it("shows the whole AI summary, labeled, in rail stories", async () => {
+    const summary = "The first sentence of the summary. The second sentence carries the detail readers came for.";
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([
+      makeItem({ story_id: "lead", editorial: editorial("Lead summary.") }),
+      makeItem({ story_id: "rail", snapshot_title: "Rail story", editorial: editorial(summary) }),
+    ]));
+    renderPane();
+    expect(await screen.findByText(summary)).toBeVisible();
+    expect(screen.getAllByText(/AI summary/)).toHaveLength(2);
   });
 
   it("keeps deleted source attribution readable and non-clickable without a URL", async () => {
@@ -877,7 +913,7 @@ describe("Today summary retries", () => {
     vi.mocked(commands.generateTodayEditorial).mockReturnValue(new Promise((resolve) => { finishLedes = resolve; }));
     vi.mocked(commands.setTodayEditionItemConsumed).mockReturnValue(new Promise((resolve) => { resolveSave = resolve; }));
     renderPane();
-    await userEvent.click(await screen.findByRole("button", { name: "Mark as read" }));
+    await userEvent.click((await screen.findAllByRole("button", { name: "Mark as read" }))[0]);
     const callbacks = vi.mocked(listen).mock.calls;
     const callback = callbacks[callbacks.length - 1][1];
     const requestId = vi.mocked(commands.generateTodayEditorial).mock.calls[0][1];

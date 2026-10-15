@@ -31,8 +31,9 @@ behaviors:
   - id: auto-organize-icon
     description: >-
       The sidebar has one folders button, next to FEEDS, showing a folder with several AI sparkles
-      (not a plus). It opens a menu: New folder, New smart folder, and Auto-organize with AI, on both
-      desktop and iOS. iOS also lists Auto-group Feeds in Settings.
+      (not a plus). It opens a menu: New folder, New smart folder, and Auto-organize with AI ("Organize
+      with AI" on iOS, so it fits on one line), on both desktop and iOS. iOS also lists Auto-group
+      Feeds in Settings.
     details: >-
       Giulio, 2026-10-15: "there should be more than one sparkle to make it clear it's not a plus",
       then "not two icons... we move menu to the sparkly icon and get rid of the plus icon".

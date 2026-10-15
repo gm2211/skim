@@ -913,7 +913,8 @@ private struct FeedPickerSheet: View {
                                 newFolderKind = .smart
                             }
                             Divider()
-                            Button("Auto-organize with AI", systemImage: "sparkles", action: onAutoGroup)
+                            // Short enough to stay on one line in the native menu.
+                            Button("Organize with AI", systemImage: "sparkles", action: onAutoGroup)
                         } label: {
                             AutoGroupIcon(size: 16)
                                 .foregroundStyle(SkimStyle.secondary)

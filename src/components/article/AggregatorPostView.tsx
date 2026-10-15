@@ -226,9 +226,9 @@ function Discussion({ post, url }: { post: AggregatorPost; url: string }) {
 
   return (
     <section className="aggregator-discussion flex flex-col" aria-label="Discussion">
-      <header className="flex items-center justify-between gap-3 border-b border-white/10" style={{ paddingBottom: 12 }}>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10" style={{ paddingBottom: 12 }}>
         <div className="flex items-baseline gap-3 min-w-0">
-          <h2 className="text-text-primary font-bold" style={{ fontSize: 18 }}>Discussion</h2>
+          <h2 className="text-text-primary font-bold whitespace-nowrap" style={{ fontSize: 18 }}>Discussion</h2>
           {stats && <span className="text-text-muted truncate" style={{ fontSize: 13 }}>{stats}</span>}
         </div>
         <button

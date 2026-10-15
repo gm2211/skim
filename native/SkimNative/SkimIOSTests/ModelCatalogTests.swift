@@ -198,7 +198,35 @@ struct ModelPickerMenuTitleTests {
     private let body = UIFont.systemFont(ofSize: 17)
 
     @Test func shortIdsAreUnchanged() {
-        #expect(ModelPickerMenu.singleLineTitle("cohere/command-a-plus", font: body) == "cohere/command-a-plus")
+        #expect(ModelPickerMenu.singleLineTitle("openai/gpt-6", font: body) == "openai/gpt-6")
+    }
+
+    @Test func longIdsKeepAShortProviderPrefixAndTheDistinguishingTail() {
+        for (id, prefix, suffix) in [
+            ("liquid/lfm-2.5-24b-a2b", "liquid/", "a2b"),
+            ("google/gemini-4-argon:batch", "google/", ":batch"),
+            ("anthropic/claude-haiku-5.5:batch", "anth", "5.5:batch"),
+        ] {
+            let title = ModelPickerMenu.singleLineTitle(id, font: body)
+            #expect(title.hasPrefix(prefix), "\(title)")
+            #expect(title.hasSuffix(suffix), "\(title)")
+            #expect(!title.contains("….") && !title.contains("…-") && !title.contains("-…"), "\(title)")
+            let width = (title as NSString).size(withAttributes: [.font: body]).width
+            #expect(width <= ModelPickerMenu.menuRowTextWidth, "\(title)")
+        }
+    }
+
+    @Test func siblingModelsStayDistinct() {
+        let ids = ["anthropic/claude-haiku-5.5:batch", "anthropic/claude-sonnet-5.5:batch"]
+        let titles = ModelPickerMenu.singleLineTitles(ids, font: body)
+        #expect(titles[ids[0]] != titles[ids[1]], "\(titles)")
+    }
+
+    @Test func collidingTitlesGiveTheRowToTheTail() {
+        let ids = ["openai/gpt-6-luna-pro:batch", "openai/gpt-6-sol-pro:batch", "openai/gpt-6"]
+        let titles = ModelPickerMenu.singleLineTitles(ids, font: body)
+        #expect(Set(titles.values).count == ids.count, "\(titles)")
+        #expect(titles["openai/gpt-6"] == "openai/gpt-6")
     }
 
     @Test func longIdsKeepBothEndsAndFitOneRow() {

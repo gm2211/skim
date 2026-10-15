@@ -11,7 +11,7 @@ private func response(_ object: [String: Any]) -> String {
     String(decoding: try! JSONSerialization.data(withJSONObject: object), as: UTF8.self)
 }
 
-private let validObject: [String: Any] = [
+nonisolated(unsafe) private let validObject: [String: Any] = [
     "theme": "Infrastructure",
     "summary": "The council closed the old bridge after engineers found it unsafe. Repairs will take a year.",
     "sources": [

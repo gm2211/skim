@@ -6,7 +6,9 @@
       "Bash(export PATH=\"$HOME/.cargo/bin:$PATH\")",
       "Bash(cargo build:*)",
       "Bash(bd close:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(pnpm testflight)"
     ]
   },
   "hooks": {

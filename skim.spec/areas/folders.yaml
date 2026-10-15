@@ -30,8 +30,11 @@ behaviors:
       reference: Giulio, project thread "Free text feedback on feed grouping", 2026-10-15
   - id: auto-organize-icon
     description: >-
-      On iOS the button that opens auto-grouping shows a folder with AI sparkles, not a folder with a
-      plus, so it doesn't read as "new folder".
+      The button that opens auto-grouping shows a folder with several AI sparkles of different sizes,
+      not a folder with a plus, so it doesn't read as "new folder". iOS shows it next to FEEDS and in
+      Settings; desktop shows it as its own button next to the add-folder button in the sidebar.
+    details: >-
+      Giulio, 2026-10-15: "there should be more than one sparkle to make it clear it's not a plus".
     source:
       text: >-
         That I can suggest they were creating a new folder, but in reality we're using AI to group

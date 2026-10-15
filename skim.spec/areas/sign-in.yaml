@@ -37,8 +37,12 @@ behaviors:
       auth.openai.com with scopes "openid profile email offline_access resource.invoke
       chatgpt.tokens.use.direct" and resource https://api.openai.com/v1. The first sign-in
       registers Skim with client_id=dynamic_agent_client, agent_name_hint=Skim and a per-install
-      ext_agent_host_id; the issued client id is kept through sign-out and used for later sign-ins
-      and every refresh. The redirect is a loopback on 127.0.0.1:1455 (54321 if busy); OpenAI
+      ext_agent_host_id; every later sign-in sends the same ext_agent_host_id and the issued client
+      id, which is kept through sign-out and used for every refresh. A callback naming a different
+      client id is refused. When the code exchange returns invalid_grant or invalid_client, Skim
+      says "ChatGPT didn't accept that sign-in. Sign in again." and forgets the issued client id, so
+      the next sign-in registers afresh (Giulio hit "ChatGPT sign-in failed (400): invalid_grant"
+      on desktop, 2026-10-15). The redirect is a loopback on 127.0.0.1:1455 (54321 if busy); OpenAI
       refuses localhost. On iOS the page opens in the in-app browser sheet while Skim listens on the
       loopback port, and the sheet closes when ChatGPT redirects back. Sign-in is refused unless the
       reader grants chatgpt.tokens.use.direct. Inference uses the public Responses API with

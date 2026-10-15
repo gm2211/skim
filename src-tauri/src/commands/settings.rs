@@ -15,7 +15,7 @@ fn models_url(provider: &str, endpoint: Option<&str>) -> Result<String, String> 
     let base = match provider {
         "openai" => "https://api.openai.com",
         "xai" => "https://api.x.ai",
-        "anthropic" => "https://api.anthropic.com",
+        "anthropic" | "claude-subscription" => "https://api.anthropic.com",
         "openrouter" => "https://openrouter.ai/api",
         "custom" => endpoint
             .filter(|value| !value.trim().is_empty())
@@ -64,6 +64,10 @@ pub async fn list_remote_models(
     // Signed in with SuperGrok and no key typed: list with the sign-in token.
     let api_key = match api_key.filter(|key| !key.trim().is_empty()) {
         None if provider == "xai" => crate::ai::xai_oauth::stored_access_token(&db),
+        // Claude Pro/Max lists with its sign-in token, as the iOS app does.
+        _ if provider == "claude-subscription" => Some(
+            crate::ai::claude_oauth::stored_access_token(&db).ok_or("Sign in with Claude to load models")?,
+        ),
         key => key,
     };
     let url = models_url(&provider, endpoint.as_deref())?;
@@ -78,6 +82,11 @@ pub async fn list_remote_models(
             request
                 .header("x-api-key", key.trim())
                 .header("anthropic-version", "2023-06-01")
+        } else if provider == "claude-subscription" {
+            request
+                .bearer_auth(key.trim())
+                .header("anthropic-version", "2023-06-01")
+                .header("anthropic-beta", crate::ai::claude_oauth::BETA_HEADER)
         } else {
             request.bearer_auth(key.trim())
         };
@@ -132,6 +141,10 @@ mod model_list_tests {
                 "https://example.com/api/v1/models"
             );
         }
+        assert_eq!(
+            models_url("claude-subscription", None).unwrap(),
+            "https://api.anthropic.com/v1/models"
+        );
         assert!(models_url("custom", None).is_err());
         assert!(models_url("none", None).is_err());
     }

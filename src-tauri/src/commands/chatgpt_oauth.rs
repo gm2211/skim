@@ -16,7 +16,14 @@ pub struct ChatGptStatus {
 pub async fn chatgpt_oauth_sign_in(db: State<'_, Database>) -> Result<ChatGptStatus, String> {
     let host_id = chatgpt_oauth::host_id(&db)?;
     let saved = chatgpt_oauth::stored_client_id(&db);
-    let (tokens, client_id) = chatgpt_oauth::run_sign_in(saved, &host_id).await?;
+    let (tokens, client_id) = match chatgpt_oauth::run_sign_in(saved, &host_id).await {
+        Err(e) if e == chatgpt_oauth::REJECTED => {
+            // A revoked or stale registration keeps failing; start over next time.
+            chatgpt_oauth::forget_client_id(&db)?;
+            return Err(e);
+        }
+        result => result?,
+    };
     chatgpt_oauth::persist(&db, &tokens, &client_id)?;
     Ok(ChatGptStatus { signed_in: true, email: chatgpt_oauth::stored_email(&db) })
 }

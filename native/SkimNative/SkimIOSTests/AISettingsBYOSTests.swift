@@ -184,6 +184,7 @@ struct NativeChatGPTTests {
         let items = URLComponents(url: flow.authorizeURL, resolvingAgainstBaseURL: false)!.queryItems!
         #expect(items.first(where: { $0.name == "client_id" })?.value == "client-1")
         #expect(!items.contains(where: { $0.name == "agent_name_hint" }))
+        #expect(items.first(where: { $0.name == "ext_agent_host_id" })?.value == "urn:uuid:abc")
     }
 
     @Test func callbackChecksStateAndTakesTheIssuedClientID() throws {

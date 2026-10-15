@@ -119,7 +119,7 @@ struct ModelPickerMenu: View {
     /// or "_" beside the "…".
     /// With `keepHead` false the whole row goes to the tail ("…luna-pro:batch"),
     /// for ids whose shortened titles would otherwise collide.
-    static func singleLineTitle(_ label: String, font: UIFont, keepHead: Bool = true) -> String {
+    nonisolated static func singleLineTitle(_ label: String, font: UIFont, keepHead: Bool = true) -> String {
         let maxWidth = menuRowTextWidth * font.pointSize / 17
         func width(_ text: String) -> CGFloat {
             (text as NSString).size(withAttributes: [.font: font]).width
@@ -148,6 +148,12 @@ struct ModelPickerMenu: View {
         var tailCount = characters.count - headCount - 1
         while tailCount > 0 {
             var tail = String(characters.suffix(tailCount))
+            // Start at a word ("…gpt-6-luna-pro", not "…ai/gpt-6-luna-pro")
+            // when that costs at most a few letters.
+            if let boundary = tail.prefix(4).firstIndex(where: { "/-".contains($0) }),
+               tail.distance(from: tail.startIndex, to: boundary) > 0 {
+                tail = String(tail[tail.index(after: boundary)...])
+            }
             while let first = tail.first, "-._/".contains(first), tail.count > 1 { tail.removeFirst() }
             let candidate = head + "…" + tail
             if width(candidate) <= maxWidth { return candidate }
@@ -159,7 +165,7 @@ struct ModelPickerMenu: View {
     /// One-line titles for a whole menu, keyed by id. Ids whose shortened
     /// titles collide (openai/gpt-6-luna-pro:batch and …-sol-pro:batch both
     /// becoming "openai/…pro:batch") give their row to the tail instead.
-    static func singleLineTitles(_ labels: [String], font: UIFont) -> [String: String] {
+    nonisolated static func singleLineTitles(_ labels: [String], font: UIFont) -> [String: String] {
         var titles = Dictionary(labels.map { ($0, singleLineTitle($0, font: font)) }, uniquingKeysWith: { first, _ in first })
         let counts = Dictionary(titles.values.map { ($0, 1) }, uniquingKeysWith: +)
         for (label, title) in titles where counts[title, default: 0] > 1 && title != label {

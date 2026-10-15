@@ -399,7 +399,7 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
                 let grows = current.items.isEmpty
                     || (covered > currentlyCovered && generatedItems.count >= current.items.count)
                 guard !generatedItems.isEmpty, !current.isSettled, grows else { return }
-                carried = current.items.map(\.snapshot).filter { $0.lede != nil }
+                carried = current.items.map(\.snapshot).filter { $0.lede != nil || $0.editorial != nil }
                 try db.execute("DELETE FROM editions WHERE id = ?", [.text(editionID)])
             }
             try db.insertEdition(edition)
@@ -419,13 +419,15 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
                     )
                 }
             }
-            // Stories that stay on a rebuilt page keep the ledes already written.
-            for item in carried {
-                guard let lede = item.lede, let source = item.ledeSourceArticleID,
-                      let hash = item.ledeSourceEvidenceHash,
-                      generatedItems.contains(where: { $0.item.storyID == item.storyID }) else { continue }
-                try? db.setEditionItemLede(editionID: editionID, storyID: item.storyID, lede: lede,
-                                           sourceArticleID: source, sourceEvidenceHash: hash)
+            // Stories that stay on a rebuilt page keep the ledes and summaries already written.
+            for item in carried where generatedItems.contains(where: { $0.item.storyID == item.storyID }) {
+                if let lede = item.lede, let source = item.ledeSourceArticleID, let hash = item.ledeSourceEvidenceHash {
+                    try? db.setEditionItemLede(editionID: editionID, storyID: item.storyID, lede: lede,
+                                               sourceArticleID: source, sourceEvidenceHash: hash)
+                }
+                if let editorial = item.editorial {
+                    try? db.setEditionItemEditorial(editionID: editionID, storyID: item.storyID, editorial: editorial)
+                }
             }
         }
         return try db.todayEditionSnapshot(id: editionID)
@@ -461,6 +463,25 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
             )
         }
         try db.setEditionItemLede(editionID: editionID, storyID: storyID, lede: lede, sourceArticleID: sourceArticleID, sourceEvidenceHash: sourceEvidenceHash)
+        return try db.todayEditionSnapshot(id: editionID)
+    }
+
+    /// Record the AI summary for one story on a Today page, and hand back the
+    /// page with it in place.
+    @discardableResult
+    public func setTodayEditionItemEditorial(
+        editionID: String,
+        storyID: String,
+        editorial: TodayEditorial
+    ) async throws -> TodayEditionSnapshot {
+        guard try db.edition(id: editionID) != nil,
+              try db.editionItem(editionID: editionID, storyID: storyID) != nil
+        else {
+            throw SkimCoreError.database(
+                "Today edition item \(editionID):\(storyID) does not exist"
+            )
+        }
+        try db.setEditionItemEditorial(editionID: editionID, storyID: storyID, editorial: editorial)
         return try db.todayEditionSnapshot(id: editionID)
     }
 
@@ -821,6 +842,9 @@ private final class SQLiteDatabase: @unchecked Sendable {
         }
         if !editionColumns.contains("lede_evidence_version") {
             try execute("ALTER TABLE edition_items ADD COLUMN lede_evidence_version INTEGER NOT NULL DEFAULT 0")
+        }
+        if !editionColumns.contains("editorial_json") {
+            try execute("ALTER TABLE edition_items ADD COLUMN editorial_json TEXT")
         }
         try execute("CREATE INDEX IF NOT EXISTS idx_edition_items_order ON edition_items(edition_id, position)")
         try execute("CREATE INDEX IF NOT EXISTS idx_edition_items_story ON edition_items(story_id)")
@@ -1891,7 +1915,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
             SELECT edition_id, story_id, story_revision_number, position, section,
                    snapshot_title, snapshot_summary, snapshot_delta_summary,
                    snapshot_source_count, snapshot_reason, is_unique_find,
-                   CASE WHEN lede_evidence_version = \(TodayLedePolicy.evidenceVersion) AND length(lede_source_evidence_hash) = 64 AND lede_source_evidence_hash NOT GLOB '*[^0-9a-f]*' AND EXISTS (SELECT 1 FROM edition_item_articles p WHERE p.edition_id=edition_items.edition_id AND p.story_id=edition_items.story_id AND p.article_id=edition_items.lede_source_article_id) THEN lede ELSE NULL END AS lede, is_consumed, consumed_at, lede_source_article_id, lede_source_evidence_hash
+                   CASE WHEN lede_evidence_version = \(TodayLedePolicy.evidenceVersion) AND length(lede_source_evidence_hash) = 64 AND lede_source_evidence_hash NOT GLOB '*[^0-9a-f]*' AND EXISTS (SELECT 1 FROM edition_item_articles p WHERE p.edition_id=edition_items.edition_id AND p.story_id=edition_items.story_id AND p.article_id=edition_items.lede_source_article_id) THEN lede ELSE NULL END AS lede, is_consumed, consumed_at, lede_source_article_id, lede_source_evidence_hash, editorial_json
             FROM edition_items
             WHERE edition_id = ? AND story_id = ?
             LIMIT 1
@@ -2145,6 +2169,8 @@ private final class SQLiteDatabase: @unchecked Sendable {
         stored.ledeSourceArticleID = nil
         item.ledeSourceEvidenceHash = nil
         stored.ledeSourceEvidenceHash = nil
+        item.editorial = nil
+        stored.editorial = nil
         guard stored == item else {
             throw SkimCoreError.database(
                 "Conflicting edition item \(item.editionID):\(item.storyID)"
@@ -2162,7 +2188,7 @@ private final class SQLiteDatabase: @unchecked Sendable {
             SELECT edition_id, story_id, story_revision_number, position, section,
                    snapshot_title, snapshot_summary, snapshot_delta_summary,
                    snapshot_source_count, snapshot_reason, is_unique_find,
-                   CASE WHEN lede_evidence_version = \(TodayLedePolicy.evidenceVersion) AND length(lede_source_evidence_hash) = 64 AND lede_source_evidence_hash NOT GLOB '*[^0-9a-f]*' AND EXISTS (SELECT 1 FROM edition_item_articles p WHERE p.edition_id=edition_items.edition_id AND p.story_id=edition_items.story_id AND p.article_id=edition_items.lede_source_article_id) THEN lede ELSE NULL END AS lede, is_consumed, consumed_at, lede_source_article_id, lede_source_evidence_hash
+                   CASE WHEN lede_evidence_version = \(TodayLedePolicy.evidenceVersion) AND length(lede_source_evidence_hash) = 64 AND lede_source_evidence_hash NOT GLOB '*[^0-9a-f]*' AND EXISTS (SELECT 1 FROM edition_item_articles p WHERE p.edition_id=edition_items.edition_id AND p.story_id=edition_items.story_id AND p.article_id=edition_items.lede_source_article_id) THEN lede ELSE NULL END AS lede, is_consumed, consumed_at, lede_source_article_id, lede_source_evidence_hash, editorial_json
             FROM edition_items
             WHERE edition_id = ?
             ORDER BY position ASC, story_id ASC
@@ -2351,6 +2377,22 @@ private final class SQLiteDatabase: @unchecked Sendable {
             WHERE edition_id = ? AND story_id = ?
             """,
             [.text(lede), .int(TodayLedePolicy.evidenceVersion), .text(sourceArticleID), .text(sourceEvidenceHash), .text(editionID), .text(storyID)]
+        )
+    }
+
+    /// Store the AI summary for one story on the page. Every report it cites
+    /// must belong to the frozen edition item.
+    func setEditionItemEditorial(editionID: String, storyID: String, editorial: TodayEditorial) throws {
+        let members = try todayEditionSnapshot(id: editionID).items.first { $0.snapshot.storyID == storyID }?.sourceArticles ?? []
+        guard !editorial.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !editorial.sources.isEmpty,
+              editorial.sources.allSatisfy({ source in members.contains { $0.articleID == source.articleID } }) else {
+            throw SkimCoreError.database("Summary sources must belong to the frozen edition item")
+        }
+        let json = String(decoding: try JSONEncoder().encode(editorial), as: UTF8.self)
+        try execute(
+            "UPDATE edition_items SET editorial_json = ? WHERE edition_id = ? AND story_id = ?",
+            [.text(json), .text(editionID), .text(storyID)]
         )
     }
 
@@ -2623,7 +2665,8 @@ private func makeEditionItem(from statement: OpaquePointer) -> EditionItem {
         ledeSourceArticleID: columnOptionalText(statement, 11) == nil ? nil : columnOptionalText(statement, 14),
         ledeSourceEvidenceHash: columnOptionalText(statement, 11) == nil ? nil : columnOptionalText(statement, 15),
         isConsumed: sqlite3_column_int(statement, 12) != 0,
-        consumedAt: columnDate(statement, 13)
+        consumedAt: columnDate(statement, 13),
+        editorial: columnOptionalText(statement, 16).flatMap { try? JSONDecoder().decode(TodayEditorial.self, from: Data($0.utf8)) }
     )
 }
 

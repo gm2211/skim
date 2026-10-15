@@ -566,6 +566,8 @@ public struct EditionItem: Identifiable, Codable, Hashable, Sendable {
     public var ledeSourceEvidenceHash: String?
     public var isConsumed: Bool
     public var consumedAt: Date?
+    /// The story's AI summary, written after the edition is generated.
+    public var editorial: TodayEditorial?
 
     public var id: String {
         "\(editionID):\(storyID)"
@@ -587,7 +589,8 @@ public struct EditionItem: Identifiable, Codable, Hashable, Sendable {
         ledeSourceArticleID: String? = nil,
         ledeSourceEvidenceHash: String? = nil,
         isConsumed: Bool = false,
-        consumedAt: Date? = nil
+        consumedAt: Date? = nil,
+        editorial: TodayEditorial? = nil
     ) {
         self.editionID = editionID
         self.storyID = storyID
@@ -605,6 +608,7 @@ public struct EditionItem: Identifiable, Codable, Hashable, Sendable {
         self.ledeSourceEvidenceHash = ledeSourceEvidenceHash
         self.isConsumed = isConsumed
         self.consumedAt = consumedAt
+        self.editorial = editorial
     }
 
     enum CodingKeys: String, CodingKey {
@@ -624,6 +628,7 @@ public struct EditionItem: Identifiable, Codable, Hashable, Sendable {
         case ledeSourceEvidenceHash = "lede_source_evidence_hash"
         case isConsumed = "is_consumed"
         case consumedAt = "consumed_at"
+        case editorial
     }
 }
 

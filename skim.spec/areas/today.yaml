@@ -43,10 +43,23 @@ behaviors:
     description: >-
       Each story groups the reports that cover the same event, shows how many reports there are, and
       labels syndicated copies.
+  - id: ai-summary
+    description: >-
+      The top stories on a page carry an AI summary of two or three sentences written from their
+      reports, labelled "AI summary · Based on N of M reports", on desktop and iOS alike.
+    details: >-
+      The model reads up to four reports (two of 1,500 characters on Apple's on-device model) and
+      must return one exact supporting quote from every report it read, or the summary is not
+      kept. Titles show first; each card's summary slot, the photo lead's included, shows an
+      animated placeholder until its summary lands. A story whose summary can't be written keeps
+      its verified source passage instead of staying blank.
+    source:
+      text: Where's the summary in newspaper / today view
+      reference: Giulio, project chat, 2026-10-14, with an iOS screenshot of a lead showing only the feed excerpt
   - id: source-verified-preview
     description: >-
-      A story's preview is an exact passage from one named source, one to three sentences and at
-      most 60 words, so it never puts words in a publisher's mouth.
+      Where a story has no AI summary, its preview is an exact passage from one named source, one
+      to three sentences and at most 60 words, so it never puts words in a publisher's mouth.
     details: >-
       The model picks the passage; when its pick fails the check or the model can't be reached,
       the preview is the first verified passage of one or two whole sentences taken without a

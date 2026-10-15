@@ -409,7 +409,9 @@ struct SummaryConfigurationSheet: View {
     var defaults: AISettings
     var onRun: (AISettings) -> Void
 
+    @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    @State private var showAISettings = false
     @State private var style: SummaryStyleOption
     @State private var wordCount: Int
     @State private var customPrompt: String
@@ -596,7 +598,14 @@ struct SummaryConfigurationSheet: View {
                     }
 
                     HStack(spacing: 8) {
-                        ModelPickerMenu(ai: $ai, onOpenSettings: nil)
+                        ModelPickerMenu(ai: $ai, onOpenSettings: { showAISettings = true })
+                            .sheet(isPresented: $showAISettings, onDismiss: {
+                                // Pick up a provider or model changed in settings;
+                                // style, length and focus live in their own state.
+                                ai = model.settings.ai
+                            }) {
+                                SettingsSheet(isPresented: $showAISettings, aiOnly: true)
+                            }
                         if !isEditingFocus {
                             Button {
                                 withAnimation(.smooth(duration: 0.2)) { isEditingFocus = true }

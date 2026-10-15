@@ -1,8 +1,9 @@
 import SkimCore
 import SwiftUI
 
-/// Red error text plus the action that fixes it, if any: "Sign in again" for
-/// an expired Claude session, "Open AI Settings" for missing providers or keys.
+/// Red error text plus the action that fixes it: "Sign in again" for an expired
+/// Claude session, "Open AI Settings" for missing providers or keys, and a
+/// quieter "AI Settings" button for any other AI failure.
 /// Runs `onResolved` after the fix sheet is dismissed so callers can retry.
 struct AIErrorBox: View {
     var message: String
@@ -25,7 +26,16 @@ struct AIErrorBox: View {
             case .openAISettings:
                 actionButton("Open AI Settings", systemImage: "gearshape") { showAISettings = true }
             case .none:
-                EmptyView()
+                // Any other AI failure may still be a provider or model
+                // problem, so settings stay one tap away.
+                Button { showAISettings = true } label: {
+                    Label("AI Settings", systemImage: "gearshape")
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+                .buttonStyle(.bordered)
+                .tint(SkimStyle.accent)
             }
         }
         .padding(16)
@@ -48,5 +58,41 @@ struct AIErrorBox: View {
         }
         .buttonStyle(.borderedProminent)
         .tint(SkimStyle.accent)
+    }
+}
+
+
+/// A gear for the toolbar or header of any surface that calls AI. It opens AI
+/// provider settings in a sheet over that surface, so closing it returns there;
+/// `onDismiss` lets the caller retry once settings close.
+struct AISettingsButton: View {
+    /// Shows "AI Settings" as text, for use beside an error or a Retry button.
+    var titled = false
+    var onDismiss: (() -> Void)? = nil
+
+    @State private var showAISettings = false
+
+    var body: some View {
+        Button {
+            showAISettings = true
+        } label: {
+            if titled {
+                Text("AI Settings")
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+            } else {
+                Label("AI Settings", systemImage: "gearshape")
+                    .labelStyle(.iconOnly)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+        }
+        // Borderless so it stays its own tap target inside a List row.
+        .buttonStyle(.borderless)
+        .accessibilityLabel("AI Settings")
+        .help("AI Settings")
+        .sheet(isPresented: $showAISettings, onDismiss: { onDismiss?() }) {
+            SettingsSheet(isPresented: $showAISettings, aiOnly: true)
+        }
     }
 }

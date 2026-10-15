@@ -24,6 +24,7 @@ import type { Feed, Folder, SidebarView, SmartRules } from "../../services/types
 import { feedsForFolder } from "../../lib/smartFolder";
 import { SmartFolderEditor } from "./SmartFolderEditor";
 import { Select } from "../ui/Select";
+import { AiErrorText, AiSettingsButton } from "../common/AiSettingsButton";
 
 type FeedContextMenu = { feedId: string; x: number; y: number } | null;
 type FolderContextMenu = { folderId: string; x: number; y: number } | null;
@@ -1189,6 +1190,8 @@ function AutoOrganizeDialog({
   const [feedback, setFeedback] = useState("");
   const [revising, setRevising] = useState(false);
   const [revisedWith, setRevisedWith] = useState<string | null>(null);
+  // Errors from the AI call get a button to AI settings; apply errors do not.
+  const [errorFromAi, setErrorFromAi] = useState(false);
 
   useEffect(() => {
     if (!loading) return;
@@ -1215,7 +1218,7 @@ function AutoOrganizeDialog({
         showProposals(result);
         setRevisedWith(null);
       } catch (e) {
-        if (!cancelled) setError(String(e instanceof Error ? e.message : e));
+        if (!cancelled) { setError(String(e instanceof Error ? e.message : e)); setErrorFromAi(true); }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -1257,6 +1260,7 @@ function AutoOrganizeDialog({
       setFeedback("");
     } catch (e) {
       setError(`Couldn't revise the grouping: ${String(e instanceof Error ? e.message : e)}`);
+      setErrorFromAi(true);
     } finally {
       setRevising(false);
     }
@@ -1307,6 +1311,7 @@ function AutoOrganizeDialog({
         feed_ids: Array.from(selected[idx] ?? new Set<string>()),
       }))
       .filter((p) => p.name && p.feed_ids.length > 0);
+    setErrorFromAi(false);
     if (filtered.length === 0) {
       setError("Nothing to apply");
       return;
@@ -1341,9 +1346,10 @@ function AutoOrganizeDialog({
               <path d="M3 7h7M3 12h7M3 17h7" />
               <path d="M14 4h7v7h-7zM14 13h7v7h-7z" />
             </svg>
-            <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600 }}>
+            <h3 className="text-text-primary flex-1" style={{ fontSize: 16, fontWeight: 600 }}>
               Auto-organize with AI
             </h3>
+            <AiSettingsButton />
           </div>
           <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
             AI proposes folders based on your feeds. Rename, uncheck, or drop folders before applying.
@@ -1500,11 +1506,9 @@ function AutoOrganizeDialog({
               </div>
             ))}
 
-          {error && (
-            <p className="text-danger" style={{ fontSize: 12, marginTop: 10 }}>
-              {error}
-            </p>
-          )}
+          {error && (errorFromAi
+            ? <AiErrorText error={error} style={{ marginTop: 10 }} />
+            : <p className="text-danger" style={{ fontSize: 12, marginTop: 10 }}>{error}</p>)}
         </div>
         {hasRun && proposals.length > 0 && !loading && (
           <form

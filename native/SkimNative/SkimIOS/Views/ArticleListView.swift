@@ -1506,6 +1506,8 @@ private struct AutoGroupSheet: View {
     @State private var dropTargetProposalID: String?
     @State private var feedbackText = ""
     @State private var isRevising = false
+    /// The last AI call failed, so its message offers AI settings.
+    @State private var aiFailed = false
     @FocusState private var feedbackFocused: Bool
 
     var body: some View {
@@ -1524,6 +1526,10 @@ private struct AutoGroupSheet: View {
                 }
 
                 Spacer()
+
+                AISettingsButton(onDismiss: { if aiFailed { Task { await runAI() } } })
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(SkimStyle.secondary)
 
                 Button {
                     dismissUIKitKeyboard()
@@ -1723,6 +1729,12 @@ private struct AutoGroupSheet: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(SkimStyle.accent)
                 }
+
+                if aiFailed {
+                    AISettingsButton(titled: true, onDismiss: { Task { await runAI() } })
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SkimStyle.accent)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 14)
@@ -1802,7 +1814,9 @@ private struct AutoGroupSheet: View {
             usedFallback = false
             feedbackText = ""
             aiMessage = "Revised with \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider)): \u{201C}\(feedback)\u{201D}"
+            aiFailed = false
         } catch {
+            aiFailed = true
             aiMessage = "Couldn't revise the grouping: \(error.localizedDescription)\nYour feedback is still in the box below."
         }
 
@@ -1852,7 +1866,9 @@ private struct AutoGroupSheet: View {
             let result = try await AutoGroupClassifier.aiProposals(for: model.feeds, settings: model.settings)
             proposals = result
             aiMessage = "Grouped with \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider))."
+            aiFailed = false
         } catch {
+            aiFailed = true
             proposals = AutoGroupClassifier.fallbackProposals(for: model.feeds)
             usedFallback = true
             aiMessage = proposals.isEmpty

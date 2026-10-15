@@ -16,7 +16,8 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 import { ModelPicker } from "../common/ModelPicker";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { ArticleLearningActions } from "../article/ArticleLearningActions";
-import { MoreIcon, ShareIcon, TickIcon } from "../ui/icons";
+import { CogIcon, MoreIcon, ShareIcon, TickIcon } from "../ui/icons";
+import { AiErrorText, AiSettingsButton, openAiSettings } from "../common/AiSettingsButton";
 import { shareArticle } from "../../lib/shareArticle";
 import { AggregatorPostView } from "../article/AggregatorPostView";
 import { parseAggregatorPost } from "../../lib/aggregatorPost";
@@ -1169,6 +1170,15 @@ export function ArticleDetail() {
           </button>
         )}
       </div>
+      <button
+        type="button"
+        onClick={() => { setShowSummarizeMenu(false); openAiSettings(); }}
+        className="w-full flex items-center justify-center gap-1.5 text-text-secondary hover:text-text-primary hover:bg-white/5 rounded-lg transition-colors"
+        style={{ padding: "6px 0", fontSize: 11, marginTop: 6 }}
+      >
+        <CogIcon size={12} />
+        AI settings…
+      </button>
     </>
   );
 
@@ -1541,7 +1551,8 @@ export function ArticleDetail() {
                 zIndex: 1,
               }}
             >
-              <div className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: isPhone ? 10 : 11 }}>AI Summary</div>
+              <div className="text-text-muted uppercase tracking-wider font-semibold flex-1" style={{ fontSize: isPhone ? 10 : 11 }}>AI Summary</div>
+              <AiSettingsButton size={isPhone ? 16 : 13} />
               <button
                 onClick={() => summarize.reset()}
                 className="inline-flex items-center justify-center text-text-muted hover:text-text-primary transition-colors rounded-md hover:bg-white/10"
@@ -1624,8 +1635,8 @@ export function ArticleDetail() {
                 </div>
               </div>
             ) : (
-              <div className="rounded-xl border border-danger/30 text-danger" style={{ padding: "12px 16px", fontSize: 14, background: "rgba(248, 81, 73, 0.1)" }}>
-                {msg}
+              <div className="rounded-xl border border-danger/30" style={{ padding: "12px 16px", background: "rgba(248, 81, 73, 0.1)" }}>
+                <AiErrorText error={msg} style={{ fontSize: 14 }} />
               </div>
             )}
           </div>

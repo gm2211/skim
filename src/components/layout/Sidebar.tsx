@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRefreshAllFeeds, useFeeds } from "../../hooks/useFeeds";
 import { useTriageArticles, useTriageProgress } from "../../hooks/useInbox";
+import { AiErrorText } from "../common/AiSettingsButton";
 import { useGenerateThemes, useThemeProgress } from "../../hooks/useThemes";
 import { ChatIcon, NewspaperIcon, PlusIcon, RefreshIcon, SidebarIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
@@ -239,6 +240,13 @@ export function Sidebar() {
               Recent
             </span>
           </div>
+          {!triage.isPending && !generateThemes.isPending && (triage.error || generateThemes.error) && (
+            <AiErrorText
+              stacked
+              error={`Couldn't rank For you: ${String((triage.error ?? generateThemes.error) instanceof Error ? (triage.error ?? generateThemes.error)!.message : (triage.error ?? generateThemes.error))}`}
+              style={{ padding: "4px 8px 0", fontSize: 12 }}
+            />
+          )}
           {(triage.isPending || generateThemes.isPending) && (
             <div className="flex flex-col gap-2" style={{ padding: "4px 8px 0" }}>
               {triage.isPending && (

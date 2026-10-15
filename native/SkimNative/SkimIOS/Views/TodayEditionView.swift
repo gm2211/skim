@@ -16,6 +16,7 @@ struct TodayEditionView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("todayStoryLimit") private var storyLimit = 10
     @Binding var showSettings: Bool
+    @State private var showAISettings = false
     /// Leaves Today for the article list.
     var onBrowseArticles: () -> Void
     /// Opens a chat about one story; the article list owns the chat sheet.
@@ -38,8 +39,11 @@ struct TodayEditionView: View {
                                 VStack(alignment: .leading, spacing: 12) {
                                     Text("Couldn’t load Today").font(.headline)
                                     Text(error).font(.subheadline).foregroundStyle(SkimStyle.secondary)
-                                    Button("Try again") { Task { await load() } }
-                                        .frame(minHeight: 44)
+                                    HStack(spacing: 20) {
+                                        Button("Try again") { Task { await load() } }
+                                            .frame(minHeight: 44)
+                                        AISettingsButton(titled: true, onDismiss: { Task { await load() } })
+                                    }
                                 }
                             }
                             if let edition = model.todayEdition {
@@ -219,6 +223,11 @@ struct TodayEditionView: View {
                             Task { await model.retryTodayLedes() }
                         }
                     }
+                    Button {
+                        showAISettings = true
+                    } label: {
+                        Label("AI Settings…", systemImage: "gearshape")
+                    }
                 }
                 Section("Edition") {
                     Picker("Stories per edition", selection: $storyLimit) {
@@ -238,6 +247,9 @@ struct TodayEditionView: View {
             }
         }
         .presentationDetents([.medium])
+        .sheet(isPresented: $showAISettings) {
+            SettingsSheet(isPresented: $showAISettings, aiOnly: true)
+        }
     }
 
     /// The dateline under the title bar, which carries the nameplate: the rule,
@@ -295,6 +307,9 @@ struct TodayEditionView: View {
                     Button("Retry") { Task { await model.retryTodayLedes() } }
                         .foregroundStyle(SkimStyle.accent)
                         .frame(minHeight: 44)
+                    Text("·").foregroundStyle(SkimStyle.secondary)
+                    AISettingsButton(titled: true)
+                        .foregroundStyle(SkimStyle.accent)
                 }
                 .font(.system(size: 12, weight: .medium))
             }

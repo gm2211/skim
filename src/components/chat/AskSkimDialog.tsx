@@ -18,6 +18,7 @@ import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { ModelPicker } from "../common/ModelPicker";
 import { SettingsCog } from "../common/SettingsCog";
+import { AiErrorText } from "../common/AiSettingsButton";
 import { Select } from "../ui/Select";
 import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./ChatMessageContent";
 
@@ -334,11 +335,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
             </div>
           )}
 
-          {error && !isAiSetupError(error) && (
-            <p role="alert" className="text-danger" style={{ fontSize: 14 }}>
-              {error}
-            </p>
-          )}
+          {error && !isAiSetupError(error) && <AiErrorText error={error} style={{ fontSize: 14 }} />}
         </div>
 
         {/* Input */}

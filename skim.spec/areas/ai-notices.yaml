@@ -13,3 +13,17 @@ behaviors:
     description: >-
       When AI cannot run because of setup (no provider, expired sign-in, missing model, missing key),
       the surface says which problem it is and offers a button to the right settings or sign-in.
+  - id: ai-settings-from-every-ai-surface
+    description: >-
+      Every surface that calls AI (auto-organize, chat and Ask Skim, summaries, Today, For you)
+      has a compact AI settings control that opens AI provider settings over it, and every AI
+      error message there carries a button to those settings. Closing settings returns to the
+      surface.
+    details: >-
+      Desktop uses a cog that opens Settings on the AI Provider tab; iOS uses a gear that opens
+      the AI-only settings sheet and retries the failed call when it closes.
+    source:
+      text: everywhere we have an ai call, I should be able to quickly access ai provider config
+      reference: >-
+        Giulio, project thread "AI settings everywhere", 2026-10-15, with a screenshot of the
+        desktop Auto-organize dialog showing "No AI provider configured" and no way to settings.

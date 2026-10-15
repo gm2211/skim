@@ -3671,6 +3671,9 @@ struct AIResultSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 16) {
+                        AISettingsButton(onDismiss: {
+                            if errorMessage != nil { retryTask = Task { await run() } }
+                        })
                         if let continueInChat = request.continueInChat, !isLoading, errorMessage == nil {
                             Button {
                                 let captured = result
@@ -4169,6 +4172,18 @@ private struct AIChatBubble: View {
                             .frame(height: 44)
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(SkimStyle.accent)
+                } else if message.isError, !message.needsReauth, let onOpenSettings {
+                    // Other AI failures may still be a provider or model problem.
+                    Button {
+                        onOpenSettings()
+                    } label: {
+                        Label("AI Settings", systemImage: "gearshape")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                    }
+                    .buttonStyle(.bordered)
                     .tint(SkimStyle.accent)
                 }
 

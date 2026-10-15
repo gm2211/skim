@@ -3610,6 +3610,7 @@ struct AIResultSheet: View {
     @State private var referencedArticles: [Article] = []
     @State private var errorMessage: String?
     @State private var errorRemedy: AIErrorRemedy = .none
+    @State private var showAISettings = false
 
     var body: some View {
         NavigationStack {
@@ -3671,6 +3672,15 @@ struct AIResultSheet: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 16) {
+                        Button {
+                            showAISettings = true
+                        } label: {
+                            Label("AI Settings", systemImage: "gearshape")
+                                .labelStyle(.iconOnly)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .help("AI Settings")
                         if let continueInChat = request.continueInChat, !isLoading, errorMessage == nil {
                             Button {
                                 let captured = result
@@ -3704,6 +3714,12 @@ struct AIResultSheet: View {
                 }
             }
             .task { await run() }
+            // On the stack, not the toolbar: a sheet inside a ToolbarItem does not present.
+            .sheet(isPresented: $showAISettings, onDismiss: {
+                if errorMessage != nil { retryTask = Task { await run() } }
+            }) {
+                SettingsSheet(isPresented: $showAISettings, aiOnly: true)
+            }
             .onDisappear {
                 publication?.cancel()
                 retryTask?.cancel()
@@ -4169,6 +4185,18 @@ private struct AIChatBubble: View {
                             .frame(height: 44)
                     }
                     .buttonStyle(.borderedProminent)
+                    .tint(SkimStyle.accent)
+                } else if message.isError, !message.needsReauth, let onOpenSettings {
+                    // Other AI failures may still be a provider or model problem.
+                    Button {
+                        onOpenSettings()
+                    } label: {
+                        Label("AI Settings", systemImage: "gearshape")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                    }
+                    .buttonStyle(.bordered)
                     .tint(SkimStyle.accent)
                 }
 

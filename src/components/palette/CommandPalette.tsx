@@ -17,6 +17,7 @@ import { useAgentContext } from "../../hooks/useAgentContext";
 import { openAgentChat } from "../../stores/agentChatStore";
 import { AgentAnswer, AgentSteps } from "../chat/AgentAnswer";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
+import { AiErrorText } from "../common/AiSettingsButton";
 import { PALETTE_ICONS } from "../ui/icons";
 
 const ARTICLE_RESULTS = 8;
@@ -441,7 +442,7 @@ export function CommandPalette() {
           )}
           {state.error && (isAiSetupError(state.error)
             ? <div style={{ padding: "6px 12px" }}><AiSetupNotice error={state.error} /></div>
-            : <p role="alert" className="text-danger" style={{ fontSize: 13, padding: "6px 12px" }}>{state.error}</p>)}
+            : <AiErrorText error={state.error} style={{ fontSize: 13, padding: "6px 12px" }} />)}
           {!chatting && results.length === 0 && (
             <p className="text-text-muted text-center" style={{ fontSize: 13, padding: "28px 12px" }}>
               No matching commands

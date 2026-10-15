@@ -7,6 +7,7 @@ import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { useSettings } from "../../hooks/useSettings";
 import { ModelPicker } from "../common/ModelPicker";
 import { SettingsCog } from "../common/SettingsCog";
+import { AiErrorText } from "../common/AiSettingsButton";
 import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./ChatMessageContent";
 
 interface ChatMessage {
@@ -474,11 +475,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
       {/* Input */}
       <div className="flex-shrink-0 min-w-0" style={{ padding: "6px 16px 8px" }}>
         {(needsSetup || isAiSetupError(error)) && <AiSetupNotice error={error} />}
-        {error && !isAiSetupError(error) && (
-          <div role="alert" className="text-danger" style={{ fontSize: 12, marginBottom: 6 }}>
-            {error}
-          </div>
-        )}
+        {error && !isAiSetupError(error) && <AiErrorText error={error} style={{ marginBottom: 6 }} />}
         {reply && <ReplyPreview reply={reply} onRemove={() => setReply(null)} />}
         <div className="flex items-end gap-2 min-w-0">
           <textarea

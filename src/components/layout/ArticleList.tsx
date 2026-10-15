@@ -14,6 +14,7 @@ import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
 import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction, SidebarView } from "../../services/types";
+import { AiSettingsButton } from "../common/AiSettingsButton";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { useAppCommand } from "../../lib/appCommands";
 
@@ -738,6 +739,7 @@ export function ArticleList() {
               {o === "forYou" ? "For you" : "Newest"}
             </button>
           ))}
+          {isForYou && <span className="ml-auto"><AiSettingsButton size={14} /></span>}
         </div>
       )}
 

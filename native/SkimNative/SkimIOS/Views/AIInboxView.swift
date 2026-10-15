@@ -89,6 +89,7 @@ struct AIInboxView: View {
                             .foregroundStyle(SkimStyle.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
+                        AISettingsButton(onDismiss: { Task { await rateNewArticles() } })
                         rateMenu
                     }
                     if let ratingStatus {
@@ -103,6 +104,8 @@ struct AIInboxView: View {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
                             .font(.system(size: 13))
                             .foregroundStyle(SkimStyle.secondary)
+                        AISettingsButton(titled: true, font: .system(size: 13, weight: .semibold), color: SkimStyle.accent,
+                                         onDismiss: { Task { await rateNewArticles() } })
                     }
                     AIDisclaimerLabel()
                 }

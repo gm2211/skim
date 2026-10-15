@@ -13,6 +13,7 @@ import { useAgentContext } from "../../hooks/useAgentContext";
 import { storyForAgent } from "../../lib/agentContext";
 import { IconButton } from "../common/IconButton";
 import { SettingsCog } from "../common/SettingsCog";
+import { AiErrorText, openAiSettings } from "../common/AiSettingsButton";
 import "./TodayFrontPage.css";
 
 export const NEWSPAPER_PAGE_SIZE = PAGE_SIZE;
@@ -149,7 +150,7 @@ export function TodayEditionPane() {
               </button>
               {canRetryLedes && <button className="today-settings-row" onClick={() => { close(); retryLedes(); }}>Retry missing summaries</button>}
               <hr />
-              <button className="today-settings-row" onClick={() => { close(); useUiStore.getState().setShowSettings(true); }}>AI settings…</button>
+              <button className="today-settings-row" onClick={() => { close(); openAiSettings(); }}>AI settings…</button>
             </>
           )}
         </SettingsCog>
@@ -172,6 +173,7 @@ export function TodayEditionPane() {
               {canRetryLedes && missingSummaries > 0 && <>
                 {" · "}<span className="today-dateline-failed">{missingSummaries} not summarized</span>
                 <button type="button" className="today-dateline-retry" onClick={retryLedes} aria-label="Retry summaries">Retry</button>
+                <button type="button" className="today-dateline-retry" onClick={openAiSettings}>AI settings</button>
               </>}
             </span>
           )}
@@ -199,8 +201,8 @@ export function TodayEditionPane() {
         </div>}
 
         {isError && (
-          <div role="alert" className="text-danger" style={{ fontSize: 13, padding: "12px 4px" }}>
-            <p>{error instanceof Error ? error.message : "Could not load today's edition."}</p>
+          <div style={{ fontSize: 13, padding: "12px 4px" }}>
+            <AiErrorText error={error instanceof Error ? error.message : String(error ?? "Could not load today's edition.")} style={{ fontSize: 13 }} />
             <button className="today-story-control text-text-primary" onClick={() => void refetch()}>Try again</button>
           </div>
         )}

@@ -813,6 +813,11 @@ async fn invoke_chat_with_tools(
 /// provider on the next round. We preserve the leading text (if any) and then
 /// each `tool_use` block with its id/name/input.
 fn build_assistant_tool_use_blocks(response: &ProviderChatResponse) -> Vec<serde_json::Value> {
+    // Anthropic's own blocks go back unchanged: a model that thinks puts
+    // `thinking` blocks ahead of its tool calls, and they must be replayed.
+    if let Some(raw) = response.raw_content.as_ref().filter(|blocks| !blocks.is_empty()) {
+        return raw.clone();
+    }
     let mut blocks: Vec<serde_json::Value> = Vec::new();
     if !response.content.is_empty() {
         blocks.push(serde_json::json!({

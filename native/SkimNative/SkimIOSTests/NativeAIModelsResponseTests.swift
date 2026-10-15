@@ -172,7 +172,7 @@ struct NativeAIModelsResponseTests {
 }
 
 
-@Suite("Native library chat context")
+@Suite("Native library chat context", .serialized)
 struct NativeLibraryChatTests {
     private func article(_ id: String, body: String = "Reader evidence") -> Article {
         Article(id: id, feedID: "feed", feedTitle: "Feed", title: "Story \(id)", contentText: body)
@@ -396,6 +396,63 @@ struct NativeLibraryChatTests {
         #expect(toolResultBlocks.first?["type"] as? String == "tool_result")
         #expect(toolResultBlocks.first?["tool_use_id"] as? String == "tool-1")
         #expect(toolResultBlocks.first?["is_error"] as? Bool == true)
+    }
+
+    // A model that thinks puts `thinking` blocks ahead of its tool calls; the
+    // continuation has to send them back unchanged rather than a rebuilt turn
+    // of text + tool_use only.
+    @Test func anthropicToolContinuationReplaysThinkingBlocks() async throws {
+        let capture = NativeChatRequestCapture(responses: [
+            .init(statusCode: 200, data: Data(#"{"content":[{"type":"thinking","thinking":"","signature":"sig-1"},{"type":"tool_use","id":"tool-1","name":"unknown_tool","input":{}}],"stop_reason":"tool_use"}"#.utf8)),
+            .init(statusCode: 200, data: Data(#"{"content":[{"type":"thinking","thinking":"","signature":"sig-2"},{"type":"text","text":"Answer after thinking"}],"stop_reason":"end_turn"}"#.utf8))
+        ])
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [NativeChatCaptureURLProtocol.self]
+        NativeChatCaptureURLProtocol.install(capture)
+        let session = URLSession(configuration: configuration)
+        defer {
+            session.invalidateAndCancel()
+            NativeChatCaptureURLProtocol.install(nil)
+        }
+        let answer = try await NativeAI.completeAnthropicWithTools(
+            settings: AISettings(provider: "claude-subscription", model: "claude-sonnet-5-5"),
+            instructions: "Answer.",
+            prompt: "Question?",
+            maxTokens: 850,
+            urlSession: session,
+            accessTokenOverride: "token"
+        )
+        #expect(answer.text == "Answer after thinking")
+        let body = try #require(capture.requestBody(at: 1))
+        let request = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let turns = try #require(request["messages"] as? [[String: Any]])
+        let assistantBlocks = try #require(turns[1]["content"] as? [[String: Any]])
+        #expect(assistantBlocks.compactMap { $0["type"] as? String } == ["thinking", "tool_use"])
+        #expect(assistantBlocks.first?["signature"] as? String == "sig-1")
+    }
+
+    @Test func anthropicThinkingOnlyAnswerSaysItRanOutOfRoom() async throws {
+        let capture = NativeChatRequestCapture(responses: [
+            .init(statusCode: 200, data: Data(#"{"content":[{"type":"thinking","thinking":"","signature":"sig"}],"stop_reason":"max_tokens"}"#.utf8))
+        ])
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [NativeChatCaptureURLProtocol.self]
+        NativeChatCaptureURLProtocol.install(capture)
+        let session = URLSession(configuration: configuration)
+        defer {
+            session.invalidateAndCancel()
+            NativeChatCaptureURLProtocol.install(nil)
+        }
+        await #expect(throws: NativeAIError.self) {
+            _ = try await NativeAI.completeAnthropicWithTools(
+                settings: AISettings(provider: "claude-subscription", model: "claude-sonnet-5-5"),
+                instructions: "Answer.",
+                prompt: "Question?",
+                maxTokens: 850,
+                urlSession: session,
+                accessTokenOverride: "token"
+            )
+        }
     }
 
     @Test func anthropicRequestKeepsToolContinuationRolesAndBlocks() throws {

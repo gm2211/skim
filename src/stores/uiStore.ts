@@ -2,6 +2,8 @@ import { create } from "zustand";
 import type { SidebarView } from "../services/types";
 
 type ListFilter = "all" | "unread" | "starred";
+/** "For you" ranks a list's unread articles the way the AI Inbox did. */
+export type ListSort = "newest" | "forYou";
 export type AddFeedTab = "url" | "feedly";
 export type SettingsTab = "ai" | "sync" | "appearance" | "reading";
 
@@ -29,6 +31,7 @@ interface UiState {
   listCollapsed: boolean;
   listManualCollapse: boolean;
   listFilter: ListFilter;
+  listSort: ListSort;
   // Phone-mode: single visible pane at a time. Sidebar/list/detail are
   // pushed onto a stack and navigated via buttons or swipe-right-to-back.
   isPhone: boolean;
@@ -47,6 +50,7 @@ interface UiState {
   toggleSidebar: () => void;
   toggleList: () => void;
   setListFilter: (filter: ListFilter) => void;
+  setListSort: (sort: ListSort) => void;
   setPhonePane: (pane: PhonePane) => void;
   phoneBack: () => void;
   applyResponsiveLayout: (width: number) => void;
@@ -96,6 +100,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   listCollapsed: false,
   listManualCollapse: false,
   listFilter: "unread",
+  listSort: "newest",
   isPhone: false,
   phonePane: "list",
 
@@ -154,11 +159,20 @@ export const useUiStore = create<UiState>((set, get) => ({
               phonePane: state.isPhone ? "detail" : state.phonePane,
       };
     }),
+  // Adding feeds happens in the Discover view; only importing (OPML/Feedly)
+  // still opens the dialog.
   setShowAddFeed: (show, tab) =>
-    set((state) => ({
-      showAddFeed: show,
-      addFeedTab: show ? tab ?? "url" : state.addFeedTab,
-    })),
+    set((state) =>
+      show && (tab ?? "url") === "url"
+        ? {
+            showAddFeed: false,
+            sidebarView: { type: "discover" },
+            selectedArticleId: null,
+            articleReturnTarget: null,
+            phonePane: state.isPhone ? "list" : state.phonePane,
+          }
+        : { showAddFeed: show, addFeedTab: show ? tab ?? "feedly" : state.addFeedTab },
+    ),
   setShowSettings: (show, tab) =>
     set((state) => ({
       showSettings: show,
@@ -181,6 +195,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     }),
 
   setListFilter: (filter) => set({ listFilter: filter }),
+  setListSort: (sort) => set({ listSort: sort }),
 
   setPhonePane: (pane) => set({ phonePane: pane }),
   phoneBack: () =>

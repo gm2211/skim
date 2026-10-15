@@ -11,7 +11,7 @@ enum AIProviderProfiles {
 
     /// Providers whose credentials are stashed. On-device providers have none,
     /// and MLX keeps its own model in `localModelPath`.
-    static let credentialProviders: Set<String> = ["claude-subscription", "anthropic", "xai", "openai", "openrouter", "custom"]
+    static let credentialProviders: Set<String> = ["claude-subscription", "chatgpt-subscription", "anthropic", "xai", "openai", "openrouter", "custom"]
 
     struct Profile: Codable, Equatable {
         var model: String?

@@ -128,3 +128,27 @@ private actor ExcerptRequests {
         #expect((TodayLedePolicy.selection(candidate: fixture.excerpt, sources: fixture.sources)?.sourceIndex ?? -1) == fixture.index, Comment(rawValue: fixture.name))
     }
 }
+
+@Test func todayExtractiveSelectionPicksTheFirstVerifiedPassage() {
+    let source = """
+    By Staff Reporter
+    The council voted on Tuesday to close the old bridge to traffic. Repairs will begin in March and take a year. Residents welcomed the decision.
+    """
+    let selection = TodayLedePolicy.extractiveSelection(sources: ["Comments", source])
+    #expect(selection?.sourceIndex == 1)
+    // The byline runs into the first sentence (a single line break is a
+    // space to the passage check), so the lede starts at the next sentence.
+    #expect(selection?.excerpt == "Repairs will begin in March and take a year. Residents welcomed the decision.")
+    #expect(selection.map { TodayLedePolicy.validatedExcerpt(candidate: $0.excerpt, sources: ["Comments", source]) != nil } == true)
+}
+
+@Test func todayExtractiveSelectionReturnsNothingWithoutAWholeSentence() {
+    #expect(TodayLedePolicy.extractiveSelection(sources: ["submitted by /u/someone [link] [comments]"]) == nil)
+    #expect(TodayLedePolicy.extractiveSelection(sources: []) == nil)
+}
+
+@Test func todayExtractiveSelectionStartsAtTheFirstCleanSentence() {
+    let source = "The council voted on Tuesday to close the old bridge to traffic. Repairs will begin in March and take a year.\n\nResidents welcomed the decision."
+    #expect(TodayLedePolicy.extractiveSelection(sources: [source])?.excerpt
+        == "The council voted on Tuesday to close the old bridge to traffic. Repairs will begin in March and take a year.")
+}

@@ -6,6 +6,11 @@ public enum TodayEditionMerge {
         guard var current else { return response }
         guard current.id == response.id else { return current }
         for incoming in response.items {
+            if let editorial = incoming.snapshot.editorial,
+               let index = current.items.firstIndex(where: { $0.id == incoming.id }),
+               current.items[index].snapshot.editorial == nil {
+                current.items[index].snapshot.editorial = editorial
+            }
             guard let lede = nonempty(incoming.snapshot.lede),
                   let index = current.items.firstIndex(where: { $0.id == incoming.id }),
                   nonempty(current.items[index].snapshot.lede) == nil else { continue }
@@ -21,6 +26,10 @@ public enum TodayEditionMerge {
         guard current.id == response.id else { return current }
         var result = response
         for existing in current.items {
+            if let editorial = existing.snapshot.editorial,
+               let index = result.items.firstIndex(where: { $0.id == existing.id }) {
+                result.items[index].snapshot.editorial = editorial
+            }
             guard let lede = nonempty(existing.snapshot.lede),
                   let index = result.items.firstIndex(where: { $0.id == existing.id }) else { continue }
             result.items[index].snapshot.lede = lede

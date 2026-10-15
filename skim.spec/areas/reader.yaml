@@ -13,7 +13,7 @@ behaviors:
   - id: toolbar-overflow-menu
     description: >-
       Desktop: the reader toolbar stays one row. When the pane is too narrow to fit every action,
-      the Reader/Web switch, star, pin, mark read and open in browser fold into a "…" menu, and
+      the Reader/Web switch, star, share, pin, mark read and open in browser fold into a "…" menu, and
       only close, history, chat and Summarize stay on the row.
     source:
       text: >-
@@ -28,9 +28,16 @@ behaviors:
       article is opened from Recent).
   - id: aggregator-comments
     description: >-
-      Hacker News, Reddit and Lobsters items end with a Discussion section: the top comments with
-      their points, an action to open the thread on the site, and, when comments can't be loaded, a
-      card that opens the conversation there instead of an error.
+      Hacker News, Reddit and Lobsters items end with a Discussion section that shows the thread
+      itself: top comments with author and points, their replies nested beneath them (direct
+      replies shown, deeper levels folded behind an "N replies" toggle), a "Show more comments"
+      action that reveals further top-level threads, and an action to open the thread on the site.
+      When Reddit refuses its JSON API, comments come from the thread's RSS feed instead (no points
+      or nesting). Only when no comments can be loaded does a card open the conversation on the
+      site instead of an error.
+    source:
+      text: I love this, but could we also extract comments and show them here?
+      reference: Giulio, project thread "Inline Reddit comments", 2026-10-14
   - id: aggregator-post-layout
     description: >-
       Reddit, Hacker News and Lobsters items get a purpose-built reader layout instead of the
@@ -47,8 +54,19 @@ behaviors:
       reference: Giulio, project thread "Reddit and Hacker News layout", 2026-10-10
   - id: reader-toolbar
     description: >-
-      Desktop: the reader toolbar offers back/forward, Chat, Reader/Web, Summarize, Star, Read, Pin
-      to top, and Open in browser.
+      Desktop: the reader toolbar offers back/forward, Chat, Reader/Web, Summarize, Star, Share,
+      Read, Pin to top, and Open in browser.
+  - id: share-article
+    description: >-
+      The reader has a Share icon (iOS: in the top bar after Star, and in the article's context
+      menu; desktop: in the toolbar after Star, or the "…" menu when narrow). It opens the system
+      share sheet with the article's title and link; a Reddit, Hacker News or Lobsters link post
+      shares the linked story rather than the aggregator page. Where no share sheet exists the
+      link is copied and the icon briefly shows a tick. All seven iOS top-bar icons fit on a
+      375pt-wide iPhone.
+    source:
+      text: I'd like a share button (icon)
+      reference: Giulio, project thread "Share button", 2026-10-14
   - id: offline-preload
     description: >-
       The newest articles are prepared for offline reading, up to a limit the reader sets (desktop

@@ -1,6 +1,7 @@
 import PDFKit
 import SkimCore
 import SwiftUI
+import UIKit
 
 private enum DetailPage: String, CaseIterable {
     case reader
@@ -26,6 +27,9 @@ struct ArticleDetailView: View {
     @State private var showAIDisclaimerGate = false
     @State private var pendingAIAction: (() -> Void)?
     @State private var webSnapshot = WebViewSnapshot()
+    // True while a passage of the reader text is selected, so dragging a
+    // selection handle never reads as the swipe-back gesture.
+    @State private var hasReaderSelection = false
 
     // Reading-time tracking
     @State private var openedAt: Date?
@@ -39,8 +43,16 @@ struct ArticleDetailView: View {
                 topBar
 
                 TabView(selection: $page) {
-                    ReaderPage(article: article, isLoading: isLoading)
-                        .contextMenu(menuItems: { detailContextMenu }, preview: { contextMenuPreview })
+                    // The article menu sits on the header only: a long press on
+                    // the body selects text, which can then go to chat.
+                    ReaderPage(
+                        article: article,
+                        isLoading: isLoading,
+                        hasTextSelection: $hasReaderSelection,
+                        onAskAboutSelection: { presentArticleChat(quote: $0) },
+                        headerMenu: { detailContextMenu },
+                        headerMenuPreview: { contextMenuPreview }
+                    )
                         .tag(DetailPage.reader)
 
                     WebPage(article: article, snapshot: $webSnapshot)
@@ -82,7 +94,7 @@ struct ArticleDetailView: View {
             SummaryConfigurationSheet(article: article, defaults: model.settings.ai) { summarySettings in
                 runSummary(article: article, summarySettings: summarySettings)
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationBackground(SkimStyle.chrome)
             .onAppear(perform: prewarmLocalModel)
@@ -143,7 +155,8 @@ struct ArticleDetailView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 12) {
+        // Seven 42pt targets fit a 375pt-wide iPhone only with tight spacing.
+        HStack(spacing: 4) {
             BorderlessIconButton(systemName: "chevron.left", title: "Back", size: 24, tapSize: 42) {
                 dismiss()
             }
@@ -165,6 +178,19 @@ struct ArticleDetailView: View {
             BorderlessIconButton(systemName: article?.isStarred == true ? SkimIcon.starFilled : SkimIcon.star, title: article?.isStarred == true ? "Unstar" : "Star", isActive: article?.isStarred == true, size: 24, tapSize: 42) {
                 Task { await toggleStar() }
             }
+            if let article, let shareURL = article.externalURL ?? article.url {
+                // A link post shares the story it points at, not the aggregator page.
+                ShareLink(item: shareURL, subject: Text(article.title), preview: SharePreview(article.title)) {
+                    Image(systemName: SkimIcon.share)
+                        .font(.system(size: 24, weight: .regular))
+                        .symbolRenderingMode(.monochrome)
+                        .frame(width: 42, height: 42)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(SkimStyle.secondary)
+                .accessibilityLabel("Share")
+            }
         }
         .padding(.horizontal, 20)
         .frame(height: 76)
@@ -174,6 +200,7 @@ struct ArticleDetailView: View {
         DragGesture(minimumDistance: 24, coordinateSpace: .local)
             .onEnded { value in
                 guard page == .reader,
+                      !hasReaderSelection,
                       abs(value.translation.width) > abs(value.translation.height)
                 else { return }
 
@@ -235,6 +262,10 @@ struct ArticleDetailView: View {
 
                 Button("Open in Browser", systemImage: SkimIcon.openExternal) {
                     openURL(url)
+                }
+
+                ShareLink(item: article.externalURL ?? url, subject: Text(article.title), preview: SharePreview(article.title)) {
+                    Label("Share", systemImage: SkimIcon.share)
                 }
             }
         }
@@ -343,6 +374,7 @@ struct ArticleDetailView: View {
                         placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
                         generatedSummaryContext: summaryText
                     ) { conversation in
+                        await model.recordChatMessage(about: article)
                         let contextArticle = try await WebAIContext.article(
                             base: article,
                             preferWeb: useWebContext,
@@ -378,158 +410,562 @@ struct SummaryConfigurationSheet: View {
     var onRun: (AISettings) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var style: String
+    @State private var style: SummaryStyleOption
     @State private var wordCount: Int
     @State private var customPrompt: String
     @State private var ai: AISettings
+    @State private var isCustomizing = false
+    @State private var isEditingFocus: Bool
+    @FocusState private var isFocusFieldActive: Bool
+
+    /// The settings the last summary ran with (they become the defaults on
+    /// every run), offered as the first preset.
+    private let lastUsed: SummaryPreset
 
     init(article: Article, defaults: AISettings, onRun: @escaping (AISettings) -> Void) {
         self.article = article
         self.defaults = defaults
         self.onRun = onRun
-        _style = State(initialValue: defaults.summaryTone ?? "concise")
-        _wordCount = State(initialValue: AIRequestPolicy.summaryWordCount(defaults))
-        _customPrompt = State(initialValue: defaults.summaryCustomPrompt ?? "")
+        let style = SummaryStyleOption(tone: defaults.summaryTone)
+        let wordCount = AIRequestPolicy.summaryWordCount(defaults)
+        let prompt = defaults.summaryCustomPrompt ?? ""
+        lastUsed = SummaryPreset(id: "again", name: "Again", style: style, wordCount: wordCount, systemImage: "arrow.counterclockwise")
+        _style = State(initialValue: style)
+        _wordCount = State(initialValue: wordCount)
+        _customPrompt = State(initialValue: prompt)
         _ai = State(initialValue: defaults)
+        _isEditingFocus = State(initialValue: !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    /// "Again" only shows when the last run differs from every standard preset.
+    private var presets: [SummaryPreset] {
+        let standard = SummaryPreset.standard
+        let repeatsStandard = standard.contains { $0.style == lastUsed.style && $0.wordCount == lastUsed.wordCount }
+        return repeatsStandard ? standard : [lastUsed] + standard
+    }
+
+    /// First preset matching the current choices; "Again" wins a tie.
+    private var selectedPreset: SummaryPreset? {
+        presets.first { $0.style == style && $0.wordCount == wordCount }
     }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Configure Summary")
-                            .font(.system(size: 31, weight: .heavy))
-                            .foregroundStyle(SkimStyle.text)
-                        Text(article.title)
-                            .font(.system(size: 15, weight: .regular))
+            ScrollViewReader { proxy in
+                VStack(spacing: 0) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            Text(article.title)
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundStyle(SkimStyle.secondary)
+                                .lineLimit(2)
+
+                            SummaryPreviewCard(style: style, wordCount: wordCount)
+
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Presets")
+                                    .summaryControlLabel()
+                                presetRow
+                            }
+
+                            customizeCard
+
+                            Text("These choices, including the model, are saved as your new defaults when you run.")
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(SkimStyle.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 4)
+                        .padding(.bottom, 16)
+                    }
+                    .onChange(of: isFocusFieldActive) { _, isActive in
+                        guard isActive else { return }
+                        Task { @MainActor in
+                            // Wait for the keyboard and the field's reveal to settle,
+                            // then lift the whole field clear of the Summarize button.
+                            try? await Task.sleep(for: .milliseconds(350))
+                            withAnimation(.smooth(duration: 0.25)) { proxy.scrollTo(Self.focusFieldID, anchor: .bottom) }
+                        }
+                    }
+                    .onChange(of: customPrompt) {
+                        guard isFocusFieldActive else { return }
+                        proxy.scrollTo(Self.focusFieldID, anchor: .bottom)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .scrollContentBackground(.hidden)
+
+                    // Outside the ScrollView so content always ends above it,
+                    // rather than sliding underneath an inset overlay.
+                    runButton
+                }
+                .background(SkimStyle.chrome.ignoresSafeArea())
+                .toolbarBackground(SkimStyle.chrome, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .navigationTitle("Summarize")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Cancel") { dismiss() }
+                    }
+                }
+            }
+        }
+    }
+
+    private static let focusFieldID = "summary-focus-field"
+
+    private var presetRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(presets) { preset in
+                    SummaryPresetTile(
+                        preset: preset,
+                        isSelected: selectedPreset?.id == preset.id,
+                        isCompact: isCustomizing
+                    ) {
+                        withAnimation(.smooth(duration: 0.2)) {
+                            style = preset.style
+                            wordCount = preset.wordCount
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.horizontal, -20)
+        .sensoryFeedback(.selection, trigger: selectedPreset?.id)
+    }
+
+    private var customizeCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.smooth(duration: 0.25)) { isCustomizing.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Text("Customize")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(SkimStyle.text)
+                    Spacer(minLength: 8)
+                    if !isCustomizing {
+                        Text(customizeSummary)
+                            .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(SkimStyle.secondary)
-                            .lineLimit(3)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .rotationEffect(.degrees(isCustomizing ? 90 : 0))
+                }
+                .padding(.horizontal, 14)
+                .frame(minHeight: 48)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(isCustomizing ? "Hides style, length, model and focus" : "Shows style, length, model and focus")
+
+            if isCustomizing {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(spacing: 6) {
+                        ForEach(SummaryStyleOption.allCases) { option in
+                            SummaryStyleChip(option: option, isSelected: style == option) {
+                                withAnimation(.smooth(duration: 0.2)) { style = option }
+                            }
+                        }
                     }
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Model")
-                            .summaryControlLabel()
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Length")
+                                .summaryControlLabel()
+                            Spacer()
+                            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                                Text("\(wordCount)")
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundStyle(SkimStyle.text)
+                                    .monospacedDigit()
+                                Text("words")
+                                    .font(.system(size: 14, weight: .regular))
+                                    .foregroundStyle(SkimStyle.secondary)
+                            }
+                        }
+                        SummaryLengthRuler(wordCount: $wordCount)
+                            .padding(.horizontal, -14)
+                    }
+
+                    HStack(spacing: 8) {
                         ModelPickerMenu(ai: $ai, onOpenSettings: nil)
-                    }
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Style")
-                            .summaryControlLabel()
-                        Picker("Style", selection: $style) {
-                            Text("Concise").tag("concise")
-                            Text("Descriptive").tag("descriptive")
-                            Text("Casual").tag("casual")
-                            Text("Technical").tag("technical")
+                        if !isEditingFocus {
+                            Button {
+                                withAnimation(.smooth(duration: 0.2)) { isEditingFocus = true }
+                                isFocusFieldActive = true
+                            } label: {
+                                Label("Focus", systemImage: "plus")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(SkimStyle.accent)
+                                    .padding(.horizontal, 12)
+                                    .frame(minHeight: 36)
+                                    .background(SkimStyle.surface, in: Capsule())
+                                    .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .pickerStyle(.segmented)
+                        Spacer(minLength: 0)
                     }
 
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Length")
-                            .summaryControlLabel()
-                        SummaryWordCountPresetChips(wordCount: $wordCount)
-                        Stepper(value: $wordCount, in: AIRequestPolicy.summaryWordRange, step: 25) {
-                            Text("\(wordCount) words")
-                                .font(.system(size: 17, weight: .regular))
-                                .foregroundStyle(SkimStyle.text)
-                        }
-                    }
-
-                    VStack(alignment: .leading, spacing: 14) {
-                        Text("Custom Prompt")
-                            .summaryControlLabel()
+                    if isEditingFocus {
                         TextField("Focus on tradeoffs, risks, key takeaways...", text: $customPrompt, axis: .vertical)
-                            .lineLimit(4...8)
+                            .focused($isFocusFieldActive)
+                            .lineLimit(3...6)
                             .textInputAutocapitalization(.sentences)
-                            .font(.system(size: 17, weight: .regular))
+                            .font(.system(size: 16, weight: .regular))
                             .foregroundStyle(SkimStyle.text)
-                            .padding(14)
+                            .padding(12)
                             .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay {
                                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                                     .stroke(SkimStyle.separator, lineWidth: 1)
                             }
                     }
-
-                    Text("These choices, including the model, are saved as your new defaults when you run.")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(SkimStyle.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(24)
-            }
-            .background(SkimStyle.chrome.ignoresSafeArea())
-            .scrollContentBackground(.hidden)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Run") {
-                        onRun(configuredSettings)
-                    }
-                    .fontWeight(.semibold)
-                }
+                .padding(.horizontal, 14)
+                .padding(.bottom, 14)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .background(SkimStyle.background, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(SkimStyle.separator, lineWidth: 1)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        // Scroll target for the Focus field: the whole card plus a gap, so the
+        // card's bottom edge stays visible above the Summarize button instead
+        // of the field sitting flush against it. The negative padding keeps
+        // the gap out of the layout.
+        .padding(.bottom, 12)
+        .id(Self.focusFieldID)
+        .padding(.bottom, -12)
+    }
+
+    private var customizeSummary: String {
+        let model = ModelCatalog.currentLabel(ai)
+        return customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? model : "\(model) · Focus"
+    }
+
+    private var runCaption: String {
+        if let preset = selectedPreset, preset.id != lastUsed.id { return preset.name }
+        return "\(style.label) · \(wordCount) words"
+    }
+
+    private var runButton: some View {
+        Button {
+            onRun(configuredSettings)
+        } label: {
+            HStack(spacing: 6) {
+                Text("Summarize")
+                    .fontWeight(.bold)
+                Text("· \(runCaption)")
+                    .fontWeight(.medium)
+                    .opacity(0.72)
+                    .lineLimit(1)
+            }
+            .font(.system(size: 17))
+            .foregroundStyle(Color(red: 0.02, green: 0.06, blue: 0.12))
+            .frame(maxWidth: .infinity, minHeight: 54)
+            .background(SkimStyle.accent, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Summarize, \(style.label), \(wordCount) words")
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .background(SkimStyle.chrome)
     }
 
     private var configuredSettings: AISettings {
         var next = AIRequestPolicy.summarySettings(ai, wordCount: wordCount)
-        next.summaryTone = style
+        next.summaryTone = style.rawValue
         next.summaryCustomPrompt = customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         return next
     }
 }
 
-// MARK: - Word Count Preset Chips
+// MARK: - Summary configuration parts
 
-private struct SummaryWordCountPresetChips: View {
-    @Binding var wordCount: Int
+private enum SummaryStyleOption: String, CaseIterable, Identifiable {
+    case concise, descriptive, casual, technical
 
-    private struct Preset {
-        let label: String
-        let value: Int
+    init(tone: String?) {
+        self = SummaryStyleOption(rawValue: tone ?? "") ?? .concise
     }
 
-    private let presets: [Preset] = [
-        Preset(label: "Short", value: 30),
-        Preset(label: "Medium", value: 150),
-        Preset(label: "Long", value: 300),
-        Preset(label: "XL", value: 600),
+    var id: String { rawValue }
+    var label: String { rawValue.capitalized }
+
+    /// What the voice reads like. Illustrative copy, not generated, so the
+    /// preview never spends tokens.
+    var sample: String {
+        switch self {
+        case .concise: "Straight to the point: the main claim, the evidence, and why it matters."
+        case .descriptive: "A fuller account that walks through the context, the argument and the details behind it."
+        case .casual: "Here's the deal in plain words, like a friend catching you up over coffee."
+        case .technical: "Precise terms, figures and mechanisms kept intact, with nothing simplified away."
+        }
+    }
+}
+
+private struct SummaryPreset: Identifiable, Sendable {
+    let id: String
+    let name: String
+    let style: SummaryStyleOption
+    let wordCount: Int
+    var systemImage: String? = nil
+
+    static let standard: [SummaryPreset] = [
+        SummaryPreset(id: "gist", name: "Gist", style: .concise, wordCount: 30),
+        SummaryPreset(id: "briefing", name: "Briefing", style: .concise, wordCount: 150),
+        SummaryPreset(id: "explainer", name: "Explainer", style: .descriptive, wordCount: 300),
+        SummaryPreset(id: "deep-dive", name: "Deep dive", style: .technical, wordCount: 600),
     ]
 
+    var detail: String { "\(style.label) · \(wordCount)" }
+
+    /// 1–4 bars, a glanceable sense of length.
+    var level: Int {
+        switch wordCount {
+        case ..<100: 1
+        case ..<250: 2
+        case ..<500: 3
+        default: 4
+        }
+    }
+}
+
+private struct SummaryPresetTile: View {
+    var preset: SummaryPreset
+    var isSelected: Bool
+    var isCompact: Bool
+    var action: () -> Void
+
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(presets, id: \.value) { preset in
-                let isSelected = wordCount == preset.value
-                Button {
-                    wordCount = preset.value
-                } label: {
-                    Text("\(preset.label) \(preset.value)")
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .foregroundStyle(isSelected ? Color.white : SkimStyle.accent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            isSelected
-                                ? AnyShapeStyle(SkimStyle.accent)
-                                : AnyShapeStyle(Color.clear),
-                            in: Capsule()
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(SkimStyle.accent, lineWidth: 1.5)
-                        )
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 0) {
+                if !isCompact {
+                    HStack(alignment: .bottom, spacing: 3) {
+                        ForEach(0..<4, id: \.self) { index in
+                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                .fill(index < preset.level ? SkimStyle.accent : SkimStyle.separator)
+                                .frame(width: 4, height: 5 + CGFloat(index) * 4.3)
+                        }
+                    }
+                    .frame(height: 18, alignment: .bottom)
+                    Spacer(minLength: 6)
                 }
-                .buttonStyle(.plain)
-                .animation(.smooth(duration: 0.18), value: isSelected)
+                HStack(spacing: 4) {
+                    if let systemImage = preset.systemImage {
+                        Image(systemName: systemImage)
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    Text(preset.name)
+                        .font(.system(size: 15, weight: .bold))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(SkimStyle.text)
+                Text(preset.detail)
+                    .font(.system(size: 12, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .padding(.top, 1)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 10)
+            .frame(width: 124, height: isCompact ? 56 : 92, alignment: .leading)
+            .background(
+                isSelected
+                    ? AnyShapeStyle(LinearGradient(colors: [SkimStyle.accent.opacity(0.18), SkimStyle.accent.opacity(0.05)], startPoint: .top, endPoint: .bottom))
+                    : AnyShapeStyle(SkimStyle.surface),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isSelected ? SkimStyle.accent : SkimStyle.separator, lineWidth: isSelected ? 1.5 : 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(preset.name), \(preset.style.label), \(preset.wordCount) words")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+private struct SummaryStyleChip: View {
+    var option: SummaryStyleOption
+    var isSelected: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(option.label)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .foregroundStyle(isSelected ? Color(red: 0.02, green: 0.06, blue: 0.12) : SkimStyle.text)
+                .frame(maxWidth: .infinity, minHeight: 34)
+                .background(isSelected ? SkimStyle.accent : SkimStyle.surface, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// Shows the shape of the summary before it runs: the chosen voice and a
+/// rough length. Nothing here is generated.
+private struct SummaryPreviewCard: View {
+    var style: SummaryStyleOption
+    var wordCount: Int
+
+    private static let visibleLines = 4
+    private static let widths: [CGFloat] = [0.96, 0.88, 0.93, 0.74]
+
+    /// About one skeleton line per 75 words.
+    private var lineCount: Int { max(1, Int((Double(wordCount) / 75).rounded())) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Preview")
+                    .summaryControlLabel()
+                Spacer()
+                Text("\(style.label) · \(wordCount) words")
+                    .font(.system(size: 12, weight: .bold))
+                    .tracking(0.6)
+                    .textCase(.uppercase)
+                    .foregroundStyle(SkimStyle.accent)
+                    .monospacedDigit()
+            }
+            Text(style.sample)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(SkimStyle.text.opacity(0.85))
+                .fixedSize(horizontal: false, vertical: true)
+            GeometryReader { geo in
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(0..<min(lineCount, Self.visibleLines), id: \.self) { index in
+                        let isLast = index == lineCount - 1
+                        Capsule()
+                            .fill(SkimStyle.separator)
+                            .frame(width: geo.size.width * (isLast ? 0.55 : Self.widths[index]), height: 8)
+                    }
+                }
+            }
+            .frame(height: CGFloat(Self.visibleLines) * 15 - 7, alignment: .top)
+            .mask {
+                LinearGradient(
+                    stops: [.init(color: .black, location: 0.6), .init(color: .black.opacity(lineCount > Self.visibleLines ? 0 : 1), location: 1)],
+                    startPoint: .top, endPoint: .bottom
+                )
             }
         }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SkimStyle.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(SkimStyle.separator, lineWidth: 1)
+        }
+        .animation(.smooth(duration: 0.2), value: lineCount)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A scrubbable ruler: drag sideways to set any length in 25-word steps
+/// across `AIRequestPolicy.summaryWordRange`.
+private struct SummaryLengthRuler: View {
+    @Binding var wordCount: Int
+    @State private var dragStart: Int?
+
+    private let step = 25
+    private let spacing: CGFloat = 12
+
+    var body: some View {
+        Canvas { context, size in
+            let mid = size.width / 2
+            let baseline = size.height - 16
+            let span = Int(mid / spacing) + 2
+            var word = (wordCount / step - span) * step
+            while word <= wordCount + span * step {
+                defer { word += step }
+                guard AIRequestPolicy.summaryWordRange.contains(word) else { continue }
+                let x = mid + CGFloat(word - wordCount) / CGFloat(step) * spacing
+                guard x > 2, x < size.width - 2 else { continue }
+                let isMajor = word % 100 == 0
+                var tick = Path()
+                tick.move(to: CGPoint(x: x, y: baseline))
+                tick.addLine(to: CGPoint(x: x, y: baseline - (isMajor ? 20 : 10)))
+                context.stroke(tick, with: .color(Color(red: 0.23, green: 0.26, blue: 0.31)), lineWidth: 2)
+                if isMajor, word != AIRequestPolicy.summaryWordRange.upperBound, abs(x - mid) > 18 {
+                    context.draw(
+                        Text("\(word)").font(.system(size: 11)).foregroundStyle(SkimStyle.secondary),
+                        at: CGPoint(x: x, y: size.height - 6)
+                    )
+                }
+            }
+            // End stops mark the shortest and longest allowed lengths, so the
+            // empty stretch past either end reads as the edge of the scale.
+            for bound in [AIRequestPolicy.summaryWordRange.lowerBound, AIRequestPolicy.summaryWordRange.upperBound] {
+                let x = mid + CGFloat(bound - wordCount) / CGFloat(step) * spacing
+                guard x > 2, x < size.width - 2 else { continue }
+                var stop = Path()
+                stop.move(to: CGPoint(x: x, y: baseline))
+                stop.addLine(to: CGPoint(x: x, y: baseline - 26))
+                context.stroke(stop, with: .color(SkimStyle.secondary), lineWidth: 2)
+                if abs(x - mid) > 18 {
+                    context.draw(
+                        Text(bound == AIRequestPolicy.summaryWordRange.lowerBound ? "min" : "max")
+                            .font(.system(size: 11, weight: .semibold)).foregroundStyle(SkimStyle.secondary),
+                        at: CGPoint(x: x, y: size.height - 6)
+                    )
+                }
+            }
+            let indicator = Path(roundedRect: CGRect(x: mid - 1.5, y: baseline - 34, width: 3, height: 38), cornerRadius: 1.5)
+            context.fill(indicator, with: .color(SkimStyle.accent))
+        }
+        .frame(height: 52)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 2)
+                .onChanged { value in
+                    let start = dragStart ?? wordCount
+                    if dragStart == nil { dragStart = start }
+                    let steps = Int((-value.translation.width / spacing).rounded())
+                    guard steps != 0 else { return }
+                    wordCount = Self.clamped(start + steps * step, step: step)
+                }
+                .onEnded { _ in dragStart = nil }
+        )
+        .sensoryFeedback(.selection, trigger: wordCount)
+        .accessibilityElement()
+        .accessibilityLabel("Length")
+        .accessibilityValue("\(wordCount) words")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: wordCount = Self.clamped(wordCount + step, step: step)
+            case .decrement: wordCount = Self.clamped(wordCount - step, step: step)
+            @unknown default: break
+            }
+        }
+    }
+
+    /// Snap to the 25-word grid, then keep inside the allowed range.
+    private static func clamped(_ value: Int, step: Int) -> Int {
+        let range = AIRequestPolicy.summaryWordRange
+        let snapped = Int((Double(value) / Double(step)).rounded()) * step
+        return min(range.upperBound, max(range.lowerBound, snapped))
     }
 }
 
@@ -550,17 +986,21 @@ private extension String {
 }
 
 private extension ArticleDetailView {
-    func presentArticleChat() {
+    /// Opens the article chat. `quote` is a passage highlighted in the reader;
+    /// the chat then opens with it quoted, ready for a question about it.
+    func presentArticleChat(quote: String? = nil) {
         guard let article else { return }
-        let useWebContext = page == .web
+        let useWebContext = quote == nil && page == .web
         let webSnapshot = webSnapshot
         gatedAI {
             activeAIChat = AIChatRequest(
                 sessionKey: chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
                 title: useWebContext ? "Chat with Web Page" : "Chat with Article",
                 placeholder: WebAIContext.subtitle(base: article, preferWeb: useWebContext, snapshot: webSnapshot),
-                generatedSummaryContext: summaryContextBySession[chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot)]
+                generatedSummaryContext: summaryContextBySession[chatSessionKey(base: article, preferWeb: useWebContext, snapshot: webSnapshot)],
+                initialArticleQuote: quote
             ) { conversation in
+                await model.recordChatMessage(about: article)
                 let contextArticle = try await WebAIContext.article(
                     base: article,
                     preferWeb: useWebContext,
@@ -605,15 +1045,21 @@ private enum ArticleLoadState {
     }
 }
 
-private struct ReaderPage: View {
+private struct ReaderPage<HeaderMenu: View, HeaderMenuPreview: View>: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openURL) private var openURL
 
     var article: Article?
     var isLoading: Bool
+    @Binding var hasTextSelection: Bool
+    var onAskAboutSelection: (String) -> Void
+    @ViewBuilder var headerMenu: () -> HeaderMenu
+    @ViewBuilder var headerMenuPreview: () -> HeaderMenuPreview
 
     @State private var comments: [AggregatorComment] = []
     @State private var commentsState: ArticleLoadState = .idle
+    // Top-level threads shown; "Show more comments" reveals the next page.
+    @State private var visibleThreadCount = ReaderPage.threadsPerPage
     @State private var extractedBody: ArticleLoadState = .idle
     // Tracks whether the 3s auto-extract timeout has fired (shows fallback button)
     @State private var autoExtractTimedOut = false
@@ -631,6 +1077,8 @@ private struct ReaderPage: View {
                         .frame(maxWidth: .infinity, minHeight: 260)
                 } else if let article {
                     articleHeader(article)
+                        .contentShape(Rectangle())
+                        .contextMenu(menuItems: headerMenu, preview: headerMenuPreview)
                     if article.aggregatorKind != nil {
                         aggregatorSection(article)
                     } else {
@@ -650,6 +1098,7 @@ private struct ReaderPage: View {
         .onChange(of: article?.id) { _, _ in
             comments = []
             commentsState = .idle
+            visibleThreadCount = ReaderPage.threadsPerPage
             extractedBody = .idle
             autoExtractTimedOut = false
             redditSelftext = nil
@@ -720,37 +1169,19 @@ private struct ReaderPage: View {
 
         VStack(alignment: .leading, spacing: 24) {
             if let selftext = redditSelftext {
-                Text(selftext)
-                    .font(.system(size: 19, weight: .regular))
-                    .lineSpacing(7)
-                    .foregroundStyle(SkimStyle.text)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                readerText(selftext)
             }
 
             if redditSelftext == nil, let externalURL {
                 if case .loaded(let text) = extractedBody {
                     linkSourceRow(url: externalURL)
-                    Text(text)
-                        .font(.system(size: 19, weight: .regular))
-                        .lineSpacing(7)
-                        .foregroundStyle(SkimStyle.text)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    readerText(text)
                 } else {
                     linkCard(url: externalURL, article: article)
                 }
             } else if redditSelftext == nil, case .loaded(let text) = extractedBody {
                 // A self post's text saved for offline reading.
-                Text(text)
-                    .font(.system(size: 19, weight: .regular))
-                    .lineSpacing(7)
-                    .foregroundStyle(SkimStyle.text)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                readerText(text)
             }
 
             discussionSection(article)
@@ -973,13 +1404,32 @@ private struct ReaderPage: View {
                     .padding(.top, 14)
                 }
             case .loaded:
+                let threads = AggregatorCommentThread.threads(from: comments)
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
+                    ForEach(Array(threads.prefix(visibleThreadCount).enumerated()), id: \.element.id) { index, thread in
                         if index > 0 {
                             Rectangle().fill(SkimStyle.separator.opacity(0.6)).frame(height: 0.5)
                         }
-                        CommentRow(comment: comment)
+                        CommentThreadView(thread: thread, onAsk: onAskAboutSelection, onSelectionChange: { if hasTextSelection != $0 { hasTextSelection = $0 } })
+                            .padding(.vertical, 14)
                     }
+                }
+                if threads.count > visibleThreadCount {
+                    Button {
+                        visibleThreadCount += ReaderPage.threadsPerPage
+                    } label: {
+                        Text("Show more comments")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(SkimStyle.text)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(SkimStyle.separator, lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, 6)
                 }
                 if let discussionURL {
                     Button {
@@ -999,6 +1449,19 @@ private struct ReaderPage: View {
 
     // MARK: - Standard body
 
+    /// Article text a reader can highlight; "Ask in Chat" in the selection
+    /// menu sends the passage to the article chat.
+    private func readerText(_ text: String) -> some View {
+        ReaderSelectableText(
+            text: text,
+            fontSize: 19,
+            lineSpacing: 7,
+            onAsk: onAskAboutSelection,
+            onSelectionChange: { if hasTextSelection != $0 { hasTextSelection = $0 } }
+        )
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     @ViewBuilder
     private func articleBody(_ article: Article) -> some View {
         let rssFeedBody = ArticleReaderContentLoader.displayBody(for: article)
@@ -1008,21 +1471,9 @@ private struct ReaderPage: View {
         // 2. Use the RSS body if it meets the threshold and isn't boilerplate.
         // 3. Otherwise, show state based on auto-extract progress.
         if case .loaded(let text) = extractedBody {
-            Text(text)
-                .font(.system(size: 19, weight: .regular))
-                .lineSpacing(7)
-                .foregroundStyle(SkimStyle.text)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            readerText(text)
         } else if ArticleReaderContentLoader.isSufficientRSSBody(article) {
-            Text(rssFeedBody)
-                .font(.system(size: 19, weight: .regular))
-                .lineSpacing(7)
-                .foregroundStyle(SkimStyle.text)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            readerText(rssFeedBody)
         } else {
             // RSS body is thin — show auto-extract UI states
             switch extractedBody {
@@ -1114,13 +1565,17 @@ private struct ReaderPage: View {
         return await AggregatorService().fetchRedditExternalURL(from: redditURL)
     }
 
+    /// Top-level threads fetched per discussion, shown a page at a time.
+    static var commentFetchLimit: Int { 30 }
+    static var threadsPerPage: Int { 8 }
+
     private func loadComments(for article: Article) async {
         commentsState = .loading
         let service = AggregatorService()
         // For Reddit self-posts, fetch the post body alongside comments
         if article.aggregatorKind == .reddit {
             async let selftextTask = service.fetchRedditSelftext(for: article)
-            async let commentsTask = service.fetchComments(for: article, limit: 10)
+            async let commentsTask = service.fetchComments(for: article, limit: ReaderPage.commentFetchLimit)
             let (fetchedSelftext, fetched) = await (selftextTask, commentsTask)
             redditSelftext = fetchedSelftext
             if let text = ArticleReaderContentLoader.sanitizedText(fetchedSelftext) {
@@ -1129,7 +1584,7 @@ private struct ReaderPage: View {
             comments = fetched
             commentsState = fetched.isEmpty ? .failed("No comments returned.") : .loaded("")
         } else {
-            let fetched = await service.fetchComments(for: article, limit: 10)
+            let fetched = await service.fetchComments(for: article, limit: ReaderPage.commentFetchLimit)
             comments = fetched
             commentsState = fetched.isEmpty ? .failed("No comments returned.") : .loaded("")
         }
@@ -1211,8 +1666,58 @@ private struct ReaderPage: View {
 
 // MARK: - Comment row
 
+/// A comment and its replies. Top-level comments open with their direct
+/// replies showing; deeper levels stay folded behind a "N replies" toggle so a
+/// long thread doesn't bury the next top-level comment.
+private struct CommentThreadView: View {
+    var thread: AggregatorCommentThread
+    var onAsk: ((String) -> Void)? = nil
+    var onSelectionChange: (Bool) -> Void = { _ in }
+    @State private var expanded: Bool
+
+    init(thread: AggregatorCommentThread, onAsk: ((String) -> Void)? = nil, onSelectionChange: @escaping (Bool) -> Void = { _ in }) {
+        self.thread = thread
+        self.onAsk = onAsk
+        self.onSelectionChange = onSelectionChange
+        _expanded = State(initialValue: thread.comment.depth == 0)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CommentRow(comment: thread.comment, onAsk: onAsk, onSelectionChange: onSelectionChange)
+            if !thread.replies.isEmpty {
+                if expanded {
+                    VStack(alignment: .leading, spacing: 16) {
+                        ForEach(thread.replies) { reply in
+                            // AnyView breaks the recursive opaque type.
+                            AnyView(CommentThreadView(thread: reply, onAsk: onAsk, onSelectionChange: onSelectionChange))
+                        }
+                    }
+                    .padding(.leading, 14)
+                    .overlay(alignment: .leading) {
+                        Rectangle().fill(SkimStyle.separator).frame(width: 2)
+                    }
+                } else {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { expanded = true }
+                    } label: {
+                        Label(thread.replyCount == 1 ? "1 reply" : "\(thread.replyCount) replies", systemImage: "chevron.right")
+                            .labelStyle(.titleAndIcon)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(SkimStyle.accent)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 private struct CommentRow: View {
     var comment: AggregatorComment
+    var onAsk: ((String) -> Void)? = nil
+    var onSelectionChange: (Bool) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1227,15 +1732,101 @@ private struct CommentRow: View {
                         .foregroundStyle(SkimStyle.secondary.opacity(0.8))
                 }
             }
-            Text(comment.body)
-                .font(.system(size: 16))
-                .foregroundStyle(SkimStyle.text)
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+            ReaderSelectableText(
+                text: comment.body,
+                fontSize: 16,
+                lineSpacing: 4,
+                onAsk: onAsk,
+                onSelectionChange: onSelectionChange
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.vertical, 14)
+    }
+}
+
+// MARK: - Selectable reader text
+
+/// Reader text on a UITextView: on iOS, SwiftUI `Text` with text selection can
+/// only copy a whole block, while this lets the reader highlight any passage.
+/// The selection menu leads with "Ask in Chat", which hands the passage over.
+private struct ReaderSelectableText: UIViewRepresentable {
+    var text: String
+    var fontSize: CGFloat
+    var lineSpacing: CGFloat
+    var onAsk: ((String) -> Void)?
+    var onSelectionChange: (Bool) -> Void
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.delegate = context.coordinator
+        view.backgroundColor = .clear
+        view.isEditable = false
+        view.isSelectable = true
+        view.isScrollEnabled = false
+        view.dataDetectorTypes = []
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.onAsk = onAsk
+        context.coordinator.onSelectionChange = onSelectionChange
+        let style = "\(fontSize)/\(lineSpacing)"
+        guard view.text != text || context.coordinator.renderedStyle != style else { return }
+        context.coordinator.renderedStyle = style
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = lineSpacing
+        view.attributedText = NSAttributedString(string: text, attributes: [
+            .font: UIFont.systemFont(ofSize: fontSize),
+            .foregroundColor: UIColor(SkimStyle.text),
+            .paragraphStyle: paragraph,
+        ])
+        view.invalidateIntrinsicContentSize()
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width.isFinite else { return nil }
+        return CGSize(width: width, height: ceil(uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height))
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(onAsk: onAsk, onSelectionChange: onSelectionChange) }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var onAsk: ((String) -> Void)?
+        var onSelectionChange: (Bool) -> Void
+        var renderedStyle = ""
+
+        init(onAsk: ((String) -> Void)?, onSelectionChange: @escaping (Bool) -> Void) {
+            self.onAsk = onAsk
+            self.onSelectionChange = onSelectionChange
+        }
+
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            onSelectionChange(textView.selectedRange.length > 0)
+        }
+
+        func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            menu(for: textView, suggestedActions: suggestedActions)
+        }
+
+        func textView(_ textView: UITextView, editMenuForTextInRanges ranges: [NSValue], suggestedActions: [UIMenuElement]) -> UIMenu? {
+            menu(for: textView, suggestedActions: suggestedActions)
+        }
+
+        private func menu(for textView: UITextView, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            guard let onAsk, textView.selectedRange.length > 0 else { return UIMenu(children: suggestedActions) }
+            let ask = UIAction(title: "Ask in Chat", image: UIImage(systemName: SkimIcon.chat)) { [weak textView] _ in
+                guard let textView, let selection = textView.selectedTextRange,
+                      let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !quote.isEmpty else { return }
+                textView.selectedTextRange = nil
+                self.onSelectionChange(false)
+                onAsk(quote)
+            }
+            return UIMenu(children: [ask] + suggestedActions)
+        }
     }
 }
 

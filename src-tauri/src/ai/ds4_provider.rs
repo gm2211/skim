@@ -252,6 +252,7 @@ impl Ds4Runtime {
             }),
             tool_uses: Vec::new(),
             stop_reason: None,
+            raw_content: None,
         })
     }
 }

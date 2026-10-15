@@ -58,6 +58,13 @@ struct LibraryChatScope: Sendable {
     }
 }
 
+/// How the article list is ordered. For you ranks unread articles the way the
+/// AI Inbox did: importance and relevance from the model, plus learned taste.
+enum ArticleListSort: String, Hashable {
+    case newest
+    case forYou
+}
+
 enum ArticleListMode: String, CaseIterable, Identifiable {
     case unread
     case all
@@ -120,6 +127,7 @@ final class AppModel: ObservableObject {
     @Published var folders: [FeedFolder] = []
     @Published var articles: [Article] = []
     @Published var listMode: ArticleListMode = .unread
+    @Published var listSort: ArticleListSort = .newest
     @Published var selectedFeedID: String?
     @Published var selectedFolderID: String?
     @Published var searchQuery = ""
@@ -140,11 +148,15 @@ final class AppModel: ObservableObject {
     /// How many pages back the paper offers: a year of weeks.
     static let todayPageCount = 53
     @Published var isLoadingToday = false
+    /// True while Today is fetching the feeds itself, before remaking the page.
+    @Published var isCheckingFeedsForToday = false
     @Published var isUpdatingToday = false
     @Published var todayError: String?
     /// Non-nil while the lede pass is still working down the page.
     @Published var todayLedeStatus: String?
     @Published var todayLedeNeedsRetry = false
+    /// Stories whose AI summary failed this launch; Retry clears it.
+    @Published private(set) var failedTodaySummaries = Set<String>()
     private var todayTask: Task<Void, Never>?
     private var todayLoadID = UUID()
 
@@ -153,6 +165,11 @@ final class AppModel: ObservableObject {
     let inboxScores = InboxScoreStore()
     private let importer = OPMLImportService()
     private let refresher = FeedRefreshService()
+    let discovery = FeedDiscoveryService()
+    /// Popular feeds by topic, bundled from shared/feed-catalog.json.
+    lazy var feedCatalog: FeedCatalog? = Bundle.main.url(forResource: "feed-catalog", withExtension: "json")
+        .flatMap { try? Data(contentsOf: $0) }
+        .flatMap { try? FeedCatalog(data: $0) }
     private let readLingerDuration: TimeInterval = 30 * 60
     private var recentlyReadArticles: [String: (article: Article, expiresAt: Date)] = [:]
     private var readLingerTask: Task<Void, Never>?
@@ -168,8 +185,15 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// How long Today trusts the last feed fetch. iOS fetches feeds only when
+    /// asked, so the front page would otherwise be made from yesterday's fetch
+    /// and come up empty every morning until the reader pulled Articles.
+    static let todayFeedStaleness: TimeInterval = 15 * 60
+
     // Edition generation, ranking, frozen content, and consumption live in SkimCore.
-    func loadTodayEdition(storyLimit: Int) async {
+    /// Makes the page from what the store holds, and on the front page also
+    /// fetches the feeds when they are stale, remaking the page from what lands.
+    func loadTodayEdition(storyLimit: Int, checkFeeds: Bool = true) async {
         todayTask?.cancel()
         let requestID = UUID()
         todayLoadID = requestID
@@ -178,6 +202,12 @@ final class AppModel: ObservableObject {
         let task = Task {
             await performTodayLoad(storyLimit: storyLimit, requestID: requestID)
             guard !Task.isCancelled, todayLoadID == requestID, todayError == nil else { return }
+            if checkFeeds, todayPage == 1, !isLoading, await feedsAreStale() {
+                await fetchFeedsForToday()
+                guard !Task.isCancelled, todayLoadID == requestID else { return }
+                await performTodayLoad(storyLimit: storyLimit, requestID: requestID)
+                guard !Task.isCancelled, todayLoadID == requestID, todayError == nil else { return }
+            }
             await writeTodayLedes()
         }
         todayTask = task
@@ -190,10 +220,42 @@ final class AppModel: ObservableObject {
         todayLoadID = UUID()
         todayLedeStatus = nil
         isLoadingToday = false
+        isCheckingFeedsForToday = false
+    }
+
+    /// Whether no feed has been fetched within `todayFeedStaleness`.
+    private func feedsAreStale() async -> Bool {
+        let feeds = (try? await store.listFeeds()) ?? self.feeds
+        guard !feeds.isEmpty else { return false }
+        let latest = feeds.compactMap(\.fetchedAt).max() ?? .distantPast
+        return Date().timeIntervalSince(latest) > Self.todayFeedStaleness
+    }
+
+    /// Fetches every feed for the front page, then refreshes the article list
+    /// so its counts agree with the page.
+    private func fetchFeedsForToday() async {
+        isCheckingFeedsForToday = true
+        isLoading = true
+        defer {
+            isCheckingFeedsForToday = false
+            isLoading = false
+        }
+        try? await refresher.refreshAll(store: store)
+        await reloadArticles()
+    }
+
+    /// Feeds just landed: a Today page already made regenerates from them. An
+    /// empty or short unread page grows; SkimCore leaves a settled one alone.
+    private func reloadTodayAfterFeeds() async {
+        guard todayEdition != nil || todayError != nil else { return }
+        let storyLimit = todayEdition?.edition.storyLimit
+            ?? UserDefaults.standard.integer(forKey: "todayStoryLimit")
+        await loadTodayEdition(storyLimit: [5, 10, 20].contains(storyLimit) ? storyLimit : 10, checkFeeds: false)
     }
 
     func retryTodayLedes() async {
         guard let edition = todayEdition else { return }
+        failedTodaySummaries.removeAll()
         await loadTodayEdition(storyLimit: edition.edition.storyLimit)
     }
 
@@ -230,7 +292,8 @@ final class AppModel: ObservableObject {
             }
             let edition = try await store.getOrGenerateTodayEdition(
                 startsAt: start, endsAt: end, storyLimit: storyLimit,
-                generatedAt: now, preferences: tasteStore.todayRankingPreferences(),
+                generatedAt: now,
+                preferences: tasteStore.todayRankingPreferences(starred: await starredForTaste()),
                 semanticEvaluator: evaluator
             )
             guard !Task.isCancelled, todayLoadID == requestID else { return }
@@ -254,15 +317,26 @@ final class AppModel: ObservableObject {
 
         let editionID = edition.id
         let requestID = todayLoadID
+        // A story whose summary already failed this launch, and that has a
+        // passage to show, waits for Retry rather than being asked again on
+        // every reload.
         let pending = edition.items.prefix(limit).filter {
-            ($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            $0.snapshot.editorial == nil
+                && !(failedTodaySummaries.contains($0.snapshot.storyID)
+                     && !($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         guard !pending.isEmpty else { return }
+        // Stories with no whole sentence in any report (a link post whose
+        // page can't be fetched) can't get a lede, and retrying won't change
+        // that, so they don't keep "Some summaries are missing" on the page.
+        var unwritable = Set<String>()
         defer {
             if todayLoadID == requestID {
                 todayLedeStatus = nil
                 todayLedeNeedsRetry = todayEdition?.items.prefix(limit).contains {
-                    ($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    $0.snapshot.editorial == nil
+                        && ($0.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        && !unwritable.contains($0.snapshot.storyID)
                 } ?? false
             }
         }
@@ -272,8 +346,8 @@ final class AppModel: ObservableObject {
             guard !Task.isCancelled, todayLoadID == requestID, todayEdition?.id == editionID else { return }
 
             todayLedeStatus = pending.count == 1
-                ? "Writing the lead story…"
-                : "Writing story \(index + 1) of \(pending.count)…"
+                ? "Writing the summary…"
+                : "Writing summary \(index + 1) of \(pending.count)…"
 
             let feedArticles = item.sourceArticles.compactMap(\.liveArticle).map { article in
                 var copy = article
@@ -284,7 +358,7 @@ final class AppModel: ObservableObject {
                 return copy
             }
             let evidenceStore = store
-            guard let articles = try? await TodayReaderEvidence.resolve(
+            let resolved = try? await TodayReaderEvidence.resolve(
                 articles: feedArticles, limit: TodayLedePolicy.maxArticles,
                 cached: { article in
                     let disk = ArticleReaderContentLoader.sanitizedText(try? await evidenceStore.cachedReaderText(articleID: article.id)) ?? ""
@@ -292,18 +366,59 @@ final class AppModel: ObservableObject {
                     return memory.count > disk.count ? memory : disk
                 },
                 fetch: { article in try await ArticleReaderContentLoader.loadText(for: article).text }
-            ), !articles.isEmpty else {
-                if Task.isCancelled { return }
+            )
+            if Task.isCancelled { return }
+            // A failed fetch still leaves the feed's own text to quote from.
+            let articles = (resolved ?? []).isEmpty
+                ? feedArticles.filter { !($0.contentText ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                : resolved ?? []
+            guard !articles.isEmpty else {
+                unwritable.insert(item.snapshot.storyID)
                 continue
             }
             guard !Task.isCancelled, todayLoadID == requestID else { return }
 
-            // One story failing to write is not worth losing the page over.
-            guard let preview = try? await NativeAI.catchUpPreview(
-                headline: item.snapshot.snapshotTitle,
-                articles: articles,
-                settings: settings
-            ) else { continue }
+            // The AI summary first, as on the desktop. When the model can't
+            // write one that passes the check, the story keeps (or gets) a
+            // verified passage from a report instead of staying blank.
+            do {
+                let themes = Array(Set((todayEdition?.items ?? []).compactMap { $0.snapshot.editorial?.theme })).sorted()
+                if let editorial = try await NativeAI.todayEditorial(
+                    headline: item.snapshot.snapshotTitle, articles: articles, themes: themes, settings: settings
+                ) {
+                    guard !Task.isCancelled, todayLoadID == requestID, todayEdition?.id == editionID else { return }
+                    if let updated = try? await store.setTodayEditionItemEditorial(
+                        editionID: editionID, storyID: item.snapshot.storyID, editorial: editorial
+                    ) {
+                        guard !Task.isCancelled, todayLoadID == requestID else { return }
+                        todayEdition = TodayEditionMerge.ledes(current: todayEdition, response: updated)
+                        continue
+                    }
+                }
+            } catch {
+                if Task.isCancelled { return }
+                print("[Today] Summary for \(item.snapshot.storyID) failed: \(error.localizedDescription)")
+            }
+            failedTodaySummaries.insert(item.snapshot.storyID)
+            guard (item.snapshot.lede ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+
+            // One story failing to write is not worth losing the page over. A
+            // nil preview means no report has a whole sentence to quote.
+            let preview: NativeAI.TodayPreview?
+            do {
+                preview = try await NativeAI.catchUpPreview(
+                    headline: item.snapshot.snapshotTitle,
+                    articles: articles,
+                    settings: settings
+                )
+            } catch {
+                if Task.isCancelled { return }
+                continue
+            }
+            guard let preview else {
+                unwritable.insert(item.snapshot.storyID)
+                continue
+            }
 
             guard !Task.isCancelled, todayLoadID == requestID, todayEdition?.id == editionID else { return }
             if let updated = try? await store.setTodayEditionItemLede(
@@ -320,15 +435,29 @@ final class AppModel: ObservableObject {
     }
 
     func setTodayConsumed(_ item: TodayEditionItem) async {
-        guard let edition = todayEdition, !isUpdatingToday else { return }
-        let requestID = todayLoadID
+        guard !isUpdatingToday else { return }
         isUpdatingToday = true
-        todayError = nil
         defer { isUpdatingToday = false }
+        await saveTodayConsumed(storyID: item.snapshot.storyID, isConsumed: !item.snapshot.isConsumed)
+    }
+
+    /// Opening a story, or asking about it in chat, reads it. Only ever marks
+    /// read, so a story the reader marked unread again stays that way until
+    /// they open it again.
+    func markTodayStoryRead(storyID: String) async {
+        guard let item = todayEdition?.items.first(where: { $0.snapshot.storyID == storyID }),
+              !item.snapshot.isConsumed else { return }
+        await saveTodayConsumed(storyID: storyID, isConsumed: true)
+    }
+
+    private func saveTodayConsumed(storyID: String, isConsumed: Bool) async {
+        guard let edition = todayEdition else { return }
+        let requestID = todayLoadID
+        todayError = nil
         do {
             let updated = try await store.setTodayEditionItemConsumed(
-                editionID: edition.id, storyID: item.snapshot.storyID,
-                isConsumed: !item.snapshot.isConsumed
+                editionID: edition.id, storyID: storyID,
+                isConsumed: isConsumed
             )
             if todayLoadID == requestID, todayEdition?.id == edition.id {
                 todayEdition = TodayEditionMerge.consumption(current: todayEdition, response: updated)
@@ -352,9 +481,26 @@ final class AppModel: ObservableObject {
         )
     }
 
-    /// Unread articles the AI Inbox ranks, newest first.
+    func recordChatMessage(about article: Article) {
+        tasteStore.recordChatMessage(articleID: article.id, feedID: article.feedID,
+                                     feedTitle: article.feedTitle, title: article.title)
+    }
+
+    /// Unread and All lists (of every feed, one feed or a folder) can be sorted For you.
+    var canSortForYou: Bool {
+        !isSearchActive && (listMode == .unread || listMode == .all)
+    }
+
+    var isForYou: Bool { listSort == .forYou && canSortForYou }
+
+    /// Unread articles in the selected feed or folder (every feed when none is
+    /// selected) for the For you ranking, newest first.
     func inboxCandidates(limit: Int = 300) async throws -> [Article] {
-        try await store.listArticles(filter: ArticleFilter(readState: .unread, limit: limit))
+        if let folderFeeds = selectedFolderFeedIDs {
+            let articles = try await store.listArticles(filter: ArticleFilter(readState: .unread, limit: 2_000))
+            return Array(articles.filter { folderFeeds.contains($0.feedID) }.prefix(limit))
+        }
+        return try await store.listArticles(filter: ArticleFilter(feedID: selectedFeedID, readState: .unread, limit: limit))
     }
 
     /// Saved articles teach the inbox what the reader values.
@@ -371,10 +517,6 @@ final class AppModel: ObservableObject {
 
     func setPriorityOverride(articleID: String, feedID: String, feedTitle: String, override: ArticlePriorityOverride) {
         tasteStore.setPriorityOverride(articleID: articleID, feedID: feedID, feedTitle: feedTitle, override: override)
-    }
-
-    func getPreferenceProfile() -> PreferenceProfile {
-        tasteStore.getPreferenceProfile()
     }
 
     var title: String {
@@ -568,13 +710,14 @@ final class AppModel: ObservableObject {
 
     func refreshAll() async {
         isLoading = true
-        defer { isLoading = false }
         do {
             try await refresher.refreshAll(store: store)
             await reloadArticles()
         } catch {
             errorMessage = error.localizedDescription
         }
+        isLoading = false
+        await reloadTodayAfterFeeds()
     }
 
     func importOPML(url: URL) async {
@@ -595,6 +738,7 @@ final class AppModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+        await reloadTodayAfterFeeds()
     }
 
     func addFeed(urlString: String) async {
@@ -616,6 +760,25 @@ final class AppModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// True when a feed with this address is already in the library.
+    func isSubscribed(_ url: URL) -> Bool {
+        feeds.contains { FeedDiscoveryService.sameFeed($0.url, url) }
+    }
+
+    /// Subscribes to a discovered feed without leaving the Add Feeds sheet.
+    func subscribe(to discovered: DiscoveredFeed) async throws {
+        guard !isSubscribed(discovered.url) else { return }
+        let feed = Feed(
+            id: stableID(prefix: "feed", value: discovered.url.absoluteString),
+            title: discovered.title,
+            url: discovered.url,
+            siteURL: discovered.siteURL
+        )
+        try await refresher.refresh(feed: feed, store: store)
+        await reloadArticles()
+        await reloadTodayAfterFeeds()
     }
 
     func setRead(_ article: Article, isRead: Bool, keepVisibleInUnreadList: Bool = false) async {

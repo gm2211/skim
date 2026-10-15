@@ -24,53 +24,59 @@ struct TodayEditionView: View {
     /// Stories that get a written lede and a full card; the rest of the page
     /// runs as two-up briefs.
     private static let leadCount = 6
+    private static let pageTop = "today-page-top"
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if model.isLoadingToday {
-                        ProgressView("Loading today’s edition…")
-                            .frame(maxWidth: .infinity, minHeight: 200)
-                    } else {
-                        if let error = model.todayError {
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Couldn’t load Today").font(.headline)
-                                Text(error).font(.subheadline).foregroundStyle(SkimStyle.secondary)
-                                Button("Try again") { Task { await load() } }
-                                    .frame(minHeight: 44)
-                            }
-                        }
-                        if let edition = model.todayEdition {
-                            editionHeader(edition)
-                            if edition.items.isEmpty {
-                                emptyEdition
-                            } else {
-                                if let status = model.todayLedeStatus {
-                                    TodayWritingRule(status: status)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if model.isLoadingToday {
+                            TodayPageSkeleton()
+                        } else {
+                            if let error = model.todayError {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text("Couldn’t load Today").font(.headline)
+                                    Text(error).font(.subheadline).foregroundStyle(SkimStyle.secondary)
+                                    Button("Try again") { Task { await load() } }
+                                        .frame(minHeight: 44)
                                 }
-                                frontPage(edition.items)
-                                if edition.consumedItemCount == edition.totalItemCount {
-                                    Label(model.todayPage == 1 ? "You’re all caught up for today." : "You’re all caught up on this page.", systemImage: "checkmark.circle.fill")
-                                        .font(.headline)
-                                        .foregroundStyle(SkimStyle.accent)
-                                        .padding(.vertical, 12)
+                            }
+                            if let edition = model.todayEdition {
+                                editionHeader(edition)
+                                if edition.items.isEmpty {
+                                    emptyEdition
+                                } else {
+                                    if let status = model.todayLedeStatus {
+                                        TodayWritingRule(status: status)
+                                    }
+                                    frontPage(edition.items)
+                                    if edition.consumedItemCount == edition.totalItemCount {
+                                        Label(model.todayPage == 1 ? "You’re all caught up for today." : "You’re all caught up on this page.", systemImage: "checkmark.circle.fill")
+                                            .font(.headline)
+                                            .foregroundStyle(SkimStyle.accent)
+                                            .padding(.vertical, 12)
+                                    }
                                 }
                             }
                         }
                     }
+                    .padding(.horizontal, 18)
+                    .padding(.bottom, 24)
+                    .frame(maxWidth: 680, alignment: .leading)
+                    .frame(maxWidth: .infinity)
+                    .id(Self.pageTop)
                 }
-                .padding(.horizontal, 18)
-                .padding(.bottom, 24)
-                .frame(maxWidth: 680, alignment: .leading)
-                .frame(maxWidth: .infinity)
+                // A turned page opens at its dateline, not at the last page's scroll offset.
+                .onChange(of: model.todayPage) { _, _ in proxy.scrollTo(Self.pageTop, anchor: .top) }
+                // Pulling the page fetches the feeds, then remakes the page from them.
+                .refreshable { await model.refreshAll() }
+                // A swipe turns the page: left goes back a week, right comes forward.
+                .gesture(DragGesture(minimumDistance: 48, coordinateSpace: .local).onEnded { value in
+                    guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+                    turn(to: model.todayPage + (value.translation.width < 0 ? 1 : -1))
+                })
             }
-            .refreshable { await load() }
-            // A swipe turns the page: left goes back a week, right comes forward.
-            .gesture(DragGesture(minimumDistance: 48, coordinateSpace: .local).onEnded { value in
-                guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-                turn(to: model.todayPage + (value.translation.width < 0 ? 1 : -1))
-            })
             pageBar
         }
         .background(SkimStyle.background.ignoresSafeArea())
@@ -103,28 +109,31 @@ struct TodayEditionView: View {
     }
 
     /// The foot of the page: where the paper turns, and which page this is.
+    /// The front page has nothing newer, so it names itself on the left and
+    /// turns back on the right; later pages put the page between the turns,
+    /// with both turns the same width so the label stays centred.
     private var pageBar: some View {
-        HStack {
-            // The front page has nothing newer: its left button is blank so
-            // the bar keeps its shape.
-            Button(model.todayPage == 2 ? "Today" : "Previous page") { turn(to: model.todayPage - 1) }
-                .disabled(model.todayPage <= 1)
-                .opacity(model.todayPage <= 1 ? 0 : 1)
-                .accessibilityHidden(model.todayPage <= 1)
-            Spacer()
-            VStack(spacing: 1) {
-                Text(model.todayPage == 1 ? "Front page" : "Page \(model.todayPage)")
-                    .font(.system(size: 12, weight: .semibold))
-                if let edition = model.todayEdition {
-                    Text(Self.dateline(for: edition.edition))
-                        .font(.system(size: 11))
-                        .foregroundStyle(SkimStyle.secondary)
+        HStack(spacing: 12) {
+            if model.todayPage <= 1 {
+                pageLabel(alignment: .leading)
+                Spacer(minLength: 8)
+                Button { turn(to: 2) } label: {
+                    Label("Last week", systemImage: "chevron.right").labelStyle(TrailingIconLabel())
                 }
-            }
-            Spacer()
-            Button(model.todayPage == 1 ? "Last week" : "Next page") { turn(to: model.todayPage + 1) }
+            } else {
+                Button { turn(to: model.todayPage - 1) } label: {
+                    Label(model.todayPage == 2 ? "Today" : "Newer", systemImage: "chevron.left")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                pageLabel(alignment: .center)
+                    .layoutPriority(1)
+                Button { turn(to: model.todayPage + 1) } label: {
+                    Label("Older", systemImage: "chevron.right").labelStyle(TrailingIconLabel())
+                }
                 .disabled(model.todayPage >= AppModel.todayPageCount)
                 .opacity(model.todayPage >= AppModel.todayPageCount ? 0.35 : 1)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
         }
         .font(.system(size: 14, weight: .medium))
         .foregroundStyle(SkimStyle.text)
@@ -132,6 +141,19 @@ struct TodayEditionView: View {
         .padding(.vertical, 10)
         .background(SkimStyle.chrome)
         .overlay(alignment: .top) { Rectangle().fill(SkimStyle.separator.opacity(0.4)).frame(height: 1) }
+    }
+
+    private func pageLabel(alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 1) {
+            Text(model.todayPage == 1 ? "Front page" : "Page \(model.todayPage)")
+                .font(.system(size: 12, weight: .semibold))
+            if let edition = model.todayEdition {
+                Text(Self.dateline(for: edition.edition))
+                    .font(.system(size: 11))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+            }
+        }
     }
 
     /// One day's date, or the span of a wider window ("October 6 – 12").
@@ -159,6 +181,7 @@ struct TodayEditionView: View {
                 isWritingLede: writing,
                 isUpdating: model.isUpdatingToday,
                 onToggleConsumed: { Task { await model.setTodayConsumed(item) } },
+                onOpen: { Task { await model.markTodayStoryRead(storyID: item.snapshot.storyID) } },
                 onAsk: { onAsk(TodayChat.story(item, model: model)) }
             )
             .padding(.horizontal, position == 0 ? -18 : 0)
@@ -177,6 +200,7 @@ struct TodayEditionView: View {
                         isWritingLede: false,
                         isUpdating: model.isUpdatingToday,
                         onToggleConsumed: { Task { await model.setTodayConsumed(item) } },
+                        onOpen: { Task { await model.markTodayStoryRead(storyID: item.snapshot.storyID) } },
                         onAsk: { onAsk(TodayChat.story(item, model: model)) }
                     )
                 }
@@ -189,7 +213,7 @@ struct TodayEditionView: View {
             Form {
                 Section("Summaries") {
                     AppModelPicker(isDisabled: model.isUpdatingToday || model.todayLedeStatus != nil)
-                    if model.todayLedeNeedsRetry {
+                    if model.todayLedeNeedsRetry || !model.failedTodaySummaries.isEmpty {
                         Button("Retry missing summaries") {
                             showSettings = false
                             Task { await model.retryTodayLedes() }
@@ -216,19 +240,12 @@ struct TodayEditionView: View {
         .presentationDetents([.medium])
     }
 
-    /// The masthead: the nameplate, then a dateline whose double rule doubles
-    /// as the day's reading progress.
+    /// The dateline under the title bar, which carries the nameplate: the rule,
+    /// then the page's span and the day's reading progress.
     private func editionHeader(_ edition: TodayEditionSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Today")
-                .font(.system(size: 38, weight: .bold, design: .serif))
-                .foregroundStyle(SkimStyle.text)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 4)
-
-            VStack(spacing: 2) {
-                Rectangle().fill(SkimStyle.text.opacity(0.28)).frame(height: 1)
-            }
+            Rectangle().fill(SkimStyle.text.opacity(0.28)).frame(height: 1)
+                .padding(.top, 10)
 
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 Text(Self.dateline(for: edition.edition).uppercased())
@@ -285,13 +302,31 @@ struct TodayEditionView: View {
         .padding(.bottom, 6)
     }
 
+    /// An empty page says why, and offers the fetch that fills it. While the
+    /// feeds are being checked it says so instead of calling the page empty.
     private var emptyEdition: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: SkimIcon.today).font(.largeTitle).foregroundStyle(SkimStyle.accent)
-            Text("No stories in this edition").font(.title3.bold())
-            Text("This saved edition has no stories. Refresh feeds in Articles to read new coverage. Tomorrow brings a new edition.")
-                .font(.body).foregroundStyle(SkimStyle.secondary)
-            Button("Browse articles") { onBrowseArticles() }.frame(minHeight: 44)
+            if model.isCheckingFeedsForToday || model.isLoading {
+                TodayWritingRule(status: "Checking your feeds for today’s stories")
+                TodayPageSkeleton()
+            } else {
+                Image(systemName: SkimIcon.today).font(.largeTitle).foregroundStyle(SkimStyle.accent)
+                Text(model.todayPage == 1 ? "Nothing published today yet" : "No stories that week")
+                    .font(.title3.bold())
+                Text(model.todayPage == 1
+                     ? "Your feeds have published nothing in the last day. Pull down, or check them now, to look again."
+                     : "Your feeds published nothing in this week, or everything from it was read on another page.")
+                    .font(.body).foregroundStyle(SkimStyle.secondary)
+                HStack(spacing: 16) {
+                    if model.todayPage == 1 {
+                        Button("Check feeds") { Task { await model.refreshAll() } }
+                            .frame(minHeight: 44)
+                            .buttonStyle(.borderedProminent)
+                            .tint(SkimStyle.accent)
+                    }
+                    Button("Browse articles") { onBrowseArticles() }.frame(minHeight: 44)
+                }
+            }
         }
         .padding(.vertical, 28)
     }
@@ -418,6 +453,8 @@ private struct TodayStoryView: View {
     var isWritingLede: Bool
     var isUpdating: Bool
     var onToggleConsumed: () -> Void
+    /// Reading a story's report marks the story read.
+    var onOpen: () -> Void
     var onAsk: () -> Void
     @State private var referencesExpanded = false
     @ObservedObject private var imageStore = TodayImageStore.shared
@@ -430,13 +467,19 @@ private struct TodayStoryView: View {
         return text.isEmpty ? nil : text
     }
 
+    /// The story's AI summary, written from its reports.
+    private var summary: String? {
+        let text = item.snapshot.editorial?.summary.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return text.isEmpty ? nil : text
+    }
+
     /// The feed's own excerpt, when it reads as reporting.
     private var excerpt: String? {
         TodayExcerpt.isReadable(item.snapshot.snapshotSummary) ? item.snapshot.snapshotSummary : nil
     }
 
     private var awaitingLede: Bool {
-        !brief && lede == nil && isWritingLede
+        !brief && summary == nil && isWritingLede
     }
 
     private var openable: TodayEditionSourceArticle? {
@@ -445,7 +488,7 @@ private struct TodayStoryView: View {
     }
 
     private var ledeSource: TodayEditionSourceArticle? {
-        guard lede != nil, let sourceID = item.snapshot.ledeSourceArticleID else { return nil }
+        guard summary == nil, lede != nil, let sourceID = item.snapshot.ledeSourceArticleID else { return nil }
         return item.sourceArticles.first(where: { $0.articleID == sourceID })
     }
 
@@ -482,12 +525,13 @@ private struct TodayStoryView: View {
     @ViewBuilder
     private var hero: some View {
         if let image {
-            ZStack(alignment: .bottomLeading) {
-                // The picture fills a fixed box; laid out on its own a filled
-                // image reports its overflowing width and widens the page.
+            // Picture on top and the words below it: over the picture a long
+            // summary pushed the headline into the image, where any text in
+            // the picture itself collided with it.
+            VStack(alignment: .leading, spacing: 0) {
                 Color.clear
                     .frame(maxWidth: .infinity)
-                    .frame(height: 440)
+                    .frame(height: 260)
                     .overlay {
                         AsyncImage(url: image) { phase in
                             if let picture = phase.image {
@@ -498,29 +542,38 @@ private struct TodayStoryView: View {
                         }
                     }
                     .clipped()
-                LinearGradient(colors: [.clear, SkimStyle.background.opacity(0.65), SkimStyle.background.opacity(0.96)],
-                               startPoint: .init(x: 0.5, y: 0.25), endPoint: .bottom)
+                    .overlay(alignment: .bottom) {
+                        LinearGradient(colors: [.clear, SkimStyle.background.opacity(0.9)],
+                                       startPoint: .top, endPoint: .bottom)
+                            .frame(height: 70)
+                    }
                 VStack(alignment: .leading, spacing: 10) {
                     kicker
                     headlineLink(size: 28)
-                    if let text = lede ?? excerpt {
+                    if awaitingLede {
+                        TodayLedeSkeleton(lead: true)
+                    } else if let text = summary ?? lede ?? excerpt {
                         Text(text)
                             .font(.system(size: 15))
                             .foregroundStyle(SkimStyle.text.opacity(0.9))
-                            .lineLimit(4)
+                            .lineLimit(summary == nil ? 4 : 6)
+                        summaryNote
                     }
                     actions
                 }
                 .padding(.horizontal, 18)
+                .padding(.top, 4)
                 .padding(.bottom, 18)
             }
-            .frame(height: 440)
         } else {
             VStack(alignment: .leading, spacing: 12) {
                 kicker
                 headlineLink(size: 30)
                 if awaitingLede {
                     TodayLedeSkeleton(lead: true)
+                } else if let summary {
+                    bodyText(summary, size: 17)
+                    summaryNote
                 } else if let lede {
                     pullQuote(lede, size: 20, cite: ledeSource)
                 } else if let excerpt {
@@ -557,12 +610,15 @@ private struct TodayStoryView: View {
             }
             VStack(alignment: .leading, spacing: 9) {
                 kicker
-                if image == nil, let lede {
+                if image == nil, summary == nil, !awaitingLede, let lede {
                     pullQuote(lede, size: 19, cite: nil)
                 }
                 headlineLink(size: 20)
                 if awaitingLede {
                     TodayLedeSkeleton(lead: false)
+                } else if let summary {
+                    bodyText(summary, size: 14)
+                    summaryNote
                 } else if image != nil, let text = lede ?? excerpt {
                     bodyText(text, size: 14)
                 } else if lede == nil, let excerpt {
@@ -637,6 +693,19 @@ private struct TodayStoryView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// Says the text above is the model's, and how many reports it read, as
+    /// the desktop does.
+    @ViewBuilder
+    private var summaryNote: some View {
+        if let editorial = item.snapshot.editorial, summary != nil {
+            let read = editorial.sources.count
+            let total = item.sourceArticles.count
+            Text("AI summary · Based on \(read) of \(total) \(total == 1 ? "report" : "reports")")
+                .font(.system(size: 11.5))
+                .foregroundStyle(SkimStyle.secondary)
+        }
+    }
+
     /// The lede is a verified excerpt from a report, so it is set as that
     /// report's own words.
     private func pullQuote(_ text: String, size: CGFloat, cite: TodayEditionSourceArticle?) -> some View {
@@ -683,7 +752,7 @@ private struct TodayStoryView: View {
             if referencesExpanded {
                 ForEach(item.sourceArticles, id: \.articleID) { source in
                     VStack(alignment: .leading, spacing: 0) {
-                        TodayByline(source: source)
+                        TodayByline(source: source, onOpen: onOpen)
                         if source.membershipType == .duplicate {
                             Text("Syndicated report")
                                 .font(.caption)
@@ -732,6 +801,7 @@ private struct TodayStoryView: View {
         if let source = openable {
             NavigationLink {
                 ArticleDetailView(articleID: source.articleID)
+                    .onAppear(perform: onOpen)
             } label: {
                 headlineText(size: size)
             }
@@ -764,12 +834,14 @@ private struct TodayStoryView: View {
         if source.liveArticle != nil {
             NavigationLink {
                 ArticleDetailView(articleID: source.articleID)
+                    .onAppear(perform: onOpen)
             } label: {
                 label
             }
             .buttonStyle(.plain)
         } else if let url = source.url {
             Link(destination: url) { label }
+                .simultaneousGesture(TapGesture().onEnded { onOpen() })
         } else {
             label
         }
@@ -794,21 +866,27 @@ enum TodayChat {
         )
     }
 
+    /// Asking about a story reads it: the first question marks it read.
+    /// Opening the chat on its own doesn't.
     static func story(_ item: TodayEditionItem, model: AppModel) -> AIChatRequest {
         let reports = item.sourceArticles.sorted { $0.isRepresentative && !$1.isRepresentative }.compactMap(\.liveArticle)
+        let storyID = item.snapshot.storyID
         return request(
             key: "today-story-\(item.snapshot.editionID)-\(item.id)",
             title: "Ask about this story",
             placeholder: "\(item.snapshot.snapshotTitle)\n\nAsk why it matters, where the reports disagree, or what happens next.",
             reports: reports,
-            model: model
+            model: model,
+            onAsk: { await model.markTodayStoryRead(storyID: storyID) }
         )
     }
 
-    private static func request(key: String, title: String, placeholder: String, reports: [Article], model: AppModel) -> AIChatRequest {
+    private static func request(key: String, title: String, placeholder: String, reports: [Article], model: AppModel,
+                                onAsk: @escaping @MainActor () async -> Void = {}) -> AIChatRequest {
         var unique: [Article] = []
         for report in reports where !unique.contains(where: { $0.id == report.id }) { unique.append(report) }
         return AIChatRequest(sessionKey: key, title: title, placeholder: placeholder) { conversation in
+            await onAsk()
             let context = await model.articlesForTodayChat(unique)
             guard !context.isEmpty else {
                 return AIChatAnswer(text: "These reports are no longer on this device. Refresh your feeds and try again.", articles: [])
@@ -823,16 +901,19 @@ enum TodayChat {
 /// The articles a story was built from, printed the way a byline is.
 private struct TodayByline: View {
     var source: TodayEditionSourceArticle
+    var onOpen: () -> Void
 
     var body: some View {
         Group {
             if source.liveArticle != nil {
                 NavigationLink {
                     ArticleDetailView(articleID: source.articleID)
+                        .onAppear(perform: onOpen)
                 } label: { label }
                 .buttonStyle(.plain)
             } else if let url = source.url {
                 Link(destination: url) { label }
+                    .simultaneousGesture(TapGesture().onEnded { onOpen() })
             } else {
                 label
             }
@@ -889,6 +970,104 @@ private struct TodayLedeSkeleton: View {
 
     private var widths: [CGFloat] {
         lead ? [1.0, 0.92, 0.68] : [1.0, 0.78]
+    }
+}
+
+/// Title then icon, for the turns that point forward ("Last week ›").
+private struct TrailingIconLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.title
+            configuration.icon.font(.system(size: 12, weight: .semibold))
+        }
+    }
+}
+
+/// The page's shape while it is being made, the iOS counterpart of the
+/// desktop's story skeletons: a full-bleed lead, story cards, then a two-up
+/// grid of briefs, all as shimmering blocks with no invented content.
+struct TodayPageSkeleton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: CGFloat = -1
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                block(height: 220, radius: 0).padding(.horizontal, -18)
+                bars([0.3], height: 8)
+                bars([0.94, 0.78, 0.56], height: 18)
+                bars([0.96, 0.96, 0.68], height: 10).padding(.top, 4)
+            }
+            ForEach(0..<3, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 10) {
+                    Rectangle().fill(SkimStyle.separator).frame(height: 3)
+                    VStack(alignment: .leading, spacing: 10) {
+                        bars([0.32], height: 8)
+                        bars([0.92, 0.64], height: 15)
+                        bars([0.96, 0.7], height: 9)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
+                }
+                .background(SkimStyle.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(SkimStyle.separator, lineWidth: 1))
+            }
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                ForEach(0..<4, id: \.self) { _ in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Rectangle().fill(SkimStyle.separator).frame(height: 3)
+                        VStack(alignment: .leading, spacing: 8) {
+                            bars([0.5], height: 7)
+                            bars([0.94, 0.8, 0.5], height: 12)
+                        }
+                        .padding(.horizontal, 12)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 130, alignment: .topLeading)
+                    .background(SkimStyle.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(SkimStyle.separator, lineWidth: 1))
+                }
+            }
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) { phase = 1 }
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Preparing today’s stories")
+    }
+
+    private func bars(_ widths: [CGFloat], height: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: height * 0.55) {
+            ForEach(Array(widths.enumerated()), id: \.offset) { _, width in
+                GeometryReader { proxy in
+                    block(height: height, radius: height >= 12 ? 3 : height / 2)
+                        .frame(width: proxy.size.width * width)
+                }
+                .frame(height: height)
+            }
+        }
+    }
+
+    /// A placeholder block with a highlight sweeping across it.
+    private func block(height: CGFloat, radius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(SkimStyle.separator.opacity(0.75))
+            .frame(height: height)
+            .overlay {
+                if !reduceMotion {
+                    GeometryReader { proxy in
+                        LinearGradient(
+                            colors: [.clear, SkimStyle.text.opacity(0.07), .clear],
+                            startPoint: .leading, endPoint: .trailing
+                        )
+                        .frame(width: proxy.size.width * 0.6)
+                        .offset(x: phase * proxy.size.width * 1.3)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
+                }
+            }
     }
 }
 

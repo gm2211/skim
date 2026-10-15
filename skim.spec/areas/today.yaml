@@ -12,43 +12,124 @@ behaviors:
       An edition draws on stories active in the 24 hours before it is made, so a page made just
       after midnight is not limited to the last few minutes; stories read in an earlier edition stay
       off it. Until an edition is full or the reader marks a story read, it grows when new stories
-      arrive, keeping the summaries already written. After that it is frozen for the day.
+      arrive, keeping the summaries already written. After that it is frozen for the day. Stories
+      covered by several outlets are preferred, but a page is never left short while stories remain:
+      a morning of single-source stories fills the page.
     source:
       text: just one story?
       reference: >-
         Giulio, project chat, 2026-10-12, on a Today page made at 00:47 that froze with the one
         story active since midnight
+  - id: fetches-feeds-itself
+    description: >-
+      The front page checks the reader's feeds itself when they are stale, so it is never empty
+      only because nothing has fetched them: on iOS, which fetches feeds only when asked, opening
+      or returning to Today with feeds last fetched over 15 minutes ago fetches them and remakes
+      the page from what lands, and pulling the page down does the same. Any feed refresh remakes
+      a Today page already on screen.
+    details: >-
+      A page made before a fetch lands grows from what the fetch brings: a story counts as new to
+      the page when it was published, updated or fetched after the page was made, on both
+      platforms. While the feeds are being checked the empty page says so instead of calling
+      itself empty.
+      An empty front page then says nothing was published in the last day and offers "Check feeds"
+      and "Browse articles"; an empty earlier week says no stories that week.
+    source:
+      text: On ios, wasted vertical space with repeaded header, also Today not working
+      reference: >-
+        Giulio, project chat, 2026-10-13, on a Today page reading "No stories in this edition"
+        under a title bar reading "Today, 2,302 unread"
   - id: grouped-coverage
     description: >-
       Each story groups the reports that cover the same event, shows how many reports there are, and
       labels syndicated copies.
+  - id: ai-summary
+    description: >-
+      The top stories on a page carry an AI summary of two or three sentences written from their
+      reports, labelled "AI summary · Based on N of M reports", on desktop and iOS alike.
+    details: >-
+      The model reads up to four reports (two of 1,500 characters on Apple's on-device model) and
+      must return one exact supporting quote from every report it read, or the summary is not
+      kept. Titles show first; each card's summary slot, the photo lead's included, shows an
+      animated placeholder until its summary lands. A story whose summary can't be written keeps
+      its verified source passage instead of staying blank.
+    source:
+      text: Where's the summary in newspaper / today view
+      reference: Giulio, project chat, 2026-10-14, with an iOS screenshot of a lead showing only the feed excerpt
   - id: source-verified-preview
     description: >-
-      A story's preview is an exact passage from one named source, one to three sentences and at
-      most 60 words, so it never puts words in a publisher's mouth.
+      Where a story has no AI summary, its preview is an exact passage from one named source, one
+      to three sentences and at most 60 words, so it never puts words in a publisher's mouth.
+    details: >-
+      The model picks the passage; when its pick fails the check or the model can't be reached,
+      the preview is the first verified passage of one or two whole sentences taken without a
+      model, skipping a byline run into the first sentence. Apple's on-device model reads two
+      reports of up to 1,500 characters so the request fits its context. "Some summaries are
+      missing" offers Retry only for stories a retry could fill, not for stories whose reports
+      have no whole sentence to quote. Titles show first; each card's summary slot shows an
+      animated placeholder while its passage is written.
+    source:
+      text: >-
+        I only see titles not summaries, it's ok to get to titles first and do summaries async
+        (with beautiful slightly animated placeholders) but no summaries?
+      reference: Giulio, project chat, 2026-10-13, after "It retries but then shows up again"
   - id: whats-new
     description: When a story gains new coverage after the edition was made, it shows a "What's new" line.
   - id: read-progress
     description: >-
       Each story can be marked read, and the header shows "N of M" read progress or "All caught up".
+  - id: open-or-ask-reads-story
+    description: >-
+      Opening one of a story's reports, or sending a question about the story in chat, marks the
+      story read. Opening the chat without sending anything does not.
+    details: >-
+      It only ever marks read: a story already read is left alone, and one the reader marked unread
+      again is read again only when they open or ask about it again. Marking a story read this way
+      is the same as tapping its read circle, so its reports are marked read too. In the article
+      lists, opening an article already marks it read; asking about an article from the list's
+      summary marks it read the same way, on the first question.
+    source:
+      text: Chatting with an article or tapping on it should mark it as read
+      reference: >-
+        Giulio, project thread "Mark read on tap or chat", 2026-10-14, on an iPhone Today card
+        whose read circle stayed empty after he opened and asked about it
   - id: summary-retry
     description: >-
       Missing story summaries can be retried, with progress shown while they are written.
   - id: ranking-signals
     description: >-
-      Story ranking uses the reader's stars, priority overrides, and engagement, plus the shared
-      story policy's importance rating.
+      Story ranking learns from the same reader signals as the AI Inbox, on both platforms: the
+      inbox taste model (reading time, chats, stars, pins, dismissals) plus the story's own stars
+      and pins, alongside coverage, freshness and the shared story policy's importance rating.
+    details: >-
+      The shared skim_story_preference adds 0.5 per starred report (at most two), 1.25 for a
+      pinned report, and up to 3 points either way (one importance level) for the mean learned
+      affinity of the story's reports, scaled by how much the inbox trusts its taste (full after
+      about 40 signals). There is no "follow story" term. Contract: shared/fixtures/inbox-ranking.json.
+    source:
+      text: Do both
+      reference: >-
+        Giulio, project chat, 2026-10-14, choosing "Do both" on the decision card "Unify Skim's
+        taste ranking across Today and the AI Inbox?"
   - id: front-page-layout
     description: >-
       Desktop sets Today as a broadsheet: a lead story with a rail of three beside it, a row of three
       features, then "In brief". iOS sets it as a magazine: a full-bleed lead, story cards, then a
       two-up grid of briefs.
     details: >-
-      Ten stories fill one desktop page. The masthead has top margin; the only controls are an
+      Ten stories fill one desktop page. The iOS photo lead sets its headline and summary below the
+      picture, so text inside the image never collides with them. The masthead has top margin; the only controls are an
       ask button, a refresh button and a cog that opens a small settings popover (summary model,
       edition size, retry, AI settings). The popover is wide enough for every
       label to sit on one line with its control inside it. Missing summaries show as a note with
-      Retry in the dateline instead of a loose button.
+      Retry in the dateline instead of a loose button. On iOS the paper has one header: the title
+      bar carries the serif "Today" nameplate between its icons, and the page below opens with the
+      dateline rule, never a second "Today" or a repeated count. While a page is being made, both
+      platforms show the page's shape as shimmering placeholders (lead, stories, briefs) with no
+      invented content, never a bare spinner; on iOS a status line above them says when the feeds
+      are being checked. The iOS page strip names the front page on the left and offers "Last
+      week" on the right; later pages centre the page between equal-width turns. A turned page
+      opens at its top.
     source:
       text: >-
         I like A on desktop, C on mobile. There should be some margin from the top - also maybe just a
@@ -98,8 +179,8 @@ behaviors:
       Desktop has an Ask button in the top bar for the page and an Ask action on each story; both
       open the app assistant (the same one Cmd+K uses) with the page's stories, or the chosen story,
       as its context. iOS has the Ask action on each story and "Ask about Today" at the top of the
-      title bar's more menu (an iPhone title bar has no room for a fourth icon beside the bolt, the
-      cog and the menu without covering the title), and its chat reads exactly those reports: each
+      title bar's more menu (an iPhone title bar has no room for a fourth icon beside the nameplate,
+      the cog and the menu), and its chat reads exactly those reports: each
       story's lead report first, then the rest, up to 30.
     source:
       text: I would like to be able to chat with the whole page or a single story

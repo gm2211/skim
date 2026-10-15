@@ -101,6 +101,10 @@ pub struct Candidate {
     constituents: Vec<(String, i64)>,
     semantic_reason: Option<String>,
     timestamp: i64,
+    /// When the story reached this device: the later of its last activity and
+    /// the fetch that brought any of its reports. A report published before a
+    /// page was made but fetched after it is still new to that page.
+    arrived_at: i64,
     evidence: String,
     sources: Vec<MemberSnapshot>,
 }
@@ -245,9 +249,17 @@ pub fn collect_candidates(
             .filter(|text| !text.trim().is_empty())
             .unwrap_or_else(|| revision.summary.clone())
             .chars().take(super::story_policy::semantic_evidence_characters()).collect();
+        let last_fetched_at: Option<i64> = conn.query_row(
+            "SELECT MAX(a.fetched_at) FROM story_articles sa
+             JOIN articles a ON a.id = sa.article_id
+             WHERE sa.story_id = ?1",
+            params![rank.story_id],
+            |row| row.get(0),
+        )?;
         candidates.push(Candidate {
             evidence,
             timestamp: story.last_activity_at,
+            arrived_at: story.last_activity_at.max(last_fetched_at.unwrap_or(i64::MIN)),
             sources: member_snapshots(
                 conn,
                 &rank.story_id,
@@ -326,7 +338,8 @@ pub fn covered_story_ids(conn: &Connection, id: &str) -> Result<BTreeSet<String>
     ids.collect()
 }
 
-/// Whether a story the page doesn't cover has arrived since it was made.
+/// Whether a story the page doesn't cover has arrived since it was made:
+/// published, updated or fetched after the page's generation time.
 pub fn has_new_arrivals(
     conn: &Connection,
     view: &TodayEditionView,
@@ -334,7 +347,8 @@ pub fn has_new_arrivals(
 ) -> Result<bool, rusqlite::Error> {
     let covered = covered_story_ids(conn, &view.edition.id)?;
     Ok(candidates.iter().any(|candidate| {
-        candidate.timestamp > view.edition.generated_at && !covered.contains(&candidate.rank.story_id)
+        candidate.arrived_at > view.edition.generated_at
+            && !covered.contains(&candidate.rank.story_id)
     }))
 }
 
@@ -1230,6 +1244,26 @@ mod tests {
         add_story(&conn, "after-reading", 1, false, DAY_START + 8_000);
         let kept = get_or_generate(&conn, DAY_START, DAY_END, DAY_START + 120, 5).unwrap();
         assert_eq!(kept.total_count, 3, "a page the reader has started stays as it is");
+    }
+
+    /// A report published before the page was made but fetched after it is
+    /// still new to the page: feeds are often fetched after Today opens.
+    #[test]
+    fn short_unread_edition_grows_with_reports_fetched_after_it_was_made() {
+        let conn = setup_empty();
+        add_story(&conn, "early", 2, false, DAY_START + 60);
+        let first = get_or_generate(&conn, DAY_START, DAY_END, DAY_START + 3_600, 5).unwrap();
+        assert_eq!(first.total_count, 1);
+
+        add_story(&conn, "published-earlier", 1, false, DAY_START + 3_000);
+        conn.execute(
+            "UPDATE articles SET fetched_at = ?1 WHERE id = 'published-earlier-article-1'",
+            params![DAY_START + 3_700],
+        )
+        .unwrap();
+        let grown = get_or_generate(&conn, DAY_START, DAY_END, DAY_START + 3_800, 5).unwrap();
+        assert_eq!(grown.edition.id, first.edition.id);
+        assert_eq!(grown.total_count, 2, "a report fetched after the page was made grows it");
     }
 
     #[test]

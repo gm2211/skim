@@ -580,6 +580,7 @@ impl AiProvider for LocalLlmProvider {
             }),
             tool_uses: Vec::new(),
             stop_reason: None,
+            raw_content: None,
         })
     }
 

@@ -19,6 +19,11 @@ behaviors:
       the app-wide actions (collapse, refresh, Ask Skim, Today, add feed); the list toolbar carries
       only the list's own (mark all read, search) and repeats the app-wide ones only while the
       sidebar is hidden.
+    details: >-
+      While the sidebar is hidden (and in the phone-width layout) the list toolbar repeats Ask
+      Skim, Today and add feed in the sidebar header's order, so Today is always one click away.
+      Giulio flagged the narrow view missing the newspaper button on 2026-10-15 ("this view is
+      lacking the newspaper button").
     source:
       text: >-
         newspaper view / icon is on second tab but still lightning on first [...] today should
@@ -26,28 +31,45 @@ behaviors:
       reference: Giulio, project chat, 2026-10-11
   - id: ios-one-icon-per-action
     description: >-
-      iOS uses the desktop's icon for each action and destination, one icon per thing everywhere it
-      appears: Today is the newspaper, AI Inbox the tray, chat and Ask
-      Skim the speech bubble, Summarize the sparkles, All Articles the list, and leaving the app
-      (open in browser, original page) the arrow-out-of-box.
+      iOS uses one icon per action and destination everywhere it appears. Unread, All and Search
+      use the icons Giulio picked for the bottom bar: Unread the full tray, All the justified text
+      lines, and Search the magnifying glass in a circle. Elsewhere iOS uses the desktop's icon:
+      Today the newspaper, For you (the AI Inbox) the tray, chat and Ask Skim the speech bubble, Summarize the sparkles, and leaving
+      the app (open in browser, original page) the arrow-out-of-box.
     details: >-
       The mapping lives in one place in the iOS code (SkimIcon in Style.swift). Starring reads
-      Star/Unstar in every menu, matching the reader toolbar.
+      Star/Unstar in every menu, matching the reader toolbar. The bar icons were chosen from five
+      SF Symbol alternatives per tab (project file tab-icons/tab-icons.png): Unread
+      tray.full, All text.justify.left, Search magnifyingglass.circle. They apply wherever iOS
+      shows those destinations. Today briefly shipped as the house and went back to the newspaper
+      at Giulio's request.
     source:
       text: icons inconsistent in ios view
       reference: Giulio, project chat, 2026-10-12
+  - id: ios-bar-icon-picks
+    description: >-
+      Giulio's choice of iOS bottom-bar icons from the five-option comparison sheet: Unread option
+      3, All option 4, Search option 2. Today stays the newspaper.
+    source:
+      text: Also I wanted newspaper icon for today
+      reference: >-
+        Giulio, project chat, 2026-10-13, after "3,4,5,2" was read as Unread 3, All 4, Today 5
+        (house), Search 2
   - id: ios-bottom-bar
     description: >-
       iOS bottom bar shows each view as an icon over its name. It defaults to Unread, All, Today and
       Search, and Giulio chooses which views appear and their order (two to five of Today, Unread,
-      All, Starred, Recent, AI Inbox and Search) from Customize Bottom Bar, reached by
+      All, Starred, Recent, For you and Search) from Customize Bottom Bar, reached by
       long-pressing the bar or from the "…" menu.
     details: >-
       Today opens in place of the article list, with the bar still showing, rather than as a pushed
-      page; picking a feed, folder or library view returns to the list. AI Inbox opens its page.
+      page; picking a feed, folder or library view returns to the list. For you sorts the list in
+      place, and Unread, All, Starred or Recent go back to Newest.
       There is no catch-up bar option (a saved bar that still names one just loses that item);
       on iPhone the Today title sits between the title bar's buttons and "Ask about Today" is
-      the first item of its "…" menu, so nothing covers the title.
+      the first item of its "…" menu, so nothing covers the title. On phones with a home
+      indicator the items sit lower in the bar, reaching part-way into the bottom inset, so the
+      space under the labels is not much bigger than the space above the icons.
     source:
       text: bottom row in ios can use improvement (maybe let me choose the today view instead of the favorite view)
       reference: Giulio, project chat, 2026-10-12

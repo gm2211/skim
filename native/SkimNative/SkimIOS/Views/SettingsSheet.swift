@@ -1,3 +1,4 @@
+import SafariServices
 import SkimCore
 import SwiftUI
 import UIKit
@@ -55,9 +56,10 @@ struct NativeAIProviderChoice: Identifiable {
         .init(id: "foundation-models", name: "Apple Intelligence", detail: "Apple's on-device model. Private, free, and works offline.", badge: "On device"),
         .init(id: "mlx", name: "On-device MLX", detail: "Download a small open model and run it on this iPhone.", badge: "On device"),
         .init(id: "claude-subscription", name: "Claude Pro/Max", detail: "Sign in with your Claude.ai account. No API key.", badge: "Subscription"),
+        .init(id: "chatgpt-subscription", name: "ChatGPT Plus/Pro", detail: "Sign in with your ChatGPT account. No API key.", badge: "Subscription"),
         .init(id: "xai", name: "Grok (xAI)", detail: "Sign in with your SuperGrok subscription, or use an xAI API key.", badge: "Subscription"),
         .init(id: "anthropic", name: "Claude (API key)", detail: "api.anthropic.com with usage-based billing.", badge: "API key"),
-        .init(id: "openai", name: "OpenAI", detail: "GPT models with a platform API key. A ChatGPT plan does not cover app access.", badge: "API key"),
+        .init(id: "openai", name: "OpenAI", detail: "GPT models with a platform API key. For a ChatGPT plan, pick ChatGPT Plus/Pro.", badge: "API key"),
         .init(id: "openrouter", name: "OpenRouter", detail: "Hundreds of models with one OpenRouter key.", badge: "API key"),
         .init(id: "custom", name: "Custom", detail: "Any OpenAI-compatible endpoint.", badge: "API key")
     ]
@@ -69,7 +71,6 @@ struct NativeAIProviderChoice: Identifiable {
 
 struct SettingsSheet: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.openURL) private var openURL
     @Binding var isPresented: Bool
     @State private var draft = AppSettings()
     @State private var activeTab: SettingsTab = .ai
@@ -80,6 +81,7 @@ struct SettingsSheet: View {
     /// so typing a key does not reorder the tabs mid-entry.
     @State private var accountFirst = false
     @State private var xaiSignedIn = XAIKeychainStore.isSignedIn
+    @State private var chatgptSignedIn = ChatGPTKeychainStore.isSignedIn
 
     var onAddFeed: () -> Void = {}
     var onImportOPML: () -> Void = {}
@@ -141,6 +143,7 @@ struct SettingsSheet: View {
                 draft = model.settings
                 draft.ai = normalizedAISettings(draft.ai)
                 xaiSignedIn = XAIKeychainStore.isSignedIn
+                chatgptSignedIn = ChatGPTKeychainStore.isSignedIn
                 accountFirst = !providerIsReady
                 Task { await model.refreshOfflineCacheStats() }
             }
@@ -320,7 +323,7 @@ struct SettingsSheet: View {
                     modelID: aiModelBinding,
                     settings: draft.ai,
                     placeholder: "Select a model",
-                    reloadKey: "\(draft.ai.provider)|\(draft.ai.apiKey ?? "")|\(xaiSignedIn)",
+                    reloadKey: "\(draft.ai.provider)|\(draft.ai.apiKey ?? "")|\(xaiSignedIn)|\(chatgptSignedIn)",
                     fetch: modelFetcher(for: draft.ai.provider)
                 )
             } else {
@@ -348,6 +351,9 @@ struct SettingsSheet: View {
         if provider == "claude-subscription" || provider == "anthropic" {
             return { try await NativeAI.fetchAnthropicModels(settings: $0) }
         }
+        if provider == "chatgpt-subscription" {
+            return { _ in try await NativeChatGPT.fetchModels() }
+        }
         return { try await NativeAI.fetchOpenAICompatibleModels(settings: $0) }
     }
 
@@ -372,13 +378,16 @@ struct SettingsSheet: View {
                 ai: aiSettingsBinding,
                 apiKeyText: aiAPIKeyBinding,
                 providerIsReady: providerIsReady,
-                openURL: { url in openURL(url) },
+                onSignedIn: { aiTab = .model }
+            )
+        case "chatgpt-subscription":
+            ChatGPTSignInPanel(
+                isSignedIn: $chatgptSignedIn,
                 onSignedIn: { aiTab = .model }
             )
         case "xai":
             SuperGrokSignInPanel(
                 isSignedIn: $xaiSignedIn,
-                openURL: { url in openURL(url) },
                 onSignedIn: { aiTab = .model }
             )
             SettingsTextField(
@@ -487,9 +496,9 @@ struct SettingsSheet: View {
             Divider()
                 .overlay(SkimStyle.separator)
 
-            SettingsAction(systemName: "plus", title: "Add RSS Feed", action: onAddFeed)
+            SettingsAction(systemName: "plus", title: "Discover Feeds", action: onAddFeed)
             SettingsAction(systemName: "square.and.arrow.down", title: "Import OPML", action: onImportOPML)
-            SettingsAction(systemName: "folder.badge.plus", title: "Auto-group Feeds", action: onAutoGroup)
+            SettingsAction(systemName: "folder", title: "Auto-group Feeds", customIcon: AnyView(AutoGroupIcon(size: 18)), action: onAutoGroup)
 
             Divider()
                 .overlay(SkimStyle.separator)
@@ -626,6 +635,8 @@ struct SettingsSheet: View {
             return draft.ai.apiKey?.nilIfEmpty != nil || draft.ai.endpoint?.nilIfEmpty != nil
         case "xai":
             return draft.ai.apiKey?.nilIfEmpty != nil || xaiSignedIn
+        case "chatgpt-subscription":
+            return chatgptSignedIn
         default:
             return draft.ai.apiKey?.nilIfEmpty != nil
         }
@@ -645,6 +656,8 @@ struct SettingsSheet: View {
         case "xai":
             if draft.ai.apiKey?.nilIfEmpty != nil { return "Using your xAI API key" }
             return xaiSignedIn ? "Signed in with SuperGrok" : "Sign in or add a key"
+        case "chatgpt-subscription":
+            return providerIsReady ? "Signed in with ChatGPT" : "Sign in with ChatGPT"
         case "custom":
             return providerIsReady ? "Custom provider configured" : "Provider details needed"
         default:
@@ -669,6 +682,8 @@ struct SettingsSheet: View {
             return providerIsReady ? "Your Claude Pro/Max plan runs chat, summaries, and AI Inbox." : "Use your Claude Pro/Max plan. Open Account to sign in."
         case "xai":
             return providerIsReady ? "Grok runs chat, summaries, and AI Inbox." : "Use your SuperGrok plan or an xAI API key. Open Account to connect."
+        case "chatgpt-subscription":
+            return providerIsReady ? "Your ChatGPT plan runs chat, summaries, and AI Inbox." : "Use your ChatGPT Plus or Pro plan. Open Account to sign in."
         default:
             return providerIsReady
                 ? "\(NativeAIProviderChoice.name(for: draft.ai.provider)) runs chat, summaries, and AI Inbox."
@@ -728,7 +743,7 @@ struct SettingsSheet: View {
                 let repoId = $0.localModelPath?.nilIfEmpty ?? NativeMLX.effectiveDefaultRepoId
                 $0.localModelPath = repoId
                 $0.model = repoId
-            } else if ["claude-subscription", "anthropic", "xai", "openai", "openrouter"].contains(value) {
+            } else if ["claude-subscription", "chatgpt-subscription", "anthropic", "xai", "openai", "openrouter"].contains(value) {
                 // These providers have a fixed base URL and a model list
                 // fetched after sign-in. A model id from another provider
                 // must not survive the switch, and substituting a
@@ -762,6 +777,7 @@ struct SettingsSheet: View {
         switch provider {
         case "claude-subscription", "anthropic": return model.hasPrefix("claude")
         case "xai": return model.hasPrefix("grok")
+        case "chatgpt-subscription": return NativeChatGPT.isChatGPTModel(model)
         case "openai": return model.hasPrefix("gpt") || model.hasPrefix("o")
         default: return true
         }
@@ -776,7 +792,7 @@ struct SettingsSheet: View {
             if next.model == legacyDefaultAnthropicModel { next.model = "claude-sonnet-5" }
             // Self-heal a foreign id left behind by an earlier provider switch.
             if !Self.model(next.model, belongsTo: ai.provider) { next.model = nil }
-        case "xai", "openai":
+        case "xai", "openai", "chatgpt-subscription":
             if !Self.model(next.model, belongsTo: ai.provider) { next.model = nil }
         default:
             next.provider = "foundation-models"
@@ -969,10 +985,11 @@ private struct ProviderChoiceRow: View {
 /// and wait. The token stays in this iPhone's Keychain.
 private struct SuperGrokSignInPanel: View {
     @Binding var isSignedIn: Bool
-    var openURL: (URL) -> Void
     var onSignedIn: () -> Void
 
     @State private var device: XAIDeviceStart?
+    /// xAI's approval page, shown in-app so Skim stays in front and keeps polling.
+    @State private var signInPage: SignInPage?
     @State private var isStarting = false
     @State private var errorMessage: String?
     @State private var attempt: Task<Void, Never>?
@@ -1003,6 +1020,7 @@ private struct SuperGrokSignInPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(SkimStyle.chrome.opacity(0.62), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onDisappear { attempt?.cancel() }
+        .inAppSignInPage($signInPage)
     }
 
     private var connectRow: some View {
@@ -1055,7 +1073,7 @@ private struct SuperGrokSignInPanel: View {
             }
             HStack(spacing: 10) {
                 Button {
-                    openURL(device.verificationURIComplete)
+                    signInPage = SignInPage(url: device.verificationURIComplete)
                 } label: {
                     Text("Open xAI")
                         .font(.system(size: 15, weight: .semibold))
@@ -1110,12 +1128,13 @@ private struct SuperGrokSignInPanel: View {
             defer {
                 isStarting = false
                 device = nil
+                signInPage = nil
             }
             do {
                 let started = try await NativeXAIOAuth.beginDevice()
                 device = started
                 isStarting = false
-                openURL(started.verificationURIComplete)
+                signInPage = SignInPage(url: started.verificationURIComplete)
                 try await NativeXAIOAuth.completeDevice(started)
                 isSignedIn = true
                 onSignedIn()
@@ -1738,7 +1757,6 @@ private struct ClaudeAuthSection: View {
     @Binding var ai: AISettings
     var apiKeyText: Binding<String>
     var providerIsReady: Bool
-    var openURL: (URL) -> Void
     var onSignedIn: () -> Void
 
     /// Whether the "API token instead" disclosure starts expanded. Defaults
@@ -1747,11 +1765,10 @@ private struct ClaudeAuthSection: View {
     /// relying on a manually pasted token and should keep seeing that field.
     @State private var showAPIToken: Bool
 
-    init(ai: Binding<AISettings>, apiKeyText: Binding<String>, providerIsReady: Bool, openURL: @escaping (URL) -> Void, onSignedIn: @escaping () -> Void) {
+    init(ai: Binding<AISettings>, apiKeyText: Binding<String>, providerIsReady: Bool, onSignedIn: @escaping () -> Void) {
         self._ai = ai
         self.apiKeyText = apiKeyText
         self.providerIsReady = providerIsReady
-        self.openURL = openURL
         self.onSignedIn = onSignedIn
         let hasManualToken = ai.wrappedValue.apiKey?.nilIfEmpty != nil
         let hasOAuthRefreshToken = ClaudeKeychainStore.loadRefreshToken() != nil
@@ -1760,9 +1777,7 @@ private struct ClaudeAuthSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ClaudeOAuthPastePanel(ai: $ai, onSignedIn: onSignedIn, collapseWhenSignedIn: providerIsReady) { url in
-                openURL(url)
-            }
+            ClaudeOAuthPastePanel(ai: $ai, onSignedIn: onSignedIn, collapseWhenSignedIn: providerIsReady)
 
             Button {
                 withAnimation(.easeInOut(duration: 0.16)) {
@@ -1797,7 +1812,7 @@ private struct ClaudeAuthSection: View {
 
 /// Sign-in panel for Claude Pro/Max.
 ///
-/// Opens Claude's sign-in page in Safari via the paste flow (the only supported
+/// Opens Claude's sign-in page in an in-app browser via the paste flow (the only supported
 /// path). The user copies the code from the Anthropic success page and pastes it
 /// here to complete authentication.
 struct ClaudeOAuthPastePanel: View {
@@ -1809,8 +1824,6 @@ struct ClaudeOAuthPastePanel: View {
     /// Defaults to false so existing callers (e.g. ClaudeReauthSheet, which
     /// always wants the full flow front and center) are unaffected.
     var collapseWhenSignedIn: Bool = false
-    /// Used to open the Anthropic OAuth page in Safari.
-    var openURL: (URL) -> Void
 
     // MARK: State
 
@@ -1820,6 +1833,9 @@ struct ClaudeOAuthPastePanel: View {
     @State private var isWorking = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
+    /// Claude's authorize page, shown in-app: the reader copies the code there,
+    /// taps Done, and pastes it without leaving Skim.
+    @State private var signInPage: SignInPage?
 
     private var isSignedIn: Bool {
         ai.apiKey?.nilIfEmpty != nil
@@ -1847,6 +1863,7 @@ struct ClaudeOAuthPastePanel: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(SkimStyle.chrome.opacity(0.62), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .inAppSignInPage($signInPage)
     }
 
     // MARK: Sub-views
@@ -1909,7 +1926,7 @@ struct ClaudeOAuthPastePanel: View {
                 Text("Sign in with Claude")
                     .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(SkimStyle.text)
-                Text("Opens Claude's sign-in page in Safari. Paste the code shown on the Anthropic page to finish signing in.")
+                Text("Opens Claude's sign-in page here in Skim. Copy the code it shows, tap Done, and paste it below.")
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(SkimStyle.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1983,7 +2000,7 @@ struct ClaudeOAuthPastePanel: View {
             let next = try NativeClaudeOAuth.beginPasteFlow()
             pasteFlow = next
             pastedCode = ""
-            openURL(next.authorizeURL)
+            signInPage = SignInPage(url: next.authorizeURL)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -2250,14 +2267,21 @@ private struct SettingsIconAction: View {
 private struct SettingsAction: View {
     var systemName: String
     var title: String
+    var customIcon: AnyView? = nil
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: systemName)
-                    .font(.system(size: 20, weight: .regular))
-                    .frame(width: 26)
+                Group {
+                    if let customIcon {
+                        customIcon
+                    } else {
+                        Image(systemName: systemName)
+                            .font(.system(size: 20, weight: .regular))
+                    }
+                }
+                .frame(width: 26)
                 Text(title)
                     .font(.system(size: 17, weight: .semibold))
                 Spacer()
@@ -2289,5 +2313,175 @@ private struct SettingMetric: View {
                 .textCase(.uppercase)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - ChatGPT sign-in
+
+/// Sign in with ChatGPT: OpenAI's official way to run Skim on a ChatGPT Plus/Pro
+/// plan. The page opens in an in-app browser; when the reader allows plan usage,
+/// ChatGPT redirects back to Skim and the sheet closes on its own.
+private struct ChatGPTSignInPanel: View {
+    @Binding var isSignedIn: Bool
+    var onSignedIn: () -> Void
+
+    @State private var signInPage: SignInPage?
+    @State private var isWorking = false
+    @State private var errorMessage: String?
+    @State private var attempt: Task<Void, Never>?
+    @State private var email = ChatGPTKeychainStore.loadEmail()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if isSignedIn {
+                signedInRow
+            } else {
+                connectRow
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text("Uses your plan's Codex allowance. Set a limit for Skim in ChatGPT under Settings, Usage.")
+                .font(.system(size: 12, weight: .regular))
+                .foregroundStyle(SkimStyle.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SkimStyle.chrome.opacity(0.62), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .onDisappear { attempt?.cancel() }
+        .inAppSignInPage($signInPage)
+        .onChange(of: signInPage == nil) { _, closed in
+            // Closing the sheet before ChatGPT redirects back cancels the sign-in.
+            if closed, isWorking { cancel() }
+        }
+    }
+
+    private var connectRow: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "person.crop.circle.badge.checkmark")
+                    .font(.system(size: 21, weight: .regular))
+                    .foregroundStyle(SkimStyle.accent)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Sign in with ChatGPT")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(SkimStyle.text)
+                    Text("Use your ChatGPT Plus or Pro plan instead of an API key. Allow plan usage when ChatGPT asks.")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            Button {
+                start()
+            } label: {
+                Label(isWorking ? "Waiting for ChatGPT…" : "Sign in with ChatGPT", systemImage: "person.crop.circle")
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(SkimStyle.accent)
+            .disabled(isWorking)
+        }
+    }
+
+    private var signedInRow: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 20, weight: .regular))
+                .foregroundStyle(Color.green.opacity(0.85))
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Signed in with ChatGPT")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(SkimStyle.text)
+                Text(email ?? "Skim refreshes your session automatically.")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 8)
+            Button(role: .destructive) {
+                ChatGPTKeychainStore.clear()
+                email = nil
+                isSignedIn = false
+            } label: {
+                Text("Sign out")
+                    .font(.system(size: 13, weight: .semibold))
+                    .fixedSize()
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private func start() {
+        attempt?.cancel()
+        errorMessage = nil
+        isWorking = true
+        attempt = Task { @MainActor in
+            defer {
+                isWorking = false
+                signInPage = nil
+            }
+            do {
+                email = try await NativeChatGPTOAuth.signIn { url in
+                    signInPage = SignInPage(url: url)
+                }
+                isSignedIn = true
+                onSignedIn()
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func cancel() {
+        attempt?.cancel()
+        attempt = nil
+        isWorking = false
+    }
+}
+
+// MARK: - In-app sign-in page
+
+/// A provider's sign-in page to show inside Skim.
+struct SignInPage: Identifiable {
+    let url: URL
+    var id: URL { url }
+}
+
+private struct SafariSignInView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        let controller = SFSafariViewController(url: url)
+        controller.dismissButtonStyle = .done
+        controller.preferredControlTintColor = UIColor(SkimStyle.accent)
+        return controller
+    }
+
+    func updateUIViewController(_ controller: SFSafariViewController, context: Context) {}
+}
+
+extension View {
+    /// Shows sign-in pages in an in-app Safari sheet rather than switching to Safari:
+    /// leaving the app suspends Skim, which cut off the SuperGrok poll mid-request.
+    func inAppSignInPage(_ page: Binding<SignInPage?>) -> some View {
+        sheet(item: page) { page in
+            SafariSignInView(url: page.url)
+                .ignoresSafeArea()
+        }
     }
 }

@@ -73,6 +73,11 @@ pub struct ChatResponse {
     /// orchestrator to detect `tool_use` termination on Anthropic.
     #[serde(default)]
     pub stop_reason: Option<String>,
+    /// The response's content blocks exactly as Anthropic sent them, so a
+    /// tool-use turn can be replayed with its `thinking` blocks intact. `None`
+    /// for other providers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_content: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,6 +132,22 @@ mod endpoint_tests {
         }
         for model in ["claude-sonnet-4-6", "claude-haiku-4-5", "claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022"] {
             assert!(anthropic_accepts_temperature(model), "{model} takes temperature");
+        }
+    }
+
+    #[test]
+    fn five_series_models_get_low_effort_and_room_to_answer() {
+        for model in ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-1"] {
+            let mut body = serde_json::json!({"model": model, "max_tokens": 850});
+            apply_anthropic_thinking_defaults(&mut body, model);
+            assert_eq!(body["output_config"]["effort"], "low", "{model}");
+            assert_eq!(body["max_tokens"], ANTHROPIC_THINKING_MAX_TOKENS_FLOOR, "{model}");
+        }
+        for model in ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5", "claude-3-5-sonnet-20241022"] {
+            let mut body = serde_json::json!({"model": model, "max_tokens": 850});
+            apply_anthropic_thinking_defaults(&mut body, model);
+            assert!(body.get("output_config").is_none(), "{model}");
+            assert_eq!(body["max_tokens"], 850, "{model}");
         }
     }
 
@@ -302,6 +323,7 @@ impl AiProvider for OpenAiCompatibleProvider {
             }),
             tool_uses: Vec::new(),
             stop_reason: None,
+            raw_content: None,
         })
     }
 
@@ -427,6 +449,36 @@ pub(crate) fn anthropic_accepts_temperature(model: &str) -> bool {
     }
 }
 
+/// Every 5-series model (Sonnet 5.5, Opus 5.5, Haiku 5.5, Fable…) thinks before
+/// answering unless told otherwise, and accepts `output_config.effort`. Older
+/// models think only when asked, and some (Sonnet 4.5, Haiku 4.5) reject `effort`.
+pub(crate) fn anthropic_thinks_by_default(model: &str) -> bool {
+    let lower = model.to_ascii_lowercase();
+    let mut parts = lower.split('-').peekable();
+    if parts.next() != Some("claude") {
+        return false;
+    }
+    if parts.peek().is_some_and(|p| p.parse::<u32>().is_err()) {
+        parts.next();
+    }
+    parts.next().and_then(|p| p.parse::<u32>().ok()).is_some_and(|major| major >= 5)
+}
+
+/// Smallest `max_tokens` sent to a model that thinks by default.
+pub(crate) const ANTHROPIC_THINKING_MAX_TOKENS_FLOOR: i64 = 4096;
+
+/// Thinking counts against `max_tokens`, so at the default effort a long
+/// article context could spend a chat's whole budget thinking and return no
+/// text. Low effort keeps thinking short; the floor leaves room to answer.
+fn apply_anthropic_thinking_defaults(body: &mut serde_json::Value, model: &str) {
+    if !anthropic_thinks_by_default(model) {
+        return;
+    }
+    body["output_config"] = serde_json::json!({"effort": "low"});
+    let max_tokens = body["max_tokens"].as_i64().unwrap_or(0);
+    body["max_tokens"] = serde_json::json!(max_tokens.max(ANTHROPIC_THINKING_MAX_TOKENS_FLOOR));
+}
+
 /// The human-readable `error.message` from an Anthropic error body, or the raw
 /// body when it isn't the usual `{"error": {"message": ...}}` envelope.
 fn anthropic_error_reason(body: &str) -> String {
@@ -450,6 +502,7 @@ impl AiProvider for AnthropicProvider {
             "messages": messages,
             "max_tokens": request.max_tokens.unwrap_or(2048),
         });
+        apply_anthropic_thinking_defaults(&mut body, &request.model);
 
         if let Some(temp) = request.temperature.filter(|_| anthropic_accepts_temperature(&request.model)) {
             body["temperature"] = serde_json::json!(temp);
@@ -480,9 +533,11 @@ impl AiProvider for AnthropicProvider {
             return Err(format!("Anthropic API error ({}): {}", status, anthropic_error_reason(&body)));
         }
 
-        let api_response: AnthropicResponse = response
+        let raw: serde_json::Value = response
             .json()
             .await
+            .map_err(|e| format!("Failed to parse Anthropic response: {}", e))?;
+        let api_response: AnthropicResponse = serde_json::from_value(raw.clone())
             .map_err(|e| format!("Failed to parse Anthropic response: {}", e))?;
 
         let (content, tool_uses) = parse_anthropic_content(&api_response.content);
@@ -496,6 +551,7 @@ impl AiProvider for AnthropicProvider {
             }),
             tool_uses,
             stop_reason: api_response.stop_reason,
+            raw_content: raw["content"].as_array().cloned(),
         })
     }
 
@@ -544,6 +600,7 @@ impl AiProvider for ClaudeSubscriptionProvider {
             "max_tokens": request.max_tokens.unwrap_or(2048),
             "system": system_blocks,
         });
+        apply_anthropic_thinking_defaults(&mut body, &request.model);
         if let Some(temp) = request.temperature.filter(|_| anthropic_accepts_temperature(&request.model)) {
             body["temperature"] = serde_json::json!(temp);
         }
@@ -570,7 +627,9 @@ impl AiProvider for ClaudeSubscriptionProvider {
             return Err(format!("Claude subscription API {}: {}", status, anthropic_error_reason(&body)));
         }
 
-        let api_response: AnthropicResponse = resp.json().await
+        let raw: serde_json::Value = resp.json().await
+            .map_err(|e| format!("Parse Claude subscription response: {}", e))?;
+        let api_response: AnthropicResponse = serde_json::from_value(raw.clone())
             .map_err(|e| format!("Parse Claude subscription response: {}", e))?;
         let (content, tool_uses) = parse_anthropic_content(&api_response.content);
         Ok(ChatResponse {
@@ -582,6 +641,7 @@ impl AiProvider for ClaudeSubscriptionProvider {
             }),
             tool_uses,
             stop_reason: api_response.stop_reason,
+            raw_content: raw["content"].as_array().cloned(),
         })
     }
 
@@ -803,6 +863,7 @@ impl AiProvider for ClaudeCliProvider {
             usage: result.1,
             tool_uses: Vec::new(),
             stop_reason: None,
+            raw_content: None,
         })
     }
 
@@ -908,6 +969,14 @@ pub fn create_provider(
                 return Err("[configure-ai] Not signed in to Claude.".to_string());
             }
             Ok(Box::new(ClaudeSubscriptionProvider::new(token)))
+        }
+        "chatgpt-subscription" => {
+            let token = settings
+                .oauth_access_token
+                .clone()
+                .filter(|t| !t.is_empty())
+                .ok_or("[configure-ai] Not signed in to ChatGPT.")?;
+            Ok(Box::new(super::chatgpt_provider::ChatGptSubscriptionProvider::new(token)))
         }
         "custom" => {
             let ep = endpoint

@@ -16,7 +16,17 @@ public enum LibraryChatPolicy {
     private static let broadCatchupTerms: Set<String> = [
         "latest", "news", "recent", "today", "today's", "week", "weeks", "week's", "biggest", "important", "top",
         "catchup", "briefing", "brief", "overview", "summarize", "summary", "happening", "new", "missed", "have",
-        "has", "happened", "been", "since", "yesterday",
+        "has", "happened", "been", "since", "yesterday", "things", "know", "should", "need", "miss", "sources",
+        "disagree",
+    ]
+
+    /// Starter questions shown in an empty library chat. Each is a broad
+    /// catch-up, so it reads the most recent articles in scope. Desktop keeps
+    /// the same list in src/lib/chatStarterPrompts.ts.
+    public static let starterPrompts = [
+        "What are the top 10 things I should know from today's articles?",
+        "What did I miss this week?",
+        "Where do sources disagree on the biggest stories?",
     ]
 
     private static let operationTerms: Set<String> = [
@@ -52,11 +62,18 @@ public enum LibraryChatPolicy {
                 if isContextualFollowup(previousQuery) { continue }
                 let previous = topicKeywords(previousQuery)
                 if !previous.isEmpty || (previousQuery.lowercased().contains("catch") && isBroadCatchup(previousQuery)) {
-                    return (previous, isBroadCatchup(previousQuery))
+                    return broadCatchupReadsRecent(previous, isBroadCatchup(previousQuery))
                 }
             }
         }
-        return (terms, isBroadCatchup(query))
+        return broadCatchupReadsRecent(terms, isBroadCatchup(query))
+    }
+
+    /// A briefing ("top 10 things from today") reads the most recent articles in
+    /// scope. Its words are not a topic, so searching for "today" or "top" would
+    /// only find articles that happen to contain them.
+    private static func broadCatchupReadsRecent(_ terms: [String], _ broad: Bool) -> (terms: [String], allowRecentFallback: Bool) {
+        broad ? ([], true) : (terms, false)
     }
 
     /// Topic terms for a newly named subject within an otherwise contextual
@@ -212,6 +229,9 @@ public enum LibraryChatPolicy {
 
     private static func isBroadCatchup(_ query: String) -> Bool {
         let terms = queryKeywords(query)
-        return !isFindRequest(query) && terms.allSatisfy(broadCatchupTerms.contains)
+        // Counts such as "top 10" carry no topic.
+        return !isFindRequest(query) && terms.allSatisfy { term in
+            broadCatchupTerms.contains(term) || term.allSatisfy { $0.isASCII && $0.isNumber }
+        }
     }
 }

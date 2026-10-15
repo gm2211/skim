@@ -10,9 +10,36 @@ behaviors:
       Summary options are length (short ~30, medium ~150, long ~300 words, or a custom 20-1000
       words), tone (concise, detailed, casual, technical), a custom prompt, and the model.
     details: iOS keeps the options used for a summary as the new defaults.
+  - id: summary-config-sheet
+    description: >-
+      On iOS, Summarize opens a sheet led by one-tap presets (the last-used settings, Gist, Briefing,
+      Explainer, Deep dive) and a live preview of the chosen style and length, with every option
+      under a collapsible Customize section.
+    details: >-
+      Presets fill in style and length; the Summarize button still runs it. Customize holds the
+      style chips, a scrubbable length ruler in 25-word steps across 20-1000 words, the model, and
+      an optional focus prompt. The preview text is a fixed sample per style, never generated.
+    source:
+      text: Mix of D and E
+      reference: >-
+        Giulio, project thread "summary config in iOS", 2026-10-13, picking from five mockups where D
+        was presets-first and E was a live preview with a length ruler
   - id: faithful-summaries
     description: >-
       Summaries keep the source's uncertainty, attribution, negation, and timing.
+  - id: complete-summaries
+    description: >-
+      A summary never ends mid-word or mid-sentence, even when the model stops at its output limit.
+    details: >-
+      Hosted providers get an output ceiling of at least 8192 tokens, because some count hidden
+      reasoning against it; the prompt's word target still sets the length. On-device models keep
+      the plan's budget. If output is still cut off, the unfinished final sentence is dropped. Both
+      rules live in shared/SkimStoryPolicy with the shared/fixtures/summary-completion.json fixture.
+    source:
+      text: What's the prompt for summaries - i noticed they frequently end with "the steelman"
+      reference: >-
+        Giulio, project thread on the summary prompt, 2026-10-14, with a screenshot of an iOS
+        summary cut off at "everything else cheap. Chea"
   - id: cancel-and-cache
     description: >-
       An in-flight summary can be cancelled, and finished summaries are cached per article.

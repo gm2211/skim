@@ -27,6 +27,7 @@ extern "C" {
         age_hours: f64,
     ) -> f64;
     fn skim_inbox_priority(importance: f64, relevance: f64) -> i32;
+    fn skim_story_preference(starred: i64, pinned: i32, affinity: f64, strength: f64) -> f64;
 }
 
 pub fn triage_prompt() -> &'static str {
@@ -94,6 +95,11 @@ pub fn score(input: &ScoreInput) -> f64 {
 
 pub fn priority(importance: i32, relevance: i32) -> i32 {
     unsafe { skim_inbox_priority(importance as f64, relevance as f64) }
+}
+
+/// The reader's preference for a Today story: stars, a pin and learned taste.
+pub fn story_preference(starred: i64, pinned: bool, affinity: f64, strength: f64) -> f64 {
+    unsafe { skim_story_preference(starred, i32::from(pinned), affinity, strength) }
 }
 
 const STOPWORDS: &[&str] = &[
@@ -180,6 +186,16 @@ impl TasteModel {
         let term = known.iter().sum::<f64>() / known.len() as f64;
         0.5 * feed + 0.5 * term
     }
+
+    /// Mean affinity of a story's reports, so Today ranks with inbox taste.
+    pub fn story_affinity<'a>(&self, reports: impl IntoIterator<Item = (&'a str, &'a str)>) -> f64 {
+        let (mut sum, mut count) = (0.0, 0usize);
+        for (feed_id, title) in reports {
+            sum += self.affinity(feed_id, title);
+            count += 1;
+        }
+        if count == 0 { 0.0 } else { sum / count as f64 }
+    }
 }
 
 /// Build the taste model from reading time, chats, stars, pins, feedback and
@@ -236,7 +252,17 @@ mod tests {
         strength: Vec<StrengthCase>,
         scores: Vec<ScoreCase>,
         priority: Vec<PriorityCase>,
+        story_preference: Vec<StoryPreferenceCase>,
         terms: Vec<TermsCase>,
+    }
+    #[derive(Deserialize)]
+    struct StoryPreferenceCase {
+        name: String,
+        starred: i64,
+        pinned: bool,
+        affinity: f64,
+        strength: f64,
+        preference: f64,
     }
     #[derive(Deserialize)]
     struct WeightCase {
@@ -321,6 +347,10 @@ mod tests {
         }
         for c in f.priority {
             assert_eq!(priority(c.importance, c.relevance), c.priority);
+        }
+        for c in f.story_preference {
+            let p = story_preference(c.starred, c.pinned, c.affinity, c.strength);
+            assert!((p - c.preference).abs() < 1e-9, "{}: {p}", c.name);
         }
         for c in f.terms {
             assert_eq!(terms(&c.title), c.terms, "{}", c.title);

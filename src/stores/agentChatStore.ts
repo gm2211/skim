@@ -13,6 +13,8 @@ export interface AgentChatSeed {
   prompt?: string;
   /** Send `prompt` as soon as the chat opens. */
   autoSend?: boolean;
+  /** Runs when a question is sent, not when the chat merely opens. */
+  onSend?: () => void;
 }
 
 interface AgentChatState {

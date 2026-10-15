@@ -25,6 +25,8 @@ struct ArticleTasteSignal: Codable {
     var title: String?
     /// Dismissed from the AI Inbox without being opened.
     var dismissed: Bool?
+    /// Questions asked about the article in chat; each counts as a minute of reading.
+    var chatMessages: Int?
 
     init(articleID: String, feedID: String, feedTitle: String, title: String? = nil) {
         self.articleID = articleID
@@ -35,17 +37,6 @@ struct ArticleTasteSignal: Codable {
         self.priorityOverride = .none
         self.recordedAt = Date()
     }
-}
-
-struct PreferenceProfile {
-    /// Feed weights: feedID → normalized score [-1.0, +1.0]
-    var feedWeights: [String: Double]
-    /// Feed display titles for reference
-    var feedTitles: [String: String]
-    /// Number of signals used to build the profile
-    var signalCount: Int
-
-    static let empty = PreferenceProfile(feedWeights: [:], feedTitles: [:], signalCount: 0)
 }
 
 // MARK: - Taste Store
@@ -81,6 +72,17 @@ final class TasteStore {
         save()
     }
 
+    /// The reader asked about this article in chat, as desktop counts chats.
+    func recordChatMessage(articleID: String, feedID: String, feedTitle: String, title: String) {
+        var signal = signals[articleID] ?? ArticleTasteSignal(articleID: articleID, feedID: feedID, feedTitle: feedTitle)
+        signal.title = title
+        signal.chatMessages = (signal.chatMessages ?? 0) + 1
+        signal.dismissed = nil
+        signal.recordedAt = Date()
+        signals[articleID] = signal
+        save()
+    }
+
     /// The reader cleared this article from the AI Inbox without opening it.
     func recordDismissal(articleID: String, feedID: String, feedTitle: String, title: String) {
         var signal = signals[articleID] ?? ArticleTasteSignal(articleID: articleID, feedID: feedID, feedTitle: feedTitle)
@@ -99,7 +101,7 @@ final class TasteStore {
     /// Titles the reader spent real time on, most recent first.
     func likedTitles(limit: Int = 15) -> [String] {
         signals.values
-            .filter { $0.dwellSeconds >= 30 || $0.priorityOverride == .pin }
+            .filter { $0.dwellSeconds >= 30 || $0.priorityOverride == .pin || ($0.chatMessages ?? 0) > 0 }
             .sorted { $0.recordedAt > $1.recordedAt }
             .compactMap(\.title)
             .prefix(limit)
@@ -118,8 +120,8 @@ final class TasteStore {
                 feedID: signal.feedID,
                 title: signal.title ?? "",
                 signal: .init(
-                    dwellSeconds: signal.dwellSeconds,
-                    opened: signal.dwellSeconds > 0,
+                    dwellSeconds: signal.dwellSeconds + Double(signal.chatMessages ?? 0) * 60,
+                    opened: signal.dwellSeconds > 0 || (signal.chatMessages ?? 0) > 0,
                     starred: starredIDs.contains(signal.articleID),
                     pinned: signal.priorityOverride == .pin,
                     readUnopened: signal.dismissed == true
@@ -132,55 +134,10 @@ final class TasteStore {
         return taste
     }
 
-    func getPreferenceProfile() -> PreferenceProfile {
-        guard !signals.isEmpty else { return .empty }
-
-        // Per-feed aggregate score
-        var feedScoreSum: [String: Double] = [:]
-        var feedCount: [String: Int] = [:]
-        var feedTitles: [String: String] = [:]
-
-        for signal in signals.values {
-            let id = signal.feedID
-            feedTitles[id] = signal.feedTitle
-
-            var score: Double = 0
-            // Dwell time: >60s = strong positive, 10-60s = mild positive, <5s = mild negative
-            let dwell = signal.dwellSeconds
-            if dwell >= 60 { score += 1.0 }
-            else if dwell >= 10 { score += 0.5 }
-            else if dwell > 0 && dwell < 5 { score -= 0.3 }
-
-            // Priority override
-            switch signal.priorityOverride {
-            case .pin: score += 2.0
-            case .none: break
-            }
-
-            feedScoreSum[id, default: 0] += score
-            feedCount[id, default: 0] += 1
-        }
-
-        // Normalize to [-1, +1]
-        var feedWeights: [String: Double] = [:]
-        for (id, sum) in feedScoreSum {
-            let count = Double(feedCount[id] ?? 1)
-            let avg = sum / count
-            // Clamp and scale
-            feedWeights[id] = max(-1.0, min(1.0, avg / 3.0))
-        }
-
-        return PreferenceProfile(
-            feedWeights: feedWeights,
-            feedTitles: feedTitles,
-            signalCount: signals.count
-        )
-    }
-
-    /// Supply existing local learning to the shared edition builder once, at generation.
-    func todayRankingPreferences() -> TodayRankingPreferences {
+    /// Supply the AI Inbox's taste to the shared edition builder once, at generation.
+    func todayRankingPreferences(starred: [Article]) -> TodayRankingPreferences {
         TodayRankingPreferences(
-            feedWeights: getPreferenceProfile().feedWeights,
+            taste: inboxTaste(starred: starred),
             pinnedArticleIDs: Set(signals.values.filter {
                 $0.priorityOverride == .pin
             }.map(\.articleID))

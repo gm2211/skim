@@ -21,6 +21,8 @@ targets:
       - SkimIOS
       - path: ../../src/assets/fonts/AquireBold.otf
         buildPhase: resources
+      - path: ../../shared/feed-catalog.json
+        buildPhase: resources
     dependencies:
       - package: SkimCore
       - package: SkimInferencePolicy
@@ -34,7 +36,7 @@ targets:
         PRODUCT_NAME: Skim
         DEVELOPMENT_TEAM: 6KQV68SJ5P
         MARKETING_VERSION: 0.1.15
-        CURRENT_PROJECT_VERSION: 88
+        CURRENT_PROJECT_VERSION: 96
         SWIFT_VERSION: 6.0
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Skim
@@ -87,7 +89,7 @@ targets:
         PRODUCT_NAME: Skim
         DEVELOPMENT_TEAM: 6KQV68SJ5P
         MARKETING_VERSION: 0.1.15
-        CURRENT_PROJECT_VERSION: 88
+        CURRENT_PROJECT_VERSION: 96
         SWIFT_VERSION: 6.0
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Skim

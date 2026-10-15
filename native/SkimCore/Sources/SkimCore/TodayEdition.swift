@@ -1,28 +1,30 @@
 import Foundation
+import SkimStoryPolicy
 
 /// Personalization captured when generating an edition. Reopening an existing
 /// edition preserves its frozen selection even if these preferences change.
+/// Taste is the AI Inbox's, weighed by the shared `skim_story_preference`.
 public struct TodayRankingPreferences: Sendable {
-    public var feedWeights: [String: Double]
+    public var taste: InboxTaste
     public var pinnedArticleIDs: Set<String>
 
     public init(
-        feedWeights: [String: Double] = [:],
+        taste: InboxTaste = InboxTaste(),
         pinnedArticleIDs: Set<String> = []
     ) {
-        self.feedWeights = feedWeights
+        self.taste = taste
         self.pinnedArticleIDs = pinnedArticleIDs
     }
 
     func signal(for articles: [Article]) -> Double {
-        let stars = Double(min(2, articles.filter(\.isStarred).count)) * 0.5
-        let pin = articles.contains { pinnedArticleIDs.contains($0.id) } ? 1.25 : 0
-        let feedIDs = Set(articles.map(\.feedID)).sorted()
-        let taste = feedIDs.reduce(0.0) { total, id in
-            let weight = feedWeights[id] ?? 0
-            return total + (weight.isFinite ? max(-1, min(1, weight)) : 0)
-        } / Double(max(1, feedIDs.count))
-        return stars + pin + taste
+        let affinity = articles.isEmpty ? 0 : articles
+            .map { taste.affinity(feedID: $0.feedID, title: $0.title) }
+            .reduce(0, +) / Double(articles.count)
+        return skim_story_preference(
+            Int64(articles.filter(\.isStarred).count),
+            articles.contains { pinnedArticleIDs.contains($0.id) } ? 1 : 0,
+            affinity, taste.strength
+        )
     }
 }
 
@@ -178,6 +180,13 @@ struct TodayEditionCandidate: Sendable {
     var memberRevisions: [TodayStoryRevisionReference] = []
     var semanticScore: Double? = nil
     var semanticReason: String? = nil
+
+    /// When the story reached this device: the later of its last activity and
+    /// the fetch that brought any of its reports. A report published before a
+    /// page was made but fetched after it is still new to that page.
+    var arrivedAt: Date {
+        max(ranking.story.lastActivityAt, sourceArticles.map(\.article.fetchedAt).max() ?? .distantPast)
+    }
 }
 
 struct TodayEditionCandidateSource: Sendable, Equatable {
@@ -277,14 +286,12 @@ enum TodayEditionBuilder {
                 feedCounts[feedID, default: 0] += 1
             }
         }
-        // Relax diversity only when needed to avoid a needlessly short edition.
+        // Relax diversity only when needed to avoid a needlessly short edition:
+        // the feed cap and the two-unique-finds cap both give way. Most feeds
+        // publish stories no second outlet covers, so keeping the unique-finds
+        // cap here capped a page of single-source stories at two.
         for choice in choices where !semantic {
             guard selected.count < storyLimit else { break }
-            if choice.2 == .uniqueFinds,
-               selected.filter({ $0.2 == .uniqueFinds }).count >= 2
-            {
-                continue
-            }
             if selectedIDs.insert(choice.0.storyID).inserted {
                 selected.append(choice)
             }

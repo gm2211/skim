@@ -26,7 +26,6 @@ struct ArticleListView: View {
     @State private var chatMessagesBySession: [String: [AIChatMessage]] = [:]
     @State private var activeChatInitialMessage: String? = nil
     @State private var activeSummaryConfiguration: Article?
-    @State private var showAIInbox = false
     @State private var showSearch = false
     @FocusState private var isSearchFocused: Bool
     /// Shown when user triggers an AI feature before accepting the disclaimer.
@@ -122,25 +121,17 @@ struct ArticleListView: View {
             guard case .success(let urls) = result, let url = urls.first else { return }
             Task { await model.importOPML(url: url) }
         }
-        .sheet(isPresented: $showAddFeed) {
-            AddFeedSheet(
-                isPresented: $showAddFeed,
-                onAdd: { url in
-                    dismissTextEntry()
-                    Task { await model.addFeed(urlString: url) }
-                },
-                onImportOPML: {
-                    presentImporter()
-                }
-            )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(SkimStyle.chrome)
+        .navigationDestination(isPresented: $showAddFeed) {
+            DiscoverView(onImportOPML: {
+                presentImporter()
+            })
+            .environmentObject(model)
         }
         .sheet(isPresented: $showAutoGroup) {
             AutoGroupSheet(isPresented: $showAutoGroup)
                 .environmentObject(model)
-                .presentationDetents([.medium, .large])
+                // Full height only: at .medium the proposals list collapses to nothing.
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
@@ -181,7 +172,7 @@ struct ArticleListView: View {
             SummaryConfigurationSheet(article: article, defaults: model.settings.ai) { summarySettings in
                 runSummary(article: article, summarySettings: summarySettings)
             }
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
             .presentationDragIndicator(.visible)
             .presentationBackground(SkimStyle.chrome)
         }
@@ -196,10 +187,6 @@ struct ArticleListView: View {
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
                 .onDisappear { activeChatInitialMessage = nil }
-        }
-        .navigationDestination(isPresented: $showAIInbox) {
-            AIInboxView()
-                .environmentObject(model)
         }
         .fullScreenCover(isPresented: $showAIDisclaimerGate) {
             AIBootDisclaimerView { dontShowAgain in
@@ -333,6 +320,11 @@ struct ArticleListView: View {
                         placeholder: WebAIContext.subtitle(base: article, preferWeb: false, snapshot: snapshot),
                         generatedSummaryContext: summaryText
                     ) { conversation in
+                        // Asking about an article reads it; it stays in the
+                        // unread list until the reader moves on, as when opened.
+                        if !article.isRead {
+                            await model.setRead(article, isRead: true, keepVisibleInUnreadList: true)
+                        }
                         let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot, store: model.store)
                         let (text, citations) = try await NativeAI.chat(conversation: conversation, article: contextArticle, settings: model.settings)
                         return AIChatAnswer(text: text, articles: [contextArticle], webCitations: citations)
@@ -349,11 +341,16 @@ struct ArticleListView: View {
             activeAIChat = AIChatRequest(
                 sessionKey: scope.sessionKey,
                 title: "Chat with Articles",
-                placeholder: "Find or ask about articles in this view."
+                placeholder: "Find or ask about articles in this view.",
+                suggestedPrompts: LibraryChatPolicy.starterPrompts
             ) { conversation in
                 let context = try await model.articlesForLibraryChat(scope: scope, conversation: conversation)
                 guard !context.isEmpty else {
-                    return AIChatAnswer(text: "No matching articles found in this view. Try another title, topic, source, or URL.", articles: [])
+                    let briefing = LibraryChatPolicy.retrievalTopic(query: conversation.latestQuestion,
+                        priorUserQueries: conversation.priorTurns.filter { $0.role == .user }.map(\.text)).allowRecentFallback
+                    return AIChatAnswer(text: briefing
+                        ? "There are no articles in this view to catch up on yet."
+                        : "No matching articles found in this view. Try another title, topic, source, or URL.", articles: [])
                 }
                 let (text, citations) = try await NativeAI.chat(conversation: conversation, articles: context, settings: model.settings)
                 return AIChatAnswer(text: text, articles: context, webCitations: citations,
@@ -362,11 +359,28 @@ struct ArticleListView: View {
         }
     }
 
+    /// Sort the current list For you (what the AI Inbox used to be). Starred
+    /// and Recent are not ranked lists, so they switch to Unread.
     private func presentAIInbox() {
         gatedAI {
             dismissTextEntry()
-            showAIInbox = true
+            showToday = false
+            if !model.canSortForYou {
+                model.searchQuery = ""
+                if model.listMode != .unread && model.listMode != .all { model.listMode = .unread }
+                Task { await model.reloadArticles() }
+            }
+            model.listSort = .forYou
         }
+    }
+
+    private var listSortBinding: Binding<ArticleListSort> {
+        Binding(
+            get: { model.listSort },
+            set: { sort in
+                if sort == .forYou { presentAIInbox() } else { model.listSort = .newest }
+            }
+        )
     }
 
     private var openFeedPickerGesture: some Gesture {
@@ -429,11 +443,21 @@ struct ArticleListView: View {
                     Button("Chat with Articles", systemImage: SkimIcon.chat) {
                         presentArticleChat()
                     }
-                    Button("AI Inbox", systemImage: SkimIcon.aiInbox) {
-                        presentAIInbox()
+                    if !showToday && model.canSortForYou {
+                        Picker(selection: listSortBinding) {
+                            Label("Newest", systemImage: SkimIcon.recent).tag(ArticleListSort.newest)
+                            Label("For you", systemImage: SkimIcon.aiInbox).tag(ArticleListSort.forYou)
+                        } label: {
+                            Label("Sort", systemImage: "arrow.up.arrow.down")
+                        }
+                        .pickerStyle(.menu)
+                    } else {
+                        Button("For you", systemImage: SkimIcon.aiInbox) {
+                            presentAIInbox()
+                        }
                     }
                     Divider()
-                    Button("Add RSS Feed", systemImage: SkimIcon.addFeed) {
+                    Button("Discover Feeds", systemImage: SkimIcon.addFeed) {
                         dismissTextEntry()
                         showAddFeed = true
                     }
@@ -466,15 +490,25 @@ struct ArticleListView: View {
         }
     }
 
-    /// The list title with its count underneath.
+    /// The list title with its count underneath. On Today the title is the
+    /// paper's nameplate, and the only header: the page below it opens with
+    /// its dateline, not a second "Today".
     private var topBarTitle: some View {
         VStack(spacing: 1) {
             Text(compactTitle)
-                .font(.system(size: 17, weight: .bold))
+                .font(showToday
+                      ? .system(size: 26, weight: .bold, design: .serif)
+                      : .system(size: 17, weight: .bold))
                 .foregroundStyle(SkimStyle.text)
                 .lineLimit(1)
 
-            if model.isLoading {
+            if showToday {
+                if model.isLoading {
+                    Text("Checking feeds...")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+            } else if model.isLoading {
                 Text("Syncing...")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(SkimStyle.secondary)
@@ -567,7 +601,7 @@ struct ArticleListView: View {
                 }
 
                 VStack(spacing: 10) {
-                    Button("Add RSS Feed") {
+                    Button("Discover Feeds") {
                         dismissTextEntry()
                         showAddFeed = true
                     }
@@ -585,6 +619,12 @@ struct ArticleListView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 32)
             .padding(.bottom, 18)
+        } else if model.isForYou {
+            AIInboxView()
+                .environmentObject(model)
+                // A new feed or folder is a new ranking.
+                .id("\(model.selectedFeedID ?? "")|\(model.selectedFolderID ?? "")")
+                .simultaneousGesture(openFeedPickerGesture)
         } else {
             List {
                 ForEach(groupedArticles, id: \.label) { group in
@@ -608,7 +648,10 @@ struct ArticleListView: View {
                             .font(.system(size: 13, weight: .bold))
                             .foregroundStyle(SkimStyle.secondary)
                             .tracking(1.15)
-                            .padding(.horizontal, 72)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .padding(.leading, 72)
+                            .padding(.trailing, 18)
                             .padding(.top, 13)
                             .padding(.bottom, 7)
                     }
@@ -667,6 +710,11 @@ struct ArticleListView: View {
             }
         }
         .padding(.horizontal, 12)
+        // On phones with a home indicator, sit the items lower: more room
+        // under the separator, and reach part-way into the bottom inset so the
+        // gap under the labels isn't bigger than the one above the icons.
+        .padding(.top, bottomSafeAreaInset > 0 ? 10 : 0)
+        .padding(.bottom, bottomSafeAreaInset > 0 ? -12 : 0)
         .frame(maxWidth: .infinity)
         .background(SkimStyle.chrome.opacity(0.96).ignoresSafeArea(.all, edges: .bottom))
         .overlay(alignment: .top) {
@@ -688,9 +736,9 @@ struct ArticleListView: View {
         case .search:
             return isSearchActive && !showToday
         case .aiInbox:
-            return false
+            return !showToday && model.isForYou
         case .unread, .all, .starred, .recent:
-            return !showToday && !isSearchActive && model.selectedFolderID == nil && model.listMode == item.listMode
+            return !showToday && !isSearchActive && !model.isForYou && model.selectedFolderID == nil && model.listMode == item.listMode
         }
     }
 
@@ -709,6 +757,7 @@ struct ArticleListView: View {
             presentAIInbox()
         case .unread, .all, .starred, .recent:
             showToday = false
+            model.listSort = .newest
             model.selectedFolderID = nil
             if let mode = item.listMode {
                 model.listMode = mode
@@ -833,8 +882,11 @@ private struct FeedPickerSheet: View {
                             Task { await model.reloadArticles() }
                         }
 
-                        pickerRow(iconSystemName: SkimIcon.aiInbox, title: "AI Inbox", count: model.totalUnreadCount, isSelected: false) {
+                        pickerRow(iconSystemName: SkimIcon.aiInbox, title: "For you", count: model.totalUnreadCount, isSelected: model.selectedFeedID == nil && model.selectedFolderID == nil && model.isForYou) {
+                            model.selectedFeedID = nil
+                            model.selectedFolderID = nil
                             onAIInbox()
+                            isPresented = false
                         }
                     }
                     .padding(.top, 14)
@@ -848,12 +900,12 @@ private struct FeedPickerSheet: View {
                             .tracking(1.1)
                         Spacer()
                         Button(action: onAutoGroup) {
-                            Image(systemName: "folder.badge.plus")
-                                .font(.system(size: 16, weight: .regular))
+                            AutoGroupIcon(size: 16)
                                 .foregroundStyle(SkimStyle.secondary)
                                 .frame(width: 36, height: 36)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Auto-group feeds with AI")
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 14)
@@ -940,7 +992,7 @@ private struct FeedPickerSheet: View {
             }
             Spacer()
             BorderlessIconButton(systemName: SkimIcon.chat, title: "Chat", size: 23, tapSize: 42, action: onChat)
-            BorderlessIconButton(systemName: SkimIcon.addFeed, title: "Add RSS Feed", size: 23, tapSize: 42, action: onAddFeed)
+            BorderlessIconButton(systemName: SkimIcon.addFeed, title: "Discover Feeds", size: 23, tapSize: 42, action: onAddFeed)
         }
         // Leading 11 centers the 42pt gear button on the picker rows' icon
         // column below (20pt row inset + 12pt half-tile = 32pt = 11 + 21).
@@ -1319,6 +1371,23 @@ private enum AutoGroupNameStyle: String, CaseIterable, Identifiable {
     }
 }
 
+/// A folder with AI sparkles: auto-grouping sorts feeds with AI, it doesn't just add a folder.
+struct AutoGroupIcon: View {
+    var size: CGFloat
+
+    var body: some View {
+        Image(systemName: "folder")
+            .font(.system(size: size, weight: .regular))
+            .overlay(alignment: .topTrailing) {
+                // Big enough that all three sparkles read at sidebar size; one alone looks like a plus.
+                Image(systemName: "sparkles")
+                    .font(.system(size: size * 0.9, weight: .bold))
+                    .offset(x: size * 0.6, y: -size * 0.85)
+            }
+            .accessibilityHidden(true)
+    }
+}
+
 private struct AutoGroupProposal: Identifiable {
     var id: String { "\(baseName)-\(feeds.map(\.id).joined(separator: ","))" }
     var baseName: String
@@ -1346,6 +1415,9 @@ private struct AutoGroupSheet: View {
     @State private var usedFallback = false
     @State private var draggingFeedID: String?
     @State private var dropTargetProposalID: String?
+    @State private var feedbackText = ""
+    @State private var isRevising = false
+    @FocusState private var feedbackFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -1354,10 +1426,12 @@ private struct AutoGroupSheet: View {
                     Text("Auto-group feeds")
                         .font(.system(size: 27, weight: .heavy))
                         .foregroundStyle(SkimStyle.text)
-                    Text("Use AI to classify feeds into folder proposals, then choose the folder naming style.")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(SkimStyle.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if !isEditingFeedback {
+                        Text("Use AI to classify feeds into folder proposals, then choose the folder naming style.")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 Spacer()
@@ -1374,38 +1448,40 @@ private struct AutoGroupSheet: View {
                 .buttonStyle(.plain)
             }
 
-            aiStatus
+            if !isEditingFeedback {
+                aiStatus
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Folder naming")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(SkimStyle.secondary)
-                    .textCase(.uppercase)
-                    .tracking(1.1)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Folder naming")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .textCase(.uppercase)
+                        .tracking(1.1)
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 9) {
-                        ForEach(AutoGroupNameStyle.allCases) { style in
-                            Button {
-                                withAnimation(.smooth(duration: 0.18)) {
-                                    nameStyle = style
-                                }
-                            } label: {
-                                Text(style.label)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(nameStyle == style ? SkimStyle.text : SkimStyle.secondary)
-                                    .padding(.horizontal, 13)
-                                    .frame(height: 36)
-                                    .background(
-                                        nameStyle == style ? SkimStyle.surface.opacity(0.95) : SkimStyle.surface.opacity(0.34),
-                                        in: Capsule()
-                                    )
-                                    .overlay {
-                                        Capsule()
-                                            .stroke(nameStyle == style ? SkimStyle.accent.opacity(0.7) : SkimStyle.separator, lineWidth: 1)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 9) {
+                            ForEach(AutoGroupNameStyle.allCases) { style in
+                                Button {
+                                    withAnimation(.smooth(duration: 0.18)) {
+                                        nameStyle = style
                                     }
+                                } label: {
+                                    Text(style.label)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(nameStyle == style ? SkimStyle.text : SkimStyle.secondary)
+                                        .padding(.horizontal, 13)
+                                        .frame(height: 36)
+                                        .background(
+                                            nameStyle == style ? SkimStyle.surface.opacity(0.95) : SkimStyle.surface.opacity(0.34),
+                                            in: Capsule()
+                                        )
+                                        .overlay {
+                                            Capsule()
+                                                .stroke(nameStyle == style ? SkimStyle.accent.opacity(0.7) : SkimStyle.separator, lineWidth: 1)
+                                        }
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -1445,71 +1521,78 @@ private struct AutoGroupSheet: View {
                 .scrollIndicators(.hidden)
             }
 
-            if !proposals.isEmpty && !isRunningAI {
+            if !proposals.isEmpty {
+                feedbackField
+            }
+
+            if !proposals.isEmpty && !isRunningAI && !isEditingFeedback {
                 AIDisclaimerLabel()
                     .padding(.top, 2)
             }
 
-            HStack(spacing: 12) {
-                Button {
-                    Task { await runAI() }
-                } label: {
-                    HStack(spacing: 8) {
-                        if isRunningAI {
-                            ProgressView()
-                                .controlSize(.mini)
-                                .tint(SkimStyle.text)
-                        }
-                        Text(aiActionTitle)
-                    }
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(isRunningAI ? SkimStyle.secondary : SkimStyle.text)
-                .padding(.horizontal, 15)
-                .frame(height: 42)
-                .background(SkimStyle.surface.opacity(0.85), in: Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(SkimStyle.separator, lineWidth: 1)
-                }
-                .disabled(isRunningAI || isApplying)
-
-                Spacer()
-
-                if !proposals.isEmpty {
+            if !isEditingFeedback {
+                HStack(spacing: 12) {
                     Button {
-                        Task { await applyProposals() }
+                        Task { await runAI() }
                     } label: {
                         HStack(spacing: 8) {
-                            if isApplying {
+                            if isRunningAI {
                                 ProgressView()
                                     .controlSize(.mini)
                                     .tint(SkimStyle.text)
                             }
-                            Text(isApplying ? "Applying…" : "Apply")
+                            Text(aiActionTitle)
                         }
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(SkimStyle.text)
+                    .foregroundStyle(isRunningAI ? SkimStyle.secondary : SkimStyle.text)
                     .padding(.horizontal, 15)
                     .frame(height: 42)
-                    .background(SkimStyle.accent.opacity(isApplying ? 0.45 : 0.95), in: Capsule())
+                    .background(SkimStyle.surface.opacity(0.85), in: Capsule())
                     .overlay {
                         Capsule()
-                            .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                            .stroke(SkimStyle.separator, lineWidth: 1)
                     }
                     .disabled(isRunningAI || isApplying)
-                }
 
-                Button("Done") {
-                    isPresented = false
+                    Spacer()
+
+                    if !proposals.isEmpty {
+                        Button {
+                            Task { await applyProposals() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isApplying {
+                                    ProgressView()
+                                        .controlSize(.mini)
+                                        .tint(SkimStyle.text)
+                                }
+                                Text(isApplying ? "Applying…" : "Apply")
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SkimStyle.text)
+                        .padding(.horizontal, 15)
+                        .frame(height: 42)
+                        .background(SkimStyle.accent.opacity(isApplying ? 0.45 : 0.95), in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                        }
+                        .disabled(isRunningAI || isApplying)
+                    }
+
+                    Button("Done") {
+                        isPresented = false
+                    }
+                    .buttonStyle(.glassProminent)
                 }
-                .buttonStyle(.glassProminent)
+                .padding(.top, 2)
             }
-            .padding(.top, 2)
         }
+        .animation(.smooth(duration: 0.2), value: isEditingFeedback)
         .padding(.horizontal, 24)
         .padding(.top, 24)
         .padding(.bottom, 18)
@@ -1526,7 +1609,7 @@ private struct AutoGroupSheet: View {
                 ProgressView()
                     .controlSize(.small)
                     .tint(SkimStyle.accent)
-                Text("Asking \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider))...")
+                Text("\(isRevising ? "Revising with" : "Asking") \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider))...")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(SkimStyle.secondary)
             }
@@ -1557,6 +1640,85 @@ private struct AutoGroupSheet: View {
             .padding(.vertical, 12)
             .background(SkimStyle.surface.opacity(0.66), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+    }
+
+    /// While typing feedback the keyboard takes half the sheet; drop the chrome so the
+    /// proposals being discussed stay visible above the box.
+    private var isEditingFeedback: Bool {
+        feedbackFocused && !isRunningAI
+    }
+
+    private var trimmedFeedback: String {
+        feedbackText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Free-text feedback on the proposal ("merge Coding into SoftwareEngineering"),
+    /// sent to the AI together with the current grouping so it revises rather than restarts.
+    private var feedbackField: some View {
+        HStack(alignment: .bottom, spacing: 8) {
+            TextField("Tell AI what to change…", text: $feedbackText, axis: .vertical)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(SkimStyle.text)
+                .lineLimit(1...4)
+                .focused($feedbackFocused)
+                .submitLabel(.send)
+                .onSubmit { Task { await reviseWithFeedback() } }
+                .onChange(of: feedbackText) { _, newValue in
+                    // A multi-line field takes Return as a newline; treat it as Send instead.
+                    guard newValue.contains("\n") else { return }
+                    feedbackText = newValue.replacingOccurrences(of: "\n", with: " ")
+                    Task { await reviseWithFeedback() }
+                }
+                .padding(.vertical, 10)
+                .padding(.leading, 14)
+
+            Button {
+                Task { await reviseWithFeedback() }
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundStyle(trimmedFeedback.isEmpty || isRunningAI ? SkimStyle.secondary.opacity(0.5) : SkimStyle.accent)
+                    .frame(width: 40, height: 40)
+            }
+            .buttonStyle(.plain)
+            .disabled(trimmedFeedback.isEmpty || isRunningAI || isApplying)
+            .accessibilityLabel("Revise grouping")
+            .padding(.trailing, 2)
+        }
+        .background(SkimStyle.surface.opacity(0.72), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(feedbackFocused ? SkimStyle.accent.opacity(0.6) : SkimStyle.separator, lineWidth: 1)
+        }
+    }
+
+    private func reviseWithFeedback() async {
+        let feedback = trimmedFeedback
+        guard !feedback.isEmpty, !proposals.isEmpty, !isRunningAI else { return }
+        dismissUIKitKeyboard()
+        feedbackFocused = false
+
+        let current = proposals.map { (name: $0.displayName(style: nameStyle), feeds: $0.feeds) }
+        isRevising = true
+        isRunningAI = true
+        aiMessage = nil
+
+        do {
+            proposals = try await AutoGroupClassifier.revisedProposals(
+                current: current,
+                feedback: feedback,
+                feeds: model.feeds,
+                settings: model.settings
+            )
+            usedFallback = false
+            feedbackText = ""
+            aiMessage = "Revised with \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider)): \u{201C}\(feedback)\u{201D}"
+        } catch {
+            aiMessage = "Couldn't revise the grouping: \(error.localizedDescription)\nYour feedback is still in the box below."
+        }
+
+        isRunningAI = false
+        isRevising = false
     }
 
     private var aiActionTitle: String {
@@ -1785,10 +1947,96 @@ private enum AutoGroupClassifier {
         }
     }
 
+    /// Revise `current` following the reader's free-text `feedback`. Unlike a fresh run this
+    /// skips the folder-count checks: "merge X into Y" legitimately leaves fewer folders.
+    static func revisedProposals(
+        current: [(name: String, feeds: [Feed])],
+        feedback: String,
+        feeds: [Feed],
+        settings: AppSettings
+    ) async throws -> [AutoGroupProposal] {
+        let uniqueFeeds = deduplicate(feeds)
+        guard !uniqueFeeds.isEmpty else { return [] }
+        let currentJSON = currentGroupingJSON(current, feeds: uniqueFeeds)
+
+        let revised: [AutoGroupProposal]
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
+            revised = try await FoundationModelFeedOrganizer.proposals(
+                for: uniqueFeeds,
+                revising: (currentJSON: currentJSON, feedback: feedback)
+            )
+            return keepUnplacedFeeds(revised, current: current)
+        }
+#endif
+        let content = try await NativeAI.complete(
+            settings: settings,
+            instructions: revisionInstructions,
+            prompt: revisionPrompt(feeds: uniqueFeeds, currentJSON: currentJSON, feedback: feedback),
+            maxTokens: max(512, uniqueFeeds.count * 4 + 160),
+            jsonMode: true
+        )
+        revised = try decodeProposals(from: content, feeds: uniqueFeeds, modelID: settings.ai.model ?? settings.ai.provider)
+        return keepUnplacedFeeds(revised, current: current)
+    }
+
+    static let revisionInstructions = """
+    You revise a proposed grouping of RSS feeds into folders, following the reader's feedback. Output ONLY valid JSON. No prose. No markdown fences.
+    Each feed goes in exactly one folder. Keep folders the feedback doesn't mention as they are.
+    Refer to feeds by their numeric handle.
+    """
+
+    /// The current grouping as `{"folders":[{"name":…,"feeds":[handles]}]}`, using the
+    /// same zero-based handles as the feed listing.
+    static func currentGroupingJSON(_ current: [(name: String, feeds: [Feed])], feeds: [Feed]) -> String {
+        var handles: [String: Int] = [:]
+        for (index, feed) in feeds.enumerated() where handles[feed.id] == nil {
+            handles[feed.id] = index
+        }
+        let folders: [[String: Any]] = current.map { folder in
+            ["name": folder.name, "feeds": folder.feeds.compactMap { handles[$0.id] }]
+        }
+        let data = (try? JSONSerialization.data(withJSONObject: ["folders": folders], options: [.sortedKeys])) ?? Data()
+        return String(data: data, encoding: .utf8) ?? #"{"folders":[]}"#
+    }
+
+    static func revisionPrompt(feeds: [Feed], currentJSON: String, feedback: String) -> String {
+        """
+        Feeds (handle TAB title [TAB site]):
+        \(listing(for: feeds))
+
+        Current grouping:
+        \(currentJSON)
+
+        Reader's feedback: "\(feedback)"
+
+        Output the full revised grouping, every feed exactly once, as ONLY this JSON shape:
+        {"folders":[{"name":"Tech","feeds":[0,3,7]}]}
+        """
+    }
+
+    /// A revision must not lose feeds: any feed the AI left out goes back into its
+    /// previous folder (matched by name), so applying never drops it.
+    static func keepUnplacedFeeds(_ revised: [AutoGroupProposal], current: [(name: String, feeds: [Feed])]) -> [AutoGroupProposal] {
+        var result = revised
+        let placed = Set(revised.flatMap { $0.feeds.map(\.id) })
+        for previous in current {
+            let missing = previous.feeds.filter { !placed.contains($0.id) }
+            guard !missing.isEmpty else { continue }
+            if let index = result.firstIndex(where: { $0.baseName.caseInsensitiveCompare(previous.name) == .orderedSame }) {
+                result[index].feeds.append(contentsOf: missing)
+            } else {
+                result.append(AutoGroupProposal(baseName: previous.name, feeds: missing))
+            }
+        }
+        return result
+    }
+
     static func providerLabel(for provider: String) -> String {
         switch provider {
         case "foundation-models": return "Apple Intelligence"
         case "claude-subscription": return "Claude Pro/Max"
+        case "chatgpt-subscription": return "ChatGPT"
         case "mlx": return "MLX"
         case "xai": return "Grok"
         case "openai": return "OpenAI"
@@ -1869,7 +2117,7 @@ private enum AutoGroupClassifier {
         """
     }
 
-    private static func listing(for feeds: [Feed]) -> String {
+    fileprivate static func listing(for feeds: [Feed]) -> String {
         feeds.enumerated()
             .map { index, feed in
                 let title = feed.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2205,7 +2453,10 @@ private enum FoundationModelFeedOrganizer {
     /// Groups feeds using Foundation Models `@Generable` guided generation.
     /// Bypasses JSON parsing and the `repairTriageJSON` path entirely — the schema
     /// guarantees well-formed output.
-    static func proposals(for feeds: [Feed]) async throws -> [AutoGroupProposal] {
+    static func proposals(
+        for feeds: [Feed],
+        revising revision: (currentJSON: String, feedback: String)? = nil
+    ) async throws -> [AutoGroupProposal] {
         guard !feeds.isEmpty else { return [] }
 
         let model = SystemLanguageModel(useCase: .contentTagging)
@@ -2218,7 +2469,7 @@ private enum FoundationModelFeedOrganizer {
 
         let session = LanguageModelSession(
             model: model,
-            instructions: """
+            instructions: revision != nil ? AutoGroupClassifier.revisionInstructions : """
             You group RSS feeds into topical folders.
             Each feed must appear in exactly one folder. Use 4–8 folders when possible.
             Use short folder names of 2–4 words. Refer to each feed only by its zero-based numeric handle.
@@ -2227,7 +2478,9 @@ private enum FoundationModelFeedOrganizer {
 
         let maxTokens = max(512, feeds.count * 6 + 160)
         let response = try await session.respond(
-            to: prompt(for: feeds),
+            to: revision.map {
+                AutoGroupClassifier.revisionPrompt(feeds: feeds, currentJSON: $0.currentJSON, feedback: $0.feedback)
+            } ?? prompt(for: feeds),
             generating: NativeAI.FMAutoGroupProposal.self,
             options: GenerationOptions(
                 sampling: .greedy,
@@ -2301,171 +2554,6 @@ private enum FoundationModelFeedOrganizer {
     }
 }
 #endif
-
-private struct AddFeedSheet: View {
-    private enum AddSource: String {
-        case feedURL
-        case feedly
-    }
-
-    @Binding var isPresented: Bool
-    @State private var feedURL = ""
-    @State private var addSource: AddSource = .feedURL
-    @FocusState private var isFocused: Bool
-
-    var onAdd: (String) -> Void
-    var onImportOPML: () -> Void
-
-    private let feedlyExportURL = URL(string: "https://feedly.com/i/back?nextUri=%2Fopml")!
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Add Feed")
-                            .font(.system(size: 26, weight: .heavy))
-                            .foregroundStyle(SkimStyle.text)
-                        Text("Add one feed or import your Feedly subscriptions.")
-                            .font(.system(size: 16, weight: .regular))
-                            .foregroundStyle(SkimStyle.secondary)
-                    }
-
-                    Spacer()
-
-                    Button {
-                        isPresented = false
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(SkimStyle.secondary)
-                            .frame(width: 44, height: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
-                }
-
-                Picker("Add source", selection: $addSource) {
-                    Text("Feed URL").tag(AddSource.feedURL)
-                    Text("Feedly").tag(AddSource.feedly)
-                }
-                .pickerStyle(.segmented)
-                .accessibilityLabel("Add source")
-
-                if addSource == .feedURL {
-                    TextField("https://example.com/feed.xml", text: $feedURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                        .textContentType(.URL)
-                        .font(.system(size: 19, weight: .regular))
-                        .foregroundStyle(SkimStyle.text)
-                        .focused($isFocused)
-                        .padding(.horizontal, 16)
-                        .frame(height: 56)
-                        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(SkimStyle.separator, lineWidth: 1)
-                        }
-
-                    HStack(spacing: 14) {
-                        Button("Import OPML") {
-                            close()
-                            onImportOPML()
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(SkimStyle.accent)
-                        .frame(minHeight: 44)
-
-                        Spacer()
-
-                        Button("Add Feed") {
-                            let value = feedURL
-                            close()
-                            onAdd(value)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .disabled(feedURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Import from Feedly")
-                            .font(.system(size: 19, weight: .bold))
-                            .foregroundStyle(SkimStyle.text)
-
-                        Button {} label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: "person.crop.circle")
-                                Text("Sign in with Feedly")
-                                    .font(.body.weight(.semibold))
-                                Spacer(minLength: 8)
-                                Text("Coming soon")
-                                    .font(.caption.weight(.semibold))
-                                    .padding(.horizontal, 9)
-                                    .padding(.vertical, 5)
-                                    .background(SkimStyle.surface, in: Capsule())
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(SkimStyle.accent)
-                        .disabled(true)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Sign in with Feedly, coming soon")
-                        .accessibilityHint("Feedly sign-in is unavailable yet. Import a Feedly OPML export below.")
-
-                        Text("Feedly developer access costs $96/year.")
-                            .font(.footnote)
-                            .foregroundStyle(SkimStyle.secondary)
-
-                        Text("Sign in to Feedly, download your Feedly OPML, then choose the file here.")
-                            .font(.system(size: 15, weight: .regular))
-                            .foregroundStyle(SkimStyle.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Link(destination: feedlyExportURL) {
-                            Label("Open Feedly export", systemImage: SkimIcon.openExternal)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(SkimStyle.accent)
-                        .accessibilityHint("Opens Feedly's export page")
-
-                        Button("Choose OPML file") {
-                            close()
-                            onImportOPML()
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(SkimStyle.accent)
-                        .frame(minHeight: 44, alignment: .leading)
-                    }
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 26)
-            .padding(.bottom, 24)
-        }
-        .onChange(of: addSource) { _, source in
-            if source == .feedly {
-                isFocused = false
-                dismissUIKitKeyboard()
-            }
-        }
-        .onDisappear {
-            isFocused = false
-            dismissUIKitKeyboard()
-        }
-    }
-
-    private func close() {
-        isFocused = false
-        dismissUIKitKeyboard()
-        isPresented = false
-    }
-}
 
 private struct FeedIcon: View {
     var feed: Feed
@@ -2793,7 +2881,7 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
         case .all: "All"
         case .starred: "Starred"
         case .recent: "Recent"
-        case .aiInbox: "AI Inbox"
+        case .aiInbox: "For you"
         case .search: "Search"
         }
     }

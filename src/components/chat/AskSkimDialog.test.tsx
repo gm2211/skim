@@ -48,6 +48,17 @@ describe("AskSkimDialog setup recovery", () => {
     expect(onOpenArticle).toHaveBeenCalledWith("source-2");
   });
 
+  it("asks a starter question as soon as it is clicked", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    const user = userEvent.setup();
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    const starter = "What are the top 10 things I should know from today's articles?";
+    await user.click(screen.getByRole("button", { name: starter }));
+    expect(chatWithArticles).toHaveBeenCalledWith("unread", starter, [], undefined);
+    expect(await screen.findByText("Answer")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "What did I miss this week?" })).toBeNull();
+  });
+
   it("restores composer focus after a fast response and restores opener only on ordinary close", async () => {
     settings = { ai: { provider: "openai", chat_provider: "same" } };
     const opener = document.createElement("button");
@@ -252,6 +263,20 @@ describe("AskSkimDialog continuing an agent conversation", () => {
     expect(context).toMatchObject({ view: "today", story: { story_id: "s1" } });
     expect(priorIds).toEqual(["r1"]);
     expect(chatWithArticles).not.toHaveBeenCalled();
+  });
+
+  it("runs the opener's send hook when a question is sent, not when the chat opens", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    vi.mocked(askAgent).mockResolvedValue(agentAnswer);
+    const onSend = vi.fn();
+    useAgentChatStore.setState({ seed: { context: { view: "today", story: { story_id: "s1", title: "Async Rust", article_ids: ["r1"] } }, onSend } });
+    const user = userEvent.setup();
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(onSend).not.toHaveBeenCalled();
+    await user.type(screen.getByRole("textbox"), "What does it say?");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText(/compares Tokio and smol/)).toBeInTheDocument();
+    expect(onSend).toHaveBeenCalledTimes(1);
   });
 
   it("sends a handed-over question straight away", async () => {

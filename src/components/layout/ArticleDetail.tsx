@@ -6,6 +6,7 @@ import { useSettings } from "../../hooks/useSettings";
 import { canGoBackArticle, canGoForwardArticle, useUiStore } from "../../stores/uiStore";
 import { getOrFetchReaderContent, cancelSummarize } from "../../services/commands";
 import { ChatDrawer } from "../chat/ChatPanel";
+import { ReaderSelectionAsk } from "../article/ReaderSelectionAsk";
 import { useReadingTimeTracker } from "../../hooks/useLearning";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { openArticleHref, openArticleLink } from "../../lib/externalLinks";
@@ -15,7 +16,8 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 import { ModelPicker } from "../common/ModelPicker";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { ArticleLearningActions } from "../article/ArticleLearningActions";
-import { MoreIcon } from "../ui/icons";
+import { MoreIcon, ShareIcon, TickIcon } from "../ui/icons";
+import { shareArticle } from "../../lib/shareArticle";
 import { AggregatorPostView } from "../article/AggregatorPostView";
 import { parseAggregatorPost } from "../../lib/aggregatorPost";
 import { useAppCommand } from "../../lib/appCommands";
@@ -365,6 +367,8 @@ export function ArticleDetail() {
   useReadingTimeTracker(selectedArticleId, sidebarView.type === "recent");
   const [showSummarizeMenu, setShowSummarizeMenu] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatAskAbout, setChatAskAbout] = useState<{ id: number; text: string } | null>(null);
+  const readerContentRef = useRef<HTMLDivElement>(null);
   const [perArticleLength, setPerArticleLength] = useState<string | undefined>();
   const [perArticleTone, setPerArticleTone] = useState<string | undefined>();
   const [perArticlePrompt, setPerArticlePrompt] = useState<string | undefined>();
@@ -378,6 +382,8 @@ export function ArticleDetail() {
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const [toolbarCompact, setToolbarCompact] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  // Brief "Link copied" tick where the webview has no share sheet.
+  const [linkCopied, setLinkCopied] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
   const longPressStart = useRef<{ x: number; y: number } | null>(null);
@@ -1064,6 +1070,16 @@ export function ArticleDetail() {
   );
 
   const compact = !isPhone && toolbarCompact;
+  // Share the story itself: a Reddit or HN link post shares the page it links to.
+  const shareUrl = readerUrl ?? article.url;
+  const handleShare = async () => {
+    if (!shareUrl) return;
+    const outcome = await shareArticle({ url: shareUrl, title: article.title });
+    if (outcome === "copied") {
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 1600);
+    }
+  };
   const menuRow = (label: string, icon: React.ReactNode, onClick: () => void, active = false) => (
     <button
       type="button"
@@ -1386,6 +1402,18 @@ export function ArticleDetail() {
           </button>
           )}
 
+          {shareUrl && !compact && (
+            <button
+              type="button"
+              onClick={handleShare}
+              className={`tap-target ${isPhone ? "" : "rounded-lg"} hover:bg-white/10 transition-colors ${linkCopied ? "text-success" : "text-text-muted hover:text-text-primary"}`}
+              title={linkCopied ? "Link copied" : "Share"}
+              aria-label={linkCopied ? "Link copied" : "Share"}
+            >
+              {linkCopied ? <TickIcon size={isPhone ? 18 : 16} /> : <ShareIcon size={isPhone ? 18 : 16} />}
+            </button>
+          )}
+
           {!compact && <ArticleLearningActions articleId={article.id} />}
 
           {!isPhone && !compact && (
@@ -1468,6 +1496,7 @@ export function ArticleDetail() {
                       <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
                     </svg>
                   ), () => { if (article.url) openUrl(article.url); })}
+                  {shareUrl && menuRow("Share", <ShareIcon size={14} />, () => { void handleShare(); })}
                 </div>
               )}
             </div>
@@ -1649,8 +1678,10 @@ export function ArticleDetail() {
               >
                 {readerRefresh.pullToRefreshIndicator}
                 <div
+                  ref={readerContentRef}
                   style={{
                     ...readerRefresh.pullToRefreshContentStyle,
+                    position: "relative",
                     maxWidth: 760,
                     width: "100%",
                     margin: "0 auto",
@@ -1705,6 +1736,13 @@ export function ArticleDetail() {
                   ) : (
                     <p className="text-text-muted" style={{ fontSize: 14 }}>No preview available.</p>
                   )}
+                  <ReaderSelectionAsk
+                    containerRef={readerContentRef}
+                    onAsk={(text) => {
+                      setChatAskAbout((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
+                      setChatOpen(true);
+                    }}
+                  />
                 </div>
               </div>
             </section>
@@ -1787,7 +1825,7 @@ export function ArticleDetail() {
       </div>
 
       {/* Chat drawer — collapsible bottom pane */}
-      <ChatDrawer articleId={article.id} articleTitle={article.title} summaryContext={summarize.data?.article_id === article.id ? ([summarize.data.bullet_summary, summarize.data.full_summary].filter(Boolean).join("\n\n") || undefined) : undefined} open={chatOpen} onOpenChange={setChatOpen} />
+      <ChatDrawer articleId={article.id} articleTitle={article.title} summaryContext={summarize.data?.article_id === article.id ? ([summarize.data.bullet_summary, summarize.data.full_summary].filter(Boolean).join("\n\n") || undefined) : undefined} open={chatOpen} onOpenChange={setChatOpen} askAbout={chatAskAbout} />
     </div>
   );
 }

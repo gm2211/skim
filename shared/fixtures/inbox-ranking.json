@@ -34,6 +34,15 @@
     {"importance": 1, "relevance": 2, "priority": 2},
     {"importance": 3, "relevance": 4, "priority": 4}
   ],
+  "story_preference": [
+    {"name": "nothing known", "starred": 0, "pinned": false, "affinity": 0, "strength": 0, "preference": 0.0},
+    {"name": "stars cap at two", "starred": 5, "pinned": false, "affinity": 0, "strength": 0, "preference": 1.0},
+    {"name": "pinned report", "starred": 0, "pinned": true, "affinity": 0, "strength": 0, "preference": 1.25},
+    {"name": "loved feed, fully learned", "starred": 0, "pinned": false, "affinity": 1, "strength": 1, "preference": 3.0},
+    {"name": "taste is trusted gradually", "starred": 0, "pinned": false, "affinity": 0.8, "strength": 0.25, "preference": 0.6},
+    {"name": "skipped feed pulls a story down", "starred": 1, "pinned": false, "affinity": -0.5, "strength": 1, "preference": -1.0},
+    {"name": "out of range inputs clamp", "starred": -3, "pinned": false, "affinity": 4, "strength": 9, "preference": 3.0}
+  ],
   "terms": [
     {"title": "Apple ships the new M5 MacBook Pro with faster GPUs", "terms": ["apple", "ships", "macbook", "faster", "gpus"]},
     {"title": "Why the Fed's rate decision matters for your mortgage", "terms": ["rate", "decision", "matters", "mortgage"]}

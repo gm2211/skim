@@ -1021,6 +1021,42 @@ import Testing
     #expect(kept.items.count == 3)
 }
 
+/// A morning of single-source stories fills the page: the two-unique-finds
+/// cap prefers widely covered stories but never leaves the page short.
+@Test func todayEditionOfSingleSourceStoriesFillsThePage() async throws {
+    let store = try temporaryStore()
+    let startsAt = Date(timeIntervalSince1970: 100_000)
+    let endsAt = Date(timeIntervalSince1970: 186_400)
+    for index in 0..<7 {
+        _ = try await seedTodayStory(
+            store: store, storyID: "single-\(index)", sourceCount: 1,
+            timestamp: 110_000 + TimeInterval(index * 600))
+    }
+    let edition = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt, endsAt: endsAt, storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 120_000))
+    #expect(edition.items.count == 5)
+}
+
+/// iOS fetches feeds after Today has made its page, so reports published
+/// before the page was made still have to grow it when they land.
+@Test func todayEditionGrowsWithReportsFetchedAfterItWasMade() async throws {
+    let store = try temporaryStore()
+    let startsAt = Date(timeIntervalSince1970: 100_000)
+    let endsAt = Date(timeIntervalSince1970: 186_400)
+    _ = try await seedTodayStory(store: store, storyID: "last-evening", sourceCount: 2, timestamp: 90_000)
+    let first = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt, endsAt: endsAt, storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 130_000))
+    #expect(Set(first.items.map(\.snapshot.storyID)) == ["last-evening"])
+
+    // Published at 09:00, fetched at 09:03, after the page was made at 09:01.
+    _ = try await seedTodayStory(
+        store: store, storyID: "morning", sourceCount: 2, timestamp: 129_000, fetchedAt: 130_200)
+    let grown = try await store.getOrGenerateTodayEdition(
+        startsAt: startsAt, endsAt: endsAt, storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 130_300))
+    #expect(grown.id == first.id)
+    #expect(Set(grown.items.map(\.snapshot.storyID)) == ["last-evening", "morning"])
+}
+
 @Test func todayEditionEarlierWeekPageCoversItsWindowAndSkipsWhatTodayConsumed() async throws {
     let store = try temporaryStore()
     let dayStart: TimeInterval = 1_728_000
@@ -1429,6 +1465,7 @@ private func clusteringArticle(
     content: String? = nil,
     url: String? = nil,
     timestamp: TimeInterval,
+    fetchedAt: TimeInterval? = nil,
     isRead: Bool = false,
     isStarred: Bool = false
 ) -> Article {
@@ -1440,7 +1477,7 @@ private func clusteringArticle(
         url: url.flatMap(URL.init(string:)),
         contentText: content,
         publishedAt: Date(timeIntervalSince1970: timestamp),
-        fetchedAt: Date(timeIntervalSince1970: timestamp),
+        fetchedAt: Date(timeIntervalSince1970: fetchedAt ?? timestamp),
         isRead: isRead,
         isStarred: isStarred
     )
@@ -1474,6 +1511,7 @@ private func seedTodayStory(
     storyID: String,
     sourceCount: Int,
     timestamp: TimeInterval,
+    fetchedAt: TimeInterval? = nil,
     isUpdate: Bool = false
 ) async throws -> [String] {
     var articles: [Article] = []
@@ -1490,7 +1528,8 @@ private func seedTodayStory(
             title: "Development report concerning \(storyID.uppercased()) source \(index)",
             content: "Source \(index) reports the \(storyID) development.",
             url: "https://news.example/\(storyID)/\(index)",
-            timestamp: timestamp + TimeInterval(index)
+            timestamp: timestamp + TimeInterval(index),
+            fetchedAt: fetchedAt
         )
         try await store.upsert(feed: feed, articles: [article])
         articles.append(article)
@@ -1729,7 +1768,7 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
             Issue.record("Full pool exceeds budget; evaluation must not run")
             return []
         })
-    #expect(result.items.count == 2) // Existing deterministic unique-find policy.
+    #expect(result.items.count == 20) // Deterministic fallback fills the page with single-source stories.
     let other = try temporaryStore()
     try await seedTodayStory(store: other, storyID: "offline", sourceCount: 1, timestamp: 100)
     let fallback = try await other.getOrGenerateTodayEdition(
@@ -1801,10 +1840,11 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
             let winner = try await store.getOrGenerateTodayEdition(
                 startsAt: Date(timeIntervalSince1970: 0), endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5,
                 generatedAt: Date(timeIntervalSince1970: 500))
-            #expect(winner.items.count == 2)
+            #expect(winner.items.count == 3)
             return [TodaySemanticGroup(members: [0, 1, 2], importance: 5, confidence: 1, reason: "Late grouping")]
         })
-    #expect(result.items.count == 2)
+    // The late grouping covers no story the winner's page lacks, so it can't replace it.
+    #expect(result.items.count == 3)
     #expect(result.items.allSatisfy { $0.sourceArticles.count == 1 })
 }
 
@@ -1949,4 +1989,25 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     changed[0].snapshotTitle = "Different frozen headline"
     #expect(await operationThrows { try await store.persistEdition(written.edition, items: changed) })
     #expect(try await store.todayEdition(id: original.id) == written)
+}
+
+@Test func todayEditorialIsStoredCarriedAndMerged() async throws {
+    let store = try temporaryStore()
+    try await seedTodayStory(store: store, storyID: "editorial", sourceCount: 2, timestamp: 100)
+    let edition = try await store.getOrGenerateTodayEdition(startsAt: Date(timeIntervalSince1970: 0),
+        endsAt: Date(timeIntervalSince1970: 86400), storyLimit: 5, generatedAt: Date(timeIntervalSince1970: 500))
+    let item = try #require(edition.items.first)
+    let member = try #require(item.sourceArticles.first?.articleID)
+    let editorial = TodayEditorial(theme: "Space", summary: "The mission launched.", sources: [.init(articleID: member, quote: "The mission launched on 10 September.")])
+    let written = try await store.setTodayEditionItemEditorial(editionID: edition.id, storyID: item.snapshot.storyID, editorial: editorial)
+    #expect(written.items.first?.snapshot.editorial == editorial)
+    #expect(try await store.todayEdition(id: edition.id)?.items.first?.snapshot.editorial == editorial)
+    let outside = TodayEditorial(theme: "Space", summary: "x", sources: [.init(articleID: "outside", quote: "q")])
+    #expect(await operationThrows { try await store.setTodayEditionItemEditorial(editionID: edition.id, storyID: item.snapshot.storyID, editorial: outside) })
+    // A later page update keeps the summary already on screen.
+    let merged = TodayEditionMerge.consumption(current: written, response: edition)
+    #expect(merged.items.first?.snapshot.editorial == editorial)
+    #expect(TodayEditionMerge.ledes(current: edition, response: written).items.first?.snapshot.editorial == editorial)
+    // Re-persisting the frozen snapshot is not a conflict.
+    try await store.persistEdition(written.edition, items: written.items.map(\.snapshot))
 }

@@ -24,13 +24,19 @@ import Testing
     #expect(update.match?.membershipType == .update)
 }
 
-@Test func todayPreferencesUseCappedStarsPinsAndDistinctFeedTaste() {
+@Test func todayPreferencesUseCappedStarsPinsAndInboxTaste() {
     let articles = (0..<3).map {
         Article(id: "article-\($0)", feedID: "feed", feedTitle: "Feed", title: "Title", isStarred: true)
     }
-    let preferences = TodayRankingPreferences(feedWeights: ["feed": 0.5], pinnedArticleIDs: ["article-1"])
-    #expect(preferences.signal(for: articles) == 2.75)
-    #expect(TodayRankingPreferences(feedWeights: ["feed": .nan]).signal(for: articles) == 1)
+    var taste = InboxTaste()
+    for _ in 0..<40 {
+        taste.learn(feedID: "feed", title: "Title", signal: .init(dwellSeconds: 300, opened: true))
+    }
+    let preferences = TodayRankingPreferences(taste: taste, pinnedArticleIDs: ["article-1"])
+    // Stars cap at two (1.0), a pin adds 1.25, fully learned taste up to 3.
+    #expect(abs(preferences.signal(for: articles) - (1.0 + 1.25 + 3.0 * 40.0 / 42.0)) < 1e-9)
+    #expect(TodayRankingPreferences().signal(for: articles) == 1)
+    #expect(TodayRankingPreferences().signal(for: []) == 0)
 }
 
 @Test func todayRankingUsesStarsAndTasteWithoutChangingFrozenSelection() async throws {
@@ -58,15 +64,18 @@ import Testing
     let start = Date(timeIntervalSince1970: 0)
     let end = Date(timeIntervalSince1970: 86_400)
     let first = try await store.getOrGenerateTodayEdition(startsAt: start, endsAt: end, storyLimit: 5, generatedAt: date)
-    #expect(first.items.map(\.snapshot.storyID) == ["story-2", "story-0"])
-    let preferences = TodayRankingPreferences(feedWeights: ["feed-1": 1],
-        pinnedArticleIDs: ["article-1"])
+    #expect(first.items.map(\.snapshot.storyID) == ["story-2", "story-0", "story-1"])
+    var taste = InboxTaste()
+    for _ in 0..<40 {
+        taste.learn(feedID: "feed-1", title: "Unrelated history", signal: .init(dwellSeconds: 300, opened: true))
+    }
+    let preferences = TodayRankingPreferences(taste: taste, pinnedArticleIDs: ["article-1"])
     let reused = try await store.getOrGenerateTodayEdition(startsAt: start, endsAt: end,
         storyLimit: 5, generatedAt: date, preferences: preferences)
     #expect(reused.items.map(\.snapshot) == first.items.map(\.snapshot))
     let fresh = try await store.getOrGenerateTodayEdition(startsAt: start, endsAt: end,
         storyLimit: 10, generatedAt: date, preferences: preferences)
-    #expect(fresh.items.map(\.snapshot.storyID) == ["story-1", "story-2"])
+    #expect(fresh.items.map(\.snapshot.storyID) == ["story-1", "story-2", "story-0"])
 }
 
 @Test func todayUpdateSectionUsesMembershipRatherThanSummaryText() {

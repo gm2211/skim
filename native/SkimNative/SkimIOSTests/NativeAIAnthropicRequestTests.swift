@@ -44,6 +44,29 @@ struct NativeAIAnthropicRequestTests {
         #expect(body["temperature"] as? Double == 0.3)
     }
 
+    // claude-sonnet-5-5 thinks before answering by default, and that thinking counts
+    // against max_tokens. Ask Skim's 850-token budget could go entirely on thinking,
+    // which came back as "The Claude response was empty." on iPhone.
+    @Test(arguments: ["claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-sonnet-5", "claude-fable-5-1"])
+    func modelsThatThinkByDefaultGetLowEffortAndRoomToAnswer(model: String) throws {
+        let body = try payload(model: model)
+        #expect((body["output_config"] as? [String: Any])?["effort"] as? String == "low")
+        #expect(body["max_tokens"] as? Int == NativeAI.anthropicThinkingMaxTokensFloor)
+    }
+
+    @Test(arguments: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5", "claude-3-5-sonnet-20241022", "claude-some-future-model"])
+    func olderModelsGetNoEffortAndKeepTheirBudget(model: String) throws {
+        let body = try payload(model: model)
+        #expect(body["output_config"] == nil)
+        #expect(body["max_tokens"] as? Int == 100)
+    }
+
+    @Test func emptyAnswerSaysWhyWhenItCan() {
+        #expect(NativeAI.anthropicEmptyResponseMessage(stopReason: "max_tokens").hasPrefix("Claude ran out of room"))
+        #expect(NativeAI.anthropicEmptyResponseMessage(stopReason: "refusal").hasPrefix("Claude declined"))
+        #expect(NativeAI.anthropicEmptyResponseMessage(stopReason: "end_turn") == "The Claude response was empty.")
+    }
+
     @Test func badRequestShowsTheAPIReason() {
         let data = Data(#"{"type":"error","error":{"type":"invalid_request_error","message":"temperature is not supported for this model"}}"#.utf8)
         let message = NativeAI.friendlyErrorMessage(status: 400, data: data, provider: "Claude subscription")
@@ -53,5 +76,51 @@ struct NativeAIAnthropicRequestTests {
     @Test func badRequestWithoutAReasonKeepsTheStatus() {
         let message = NativeAI.friendlyErrorMessage(status: 400, data: Data("oops".utf8), provider: "Claude API")
         #expect(message == "Claude request failed (400). Try again.")
+    }
+
+    // A subscription token whose system prompt doesn't open with the Claude Code identity
+    // gets a 429 "Error" on Sonnet and Opus, shown as "Claude is rate-limited" to someone
+    // with no limits hit (Ask about this story on claude-sonnet-5-5).
+    @Test func subscriptionRequestsOpenWithTheClaudeCodeIdentity() throws {
+        let request = try NativeAI.buildAnthropicRequestFull(
+            settings: AISettings(provider: "claude-subscription", model: "claude-sonnet-5-5"),
+            accessToken: "oauth-token",
+            isSubscription: true,
+            instructions: "Answer about this story.",
+            messages: [["role": "user", "content": "Can it?"]],
+            maxTokens: 100
+        )
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer oauth-token")
+        let body = try #require(request.httpBody)
+        let payload = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let system = try #require(payload["system"] as? [[String: Any]])
+        #expect(system.compactMap { $0["text"] as? String } == [
+            "You are Claude Code, Anthropic's official CLI for Claude.",
+            "Answer about this story."
+        ])
+    }
+
+    @Test func apiKeyRequestsKeepAPlainSystemString() throws {
+        let body = try payload(model: "claude-sonnet-5-5")
+        #expect(body["system"] as? String == "system")
+    }
+
+    @Test func bare429IsNotCalledARateLimit() {
+        let data = Data(#"{"type":"error","error":{"type":"rate_limit_error","message":"Error"}}"#.utf8)
+        let message = NativeAI.friendlyErrorMessage(status: 429, data: data, provider: "Claude subscription")
+        #expect(!message.contains("rate-limited"))
+        #expect(message.hasPrefix("Claude turned down this request"))
+    }
+
+    @Test func real429WithRetryAfterSaysWhenToRetry() {
+        let data = Data(#"{"type":"error","error":{"type":"rate_limit_error","message":"Error"}}"#.utf8)
+        let message = NativeAI.friendlyErrorMessage(status: 429, data: data, provider: "Claude subscription", retryAfter: "150")
+        #expect(message == "Claude is rate-limited right now. Try again in 3 minutes.")
+    }
+
+    @Test func real429WithAReasonShowsIt() {
+        let data = Data(#"{"type":"error","error":{"type":"rate_limit_error","message":"This request would exceed your account's rate limit."}}"#.utf8)
+        let message = NativeAI.friendlyErrorMessage(status: 429, data: data, provider: "Claude subscription")
+        #expect(message == "Claude is rate-limited right now. Wait a bit and try again. (This request would exceed your account's rate limit.)")
     }
 }

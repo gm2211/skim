@@ -6,12 +6,16 @@ pub mod publication;
 pub mod model_manager;
 pub mod claude_oauth;
 pub mod xai_oauth;
+pub mod chatgpt_oauth;
+pub mod chatgpt_provider;
 
 /// The signed-in subscription token for `provider`: xAI (SuperGrok) for
-/// "xai", otherwise Claude Pro/Max. Providers ignore it unless they use it.
+/// "xai", ChatGPT for "chatgpt-subscription", otherwise Claude Pro/Max.
+/// Providers ignore it unless they use it.
 pub fn subscription_access_token(db: &crate::db::Database, provider: &str) -> Option<String> {
     match provider {
         "xai" => xai_oauth::stored_access_token(db),
+        "chatgpt-subscription" => chatgpt_oauth::stored_access_token(db),
         _ => claude_oauth::stored_access_token(db),
     }
 }
@@ -27,9 +31,23 @@ fn due_refresh_token(db: &crate::db::Database, refresh_key: &str, expires_key: &
     crate::db::queries::get_setting(&conn, refresh_key).ok()?.filter(|t| !t.is_empty())
 }
 
-/// Refreshes Claude and SuperGrok sign-ins shortly before they expire, so a
-/// subscription keeps working without signing in again. Run periodically.
+/// Refreshes Claude, ChatGPT, and SuperGrok sign-ins shortly before they
+/// expire, so a subscription keeps working without signing in again. Run
+/// periodically.
 pub async fn refresh_due_subscription_tokens(db: &crate::db::Database) {
+    if let (Some(rt), Some(client_id)) = (
+        due_refresh_token(db, chatgpt_oauth::REFRESH_TOKEN_KEY, chatgpt_oauth::EXPIRES_AT_KEY),
+        chatgpt_oauth::stored_client_id(db),
+    ) {
+        match chatgpt_oauth::refresh_access_token(&rt, &client_id).await {
+            Ok(tokens) => {
+                if let Err(e) = chatgpt_oauth::persist(db, &tokens, &client_id) {
+                    log::warn!("Saving refreshed ChatGPT token failed: {e}");
+                }
+            }
+            Err(e) => log::warn!("{e}"),
+        }
+    }
     if let Some(rt) = due_refresh_token(db, xai_oauth::REFRESH_TOKEN_KEY, xai_oauth::EXPIRES_AT_KEY) {
         match xai_oauth::refresh_access_token(&rt).await {
             Ok(tokens) => {

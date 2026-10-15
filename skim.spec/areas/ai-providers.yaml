@@ -7,12 +7,12 @@ behaviors:
   - id: desktop-providers
     description: >-
       Desktop providers: None, Local (llama.cpp), On-device MLX, Apple Intelligence, Ollama, Claude
-      Pro/Max (OAuth), Claude CLI (legacy), Claude API key, OpenAI, Grok (xAI), DeepSeek DS4 (Mac
+      Pro/Max (OAuth), ChatGPT Plus/Pro, Claude CLI (legacy), Claude API key, OpenAI, Grok (xAI), DeepSeek DS4 (Mac
       only), OpenRouter, and Custom (any OpenAI-compatible endpoint).
   - id: ios-providers
     description: >-
-      iOS providers: Apple Intelligence (default), On-device MLX, Claude Pro/Max, Grok (xAI), Claude
-      API key, OpenAI, OpenRouter, and Custom.
+      iOS providers: Apple Intelligence (default), On-device MLX, Claude Pro/Max, ChatGPT Plus/Pro, Grok
+      (xAI), Claude API key, OpenAI, OpenRouter, and Custom.
   - id: keys-kept-per-provider
     description: >-
       Each provider keeps its own API key, endpoint, and model, so switching away and back does not
@@ -40,6 +40,36 @@ behaviors:
     details: >-
       The reason is the provider's error message, never the raw JSON body. Sign-in, plan, rate-limit,
       and outage errors keep their own friendly wording.
+  - id: claude-subscription-runs-every-model
+    description: >-
+      Signed in with a Claude Pro/Max subscription, every Claude model the picker lists answers
+      Skim's requests on iOS and desktop.
+    details: >-
+      A subscription (OAuth) request whose system prompt does not open with the Claude Code identity
+      line gets a 429 "Error" from Sonnet and Opus. Desktop always sent that line; iOS did not, so Ask
+      about this story on claude-sonnet-5-5 showed "Claude is rate-limited right now" to a reader
+      with no limits hit.
+    source:
+      text: "Smthing is broken with byos and claude - I don't have rate limits"
+      reference: Giulio, project thread "Claude rate-limit error with BYOS", 2026-10-13
+  - id: claude-thinking-models-answer
+    description: >-
+      Claude models that think before answering (every 5-series model) still return an answer to
+      chat, Ask Skim, and summaries rather than an empty response; when Claude does return no text,
+      the error says why (out of room, or declined) where the response tells it.
+    details: >-
+      5-series models think by default and the thinking counts against the output limit, so a
+      long article context could use Ask Skim's whole budget and come back as "The Claude response
+      was empty." iOS and desktop ask these models for low effort with at least 4,096 output tokens,
+      and a tool-use turn is replayed with its thinking blocks.
+    source:
+      text: 'Screenshot: Ask Skim on claude-sonnet-5-5, "The Claude response was empty." twice. "Empty responses"'
+      reference: Giulio, project thread "Empty responses", 2026-10-14
+  - id: rate-limit-error-only-for-real-limits
+    description: >-
+      Skim says a provider is rate-limited only when the provider says so: a retry-after time or a
+      message naming the limit. A bare 429 says the request was turned down instead.
+    details: With a retry-after header the message says how many minutes to wait.
   - id: desktop-local-models
     description: >-
       Desktop local models come from a curated list (Qwen3.5 2B, 4B recommended, 9B, 35B-A3B on Macs

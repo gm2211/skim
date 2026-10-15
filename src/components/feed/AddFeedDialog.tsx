@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { IconButton } from "../common/IconButton";
-import { useAddFeed } from "../../hooks/useFeeds";
-import { useUiStore, type AddFeedTab } from "../../stores/uiStore";
+import { useUiStore } from "../../stores/uiStore";
 import {
   feedlyOauthAvailable,
   feedlyOauthLogin,
@@ -43,11 +42,7 @@ function Step({ number, title, children }: { number: number; title: string; chil
   );
 }
 
-type Tab = AddFeedTab;
-
 export function AddFeedDialog() {
-  const initialTab = useUiStore((s) => s.addFeedTab);
-  const [tab, setTab] = useState<Tab>(initialTab);
   const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
   const isPhone = useUiStore((s) => s.isPhone);
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(
@@ -59,10 +54,6 @@ export function AddFeedDialog() {
   // backdrop click, and Tab walked the list behind the dialog.
   useDialogFocus(dialogRef, () => setShowAddFeed(false));
 
-  useEffect(() => {
-    setTab(initialTab);
-  }, [initialTab]);
-
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
       <div
@@ -72,14 +63,19 @@ export function AddFeedDialog() {
         aria-labelledby="add-feed-title"
         tabIndex={-1}
         className="border border-white/10 rounded-2xl w-full max-w-md mx-4 shadow-2xl overflow-hidden flex flex-col"
-        style={{ background: "rgba(22, 27, 34, 0.95)", maxHeight: "calc(100dvh - 32px)", minWidth: 0, ...swipeToDismissStyle }}
+        style={{
+          background: "rgba(22, 27, 34, 0.95)",
+          maxHeight: "calc(100dvh - 32px)",
+          minWidth: 0,
+          ...swipeToDismissStyle,
+        }}
       >
         <div
           className="flex items-center justify-between shrink-0"
-          style={{ padding: "16px 16px 0", touchAction: isPhone ? "pan-y" : undefined }}
+          style={{ padding: "16px 12px 0 24px", touchAction: isPhone ? "pan-y" : undefined }}
           {...swipeToDismissHandlers}
         >
-          <h2 id="add-feed-title" style={{ fontSize: 18, fontWeight: 600 }} className="text-text-primary">Add Feed</h2>
+          <h2 id="add-feed-title" style={{ fontSize: 18, fontWeight: 600 }} className="text-text-primary">Import feeds</h2>
           <button
             onClick={() => setShowAddFeed(false)}
             className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
@@ -91,101 +87,11 @@ export function AddFeedDialog() {
           </button>
         </div>
 
-        {/* Tab bar */}
-        <div className="flex gap-1 shrink-0" style={{ padding: "12px 24px 0" }}>
-          <button
-            onClick={() => setTab("url")}
-            className={`rounded-lg transition-colors ${
-              tab === "url" ? "bg-white/10 text-text-primary" : "text-text-muted hover:text-text-primary"
-            }`}
-            style={{ padding: "6px 14px", fontSize: 13, fontWeight: 500 }}
-          >
-            Feed URL
-          </button>
-          <button
-            onClick={() => setTab("feedly")}
-            className={`rounded-lg transition-colors ${
-              tab === "feedly" ? "bg-white/10 text-text-primary" : "text-text-muted hover:text-text-primary"
-            }`}
-            style={{ padding: "6px 14px", fontSize: 13, fontWeight: 500 }}
-          >
-            Import from Feedly
-          </button>
-        </div>
-
         <div className="min-h-0 overflow-y-auto">
-          {tab === "url" ? <UrlTab /> : <FeedlyTab />}
+          <FeedlyTab />
         </div>
       </div>
     </div>
-  );
-}
-
-function UrlTab() {
-  const [url, setUrl] = useState("");
-  const addFeed = useAddFeed();
-  const setShowAddFeed = useUiStore((s) => s.setShowAddFeed);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!url.trim()) return;
-    try {
-      await addFeed.mutateAsync(url.trim());
-      setShowAddFeed(false);
-    } catch {
-      // error shown via addFeed.error
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} style={{ padding: "16px 24px 24px" }}>
-      <div style={{ marginBottom: 20 }}>
-        <label className="block text-text-secondary" style={{ fontSize: 13, marginBottom: 8 }}>
-          Feed URL
-        </label>
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://example.com/feed.xml"
-          autoFocus
-          className="w-full border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors"
-          style={{
-            background: "rgba(255, 255, 255, 0.05)",
-            padding: "12px 16px",
-            fontSize: 15,
-          }}
-        />
-      </div>
-
-      {addFeed.isError && (
-        <div
-          className="rounded-xl border border-danger/30 text-danger"
-          style={{ padding: "12px 16px", marginBottom: 20, fontSize: 14, background: "rgba(248, 81, 73, 0.1)" }}
-        >
-          {String(addFeed.error instanceof Error ? addFeed.error.message : addFeed.error)}
-        </div>
-      )}
-
-      <div className="flex justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => useUiStore.getState().setShowAddFeed(false)}
-          className="text-text-secondary hover:text-text-primary rounded-xl hover:bg-white/5 transition-colors"
-          style={{ padding: "10px 20px", fontSize: 14 }}
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={addFeed.isPending || !url.trim()}
-          className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
-          style={{ padding: "10px 24px", fontSize: 14 }}
-        >
-          {addFeed.isPending ? "Adding..." : "Add Feed"}
-        </button>
-      </div>
-    </form>
   );
 }
 

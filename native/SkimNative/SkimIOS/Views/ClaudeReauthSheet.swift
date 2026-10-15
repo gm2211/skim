@@ -5,7 +5,6 @@ import SwiftUI
 /// failure surfaces. Reuses ClaudeOAuthPastePanel and persists via AppModel.
 struct ClaudeReauthSheet: View {
     @EnvironmentObject private var model: AppModel
-    @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
     @State private var draft = AISettings()
 
@@ -16,9 +15,7 @@ struct ClaudeReauthSheet: View {
                     Text("Your Claude session expired. Sign in again to continue.")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
-                    ClaudeOAuthPastePanel(ai: $draft, onSignedIn: { dismiss() }) { url in
-                        openURL(url)
-                    }
+                    ClaudeOAuthPastePanel(ai: $draft, onSignedIn: { dismiss() })
                 }
                 .padding(24)
             }

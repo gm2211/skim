@@ -6,7 +6,6 @@ import { ArticleList, buildArticleFilter, buildMarkAllReadScope } from "./Articl
 
 describe("buildArticleFilter", () => {
   it.each([
-    { type: "inbox" as const },
     { type: "recent" as const },
     { type: "theme" as const, themeId: "theme-1" },
     { type: "folder" as const, folderId: "folder-1" },
@@ -96,8 +95,10 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("article list scope regressions", () => {
-  it.each(["inbox", "recent", "all"] as const)("renders backend URL-only search matches from %s", async (type) => {
-    useUiStore.setState({ sidebarView: { type } });
+  it.each([
+    ["all", "forYou"], ["recent", "newest"], ["all", "newest"],
+  ] as const)("renders backend URL-only search matches from %s sorted %s", async (type, listSort) => {
+    useUiStore.setState({ sidebarView: { type }, listSort });
     render(<ArticleList />);
     await userEvent.type(screen.getByPlaceholderText("Search articles..."), "unique-domain");
     expect(screen.getByText("Unrelated title")).toBeInTheDocument();
@@ -128,7 +129,6 @@ describe("article list scope regressions", () => {
   it.each([
     [{ type: "theme", themeId: "t1" }, { theme_id: "t1" }, false],
     [{ type: "starred" }, { is_starred: true }, false],
-    [{ type: "inbox" }, { theme_id: "active-theme" }, false],
     [{ type: "recent" }, {}, true],
     [{ type: "all" }, {}, false],
     [{ type: "today" }, { feed_ids: [] }, false],
@@ -136,6 +136,28 @@ describe("article list scope regressions", () => {
     expect(buildMarkAllReadScope({
       sidebarView, listFilter: "all", searchQuery: "", folderFeedIds: [], activeThemeId: "active-theme",
     })).toEqual({ filter: { limit: 200, is_read: false, ...expected }, recentOnly });
+  });
+
+  it.each([
+    [{ type: "all" }, { theme_id: "active-theme" }],
+    [{ type: "feed", feedId: "f1" }, { feed_id: "f1", theme_id: "active-theme" }],
+    [{ type: "starred" }, { is_starred: true }],
+  ] as const)("a list sorted For you marks its unread theme scope for %s", (sidebarView, expected) => {
+    expect(buildMarkAllReadScope({
+      sidebarView, listFilter: "unread", searchQuery: "", folderFeedIds: [], activeThemeId: "active-theme",
+      forYou: true,
+    })).toEqual({ filter: { limit: 200, is_read: false, ...expected }, recentOnly: false });
+  });
+
+  it("offers the For you sort on lists of feeds only", async () => {
+    useUiStore.setState({ sidebarView: { type: "all" }, listSort: "newest" });
+    render(<ArticleList />);
+    await userEvent.click(screen.getByRole("button", { name: "For you" }));
+    expect(useUiStore.getState().listSort).toBe("forYou");
+    cleanup();
+    useUiStore.setState({ sidebarView: { type: "starred" } });
+    render(<ArticleList />);
+    expect(screen.queryByRole("button", { name: "For you" })).not.toBeInTheDocument();
   });
 });
 
@@ -152,5 +174,23 @@ describe("article list toolbar", () => {
     expect(screen.getByRole("button", { name: "Ask Skim" })).toBeInTheDocument();
     // There is no catch-up; Today is the one newspaper.
     expect(screen.queryByRole("button", { name: /catch/i })).not.toBeInTheDocument();
+  });
+
+  it("reaches Today from the list header while the sidebar is hidden", async () => {
+    useUiStore.setState({ sidebarView: { type: "all" }, isPhone: false, sidebarCollapsed: false });
+    const { unmount } = render(<ArticleList />);
+    expect(screen.queryByRole("button", { name: "Today" })).not.toBeInTheDocument();
+    unmount();
+
+    useUiStore.setState({ sidebarCollapsed: true });
+    render(<ArticleList />);
+    await userEvent.click(screen.getByRole("button", { name: "Today" }));
+    expect(useUiStore.getState().sidebarView).toEqual({ type: "today" });
+  });
+
+  it("offers Today in the phone list header too", () => {
+    useUiStore.setState({ sidebarView: { type: "all" }, isPhone: true, sidebarCollapsed: false });
+    render(<ArticleList />);
+    expect(screen.getByRole("button", { name: "Today" })).toBeInTheDocument();
   });
 });

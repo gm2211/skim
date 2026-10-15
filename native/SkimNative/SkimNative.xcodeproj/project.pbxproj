@@ -23,6 +23,7 @@
 		568EFC6280529AB7F91222BD /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8734D4E26C300D1AD49D4262 /* SkimCore */; };
 		6048C096F85B46DFAF8590AF /* Style.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038284DEE00F91A360324653 /* Style.swift */; };
 		61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */; };
+		6D3770441D3294FF7F64A6E4 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13CA09D1BB9E6DBD9C3B3CB6 /* DiscoverView.swift */; };
 		705834903C7D5B0F2442C2D8 /* SkimMacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */; };
 		7487CDA38AA993612EB4880B /* AIBootDisclaimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959A59B5B27E8C969D084B8F /* AIBootDisclaimerView.swift */; };
 		751B168D630209B01DAFF073 /* ArticleExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */; };
@@ -51,6 +52,7 @@
 		DFC1782BE965DCD3BBEAFEC9 /* SkimMLXEngine in Frameworks */ = {isa = PBXBuildFile; productRef = 356F134F0CF2259CC2DA4CF9 /* SkimMLXEngine */; };
 		E0006C62ED6F6DE502164145 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9AD11F7D9C976F34C0C9347 /* RootView.swift */; };
 		E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */; };
+		EF7551C40707A39B423718A4 /* feed-catalog.json in Resources */ = {isa = PBXBuildFile; fileRef = 7F3443A5887489D35EB406EF /* feed-catalog.json */; };
 		F22F6907C7390FE6C195AD8C /* SkimCore in Frameworks */ = {isa = PBXBuildFile; productRef = 96F35F36DD1B890E9DE5ACBA /* SkimCore */; };
 		F77D922DF2F50121B27BDD3B /* SkimInferencePolicy in Frameworks */ = {isa = PBXBuildFile; productRef = DC6D547D6D1E448AFD5E74FA /* SkimInferencePolicy */; };
 /* End PBXBuildFile section */
@@ -75,6 +77,7 @@
 		0C79E51007F91AE5C8286F40 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0F061CEDC44541EB5F549319 /* AISettingsBYOSTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettingsBYOSTests.swift; sourceTree = "<group>"; };
 		1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartFolderEditor.swift; sourceTree = "<group>"; };
+		13CA09D1BB9E6DBD9C3B3CB6 /* DiscoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverView.swift; sourceTree = "<group>"; };
 		13F4F0168DBE15FBFB319E12 /* NativeAIModelsResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIModelsResponseTests.swift; sourceTree = "<group>"; };
 		1474BA38A4E522DB5D3ECB21 /* WebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebView.swift; sourceTree = "<group>"; };
 		1751E6AA54B6FF0B8F3606F3 /* ModelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalog.swift; sourceTree = "<group>"; };
@@ -90,6 +93,7 @@
 		6785D2075A65E843FF20D6D3 /* ModelCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalogTests.swift; sourceTree = "<group>"; };
 		6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleListView.swift; sourceTree = "<group>"; };
 		7D0B3F4B1BD0D6523873DFE5 /* NativeAIAnthropicRequestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIAnthropicRequestTests.swift; sourceTree = "<group>"; };
+		7F3443A5887489D35EB406EF /* feed-catalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "feed-catalog.json"; sourceTree = "<group>"; };
 		7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleExtractor.swift; sourceTree = "<group>"; };
 		7F972FCF70051CCDDFB99F04 /* hackernoon-9m0.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = "hackernoon-9m0.html"; sourceTree = "<group>"; };
 		8387834F563CFA86721EBF1D /* LegalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegalView.swift; sourceTree = "<group>"; };
@@ -144,11 +148,21 @@
 			children = (
 				F382D506BD65E61FC2E26B85 /* fonts */,
 				5D931F04FC8D63ECE5B39F74 /* Packages */,
+				20D09BB632FF13F8E5F6CFDE /* shared */,
 				3E35E50044D8E41517AC148A /* SkimIOS */,
 				9A9C260A0D04A7C6FA1C365C /* SkimIOSTests */,
 				2BC0ADE719452D0F6EFFCB9A /* SkimMacOS */,
 				D7ABB738AAC39584D7DAB6DD /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		20D09BB632FF13F8E5F6CFDE /* shared */ = {
+			isa = PBXGroup;
+			children = (
+				7F3443A5887489D35EB406EF /* feed-catalog.json */,
+			);
+			name = shared;
+			path = ../../shared;
 			sourceTree = "<group>";
 		};
 		2491A6F269A3E3AB095AC9AD /* Fixtures */ = {
@@ -273,6 +287,7 @@
 				D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */,
 				6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */,
 				5AD1C797EBFBB9448A83E919 /* ClaudeReauthSheet.swift */,
+				13CA09D1BB9E6DBD9C3B3CB6 /* DiscoverView.swift */,
 				8387834F563CFA86721EBF1D /* LegalView.swift */,
 				0A322079492B7E2B99DBEB26 /* ModelPicker.swift */,
 				A9AD11F7D9C976F34C0C9347 /* RootView.swift */,
@@ -411,6 +426,7 @@
 			files = (
 				8B797999B22B89495C05CA39 /* AquireBold.otf in Resources */,
 				C1D91C8A78E543F0F69FFE82 /* Assets.xcassets in Resources */,
+				EF7551C40707A39B423718A4 /* feed-catalog.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -454,6 +470,7 @@
 				E1982976AACCF15F39396194 /* ArticleListView.swift in Sources */,
 				77DA3EA9CDD533959D7EBE99 /* ArticleReaderContentLoader.swift in Sources */,
 				D357B98D7AFF8B7E71A67F2A /* ClaudeReauthSheet.swift in Sources */,
+				6D3770441D3294FF7F64A6E4 /* DiscoverView.swift in Sources */,
 				96F49A7819D5D167616F137F /* LegalView.swift in Sources */,
 				436F02334D47F5BCE5A79570 /* MLXRunner.swift in Sources */,
 				2AB0CE0EC7CED2383AD2A4EC /* ModelCatalog.swift in Sources */,

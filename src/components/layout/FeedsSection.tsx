@@ -267,6 +267,18 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
           <button
             onClick={(e) => {
               e.stopPropagation();
+              closeAllMenus();
+              setAutoOrganizeOpen(true);
+            }}
+            className="text-text-muted hover:text-text-primary transition-colors"
+            title="Auto-organize feeds with AI"
+            aria-label="Auto-organize feeds with AI"
+          >
+            <AutoOrganizeIcon size={20} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
               const rect = e.currentTarget.getBoundingClientRect();
               setShowAddMenu({ x: rect.right - 180, y: rect.bottom + 4 });
             }}
@@ -1145,6 +1157,26 @@ function applyCase(name: string, style: CaseStyle): string {
     case "snake":
       return words.map((w) => w.toLowerCase()).join("_");
   }
+}
+
+/** A folder with AI sparkles: auto-organize sorts feeds with AI, it doesn't just add a folder. */
+function AutoOrganizeIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M2 12.5a1.5 1.5 0 0 1 1.5-1.5h3.2l1.8 2h4a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 19.5z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinejoin="round"
+      />
+      <g fill="currentColor">
+        <path d="M17.5 1.5Q18.3 6.7 23.5 7.5Q18.3 8.3 17.5 13.5Q16.7 8.3 11.5 7.5Q16.7 6.7 17.5 1.5Z" />
+        <path d="M8.5 1Q8.95 3.55 11.5 4Q8.95 4.45 8.5 7Q8.05 4.45 5.5 4Q8.05 3.55 8.5 1Z" />
+        <path d="M21 14.5Q21.35 16.65 23.5 17Q21.35 17.35 21 19.5Q20.65 17.35 18.5 17Q20.65 16.65 21 14.5Z" />
+      </g>
+    </svg>
+  );
 }
 
 function AutoOrganizeDialog({

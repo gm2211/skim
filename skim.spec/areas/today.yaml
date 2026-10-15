@@ -117,7 +117,8 @@ behaviors:
       features, then "In brief". iOS sets it as a magazine: a full-bleed lead, story cards, then a
       two-up grid of briefs.
     details: >-
-      Ten stories fill one desktop page. The masthead has top margin; the only controls are an
+      Ten stories fill one desktop page. The iOS photo lead sets its headline and summary below the
+      picture, so text inside the image never collides with them. The masthead has top margin; the only controls are an
       ask button, a refresh button and a cog that opens a small settings popover (summary model,
       edition size, retry, AI settings). The popover is wide enough for every
       label to sit on one line with its control inside it. Missing summaries show as a note with

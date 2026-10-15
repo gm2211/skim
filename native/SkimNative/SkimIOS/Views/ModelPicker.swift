@@ -67,23 +67,35 @@ struct ModelPickerMenu: View {
                     ai = ModelCatalog.applying(choice.id, to: ai, forChat: forChat)
                 } label: {
                     if choice.id == currentID {
-                        Label(choice.label, systemImage: "checkmark")
+                        Label {
+                            menuTitle(choice.label)
+                        } icon: {
+                            Image(systemName: "checkmark")
+                        }
                     } else if !choice.isAvailable {
                         Label {
-                            Text(choice.label)
+                            menuTitle(choice.label)
                             Text(choice.detail ?? "Download in AI Settings")
                         } icon: {
                             Image(systemName: "arrow.down.circle")
                         }
                     } else {
-                        Text(choice.label)
+                        menuTitle(choice.label)
                     }
                 }
                 .disabled(!choice.isAvailable)
             }
         case .fixed(let label):
-            Text(label)
+            menuTitle(label)
         }
+    }
+
+    /// One line per model, eliding the middle of long ids
+    /// ("grok-4.20-…-non-reasoning") instead of wrapping them onto two lines.
+    private func menuTitle(_ label: String) -> some View {
+        Text(label)
+            .lineLimit(1)
+            .truncationMode(.middle)
     }
 }
 

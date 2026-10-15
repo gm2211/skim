@@ -2730,7 +2730,7 @@ enum NativeAI {
     /// we have. Mirrors `is_chat_model` in the desktop app.
     private static let nonChatModelWords: Set<String> = [
         "imagine", "image", "video", "embed", "embedding", "tts", "whisper", "dall", "moderation",
-        "transcribe", "sora", "realtime", "audio", "speech",
+        "transcribe", "sora", "realtime", "audio", "speech", "imagen", "banana", "veo", "lyria",
     ]
 
     static func isChatModel(_ id: String) -> Bool {

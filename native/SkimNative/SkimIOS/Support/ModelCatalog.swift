@@ -116,7 +116,8 @@ enum ModelCatalog {
                 } else {
                     models = try await NativeAI.fetchOpenAICompatibleModels(settings: ai)
                 }
-                var built = models.map { ModelChoice(id: $0.id, label: $0.displayName, isAvailable: true, detail: nil) }
+                // Every provider, not just OpenAI-compatible ones, can list image or video models.
+                var built = models.filter { NativeAI.isChatModel($0.id) }.map { ModelChoice(id: $0.id, label: $0.displayName, isAvailable: true, detail: nil) }
                 if let current = current?.nilIfEmpty, !built.contains(where: { $0.id == current }) {
                     built.append(ModelChoice(id: current, label: current, isAvailable: true, detail: nil))
                 }

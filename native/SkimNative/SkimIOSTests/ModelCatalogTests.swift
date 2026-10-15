@@ -204,7 +204,7 @@ struct ModelPickerMenuTitleTests {
     @Test func longIdsKeepAShortProviderPrefixAndTheDistinguishingTail() {
         for (id, prefix, suffix) in [
             ("liquid/lfm-2.5-24b-a2b", "liquid/", "a2b"),
-            ("google/gemini-4-argon:batch", "google/", "argon:batch"),
+            ("google/gemini-4-argon:batch", "google/", ":batch"),
             ("anthropic/claude-haiku-5.5:batch", "anth", "5.5:batch"),
         ] {
             let title = ModelPickerMenu.singleLineTitle(id, font: body)
@@ -220,6 +220,13 @@ struct ModelPickerMenuTitleTests {
         let haiku = ModelPickerMenu.singleLineTitle("anthropic/claude-haiku-5.5:batch", font: body)
         let sonnet = ModelPickerMenu.singleLineTitle("anthropic/claude-sonnet-5.5:batch", font: body)
         #expect(haiku != sonnet)
+    }
+
+    @Test func collidingTitlesGiveTheRowToTheTail() {
+        let ids = ["openai/gpt-6-luna-pro:batch", "openai/gpt-6-sol-pro:batch", "openai/gpt-6"]
+        let titles = ModelPickerMenu.singleLineTitles(ids, font: body)
+        #expect(Set(titles.values).count == ids.count, "\(titles)")
+        #expect(titles["openai/gpt-6"] == "openai/gpt-6")
     }
 
     @Test func longIdsKeepBothEndsAndFitOneRow() {

@@ -68,32 +68,33 @@ struct ModelPickerMenu: View {
         switch choices {
         case .list(let items):
             let currentID = ModelCatalog.currentID(effectiveAI)
+            let titles = Self.singleLineTitles(items.map(\.label), font: .preferredFont(forTextStyle: .body))
             ForEach(items) { choice in
                 Button {
                     ai = ModelCatalog.applying(choice.id, to: ai, forChat: forChat)
                 } label: {
                     if choice.id == currentID {
                         Label {
-                            menuTitle(choice.label)
+                            menuTitle(titles[choice.label] ?? choice.label)
                         } icon: {
                             Image(systemName: "checkmark")
                         }
                     } else if !choice.isAvailable {
                         Label {
-                            menuTitle(choice.label)
+                            menuTitle(titles[choice.label] ?? choice.label)
                             Text(choice.detail ?? "Download in AI Settings")
                         } icon: {
                             Image(systemName: "arrow.down.circle")
                         }
                     } else {
-                        menuTitle(choice.label)
+                        menuTitle(titles[choice.label] ?? choice.label)
                     }
                 }
                 .disabled(!choice.isAvailable)
                 .accessibilityLabel(choice.label)
             }
         case .fixed(let label):
-            menuTitle(label)
+            menuTitle(Self.singleLineTitle(label, font: .preferredFont(forTextStyle: .body)))
         }
     }
 
@@ -101,8 +102,8 @@ struct ModelPickerMenu: View {
     /// ("openai/gpt-6-…pro:batch") instead of wrapping them onto two lines.
     /// Menu rows are drawn by UIKit, which ignores `lineLimit`, so the string
     /// itself is shortened; VoiceOver still reads the full id.
-    private func menuTitle(_ label: String) -> some View {
-        Text(Self.singleLineTitle(label, font: .preferredFont(forTextStyle: .body)))
+    private func menuTitle(_ title: String) -> some View {
+        Text(title)
     }
 
     /// Text width a menu row fits on one line at the 17pt body size, beside
@@ -116,7 +117,9 @@ struct ModelPickerMenu: View {
     /// prefix stays whole ("google/…argon:batch"); a long one keeps its first
     /// letters ("anth…haiku-5.5:batch"). The cut never leaves a stray "-", "."
     /// or "_" beside the "…".
-    static func singleLineTitle(_ label: String, font: UIFont) -> String {
+    /// With `keepHead` false the whole row goes to the tail ("…luna-pro:batch"),
+    /// for ids whose shortened titles would otherwise collide.
+    static func singleLineTitle(_ label: String, font: UIFont, keepHead: Bool = true) -> String {
         let maxWidth = menuRowTextWidth * font.pointSize / 17
         func width(_ text: String) -> CGFloat {
             (text as NSString).size(withAttributes: [.font: font]).width
@@ -125,7 +128,9 @@ struct ModelPickerMenu: View {
 
         let characters = Array(label)
         let headCount: Int
-        if let slash = characters.firstIndex(of: "/"),
+        if !keepHead {
+            headCount = 0
+        } else if let slash = characters.firstIndex(of: "/"),
            width(String(characters[...slash])) <= maxWidth * 0.4 {
             headCount = slash + 1
         } else {
@@ -136,7 +141,7 @@ struct ModelPickerMenu: View {
             headCount = count
         }
         var head = String(characters.prefix(headCount))
-        if !head.hasSuffix("/") {
+        if !head.isEmpty, !head.hasSuffix("/") {
             while let last = head.last, "-._".contains(last), head.count > 1 { head.removeLast() }
         }
 
@@ -149,6 +154,18 @@ struct ModelPickerMenu: View {
             tailCount -= 1
         }
         return head + "…"
+    }
+
+    /// One-line titles for a whole menu, keyed by id. Ids whose shortened
+    /// titles collide (openai/gpt-6-luna-pro:batch and …-sol-pro:batch both
+    /// becoming "openai/…pro:batch") give their row to the tail instead.
+    static func singleLineTitles(_ labels: [String], font: UIFont) -> [String: String] {
+        var titles = Dictionary(labels.map { ($0, singleLineTitle($0, font: font)) }, uniquingKeysWith: { first, _ in first })
+        let counts = Dictionary(titles.values.map { ($0, 1) }, uniquingKeysWith: +)
+        for (label, title) in titles where counts[title, default: 0] > 1 && title != label {
+            titles[label] = singleLineTitle(label, font: font, keepHead: false)
+        }
+        return titles
     }
 }
 

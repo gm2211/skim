@@ -1222,12 +1222,13 @@ private struct RemoteModelPicker: View {
         VStack(alignment: .leading, spacing: 8) {
             fieldLabel
             Menu {
+                // One line per model, as in the inline model menus.
+                let titles = ModelPickerMenu.singleLineTitles(displayEntries.map(\.displayName), font: .preferredFont(forTextStyle: .body))
                 ForEach(displayEntries, id: \.id) { entry in
                     Button {
                         modelID = entry.id
                     } label: {
-                        // One line per model, as in the inline model menus.
-                        let title = ModelPickerMenu.singleLineTitle(entry.displayName, font: .preferredFont(forTextStyle: .body))
+                        let title = titles[entry.displayName] ?? entry.displayName
                         if entry.id == modelID {
                             Label(title, systemImage: "checkmark")
                         } else {

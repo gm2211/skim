@@ -223,30 +223,53 @@ struct AIInboxView: View {
             likedTitles: model.tasteStore.likedTitles()
         )
         var rated = 0
+        var unrated = 0
+        var firstError: Error?
         defer { ratingStatus = nil }
         for start in stride(from: 0, to: pending.count, by: batchSize) {
             guard !Task.isCancelled else { return }
             let batch = Array(pending[start..<min(start + batchSize, pending.count)])
-            ratingStatus = "Rating \(rated + 1)–\(rated + batch.count) of \(pending.count)…"
-            do {
-                let ratings = try await NativeAI.inboxRatings(
-                    articles: batch, readerContext: readerContext, settings: model.settings)
-                let now = Date()
-                var stored: [String: InboxAIScore] = [:]
-                for (handle, rating) in ratings {
-                    stored[batch[handle - 1].id] = InboxAIScore(
-                        importance: rating.importance, relevance: rating.relevance,
-                        reason: rating.reason, scoredAt: now)
+            ratingStatus = "Rating \(rated + unrated + 1)–\(rated + unrated + batch.count) of \(pending.count)…"
+            // A batch that fails is retried as two halves, so one bad response
+            // costs at most that batch, never the rest of the visit.
+            var parts: [(articles: [Article], canSplit: Bool)] = [(batch, true)]
+            while !parts.isEmpty {
+                let (part, canSplit) = parts.removeFirst()
+                do {
+                    let ratings = try await NativeAI.inboxRatings(
+                        articles: part, readerContext: readerContext, settings: model.settings)
+                    store(ratings, for: part)
+                    rated += ratings.count
+                    unrated += part.count - ratings.count
+                    await rank()
+                } catch {
+                    if Task.isCancelled { return }
+                    if canSplit, part.count > 1 {
+                        let half = part.count / 2
+                        parts = [(Array(part[..<half]), false), (Array(part[half...]), false)] + parts
+                    } else {
+                        firstError = firstError ?? error
+                        unrated += part.count
+                    }
                 }
-                model.inboxScores.set(stored)
-                rated += batch.count
-                await rank()
-            } catch {
-                if Task.isCancelled { return }
-                errorMessage = error.localizedDescription
-                return
             }
         }
+        if let firstError, rated == 0 {
+            errorMessage = firstError.localizedDescription
+        } else if unrated > 0 {
+            errorMessage = "Rated \(rated) of \(pending.count). The rest stay ranked by what you read; rate again to retry them."
+        }
+    }
+
+    private func store(_ ratings: [Int: NativeAI.InboxRating], for batch: [Article]) {
+        let now = Date()
+        var stored: [String: InboxAIScore] = [:]
+        for (handle, rating) in ratings {
+            stored[batch[handle - 1].id] = InboxAIScore(
+                importance: rating.importance, relevance: rating.relevance,
+                reason: rating.reason, scoredAt: now)
+        }
+        model.inboxScores.set(stored)
     }
 }
 

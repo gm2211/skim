@@ -1145,6 +1145,76 @@ struct TriageResponse {
     triage: Vec<TriageResponseItem>,
 }
 
+/// Output budget for rating `count` articles. An entry with its reason runs to
+/// about 50 tokens; 45 per article left no slack, so longer reasons were cut
+/// off mid-array and the whole batch failed to parse.
+fn triage_max_tokens(count: usize) -> i64 {
+    (count as i64 * 80 + 300).max(512)
+}
+
+/// Parse a triage response. One cut off mid-array (`max_tokens`) still yields
+/// the entries the model finished, so a long batch isn't lost whole.
+fn parse_triage_response(content: &str) -> Result<TriageResponse, serde_json::Error> {
+    let json_str = extract_json_object(content).unwrap_or(content);
+    match serde_json::from_str::<TriageResponse>(json_str) {
+        Ok(parsed) => Ok(parsed),
+        Err(e) => {
+            let triage = complete_triage_entries(content);
+            if triage.is_empty() {
+                Err(e)
+            } else {
+                Ok(TriageResponse { triage })
+            }
+        }
+    }
+}
+
+/// The objects a truncated `{"triage":[{…},{…},{"id":` response finished, in
+/// order: each balanced `{…}` directly inside the first `[`.
+fn complete_triage_entries(content: &str) -> Vec<TriageResponseItem> {
+    let Some(array_start) = content.find('[') else {
+        return Vec::new();
+    };
+    let body = &content[array_start + 1..];
+    let mut entries = Vec::new();
+    let mut depth = 0i32;
+    let mut in_string = false;
+    let mut escape_next = false;
+    let mut object_start = None;
+    for (i, ch) in body.char_indices() {
+        if escape_next {
+            escape_next = false;
+            continue;
+        }
+        match ch {
+            '\\' if in_string => escape_next = true,
+            '"' => in_string = !in_string,
+            '{' if !in_string => {
+                if depth == 0 {
+                    object_start = Some(i);
+                }
+                depth += 1;
+            }
+            '}' if !in_string => {
+                depth -= 1;
+                if depth == 0 {
+                    if let Some(item) = object_start
+                        .and_then(|start| serde_json::from_str::<TriageResponseItem>(&body[start..=i]).ok())
+                    {
+                        entries.push(item);
+                    }
+                }
+                if depth < 0 {
+                    break;
+                }
+            }
+            ']' if !in_string && depth == 0 => break,
+            _ => {}
+        }
+    }
+    entries
+}
+
 #[tauri::command]
 pub async fn triage_articles(
     app: AppHandle,
@@ -1269,8 +1339,7 @@ pub async fn triage_articles(
                 excerpt_clean
             ));
         }
-        // ~40 output tokens per item covers handle + two ratings + short reason.
-        let max_tokens = (chunk.len() as i64 * 45 + 200).max(512);
+        let max_tokens = triage_max_tokens(chunk.len());
 
         let request = ChatRequest {
             model: model.clone(),
@@ -1298,8 +1367,7 @@ pub async fn triage_articles(
         match provider.chat(request).await {
             Ok(response) => {
                 let content = response.content.trim();
-                let json_str = extract_json_object(content).unwrap_or(content);
-                match serde_json::from_str::<TriageResponse>(json_str) {
+                match parse_triage_response(content) {
                     Ok(parsed) => {
                         let triage_items: Vec<crate::db::models::ArticleTriage> = parsed
                             .triage
@@ -2904,5 +2972,45 @@ mod catchup_tests {
         assert_eq!(claimed.len(), 2);
         let next = claim_citations(&serde_json::json!([2, 3]), &pool, &mut claimed, 2);
         assert_eq!(next, vec!["a2".to_string(), "a3".to_string()]);
+    }
+}
+
+#[cfg(test)]
+mod triage_parse_tests {
+    use super::*;
+
+    // A ratings response cut off by max_tokens used to fail the whole batch.
+    // The entries the model finished are still good ratings.
+    #[test]
+    fn truncated_response_keeps_the_finished_entries() {
+        let raw = r#"{"triage":[{"id":1,"importance":4,"relevance":3,"reason":"Rate cut {surprise}"},{"id":2,"importance":2,"relevance":5,"reason":"Matches \"AI\" interest"},{"id":3,"importance":5,"rel"#;
+        let parsed = parse_triage_response(raw).expect("salvaged");
+        let ids: Vec<_> = parsed.triage.iter().map(|t| t.id.clone()).collect();
+        assert_eq!(ids, vec![serde_json::json!(1), serde_json::json!(2)]);
+        assert_eq!(parsed.triage[0].reason, "Rate cut {surprise}");
+        assert_eq!(parsed.triage[1].relevance, Some(5));
+    }
+
+    #[test]
+    fn fenced_truncated_response_is_salvaged() {
+        let raw = "```json\n{\"triage\":[{\"id\":\"1\",\"priority\":4,\"reason\":\"x\"},{\"id\":2";
+        assert_eq!(parse_triage_response(raw).expect("salvaged").triage.len(), 1);
+    }
+
+    #[test]
+    fn complete_response_still_parses() {
+        let raw = r#"{"triage":[{"id":1,"importance":3,"relevance":3,"reason":"ok"}]}"#;
+        assert_eq!(parse_triage_response(raw).expect("parsed").triage.len(), 1);
+    }
+
+    #[test]
+    fn prose_without_json_is_an_error() {
+        assert!(parse_triage_response("I can't rate these.").is_err());
+    }
+
+    #[test]
+    fn budget_leaves_room_for_reasons() {
+        assert_eq!(triage_max_tokens(30), 2700);
+        assert_eq!(triage_max_tokens(2), 512);
     }
 }

@@ -1019,7 +1019,7 @@ enum NativeAI {
             Output ONLY JSON:
             {"triage":[{"id":1,"importance":3,"relevance":3,"reason":"short reason"}]}
             """,
-            maxTokens: articles.count * 45 + 200,
+            maxTokens: inboxRatingsMaxTokens(count: articles.count),
             jsonMode: true,
             temperature: 0.3
         )
@@ -1032,8 +1032,16 @@ enum NativeAI {
         return ratings
     }
 
+    /// Output budget for rating `count` articles. An entry with its reason runs to about
+    /// 50 tokens; 45 per article left no slack, so a model that wrote longer reasons
+    /// was cut off mid-array and the whole batch failed to parse.
+    static func inboxRatingsMaxTokens(count: Int) -> Int {
+        count * 80 + 300
+    }
+
     /// Tolerant decode of `{"triage":[{id, importance, relevance, reason}]}`;
     /// numbers may arrive as strings and single-axis `priority` fills both axes.
+    /// A response cut off mid-array still yields the entries it finished.
     static func parseInboxRatings(_ raw: String, count: Int) -> [Int: InboxRating] {
         func int(_ value: Any?) -> Int? {
             if let n = value as? Int { return n }
@@ -1042,14 +1050,16 @@ enum NativeAI {
             return nil
         }
         let cleaned = repairTriageJSON(raw)
-        guard let data = cleaned.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data)
-        else { return [:] }
         let entries: [[String: Any]]
-        if let object = json as? [String: Any] {
-            entries = (object["triage"] ?? object["ratings"] ?? object["articles"]) as? [[String: Any]] ?? []
+        if let data = cleaned.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) {
+            if let object = json as? [String: Any] {
+                entries = (object["triage"] ?? object["ratings"] ?? object["articles"]) as? [[String: Any]] ?? []
+            } else {
+                entries = json as? [[String: Any]] ?? []
+            }
         } else {
-            entries = json as? [[String: Any]] ?? []
+            entries = completeTriageEntries(raw)
         }
         var out: [Int: InboxRating] = [:]
         for entry in entries {
@@ -1067,6 +1077,45 @@ enum NativeAI {
             )
         }
         return out
+    }
+
+    /// The objects a truncated `{"triage":[{…},{…},{"id":` response finished, in order.
+    /// Scans from the first `[` and keeps each balanced `{…}` directly inside it.
+    static func completeTriageEntries(_ raw: String) -> [[String: Any]] {
+        guard let arrayStart = raw.firstIndex(of: "[") else { return [] }
+        var entries: [[String: Any]] = []
+        var depth = 0
+        var inString = false
+        var escaped = false
+        var objectStart: String.Index?
+        var idx = raw.index(after: arrayStart)
+        while idx < raw.endIndex {
+            let ch = raw[idx]
+            if escaped {
+                escaped = false
+            } else if ch == "\\" && inString {
+                escaped = true
+            } else if ch == "\"" {
+                inString.toggle()
+            } else if !inString {
+                if ch == "{" {
+                    if depth == 0 { objectStart = idx }
+                    depth += 1
+                } else if ch == "}" {
+                    depth -= 1
+                    if depth == 0, let start = objectStart,
+                       let data = String(raw[start...idx]).data(using: .utf8),
+                       let entry = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                        entries.append(entry)
+                    }
+                    if depth < 0 { break }
+                } else if ch == "]" && depth == 0 {
+                    break
+                }
+            }
+            idx = raw.index(after: idx)
+        }
+        return entries
     }
 
     // MARK: - Structured triage JSON (used by auto-group and future JSON consumers)

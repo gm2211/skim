@@ -7,6 +7,7 @@ import { AddFeedDialog } from "./components/feed/AddFeedDialog";
 import { DiscoverView } from "./components/discover/DiscoverView";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { CommandPalette } from "./components/palette/CommandPalette";
+import { isPaletteShortcut } from "@byos/commands";
 import { useUiStore } from "./stores/uiStore";
 import { openArticleLink } from "./lib/externalLinks";
 import { useEffect, useRef, useState } from "react";
@@ -409,7 +410,7 @@ function App() {
       }
 
       // Global shortcuts — work even when typing in inputs
-      if (key === "k" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+      if (isPaletteShortcut(e)) {
         e.preventDefault();
         const state = useUiStore.getState();
         state.setShowCommandPalette(!state.showCommandPalette);

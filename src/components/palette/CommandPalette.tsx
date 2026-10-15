@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { canGoBackArticle, canGoForwardArticle, useUiStore } from "../../stores/uiStore";
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
@@ -10,7 +9,8 @@ import { useArticleInteraction, useSetPriorityOverride } from "../../hooks/useLe
 import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { askAgent, getArticles, type AgentContext } from "../../services/commands";
 import { runAppCommand } from "../../lib/appCommands";
-import { askFirst, filterCommands, formatShortcutKey, type PaletteCommand } from "../../lib/commandPalette";
+import { formatShortcutKey, type PaletteCommand } from "../../lib/commandPalette";
+import { createCommandRegistry, createPaletteController, isAskCommand, type AskTurn } from "@byos/commands";
 import { agentContextLabel, type AgentMessage } from "../../lib/agentContext";
 import { partitionSources } from "../../lib/chatCitations";
 import { useAgentContext } from "../../hooks/useAgentContext";
@@ -20,15 +20,6 @@ import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { PALETTE_ICONS } from "../ui/icons";
 
 const ARTICLE_RESULTS = 8;
-
-function useDebounced<T>(value: T, ms: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const id = window.setTimeout(() => setDebounced(value), ms);
-    return () => window.clearTimeout(id);
-  }, [value, ms]);
-  return debounced;
-}
 
 /** Every command the app offers right now, in the order shown for an empty query. */
 function useCommands(): PaletteCommand[] {
@@ -161,6 +152,12 @@ function useCommands(): PaletteCommand[] {
   return commands;
 }
 
+/** What Skim keeps with an answer, for its own rendering and the next turn. */
+type AnswerData = Pick<AgentMessage, "sources" | "articleIds" | "steps">;
+
+const toAgentMessages = (history: readonly AskTurn[]): AgentMessage[] =>
+  history.map((turn) => ({ role: turn.role, content: turn.content, ...(turn.data as AnswerData | undefined) }));
+
 export function CommandPalette() {
   const setShowCommandPalette = useUiStore((s) => s.setShowCommandPalette);
   const close = () => setShowCommandPalette(false);
@@ -169,8 +166,6 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   useDialogFocus(dialogRef, close);
 
-  const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
   const commands = useCommands();
   const { data: feeds } = useFeeds();
 
@@ -179,22 +174,13 @@ export function CommandPalette() {
   const liveContext = useAgentContext();
   const selectedArticleId = useUiStore((s) => s.selectedArticleId);
   const { data: openArticle } = useArticle(selectedArticleId);
-  const [chat, setChat] = useState<{ context: AgentContext; label: string; messages: AgentMessage[] } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
-  }, []);
 
-  const articleQuery = useDebounced(query.trim(), 150);
-  const { data: foundArticles } = useQuery({
-    queryKey: ["commandPaletteArticles", articleQuery],
-    queryFn: () => getArticles({ search: articleQuery, limit: ARTICLE_RESULTS }),
-    enabled: !chat && articleQuery.length >= 2,
-    staleTime: 30_000,
-  });
+  // The palette engine (ranking, keys, Ask flow) is BYOS's; the closures below
+  // always read this render's values.
+  const latest = useRef({ commands, feeds, liveContext, openArticle });
+  latest.current = { commands, feeds, liveContext, openArticle };
+  // A conversation keeps the context it started with, even if the view changes underneath.
+  const chatContext = useRef<{ context: AgentContext; label: string } | null>(null);
 
   const openArticleById = (id: string) => {
     const ui = useUiStore.getState();
@@ -202,102 +188,101 @@ export function CommandPalette() {
     else ui.setSelectedArticleId(id);
   };
 
-  const ask = async (text: string) => {
-    const question = text.trim();
-    if (!question || loading) return;
-    const context = chat?.context ?? liveContext;
-    const label = chat?.label ?? agentContextLabel(context, openArticle?.title);
-    const prior = chat?.messages ?? [];
-    const messages: AgentMessage[] = [...prior, { role: "user", content: question }];
-    setChat({ context, label, messages });
-    setQuery("");
-    setError(null);
-    setLoading(true);
-    const priorIds = [...prior].reverse().find((m) => m.role === "assistant")?.articleIds;
-    try {
-      const resp = await askAgent(messages.map(({ role, content }) => ({ role, content })), context, priorIds);
-      if (!mounted.current) return;
-      setChat((current) => current && {
-        ...current,
-        messages: [...current.messages, { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps }],
-      });
-      const open = resp.actions.find((action) => action.type === "open_article");
-      if (open) {
-        close();
-        window.setTimeout(() => openArticleById(open.article_id), 0);
-      }
-    } catch (e) {
-      if (!mounted.current) return;
-      setError(String(e instanceof Error ? e.message : e));
-      setChat(prior.length ? { context, label, messages: prior } : null);
-      setQuery(question);
-    } finally {
-      if (mounted.current) {
-        setLoading(false);
-        inputRef.current?.focus();
-      }
-    }
-  };
-
-  const openFullChat = (prompt?: string) => {
-    if (loading) return;
-    const context = chat?.context ?? liveContext;
-    const text = (prompt ?? query).trim();
-    close();
-    window.setTimeout(() => openAgentChat({
-      context,
-      articleTitle: context.article_id ? openArticle?.title : null,
-      messages: chat?.messages,
-      prompt: text || undefined,
-      autoSend: !!text,
-    }), 0);
-  };
-
-  const lastAnswer = chat ? [...chat.messages].reverse().find((m) => m.role === "assistant") : undefined;
-  const lastAnswerIsLatest = !!chat && !loading && chat.messages[chat.messages.length - 1] === lastAnswer;
-
-  const results = useMemo(() => {
-    if (chat) {
-      // The articles the latest answer cited, ready to open.
-      if (!lastAnswer?.sources || !lastAnswerIsLatest) return [];
-      return partitionSources(lastAnswer.sources, lastAnswer.content).cited.map(({ source, number }): PaletteCommand => ({
-        id: `cited.${source.id}`,
-        group: number === null ? "Web" : `[${number}]`,
-        title: source.title,
-        detail: source.feed_title,
-        icon: source.source_type === "web" ? "globe" : "book",
-        run: () => {
-          if (source.source_type === "web") { if (source.url) void openUrl(source.url); }
-          else openArticleById(source.id);
+  const controller = useMemo(() => {
+    const registry = createCommandRegistry([
+      {
+        id: "skim",
+        // Rows re-resolve by id when run, so a row never acts on a stale article.
+        commands: () => latest.current.commands.map((command) => ({
+          ...command,
+          run: () => latest.current.commands.find((c) => c.id === command.id)?.run(),
+        })),
+      },
+      {
+        id: "articles",
+        minQuery: 2,
+        debounceMs: 150,
+        limit: ARTICLE_RESULTS,
+        search: async (query) => {
+          const found = await getArticles({ search: query, limit: ARTICLE_RESULTS });
+          const feedTitles = new Map((latest.current.feeds ?? []).map((f) => [f.id, f.title]));
+          return found.map((a): PaletteCommand => ({
+            id: `articleResult.${a.id}`,
+            group: "Articles",
+            title: a.title,
+            detail: feedTitles.get(a.feed_id),
+            icon: "book",
+            run: () => useUiStore.getState().setSelectedArticleId(a.id),
+          }));
         },
-      }));
-    }
-    const matched = filterCommands(commands, query);
-    const trimmed = query.trim();
-    if (trimmed.length < 2) return matched;
-    const askRow: PaletteCommand = {
-      id: "ask.agent",
-      group: "Ask Skim",
-      title: trimmed,
-      icon: "sparkle",
-      stay: true,
-      run: () => void ask(trimmed),
-    };
-    const feedTitles = new Map((feeds ?? []).map((f) => [f.id, f.title]));
-    const articles: PaletteCommand[] = (foundArticles ?? []).slice(0, ARTICLE_RESULTS).map((a) => ({
-      id: `articleResult.${a.id}`,
-      group: "Articles",
-      title: a.title,
-      detail: feedTitles.get(a.feed_id),
-      icon: "book",
-      run: () => useUiStore.getState().setSelectedArticleId(a.id),
-    }));
-    return askFirst(commands, query) ? [askRow, ...matched, ...articles] : [...matched, askRow, ...articles];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat, lastAnswer, lastAnswerIsLatest, commands, feeds, foundArticles, query]);
+      },
+    ]);
+    return createPaletteController({
+      registry,
+      // Let the palette unmount and hand focus back before the command opens
+      // its own dialog or moves focus.
+      schedule: (run) => { window.setTimeout(run, 0); },
+      onOpenChange: (open) => { if (!open) useUiStore.getState().setShowCommandPalette(false); },
+      ask: {
+        label: "Ask Skim",
+        ask: async (question, { history }) => {
+          const { liveContext, openArticle } = latest.current;
+          if (!history.length) chatContext.current = { context: liveContext, label: agentContextLabel(liveContext, openArticle?.title) };
+          const context = chatContext.current?.context ?? liveContext;
+          const prior = toAgentMessages(history);
+          const messages = [...prior, { role: "user" as const, content: question }];
+          const priorIds = [...prior].reverse().find((m) => m.role === "assistant")?.articleIds;
+          let resp;
+          try {
+            resp = await askAgent(messages.map(({ role, content }) => ({ role, content })), context, priorIds);
+          } catch (e) {
+            throw new Error(String(e instanceof Error ? e.message : e));
+          }
+          const open = resp.actions.find((action) => action.type === "open_article");
+          if (open) return { kind: "action", perform: () => openArticleById(open.article_id) };
+          const data: AnswerData = { sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps };
+          // The articles the answer cited, ready to open.
+          const cited = partitionSources(resp.sources, resp.content).cited.map(({ source, number }): PaletteCommand => ({
+            id: `cited.${source.id}`,
+            group: number === null ? "Web" : `[${number}]`,
+            title: source.title,
+            detail: source.feed_title,
+            icon: source.source_type === "web" ? "globe" : "book",
+            run: () => {
+              if (source.source_type === "web") { if (source.url) void openUrl(source.url); }
+              else openArticleById(source.id);
+            },
+          }));
+          return { kind: "answer", text: resp.content, data, commands: cited };
+        },
+        openFull: (prompt, history) => {
+          const context = chatContext.current?.context ?? latest.current.liveContext;
+          openAgentChat({
+            context,
+            articleTitle: context.article_id ? latest.current.openArticle?.title : null,
+            messages: history.length ? toAgentMessages(history) : undefined,
+            prompt: prompt || undefined,
+            autoSend: !!prompt,
+          });
+        },
+      },
+    });
+  }, []);
 
-  useEffect(() => setActive(0), [query, chat?.messages.length]);
-  const activeIndex = Math.min(active, Math.max(results.length - 1, 0));
+  const state = useSyncExternalStore(controller.subscribe, controller.getState, controller.getState);
+  // The app mounts the palette while it is shown; follow the store if it stays mounted.
+  const shown = useUiStore((s) => s.showCommandPalette);
+  useEffect(() => { if (shown) controller.open(); }, [controller, shown]);
+
+  // Commands depend on the open article, the view and loaded feeds; rebuild when their rows change.
+  const signature = commands.map((c) => `${c.id}\u0000${c.title}\u0000${c.detail ?? ""}`).join("\u0001");
+  useEffect(() => controller.refresh(), [controller, signature]);
+
+  const chatting = state.mode === "answered" || state.mode === "pending";
+  const loading = state.mode === "pending";
+  const results = state.items;
+  const activeIndex = state.active;
+  const chatLabel = chatContext.current?.label ?? agentContextLabel(liveContext, openArticle?.title);
 
   useEffect(() => {
     listRef.current
@@ -306,51 +291,21 @@ export function CommandPalette() {
   }, [activeIndex]);
 
   useEffect(() => {
-    if (chat && loading) listRef.current?.scrollTo?.({ top: listRef.current.scrollHeight });
-  }, [chat, loading]);
+    if (loading) listRef.current?.scrollTo?.({ top: listRef.current.scrollHeight });
+  }, [loading]);
 
-  const run = (command: PaletteCommand | undefined) => {
-    if (!command) return;
-    if (command.stay) {
-      command.run();
-      return;
-    }
-    close();
-    // Let the palette unmount and hand focus back before the command opens
-    // its own dialog or moves focus.
-    window.setTimeout(command.run, 0);
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) {
-      e.preventDefault();
-      setActive((i) => (results.length ? (Math.min(i, results.length - 1) + 1) % results.length : 0));
-    } else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) {
-      e.preventDefault();
-      setActive((i) => (results.length ? (Math.min(i, results.length - 1) - 1 + results.length) % results.length : 0));
-    } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault();
-      if (chat || query.trim()) openFullChat();
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (chat && query.trim()) void ask(query);
-      else run(results[activeIndex]);
-    } else if (e.key === "Backspace" && chat && !query && !loading) {
-      // Backspace on an empty follow-up returns to the command list.
-      e.preventDefault();
-      setChat(null);
-      setError(null);
-    }
-  };
+  useEffect(() => {
+    if (state.mode === "answered" || state.error) inputRef.current?.focus();
+  }, [state.mode, state.error]);
 
   // Group headers only when browsing; a search shows one ranked list with
   // each row's group on the right.
-  const browsing = !chat && !query.trim();
+  const browsing = state.showGroups;
 
   const renderRow = (command: PaletteCommand, index: number) => {
     const header = browsing && (index === 0 || results[index - 1].group !== command.group);
     const selected = index === activeIndex;
-    const isAsk = command.id === "ask.agent";
+    const isAsk = isAskCommand(command);
     return (
       <div key={command.id}>
         {header && (
@@ -363,8 +318,8 @@ export function CommandPalette() {
           data-index={index}
           role="option"
           aria-selected={selected}
-          onMouseMove={() => { if (!selected) setActive(index); }}
-          onClick={() => run(command)}
+          onMouseMove={() => { if (!selected) controller.setActive(index); }}
+          onClick={() => controller.run(command)}
           className={`flex items-center gap-3 rounded-lg cursor-pointer ${selected ? "bg-white/10 text-text-primary" : "text-text-secondary"}`}
           style={{ padding: "8px 12px", fontSize: 14 }}
         >
@@ -373,7 +328,7 @@ export function CommandPalette() {
             style={{ width: 18, height: 18 }}
           >
             {(() => {
-              const Glyph = command.icon ? PALETTE_ICONS[command.icon] : undefined;
+              const Glyph = isAsk ? PALETTE_ICONS.sparkle : command.icon ? PALETTE_ICONS[command.icon] : undefined;
               return Glyph ? <Glyph size={16} strokeWidth={1.9} /> : null;
             })()}
           </span>
@@ -416,14 +371,14 @@ export function CommandPalette() {
         style={{
           background: "var(--color-bg-secondary)",
           width: "min(640px, 92vw)",
-          maxHeight: chat ? "min(640px, 76vh)" : "min(560px, 70vh)",
-          marginTop: chat ? "10vh" : "14vh",
+          maxHeight: chatting ? "min(640px, 76vh)" : "min(560px, 70vh)",
+          marginTop: chatting ? "10vh" : "14vh",
           alignSelf: "flex-start",
         }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 border-b border-white/5" style={{ padding: "14px 18px" }}>
-          {chat ? (
+          {chatting ? (
             <span className="text-accent flex-shrink-0 flex">
               {(() => { const Sparkle = PALETTE_ICONS.sparkle; return Sparkle ? <Sparkle size={16} strokeWidth={1.9} /> : null; })()}
             </span>
@@ -436,11 +391,11 @@ export function CommandPalette() {
           <input
             ref={inputRef}
             autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={onKeyDown}
-            placeholder={chat ? "Ask a follow-up…" : "Type a command, or ask anything…"}
-            aria-label={chat ? "Follow-up question" : "Search commands"}
+            value={state.query}
+            onChange={(e) => controller.setQuery(e.target.value)}
+            onKeyDown={(e) => { if (controller.handleKey(e.nativeEvent)) e.preventDefault(); }}
+            placeholder={chatting ? "Ask a follow-up…" : "Type a command, or ask anything…"}
+            aria-label={chatting ? "Follow-up question" : "Search commands"}
             aria-controls="command-palette-list"
             aria-activedescendant={results.length ? `command-${activeIndex}` : undefined}
             role="combobox"
@@ -451,20 +406,20 @@ export function CommandPalette() {
           <Kbd>esc</Kbd>
         </div>
 
-        <div ref={listRef} id="command-palette-list" role="listbox" aria-label={chat ? "Conversation" : undefined} className="flex-1 overflow-y-auto" style={{ padding: 6 }}>
-          {chat && (
+        <div ref={listRef} id="command-palette-list" role="listbox" aria-label={chatting ? "Conversation" : undefined} className="flex-1 overflow-y-auto" style={{ padding: 6 }}>
+          {chatting && (
             <div style={{ padding: "6px 12px 4px" }} aria-live="polite">
-              <div className="text-text-muted" style={{ fontSize: 11, marginBottom: 8 }}>{chat.label}</div>
-              {chat.messages.map((message, index) => message.role === "user" ? (
+              <div className="text-text-muted" style={{ fontSize: 11, marginBottom: 8 }}>{chatLabel}</div>
+              {state.history.map((turn, index) => turn.role === "user" ? (
                 <p key={index} className="text-text-primary" style={{ fontSize: 15, fontWeight: 600, marginTop: index ? 18 : 0, marginBottom: 6 }}>
-                  {message.content}
+                  {turn.content}
                 </p>
               ) : (
                 <div key={index}>
-                  <AgentSteps steps={message.steps ?? []} />
+                  <AgentSteps steps={(turn.data as AnswerData | undefined)?.steps ?? []} />
                   <AgentAnswer
-                    content={message.content}
-                    sources={message.sources ?? []}
+                    content={turn.content}
+                    sources={(turn.data as AnswerData | undefined)?.sources ?? []}
                     onOpenArticle={(id) => { close(); window.setTimeout(() => openArticleById(id), 0); }}
                   />
                 </div>
@@ -484,10 +439,10 @@ export function CommandPalette() {
               )}
             </div>
           )}
-          {error && (isAiSetupError(error)
-            ? <div style={{ padding: "6px 12px" }}><AiSetupNotice error={error} /></div>
-            : <p role="alert" className="text-danger" style={{ fontSize: 13, padding: "6px 12px" }}>{error}</p>)}
-          {!chat && results.length === 0 && (
+          {state.error && (isAiSetupError(state.error)
+            ? <div style={{ padding: "6px 12px" }}><AiSetupNotice error={state.error} /></div>
+            : <p role="alert" className="text-danger" style={{ fontSize: 13, padding: "6px 12px" }}>{state.error}</p>)}
+          {!chatting && results.length === 0 && (
             <p className="text-text-muted text-center" style={{ fontSize: 13, padding: "28px 12px" }}>
               No matching commands
             </p>
@@ -496,16 +451,16 @@ export function CommandPalette() {
         </div>
 
         <div className="flex items-center gap-4 border-t border-white/5 text-text-muted" style={{ padding: "8px 16px", fontSize: 11 }}>
-          {chat ? (
+          {chatting ? (
             <>
-              {(query.trim() || results.length > 0) && (
-                <span className="flex items-center gap-1"><Kbd>↵</Kbd> {query.trim() ? "ask" : "open article"}</span>
+              {(state.query.trim() || results.length > 0) && (
+                <span className="flex items-center gap-1"><Kbd>↵</Kbd> {state.query.trim() ? "ask" : "open article"}</span>
               )}
               <span className="flex items-center gap-1"><Kbd>⌫</Kbd> commands</span>
               <span className="flex-1" />
               <button
                 type="button"
-                onClick={() => openFullChat()}
+                onClick={() => controller.openFull()}
                 disabled={loading}
                 className="flex items-center gap-1 rounded-md hover:text-text-primary hover:bg-white/5 disabled:opacity-40"
                 style={{ padding: "2px 6px", fontSize: 11 }}
@@ -517,7 +472,7 @@ export function CommandPalette() {
             <>
               <span className="flex items-center gap-1"><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
               <span className="flex items-center gap-1"><Kbd>↵</Kbd> run</span>
-              {query.trim() && <span className="flex items-center gap-1"><Kbd>{formatShortcutKey("mod")}</Kbd><Kbd>↵</Kbd> ask in full chat</span>}
+              {state.query.trim() && <span className="flex items-center gap-1"><Kbd>{formatShortcutKey("mod")}</Kbd><Kbd>↵</Kbd> ask in full chat</span>}
               <span className="flex-1" />
               <span className="flex items-center gap-1"><Kbd>{formatShortcutKey("mod")}</Kbd><Kbd>K</Kbd> toggle</span>
             </>

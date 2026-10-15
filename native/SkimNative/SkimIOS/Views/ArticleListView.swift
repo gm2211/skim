@@ -140,7 +140,8 @@ struct ArticleListView: View {
         .sheet(isPresented: $showAutoGroup) {
             AutoGroupSheet(isPresented: $showAutoGroup)
                 .environmentObject(model)
-                .presentationDetents([.medium, .large])
+                // Full height only: at .medium the proposals list collapses to nothing.
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
         }
@@ -1351,7 +1352,6 @@ struct AutoGroupIcon: View {
                     .font(.system(size: size * 0.62, weight: .semibold))
                     .offset(x: size * 0.42, y: -size * 0.38)
             }
-            .padding(.trailing, size * 0.3)
             .accessibilityHidden(true)
     }
 }
@@ -1394,10 +1394,12 @@ private struct AutoGroupSheet: View {
                     Text("Auto-group feeds")
                         .font(.system(size: 27, weight: .heavy))
                         .foregroundStyle(SkimStyle.text)
-                    Text("Use AI to classify feeds into folder proposals, then choose the folder naming style.")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(SkimStyle.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    if !isEditingFeedback {
+                        Text("Use AI to classify feeds into folder proposals, then choose the folder naming style.")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
                 Spacer()
@@ -1414,38 +1416,40 @@ private struct AutoGroupSheet: View {
                 .buttonStyle(.plain)
             }
 
-            aiStatus
+            if !isEditingFeedback {
+                aiStatus
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Folder naming")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(SkimStyle.secondary)
-                    .textCase(.uppercase)
-                    .tracking(1.1)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Folder naming")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .textCase(.uppercase)
+                        .tracking(1.1)
 
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 9) {
-                        ForEach(AutoGroupNameStyle.allCases) { style in
-                            Button {
-                                withAnimation(.smooth(duration: 0.18)) {
-                                    nameStyle = style
-                                }
-                            } label: {
-                                Text(style.label)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(nameStyle == style ? SkimStyle.text : SkimStyle.secondary)
-                                    .padding(.horizontal, 13)
-                                    .frame(height: 36)
-                                    .background(
-                                        nameStyle == style ? SkimStyle.surface.opacity(0.95) : SkimStyle.surface.opacity(0.34),
-                                        in: Capsule()
-                                    )
-                                    .overlay {
-                                        Capsule()
-                                            .stroke(nameStyle == style ? SkimStyle.accent.opacity(0.7) : SkimStyle.separator, lineWidth: 1)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 9) {
+                            ForEach(AutoGroupNameStyle.allCases) { style in
+                                Button {
+                                    withAnimation(.smooth(duration: 0.18)) {
+                                        nameStyle = style
                                     }
+                                } label: {
+                                    Text(style.label)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(nameStyle == style ? SkimStyle.text : SkimStyle.secondary)
+                                        .padding(.horizontal, 13)
+                                        .frame(height: 36)
+                                        .background(
+                                            nameStyle == style ? SkimStyle.surface.opacity(0.95) : SkimStyle.surface.opacity(0.34),
+                                            in: Capsule()
+                                        )
+                                        .overlay {
+                                            Capsule()
+                                                .stroke(nameStyle == style ? SkimStyle.accent.opacity(0.7) : SkimStyle.separator, lineWidth: 1)
+                                        }
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -1489,71 +1493,74 @@ private struct AutoGroupSheet: View {
                 feedbackField
             }
 
-            if !proposals.isEmpty && !isRunningAI {
+            if !proposals.isEmpty && !isRunningAI && !isEditingFeedback {
                 AIDisclaimerLabel()
                     .padding(.top, 2)
             }
 
-            HStack(spacing: 12) {
-                Button {
-                    Task { await runAI() }
-                } label: {
-                    HStack(spacing: 8) {
-                        if isRunningAI {
-                            ProgressView()
-                                .controlSize(.mini)
-                                .tint(SkimStyle.text)
-                        }
-                        Text(aiActionTitle)
-                    }
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(isRunningAI ? SkimStyle.secondary : SkimStyle.text)
-                .padding(.horizontal, 15)
-                .frame(height: 42)
-                .background(SkimStyle.surface.opacity(0.85), in: Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(SkimStyle.separator, lineWidth: 1)
-                }
-                .disabled(isRunningAI || isApplying)
-
-                Spacer()
-
-                if !proposals.isEmpty {
+            if !isEditingFeedback {
+                HStack(spacing: 12) {
                     Button {
-                        Task { await applyProposals() }
+                        Task { await runAI() }
                     } label: {
                         HStack(spacing: 8) {
-                            if isApplying {
+                            if isRunningAI {
                                 ProgressView()
                                     .controlSize(.mini)
                                     .tint(SkimStyle.text)
                             }
-                            Text(isApplying ? "Applying…" : "Apply")
+                            Text(aiActionTitle)
                         }
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(SkimStyle.text)
+                    .foregroundStyle(isRunningAI ? SkimStyle.secondary : SkimStyle.text)
                     .padding(.horizontal, 15)
                     .frame(height: 42)
-                    .background(SkimStyle.accent.opacity(isApplying ? 0.45 : 0.95), in: Capsule())
+                    .background(SkimStyle.surface.opacity(0.85), in: Capsule())
                     .overlay {
                         Capsule()
-                            .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                            .stroke(SkimStyle.separator, lineWidth: 1)
                     }
                     .disabled(isRunningAI || isApplying)
-                }
 
-                Button("Done") {
-                    isPresented = false
+                    Spacer()
+
+                    if !proposals.isEmpty {
+                        Button {
+                            Task { await applyProposals() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if isApplying {
+                                    ProgressView()
+                                        .controlSize(.mini)
+                                        .tint(SkimStyle.text)
+                                }
+                                Text(isApplying ? "Applying…" : "Apply")
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SkimStyle.text)
+                        .padding(.horizontal, 15)
+                        .frame(height: 42)
+                        .background(SkimStyle.accent.opacity(isApplying ? 0.45 : 0.95), in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                        }
+                        .disabled(isRunningAI || isApplying)
+                    }
+
+                    Button("Done") {
+                        isPresented = false
+                    }
+                    .buttonStyle(.glassProminent)
                 }
-                .buttonStyle(.glassProminent)
+                .padding(.top, 2)
             }
-            .padding(.top, 2)
         }
+        .animation(.smooth(duration: 0.2), value: isEditingFeedback)
         .padding(.horizontal, 24)
         .padding(.top, 24)
         .padding(.bottom, 18)
@@ -1603,6 +1610,12 @@ private struct AutoGroupSheet: View {
         }
     }
 
+    /// While typing feedback the keyboard takes half the sheet; drop the chrome so the
+    /// proposals being discussed stay visible above the box.
+    private var isEditingFeedback: Bool {
+        feedbackFocused && !isRunningAI
+    }
+
     private var trimmedFeedback: String {
         feedbackText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -1611,7 +1624,7 @@ private struct AutoGroupSheet: View {
     /// sent to the AI together with the current grouping so it revises rather than restarts.
     private var feedbackField: some View {
         HStack(alignment: .bottom, spacing: 8) {
-            TextField("Tell AI what to change, e.g. merge Coding into SoftwareEngineering", text: $feedbackText, axis: .vertical)
+            TextField("Tell AI what to change…", text: $feedbackText, axis: .vertical)
                 .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(SkimStyle.text)
                 .lineLimit(1...4)

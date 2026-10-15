@@ -217,9 +217,9 @@ struct ModelPickerMenuTitleTests {
     }
 
     @Test func siblingModelsStayDistinct() {
-        let haiku = ModelPickerMenu.singleLineTitle("anthropic/claude-haiku-5.5:batch", font: body)
-        let sonnet = ModelPickerMenu.singleLineTitle("anthropic/claude-sonnet-5.5:batch", font: body)
-        #expect(haiku != sonnet)
+        let ids = ["anthropic/claude-haiku-5.5:batch", "anthropic/claude-sonnet-5.5:batch"]
+        let titles = ModelPickerMenu.singleLineTitles(ids, font: body)
+        #expect(titles[ids[0]] != titles[ids[1]], "\(titles)")
     }
 
     @Test func collidingTitlesGiveTheRowToTheTail() {

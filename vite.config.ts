@@ -42,6 +42,7 @@ export default defineConfig(async () => ({
     alias: {
       "@byos/react/styles.css": fileURLToPath(new URL("./shared/byos-react/src/styles.css", import.meta.url)),
       "@byos/react": fileURLToPath(new URL("./shared/byos-react/src/index.ts", import.meta.url)),
+      "@byos/commands": fileURLToPath(new URL("./shared/byos-commands/src/index.ts", import.meta.url)),
       "@byos/core": fileURLToPath(new URL("./shared/byos-core/src/index.ts", import.meta.url)),
       "@byos/providers": fileURLToPath(new URL("./shared/byos-providers/src/index.ts", import.meta.url)),
     },

@@ -139,15 +139,23 @@ struct NativeAIModelsResponseTests {
         }
         """
         let models = try NativeAI.parseOpenAICompatibleModelsResponse(Data(json.utf8))
-        #expect(models.map(\.displayName) == ["grok-4.3", "grok-4.5"])
+        #expect(models.map(\.displayName) == ["grok-4.5", "grok-4.3"])
     }
 
-    @Test func openAICompatibleModelsAreSortedByID() throws {
+    @Test func openAICompatibleModelsKeepProviderOrder() throws {
         let json = """
-        { "data": [ { "id": "gpt-5" }, { "id": "gpt-4o-mini" }, { "id": "gpt-4o" } ] }
+        { "data": [ { "id": "gpt-5" }, { "id": "gpt-4o-mini" }, { "id": "gpt-4o" }, { "id": "gpt-5" } ] }
         """
         let models = try NativeAI.parseOpenAICompatibleModelsResponse(Data(json.utf8))
-        #expect(models.map(\.id) == ["gpt-4o", "gpt-4o-mini", "gpt-5"])
+        #expect(models.map(\.id) == ["gpt-5", "gpt-4o-mini", "gpt-4o"])
+    }
+
+    @Test func openAICompatibleHidesImageAndVideoModels() throws {
+        let json = """
+        { "data": [ { "id": "grok-4.7" }, { "id": "grok-imagine-image-2.0" }, { "id": "grok-imagine-video-1.5-lite" }, { "id": "grok-build-0.1" } ] }
+        """
+        let models = try NativeAI.parseOpenAICompatibleModelsResponse(Data(json.utf8))
+        #expect(models.map(\.id) == ["grok-4.7", "grok-build-0.1"])
     }
 
     @Test func openAICompatibleKeepsExplicitDisplayNameWhenPresent() throws {

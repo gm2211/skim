@@ -1,0 +1,27 @@
+{
+  "name": "@byos/commands",
+  "version": "0.1.0",
+  "description": "Framework-free command palette (Cmd+K) core: command registry, ranking, keyboard rules, an Ask controller, standard AI commands, and a plain DOM renderer. No credentials and no provider calls.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./styles.css": "./dist/styles.css",
+    "./classic.js": "./dist/classic.js"
+  },
+  "engines": {
+    "node": ">=22.23.2"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp src/styles.css dist/styles.css && node build-classic.mjs",
+    "test": "npm run build && node --experimental-strip-types --test src/*.test.ts",
+    "css": "node build-styles.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}

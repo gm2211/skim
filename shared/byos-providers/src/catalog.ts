@@ -94,16 +94,25 @@ export async function listOpenRouterModels(key: string, signal?: AbortSignal): P
     .sort((a, b) => fitRank(a.analysisFit) - fitRank(b.analysisFit) || a.name.localeCompare(b.name));
 }
 
+/** Id words that mark a model as image, video, audio, embedding or moderation rather than text chat,
+ * such as xAI's `grok-imagine-image` and `grok-imagine-video`. OpenAI-compatible `/models` lists carry
+ * no modality, so the id is all there is to go on. */
+const NON_CHAT_MODEL_WORDS = new Set(['imagine', 'image', 'video', 'embed', 'embedding', 'tts', 'whisper', 'dall', 'moderation', 'transcribe', 'sora', 'realtime', 'audio', 'speech']);
+
+/** False for ids of models that cannot answer a chat request (see NON_CHAT_MODEL_WORDS). */
+export function isChatModel(id: string): boolean {
+  return !id.toLowerCase().split(/[^a-z0-9]+/).some(word => NON_CHAT_MODEL_WORDS.has(word));
+}
+
 /**
  * listOpenRouterModels' sibling for xAI and Groq: the same `GET {baseUrl}/models` OpenAI-compatible
  * route every browser-direct endpoint answers (see endpoints.ts). Deliberately simpler than
  * listOpenRouterModels above rather than sharing its body: xAI/Groq's `/models` responses carry
- * neither OpenRouter's `supported_parameters` (so there is nothing to filter "tools support" or
- * "reasoning" on) nor its per-token `pricing` block, so guessing either would just be fabricating a
- * number this response never sent. Every model that answers with an id is kept and sorted by name;
- * `analysisFit` stays 'standard' across the board rather than reusing OpenRouter's name-sniffing
- * heuristic, which was tuned against OpenRouter's own model-name conventions (e.g. "sonar-pro") that
- * do not apply to xAI's or Groq's catalog.
+ * neither OpenRouter's `supported_parameters` nor its per-token `pricing` block, so guessing either
+ * would just be fabricating a number this response never sent. Models keep the order the provider
+ * sent them in; only repeats and non-chat models (isChatModel) are dropped. `analysisFit` stays
+ * 'standard' across the board rather than reusing OpenRouter's name-sniffing heuristic, which was
+ * tuned against OpenRouter's own model-name conventions (e.g. "sonar-pro").
  */
 export async function listModelsForEndpoint(endpoint: CloudEndpoint, signal?: AbortSignal): Promise<OpenRouterModel[]> {
   const response = await fetch(`${endpoint.baseUrl}/models`, { signal, redirect: 'error', headers: { Authorization: `Bearer ${endpoint.apiKey}`, ...endpoint.headers } });
@@ -112,8 +121,12 @@ export async function listModelsForEndpoint(endpoint: CloudEndpoint, signal?: Ab
     error?: { message?: string };
   };
   if (!response.ok) throw new Error(safeProviderErrorText(payload, endpoint.apiKey) || 'Could not load models.');
+  const seen = new Set<string>();
   return (payload.data ?? [])
-    .filter((model): model is { id: string; name?: string } => Boolean(model.id))
-    .map(model => ({ id: model.id, name: model.name || model.id, analysisFit: 'standard' as const, reasoning: false }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .filter((model): model is { id: string; name?: string } => {
+      if (!model.id || !isChatModel(model.id) || seen.has(model.id)) return false;
+      seen.add(model.id);
+      return true;
+    })
+    .map(model => ({ id: model.id, name: model.name || model.id, analysisFit: 'standard' as const, reasoning: false }));
 }

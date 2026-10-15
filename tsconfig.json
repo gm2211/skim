@@ -9,6 +9,7 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "paths": {
+      "@byos/commands": ["./shared/byos-commands/src/index.ts"],
       "@byos/core": ["./shared/byos-core/src/index.ts"],
       "@byos/providers": ["./shared/byos-providers/src/index.ts"],
       "@byos/react": ["./shared/byos-react/src/index.ts"],

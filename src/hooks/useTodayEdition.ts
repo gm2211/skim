@@ -21,6 +21,7 @@ function mergeLedesIntoCurrent(current: TodayEditionView | undefined, incoming: 
         lede_source_article_id: item.lede ? item.lede_source_article_id : next.lede_source_article_id,
         lede_source_evidence_hash: item.lede ? item.lede_source_evidence_hash : next.lede_source_evidence_hash,
         editorial: item.editorial ?? next.editorial,
+        editorial_error: item.editorial ?? next.editorial ? null : (next.editorial_error ?? item.editorial_error ?? null),
       } : item;
     }),
   };

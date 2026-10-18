@@ -217,6 +217,9 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
           <span className="today-story-skeleton-bar" />
         </div>
       )}
+      {!isWritingSummary && !summary && item.editorial_error && (
+        <p className="today-summary-failed" role="note">Not summarized: {item.editorial_error}</p>
+      )}
       {body && item.editorial && !brief && (
         <p className="today-summary-kind">AI summary · Based on {item.editorial.sources.length} of {members.length} {members.length === 1 ? "report" : "reports"}</p>
       )}

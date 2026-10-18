@@ -90,6 +90,7 @@ export function TodayEditionPane() {
 
   const totalCount = data?.total_count ?? 0;
   const missingSummaries = items.filter((item) => !item.editorial?.summary.trim()).length;
+  const failureReasons = [...new Set(items.flatMap((item) => item.editorial?.summary.trim() || !item.editorial_error ? [] : [item.editorial_error]))].join("\n");
   const consumedCount = data?.consumed_count ?? 0;
   const isFullyConsumed = totalCount > 0 && consumedCount === totalCount;
   const progressPct = totalCount > 0 ? Math.round((consumedCount / totalCount) * 100) : 0;
@@ -171,7 +172,7 @@ export function TodayEditionPane() {
               {totalCount} {totalCount === 1 ? "story" : "stories"}
               {themes.length > 0 && <> · {themes.length} {themes.length === 1 ? "theme" : "themes"}</>}
               {canRetryLedes && missingSummaries > 0 && <>
-                {" · "}<span className="today-dateline-failed">{missingSummaries} not summarized</span>
+                {" · "}<span className="today-dateline-failed" title={failureReasons || undefined}>{missingSummaries} not summarized</span>
                 <button type="button" className="today-dateline-retry" onClick={retryLedes} aria-label="Retry summaries">Retry</button>
                 <button type="button" className="today-dateline-retry" onClick={openAiSettings}>AI settings</button>
               </>}

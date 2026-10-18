@@ -780,6 +780,21 @@ describe("Today summary retries", () => {
     expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();
   });
 
+  it("says why a story could not be summarized and clears it once a retry writes the summary", async () => {
+    enableAI();
+    const view = makeView([makeItem({ snapshot_title: "Stubborn story" })]);
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
+    const reason = "The AI's summary didn't quote its reports exactly, so it wasn't kept.";
+    vi.mocked(commands.generateTodayEditorial).mockResolvedValueOnce(makeView([makeItem({ snapshot_title: "Stubborn story", editorial_error: reason })]));
+    vi.mocked(commands.generateTodayEditorial).mockResolvedValueOnce(makeView([makeItem({ snapshot_title: "Stubborn story", editorial: editorial("Finally summarized.") })]));
+    renderPane(true);
+    expect(await screen.findByText(`Not summarized: ${reason}`)).toBeVisible();
+    expect(screen.getByText("1 not summarized")).toHaveAttribute("title", reason);
+    await userEvent.click(screen.getByRole("button", { name: "Retry summaries" }));
+    expect(await screen.findByText("Finally summarized.")).toBeVisible();
+    expect(screen.queryByText(/Not summarized:/)).not.toBeInTheDocument();
+  });
+
   it.each(["failure", "partial"])("allows explicit retry after %s without automatic loops or regenerating", async (outcome) => {
     enableAI();
     const view = makeView([makeItem({})]);

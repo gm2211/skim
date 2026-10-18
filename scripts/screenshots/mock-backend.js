@@ -406,14 +406,21 @@
     // __SKIM_SLOW_EDITORIAL__ (ms) shows the page while summaries are still being written.
     get_or_generate_today_edition: (args) => {
       const view = todayView(args);
-      if (!window.__SKIM_SLOW_EDITORIAL__) return view;
-      return { ...view, items: view.items.map((item) => ({ ...item, editorial: null })) };
+      const failed = window.__SKIM_UNSUMMARIZED__ || 0;
+      if (!window.__SKIM_SLOW_EDITORIAL__ && !failed) return view;
+      return { ...view, items: view.items.map((item, index) => window.__SKIM_SLOW_EDITORIAL__ || (index >= 1 && index <= failed) ? { ...item, editorial: null } : item) };
     },
     list_today_edition_items: ({ editionId } = {}) => pageItems(editionId?.startsWith("ed-week-") ? Number(editionId.slice(8)) : 0),
     generate_today_ledes: () => todayView(),
+    // __SKIM_UNSUMMARIZED__ (n) leaves stories 2..n+1 without a summary, each saying why.
     generate_today_editorial: async () => {
       if (window.__SKIM_SLOW_EDITORIAL__) await new Promise((resolve) => setTimeout(resolve, window.__SKIM_SLOW_EDITORIAL__));
-      return todayView();
+      const view = todayView();
+      const failed = window.__SKIM_UNSUMMARIZED__ || 0;
+      if (!failed) return view;
+      const reasons = ["The AI's summary didn't quote its reports exactly, so it wasn't kept.", "Its reports have no readable text to summarize."];
+      return { ...view, items: view.items.map((item, index) => index >= 1 && index <= failed
+        ? { ...item, editorial: null, editorial_error: reasons[(index - 1) % reasons.length] } : item) };
     },
     // Report images are opt-in so a run shows the no-image page by default.
     get_today_story_image: ({ articleIds }) => (window.__SKIM_TODAY_IMAGES__ || {})[articleIds[0]] ?? null,

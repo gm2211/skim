@@ -378,6 +378,8 @@ export interface TodayEditorial {
 
 export interface TodayEditionItem {
   editorial?: TodayEditorial | null;
+  /** Why the latest try couldn't write this story's summary; only set while this session's writer reports it. */
+  editorial_error?: string | null;
   edition_id: string;
   story_id: string;
   story_revision_number: number;

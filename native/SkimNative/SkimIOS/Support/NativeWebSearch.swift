@@ -20,57 +20,92 @@ enum NativeWebSearch {
     static func run(query: String, maxResults: Int) async throws -> [SearchResult] {
         let clampedMax = max(1, min(10, maxResults))
 
-        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            throw URLError(.badURL)
-        }
-        let urlString = "https://html.duckduckgo.com/html/?q=\(encoded)"
-        guard let url = URL(string: urlString) else {
+        // POST, not GET: DuckDuckGo answers a GET of /html/?q= with its 202
+        // bot-check page from many IPs while still serving the form POST.
+        let allowed = CharacterSet(
+            charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+        )
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: allowed),
+              let url = URL(string: "https://html.duckduckgo.com/html/") else {
             throw URLError(.badURL)
         }
 
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data("q=\(encoded)".utf8)
         request.setValue(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
             forHTTPHeaderField: "User-Agent"
         )
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await URLSession.shared.data(for: request)
         let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1) ?? ""
 
-        var results = parseDDGResults(html)
-        results = Array(results.prefix(clampedMax))
-        return results
+        let results = parseDDGResults(html)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 200
+        if results.isEmpty && isDDGChallenge(status: status, html: html) {
+            // An empty list reads to the model as "the web has nothing on this";
+            // a bot check is a transient block it should report as such.
+            throw SearchBlocked()
+        }
+        return Array(results.prefix(clampedMax))
+    }
+
+    struct SearchBlocked: LocalizedError {
+        var errorDescription: String? {
+            "DuckDuckGo blocked the search with a bot check; try again shortly"
+        }
+    }
+
+    /// DuckDuckGo answers rapid or bot-like requests with a 202 and an
+    /// "anomaly" captcha page instead of results.
+    static func isDDGChallenge(status: Int, html: String) -> Bool {
+        status == 202 || html.contains("anomaly-modal") || html.contains("bots use DuckDuckGo")
     }
 
     // MARK: - Private parsing helpers
 
-    private static func parseDDGResults(_ html: String) -> [SearchResult] {
+    static func parseDDGResults(_ html: String) -> [SearchResult] {
         var results: [SearchResult] = []
 
-        for chunk in html.components(separatedBy: "class=\"result__body") {
+        // Each result has exactly one `result__a` title link, so walk those
+        // anchors rather than the result containers. The container's class
+        // list is "links_main links_deep result__body", which a split on
+        // `class="result__body` never matched: the whole page became one
+        // chunk and only the first result survived.
+        var starts: [String.Index] = []
+        var cursor = html.startIndex
+        while let r = html.range(of: "class=\"result__a\"", range: cursor..<html.endIndex) {
+            starts.append(r.lowerBound)
+            cursor = r.upperBound
+        }
+
+        for (n, start) in starts.enumerated() {
             if results.count >= 10 { break }
+            let end = n + 1 < starts.count ? starts[n + 1] : html.endIndex
+            // Back up to the anchor's `<` so href is found whichever order
+            // the attributes come in.
+            let tagStart = html[..<start].lastIndex(of: "<") ?? start
+            let chunk = String(html[tagStart..<end])
 
             // --- title + URL ---
-            guard let aRange = chunk.range(of: "class=\"result__a\"") else { continue }
-            let afterA = String(chunk[aRange.lowerBound...])
-            guard let href = extractAttr(afterA, attr: "href"),
-                  let title = extractTagText(afterA, tag: "a") else { continue }
+            guard let href = extractAttr(chunk, attr: "href"),
+                  let title = extractTagText(chunk, tag: "a") else { continue }
 
             // Unwrap DDG redirect: …?uddg=<percent-encoded-url>&…
             let actualURL: String
-            if href.contains("uddg=") {
-                if let uddgRange = href.range(of: "uddg=") {
-                    let afterUddg = String(href[uddgRange.upperBound...])
-                    let raw = afterUddg.components(separatedBy: "&").first ?? afterUddg
-                    actualURL = raw.removingPercentEncoding ?? raw
-                } else {
-                    actualURL = href
-                }
+            if let uddgRange = href.range(of: "uddg=") {
+                let afterUddg = String(href[uddgRange.upperBound...])
+                let raw = afterUddg.components(separatedBy: "&").first ?? afterUddg
+                actualURL = raw.removingPercentEncoding ?? raw
             } else {
                 actualURL = href
             }
 
-            guard actualURL.hasPrefix("http") else { continue }
+            // Sponsored results link through duckduckgo.com/y.js, not uddg.
+            guard actualURL.hasPrefix("http"), !isDDGInternal(actualURL) else { continue }
+            guard !results.contains(where: { $0.url == actualURL }) else { continue }
 
             // --- snippet ---
             let snippet: String
@@ -81,8 +116,6 @@ enum NativeWebSearch {
                 snippet = ""
             }
 
-            guard !title.isEmpty else { continue }
-
             results.append(SearchResult(
                 title: htmlEntitiesDecode(title),
                 url: actualURL,
@@ -91,6 +124,11 @@ enum NativeWebSearch {
         }
 
         return results
+    }
+
+    private static func isDDGInternal(_ url: String) -> Bool {
+        guard let host = URL(string: url)?.host?.lowercased() else { return false }
+        return host == "duckduckgo.com" || host.hasSuffix(".duckduckgo.com")
     }
 
     /// Extract the value of `attr="…"` from the beginning of `html`.

@@ -925,23 +925,35 @@ pub async fn run_web_search(query: &str, max_results: usize) -> Result<Vec<Searc
         .build()
         .map_err(|e| e.to_string())?;
 
-    let url = format!(
-        "https://html.duckduckgo.com/html/?q={}",
-        urlencoding::encode(query)
-    );
-
-    let html = client
-        .get(&url)
+    // POST, not GET: DuckDuckGo answers a GET of /html/?q= with its 202
+    // bot-check page from many IPs while still serving the form POST.
+    let response = client
+        .post("https://html.duckduckgo.com/html/")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(format!("q={}", urlencoding::encode(query)))
         .send()
         .await
-        .map_err(|e| format!("Search request failed: {}", e))?
+        .map_err(|e| format!("Search request failed: {}", e))?;
+    let status = response.status();
+    let html = response
         .text()
         .await
         .map_err(|e| format!("Failed to read search response: {}", e))?;
 
     let mut results = parse_ddg_results(&html);
+    if results.is_empty() && is_ddg_challenge(status.as_u16(), &html) {
+        // An empty list reads to the model as "the web has nothing on this";
+        // a bot check is a transient block it should report as such.
+        return Err("DuckDuckGo blocked the search with a bot check; try again shortly".into());
+    }
     results.truncate(max_results);
     Ok(results)
+}
+
+/// DuckDuckGo answers rapid or bot-like requests with a 202 and an
+/// "anomaly" captcha page instead of results.
+fn is_ddg_challenge(status: u16, html: &str) -> bool {
+    status == 202 || html.contains("anomaly-modal") || html.contains("bots use DuckDuckGo")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -952,58 +964,75 @@ pub struct SearchResult {
 }
 
 fn parse_ddg_results(html: &str) -> Vec<SearchResult> {
-    let mut results = Vec::new();
+    const ANCHOR: &str = "class=\"result__a\"";
+    let mut results: Vec<SearchResult> = Vec::new();
 
-    // Parse DuckDuckGo HTML results - they use class="result__a" for links
-    // and class="result__snippet" for snippets
-    for chunk in html.split("class=\"result__body") {
+    // Each result has exactly one `result__a` title link, so walk those
+    // anchors rather than the result containers. The container's class list
+    // is "links_main links_deep result__body", which a split on
+    // `class="result__body` never matched: the whole page became one chunk
+    // and only the first result survived.
+    let starts: Vec<usize> = html.match_indices(ANCHOR).map(|(i, _)| i).collect();
+    for (n, &start) in starts.iter().enumerate() {
         if results.len() >= 10 {
             break;
         }
+        let end = starts.get(n + 1).copied().unwrap_or(html.len());
+        // The anchor's own tag opens before the class attribute; back up to
+        // its `<` so href is found whichever order the attributes come in.
+        let tag_start = html[..start].rfind('<').unwrap_or(start);
+        let chunk = &html[tag_start..end];
 
-        // Extract title and URL from result__a
-        let title_url = if let Some(a_start) = chunk.find("class=\"result__a\"") {
-            let after_a = &chunk[a_start..];
-            let href = extract_attr(after_a, "href");
-            let title = extract_tag_text(after_a, "a");
-            (title, href)
-        } else {
+        let (Some(title), Some(url)) = (extract_tag_text(chunk, "a"), extract_attr(chunk, "href"))
+        else {
             continue;
         };
 
-        // Extract snippet
-        let snippet = if let Some(s_start) = chunk.find("class=\"result__snippet\"") {
-            let after_s = &chunk[s_start..];
-            extract_tag_text(after_s, "a")
-                .or_else(|| extract_inner_text(after_s))
-                .unwrap_or_default()
+        let snippet = chunk
+            .find("class=\"result__snippet\"")
+            .map(|s_start| {
+                let after_s = &chunk[s_start..];
+                extract_tag_text(after_s, "a")
+                    .or_else(|| extract_inner_text(after_s))
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+
+        // DDG wraps URLs in a redirect - extract the actual URL
+        let actual_url = if url.contains("uddg=") {
+            url.split("uddg=")
+                .nth(1)
+                .and_then(|u| u.split('&').next())
+                .map(|u| urlencoding::decode(u).unwrap_or_default().into_owned())
+                .unwrap_or(url)
         } else {
-            String::new()
+            url
         };
 
-        if let (Some(title), Some(url)) = (title_url.0, title_url.1) {
-            // DDG wraps URLs in a redirect - extract the actual URL
-            let actual_url = if url.contains("uddg=") {
-                url.split("uddg=")
-                    .nth(1)
-                    .and_then(|u| u.split('&').next())
-                    .map(|u| urlencoding::decode(u).unwrap_or_default().into_owned())
-                    .unwrap_or(url)
-            } else {
-                url
-            };
-
-            if !title.is_empty() && actual_url.starts_with("http") {
-                results.push(SearchResult {
-                    title: html_entities_decode(&title),
-                    url: actual_url,
-                    snippet: html_entities_decode(&snippet),
-                });
-            }
+        // Sponsored results link through duckduckgo.com/y.js, not uddg.
+        if title.is_empty() || !actual_url.starts_with("http") || is_ddg_internal(&actual_url) {
+            continue;
         }
+        if results.iter().any(|r| r.url == actual_url) {
+            continue;
+        }
+        results.push(SearchResult {
+            title: html_entities_decode(&title),
+            url: actual_url,
+            snippet: html_entities_decode(&snippet),
+        });
     }
 
     results
+}
+
+fn is_ddg_internal(url: &str) -> bool {
+    let host = url
+        .split("://")
+        .nth(1)
+        .and_then(|rest| rest.split(['/', '?', '#']).next())
+        .unwrap_or("");
+    host == "duckduckgo.com" || host.ends_with(".duckduckgo.com")
 }
 
 fn extract_attr(html: &str, attr: &str) -> Option<String> {
@@ -1102,6 +1131,65 @@ pub(crate) fn resolve_chat_settings(ai: &AiSettings) -> AiSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Trimmed from html.duckduckgo.com: one sponsored result, then organic
+    /// results whose containers carry "links_main links_deep result__body".
+    const DDG_RESULTS_HTML: &str = r#"
+<div class="result results_links results_links_deep result--ad ">
+  <div class="links_main links_deep result__body">
+    <h2 class="result__title"><a rel="nofollow" class="result__a" href="https://duckduckgo.com/y.js?ad_domain=example.com&amp;ad_provider=bing">Cheap <b>VPS</b> Hosting</a></h2>
+    <a class="result__snippet" href="https://duckduckgo.com/y.js?ad_domain=example.com">Sponsored</a>
+  </div>
+</div>
+<div class="result results_links results_links_deep web-result ">
+  <div class="links_main links_deep result__body">
+    <h2 class="result__title"><a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.digitalocean.com%2Fpricing%2Fdroplets&amp;rut=abc">Droplet Pricing | <b>DigitalOcean</b></a></h2>
+    <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.digitalocean.com%2Fpricing%2Fdroplets">Basic Droplets start at $4/mo &amp; scale up.</a>
+  </div>
+</div>
+<div class="result results_links results_links_deep web-result ">
+  <div class="links_main links_deep result__body">
+    <h2 class="result__title"><a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.digitalocean.com%2Fpricing%2Fkubernetes&amp;rut=def">Kubernetes Pricing | DigitalOcean</a></h2>
+    <a class="result__snippet" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.digitalocean.com%2Fpricing%2Fkubernetes">The control plane is free; you pay for worker nodes.</a>
+  </div>
+</div>
+<div class="result results_links results_links_deep web-result ">
+  <div class="links_main links_deep result__body">
+    <h2 class="result__title"><a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.digitalocean.com%2Fpricing%2Fdroplets&amp;rut=ghi">Droplet Pricing (duplicate)</a></h2>
+  </div>
+</div>
+<div class="result results_links results_links_deep web-result ">
+  <div class="links_main links_deep result__body">
+    <h2 class="result__title"><a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.org%2Fvps-compare&amp;rut=jkl">VPS price comparison</a></h2>
+  </div>
+</div>
+"#;
+
+    #[test]
+    fn ddg_parser_returns_every_organic_result() {
+        let results = parse_ddg_results(DDG_RESULTS_HTML);
+        let urls: Vec<&str> = results.iter().map(|r| r.url.as_str()).collect();
+        assert_eq!(
+            urls,
+            vec![
+                "https://www.digitalocean.com/pricing/droplets",
+                "https://www.digitalocean.com/pricing/kubernetes",
+                "https://example.org/vps-compare",
+            ]
+        );
+        assert_eq!(results[0].title, "Droplet Pricing | DigitalOcean");
+        assert_eq!(results[0].snippet, "Basic Droplets start at $4/mo & scale up.");
+        assert_eq!(results[2].snippet, "");
+    }
+
+    #[test]
+    fn ddg_bot_check_is_detected() {
+        let page = r#"<div class="anomaly-modal__title">Unfortunately, bots use DuckDuckGo too.</div>"#;
+        assert!(parse_ddg_results(page).is_empty());
+        assert!(is_ddg_challenge(200, page));
+        assert!(is_ddg_challenge(202, ""));
+        assert!(!is_ddg_challenge(200, DDG_RESULTS_HTML));
+    }
 
     #[test]
     fn chat_override_uses_its_own_saved_local_model() {

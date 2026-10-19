@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9167BE3C78659C05031D238 /* SettingsSheet.swift */; };
+		10732BECDD3CCAF0FA28F79B /* NativeWebSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A4E78386B28FBBCC93D3318 /* NativeWebSearchTests.swift */; };
 		17C51EA54BB8D84F05DA92F4 /* NativeXAIOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0272CBDAB77DD88C76A52E91 /* NativeXAIOAuth.swift */; };
 		18CED8EE0C6AA5C517B1D143 /* AIInboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE465769D153A0A0D17504 /* AIInboxView.swift */; };
 		1A1DE7D0E9302121D55DB390 /* ArticleDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */; };
@@ -99,6 +100,7 @@
 		8387834F563CFA86721EBF1D /* LegalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegalView.swift; sourceTree = "<group>"; };
 		89737FFF993802E562860605 /* AIDisclaimerLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIDisclaimerLabel.swift; sourceTree = "<group>"; };
 		8A1B88832F456973EA297F0F /* NativeWebSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeWebSearch.swift; sourceTree = "<group>"; };
+		8A4E78386B28FBBCC93D3318 /* NativeWebSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeWebSearchTests.swift; sourceTree = "<group>"; };
 		8E9B482B07ABFB0BD983D016 /* TodayEditionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayEditionView.swift; sourceTree = "<group>"; };
 		911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkimMacOSApp.swift; sourceTree = "<group>"; };
 		959A59B5B27E8C969D084B8F /* AIBootDisclaimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIBootDisclaimerView.swift; sourceTree = "<group>"; };
@@ -253,6 +255,7 @@
 				BFC1D459A8E191D2264A703F /* NativeAIDegenerateRepetitionTests.swift */,
 				1D15E5B261AE4E05EEAE52DC /* NativeAIGuardrailRefusalTests.swift */,
 				13F4F0168DBE15FBFB319E12 /* NativeAIModelsResponseTests.swift */,
+				8A4E78386B28FBBCC93D3318 /* NativeWebSearchTests.swift */,
 				2491A6F269A3E3AB095AC9AD /* Fixtures */,
 			);
 			path = SkimIOSTests;
@@ -452,6 +455,7 @@
 				BCE83B6AED9AC4923D1F9A6D /* NativeAIDegenerateRepetitionTests.swift in Sources */,
 				AFD473138D9923FB717FE9E2 /* NativeAIGuardrailRefusalTests.swift in Sources */,
 				86AFEB9F2A2239BCDF6EFDF1 /* NativeAIModelsResponseTests.swift in Sources */,
+				10732BECDD3CCAF0FA28F79B /* NativeWebSearchTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

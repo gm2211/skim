@@ -84,6 +84,10 @@ behaviors:
       A web source chip whose title is longer than the chat bubble truncates with an ellipsis and
       stays inside the bubble, so it never widens the chat (Giulio, 2026-10-14: "Chat body width
       sligthly messed up by long source - maybe ellipses?").
+      A search returns every organic result DuckDuckGo lists (up to the requested count), skipping
+      sponsored and duplicate links, and a DuckDuckGo bot check is reported as a failed search
+      rather than as no results (Giulio, 2026-10-19: "consistently only finds one result, bug
+      with tool?").
   - id: answer-first-on-small-models
     description: >-
       On-device models answer first, stay grounded in exact source passages, and drop chatbot

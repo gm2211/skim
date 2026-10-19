@@ -20,15 +20,20 @@ enum NativeWebSearch {
     static func run(query: String, maxResults: Int) async throws -> [SearchResult] {
         let clampedMax = max(1, min(10, maxResults))
 
-        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            throw URLError(.badURL)
-        }
-        let urlString = "https://html.duckduckgo.com/html/?q=\(encoded)"
-        guard let url = URL(string: urlString) else {
+        // POST, not GET: DuckDuckGo answers a GET of /html/?q= with its 202
+        // bot-check page from many IPs while still serving the form POST.
+        let allowed = CharacterSet(
+            charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+        )
+        guard let encoded = query.addingPercentEncoding(withAllowedCharacters: allowed),
+              let url = URL(string: "https://html.duckduckgo.com/html/") else {
             throw URLError(.badURL)
         }
 
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data("q=\(encoded)".utf8)
         request.setValue(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
             forHTTPHeaderField: "User-Agent"

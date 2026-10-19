@@ -925,13 +925,12 @@ pub async fn run_web_search(query: &str, max_results: usize) -> Result<Vec<Searc
         .build()
         .map_err(|e| e.to_string())?;
 
-    let url = format!(
-        "https://html.duckduckgo.com/html/?q={}",
-        urlencoding::encode(query)
-    );
-
+    // POST, not GET: DuckDuckGo answers a GET of /html/?q= with its 202
+    // bot-check page from many IPs while still serving the form POST.
     let response = client
-        .get(&url)
+        .post("https://html.duckduckgo.com/html/")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(format!("q={}", urlencoding::encode(query)))
         .send()
         .await
         .map_err(|e| format!("Search request failed: {}", e))?;

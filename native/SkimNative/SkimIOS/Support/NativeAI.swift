@@ -3890,6 +3890,9 @@ struct AIChatSheet: View {
                         .padding(18)
                     }
                     .scrollDismissesKeyboard(.interactively)
+                    // A solid edge under the Close and model buttons, so a
+                    // scrolled-up question doesn't run beneath them.
+                    .chatHardTopScrollEdge()
                     .simultaneousGesture(TapGesture().onEnded { focused = false })
                     .onChange(of: messages.last?.id) { _, _ in
                         scrollToLatest(proxy)
@@ -4653,5 +4656,16 @@ private extension String {
         let words = split(whereSeparator: { $0.isWhitespace || $0.isNewline })
         guard words.count > maxWords else { return self }
         return words.prefix(maxWords).joined(separator: " ") + "..."
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func chatHardTopScrollEdge() -> some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            scrollEdgeEffectStyle(.hard, for: .top)
+        } else {
+            self
+        }
     }
 }

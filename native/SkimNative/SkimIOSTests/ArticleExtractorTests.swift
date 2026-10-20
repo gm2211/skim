@@ -177,6 +177,27 @@ struct ArticleExtractorTests {
             try ArticleExtractor.extract(from: html, baseURL: baseURL)
         }
     }
+
+    /// A category bar of link-only list items before the story (ipinfo.io's
+    /// blog) is a site menu and never leads the reader; link lists after the
+    /// story starts are kept.
+    @Test func testLeadingLinkOnlyListItemsAreDropped() throws {
+        let story = String(repeating: "Danfoss refrigeration dashboards in French supermarkets were reachable online for months. ", count: 3)
+        let html = """
+        <html><body><main>
+        <ul><li><a href="/blog/ip-data-fundamentals">IP Data Fundamentals</a></li>
+        <li><a href="/blog/ip-data-accuracy">IP Data Accuracy</a></li></ul>
+        <h1>France's Supermarket Fridges Were Vulnerable Online for Months</h1>
+        <p>\(story)</p>
+        <ul><li><a href="/related">Related: the 2025 login bypass</a></li></ul>
+        </main></body></html>
+        """
+        let text = try ArticleExtractor.extract(from: html, baseURL: URL(string: "https://ipinfo.io/blog/france-fridges-hack")!)
+        #expect(!text.contains("IP Data Fundamentals"))
+        #expect(!text.contains("IP Data Accuracy"))
+        #expect(text.hasPrefix("France's Supermarket Fridges"))
+        #expect(text.contains("Related: the 2025 login bypass"))
+    }
 }
 
 /// Dummy class used only to locate the test bundle via `Bundle(for:)`.

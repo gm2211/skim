@@ -107,7 +107,8 @@ behaviors:
     details: >-
       Swiping down on the conversation, tapping it, or the hide button beside the input dismisses
       the keyboard. When an answer arrives the conversation scrolls so the answer's top sits at
-      the top of the view; a sent question still scrolls to the bottom.
+      the top of the view; a sent question still scrolls to the bottom. Scrolled-up messages stop
+      at a solid edge below the Close and model buttons instead of running beneath them.
     source:
       text: >-
         I wanna be able to easily dismiss keyboard for easier reading. Also right after generation

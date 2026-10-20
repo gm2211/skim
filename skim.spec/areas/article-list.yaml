@@ -28,3 +28,7 @@ behaviors:
       offers Summarize and Open Link from the list.
   - id: optional-excerpts
     description: Desktop can show an excerpt under each article title (Appearance setting).
+  - id: aggregator-row-source
+    description: >-
+      On iOS a Hacker News, Lobsters or Reddit row names the site the story links to (ipinfo.io)
+      under its title, never the feed's "Comments" stub.

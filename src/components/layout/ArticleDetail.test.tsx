@@ -36,9 +36,10 @@ vi.mock("../../stores/uiStore", () => ({
 }));
 
 const articles: Record<string, Article> = {};
+const markReadMutate = vi.fn();
 vi.mock("../../hooks/useArticles", () => ({
   useArticle: (id: string | null) => ({ data: id ? articles[id] : undefined, refetch: vi.fn() }),
-  useMarkRead: () => ({ mutate: vi.fn() }),
+  useMarkRead: () => ({ mutate: markReadMutate }),
   useToggleStar: () => ({ mutate: vi.fn() }),
   useToggleRead: () => ({ mutate: vi.fn() }),
 }));
@@ -111,6 +112,32 @@ describe("ArticleDetail Reddit and Hacker News items", () => {
     render(<ArticleDetail />);
     await waitFor(() => expect(screen.getByTestId("aggregator-post")).toHaveAttribute("data-state", "ready"));
     expect(screen.getByTestId("aggregator-post")).toHaveTextContent("Story text.");
+  });
+});
+
+describe("ArticleDetail marking read", () => {
+  beforeEach(() => {
+    vi.mocked(getOrFetchReaderContent).mockResolvedValue({ html: "<p>Article</p>", raw_html: "" });
+  });
+
+  it("marks an unread article read when it opens, and leaves a read one alone", async () => {
+    articles.a = { ...article("a"), is_read: false };
+    const { unmount } = render(<ArticleDetail />);
+    await waitFor(() => expect(markReadMutate).toHaveBeenCalledWith(["a"], expect.anything()));
+    unmount();
+    markReadMutate.mockClear();
+    selectedArticleId = "b";
+    render(<ArticleDetail />);
+    await waitFor(() => expect(getOrFetchReaderContent).toHaveBeenCalledWith("b", expect.anything()));
+    expect(markReadMutate).not.toHaveBeenCalled();
+  });
+
+  it("says so in the reader when saving the read state fails", async () => {
+    articles.a = { ...article("a"), is_read: false };
+    markReadMutate.mockImplementation((_ids: string[], opts?: { onError?: (e: unknown) => void }) => opts?.onError?.("database is locked"));
+    render(<ArticleDetail />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't mark this article read: database is locked");
+    markReadMutate.mockReset();
   });
 });
 

@@ -111,7 +111,8 @@ fn cache_reader_evidence(
     if text.trim().is_empty() {
         return Err("No article text extracted".into());
     }
-    if let Ok(conn) = db.conn.lock() {
+    {
+        let conn = db.conn.lock().unwrap_or_else(|never| match never {});
         let existing = queries::get_reader_cache(&conn, article_id).ok().flatten();
         let existing_len = existing
             .as_ref()

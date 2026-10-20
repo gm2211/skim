@@ -23,7 +23,15 @@ behaviors:
       GitHub repos and users, Hacker News, Medium, Mastodon, Bluesky) and falls back to common paths
       (/feed, /rss, /atom.xml, ...) when nothing else turns up. Topics and search merge the built-in
       catalog (shared/feed-catalog.json) with Feedly's public, keyless feed search; the catalog
-      alone answers when Feedly is unreachable. Adding a website address by URL also resolves it to
+      alone answers when Feedly is unreachable. The catalog is generated, not hand-edited:
+      tools/feed-catalog/build.mjs probes every candidate in tools/feed-catalog/sources.json
+      (Skim's hand picks plus the CC0 plenaryapp/awesome-rss-feeds collection) with Skim's
+      User-Agent and keeps feeds that parse, are not podcasts, and posted within 365 days (hand
+      picks) or 120 days (imports); topics with fewer than 6 live feeds are left out. The October
+      2026 run kept 389 feeds in 24 topics out of 692 candidates. Giulio asked for this after
+      seeing the Programming topic: "where are these sourced, looks hardcoded and there are too
+      little - research how to properly source for discover" (Discover sources thread,
+      2026-10-20). Adding a website address by URL also resolves it to
       its first feed. OPML and Feedly import moved to an Import button in Discover's header. The
       original ask was "I'd like to have rss feed discovery and ability to easily add feeds like I
       can do on feedly" (Giulio, project chat, 2026-10-14).

@@ -683,6 +683,23 @@ private enum TopicLook {
         case "design": [Color(red: 0.96, green: 0.45, blue: 0.71), Color(red: 0.75, green: 0.09, blue: 0.36)]
         case "apple": [Color(red: 0.58, green: 0.64, blue: 0.72), Color(red: 0.20, green: 0.25, blue: 0.33)]
         case "gaming": [Color(red: 0.94, green: 0.27, blue: 0.27), Color(red: 0.50, green: 0.11, blue: 0.11)]
+        case "security": [Color(red: 0.39, green: 0.45, blue: 0.55), Color(red: 0.06, green: 0.46, blue: 0.43)]
+        case "android": [Color(red: 0.29, green: 0.87, blue: 0.50), Color(red: 0.08, green: 0.50, blue: 0.24)]
+        case "climate": [Color(red: 0.53, green: 0.94, blue: 0.67), Color(red: 0.09, green: 0.40, blue: 0.20)]
+        case "startups": [Color(red: 0.98, green: 0.57, blue: 0.24), Color(red: 0.76, green: 0.25, blue: 0.05)]
+        case "finance": [Color(red: 0.18, green: 0.83, blue: 0.75), Color(red: 0.05, green: 0.45, blue: 0.56)]
+        case "crypto": [Color(red: 0.98, green: 0.75, blue: 0.14), Color(red: 0.63, green: 0.38, blue: 0.03)]
+        case "photography": [Color(red: 0.66, green: 0.64, blue: 0.62), Color(red: 0.27, green: 0.25, blue: 0.24)]
+        case "film-tv": [Color(red: 0.97, green: 0.44, blue: 0.44), Color(red: 0.60, green: 0.11, blue: 0.11)]
+        case "music": [Color(red: 0.91, green: 0.47, blue: 0.98), Color(red: 0.53, green: 0.10, blue: 0.56)]
+        case "books": [Color(red: 0.84, green: 0.65, blue: 0.42), Color(red: 0.49, green: 0.29, blue: 0.12)]
+        case "history": [Color(red: 0.77, green: 0.64, blue: 0.52), Color(red: 0.34, green: 0.33, blue: 0.31)]
+        case "food": [Color(red: 0.99, green: 0.65, blue: 0.65), Color(red: 0.76, green: 0.25, blue: 0.05)]
+        case "travel": [Color(red: 0.22, green: 0.74, blue: 0.97), Color(red: 0.01, green: 0.41, blue: 0.63)]
+        case "sports": [Color(red: 0.64, green: 0.90, blue: 0.21), Color(red: 0.25, green: 0.38, blue: 0.07)]
+        case "cars": [Color(red: 0.58, green: 0.77, blue: 0.99), Color(red: 0.12, green: 0.25, blue: 0.69)]
+        case "diy": [Color(red: 0.99, green: 0.73, blue: 0.45), Color(red: 0.60, green: 0.20, blue: 0.07)]
+        case "style": [Color(red: 0.98, green: 0.66, blue: 0.83), Color(red: 0.62, green: 0.09, blue: 0.30)]
         default: [SkimStyle.accent, Color(red: 0.12, green: 0.29, blue: 0.56)]
         }
     }
@@ -699,6 +716,23 @@ private enum TopicLook {
         case "design": "paintpalette"
         case "apple": "apple.logo"
         case "gaming": "gamecontroller"
+        case "security": "lock.shield"
+        case "android": "smartphone"
+        case "climate": "leaf"
+        case "startups": "chart.line.uptrend.xyaxis"
+        case "finance": "banknote"
+        case "crypto": "bitcoinsign.circle"
+        case "photography": "camera"
+        case "film-tv": "film"
+        case "music": "music.note"
+        case "books": "books.vertical"
+        case "history": "building.columns"
+        case "food": "fork.knife"
+        case "travel": "airplane"
+        case "sports": "sportscourt"
+        case "cars": "car"
+        case "diy": "hammer"
+        case "style": "tshirt"
         default: "dot.radiowaves.up.forward"
         }
     }

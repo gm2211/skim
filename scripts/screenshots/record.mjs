@@ -284,6 +284,7 @@ const main = async () => {
   const p = await ctx.newPage();
   p.on("pageerror", (e) => console.warn(`  ! ${e}`));
   if (process.env.DEBUG) p.on("framenavigated", (f) => console.log("nav", f.url()));
+  await p.addInitScript({ content: `window.__SKIM_CATALOG__ = ${await fs.readFile(path.join(ROOT, "shared/feed-catalog.json"), "utf8")};` });
   await p.addInitScript({ path: path.join(HERE, "fixtures.js") });
   await p.addInitScript({ path: path.join(HERE, "mock-backend.js") });
   await p.addInitScript(OVERLAY);

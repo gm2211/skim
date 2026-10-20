@@ -557,6 +557,20 @@ mod tests {
     }
 
     #[test]
+    fn catalog_topics_are_full_and_distinct() {
+        let topics = catalog();
+        assert!(topics.len() >= 20, "only {} topics", topics.len());
+        for topic in &topics {
+            assert!(topic.feeds.len() >= 6, "{} has {} feeds", topic.id, topic.feeds.len());
+            let mut urls: Vec<&str> = topic.feeds.iter().map(|f| f.url.as_str()).collect();
+            urls.sort();
+            urls.dedup();
+            assert_eq!(urls.len(), topic.feeds.len(), "{} repeats a feed", topic.id);
+            assert!(topic.feeds.iter().all(|f| !f.title.trim().is_empty()), "{} has an untitled feed", topic.id);
+        }
+    }
+
+    #[test]
     fn builds_preview_from_feed_bytes() {
         let rss = br#"<?xml version="1.0"?><rss version="2.0"><channel><title>Demo &amp; Co</title>
             <link>https://demo.example</link><description>About &lt;b&gt;things&lt;/b&gt;</description>

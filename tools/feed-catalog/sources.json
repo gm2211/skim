@@ -194,7 +194,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NYT > Technology",
+     "title": "NYT: Technology",
      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
      "site": "https://rss.nytimes.com",
      "description": "",
@@ -222,14 +222,14 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Stratechery by Ben Thompson",
+     "title": "Stratechery",
      "url": "http://stratechery.com/feed/",
      "site": "http://stratechery.com",
      "description": "On the business, strategy, and impact of technology.",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "The Keyword",
+     "title": "Google: The Keyword",
      "url": "https://www.blog.google/rss/",
      "site": "https://www.blog.google",
      "description": "The Keyword",
@@ -271,7 +271,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "www.theregister.com - Articles",
+     "title": "The Register: Security",
      "url": "https://www.theregister.com/headlines.rss",
      "site": "https://www.theregister.com",
      "description": "Articles from www.theregister.com",
@@ -550,7 +550,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Etsy Engineering | Code as Craft",
+     "title": "Etsy: Code as Craft",
      "url": "https://codeascraft.com/feed/atom/",
      "site": "https://codeascraft.com",
      "description": "The engineers who make Etsy make our living with a craft we love: software.",
@@ -620,7 +620,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Overflow - Buffer Resources",
+     "title": "Buffer: Overflow",
      "url": "https://buffer.com/resources/overflow/rss/",
      "site": "https://buffer.com",
      "description": "In-depth ideas and guides to social media & online marketing strategy, published by the team at Buffer",
@@ -760,21 +760,21 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "overreacted — A blog by Dan Abramov",
+     "title": "overreacted",
      "url": "https://overreacted.io/rss.xml",
      "site": "https://overreacted.io",
      "description": "A blog by Dan Abramov",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "programming",
+     "title": "r/programming",
      "url": "https://www.reddit.com/r/programming/.rss",
      "site": "https://www.reddit.com",
      "description": "Computer Programming",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "A List Apart: The Full Feed",
+     "title": "A List Apart",
      "url": "https://alistapart.com/main/feed/",
      "site": "https://alistapart.com",
      "description": "Articles for people who make web sites.",
@@ -799,13 +799,6 @@
      "url": "https://davidwalsh.name/feed",
      "site": "https://davidwalsh.name",
      "description": "A blog featuring tutorials about JavaScript, HTML5, AJAX, PHP, CSS, WordPress, and everything else development.",
-     "origin": "awesome-rss-feeds"
-    },
-    {
-     "title": "Sink In - Tech Learnings",
-     "url": "https://gosink.in/rss/",
-     "site": "https://gosink.in",
-     "description": "Sink In - Tech Learnings (Shah Code Exporters - FZCO)",
      "origin": "awesome-rss-feeds"
     }
    ]
@@ -1059,7 +1052,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Darknet – Hacking Tools, Hacker News & Cyber Security",
+     "title": "Darknet",
      "url": "http://feeds.feedburner.com/darknethackers",
      "site": "http://feeds.feedburner.com",
      "description": "Darknet is your best source for the latest hacking tools, hacker news, cyber security best practices, ethical…",
@@ -1087,7 +1080,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Latest news",
+     "title": "ZDNET: Security",
      "url": "https://www.zdnet.com/topic/security/rss.xml",
      "site": "https://www.zdnet.com",
      "description": "Most recent news",
@@ -1164,14 +1157,14 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "cybersecurity | TechCrunch",
+     "title": "TechCrunch: Cybersecurity",
      "url": "https://techcrunch.com/tag/cybersecurity/feed/",
      "site": "https://techcrunch.com",
      "description": "Startup and Technology News",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "www.theregister.com - Articles",
+     "title": "The Register: Security",
      "url": "http://www.theregister.co.uk/security/headlines.atom",
      "site": "http://www.theregister.co.uk",
      "description": "Articles from www.theregister.com",
@@ -1373,7 +1366,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Latest News - Apple Developer",
+     "title": "Apple Developer News",
      "url": "https://developer.apple.com/news/rss/news.rss",
      "site": "https://developer.apple.com",
      "description": "",
@@ -1415,7 +1408,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "The One And Only Blog Of Joe Fabisevich",
+     "title": "Joe Fabisevich",
      "url": "https://www.fabisevi.ch/feed.xml",
      "site": "https://www.fabisevi.ch",
      "description": "The personal website of the one and only Joe Fabisevich, and indie developer building Red Panda Club Inc.",
@@ -1498,7 +1491,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Android",
+     "title": "Google: Android",
      "url": "https://blog.google/products/android/rss",
      "site": "https://blog.google",
      "description": "Android",
@@ -1561,7 +1554,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Droid Life – Opinionated Android news.",
+     "title": "Droid Life",
      "url": "https://www.droid-life.com/feed",
      "site": "https://www.droid-life.com",
      "description": "Opinionated Android news.",
@@ -1575,7 +1568,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Latest from Android Central",
+     "title": "Android Central",
      "url": "http://feeds.androidcentral.com/androidcentral",
      "site": "http://feeds.androidcentral.com",
      "description": "All the latest content from the Android Central team",
@@ -1642,13 +1635,6 @@
      "url": "https://chrynan.codes/rss/",
      "site": "https://chrynan.codes",
      "description": "Software Development Blog",
-     "origin": "awesome-rss-feeds"
-    },
-    {
-     "title": "Company | The JetBrains Blog",
-     "url": "https://blog.jetbrains.com/blog/feed",
-     "site": "https://blog.jetbrains.com",
-     "description": "Developer Tools for Professionals and Teams",
      "origin": "awesome-rss-feeds"
     },
     {
@@ -1840,7 +1826,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "BBC News",
+     "title": "BBC News: Science",
      "url": "http://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
      "site": "http://feeds.bbci.co.uk",
      "description": "BBC News - Science & Environment",
@@ -1882,7 +1868,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NYT > Science",
+     "title": "NYT: Science",
      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Science.xml",
      "site": "https://rss.nytimes.com",
      "description": "",
@@ -1924,14 +1910,14 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Science",
+     "title": "Gizmodo: Science",
      "url": "https://gizmodo.com/tag/science/rss",
      "site": "https://gizmodo.com",
      "description": "The Future Is Here",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Science Latest",
+     "title": "Wired: Science",
      "url": "https://www.wired.com/feed/category/science/latest/rss",
      "site": "https://www.wired.com",
      "description": "Channel Description",
@@ -2063,7 +2049,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Space | The Guardian",
+     "title": "The Guardian: Space",
      "url": "https://www.theguardian.com/science/space/rss",
      "site": "https://www.theguardian.com",
      "description": "Latest news and features from theguardian.com, the world's leading liberal voice",
@@ -2080,7 +2066,7 @@
   },
   {
    "id": "climate",
-   "name": "Climate & Nature",
+   "name": "Climate & nature",
    "feeds": [
     {
      "title": "Inside Climate News",
@@ -2139,21 +2125,21 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Environment + Energy – The Conversation",
+     "title": "The Conversation: Environment",
      "url": "https://theconversation.com/au/environment/articles.atom",
      "site": "https://theconversation.com",
      "description": "",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Environment News, Earth News, Global Warming, Wild Life, Carbon Trading, Climate Business, Climate Change & Pollution News",
+     "title": "Times of India: Environment",
      "url": "https://timesofindia.indiatimes.com/rssfeeds/2647163.cms",
      "site": "https://timesofindia.indiatimes.com",
      "description": "World news on global warming, climate change, wildlife, pollution, carbon business and climate politics.",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Environment | The Guardian",
+     "title": "The Guardian: Environment",
      "url": "https://www.theguardian.com/us/environment/rss",
      "site": "https://www.theguardian.com",
      "description": "Latest environmental news, opinion and analysis from the Guardian.",
@@ -2174,7 +2160,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NYT > Climate and Environment",
+     "title": "NYT: Climate and Environment",
      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Climate.xml",
      "site": "https://rss.nytimes.com",
      "description": "",
@@ -2209,14 +2195,14 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "BLOG POSTS – Mark Avery",
+     "title": "Mark Avery",
      "url": "https://markavery.info/blog/feed/",
      "site": "https://markavery.info",
      "description": "Standing up for Nature",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Blog | Nature | PBS",
+     "title": "PBS Nature: Blog",
      "url": "https://www.pbs.org/wnet/nature/blog/feed/",
      "site": "https://www.pbs.org",
      "description": "The premiere natural history program on television.",
@@ -2279,7 +2265,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Stories Archives - Nature Canada",
+     "title": "Nature Canada",
      "url": "https://naturecanada.ca/category/news/blog/feed/",
      "site": "https://naturecanada.ca",
      "description": "Your voice for nature!",
@@ -2335,7 +2321,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Wildlife | The Guardian",
+     "title": "The Guardian: Wildlife",
      "url": "https://www.theguardian.com/environment/wildlife/rss",
      "site": "https://www.theguardian.com",
      "description": "Latest news and features from theguardian.com, the world's leading liberal voice",
@@ -2352,7 +2338,7 @@
   },
   {
    "id": "news",
-   "name": "World News",
+   "name": "World news",
    "feeds": [
     {
      "title": "BBC News: World",
@@ -2425,28 +2411,28 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "International: Top News And Analysis",
+     "title": "CNBC: International",
      "url": "https://www.cnbc.com/id/100727362/device/rss/rss.html",
      "site": "https://www.cnbc.com",
      "description": "CNBC International is the world leader for news on business, technology, China, trade, oil prices, the Middle East…",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NDTV News Search Records Found 1000",
+     "title": "NDTV: World",
      "url": "http://feeds.feedburner.com/ndtvnews-world-news",
      "site": "http://feeds.feedburner.com",
      "description": "NDTV.com provides the latest information from and in-depth coverage of India and the world.",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NYT > World News",
+     "title": "NYT: World News",
      "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
      "site": "https://rss.nytimes.com",
      "description": "",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Top stories - Google News",
+     "title": "Google News: Top Stories",
      "url": "https://news.google.com/rss",
      "site": "https://news.google.com",
      "description": "Google News",
@@ -2467,7 +2453,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "World News, Today World News, Latest International News, World Breaking News, Trending News of World - Times of India",
+     "title": "Times of India: World",
      "url": "https://timesofindia.indiatimes.com/rssfeeds/296589292.cms",
      "site": "https://timesofindia.indiatimes.com",
      "description": "World News Today: Read the latest world news headlines, Current International breaking news world wide.",
@@ -2543,7 +2529,7 @@
      "origin": "skim"
     },
     {
-     "title": "All News",
+     "title": "Investing.com News",
      "url": "https://www.investing.com/rss/news.rss",
      "site": "https://www.investing.com",
      "description": "",
@@ -2557,7 +2543,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Breaking News on Seeking Alpha",
+     "title": "Seeking Alpha",
      "url": "https://seekingalpha.com/market_currents.xml",
      "site": "https://seekingalpha.com",
      "description": "© seekingalpha.com. Use of this feed is limited to personal, non-commercial use and is governed by Seeking Alpha's…",
@@ -2585,14 +2571,14 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Forbes - Business",
+     "title": "Forbes: Business",
      "url": "https://www.forbes.com/business/feed/",
      "site": "https://www.forbes.com",
      "description": "Forbes - Business",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Fortune | FORTUNE",
+     "title": "Fortune",
      "url": "https://fortune.com/feed",
      "site": "https://fortune.com",
      "description": "Fortune 500 Daily & Breaking Business News",
@@ -2703,7 +2689,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Entrepreneur – Latest",
+     "title": "Entrepreneur",
      "url": "http://feeds.feedburner.com/entrepreneur/latest",
      "site": "http://feeds.feedburner.com",
      "description": "The latest small business tips and advice from Entrepreneur",
@@ -2759,7 +2745,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Product Hunt — The best new products, every day",
+     "title": "Product Hunt",
      "url": "https://www.producthunt.com/feed",
      "site": "https://www.producthunt.com",
      "description": "",
@@ -2818,7 +2804,7 @@
   },
   {
    "id": "finance",
-   "name": "Personal Finance",
+   "name": "Personal finance",
    "feeds": [
     {
      "title": "Afford Anything®",
@@ -2912,7 +2898,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Money Saving Mom®",
+     "title": "Money Saving Mom",
      "url": "https://moneysavingmom.com/feed/",
      "site": "https://moneysavingmom.com",
      "description": "Saving Families Money Since 2007",
@@ -2940,7 +2926,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Nerd's Eye View | Kitces.com",
+     "title": "Kitces: Nerd's Eye View",
      "url": "http://feeds.feedblitz.com/kitcesnerdseyeview&x=1",
      "site": "http://feeds.feedblitz.com",
      "description": "Commentary from Michael Kitces on Financial Planning News & Strategies",
@@ -3079,14 +3065,14 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Cointelegraph.com News",
+     "title": "Cointelegraph",
      "url": "https://cointelegraph.com/rss",
      "site": "https://cointelegraph.com",
      "description": "Cointelegraph covers fintech, blockchain and Bitcoin bringing you the latest crypto news and analyses on the future…",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "CryptoCurrency – Finance Magnates | Financial and business news",
+     "title": "Finance Magnates: Crypto",
      "url": "https://www.financemagnates.com/cryptocurrency/feed/",
      "site": "https://www.financemagnates.com",
      "description": "",
@@ -3226,7 +3212,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "cryptocurrency | TechCrunch",
+     "title": "TechCrunch: Cryptocurrency",
      "url": "https://techcrunch.com/tag/cryptocurrency/feed",
      "site": "https://techcrunch.com",
      "description": "Startup and Technology News",
@@ -3386,14 +3372,14 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Architecture news and projects | Dezeen",
+     "title": "Dezeen: Architecture",
      "url": "https://www.dezeen.com/architecture/feed/",
      "site": "https://www.dezeen.com",
      "description": "architecture and design magazine",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Design MilkArchitecture, Architectural Designs, and House Designs | Design Milk",
+     "title": "Design Milk: Architecture",
      "url": "https://design-milk.com/category/architecture/feed/",
      "site": "https://design-milk.com",
      "description": "Dedicated to modern design",
@@ -3421,14 +3407,14 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "architecture archives | designboom | architecture & design magazine",
+     "title": "designboom: Architecture",
      "url": "https://www.designboom.com/architecture/feed/",
      "site": "https://www.designboom.com",
      "description": "designboom magazine | your first source for architecture, design & art news",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "BLOG - decor8",
+     "title": "decor8",
      "url": "https://www.decor8blog.com/blog?format=rss",
      "site": "https://www.decor8blog.com",
      "description": "",
@@ -3442,7 +3428,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Design MilkInterior Design Ideas for Your Modern Home | Design Milk",
+     "title": "Design Milk: Interiors",
      "url": "https://design-milk.com/category/interior-design/feed/",
      "site": "https://design-milk.com",
      "description": "Dedicated to modern design",
@@ -3477,21 +3463,21 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Interior Design Ideas",
+     "title": "Home Designing",
      "url": "http://www.home-designing.com/feed",
      "site": "http://www.home-designing.com",
      "description": "Inspirational Interior Design Ideas",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Interior design | Dezeen",
+     "title": "Dezeen: Interior design",
      "url": "https://www.dezeen.com/interiors/feed/",
      "site": "https://www.dezeen.com",
      "description": "architecture and design magazine",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Latest from Ideal Home in News",
+     "title": "Ideal Home",
      "url": "https://www.idealhome.co.uk/feed",
      "site": "https://www.idealhome.co.uk",
      "description": "All the latest news content from the Ideal Home team",
@@ -3533,7 +3519,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Yatzer | Live Beautifully. Explore Endlessly.",
+     "title": "Yatzer",
      "url": "https://www.yatzer.com/rss.xml",
      "site": "https://www.yatzer.com",
      "description": "Since 2006, Yatzer has explored the many ways design shapes our lives,curating soulful interiors, visionary…",
@@ -3554,7 +3540,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "design archives | designboom | architecture & design magazine",
+     "title": "designboom: Design",
      "url": "https://www.designboom.com/design/feed",
      "site": "https://www.designboom.com",
      "description": "designboom magazine | your first source for architecture, design & art news",
@@ -3637,14 +3623,14 @@
      "origin": "skim"
     },
     {
-     "title": "Eurogamer.net Latest Articles Feed",
+     "title": "Eurogamer: Latest",
      "url": "https://www.eurogamer.net/?format=rss",
      "site": "https://www.eurogamer.net",
      "description": "This is a feed of the latest articles from Eurogamer.net.",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "GameSpot - All Content",
+     "title": "GameSpot",
      "url": "https://www.gamespot.com/feeds/mashup/",
      "site": "https://www.gamespot.com",
      "description": "GameSpot's Everything Feed! All the latest from GameSpot",
@@ -3679,7 +3665,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Steam RSS News Feed",
+     "title": "Steam News",
      "url": "https://store.steampowered.com/feeds/news.xml",
      "site": "https://store.steampowered.com",
      "description": "All Steam news, all the time!",
@@ -3700,7 +3686,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "TouchArcade - iPhone, iPad, Android Games Forum",
+     "title": "TouchArcade",
      "url": "https://toucharcade.com/community/forums/-/index.rss",
      "site": "https://toucharcade.com",
      "description": "iPhone and iPad Games and News",
@@ -3735,7 +3721,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Chess | The Guardian",
+     "title": "The Guardian: Chess",
      "url": "https://www.theguardian.com/sport/chess/rss",
      "site": "https://www.theguardian.com",
      "description": "Latest news and features from theguardian.com, the world's leading liberal voice",
@@ -3936,7 +3922,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "ComingSoon.net – Movie Trailers, TV & Streaming News, and More",
+     "title": "ComingSoon.net",
      "url": "https://www.comingsoon.net/feed",
      "site": "https://www.comingsoon.net",
      "description": "ComingSoon.net features the latest movie trailers and news, TV updates, video game reviews, anime releases, and more.",
@@ -3964,7 +3950,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Movies",
+     "title": "Bleeding Cool: Movies",
      "url": "https://www.bleedingcool.com/movies/feed/",
      "site": "https://www.bleedingcool.com",
      "description": "Comics, Movies, TV, Games",
@@ -3985,7 +3971,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "TVLine - All TV. No Interference. TV News & Spoilers by TVLine",
+     "title": "TVLine",
      "url": "https://tvline.com/feed/",
      "site": "https://tvline.com",
      "description": "Stay up to date with the latest TV news, previews, spoilers, casting updates, interviews, and more from TVLine.",
@@ -4275,7 +4261,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Kitchn | Inspiring cooks, nourishing homes",
+     "title": "Kitchn",
      "url": "https://www.thekitchn.com/main.rss",
      "site": "https://www.thekitchn.com",
      "description": "Inspiring cooks, nourishing homes",
@@ -4303,7 +4289,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NYT > Food",
+     "title": "NYT: Food",
      "url": "https://rss.nytimes.com/services/xml/rss/nyt/DiningandWine.xml",
      "site": "https://rss.nytimes.com",
      "description": "",
@@ -4379,7 +4365,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Everything Everywhere",
+     "title": "Everything Everywhere Travel",
      "url": "http://feeds2.feedburner.com/EverythingEverywhere/",
      "site": "http://feeds2.feedburner.com",
      "description": "Learn Something New Every Day!",
@@ -4400,7 +4386,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NYT > Travel",
+     "title": "NYT: Travel",
      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Travel.xml",
      "site": "https://rss.nytimes.com",
      "description": "",
@@ -4414,14 +4400,14 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "The Points Guy Articles",
+     "title": "The Points Guy: Articles",
      "url": "http://feeds.feedburner.com/thepointsguy",
      "site": "http://feeds.feedburner.com",
      "description": "The Points Guy Articles Feed",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Travel Blog -",
+     "title": "Nomadic Matt",
      "url": "https://www.nomadicmatt.com/travel-blog/feed/",
      "site": "https://www.nomadicmatt.com",
      "description": "Travel Better, Cheaper, Longer",
@@ -4435,7 +4421,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Travel | The Guardian",
+     "title": "The Guardian: Travel",
      "url": "https://www.theguardian.com/uk/travel/rss",
      "site": "https://www.theguardian.com",
      "description": "Latest travel news and reviews on UK and world holidays, travel guides to global destinations, city breaks, hotels…",
@@ -4476,7 +4462,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NYT > Sports",
+     "title": "NYT: Sports",
      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml",
      "site": "https://rss.nytimes.com",
      "description": "",
@@ -4490,28 +4476,28 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Sport | The Guardian",
+     "title": "The Guardian: Sport",
      "url": "https://www.theguardian.com/uk/sport/rss",
      "site": "https://www.theguardian.com",
      "description": "Latest Sport news, comment and analysis from the Guardian, the world's leading liberal voice",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Sports News - Latest Sports and Football News | Sky News",
+     "title": "Sky News: Sports",
      "url": "http://feeds.skynews.com/feeds/rss/sports.xml",
      "site": "http://feeds.skynews.com",
      "description": "The best sports coverage from around the world, covering: Football, Cricket, Golf, Rugby, WWE, Boxing, Tennis and…",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Sports News: Cricket Live Scorecard, Latest Cricket News, Football, NBA, NFL, WWE, NHL, MLB News & More",
+     "title": "Times of India: Sports",
      "url": "https://timesofindia.indiatimes.com/rssfeeds/4719148.cms",
      "site": "https://timesofindia.indiatimes.com",
      "description": "Get the latest sports news, live cricket scores and in-depth coverage of Cricket, Football, NBA, NFL, WWE, F1,…",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Sports | The Indian Express",
+     "title": "Indian Express: Sports",
      "url": "https://indianexpress.com/section/sports/feed/",
      "site": "https://indianexpress.com",
      "description": "Latest News Today, Breaking News, India News, Top Headlines",
@@ -4553,21 +4539,21 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Football News, Football Scores, Premier League, La Liga, ISL | The Hindu",
+     "title": "The Hindu: Football",
      "url": "https://www.thehindu.com/sport/football/feeder/default.rss",
      "site": "https://www.thehindu.com",
      "description": "Get Football News, Updates, Fixtures, Commentary &amp; Live Scores From Top Leagues Like The Premier League, La…",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Football | The Guardian",
+     "title": "The Guardian: Football",
      "url": "https://www.theguardian.com/football/rss",
      "site": "https://www.theguardian.com",
      "description": "Latest Football news, comment and analysis from the Guardian, the world's leading liberal voice",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NYT > Sports > Soccer",
+     "title": "NYT: Sports > Soccer",
      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Soccer.xml",
      "site": "https://rss.nytimes.com",
      "description": "",
@@ -4609,35 +4595,35 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Cricket News Today, Latest Cricket Updates, Cricket Live Score, Upcoming Matches | Times of India",
+     "title": "Times of India: Cricket",
      "url": "https://timesofindia.indiatimes.com/rssfeeds/54829575.cms",
      "site": "https://timesofindia.indiatimes.com",
      "description": "Latest and Breaking Cricket News: Check live cricket scores, schedule, results, scorecard, upcoming matches list and…",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Cricket News: Stories, Features, Interviews, Opinion, Reports | Wisden",
+     "title": "Wisden",
      "url": "https://www.wisden.com/feed",
      "site": "https://www.wisden.com",
      "description": "The independent voice of cricket",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Cricket news from ESPN Cricinfo.com",
+     "title": "ESPNcricinfo",
      "url": "http://www.espncricinfo.com/rss/content/story/feeds/0.xml",
      "site": "http://www.espncricinfo.com",
      "description": "Visit Cricinfo.com for up-to-the-minute cricket news, breaking cricket news, live cricket commentary, ball-by-ball…",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Cricket | The Guardian",
+     "title": "The Guardian: Cricket",
      "url": "https://www.theguardian.com/sport/cricket/rss",
      "site": "https://www.theguardian.com",
      "description": "Latest news and features from theguardian.com, the world's leading liberal voice",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Cricket | The Indian Express",
+     "title": "Indian Express: Cricket",
      "url": "https://indianexpress.com/section/sports/cricket/feed/",
      "site": "https://indianexpress.com",
      "description": "Latest News Today, Breaking News, India News, Top Headlines",
@@ -4658,7 +4644,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NDTV News Search Records Found 1000",
+     "title": "NDTV: Cricket",
      "url": "http://feeds.feedburner.com/ndtvsports-cricket",
      "site": "http://feeds.feedburner.com",
      "description": "NDTV.com provides the latest information from and in-depth coverage of India and the world.",
@@ -4735,7 +4721,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NYT > Sports > Tennis",
+     "title": "NYT: Sports > Tennis",
      "url": "https://rss.nytimes.com/services/xml/rss/nyt/Tennis.xml",
      "site": "https://rss.nytimes.com",
      "description": "",
@@ -4756,28 +4742,28 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Tennis News, Updates, Tennis Scores, ATP, WTA, Grand Slams | The Hindu",
+     "title": "The Hindu: Tennis",
      "url": "https://www.thehindu.com/sport/tennis/feeder/default.rss",
      "site": "https://www.thehindu.com",
      "description": "Find Tennis Results, Commentary, Highlights, Live Scores, Latest News From The ATP Tour, WTA Tour &amp; All The…",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Tennis | The Guardian",
+     "title": "The Guardian: Tennis",
      "url": "https://www.theguardian.com/sport/tennis/rss",
      "site": "https://www.theguardian.com",
      "description": "Latest news and features from theguardian.com, the world's leading liberal voice",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Tennis | The Indian Express",
+     "title": "Indian Express: Tennis",
      "url": "https://indianexpress.com/section/sports/tennis/feed/",
      "site": "https://indianexpress.com",
      "description": "Latest News Today, Breaking News, India News, Top Headlines",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "www.espn.com - TENNIS",
+     "title": "ESPN: Tennis",
      "url": "https://www.espn.com/espn/rss/tennis/news",
      "site": "https://www.espn.com",
      "description": "Latest TENNIS news from www.espn.com",
@@ -4853,7 +4839,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Latest Content - Car and Driver",
+     "title": "Car and Driver",
      "url": "https://www.caranddriver.com/rss/all.xml/",
      "site": "https://www.caranddriver.com",
      "description": "RSS feed for Latest Content - Car and Driver",
@@ -4867,7 +4853,7 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "The best vintage and classic cars for sale online | Bring a Trailer",
+     "title": "Bring a Trailer",
      "url": "https://bringatrailer.com/feed/",
      "site": "https://bringatrailer.com",
      "description": "Barn finds, rally cars, and needles in the haystack.",
@@ -4884,7 +4870,7 @@
   },
   {
    "id": "diy",
-   "name": "DIY & Making",
+   "name": "DIY & making",
    "feeds": [
     {
      "title": "Make:",
@@ -4963,35 +4949,35 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Fashion - ELLE",
+     "title": "ELLE: Fashion",
      "url": "https://www.elle.com/rss/fashion.xml/",
      "site": "https://www.elle.com",
      "description": "RSS feed for Fashion - ELLE",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Fashion | The Guardian",
+     "title": "The Guardian: Fashion",
      "url": "https://www.theguardian.com/fashion/rss",
      "site": "https://www.theguardian.com",
      "description": "The latest fashion news, advice and comment from the Guardian",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Fashionista Full",
+     "title": "Fashionista",
      "url": "https://fashionista.com/.rss/excerpt/",
      "site": "https://fashionista.com",
      "description": "Fashionista Full",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Latest from Who What Wear",
+     "title": "Who What Wear",
      "url": "https://www.whowhatwear.com/rss",
      "site": "https://www.whowhatwear.com",
      "description": "All the latest content from the Who What Wear team",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "NYT > Style",
+     "title": "NYT: Style",
      "url": "https://rss.nytimes.com/services/xml/rss/nyt/FashionandStyle.xml",
      "site": "https://rss.nytimes.com",
      "description": "",
@@ -5012,14 +4998,14 @@
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Beauty - ELLE",
+     "title": "ELLE: Beauty",
      "url": "https://www.elle.com/rss/beauty.xml/",
      "site": "https://www.elle.com",
      "description": "RSS feed for Beauty - ELLE",
      "origin": "awesome-rss-feeds"
     },
     {
-     "title": "Fashionista Full",
+     "title": "Fashionista",
      "url": "https://fashionista.com/.rss/excerpt/beauty",
      "site": "https://fashionista.com",
      "description": "Fashionista Full",

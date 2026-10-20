@@ -3,12 +3,15 @@
 //
 // Every candidate is fetched with Skim's own User-Agent. A feed makes the
 // catalog only when it answers, parses as RSS/Atom/JSON Feed, is mostly text
-// (not a podcast), and posted within the last MAX_AGE_DAYS. Hand-picked feeds
-// (origin "skim") lead each topic in their listed order; the rest follow by how
-// much they posted in the last 30 days. Every probe result lands in report.json.
+// (not a podcast), and posted recently: within PICK_MAX_AGE_DAYS for hand-picked
+// feeds (origin "skim"; a good blog that posts a few times a year is still worth
+// following) and IMPORT_MAX_AGE_DAYS for imported ones. Hand-picked feeds lead
+// each topic in their listed order; the rest follow by how much they posted in
+// the last 30 days. Every probe result lands in report.json.
 //
-//   node tools/feed-catalog/build.mjs            # probe and write both files
-//   node tools/feed-catalog/build.mjs --dry-run  # probe and print the summary only
+//   node tools/feed-catalog/build.mjs                 # probe and write both files
+//   node tools/feed-catalog/build.mjs --dry-run       # probe and print the summary only
+//   node tools/feed-catalog/build.mjs --reuse-report  # re-curate from report.json without probing
 
 import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -21,14 +24,18 @@ const REPORT = path.join(here, "report.json");
 const CATALOG = path.join(root, "shared/feed-catalog.json");
 
 const USER_AGENT = "Skim/0.1 RSS Reader";
-const MAX_AGE_DAYS = 120;
+const PICK_MAX_AGE_DAYS = 365;
+const IMPORT_MAX_AGE_DAYS = 120;
 const MIN_PER_TOPIC = 6;
+const MAX_PER_HOST = 2;
 const CONCURRENCY = 16;
 const TIMEOUT_MS = 20_000;
 const DAY = 86_400_000;
 
 const dryRun = process.argv.includes("--dry-run");
-const now = Date.now();
+const reuse = process.argv.includes("--reuse-report");
+const previous = reuse ? JSON.parse(await readFile(REPORT, "utf8")) : null;
+const now = reuse ? Date.parse(previous.generatedAt) : Date.now();
 
 function decode(s) {
   return s
@@ -97,7 +104,7 @@ async function probe(feed) {
     if (info.items === 0) return { ...out, verdict: "empty" };
     if (out.audioShare > 0.5) return { ...out, verdict: "podcast" };
     if (!newest) return { ...out, verdict: "undated" };
-    if (now - newest > MAX_AGE_DAYS * DAY) return { ...out, verdict: "stale" };
+    if (now - newest > PICK_MAX_AGE_DAYS * DAY) return { ...out, verdict: "stale" };
     if (newest - now > 2 * DAY) return { ...out, verdict: "future-dated" };
     return { ...out, verdict: "ok" };
   } catch (e) {
@@ -119,19 +126,42 @@ async function pool(items, worker) {
 
 const sources = JSON.parse(await readFile(SOURCES, "utf8"));
 const unique = [...new Map(sources.topics.flatMap((t) => t.feeds).map((f) => [f.url, f])).values()];
-console.error(`Probing ${unique.length} feeds…`);
+console.error(reuse ? `Re-curating ${unique.length} feeds from report.json…` : `Probing ${unique.length} feeds…`);
 const probed = new Map(unique.map((f, i) => [f.url, i]));
-const results = await pool(unique, probe);
+const reused = new Map(previous?.topics.flatMap((t) => t.feeds).map(({ title, url, origin, ...p }) => [url, p]) ?? []);
+const results = await pool(unique, async (f) => {
+  const p = reused.get(f.url) ?? (reuse ? { status: 0, verdict: "not probed" } : await probe(f));
+  // Older reports marked anything past the import cutoff stale; re-judge by date.
+  if (p.verdict === "stale" && p.newest && now - Date.parse(p.newest) <= PICK_MAX_AGE_DAYS * DAY) return { ...p, verdict: "ok" };
+  return p;
+});
 const resultFor = (url) => results[probed.get(url)];
+const fresh = (r) => {
+  const limit = r.origin === "skim" ? PICK_MAX_AGE_DAYS : IMPORT_MAX_AGE_DAYS;
+  return r.probe.verdict === "ok" && now - Date.parse(r.probe.newest) <= limit * DAY;
+};
 
 const topics = [];
-const report = { generatedAt: new Date(now).toISOString(), maxAgeDays: MAX_AGE_DAYS, userAgent: USER_AGENT, topics: [] };
+const report = { generatedAt: new Date(now).toISOString(), pickMaxAgeDays: PICK_MAX_AGE_DAYS, importMaxAgeDays: IMPORT_MAX_AGE_DAYS, userAgent: USER_AGENT, topics: [] };
 for (const topic of sources.topics) {
   const rows = topic.feeds.map((f) => ({ ...f, probe: resultFor(f.url) }));
-  const ok = rows.filter((r) => r.probe.verdict === "ok");
+  const ok = rows.filter(fresh);
   const picks = ok.filter((r) => r.origin === "skim");
   const rest = ok.filter((r) => r.origin !== "skim").sort((a, b) => b.probe.postsLast30Days - a.probe.postsLast30Days);
-  const feeds = [...picks, ...rest].map(({ title, url, site, description, probe }) => ({
+  // One feed per name, and at most MAX_PER_HOST imported feeds from one site, so
+  // a topic doesn't fill up with a single publisher's sections.
+  const names = new Set();
+  const hosts = new Map();
+  const distinct = [...picks, ...rest].filter((r) => {
+    const name = r.title.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    if (!name || names.has(name)) return false;
+    const host = new URL(r.probe.finalUrl || r.url).hostname.replace(/^www\./, "");
+    if (r.origin !== "skim" && (hosts.get(host) ?? 0) >= MAX_PER_HOST) return false;
+    names.add(name);
+    hosts.set(host, (hosts.get(host) ?? 0) + 1);
+    return true;
+  });
+  const feeds = distinct.map(({ title, url, site, description, probe }) => ({
     title,
     url,
     site,

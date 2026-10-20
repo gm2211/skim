@@ -22,6 +22,14 @@ behaviors:
       reference: Giulio, project chat, 2026-10-11
   - id: open-marks-read
     description: Opening an article marks it read.
+    details: >-
+      If saving the read state fails, the desktop reader says so under its toolbar instead of
+      leaving the unread dot with no explanation. A crash inside one database command does not
+      stop later commands from saving: the app keeps using its database rather than failing every
+      write until it is relaunched.
+    source:
+      text: articles not getting marked as read
+      reference: Giulio, project thread "Articles not marked read", 2026-10-20, desktop article list
   - id: reading-time-tracked
     description: >-
       Time spent reading an article is recorded as an engagement signal (desktop skips this when the

@@ -634,7 +634,7 @@ mod tests {
             INSERT INTO articles(id,feed_id,title,url,content_text,published_at,fetched_at,is_read,is_starred) VALUES
             ('a1','f','Rust async runtimes compared','https://x.test/rust','Tokio and smol benchmarks',100,100,0,0),
             ('a2','f','Gardening in October','https://x.test/garden','Bulbs and frost',200,200,1,1);").unwrap();
-        Database { conn: std::sync::Mutex::new(conn), data_dir: std::env::temp_dir() }
+        Database { conn: crate::db::DbConn::new(conn), data_dir: std::env::temp_dir() }
     }
 
     #[tokio::test]

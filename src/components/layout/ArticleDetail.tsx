@@ -368,7 +368,7 @@ export function ArticleDetail() {
   useReadingTimeTracker(selectedArticleId, sidebarView.type === "recent");
   const [showSummarizeMenu, setShowSummarizeMenu] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatAskAbout, setChatAskAbout] = useState<{ id: number; text: string } | null>(null);
+  const [chatAskAbout, setChatAskAbout] = useState<{ id: number; text: string; articleId: string } | null>(null);
   const readerContentRef = useRef<HTMLDivElement>(null);
   const [perArticleLength, setPerArticleLength] = useState<string | undefined>();
   const [perArticleTone, setPerArticleTone] = useState<string | undefined>();
@@ -1750,7 +1750,7 @@ export function ArticleDetail() {
                   <ReaderSelectionAsk
                     containerRef={readerContentRef}
                     onAsk={(text) => {
-                      setChatAskAbout((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
+                      setChatAskAbout((previous) => ({ id: (previous?.id ?? 0) + 1, text, articleId: article.id }));
                       setChatOpen(true);
                     }}
                   />

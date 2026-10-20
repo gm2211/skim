@@ -407,8 +407,8 @@
     get_or_generate_today_edition: (args) => {
       const view = todayView(args);
       const failed = window.__SKIM_UNSUMMARIZED__ || 0;
-      if (!window.__SKIM_SLOW_EDITORIAL__ && !failed) return view;
-      return { ...view, items: view.items.map((item, index) => window.__SKIM_SLOW_EDITORIAL__ || (index >= 1 && index <= failed) ? { ...item, editorial: null } : item) };
+      if (!window.__SKIM_SLOW_EDITORIAL__ && !failed && !window.__SKIM_NO_SUMMARIES__) return view;
+      return { ...view, items: view.items.map((item, index) => window.__SKIM_SLOW_EDITORIAL__ || window.__SKIM_NO_SUMMARIES__ || (index >= 1 && index <= failed) ? { ...item, editorial: null } : item) };
     },
     list_today_edition_items: ({ editionId } = {}) => pageItems(editionId?.startsWith("ed-week-") ? Number(editionId.slice(8)) : 0),
     generate_today_ledes: () => todayView(),
@@ -416,6 +416,8 @@
     generate_today_editorial: async () => {
       if (window.__SKIM_SLOW_EDITORIAL__) await new Promise((resolve) => setTimeout(resolve, window.__SKIM_SLOW_EDITORIAL__));
       const view = todayView();
+      // __SKIM_NO_SUMMARIES__ shows a page whose summaries were never written.
+      if (window.__SKIM_NO_SUMMARIES__) return { ...view, items: view.items.map((item) => ({ ...item, editorial: null })) };
       const failed = window.__SKIM_UNSUMMARIZED__ || 0;
       if (!failed) return view;
       const reasons = ["The AI's summary didn't quote its reports exactly, so it wasn't kept.", "Its reports have no readable text to summarize."];

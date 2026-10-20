@@ -142,7 +142,10 @@ behaviors:
       bar carries the serif "Today" nameplate between its icons, and the page below opens with the
       dateline rule, never a second "Today" or a repeated count. While a page is being made, both
       platforms show the page's shape as shimmering placeholders (lead, stories, briefs) with no
-      invented content, never a bare spinner; on iOS a status line above them says when the feeds
+      invented content, never a bare spinner. On desktop a lead with only a line or two of text
+      and no picture runs full width with the rail as a row of three beneath it, so no tall empty
+      column sits beside the rail, and a story without a summary takes its publication's colour
+      until a theme is written; on iOS a status line above them says when the feeds
       are being checked. The iOS page strip names the front page on the left and offers "Last
       week" on the right; later pages centre the page between equal-width turns. A turned page
       opens at its top.

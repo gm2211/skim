@@ -531,6 +531,28 @@ describe("TodayEditionPane", () => {
     expect(useUiStore.getState().selectedArticleId).toBeNull();
   });
 
+  it("sets a short lead full width and colours unsummarized stories by publication", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([
+      makeItem({ story_id: "lead", snapshot_title: "Short lead" }),
+      makeItem({ story_id: "rail", snapshot_title: "Rail story" }),
+    ]));
+    const { container } = renderPane();
+    await screen.findByText("Short lead");
+    const lead = container.querySelector(".today-story--lead") as HTMLElement;
+    expect(lead).toHaveClass("today-story--short");
+    expect(lead.style.getPropertyValue("--today-theme")).toMatch(/^#/);
+  });
+
+  it("keeps a lead with a long summary beside the rail", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([
+      makeItem({ story_id: "lead", editorial: editorial("A long summary sentence that keeps going with detail. ".repeat(8)) }),
+      makeItem({ story_id: "rail" }),
+    ]));
+    const { container } = renderPane();
+    await waitFor(() => expect(container.querySelector(".today-story--lead")).not.toBeNull());
+    expect(container.querySelector(".today-story--lead")).not.toHaveClass("today-story--short");
+  });
+
   it("shows the whole AI summary, labeled, in rail stories", async () => {
     const summary = "The first sentence of the summary. The second sentence carries the detail readers came for.";
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([

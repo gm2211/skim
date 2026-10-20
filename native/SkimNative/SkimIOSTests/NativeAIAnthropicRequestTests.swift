@@ -123,4 +123,89 @@ struct NativeAIAnthropicRequestTests {
         let message = NativeAI.friendlyErrorMessage(status: 429, data: data, provider: "Claude subscription")
         #expect(message == "Claude is rate-limited right now. Wait a bit and try again. (This request would exceed your account's rate limit.)")
     }
+
+    // Chat answers stream: the events are rebuilt into the message a
+    // non-streaming request returns, so the tool loop reads them unchanged.
+    @Test func streamRebuildsTextThinkingAndToolCalls() throws {
+        let lines = [
+            "event: message_start",
+            #"data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[],"stop_reason":null}}"#,
+            #"data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}"#,
+            #"data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"Need the web."}}"#,
+            #"data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig"}}"#,
+            #"data: {"type":"content_block_stop","index":0}"#,
+            #"data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}"#,
+            #"data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Let me "}}"#,
+            #"data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"check."}}"#,
+            #"data: {"type":"content_block_stop","index":1}"#,
+            #"data: {"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"tu_1","name":"web_search","input":{}}}"#,
+            #"data: {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\"query\": \"sk"}}"#,
+            #"data: {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"im\"}"}}"#,
+            #"data: {"type":"content_block_stop","index":2}"#,
+            #"data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":9}}"#,
+            #"data: {"type":"message_stop"}"#
+        ]
+        var stream = NativeAI.AnthropicMessageStream()
+        var shown = ""
+        for line in lines {
+            if let delta = try stream.consume(line) { shown += delta }
+        }
+        #expect(shown == "Let me check.")
+        #expect(stream.isComplete)
+
+        let finished = try stream.finish()
+        let message = try #require(JSONSerialization.jsonObject(with: finished) as? [String: Any])
+        #expect(message["stop_reason"] as? String == "tool_use")
+        let content = try #require(message["content"] as? [[String: Any]])
+        #expect(content.map { $0["type"] as? String } == ["thinking", "text", "tool_use"])
+        #expect(content[0]["thinking"] as? String == "Need the web.")
+        #expect(content[0]["signature"] as? String == "sig")
+        #expect(content[1]["text"] as? String == "Let me check.")
+        #expect((content[2]["input"] as? [String: Any])?["query"] as? String == "skim")
+    }
+
+    @Test func streamCutOffOrErroredThrows() throws {
+        var cut = NativeAI.AnthropicMessageStream()
+        _ = try cut.consume(#"data: {"type":"message_start","message":{"content":[]}}"#)
+        #expect(throws: NativeAIError.self) { try cut.finish() }
+
+        var failed = NativeAI.AnthropicMessageStream()
+        #expect(throws: NativeAIError.self) {
+            try failed.consume(#"data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}"#)
+        }
+    }
+
+    @Test func openAIStreamCollectsContentDeltas() throws {
+        var stream = NativeAI.OpenAIChatStream(provider: "OpenAI")
+        var shown = ""
+        for line in [
+            #"data: {"choices":[{"delta":{"role":"assistant"}}]}"#,
+            #"data: {"choices":[{"delta":{"content":"Hello"}}]}"#,
+            "",
+            #"data: {"choices":[{"delta":{"content":" there"}}]}"#
+        ] {
+            let (delta, done) = try stream.consume(line)
+            shown += delta ?? ""
+            #expect(!done)
+        }
+        let end = try stream.consume("data: [DONE]")
+        #expect(end.done)
+        #expect(shown == "Hello there")
+        let finished = try stream.finish()
+        #expect(finished == "Hello there")
+    }
+
+    @Test func openAIRequestAsksToStreamOnlyWhenStreaming() throws {
+        let settings = AISettings(provider: "openai", apiKey: "k", model: "gpt-test")
+        func body(_ stream: Bool) throws -> [String: Any] {
+            let request = try NativeAI.buildOpenAICompatibleRequest(
+                settings: settings, instructions: "s", prompt: "p", maxTokens: 10, stream: stream)
+            let data = try #require(request.httpBody)
+            return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        }
+        let streaming = try body(true)
+        let plain = try body(false)
+        #expect(streaming["stream"] as? Bool == true)
+        #expect(plain["stream"] == nil)
+    }
 }

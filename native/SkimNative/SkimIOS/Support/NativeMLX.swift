@@ -3,6 +3,7 @@ import Foundation
 import UIKit
 #endif
 import SkimCore
+import SkimInferencePolicy
 
 struct MLXModelOption: Identifiable, Hashable {
     var repoId: String
@@ -221,6 +222,23 @@ enum NativeMLX {
         await MLXRunner.shared.selectDownloadedModel(preferredRepoId: repoId)
 
         let resolvedMaxTokens = settings.mlxMaxTokens ?? maxTokens
+
+        if let stream = NativeAI.chatStream {
+            // A reasoning block stays hidden until it closes, as in the final answer.
+            let family = MLXModelFamily.detect(from: repoId)
+            stream.begin { LocalModelOutput.sanitize($0, family: family) }
+            return try await MLXRunner.shared.stream(
+                messages: messages,
+                maxTokens: resolvedMaxTokens,
+                temperature: settings.mlxTemperature.map { Float($0) } ?? temperature.map { Float($0) },
+                topP: settings.mlxTopP.map { Float($0) } ?? topP.map { Float($0) },
+                repetitionPenalty: settings.mlxRepetitionPenalty.map { Float($0) } ?? repetitionPenalty.map { Float($0) },
+                repetitionContextSize: settings.mlxRepetitionContextSize,
+                reusablePrefixMarker: reusablePrefixMarker,
+                onToken: { stream.append($0) }
+            )
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
 
         return try await MLXRunner.shared.complete(
             messages: messages,

@@ -549,8 +549,12 @@ enum NativeChatGPT {
                 throw NativeAIError.unavailable(friendlyHTTPError(status: status, data: body))
             }
             var stream = ResponsesStream()
+            let answerStream = NativeAI.chatStream
+            answerStream?.begin()
             for try await line in bytes.lines {
-                if try stream.consume(line) { break }
+                let done = try stream.consume(line)
+                answerStream?.replace(stream.text)
+                if done { break }
             }
             return try stream.finish()
         }

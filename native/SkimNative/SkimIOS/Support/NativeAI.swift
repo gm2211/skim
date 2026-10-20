@@ -175,6 +175,75 @@ struct AIChatRequest: Identifiable {
     var answer: (AIChatConversation) async throws -> AIChatAnswer
 }
 
+/// The text of a chat answer while it is being generated, so the chat sheet can
+/// show it as it streams. Providers append deltas (or replace with a snapshot);
+/// the sheet gets at most one update every ~60 ms on the main actor.
+final class ChatAnswerStream: @unchecked Sendable {
+    private let lock = NSLock()
+    private var text = ""
+    private var display: @Sendable (String) -> String = { $0 }
+    private var flushScheduled = false
+    private var finished = false
+    private let onUpdate: @MainActor (String) -> Void
+
+    init(onUpdate: @escaping @MainActor (String) -> Void) {
+        self.onUpdate = onUpdate
+    }
+
+    /// Starts a new attempt or tool round, clearing what was shown so far.
+    /// `display` turns the raw text into what the reader sees (e.g. hiding an
+    /// on-device model's unfinished reasoning block).
+    func begin(display: @escaping @Sendable (String) -> String = { $0 }) {
+        lock.withLock {
+            text = ""
+            self.display = display
+        }
+        scheduleFlush()
+    }
+
+    func append(_ delta: String) {
+        guard !delta.isEmpty else { return }
+        lock.withLock { text += delta }
+        scheduleFlush()
+    }
+
+    func replace(_ snapshot: String) {
+        lock.withLock { text = snapshot }
+        scheduleFlush()
+    }
+
+    /// Stops updates; a flush already scheduled is dropped.
+    func finish() {
+        lock.withLock { finished = true }
+    }
+
+    private func scheduleFlush() {
+        let schedule = lock.withLock { () -> Bool in
+            guard !finished, !flushScheduled else { return false }
+            flushScheduled = true
+            return true
+        }
+        guard schedule else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(60))
+            let shown: String? = self.lock.withLock {
+                self.flushScheduled = false
+                return self.finished ? nil : self.display(self.text)
+            }
+            if let shown { self.onUpdate(shown) }
+        }
+    }
+}
+
+extension NativeAI {
+    /// Set by the chat sheet around a question. `chat(...)` passes it on as
+    /// `chatStream` for the answer's generation only, so other AI calls made
+    /// while preparing a question (routing, context) never stream into it.
+    @TaskLocal static var requestedChatStream: ChatAnswerStream?
+    /// Read by the provider calls: when set, they stream the answer into it.
+    @TaskLocal static var chatStream: ChatAnswerStream?
+}
+
 struct AIChatAnswer {
     var text: String
     var articles: [Article]
@@ -1647,11 +1716,14 @@ enum NativeAI {
         if skipRouter {
             decision = .answer
         } else if let routerContext = try? groundedArticleContext(article: article, conversation: conversation, maxCharacters: budget.routerChars) {
-            decision = await routeLocalChat(
-                conversation: conversation,
-                articleContext: routerContext,
-                settings: settings
-            )
+            // The router's one-line verdict is not the answer, so it never streams.
+            decision = await $chatStream.withValue(nil) {
+                await routeLocalChat(
+                    conversation: conversation,
+                    articleContext: routerContext,
+                    settings: settings
+                )
+            }
         } else {
             decision = .answer
         }
@@ -1686,6 +1758,15 @@ enum NativeAI {
     static func chat(
         conversation: AIChatConversation, article: Article, settings: AppSettings,
         urlSession: URLSession = .shared
+    ) async throws -> (text: String, citations: [WebCitation]) {
+        try await $chatStream.withValue(requestedChatStream) {
+            try await answerChat(conversation: conversation, article: article, settings: settings, urlSession: urlSession)
+        }
+    }
+
+    private static func answerChat(
+        conversation: AIChatConversation, article: Article, settings: AppSettings,
+        urlSession: URLSession
     ) async throws -> (text: String, citations: [WebCitation]) {
         var settings = settings
         settings.ai = AIRequestPolicy.chatSettings(settings.ai)
@@ -1831,6 +1912,15 @@ enum NativeAI {
     static func chat(
         conversation: AIChatConversation, articles: [Article], settings: AppSettings,
         urlSession: URLSession = .shared
+    ) async throws -> (text: String, citations: [WebCitation]) {
+        try await $chatStream.withValue(requestedChatStream) {
+            try await answerChat(conversation: conversation, articles: articles, settings: settings, urlSession: urlSession)
+        }
+    }
+
+    private static func answerChat(
+        conversation: AIChatConversation, articles: [Article], settings: AppSettings,
+        urlSession: URLSession
     ) async throws -> (text: String, citations: [WebCitation]) {
         var settings = settings
         settings.ai = AIRequestPolicy.chatSettings(settings.ai)
@@ -2013,6 +2103,15 @@ enum NativeAI {
                         user: prompt
                     )
                     let session = LanguageModelSession(model: model, transcript: prepared.transcript)
+                    if let stream = chatStream {
+                        stream.begin()
+                        var latest = ""
+                        for try await snapshot in session.streamResponse(to: prepared.prompt, options: options) {
+                            latest = snapshot.content
+                            stream.replace(latest)
+                        }
+                        return stripEchoedPrompt(latest.trimmingCharacters(in: .whitespacesAndNewlines), prompt: prepared.prompt)
+                    }
                     let response = try await session.respond(to: prepared.prompt, options: options)
                     let raw = response.content.trimmingCharacters(in: .whitespacesAndNewlines)
                     return stripEchoedPrompt(raw, prompt: prepared.prompt)
@@ -2365,6 +2464,14 @@ enum NativeAI {
             return try await urlSession.data(for: request)
         }
 
+        if let stream = chatStream {
+            return try await streamOpenAICompatible(
+                settings: settings, instructions: instructions, prompt: prompt, maxTokens: maxTokens,
+                temperature: temperature ?? 0.2, messages: messages, credential: credential,
+                urlSession: urlSession, into: stream
+            )
+        }
+
         var (data, response) = try await send(credential.token)
         if credential.isSubscription, (response as? HTTPURLResponse)?.statusCode == 401 {
             guard let refreshed = try? await NativeXAIOAuth.refreshStoredTokens() else {
@@ -2380,6 +2487,92 @@ enum NativeAI {
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// `completeOpenAICompatible` for a chat answer: the same request with
+    /// `stream: true`, each content delta passed to `stream` as it arrives.
+    private static func streamOpenAICompatible(
+        settings: AISettings,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        temperature: Double,
+        messages: [[String: String]]?,
+        credential: (token: String?, isSubscription: Bool),
+        urlSession: URLSession,
+        into stream: ChatAnswerStream
+    ) async throws -> String {
+        let provider = providerDisplayName(settings.provider)
+        func open(_ token: String?) async throws -> (URLSession.AsyncBytes, URLResponse) {
+            let request = try buildOpenAICompatibleRequest(
+                settings: settings,
+                instructions: instructions,
+                prompt: prompt,
+                maxTokens: maxTokens,
+                temperature: temperature,
+                messages: messages,
+                bearerToken: token,
+                stream: true
+            )
+            return try await urlSession.bytes(for: request)
+        }
+
+        var (bytes, response) = try await open(credential.token)
+        if credential.isSubscription, (response as? HTTPURLResponse)?.statusCode == 401 {
+            guard let refreshed = try? await NativeXAIOAuth.refreshStoredTokens() else {
+                throw NativeAIError.unavailable("SuperGrok sign-in expired. Sign in again in Settings.")
+            }
+            (bytes, response) = try await open(refreshed)
+        }
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            var body = Data()
+            for try await byte in bytes { body.append(byte) }
+            try validate(response: response, data: body, provider: provider)
+        }
+
+        stream.begin()
+        var events = OpenAIChatStream(provider: provider)
+        for try await line in bytes.lines {
+            let (delta, done) = try events.consume(line)
+            if let delta { stream.append(delta) }
+            if done { break }
+        }
+        return try events.finish()
+    }
+
+    /// Accumulates an OpenAI-style chat completions event stream.
+    struct OpenAIChatStream {
+        var provider: String
+        private(set) var text = ""
+
+        init(provider: String) {
+            self.provider = provider
+        }
+
+        /// Takes one SSE line; returns the content it adds and whether the stream ended.
+        mutating func consume(_ line: String) throws -> (delta: String?, done: Bool) {
+            guard line.hasPrefix("data:") else { return (nil, false) }
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            if payload == "[DONE]" { return (nil, true) }
+            guard let data = payload.data(using: .utf8),
+                  let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return (nil, false) }
+            if let error = event["error"] as? [String: Any] {
+                let message = (error["message"] as? String).map { ": \($0.prefix(240))" } ?? "."
+                throw NativeAIError.unavailable("\(provider) stopped while answering\(message)")
+            }
+            let choice = (event["choices"] as? [[String: Any]])?.first
+            guard let delta = (choice?["delta"] as? [String: Any])?["content"] as? String, !delta.isEmpty else {
+                return (nil, false)
+            }
+            text += delta
+            return (delta, false)
+        }
+
+        func finish() throws -> String {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { throw NativeAIError.unavailable("The \(provider) response was empty.") }
+            return trimmed
+        }
+    }
+
     static func buildOpenAICompatibleRequest(
         settings: AISettings,
         instructions: String,
@@ -2387,14 +2580,15 @@ enum NativeAI {
         maxTokens: Int,
         temperature: Double = 0.2,
         messages: [[String: String]]? = nil,
-        bearerToken: String? = nil
+        bearerToken: String? = nil,
+        stream: Bool = false
     ) throws -> URLRequest {
         let provider = settings.provider
         let key = settings.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? bearerToken?.nilIfEmpty
         if provider != "custom", key == nil {
             throw NativeAIError.unavailable("Add an API key for \(providerDisplayName(provider)) in Settings.")
         }
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": settings.model?.nilIfEmpty ?? defaultModel(for: provider),
             "messages": messages ?? [
                 ["role": "system", "content": instructions],
@@ -2403,6 +2597,9 @@ enum NativeAI {
             "temperature": temperature,
             "max_tokens": maxTokens
         ]
+        if stream {
+            body["stream"] = true
+        }
         var request = URLRequest(url: openAICompatibleURL(settings))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "content-type")
@@ -2486,7 +2683,8 @@ enum NativeAI {
         messages: [[String: Any]],
         maxTokens: Int,
         tools: [[String: Any]]? = nil,
-        temperature: Double? = nil
+        temperature: Double? = nil,
+        stream: Bool = false
     ) throws -> URLRequest {
         var request = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
         request.httpMethod = "POST"
@@ -2519,6 +2717,9 @@ enum NativeAI {
         }
         if let tools {
             body["tools"] = tools
+        }
+        if stream {
+            body["stream"] = true
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
@@ -2788,6 +2989,114 @@ enum NativeAI {
         ]
     }
 
+    // MARK: - Anthropic streaming
+
+    /// Sends a `stream: true` Messages request, passing answer text to `stream` as
+    /// it arrives, and returns the finished message as the JSON a non-streaming
+    /// request would have returned. A failed status returns its body unread, for
+    /// the caller's usual 401 refresh and error handling.
+    static func streamAnthropicMessage(
+        _ request: URLRequest,
+        urlSession: URLSession,
+        into stream: ChatAnswerStream
+    ) async throws -> (Data, URLResponse) {
+        let (bytes, response) = try await urlSession.bytes(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            var body = Data()
+            for try await byte in bytes { body.append(byte) }
+            return (body, response)
+        }
+        stream.begin()
+        var message = AnthropicMessageStream()
+        for try await line in bytes.lines {
+            if let delta = try message.consume(line) { stream.append(delta) }
+            if message.isComplete { break }
+        }
+        return (try message.finish(), response)
+    }
+
+    /// Rebuilds a Messages response from its server-sent events: text, thinking
+    /// (with its signature, which tool rounds must replay) and tool calls.
+    struct AnthropicMessageStream {
+        private var message: [String: Any] = [:]
+        private var blocks: [Int: [String: Any]] = [:]
+        private var toolInputJSON: [Int: String] = [:]
+        private var emittedText = false
+        private(set) var isComplete = false
+
+        /// Takes one SSE line; returns answer text it adds, if any.
+        mutating func consume(_ line: String) throws -> String? {
+            guard line.hasPrefix("data:") else { return nil }
+            let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+            guard let data = payload.data(using: .utf8),
+                  let event = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+            let index = event["index"] as? Int ?? 0
+            switch event["type"] as? String {
+            case "message_start":
+                message = event["message"] as? [String: Any] ?? [:]
+            case "content_block_start":
+                guard let block = event["content_block"] as? [String: Any] else { return nil }
+                blocks[index] = block
+                if block["type"] as? String == "tool_use" {
+                    toolInputJSON[index] = ""
+                }
+                // Separate text blocks the way the non-streaming join does.
+                if block["type"] as? String == "text", emittedText {
+                    return "\n" + (block["text"] as? String ?? "")
+                }
+            case "content_block_delta":
+                guard let delta = event["delta"] as? [String: Any], var block = blocks[index] else { return nil }
+                defer { blocks[index] = block }
+                switch delta["type"] as? String {
+                case "text_delta":
+                    let text = delta["text"] as? String ?? ""
+                    block["text"] = (block["text"] as? String ?? "") + text
+                    if !text.isEmpty { emittedText = true }
+                    return text
+                case "thinking_delta":
+                    block["thinking"] = (block["thinking"] as? String ?? "") + (delta["thinking"] as? String ?? "")
+                case "signature_delta":
+                    block["signature"] = (block["signature"] as? String ?? "") + (delta["signature"] as? String ?? "")
+                case "input_json_delta":
+                    toolInputJSON[index, default: ""] += delta["partial_json"] as? String ?? ""
+                default:
+                    break
+                }
+            case "content_block_stop":
+                if let json = toolInputJSON.removeValue(forKey: index), var block = blocks[index] {
+                    let input = json.isEmpty ? nil : json.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) }
+                    block["input"] = input ?? [String: Any]()
+                    blocks[index] = block
+                }
+            case "message_delta":
+                if let delta = event["delta"] as? [String: Any] {
+                    for (key, value) in delta { message[key] = value }
+                }
+            case "message_stop":
+                isComplete = true
+            case "error":
+                let error = event["error"] as? [String: Any]
+                let type = error?["type"] as? String
+                if type == "overloaded_error" {
+                    throw NativeAIError.unavailable("Claude is overloaded right now. Try again in a moment.")
+                }
+                let reason = (error?["message"] as? String).map { ": \($0.prefix(240))" } ?? "."
+                throw NativeAIError.unavailable("Claude stopped while answering\(reason)")
+            default:
+                break
+            }
+            return nil
+        }
+
+        /// The finished message, encoded like a non-streaming response body.
+        func finish() throws -> Data {
+            guard isComplete else { throw NativeAIError.unavailable("Claude's answer was cut off. Try again.") }
+            var finished = message
+            finished["content"] = blocks.keys.sorted().compactMap { blocks[$0] }
+            return try JSONSerialization.data(withJSONObject: finished)
+        }
+    }
+
     // MARK: - Anthropic tool-use loop
 
     /// Chat completion with web_search tool support. Handles both api-key and
@@ -2839,6 +3148,13 @@ enum NativeAI {
         var citations: [WebCitation] = []
         var seenCitationURLs: Set<String> = []
 
+        // A chat answer streams; the rebuilt message reads like a plain response.
+        let answerStream = chatStream
+        func execute(_ request: URLRequest) async throws -> (Data, URLResponse) {
+            guard let answerStream else { return try await urlSession.data(for: request) }
+            return try await streamAnthropicMessage(request, urlSession: urlSession, into: answerStream)
+        }
+
         for iteration in 0...maxIterations {
             let request = try buildAnthropicRequestFull(
                 settings: settings,
@@ -2847,13 +3163,14 @@ enum NativeAI {
                 instructions: instructions,
                 messages: messages,
                 maxTokens: maxTokens,
-                tools: tools
+                tools: tools,
+                stream: answerStream != nil
             )
 
             // Execute the request, handling subscription 401 refresh once per iteration.
             var data: Data
             var response: URLResponse
-            (data, response) = try await urlSession.data(for: request)
+            (data, response) = try await execute(request)
 
             if isSubscription, let http = response as? HTTPURLResponse, http.statusCode == 401 {
                 let newToken: String
@@ -2874,9 +3191,10 @@ enum NativeAI {
                     instructions: instructions,
                     messages: messages,
                     maxTokens: maxTokens,
-                    tools: tools
+                    tools: tools,
+                    stream: answerStream != nil
                 )
-                (data, response) = try await urlSession.data(for: retryRequest)
+                (data, response) = try await execute(retryRequest)
             }
 
             try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
@@ -3810,6 +4128,13 @@ struct AIChatSheet: View {
     @State private var quotedText: String?
     @State private var quoteSource: ChatQuoteSource = .answer
     @State private var isSending = false
+    /// The answer so far while it streams in, shown under the latest question.
+    @State private var streamingText = ""
+    /// The id the streaming answer keeps once it lands in `messages`, so its
+    /// bubble (and the scroll position on it) carries over.
+    @State private var answerID = UUID()
+    /// The answer last scrolled into view, so it is scrolled to only once.
+    @State private var scrolledAnswerID: UUID?
     @State private var showReauth = false
     @State private var showAISettings = false
     @FocusState private var focused: Bool
@@ -3832,7 +4157,10 @@ struct AIChatSheet: View {
             VStack(spacing: 0) {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 14) {
+                        // Eager, not lazy: a lazy stack estimates the height of a long
+                        // answer it hasn't measured, so scrolling to it could land past
+                        // the end of the content and show an empty screen.
+                        VStack(alignment: .leading, spacing: 14) {
                             if messages.isEmpty {
                                 // Centered in the visible space above the input bar, so the
                                 // hint stays in view when the keyboard shrinks the sheet;
@@ -3871,7 +4199,10 @@ struct AIChatSheet: View {
                                     .padding(.top, 4)
                             }
 
-                            if isSending {
+                            if isSending, !streamingText.isEmpty {
+                                AIChatBubble(message: AIChatMessage(id: answerID, role: .assistant, text: streamingText))
+                                    .id(answerID)
+                            } else if isSending {
                                 HStack(spacing: 10) {
                                     ProgressView()
                                         .controlSize(.small)
@@ -3899,6 +4230,9 @@ struct AIChatSheet: View {
                     }
                     .onChange(of: isSending) { _, sending in
                         if sending { scrollToLatest(proxy) }
+                    }
+                    .onChange(of: streamingText.isEmpty) { _, empty in
+                        if !empty { scrollToAnswer(answerID, proxy) }
                     }
                 }
 
@@ -4010,16 +4344,29 @@ struct AIChatSheet: View {
     /// A new answer is scrolled so its first line sits at the top, so the
     /// reader starts at the beginning instead of the end of a long reply.
     /// A question (and the "Thinking..." row) scrolls to the bottom.
+    /// A streamed answer is scrolled to when its first words arrive and is left
+    /// alone after that, so it neither jumps back to its top when it finishes
+    /// nor drags the reader to its end as it grows.
     private func scrollToLatest(_ proxy: ScrollViewProxy) {
-        let answerID = messages.last.flatMap { $0.role == .assistant ? $0.id : nil }
+        if let latest = messages.last, latest.role == .assistant {
+            scrollToAnswer(latest.id, proxy)
+            return
+        }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(80))
             withAnimation(.smooth(duration: 0.22)) {
-                if let answerID {
-                    proxy.scrollTo(answerID, anchor: .top)
-                } else {
-                    proxy.scrollTo(bottomAnchorID, anchor: .bottom)
-                }
+                proxy.scrollTo(bottomAnchorID, anchor: .bottom)
+            }
+        }
+    }
+
+    private func scrollToAnswer(_ id: UUID, _ proxy: ScrollViewProxy) {
+        guard scrolledAnswerID != id else { return }
+        scrolledAnswerID = id
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(80))
+            withAnimation(.smooth(duration: 0.22)) {
+                proxy.scrollTo(id, anchor: .top)
             }
         }
     }
@@ -4037,11 +4384,25 @@ struct AIChatSheet: View {
         focused = true
         let userMessage = AIChatMessage(role: .user, text: toSend, quotedText: quoteToSend, quoteSource: sourceToSend)
         messages.append(userMessage)
+        let currentAnswerID = UUID()
+        answerID = currentAnswerID
+        streamingText = ""
+        let stream = ChatAnswerStream { text in
+            if answerID == currentAnswerID { streamingText = text }
+        }
         isSending = true
+        defer {
+            stream.finish()
+            streamingText = ""
+        }
         do {
-            let answer = try await request.answer(conversation)
+            let answer = try await NativeAI.$requestedChatStream.withValue(stream) {
+                try await request.answer(conversation)
+            }
+            stream.finish()
             messages.append(
                 AIChatMessage(
+                    id: currentAnswerID,
                     role: .assistant,
                     text: answer.text,
                     referencedArticles: ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles, handles: answer.articleHandles),
@@ -4052,6 +4413,7 @@ struct AIChatSheet: View {
                 )
             )
         } catch {
+            stream.finish()
             messages.removeAll { $0.id == userMessage.id }
             input = toSend
             quotedText = quoteToSend
@@ -4110,7 +4472,7 @@ struct AIChatMessage: Identifiable, Sendable {
         case assistant
     }
 
-    let id = UUID()
+    var id = UUID()
     var role: Role
     var text: String
     var quotedText: String? = nil

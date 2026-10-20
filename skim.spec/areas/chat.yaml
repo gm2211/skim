@@ -108,10 +108,27 @@ behaviors:
       Swiping down on the conversation, tapping it, or the hide button beside the input dismisses
       the keyboard. When an answer arrives the conversation scrolls so the answer's top sits at
       the top of the view; a sent question still scrolls to the bottom. Scrolled-up messages stop
-      at a solid edge below the Close and model buttons instead of running beneath them.
+      at a solid edge below the Close and model buttons instead of running beneath them. The
+      conversation is laid out eagerly, so scrolling after a long answer never lands past the end of
+      the content on an empty screen (Giulio, 2026-10-20: "Scrolling down after I send a message in
+      chat is still broken - it shows empty screen").
     source:
       text: >-
         I wanna be able to easily dismiss keyboard for easier reading. Also right after generation
         of chat response, it auto scrolls all the way to the botton and you can't see much till i
         scroll back up
       reference: Giulio, project chat, 2026-10-14
+  - id: chat-streams-answers
+    description: >-
+      In the iOS chat sheet an answer appears as it is generated instead of all at once when it is
+      done.
+    details: >-
+      Every provider streams: Claude (API key and subscription, including web-search tool rounds),
+      OpenAI-compatible APIs, a ChatGPT plan, Apple Intelligence and on-device MLX models. The view
+      scrolls to the answer's first line when its first words arrive and then leaves the scroll
+      position to the reader; the finished answer replaces the streamed text in place. Text a model
+      writes before a web search is replaced by the answer after it, and an on-device model's
+      reasoning block stays hidden. Desktop chat does not stream yet.
+    source:
+      text: also I would like it to stream output
+      reference: Giulio, project chat, 2026-10-20

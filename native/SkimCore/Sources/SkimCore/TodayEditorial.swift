@@ -124,16 +124,18 @@ public enum TodayEditorialPolicy {
             throw Failure.citations("The summary must cite each available report exactly once")
         }
         var cited = Set<String>()
-        for citation in editorial.sources {
+        for index in editorial.sources.indices {
+            let citation = editorial.sources[index]
             guard cited.insert(citation.articleID).inserted else {
                 throw Failure.citations("The summary repeats a source ID")
             }
             guard let report = reports.first(where: { $0.articleID == citation.articleID }) else {
                 throw Failure.citations("The summary cites a report outside this story")
             }
-            guard (20...600).contains(citation.quote.count), report.body.contains(citation.quote) else {
+            guard let passage = reportPassage(report.body, citation.quote), (20...600).contains(passage.count) else {
                 throw Failure.citations("A summary quote is not an exact supporting passage in its report")
             }
+            editorial.sources[index].quote = passage
         }
         // An unsupported figure is dropped, not fatal: the summary still stands.
         if var figure = editorial.figure {
@@ -142,6 +144,50 @@ public enum TodayEditorialPolicy {
             editorial.figure = supported(figure, reports: reports) ? figure : nil
         }
         return editorial
+    }
+
+    /// The question again with the rejected answer and why it was rejected.
+    /// At temperature 0 a plain retry repeats the same answer, so a story
+    /// stayed unsummarized however often Retry was tapped; the checks stay as strict.
+    public static func repairPrompt(_ prompt: String, answer: String, rejection: String) -> String {
+        "\(prompt)\n\nYour previous answer was rejected: \(rejection). Previous answer: \(answer.prefix(4_000))\n"
+            + "Return the corrected JSON object only, with no other text. Copy each quote character for character from its report and cite every report exactly once."
+    }
+
+    /// The report's own words for `quote`. Models often straighten curly
+    /// quotes, swap dashes or fold line breaks when they copy a passage; those
+    /// differences alone don't make a quote unfaithful, and the page shows the
+    /// report's text. Same matching as the desktop.
+    static func reportPassage(_ body: String, _ quote: String) -> String? {
+        if body.contains(quote) { return quote }
+        func fold(_ character: Character) -> Character {
+            switch character {
+            case "\u{2018}", "\u{2019}", "\u{201A}", "\u{201B}", "\u{2032}": return "'"
+            case "\u{201C}", "\u{201D}", "\u{201E}", "\u{201F}", "\u{2033}": return "\""
+            case "\u{2010}", "\u{2011}", "\u{2012}", "\u{2013}", "\u{2014}", "\u{2015}", "\u{2212}": return "-"
+            default: return character.isWhitespace ? " " : character
+            }
+        }
+        var folded: [(character: Character, range: Range<String.Index>)] = []
+        var index = body.startIndex
+        while index < body.endIndex {
+            let next = body.index(after: index)
+            let character = fold(body[index])
+            if !(character == " " && folded.last?.character == " ") {
+                folded.append((character, index..<next))
+            }
+            index = next
+        }
+        var needle: [Character] = []
+        for character in quote.trimmingCharacters(in: .whitespacesAndNewlines).map(fold) {
+            if !(character == " " && needle.last == " ") { needle.append(character) }
+        }
+        guard !needle.isEmpty, needle.count <= folded.count else { return nil }
+        for start in 0...(folded.count - needle.count)
+        where (0..<needle.count).allSatisfy({ folded[start + $0].character == needle[$0] }) {
+            return String(body[folded[start].range.lowerBound..<folded[start + needle.count - 1].range.upperBound])
+        }
+        return nil
     }
 
     /// A figure stands only when it is short and every run of digits in it

@@ -6,6 +6,10 @@ behaviors:
       Opening an article extracts its full text automatically. If extraction fails, the reader shows
       the RSS preview with a notice and a way to retry, and the web view still works. Reddit, Hacker
       News and Lobsters items use the aggregator layout instead (reader.aggregator-post-layout).
+    details: >-
+      A run of link-only list items before the story's first paragraph is a site menu (ipinfo.io's
+      "IP Data Fundamentals", "IP Data Accuracy" category bar) and is left out on iOS; link lists
+      after the story starts are kept.
   - id: reader-web-toggle
     description: >-
       A reader can switch between the extracted Reader view and the original Web view (desktop

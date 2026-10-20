@@ -2867,8 +2867,10 @@ private struct ArticleRow: View {
     }
 
     private var secondaryLine: String? {
-        if article.feedTitle.localizedCaseInsensitiveContains("hacker news") {
-            return "Comments"
+        // Aggregator posts (Hacker News, Lobsters, Reddit) name the site the
+        // story links to; their own feed text is only a "Comments" stub.
+        if let host = article.externalURL?.host(percentEncoded: false) {
+            return host.replacingOccurrences(of: "www.", with: "")
         }
 
         if let author = article.author?.trimmingCharacters(in: .whitespacesAndNewlines), !author.isEmpty {

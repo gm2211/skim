@@ -72,7 +72,9 @@ behaviors:
       28 px tall, named "Ask in chat" for screen readers) just above the selection in the reader, sized
       to fit between lines so it does not cover the text above (Giulio, 2026-10-20: "love this, but
       a little big"). The quote is sent as "About this passage from the article" and the
-      bubble labels it "From the article", distinct from replying to one of Skim's answers.
+      bubble labels it "From the article", distinct from replying to one of Skim's answers. A quoted passage
+      belongs to the article it came from: moving to another article drops it from the chat (Giulio,
+      2026-10-20: "ask in chat should not transfer across articles").
     source:
       text: I'd like the ability to easily highlight text and ask about it in chat
       reference: Giulio, project thread "highlight text and ask in chat", 2026-10-14

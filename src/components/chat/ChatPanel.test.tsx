@@ -194,7 +194,7 @@ describe("ChatDrawer quoted replies", () => {
     vi.mocked(chatWithArticle).mockResolvedValue({ content: "It means X", web_citations: [], provider: "openai", model: "test" });
     const user = userEvent.setup();
     const view = render(<ChatDrawer articleId="article-1" articleTitle="Article" open askAbout={null} />);
-    view.rerender(<ChatDrawer articleId="article-1" articleTitle="Article" open askAbout={{ id: 1, text: "a hack of Australia's health department" }} />);
+    view.rerender(<ChatDrawer articleId="article-1" articleTitle="Article" open askAbout={{ id: 1, text: "a hack of Australia's health department", articleId: "article-1" }} />);
     const note = screen.getByRole("note", { name: "Quoted text" });
     expect(note).toHaveTextContent("From the article");
     expect(note).toHaveTextContent("a hack of Australia's health department");
@@ -205,5 +205,17 @@ describe("ChatDrawer quoted replies", () => {
       role: "user",
       content: "About this passage from the article:\n> a hack of Australia's health department\n\nWhich hack?",
     });
+  });
+  it("drops a highlighted passage when the reader moves to another article", () => {
+    const quote = { id: 1, text: "built Signal", articleId: "article-1" };
+    const view = render(<ChatDrawer articleId="article-1" articleTitle="Article" open askAbout={quote} />);
+    expect(screen.getByRole("note", { name: "Quoted text" })).toHaveTextContent("built Signal");
+    view.rerender(<ChatDrawer articleId="article-2" articleTitle="Other" open askAbout={quote} />);
+    expect(screen.queryByRole("note", { name: "Quoted text" })).not.toBeInTheDocument();
+    // Remounting on the next article with the old request still set, as the
+    // reader does while it loads, must not bring the quote back either.
+    view.unmount();
+    render(<ChatDrawer articleId="article-2" articleTitle="Other" open askAbout={quote} />);
+    expect(screen.queryByRole("note", { name: "Quoted text" })).not.toBeInTheDocument();
   });
 });

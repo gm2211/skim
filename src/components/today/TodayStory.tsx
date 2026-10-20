@@ -180,9 +180,13 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
   const imageArticleIds = [articleId, ...members.map((member) => member.article_id)]
     .filter((id, index, ids): id is string => !!id && ids.indexOf(id) === index);
   const accent = themeColor(item.editorial?.theme);
+  // A lead with little to show (a short lede, at most one quote, no figure)
+  // ends well above a three-story rail; the front page then runs the rail
+  // under it instead of beside it.
+  const thinLead = lead && quotes.length <= 1 && !figure && (body?.length ?? 0) < LEAD_COLUMNS_MIN_CHARS;
 
   return (
-    <article className={`story-rise-in today-story today-story--${rank} ${item.is_consumed ? "today-story--read" : ""}`}
+    <article className={`story-rise-in today-story today-story--${rank} ${thinLead ? "today-story--thin-lead" : ""} ${item.is_consumed ? "today-story--read" : ""}`}
       style={accent ? { "--today-theme": accent } as CSSProperties : undefined}>
       {showsImage && <ReportImage key={imageArticleIds.join(",")} articleIds={imageArticleIds} title={item.snapshot_title} />}
       <div className="today-byline today-kicker">

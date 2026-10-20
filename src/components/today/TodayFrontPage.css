@@ -61,6 +61,23 @@
   .today-front-rail { padding-left: 28px; }
 }
 
+/* A thin lead with no picture would leave its column mostly empty beside a
+   tall rail, so it takes the full width and the rail runs as a row under it.
+   A picture arriving later restores the side-by-side layout. */
+@container (min-width: 900px) {
+  .today-front-top:has(.today-story--thin-lead):not(:has(.today-report-image)) { grid-template-columns: minmax(0, 1fr); }
+  .today-page .today-front-top:has(.today-story--thin-lead):not(:has(.today-report-image)) > .today-story-cell--lead { padding-right: 0; border-right: 0; }
+  .today-front-top:has(.today-story--thin-lead):not(:has(.today-report-image)) .today-front-rail {
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+    padding-left: 0; padding-top: 22px; border-top: 1px solid var(--color-border-light);
+  }
+  .today-page .today-front-top:has(.today-story--thin-lead):not(:has(.today-report-image)) .today-front-rail .today-story-cell {
+    padding-block: 0; padding-inline: 24px; border-top: 0; border-left: 1px solid var(--color-border);
+  }
+  .today-page .today-front-top:has(.today-story--thin-lead):not(:has(.today-report-image)) .today-front-rail .today-story-cell:first-child { padding-left: 0; border-left: 0; }
+  .today-page .today-front-top:has(.today-story--thin-lead):not(:has(.today-report-image)) .today-front-rail .today-story-cell:last-child { padding-right: 0; }
+}
+
 /* Story type. */
 .today-page .today-front .today-kicker {
   margin-bottom: 6px; color: var(--today-theme, var(--color-accent));

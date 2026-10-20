@@ -133,7 +133,10 @@ behaviors:
       features, then "In brief". iOS sets it as a magazine: a full-bleed lead, story cards, then a
       two-up grid of briefs.
     details: >-
-      Ten stories fill one desktop page. The iOS photo lead sets its headline and summary below the
+      Ten stories fill one desktop page. A lead with no picture and little text (a short summary,
+      at most one quote, no figure) spans the full width with the rail as a row of three under it,
+      so its column never sits mostly empty beside the rail; a picture arriving later restores the
+      side-by-side layout. The iOS photo lead sets its headline and summary below the
       picture, so text inside the image never collides with them. The masthead has top margin; the only controls are an
       ask button, a refresh button and a cog that opens a small settings popover (summary model,
       edition size, retry, AI settings). The popover is wide enough for every

@@ -736,13 +736,26 @@ enum NativeAI {
             .filter { TodayEditorialPolicy.usable($0.body) }
             .prefix(onDevice ? 2 : TodayLedePolicy.maxArticles)
         guard !reports.isEmpty else { return nil }
+        let prompt = TodayEditorialPolicy.prompt(headline: headline, reports: Array(reports), themes: themes)
         let response = try await complete(
             settings: settings,
             instructions: TodayEditorialPolicy.instructions,
-            prompt: TodayEditorialPolicy.prompt(headline: headline, reports: Array(reports), themes: themes),
+            prompt: prompt,
             maxTokens: TodayEditorialPolicy.maxTokens, jsonMode: true, temperature: 0)
         try Task.checkCancellation()
-        return try TodayEditorialPolicy.validate(response, reports: Array(reports))
+        do {
+            return try TodayEditorialPolicy.validate(response, reports: Array(reports))
+        } catch let rejection as TodayEditorialPolicy.Failure {
+            // Say once what was wrong; asking the same question again at
+            // temperature 0 only returns the same rejected answer.
+            let corrected = try await complete(
+                settings: settings,
+                instructions: TodayEditorialPolicy.instructions,
+                prompt: TodayEditorialPolicy.repairPrompt(prompt, answer: response, rejection: rejection.errorDescription ?? "it failed the checks"),
+                maxTokens: TodayEditorialPolicy.maxTokens, jsonMode: true, temperature: 0)
+            try Task.checkCancellation()
+            return try TodayEditorialPolicy.validate(corrected, reports: Array(reports))
+        }
     }
 
     static func catchUpPreview(

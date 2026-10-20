@@ -58,9 +58,10 @@ behaviors:
       show the whole summary with its label; only briefs are cut to one sentence. A story whose
       summary can't be written keeps its verified source passage instead of staying blank, and on
       desktop its card says why ("Not summarized: …"), as does the dateline's "N not summarized".
-      An answer that fails the checks is sent back once with the reason so the model can correct
-      it, quotes match through curly quotes, dashes and line breaks while the page shows the
-      report's own words, and a rate-limited or overloaded provider is asked again after a pause.
+      On desktop and iOS alike, an answer that fails the checks is sent back once with the reason
+      so the model can correct it, and quotes match through curly quotes, dashes and line breaks
+      while the page shows the report's own words. On desktop a rate-limited or overloaded
+      provider is asked again after a pause.
     source:
       text: Where's the summary in newspaper / today view
       reference: Giulio, project chat, 2026-10-14, with an iOS screenshot of a lead showing only the feed excerpt

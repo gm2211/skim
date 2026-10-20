@@ -20,6 +20,7 @@
 .chat-markdown th, .chat-markdown td { border: 1px solid var(--color-border); padding: .35em .6em; text-align: left; }
 .chat-markdown th { font-weight: 600; }
 .chat-selection-reply { position: absolute; z-index: 10; background: var(--color-bg-tertiary); border: 1px solid var(--color-accent); box-shadow: 0 3px 12px #0005; border-radius: 8px; padding: 8px 12px; min-height: 44px; font-size: 12px; color: var(--color-text-primary); cursor: pointer; }
+.reader-selection-ask { min-height: 0; height: 28px; padding: 0 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .chat-selection-reply:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .chat-reply-preview { border-left: 2px solid var(--color-accent); padding: 4px 8px; margin-bottom: 8px; font-size: 12px; }
 .chat-reply-preview blockquote { max-height: 72px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; }

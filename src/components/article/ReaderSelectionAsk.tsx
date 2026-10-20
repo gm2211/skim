@@ -31,8 +31,8 @@ export function ReaderSelectionAsk({ containerRef, onAsk }: {
       const container = element.getBoundingClientRect();
       setSelection({
         text,
-        top: Math.max(0, bounds.top - container.top - 48),
-        left: Math.max(0, Math.min(bounds.left - container.left, container.width - 140)),
+        top: Math.max(0, bounds.top - container.top - 36),
+        left: Math.max(0, Math.min(bounds.left - container.left, container.width - 80)),
       });
     };
     document.addEventListener("selectionchange", update);
@@ -44,7 +44,9 @@ export function ReaderSelectionAsk({ containerRef, onAsk }: {
     <button
       type="button"
       className="chat-selection-reply reader-selection-ask"
-      style={{ top: selection.top, left: selection.left, whiteSpace: "nowrap" }}
+      aria-label="Ask in chat"
+      title="Ask in chat"
+      style={{ top: selection.top, left: selection.left }}
       onPointerDown={(event) => event.preventDefault()}
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => {
@@ -53,10 +55,10 @@ export function ReaderSelectionAsk({ containerRef, onAsk }: {
         setSelection(null);
       }}
     >
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" style={{ display: "inline", marginRight: 6, verticalAlign: "-2px" }}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
-      Ask in chat
+      Ask
     </button>
   );
 }

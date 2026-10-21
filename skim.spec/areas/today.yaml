@@ -82,6 +82,19 @@ behaviors:
         I only see titles not summaries, it's ok to get to titles first and do summaries async
         (with beautiful slightly animated placeholders) but no summaries?
       reference: Giulio, project chat, 2026-10-13, after "It retries but then shows up again"
+  - id: ai-off-notice
+    description: >-
+      When no AI provider is set up, the desktop Today page says so plainly, above both tabs, with a
+      Set up AI button that opens AI settings.
+    details: >-
+      The notice is a highlighted box reading "AI is off, so stories aren't summarized" and explains
+      that stories show their feed's excerpt and only reports with matching headlines are grouped.
+      With AI off, an empty Multiple reports tab adds that without AI only headlines sharing key
+      words are grouped. The notice waits for settings to load, so it never flashes while a
+      provider is set.
+    source:
+      text: Well, I should get visual indication that that's the case.
+      reference: Giulio, Newspaper view thread, 2026-10-21, after summaries and multiple reports were empty because no AI provider was set
   - id: headline-opens-story
     description: >-
       A story's headline opens one of its reports in the reader, choosing a report still kept in

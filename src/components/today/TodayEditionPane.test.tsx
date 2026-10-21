@@ -334,6 +334,29 @@ describe("TodayEditionPane", () => {
     expect(useUiStore.getState().showSettings).toBe(true);
   });
 
+  it("says plainly when AI is off, on both tabs, and opens AI settings from there", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    expect(await screen.findByText("AI is off, so stories aren't summarized")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Multiple reports" }));
+    expect(screen.getByText(/Without AI, Skim only groups reports whose headlines share key words/)).toBeVisible();
+    expect(screen.getByText("AI is off, so stories aren't summarized")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Set up AI" }));
+    expect(useUiStore.getState().settingsTab).toBe("ai");
+    expect(useUiStore.getState().showSettings).toBe(true);
+  });
+
+  it("does not claim AI is off while settings load or once a provider is set", async () => {
+    let resolveSettings: (settings: typeof DEFAULT_SETTINGS) => void = () => {};
+    vi.mocked(commands.getSettings).mockReturnValue(new Promise((resolve) => { resolveSettings = resolve; }));
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    await screen.findByText("Default snapshot title");
+    expect(screen.queryByText("AI is off, so stories aren't summarized")).not.toBeInTheDocument();
+    await act(async () => resolveSettings({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } }));
+    expect(screen.queryByText("AI is off, so stories aren't summarized")).not.toBeInTheDocument();
+  });
+
   it("does not leave skeletons forever when AI settings fail to load", async () => {
     vi.mocked(commands.getSettings).mockRejectedValue(new Error("Settings unavailable"));
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));

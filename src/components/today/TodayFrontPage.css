@@ -28,6 +28,20 @@
 
 .today-page .today-themes { justify-content: center; border-bottom: 0; margin-bottom: 18px; padding-block: 10px 0; }
 
+/* No AI model: a notice the reader can't miss, above the page. */
+.today-ai-off {
+  display: flex; align-items: center; gap: 14px; margin: 4px 0 16px; padding: 10px 14px;
+  border: 1px solid var(--color-border); border-left: 3px solid var(--color-warning); border-radius: 6px;
+  background: var(--color-bg-secondary); color: var(--color-text-secondary); font-size: 13px; line-height: 1.5;
+}
+.today-ai-off p { margin: 0; flex: 1; }
+.today-ai-off strong { color: var(--color-text-primary); font-weight: 600; }
+.today-ai-off-action {
+  flex: none; padding: 6px 12px; border: 0; border-radius: 6px;
+  background: var(--color-accent); color: var(--color-bg-primary); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.today-ai-off-action:hover { background: var(--color-accent-hover); }
+
 /* Slots. */
 .today-page .today-front { display: block; }
 .today-page .today-front .today-story-cell {

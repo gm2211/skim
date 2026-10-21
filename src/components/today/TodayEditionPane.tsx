@@ -171,6 +171,10 @@ export function TodayEditionPane() {
             <span className="today-dateline-status">
               {totalCount} {totalCount === 1 ? "story" : "stories"}
               {themes.length > 0 && <> · {themes.length} {themes.length === 1 ? "theme" : "themes"}</>}
+              {!aiEnabled && !settingsUnavailable && missingSummaries > 0 && <>
+                {" · "}<span className="today-dateline-failed">Summaries off</span>
+                <button type="button" className="today-dateline-retry" onClick={openAiSettings}>Set up AI</button>
+              </>}
               {canRetryLedes && missingSummaries > 0 && <>
                 {" · "}<span className="today-dateline-failed" title={failureReasons || undefined}>{missingSummaries} not summarized</span>
                 <button type="button" className="today-dateline-retry" onClick={retryLedes} aria-label="Retry summaries">Retry</button>
@@ -234,7 +238,14 @@ export function TodayEditionPane() {
         )}
 
         {!isLoading && !isError && items.length > 0 && <>
-          {!aiEnabled && !settingsUnavailable && items.some((item) => !item.editorial) && <p className="today-summary-note">Unprepared summaries show source excerpts. <button className="today-story-control text-accent" onClick={() => useUiStore.getState().setShowSettings(true)}>Set up AI for thematic summaries</button></p>}
+          {/* Without a model the page can't write summaries; say so plainly
+              instead of letting the feed's own text pass for them. */}
+          {!aiEnabled && !settingsUnavailable && items.some((item) => !item.editorial) && (
+            <div role="status" className="today-ai-off">
+              <p><strong>No AI model is set up, so Today can't write summaries.</strong> Stories show the feed's own text instead.</p>
+              <button type="button" className="today-ai-off-action" onClick={openAiSettings}>Set up AI</button>
+            </div>
+          )}
           <nav className="today-themes" aria-label="Newspaper themes">
             <button className="today-story-control" aria-pressed={!activeTheme && !sharedOnly} onClick={() => { setTheme(null); setSharedOnly(false); }}>All stories</button>
             {themes.map((name) => <button key={name} className="today-story-control" aria-pressed={activeTheme === name} onClick={() => setTheme(activeTheme === name ? null : name)}>{name}</button>)}

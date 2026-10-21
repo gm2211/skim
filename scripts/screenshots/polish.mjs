@@ -76,6 +76,7 @@ const openDiscover = async (p) => {
 
 const SCENES = [
   { name: "today", viewport: DESKTOP, run: openToday },
+  { name: "today-no-ai", viewport: DESKTOP, init: { content: "window.__SKIM_NO_AI__ = true;" }, run: openToday },
   // The same paper over a wider window, picked from the cog.
   { name: "today-page-2", viewport: DESKTOP, run: async (p) => { await openToday(p); await turnBack(p, 1); } },
   { name: "today-full", viewport: TALL, run: async (p) => { await openToday(p); await unclip(p); }, target: ".today-page" },

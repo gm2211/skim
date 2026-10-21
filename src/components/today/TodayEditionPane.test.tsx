@@ -184,6 +184,25 @@ describe("TodayEditionPane", () => {
     expect(screen.getByText("Supporting passage from the report.")).toBeVisible();
   });
 
+  it("says plainly when no AI model is set up and links to AI settings", async () => {
+    // DEFAULT_SETTINGS has no provider.
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    expect(await screen.findByText("No AI model is set up, so Today can't write summaries.")).toBeVisible();
+    expect(screen.getByText("Summaries off")).toBeVisible();
+    expect(screen.getAllByRole("button", { name: "Set up AI" })).toHaveLength(2);
+    expect(commands.generateTodayEditorial).not.toHaveBeenCalled();
+  });
+
+  it("shows no AI-off notice once a model is set up", async () => {
+    vi.mocked(commands.getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    await screen.findByRole("button", { name: "Default snapshot title" });
+    expect(screen.queryByText(/No AI model is set up/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Summaries off")).not.toBeInTheDocument();
+  });
+
   it("asks the assistant about the whole page or one story", async () => {
     vi.mocked(commands.getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } });
     const member = makeItem({}).member_articles[0];

@@ -138,7 +138,9 @@ behaviors:
       ask button, a refresh button and a cog that opens a small settings popover (summary model,
       edition size, retry, AI settings). The popover is wide enough for every
       label to sit on one line with its control inside it. Missing summaries show as a note with
-      Retry in the dateline instead of a loose button. On iOS the paper has one header: the title
+      Retry in the dateline instead of a loose button. With no AI model set up, the desktop dateline says
+      "Summaries off" with "Set up AI", and a notice above the stories says Today can't write
+      summaries without a model, so feed text is never mistaken for a summary. On iOS the paper has one header: the title
       bar carries the serif "Today" nameplate between its icons, and the page below opens with the
       dateline rule, never a second "Today" or a repeated count. While a page is being made, both
       platforms show the page's shape as shimmering placeholders (lead, stories, briefs) with no

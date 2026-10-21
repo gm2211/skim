@@ -7,7 +7,7 @@ import { PAGE_SIZE, TODAY_PAGE_COUNT, formatWindowDate, rankFor } from "../../li
 import { TodayStorySkeleton } from "./TodayStorySkeleton";
 import { TodayStory } from "./TodayStory";
 import { ModelPicker } from "../common/ModelPicker";
-import { ChatIcon, NewspaperIcon, RefreshIcon } from "../ui/icons";
+import { ChatIcon, NewspaperIcon, RefreshIcon, SparkleIcon } from "../ui/icons";
 import { openAgentChat } from "../../stores/agentChatStore";
 import { useAgentContext } from "../../hooks/useAgentContext";
 import { storyForAgent } from "../../lib/agentContext";
@@ -54,6 +54,8 @@ export function TodayEditionPane() {
   const refreshFeeds = useRefreshAllFeeds();
   const isFrontPage = !isPhone && !selectedArticleId;
   const items = data?.items ?? [];
+  // Settings have loaded and name no provider: say so plainly, not just with excerpts.
+  const aiOff = !aiEnabled && !settingsUnavailable && !isPreparingSummaries;
   const themes = [...new Set(items.flatMap((item) => item.editorial?.theme ? [item.editorial.theme] : []))];
   const activeTheme = themes.includes(theme ?? "") ? theme : null;
   const visibleItems = items.map((item, index) => ({ item, index })).filter(({ item }) =>
@@ -234,13 +236,20 @@ export function TodayEditionPane() {
         )}
 
         {!isLoading && !isError && items.length > 0 && <>
-          {!aiEnabled && !settingsUnavailable && items.some((item) => !item.editorial) && <p className="today-summary-note">Unprepared summaries show source excerpts. <button className="today-story-control text-accent" onClick={() => useUiStore.getState().setShowSettings(true)}>Set up AI for thematic summaries</button></p>}
+          {aiOff && <div role="status" className="today-ai-off">
+            <SparkleIcon size={18} className="today-ai-off-icon" />
+            <div className="today-ai-off-text">
+              <p className="today-ai-off-title">AI is off, so stories aren't summarized</p>
+              <p>Each story shows its feed's excerpt, and only reports with matching headlines are grouped.</p>
+            </div>
+            <button className="today-ai-off-action" onClick={openAiSettings}>Set up AI</button>
+          </div>}
           <nav className="today-themes" aria-label="Newspaper themes">
             <button className="today-story-control" aria-pressed={!activeTheme && !sharedOnly} onClick={() => { setTheme(null); setSharedOnly(false); }}>All stories</button>
             {themes.map((name) => <button key={name} className="today-story-control" aria-pressed={activeTheme === name} onClick={() => setTheme(activeTheme === name ? null : name)}>{name}</button>)}
             <button className="today-story-control" aria-pressed={sharedOnly} onClick={() => setSharedOnly(!sharedOnly)}>Multiple reports</button>
           </nav>
-          {visibleItems.length === 0 && <p className="today-summary-note">No stories with multiple reports in this selection.</p>}
+          {visibleItems.length === 0 && <p className="today-summary-note">No stories with multiple reports in this selection.{aiOff && " Without AI, Skim only groups reports whose headlines share key words."}</p>}
         </>}
         {!isLoading && !isError && visibleItems.length > 0 && <FrontPage cells={visibleItems.map(({ item }, index) => ({
           key: item.story_id,

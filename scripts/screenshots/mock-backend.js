@@ -353,7 +353,8 @@
       return { id: "new-" + url, title: url, url };
     },
     list_folders: () => folders,
-    get_settings: () => SETTINGS,
+    // __SKIM_AI_OFF__ shows the app with no AI provider set up.
+    get_settings: () => window.__SKIM_AI_OFF__ ? { ...SETTINGS, ai: { ...SETTINGS.ai, provider: "none" } } : SETTINGS,
     // Persist, so a picker in a popover shows what was just chosen.
     update_settings: ({ settings }) => { SETTINGS = settings; return null; },
     get_total_unread: () => articles.filter((a) => !a.is_read).length,
@@ -408,8 +409,8 @@
     get_or_generate_today_edition: (args) => {
       const view = todayView(args);
       const failed = window.__SKIM_UNSUMMARIZED__ || 0;
-      if (!window.__SKIM_SLOW_EDITORIAL__ && !failed && !window.__SKIM_NO_SUMMARIES__) return view;
-      return { ...view, items: view.items.map((item, index) => window.__SKIM_SLOW_EDITORIAL__ || window.__SKIM_NO_SUMMARIES__ || (index >= 1 && index <= failed) ? { ...item, editorial: null } : item) };
+      if (!window.__SKIM_SLOW_EDITORIAL__ && !failed && !window.__SKIM_NO_SUMMARIES__ && !window.__SKIM_AI_OFF__) return view;
+      return { ...view, items: view.items.map((item, index) => window.__SKIM_SLOW_EDITORIAL__ || window.__SKIM_NO_SUMMARIES__ || window.__SKIM_AI_OFF__ || (index >= 1 && index <= failed) ? { ...item, editorial: null } : item) };
     },
     list_today_edition_items: ({ editionId } = {}) => pageItems(editionId?.startsWith("ed-week-") ? Number(editionId.slice(8)) : 0),
     generate_today_ledes: () => todayView(),

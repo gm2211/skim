@@ -150,6 +150,11 @@ describe("article list scope regressions", () => {
   });
 
   it("offers the smart sorting switch on lists of feeds only, and remembers it", async () => {
+    const store: Record<string, string> = {};
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; } },
+    });
     useUiStore.setState({ sidebarView: { type: "all" }, listSort: "newest" });
     render(<ArticleList />);
     const toggle = screen.getByRole("switch", { name: "Smart sorting" });

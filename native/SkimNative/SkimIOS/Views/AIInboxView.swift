@@ -40,7 +40,7 @@ struct AIInboxView: View {
                 ContentUnavailableView(
                     "Nothing unread",
                     systemImage: SkimIcon.aiInbox,
-                    description: Text("For you ranks unread articles. Refresh your feeds, or sort by Newest to see read ones.")
+                    description: Text("Smart sorting ranks unread articles. Refresh your feeds, or turn it off to see read ones.")
                 )
                 .foregroundStyle(SkimStyle.secondary)
                 .frame(maxHeight: .infinity)
@@ -84,7 +84,7 @@ struct AIInboxView: View {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
-                        Text("Ranked by importance and what you read")
+                        Text("Smart sorted for you")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(SkimStyle.secondary)
                             .fixedSize(horizontal: false, vertical: true)

@@ -7,6 +7,25 @@ export type ListSort = "newest" | "forYou";
 export type AddFeedTab = "url" | "feedly";
 export type SettingsTab = "ai" | "sync" | "appearance" | "reading";
 
+// Smart sorting is a standing preference, so it survives relaunches.
+const LIST_SORT_KEY = "skim.listSort";
+
+function readListSort(): ListSort {
+  try {
+    return globalThis.localStorage?.getItem(LIST_SORT_KEY) === "forYou" ? "forYou" : "newest";
+  } catch {
+    return "newest";
+  }
+}
+
+function writeListSort(sort: ListSort) {
+  try {
+    globalThis.localStorage?.setItem(LIST_SORT_KEY, sort);
+  } catch {
+    // Storage can be unavailable; the toggle still works for this session.
+  }
+}
+
 type PhonePane = "sidebar" | "list" | "detail";
 type ArticleReturnTarget = "today";
 
@@ -100,7 +119,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   listCollapsed: false,
   listManualCollapse: false,
   listFilter: "unread",
-  listSort: "newest",
+  listSort: readListSort(),
   isPhone: false,
   phonePane: "list",
 
@@ -195,7 +214,10 @@ export const useUiStore = create<UiState>((set, get) => ({
     }),
 
   setListFilter: (filter) => set({ listFilter: filter }),
-  setListSort: (sort) => set({ listSort: sort }),
+  setListSort: (sort) => {
+    writeListSort(sort);
+    set({ listSort: sort });
+  },
 
   setPhonePane: (pane) => set({ phonePane: pane }),
   phoneBack: () =>

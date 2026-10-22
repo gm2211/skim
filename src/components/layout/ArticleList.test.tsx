@@ -149,15 +149,22 @@ describe("article list scope regressions", () => {
     })).toEqual({ filter: { limit: 200, is_read: false, ...expected }, recentOnly: false });
   });
 
-  it("offers the For you sort on lists of feeds only", async () => {
+  it("offers the smart sorting switch on lists of feeds only, and remembers it", async () => {
     useUiStore.setState({ sidebarView: { type: "all" }, listSort: "newest" });
     render(<ArticleList />);
-    await userEvent.click(screen.getByRole("button", { name: "For you" }));
+    const toggle = screen.getByRole("switch", { name: "Smart sorting" });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    await userEvent.click(toggle);
     expect(useUiStore.getState().listSort).toBe("forYou");
+    expect(localStorage.getItem("skim.listSort")).toBe("forYou");
+    expect(screen.getByRole("switch", { name: "Smart sorting" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(screen.getByRole("switch", { name: "Smart sorting" }));
+    expect(useUiStore.getState().listSort).toBe("newest");
+    expect(localStorage.getItem("skim.listSort")).toBe("newest");
     cleanup();
     useUiStore.setState({ sidebarView: { type: "starred" } });
     render(<ArticleList />);
-    expect(screen.queryByRole("button", { name: "For you" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Smart sorting" })).not.toBeInTheDocument();
   });
 });
 

@@ -40,7 +40,7 @@ struct AIInboxView: View {
                 ContentUnavailableView(
                     "Nothing unread",
                     systemImage: SkimIcon.aiInbox,
-                    description: Text("For you ranks unread articles. Refresh your feeds, or sort by Newest to see read ones.")
+                    description: Text("Smart sorting ranks unread articles. Refresh your feeds, or turn it off to see read ones.")
                 )
                 .foregroundStyle(SkimStyle.secondary)
                 .frame(maxHeight: .infinity)

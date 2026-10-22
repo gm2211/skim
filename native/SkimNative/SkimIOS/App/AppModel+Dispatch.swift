@@ -57,9 +57,11 @@ extension AppModel {
         var stored = try? await store.dispatchEdition(id: id)
         guard isCurrent(requestID) else { return }
         if mode != .rewrite { dispatch = stored }
-        if mode == .open, let stored, stored.isComplete {
-            dispatchNewArticles = (try? await store.countArticles(from: stored.startsAt, to: stored.endsAt, fetchedAfter: stored.generatedAt)) ?? 0
-            return
+        if mode == .open, let complete = stored, complete.isComplete {
+            dispatchNewArticles = (try? await store.countArticles(from: complete.startsAt, to: complete.endsAt, fetchedAfter: complete.generatedAt)) ?? 0
+            // An empty page is written again once articles arrive for it.
+            guard complete.themes.isEmpty, dispatchNewArticles > 0, isCurrent(requestID) else { return }
+            stored = nil
         }
         if mode == .rewrite { stored = nil; dispatch = nil }
         defer { if dispatchLoadID == requestID { dispatchStatus = nil } }

@@ -52,7 +52,10 @@ struct DispatchView: View {
                     .id(Self.pageTop)
                 }
                 .onChange(of: model.todayPage) { _, _ in proxy.scrollTo(Self.pageTop, anchor: .top) }
-                .refreshable { await model.refreshAll() }
+                .refreshable {
+                    await model.refreshAll()
+                    await load()
+                }
                 .gesture(DragGesture(minimumDistance: 48, coordinateSpace: .local).onEnded { value in
                     guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
                     turn(to: model.todayPage + (value.translation.width < 0 ? 1 : -1))
@@ -426,7 +429,8 @@ struct DispatchView: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Done") { showSettings = false } }
             }
         }
-        .presentationDetents([.medium])
+        // Tall enough for the actions on an iPhone SE, where half the screen hides them.
+        .presentationDetents([.height(480), .large])
         .sheet(isPresented: $showAISettings) { SettingsSheet(isPresented: $showAISettings, aiOnly: true) }
     }
 }

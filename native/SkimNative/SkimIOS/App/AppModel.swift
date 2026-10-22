@@ -127,7 +127,10 @@ final class AppModel: ObservableObject {
     @Published var folders: [FeedFolder] = []
     @Published var articles: [Article] = []
     @Published var listMode: ArticleListMode = .unread
-    @Published var listSort: ArticleListSort = .newest
+    /// Smart sorting is a standing preference, so it survives relaunches.
+    @Published var listSort: ArticleListSort = ArticleListSort(rawValue: UserDefaults.standard.string(forKey: "listSort") ?? "") ?? .newest {
+        didSet { UserDefaults.standard.set(listSort.rawValue, forKey: "listSort") }
+    }
     @Published var selectedFeedID: String?
     @Published var selectedFolderID: String?
     @Published var searchQuery = ""

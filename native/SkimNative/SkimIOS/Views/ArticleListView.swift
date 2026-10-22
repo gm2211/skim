@@ -374,11 +374,12 @@ struct ArticleListView: View {
         }
     }
 
-    private var listSortBinding: Binding<ArticleListSort> {
+    /// Smart sorting on is the For you ranking; off is the raw list, newest first.
+    private var smartSortingBinding: Binding<Bool> {
         Binding(
-            get: { model.listSort },
-            set: { sort in
-                if sort == .forYou { presentAIInbox() } else { model.listSort = .newest }
+            get: { model.isForYou },
+            set: { on in
+                if on { presentAIInbox() } else { model.listSort = .newest }
             }
         )
     }
@@ -408,7 +409,7 @@ struct ArticleListView: View {
             if !showToday {
                 HStack {
                     Spacer()
-                    topBarTitle.frame(maxWidth: 190)
+                    topBarTitle.frame(maxWidth: model.canSortForYou ? 160 : 190)
                     Spacer()
                 }
             }
@@ -428,6 +429,18 @@ struct ArticleListView: View {
                     }
                 } else {
                     Spacer()
+                    if model.canSortForYou {
+                        BorderlessIconButton(systemName: "sparkles",
+                                             title: "Smart sorting",
+                                             isActive: model.isForYou,
+                                             size: 17, tapSize: 36) {
+                            dismissTextEntry()
+                            smartSortingBinding.wrappedValue.toggle()
+                        }
+                        .opacity(model.isForYou ? 1 : 0.55)
+                        .accessibilityValue(model.isForYou ? "On" : "Off")
+                        .accessibilityHint("Ranks unread articles for you when on; newest first when off")
+                    }
                 }
 
                 Menu {
@@ -444,13 +457,9 @@ struct ArticleListView: View {
                         presentArticleChat()
                     }
                     if !showToday && model.canSortForYou {
-                        Picker(selection: listSortBinding) {
-                            Label("Newest", systemImage: SkimIcon.recent).tag(ArticleListSort.newest)
-                            Label("For you", systemImage: SkimIcon.aiInbox).tag(ArticleListSort.forYou)
-                        } label: {
-                            Label("Sort", systemImage: "arrow.up.arrow.down")
+                        Toggle(isOn: smartSortingBinding) {
+                            Label("Smart Sorting", systemImage: "sparkles")
                         }
-                        .pickerStyle(.menu)
                     } else {
                         Button("For you", systemImage: SkimIcon.aiInbox) {
                             presentAIInbox()
@@ -738,7 +747,9 @@ struct ArticleListView: View {
         case .aiInbox:
             return !showToday && model.isForYou
         case .unread, .all, .starred, .recent:
-            return !showToday && !isSearchActive && !model.isForYou && model.selectedFolderID == nil && model.listMode == item.listMode
+            // Smart sorting keeps the list's tab lit, unless a For you tab is there to show it.
+            let forYouTabShown = model.isForYou && bottomBarItems.contains(.aiInbox)
+            return !showToday && !isSearchActive && !forYouTabShown && model.selectedFolderID == nil && model.listMode == item.listMode
         }
     }
 

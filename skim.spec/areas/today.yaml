@@ -1,9 +1,83 @@
 id: today
-name: Today edition
+name: The Dispatch (formerly Today)
 prose: >-
-  Today is a frozen daily front page: the most important stories from the reader's feeds, grouped
-  across sources, with a short preview taken from a real source.
+  The Dispatch is the reader's newspaper. With AI set up, an AI journalist reads the articles from
+  the last 1, 3 or 7 days and writes its own edition around the most important themes and
+  takeaways, each piece linking to the stories behind it. Without AI, the same place shows the
+  story page: the most important stories from the feeds, grouped across sources, each with a
+  short preview taken from a real source. The behaviors below that speak of stories, editions of
+  5-20 stories and summaries describe that story page. The story page's per-story AI summaries
+  and their retry were retired when the AI-written edition replaced it (Giulio, 2026-10-22).
 behaviors:
+  - id: ai-written-edition
+    description: >-
+      With an AI provider set up, the paper is written by the AI: an editor pass reads every
+      headline in the window and picks 4-6 themes plus up to 8 one-line briefs, and a writer pass
+      files one short piece per theme (2-4 paragraphs, a "What it means" box of takeaways, and the
+      list of reports behind it), on desktop and iOS alike.
+    details: >-
+      A theme can gather several related stories (a run of breaches at different certificate
+      authorities), not only reports of one event. The editor reads one article per link or
+      headline, taking each feed in turn so a busy feed can't crowd out the rest: up to 240
+      headlines with a short excerpt on a hosted model, 60 on a model on the Mac or MLX, and 40
+      headlines alone on Apple's on-device model. The writer reads up to six of the theme's
+      reports (fewer on device), with linked pages resolved for aggregator posts. An answer the
+      checks reject is sent back once with the reason. Pieces land on the page as they are filed,
+      under shimmering placeholders; a piece that can't be written says why, and Retry writes the
+      missing ones. The page says it was written by AI, from how many articles, with which model,
+      and that it can get things wrong.
+    source:
+      text: >-
+        "today" should be an AI-generated newspaper, where the AI journalist reads articles in the
+        last X days and writes its own newspaper based on what it thinks are the most important
+        themes and take-aways with links to the different stories connected to the theme.
+      reference: Giulio, project chat, 2026-10-22, with a screenshot of a DuckDB release leading Today
+  - id: ranked-by-consequence
+    description: >-
+      Themes are ranked by consequence, not by how often something was posted: active security
+      incidents, exploited vulnerabilities, breaches, outages and decisions by governments, courts
+      or regulators outrank launches and releases, and a routine release sits low or in the briefs.
+    details: >-
+      The editor rates each theme 1-5 and the page orders by that rating, the editor's order
+      breaking ties. The reader's AI Inbox interests break ties and pick briefs but never lift a
+      minor story above a consequential one. The story page's ranking (coverage, freshness, taste)
+      led with a two-report DuckDB release while single-report breach stories each scored lower,
+      and its importance rating was skipped on windows of more than 64 stories.
+    source:
+      text: >-
+        why is this my main article? With all that's going on right now with vulns and
+        certificates being breached I would have expected the main story to be about
+      reference: Giulio, project chat, 2026-10-22
+  - id: covers-days
+    description: >-
+      The reader chooses how many days one edition reads: 1, 3 (the default) or 7, from the
+      paper's cog and from Settings. The front page reads the chosen days up to the end of today;
+      each page turned is the edition before it.
+    source:
+      text: reads articles in the last X days
+      reference: Giulio, project chat, 2026-10-22
+  - id: cited-pieces
+    description: >-
+      Every piece cites its reports by number; each number is a small link that opens that report
+      in the reader, and the numbered reports are listed under the piece. A citation that names no
+      report of the piece is dropped, and a piece with no valid citation is not kept.
+  - id: edition-is-kept
+    description: >-
+      An edition is written once per window and kept, so reopening the paper shows it at once. When
+      articles arrive after it was written, the front page says how many and offers "Write a new
+      edition"; the cog offers the same at any time.
+  - id: paper-name
+    description: >-
+      The paper is called The Dispatch: the nameplate, the cog's heading, the sidebar and bottom-bar
+      entries ("Dispatch"), the palette and the Ask button use the name.
+    details: >-
+      Proposed names were The Dispatch, The Briefing, Broadsheet and The Ledger; The Dispatch was
+      the recommended pick, used until Giulio chooses (assumption, 2026-10-22).
+    source:
+      text: >-
+        we probably need to find a different name than Today since it might be more than today -
+        it should be like a magazine or newspaper name
+      reference: Giulio, project chat, 2026-10-22
   - id: frozen-daily-edition
     description: >-
       Today shows an edition of 5, 10, or 20 stories (reader's choice). Stories stay fixed for the
@@ -43,30 +117,6 @@ behaviors:
     description: >-
       Each story groups the reports that cover the same event, shows how many reports there are, and
       labels syndicated copies.
-  - id: ai-summary
-    description: >-
-      The top stories on a page carry an AI summary of two or three sentences written from their
-      reports, labelled "AI summary · Based on N of M reports", on desktop and iOS alike.
-    details: >-
-      The model reads up to four reports (two of 1,500 characters on Apple's on-device model) and
-      must return one exact supporting quote from every report it read, or the summary is not
-      kept. Titles show first; each card's summary slot, the photo lead's included, shows an
-      animated placeholder until its summary lands. On desktop each card shows its title and the
-      feed's own text at once, with the animated placeholder beneath, and the summary replaces
-      that text when it lands; summaries are written four at a time on a hosted model and one at
-      a time on a local one, and are kept with the edition so they are written once. Rail stories
-      show the whole summary with its label; only briefs are cut to one sentence. A story whose
-      summary can't be written keeps its verified source passage instead of staying blank, and on
-      desktop its card says why ("Not summarized: …"), as does the dateline's "N not summarized".
-      On desktop and iOS alike, an answer that fails the checks is sent back once with the reason
-      so the model can correct it, and quotes match through curly quotes, dashes and line breaks
-      while the page shows the report's own words. On desktop a rate-limited or overloaded
-      provider is asked again after a pause. An answer wrapped in a code fence or a line of
-      prose, or carrying extra keys or an empty figure, is read for its summary object; when no
-      summary can be read, the card quotes how the answer began.
-    source:
-      text: Where's the summary in newspaper / today view
-      reference: Giulio, project chat, 2026-10-14, with an iOS screenshot of a lead showing only the feed excerpt
   - id: source-verified-preview
     description: >-
       Where a story has no AI summary, its preview is an exact passage from one named source, one
@@ -124,9 +174,6 @@ behaviors:
       reference: >-
         Giulio, project thread "Mark read on tap or chat", 2026-10-14, on an iPhone Today card
         whose read circle stayed empty after he opened and asked about it
-  - id: summary-retry
-    description: >-
-      Missing story summaries can be retried, with progress shown while they are written.
   - id: ranking-signals
     description: >-
       Story ranking learns from the same reader signals as the AI Inbox, on both platforms: the
@@ -207,8 +254,8 @@ behaviors:
       report or feed item. No stock art.
   - id: ask-about-today
     description: >-
-      The reader can chat with the whole Today page or with a single story. The chat starts from
-      that page's or story's reports and cites them.
+      The reader can chat with the whole paper or with a single piece (or, on the story page, a
+      single story). The chat starts from that page's, piece's or story's reports and cites them.
     details: >-
       Desktop has an Ask button in the top bar for the page and an Ask action on each story; both
       open the app assistant (the same one Cmd+K uses) with the page's stories, or the chosen story,

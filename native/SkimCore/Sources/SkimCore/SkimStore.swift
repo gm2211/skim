@@ -92,7 +92,7 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
     }
 
     /// Articles published (or, undated, fetched) in `[start, end)`, newest
-    /// first: what one edition of The Dispatch reads.
+    /// first: what one edition of The Briefing reads.
     public func articles(from start: Date, to end: Date, limit: Int) async throws -> [Article] {
         try db.articles(from: start, to: end, limit: limit)
     }

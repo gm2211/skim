@@ -45,7 +45,7 @@ function FrontPage({ cells }: { cells: { key: string; node: React.ReactNode }[] 
 }
 
 /**
- * With AI set up, the paper is The Dispatch, written by the AI from the
+ * With AI set up, the paper is The Briefing, written by the AI from the
  * reader's feeds. Without it, the same page sets the feeds' own stories.
  * Settings decide which, so neither page's work starts before they load.
  */

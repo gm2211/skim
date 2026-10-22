@@ -1,6 +1,6 @@
 import Foundation
 
-/// The Dispatch: an edition an AI journalist writes from the reader's feeds.
+/// The Briefing: an edition an AI journalist writes from the reader's feeds.
 ///
 /// Two passes, the same as the desktop's `commands::dispatch`. The editor
 /// reads every headline in the window (one per link, feeds taken in turn so a
@@ -76,8 +76,8 @@ public struct DispatchEdition: Codable, Hashable, Sendable {
 }
 
 public enum Dispatch {
-    public static let name = "The Dispatch"
-    public static let shortName = "Dispatch"
+    public static let name = "The Briefing"
+    public static let shortName = "Briefing"
     public static let dayChoices = [1, 3, 7]
     public static let maxThemes = 6
     public static let maxThemeArticles = 10
@@ -158,7 +158,7 @@ public enum Dispatch {
     public static func editorInstructions(days: Int, interests: String?) -> String {
         let span = days == 1 ? "the last day" : "the last \(days) days"
         var text = """
-        You are the editor-in-chief of The Dispatch, a newspaper written for one reader from the articles in their feeds over \(span). Output JSON only.
+        You are the editor-in-chief of The Briefing, a newspaper written for one reader from the articles in their feeds over \(span). Output JSON only.
 
         Read the whole listing and decide what this period was really about. Then commission the pieces your journalists will write.
 
@@ -194,7 +194,7 @@ public enum Dispatch {
     }
 
     public static let writerInstructions = """
-    You are a journalist at The Dispatch. Write one short newspaper piece about the assigned theme from the numbered reports supplied. Output JSON only.
+    You are a journalist at The Briefing. Write one short newspaper piece about the assigned theme from the numbered reports supplied. Output JSON only.
 
     - Open with what happened and why it matters, then connect the reports: what each adds, where they agree or disagree, and what remains uncertain.
     - Use only facts stated in the reports. Never invent numbers, names, dates or quotes, and never speculate beyond them.

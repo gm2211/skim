@@ -1,4 +1,4 @@
-//! The Dispatch: an edition an AI journalist writes from the reader's feeds.
+//! The Briefing: an edition an AI journalist writes from the reader's feeds.
 //!
 //! Two passes. The editor reads every headline in the window (one article per
 //! link, round-robin across feeds so a busy feed can't crowd out the rest),
@@ -111,7 +111,7 @@ pub fn edition_id(starts_at: i64, ends_at: i64, days: i64) -> String {
 
 fn validate_window(starts_at: i64, ends_at: i64, days: i64) -> Result<(), String> {
     if ends_at <= starts_at || ends_at - starts_at > MAX_WINDOW_SECONDS || !matches!(days, 1 | 3 | 7) {
-        return Err("The Dispatch covers 1, 3 or 7 days.".into());
+        return Err("The Briefing covers 1, 3 or 7 days.".into());
     }
     Ok(())
 }

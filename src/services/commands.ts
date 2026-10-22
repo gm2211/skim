@@ -471,7 +471,7 @@ export const setTodayEditionItemConsumed = (
     changedAt,
   });
 
-// The Dispatch
+// The Briefing
 export interface DispatchProgress {
   edition_id: string;
   request_id?: string;

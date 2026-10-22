@@ -1,7 +1,7 @@
 id: today
-name: The Dispatch (formerly Today)
+name: The Briefing (formerly Today)
 prose: >-
-  The Dispatch is the reader's newspaper. With AI set up, an AI journalist reads the articles from
+  The Briefing is the reader's newspaper. With AI set up, an AI journalist reads the articles from
   the last 1, 3 or 7 days and writes its own edition around the most important themes and
   takeaways, each piece linking to the stories behind it. Without AI, the same place shows the
   story page: the most important stories from the feeds, grouped across sources, each with a
@@ -68,11 +68,11 @@ behaviors:
       edition"; the cog offers the same at any time.
   - id: paper-name
     description: >-
-      The paper is called The Dispatch: the nameplate, the cog's heading, the sidebar and bottom-bar
-      entries ("Dispatch"), the palette and the Ask button use the name.
+      The paper is called The Briefing: the nameplate, the cog's heading, the sidebar and bottom-bar
+      entries ("Briefing"), the palette and the Ask button use the name.
     details: >-
-      Proposed names were The Dispatch, The Briefing, Broadsheet and The Ledger; The Dispatch was
-      the recommended pick, used until Giulio chooses (assumption, 2026-10-22).
+      Proposed names were The Dispatch, The Briefing, Broadsheet and The Ledger; Giulio chose The
+      Briefing on 2026-10-22.
     source:
       text: >-
         we probably need to find a different name than Today since it might be more than today -

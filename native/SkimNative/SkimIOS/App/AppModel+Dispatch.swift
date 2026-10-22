@@ -1,7 +1,7 @@
 import Foundation
 import SkimCore
 
-/// The Dispatch: the paper the AI writes from the reader's feeds. SkimCore
+/// The Briefing: the paper the AI writes from the reader's feeds. SkimCore
 /// holds the prompts and the checks; this runs the two passes with the
 /// reader's model and keeps the edition, so a window is written once.
 extension AppModel {

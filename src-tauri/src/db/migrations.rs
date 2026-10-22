@@ -426,7 +426,7 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute("ALTER TABLE feeds ADD COLUMN opml_category TEXT", [])?;
     }
 
-    // The Dispatch: editions an AI journalist wrote, one per window.
+    // The Briefing: editions an AI journalist wrote, one per window.
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS dispatch_editions (
             id TEXT PRIMARY KEY,

@@ -1,9 +1,9 @@
 import type { TodayWindow } from "./todayEdition";
 
 /** The paper's name, on the nameplate and wherever the app links to it. */
-export const PAPER_NAME = "The Dispatch";
+export const PAPER_NAME = "The Briefing";
 /** The short form, for tight spots such as a sidebar row or a tab. */
-export const PAPER_SHORT_NAME = "Dispatch";
+export const PAPER_SHORT_NAME = "Briefing";
 
 export const DISPATCH_DAY_CHOICES = [1, 3, 7] as const;
 export type DispatchDays = (typeof DISPATCH_DAY_CHOICES)[number];

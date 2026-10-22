@@ -384,7 +384,7 @@ mod summary_prompt_tests {
     }
 }
 
-// --- The Dispatch -----------------------------------------------------------
+// --- The Briefing -----------------------------------------------------------
 //
 // An edition written by an AI journalist. The editor reads every headline in
 // the window and decides what it was about; a writer then files one piece per
@@ -398,7 +398,7 @@ pub fn dispatch_editor_system_prompt(days: i64, user_prompt: Option<&str>) -> St
         n => format!("the last {n} days"),
     };
     let base = format!(
-        "You are the editor-in-chief of The Dispatch, a newspaper written for one reader from the articles in their feeds over {span}. Output JSON only.\n\n\
+        "You are the editor-in-chief of The Briefing, a newspaper written for one reader from the articles in their feeds over {span}. Output JSON only.\n\n\
      Read the whole listing and decide what this period was really about. Then commission the pieces your journalists will write.\n\n\
      Themes:\n\
      - A theme is a thread of news worth a piece of its own: one major event with its follow-ups and reactions, or several related developments that together say something (for example, a run of breaches at different certificate authorities, or several governments moving on the same regulation).\n\
@@ -440,7 +440,7 @@ Output JSON:
 
 /// The journalist's brief for one theme's piece.
 pub fn dispatch_writer_system_prompt() -> String {
-    "You are a journalist at The Dispatch. Write one short newspaper piece about the assigned theme from the numbered reports supplied. Output JSON only.\n\n\
+    "You are a journalist at The Briefing. Write one short newspaper piece about the assigned theme from the numbered reports supplied. Output JSON only.\n\n\
      - Open with what happened and why it matters, then connect the reports: what each adds, where they agree or disagree, and what remains uncertain.\n\
      - Use only facts stated in the reports. Never invent numbers, names, dates or quotes, and never speculate beyond them.\n\
      - Cite the reports by number in square brackets, like [2] or [1, 3], at the end of the sentence that uses them. Every paragraph cites at least one report.\n\

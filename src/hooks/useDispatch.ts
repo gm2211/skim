@@ -38,7 +38,7 @@ function omit<T>(record: Record<string, T>, key: string): Record<string, T> {
 const newRequestId = () => globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 /**
- * The Dispatch for the page on screen: the stored edition, written when the
+ * The Briefing for the page on screen: the stored edition, written when the
  * page is first opened. Pieces land one by one through progress events.
  */
 export function useDispatch() {

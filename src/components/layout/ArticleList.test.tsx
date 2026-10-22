@@ -179,18 +179,18 @@ describe("article list toolbar", () => {
   it("reaches Today from the list header while the sidebar is hidden", async () => {
     useUiStore.setState({ sidebarView: { type: "all" }, isPhone: false, sidebarCollapsed: false });
     const { unmount } = render(<ArticleList />);
-    expect(screen.queryByRole("button", { name: "The Dispatch" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "The Briefing" })).not.toBeInTheDocument();
     unmount();
 
     useUiStore.setState({ sidebarCollapsed: true });
     render(<ArticleList />);
-    await userEvent.click(screen.getByRole("button", { name: "The Dispatch" }));
+    await userEvent.click(screen.getByRole("button", { name: "The Briefing" }));
     expect(useUiStore.getState().sidebarView).toEqual({ type: "today" });
   });
 
   it("offers Today in the phone list header too", () => {
     useUiStore.setState({ sidebarView: { type: "all" }, isPhone: true, sidebarCollapsed: false });
     render(<ArticleList />);
-    expect(screen.getByRole("button", { name: "The Dispatch" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "The Briefing" })).toBeInTheDocument();
   });
 });

@@ -206,7 +206,7 @@ function chatReply(messages) {
     .join("\n");
 }
 
-/** The Dispatch's editor: shared-word groups become themes, ranked so incidents lead. */
+/** The Briefing's editor: shared-word groups become themes, ranked so incidents lead. */
 function dispatchPlanFor(rows) {
   const plan = JSON.parse(frontPageFor(rows));
   const byId = new Map(rows.map((row) => [row.id, row]));
@@ -228,7 +228,7 @@ function dispatchPlanFor(rows) {
   return JSON.stringify({ themes, briefs: plan.briefs.map((b) => ({ text: b.text, articles: b.article_ids })) });
 }
 
-/** The Dispatch's writer: the reports' own opening sentences, each cited. */
+/** The Briefing's writer: the reports' own opening sentences, each cited. */
 function dispatchPieceFor(user) {
   const reports = [...user.matchAll(/^\[(\d+)\] (.+)\n([\s\S]*?)(?=\n\[\d+\] |\n\nOutput JSON)/gm)].map((m) => ({
     n: Number(m[1]), title: m[2], text: m[3].replace(/\s+/g, " ").trim(),
@@ -244,8 +244,8 @@ function respond(messages) {
   const all = messages.map((m) => m.content).join("\n");
   const system = messages.find((m) => m.role === "system")?.content ?? "";
 
-  if (/editor-in-chief of The Dispatch/.test(system)) return dispatchPlanFor(parseListing(messages.find((m) => m.role === "user")?.content ?? ""));
-  if (/journalist at The Dispatch/.test(system)) return dispatchPieceFor(messages.find((m) => m.role === "user")?.content ?? "");
+  if (/editor-in-chief of The Briefing/.test(system)) return dispatchPlanFor(parseListing(messages.find((m) => m.role === "user")?.content ?? ""));
+  if (/journalist at The Briefing/.test(system)) return dispatchPieceFor(messages.find((m) => m.role === "user")?.content ?? "");
 
   if (/"themes"\s*:/.test(user)) return themesFor(parseListing(user));
   if (/"triage"\s*:/.test(user)) return triageFor(parseListing(user));

@@ -198,7 +198,7 @@ describe("TodayEditionPane", () => {
     renderPane();
     await screen.findByRole("button", { name: "Second story" });
 
-    await user.click(screen.getByRole("button", { name: "Ask about The Dispatch" }));
+    await user.click(screen.getByRole("button", { name: "Ask about The Briefing" }));
     const page = useAgentChatStore.getState().seed?.context;
     expect(page?.view).toBe("today");
     expect(page?.story).toBeNull();
@@ -373,8 +373,8 @@ describe("TodayEditionPane", () => {
     renderPane();
     await screen.findByText("Default snapshot title");
     expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "The Dispatch settings" }));
-    expect(within(screen.getByRole("dialog", { name: "The Dispatch settings" })).getByTestId("model-picker")).toHaveAttribute("data-surface", "today");
+    await userEvent.click(screen.getByRole("button", { name: "The Briefing settings" }));
+    expect(within(screen.getByRole("dialog", { name: "The Briefing settings" })).getByTestId("model-picker")).toHaveAttribute("data-surface", "today");
     expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "false");
   });
 
@@ -397,7 +397,7 @@ describe("TodayEditionPane", () => {
       expect(last[0]).toBe(front[0] - 7 * 24 * 60 * 60);
     });
     expect(screen.getByText(/^Page 2/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "The Dispatch" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "The Briefing" })).toBeInTheDocument();
     expect(screen.getAllByText(/\u2013/).length).toBeGreaterThan(0);
 
     // → turns further back, ← comes forward; the front page has no earlier page.
@@ -415,11 +415,11 @@ describe("TodayEditionPane", () => {
     });
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
-    await userEvent.click(await screen.findByRole("button", { name: "The Dispatch settings" }));
+    await userEvent.click(await screen.findByRole("button", { name: "The Briefing settings" }));
     // The choice applies to the next pass, so the picker never reads as greyed out.
     await waitFor(() => expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "false"));
     await userEvent.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "The Dispatch settings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "The Briefing settings" })).not.toBeInTheDocument();
   });
 
   it("keeps Skim branding visible while the sidebar is collapsed", async () => {

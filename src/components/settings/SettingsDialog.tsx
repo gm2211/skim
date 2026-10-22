@@ -858,8 +858,8 @@ function SyncTab({
         </div>
       </InputField>
       <InputField
-        label="The Dispatch covers"
-        description="How many days of articles the AI reads for each edition of The Dispatch. Each page turned goes back one more edition."
+        label="The Briefing covers"
+        description="How many days of articles the AI reads for each edition of The Briefing. Each page turned goes back one more edition."
       >
         <div className="inline-flex rounded-lg bg-white/5 border border-white/10" style={{ padding: 2 }}>
           {DISPATCH_DAY_CHOICES.map((days) => (

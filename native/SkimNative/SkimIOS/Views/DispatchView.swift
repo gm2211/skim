@@ -1,7 +1,7 @@
 import SkimCore
 import SwiftUI
 
-/// The Dispatch on iPhone: the edition the AI wrote from the reader's feeds.
+/// The Briefing on iPhone: the edition the AI wrote from the reader's feeds.
 ///
 /// A magazine column: the lead piece with its picture, drop cap and
 /// takeaways, then the other pieces, then the briefs. Citations are small

@@ -160,7 +160,7 @@ final class AppModel: ObservableObject {
     private var todayTask: Task<Void, Never>?
     private var todayLoadID = UUID()
 
-    /// The Dispatch on screen: the edition the AI wrote for this page's window.
+    /// The Briefing on screen: the edition the AI wrote for this page's window.
     @Published var dispatch: DispatchEdition?
     /// Non-nil while the edition is being read or written.
     @Published var dispatchStatus: String?

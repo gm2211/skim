@@ -228,7 +228,7 @@ export interface SyncSettings {
   /** Today edition story cap. Always 5, 10, or 20 — changing it starts a
    *  fresh edition (the edition id is derived from the limit). */
   today_story_limit: number;
-  /** Days of articles one edition of The Dispatch reads: 1, 3 or 7. */
+  /** Days of articles one edition of The Briefing reads: 1, 3 or 7. */
   dispatch_days?: number;
 }
 
@@ -262,7 +262,7 @@ export interface DispatchBrief {
   article_ids: string[];
 }
 
-/** An edition of The Dispatch, written by the AI from one window of articles. */
+/** An edition of The Briefing, written by the AI from one window of articles. */
 export interface DispatchEdition {
   id: string;
   days: number;

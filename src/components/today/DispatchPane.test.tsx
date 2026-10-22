@@ -81,14 +81,14 @@ beforeEach(() => {
 });
 afterEach(() => vi.clearAllMocks());
 
-describe("The Dispatch", () => {
+describe("The Briefing", () => {
   it("sets the AI's pieces with citations that open the reporting, and never starts the story page's work", async () => {
     vi.mocked(commands.getDispatch).mockResolvedValue(edition());
     const open = vi.fn();
     useUiStore.setState({ openArticleFromToday: open });
     renderPane();
     expect(await screen.findByRole("heading", { name: "Two certificate authorities breached in a week" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "The Dispatch" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "The Briefing" })).toBeInTheDocument();
     expect(screen.getByText(/Written by AI from 214 articles/)).toBeInTheDocument();
     // [9] names no report of this piece, so it isn't a link.
     const lead = screen.getAllByRole("article")[0];
@@ -114,7 +114,7 @@ describe("The Dispatch", () => {
     await waitFor(() => expect(commands.writeDispatch).toHaveBeenCalledTimes(1));
     const [, , days, mode, requestId] = vi.mocked(commands.writeDispatch).mock.calls[0];
     expect([days, mode]).toEqual([3, "open"]);
-    expect(screen.getByLabelText("Writing The Dispatch")).toBeInTheDocument();
+    expect(screen.getByLabelText("Writing The Briefing")).toBeInTheDocument();
     const partial = edition({ status: "writing" });
     partial.themes[0].body = [];
     act(() => emit({ edition_id: "dispatch-1", request_id: requestId, message: "Filed 0 of 2…", edition: partial }));

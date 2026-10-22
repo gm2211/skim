@@ -19,6 +19,7 @@ import { AgentAnswer, AgentSteps } from "../chat/AgentAnswer";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { AiErrorText } from "../common/AiSettingsButton";
 import { PALETTE_ICONS } from "../ui/icons";
+import { PAPER_NAME } from "../../lib/dispatch";
 
 const ARTICLE_RESULTS = 8;
 
@@ -79,7 +80,7 @@ function useCommands(): PaletteCommand[] {
     if (canGoForwardArticle(ui)) {
       add(g, { id: "go.forward", icon: "forward", title: "Forward to next article", keywords: ["history"], shortcut: ["mod", "]"], run: () => useUiStore.getState().goForwardArticle() });
     }
-    add(g, { id: "go.today", icon: "newspaper", title: "Today", keywords: ["edition", "front page"], run: () => ui.setSidebarView({ type: "today" }) });
+    add(g, { id: "go.today", icon: "newspaper", title: PAPER_NAME, keywords: ["today", "dispatch", "edition", "front page", "newspaper"], run: () => ui.setSidebarView({ type: "today" }) });
     add(g, { id: "go.all", icon: "list", title: "All Articles", run: () => ui.setSidebarView({ type: "all" }) });
     add(g, { id: "go.starred", icon: "star", title: "Starred", keywords: ["favorites"], run: () => ui.setSidebarView({ type: "starred" }) });
     add(g, { id: "go.recent", icon: "clock", title: "Recently Read", keywords: ["history"], run: () => ui.setSidebarView({ type: "recent" }) });

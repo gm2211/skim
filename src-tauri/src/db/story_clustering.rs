@@ -1082,6 +1082,7 @@ mod tests {
             is_starred: None,
             limit: Some(100),
             published_after: None,
+            published_before: None,
             offset: None,
         };
         assert_eq!(queries::count_articles(&conn, &filter).unwrap(), 2);

@@ -279,6 +279,10 @@ pub struct ArticleFilter {
     /// honour the reader's chosen time range.
     #[serde(default)]
     pub published_after: Option<i64>,
+    /// Unix seconds, exclusive. The Dispatch bounds an earlier edition's
+    /// window with it.
+    #[serde(default)]
+    pub published_before: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -390,6 +394,9 @@ pub struct SyncSettings {
     /// starts a fresh edition rather than resizing the current one.
     #[serde(default = "default_today_story_limit")]
     pub today_story_limit: i32,
+    /// How many days of articles one edition of The Dispatch reads: 1, 3 or 7.
+    #[serde(default = "default_dispatch_days")]
+    pub dispatch_days: i32,
 }
 
 fn default_recent_cap() -> i32 {
@@ -397,6 +404,9 @@ fn default_recent_cap() -> i32 {
 }
 fn default_today_story_limit() -> i32 {
     10
+}
+fn default_dispatch_days() -> i32 {
+    3
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -512,6 +522,7 @@ impl Default for AppSettings {
                 max_articles_per_feed: 200,
                 recent_cap: 3000,
                 today_story_limit: 10,
+                dispatch_days: 3,
             },
         }
     }

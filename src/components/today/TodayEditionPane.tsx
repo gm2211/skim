@@ -14,6 +14,9 @@ import { storyForAgent } from "../../lib/agentContext";
 import { IconButton } from "../common/IconButton";
 import { SettingsCog } from "../common/SettingsCog";
 import { AiErrorText, openAiSettings } from "../common/AiSettingsButton";
+import { DispatchPane } from "./DispatchPane";
+import { useSettings } from "../../hooks/useSettings";
+import { PAPER_NAME } from "../../lib/dispatch";
 import "./TodayFrontPage.css";
 
 export const NEWSPAPER_PAGE_SIZE = PAGE_SIZE;
@@ -41,7 +44,18 @@ function FrontPage({ cells }: { cells: { key: string; node: React.ReactNode }[] 
   );
 }
 
+/**
+ * With AI set up, the paper is The Dispatch, written by the AI from the
+ * reader's feeds. Without it, the same page sets the feeds' own stories.
+ * Settings decide which, so neither page's work starts before they load.
+ */
 export function TodayEditionPane() {
+  const settings = useSettings();
+  if (settings.data && settings.data.ai.provider !== "none") return <DispatchPane />;
+  return <StoryFrontPage />;
+}
+
+export function StoryFrontPage() {
   const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane, todayPage, setTodayPage } = useUiStore();
   const { data, isLoading, isError, error, window: todayWin, setConsumed, markStoryRead, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch, aiEnabled, isPreparingSummaries, settingsUnavailable, retrySettings } =
     useTodayEdition();
@@ -127,7 +141,7 @@ export function TodayEditionPane() {
         )}
         <div className="flex-1" />
         {items.length > 0 && <IconButton
-          label="Ask about Today"
+          label={`Ask about ${PAPER_NAME}`}
           onClick={() => openAgentChat({ context: { ...agentContext, story: null } })}
           className="text-text-secondary hover:text-text-primary hover:bg-white/10"
         >
@@ -141,7 +155,7 @@ export function TodayEditionPane() {
         >
           <RefreshIcon size={18} className={refreshFeeds.isPending ? "smooth-spin" : undefined} />
         </IconButton>
-        <SettingsCog label="Today settings" heading="Today" className="text-text-secondary">
+        <SettingsCog label={`${PAPER_NAME} settings`} heading={PAPER_NAME} className="text-text-secondary">
           {(close) => (
             <>
               <div className="today-settings-row">
@@ -165,7 +179,7 @@ export function TodayEditionPane() {
           day's reading progress. */}
       <div className="today-masthead">
         <h2 className="today-title text-text-primary truncate">
-          Today
+          {PAPER_NAME}
         </h2>
         <div className="today-dateline">
           <span>{formatWindowDate(todayWin)}</span>

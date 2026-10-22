@@ -439,7 +439,7 @@ async fn synthesize_editorial(
 
 /// Several summaries are written at once, so a hosted model can answer one
 /// of them with a rate limit or an overload; wait and ask again, twice.
-async fn chat_with_backoff(provider: &dyn AiProvider, request: &ChatRequest) -> Result<crate::ai::provider::ChatResponse, String> {
+pub(crate) async fn chat_with_backoff(provider: &dyn AiProvider, request: &ChatRequest) -> Result<crate::ai::provider::ChatResponse, String> {
     for delay in EDITORIAL_BACKOFF {
         match provider.chat(request.clone()).await {
             Err(error) if transient_model_error(&error) => tokio::time::sleep(delay).await,
@@ -454,7 +454,7 @@ const EDITORIAL_BACKOFF: [std::time::Duration; 2] = [std::time::Duration::from_s
 #[cfg(test)]
 const EDITORIAL_BACKOFF: [std::time::Duration; 2] = [std::time::Duration::ZERO; 2];
 
-fn transient_model_error(error: &str) -> bool {
+pub(crate) fn transient_model_error(error: &str) -> bool {
     let lowered = error.to_lowercase();
     ["429", "529", "500 ", "502", "503", "504", "rate limit", "rate_limit", "overloaded", "timed out", "timeout"]
         .iter().any(|marker| lowered.contains(marker))

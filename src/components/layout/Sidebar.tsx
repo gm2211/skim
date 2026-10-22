@@ -10,6 +10,7 @@ import { FeedsSection } from "./FeedsSection";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
 import { SkimTitle } from "./SkimTitle";
 import { useAppCommand } from "../../lib/appCommands";
+import { PAPER_NAME, PAPER_SHORT_NAME } from "../../lib/dispatch";
 
 export function Sidebar() {
   const askButtonRef = useRef<HTMLButtonElement>(null);
@@ -116,8 +117,8 @@ export function Sidebar() {
         <button
           onClick={() => setSidebarView({ type: "today" })}
           className="sidebar-header-action tap-target rounded-lg hover:bg-white/10 text-text-muted hover:text-accent transition-colors"
-          title="Today — your finite, sectioned daily edition"
-          aria-label="Today"
+          title={`${PAPER_NAME} — the paper the AI writes from your feeds`}
+          aria-label={PAPER_NAME}
         >
           <NewspaperIcon />
         </button>
@@ -160,7 +161,7 @@ export function Sidebar() {
               className={isActive({ type: "today" }) ? "text-text-primary" : "text-text-secondary"}
               style={{ fontSize: 17, fontWeight: 600 }}
             >
-              Today
+              {PAPER_SHORT_NAME}
             </span>
           </div>
         </div>

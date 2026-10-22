@@ -182,9 +182,9 @@ extension AppModel {
     }
 
     /// Asks once and, if the answer can't be used, once more with the reason.
-    nonisolated private static func askWithOneCorrection<T>(
+    nonisolated private static func askWithOneCorrection<T: Sendable>(
         settings: AppSettings, instructions: String, prompt: String, maxTokens: Int,
-        parse: (String) throws -> T
+        parse: @Sendable (String) throws -> T
     ) async throws -> T {
         let answer = try await NativeAI.complete(settings: settings, instructions: instructions, prompt: prompt,
                                                  maxTokens: maxTokens, jsonMode: true, temperature: 0.2)

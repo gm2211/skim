@@ -49,6 +49,13 @@ public struct DispatchEdition: Codable, Hashable, Sendable {
         public var title: String
         public var publication: String
         public var imageURL: URL?
+
+        public init(id: String, title: String, publication: String, imageURL: URL?) {
+            self.id = id
+            self.title = title
+            self.publication = publication
+            self.imageURL = imageURL
+        }
     }
 
     public init(id: String, days: Int, startsAt: Date, endsAt: Date, generatedAt: Date) {

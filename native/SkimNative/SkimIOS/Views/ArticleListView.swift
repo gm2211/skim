@@ -747,7 +747,9 @@ struct ArticleListView: View {
         case .aiInbox:
             return !showToday && model.isForYou
         case .unread, .all, .starred, .recent:
-            return !showToday && !isSearchActive && !model.isForYou && model.selectedFolderID == nil && model.listMode == item.listMode
+            // Smart sorting keeps the list's tab lit, unless a For you tab is there to show it.
+            let forYouTabShown = model.isForYou && bottomBarItems.contains(.aiInbox)
+            return !showToday && !isSearchActive && !forYouTabShown && model.selectedFolderID == nil && model.listMode == item.listMode
         }
     }
 

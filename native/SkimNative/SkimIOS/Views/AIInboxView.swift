@@ -84,7 +84,7 @@ struct AIInboxView: View {
             Section {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
-                        Text("Ranked by importance and what you read")
+                        Text("Smart sorted for you")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(SkimStyle.secondary)
                             .fixedSize(horizontal: false, vertical: true)

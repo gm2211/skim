@@ -469,7 +469,11 @@ fn editorial_failure_reason(error: &str) -> String {
         "The AI provider was busy or rate limited. Retry in a moment.".into()
     } else if lowered.contains("quote") || lowered.contains("cite") || lowered.contains("source id") || lowered.contains("outside this story") {
         "The AI's summary didn't quote its reports exactly, so it wasn't kept.".into()
-    } else if lowered.contains("malformed") || lowered.contains("empty or oversized") || lowered.contains("size limit") {
+    } else if let Some((_, start)) = error.split_once("; it began ") {
+        format!("The AI didn't return a usable summary. Its answer began {start}")
+    } else if lowered.contains("empty or oversized") {
+        "The AI returned no summary for these reports.".into()
+    } else if lowered.contains("malformed") || lowered.contains("size limit") {
         "The AI didn't return a usable summary for these reports.".into()
     } else {
         let detail: String = error.chars().take(160).collect();
@@ -477,13 +481,46 @@ fn editorial_failure_reason(error: &str) -> String {
     }
 }
 
+/// The summary object inside a model's answer. Only Ollama and OpenAI-style
+/// APIs enforce JSON, so Claude and ChatGPT models often fence it, put a line
+/// before it, or add a key or an empty figure; every summary failed that way.
+/// Those wrappers don't change what the summary says, so they are dropped
+/// here; the quote and length checks below stay strict.
+fn editorial_value(content: &str) -> Option<serde_json::Value> {
+    let object = crate::commands::ai::extract_json_object(content)?;
+    let mut value: serde_json::Value = serde_json::from_str(object).ok()?;
+    let editorial = value.as_object_mut()?;
+    editorial.retain(|key, _| matches!(key.as_str(), "theme" | "summary" | "sources" | "figure"));
+    for source in editorial.get_mut("sources").and_then(|sources| sources.as_array_mut()).into_iter().flatten() {
+        if let Some(source) = source.as_object_mut() {
+            source.retain(|key, _| matches!(key.as_str(), "article_id" | "quote"));
+        }
+    }
+    let figure_complete = editorial.get("figure").and_then(|figure| figure.as_object())
+        .is_some_and(|figure| figure.get("value").is_some_and(|v| v.is_string()) && figure.get("label").is_some_and(|l| l.is_string()));
+    if figure_complete {
+        if let Some(figure) = editorial.get_mut("figure").and_then(|figure| figure.as_object_mut()) {
+            figure.retain(|key, _| matches!(key.as_str(), "value" | "label"));
+        }
+    } else {
+        editorial.remove("figure");
+    }
+    Some(value)
+}
+
+/// The start of an answer that wasn't a summary, for the card's reason.
+fn answer_start(content: &str) -> String {
+    let start: String = content.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(60).collect();
+    if start.is_empty() { "an empty answer".into() } else { format!("\u{201C}{start}\u{2026}\u{201D}") }
+}
+
 fn validate_editorial(content: &str, evidence: &LedeEvidence) -> Result<TodayEditorial, String> {
-    // Reject prefixes, fences, extra fields and oversized provider output.
     if content.len() > 16_000 {
         return Err("The summary response exceeds its size limit".into());
     }
-    let mut editorial: TodayEditorial = serde_json::from_str(content)
-        .map_err(|_| "The provider returned malformed summary JSON".to_string())?;
+    let mut editorial: TodayEditorial = editorial_value(content)
+        .and_then(|value| serde_json::from_value(value).ok())
+        .ok_or_else(|| format!("The provider returned malformed summary JSON; it began {}", answer_start(content)))?;
     editorial.theme = editorial.theme.trim().to_string();
     editorial.summary = editorial.summary.trim().to_string();
     if editorial.theme.is_empty() || editorial.theme.chars().count() > 80
@@ -765,12 +802,39 @@ mod tests {
         let mut raw = valid.clone(); raw["theme"] = "x".repeat(81).into(); cases.push(raw);
         let mut raw = valid.clone(); raw["summary"] = "x".repeat(1201).into(); cases.push(raw);
         let mut raw = valid.clone(); raw["summary"] = "a ".repeat(181).into(); cases.push(raw);
-        let mut raw = valid.clone(); raw["extra"] = true.into(); cases.push(raw);
-        let mut raw = valid.clone(); raw["sources"][0]["extra"] = true.into(); cases.push(raw);
         for raw in cases { assert!(validate_editorial(&raw.to_string(), &evidence).is_err(), "{raw}"); }
-        for raw in ["{malformed".to_string(), format!("```json\n{valid}\n```"), format!("Here it is: {valid}")] {
-            assert!(validate_editorial(&raw, &evidence).is_err());
+        for raw in ["{malformed", "", "I can't summarize these reports."] {
+            assert!(validate_editorial(raw, &evidence).is_err());
         }
+    }
+
+    #[test]
+    fn editorial_reads_through_fences_preambles_extra_keys_and_empty_figures() {
+        let evidence = editorial_evidence();
+        let valid = editorial_json();
+        let expected = validate_editorial(&valid.to_string(), &evidence).unwrap();
+        let mut extra = valid.clone();
+        extra["headline"] = "Court blocks rule".into();
+        extra["sources"][0]["note"] = "lead report".into();
+        let mut empty_figure = valid.clone(); empty_figure["figure"] = serde_json::json!({});
+        let mut null_figure = valid.clone(); null_figure["figure"] = serde_json::Value::Null;
+        for raw in [
+            format!("```json\n{valid}\n```"),
+            format!("Here is the JSON:\n{valid}\nLet me know if you need changes."),
+            extra.to_string(), empty_figure.to_string(), null_figure.to_string(),
+        ] {
+            assert_eq!(validate_editorial(&raw, &evidence).as_ref(), Ok(&expected), "{raw}");
+        }
+    }
+
+    #[test]
+    fn a_reply_that_is_not_a_summary_shows_how_it_began() {
+        let evidence = editorial_evidence();
+        let error = validate_editorial("I'm sorry, but I can't help with that request.", &evidence).unwrap_err();
+        let reason = editorial_failure_reason(&error);
+        assert!(reason.starts_with("The AI didn't return a usable summary. Its answer began"), "{reason}");
+        assert!(reason.contains("I'm sorry, but I can't help"), "{reason}");
+        assert!(editorial_failure_reason(&validate_editorial("", &evidence).unwrap_err()).contains("an empty answer"));
     }
 
     #[test]
@@ -792,8 +856,9 @@ mod tests {
             let editorial = validate_editorial(&raw.to_string(), &evidence).unwrap();
             assert!(editorial.figure.is_none(), "{value}");
         }
+        raw["figure"]["value"] = "40M".into();
         raw["figure"]["extra"] = true.into();
-        assert!(validate_editorial(&raw.to_string(), &evidence).is_err());
+        assert_eq!(validate_editorial(&raw.to_string(), &evidence).unwrap().figure, Some(figure));
         raw.as_object_mut().unwrap().remove("figure");
         assert!(validate_editorial(&raw.to_string(), &evidence).unwrap().figure.is_none());
     }

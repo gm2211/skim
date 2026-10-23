@@ -30,7 +30,7 @@ extension AppModel {
             case "mlx":
                 DispatchBudget(pool: 60, excerpt: 60, reports: 4, reportCharacters: 1_200, editorTokens: 2_000, writerTokens: 1_000, concurrency: 1, leadFirst: false)
             default:
-                DispatchBudget(pool: 240, excerpt: 160, reports: 6, reportCharacters: 1_800, editorTokens: 3_000, writerTokens: 1_200, concurrency: 3, leadFirst: true)
+                DispatchBudget(pool: 160, excerpt: 100, reports: 4, reportCharacters: 1_200, editorTokens: 3_000, writerTokens: 900, concurrency: 4, leadFirst: true)
             }
         }
     }
@@ -124,6 +124,8 @@ extension AppModel {
         // the page the moment it is filed.
         let needsPlan = !pool.isEmpty
         let listing = needsPlan ? Dispatch.listing(pool, excerptCharacters: budget.excerpt) : ""
+        // Headlines alone for the lead: the short listing is what makes it quick.
+        let leadListing = needsPlan && budget.leadFirst ? Dispatch.listing(pool, excerptCharacters: 0) : ""
         let interests = settings.ai.triageUserPrompt
         var planned = !needsPlan
         var hasLead = false
@@ -146,7 +148,7 @@ extension AppModel {
                         .lead(await Self.attempt {
                             try await Self.askWithOneCorrection(
                                 settings: settings, instructions: Dispatch.leadInstructions(days: days, interests: interests),
-                                prompt: Dispatch.leadPrompt(listing: listing), maxTokens: 400
+                                prompt: Dispatch.leadPrompt(listing: leadListing), maxTokens: 400
                             ) { try Dispatch.lead($0, pool: candidates) }
                         })
                     }

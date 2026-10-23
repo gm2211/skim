@@ -28,17 +28,17 @@ pub const DISPATCH_PROGRESS_EVENT: &str = "dispatch_progress";
 
 /// Articles the editor reads from one window. A hosted model reads them all
 /// in one request; a model on this machine gets fewer so it answers at all.
-const HOSTED_POOL: usize = 240;
+const HOSTED_POOL: usize = 160;
 const ON_DEVICE_POOL: usize = 60;
-const HOSTED_EXCERPT_CHARS: usize = 160;
+const HOSTED_EXCERPT_CHARS: usize = 100;
 const ON_DEVICE_EXCERPT_CHARS: usize = 60;
 const MAX_THEMES: usize = 6;
 const MAX_THEME_ARTICLES: usize = 10;
 const MAX_BRIEFS: usize = 8;
 /// Reports a writer reads for one piece, and how much of each.
-const WRITER_REPORTS: usize = 6;
-const WRITER_REPORT_CHARS: usize = 1_800;
-const WRITER_CONCURRENCY: usize = 3;
+const WRITER_REPORTS: usize = 4;
+const WRITER_REPORT_CHARS: usize = 1_200;
+const WRITER_CONCURRENCY: usize = 4;
 /// The widest window an edition may cover, with a day of slack for DST.
 const MAX_WINDOW_SECONDS: i64 = 8 * 24 * 60 * 60;
 
@@ -728,7 +728,8 @@ pub async fn write_dispatch(
                 // The front-page editor answers in seconds with the lead, whose
                 // piece is written while the full plan is still being drawn up.
                 let leading = async {
-                    let mut lead = plan_lead(provider.as_ref(), &model, days, interests, &pool, excerpt).await?;
+                    // Headlines alone: the short listing is what makes this answer quick.
+                    let mut lead = plan_lead(provider.as_ref(), &model, days, interests, &pool, 0).await?;
                     let mut page = edition.clone();
                     page.articles = pool.iter().filter(|a| lead.article_ids.contains(&a.article.id)).map(dispatch_article).collect();
                     page.themes = vec![lead.clone()];

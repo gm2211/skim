@@ -66,6 +66,18 @@ behaviors:
       An edition is written once per window and kept, so reopening the paper shows it at once. When
       articles arrive after it was written, the front page says how many and offers "Write a new
       edition"; the cog offers the same at any time.
+  - id: never-blank-while-writing
+    description: >-
+      While an edition is being written the page is never blank: it shows the reader's last kept
+      edition, labelled with its dates, or when there is none the newest headlines the editor is
+      reading. With a hosted model the lead is picked by a short separate call and written while
+      the rest of the page is planned, and every piece appears as soon as it is filed.
+    details: >-
+      Giulio found the first iPhone edition showed only a skeleton for over 20 seconds, because the
+      whole plan had to come back before anything appeared. Both the iPhone and desktop apps do this.
+    source:
+      text: Way too slow - over 20 seconds and still nothing at all
+      reference: Giulio, project chat, 2026-10-23
   - id: paper-name
     description: >-
       The paper is called The Briefing: the nameplate, the cog's heading, the sidebar and bottom-bar

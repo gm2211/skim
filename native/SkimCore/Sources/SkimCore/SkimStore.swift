@@ -107,6 +107,16 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         return try? JSONDecoder().decode(DispatchEdition.self, from: Data(json.utf8))
     }
 
+    /// The newest kept edition with pieces that ended by `end`, other than
+    /// `excluding`: what the page shows while a new edition is written.
+    public func latestDispatchEdition(days: Int, endingBy end: Date, excluding id: String) async throws -> DispatchEdition? {
+        let rows = try db.settings(keyLike: "dispatch:dispatch-%-\(days)", newestFirst: 12)
+        return rows.lazy
+            .filter { $0.key != "dispatch:\(id)" }
+            .compactMap { try? JSONDecoder().decode(DispatchEdition.self, from: Data($0.value.utf8)) }
+            .first { $0.endsAt <= end && $0.themes.contains(where: \.isWritten) }
+    }
+
     public func saveDispatchEdition(_ edition: DispatchEdition) async throws {
         let data = try JSONEncoder().encode(edition)
         try db.setSetting(key: "dispatch:\(edition.id)", value: String(decoding: data, as: UTF8.self))
@@ -1329,6 +1339,13 @@ private final class SQLiteDatabase: @unchecked Sendable {
         try query("SELECT value FROM settings WHERE key = ? LIMIT 1", [.text(key)]) { statement in
             columnText(statement, 0)
         }.first
+    }
+
+    /// Settings whose key matches a LIKE pattern, by key, last first.
+    func settings(keyLike pattern: String, newestFirst limit: Int) throws -> [(key: String, value: String)] {
+        try query("SELECT key, value FROM settings WHERE key LIKE ? ORDER BY key DESC LIMIT ?", [.text(pattern), .int(limit)]) { statement in
+            (columnText(statement, 0), columnText(statement, 1))
+        }
     }
 
     func setSetting(key: String, value: String) throws {

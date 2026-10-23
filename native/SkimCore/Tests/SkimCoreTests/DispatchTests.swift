@@ -70,3 +70,42 @@ private func article(_ id: String, feed: String, url: String, minutesAgo: Double
     try await store.saveDispatchEdition(edition)
     #expect(try await store.dispatchEdition(id: "dispatch-x") == edition)
 }
+
+@Test func dispatchLeadIsReadAloneAndTopsThePlan() throws {
+    let pool = (0..<6).map { article("a\($0)", feed: "f", url: "https://e.com/\($0)", minutesAgo: 0) }
+    let lead = try Dispatch.lead(#"Lead: {"kicker":"Security","headline":"CA breached","dek":"Certificates at risk.","importance":5,"articles":[1,2,1,40]}"#, pool: pool)
+    #expect(lead.headline == "CA breached")
+    #expect(lead.articleIDs == ["a1", "a2"])
+    #expect(throws: Dispatch.Failure.noThemes) { try Dispatch.lead(#"{"headline":"","articles":[]}"#, pool: pool) }
+
+    let plan = try Dispatch.plan("""
+    {"themes":[
+      {"headline":"Certificate authority breach widens","importance":5,"articles":[1,2,3]},
+      {"headline":"DuckDB 2.0 ships","importance":2,"articles":[0,2]}
+    ],"briefs":[{"text":"Old news.","articles":[1]},{"text":"Small thing.","articles":[4]}]}
+    """, pool: pool)
+    let merged = Dispatch.merge(lead: lead, plan: plan)
+    #expect(merged.themes.map(\.headline) == ["CA breached", "DuckDB 2.0 ships"])
+    #expect(merged.themes[1].articleIDs == ["a0"])
+    #expect(merged.briefs.map(\.text) == ["Small thing."])
+}
+
+@Test func dispatchStandInIsTheNewestEarlierEditionWithPieces() async throws {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let store = try SkimStore(databaseURL: dir.appendingPathComponent("skim.sqlite"))
+    let day: TimeInterval = 86_400
+    let base = Date(timeIntervalSince1970: 1_800_000_000)
+    func edition(_ start: Date, written: Bool) -> DispatchEdition {
+        var edition = DispatchEdition(id: Dispatch.editionID(start: start, end: start + 3 * day, days: 3), days: 3,
+                                      startsAt: start, endsAt: start + 3 * day, generatedAt: start)
+        edition.themes = [.init(kicker: "K", headline: "H", dek: "", importance: 3, articleIDs: ["x"], body: written ? ["B [1]."] : [])]
+        return edition
+    }
+    let older = edition(base, written: true), newer = edition(base + day, written: true), unwritten = edition(base + 2 * day, written: false)
+    for item in [older, newer, unwritten] { try await store.saveDispatchEdition(item) }
+    let current = Dispatch.editionID(start: base + 3 * day, end: base + 6 * day, days: 3)
+    #expect(try await store.latestDispatchEdition(days: 3, endingBy: base + 6 * day, excluding: current)?.id == newer.id)
+    #expect(try await store.latestDispatchEdition(days: 3, endingBy: base + 6 * day, excluding: newer.id)?.id == older.id)
+    #expect(try await store.latestDispatchEdition(days: 1, endingBy: base + 6 * day, excluding: current) == nil)
+}

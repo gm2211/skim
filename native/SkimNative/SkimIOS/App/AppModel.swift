@@ -170,6 +170,10 @@ final class AppModel: ObservableObject {
     @Published var dispatchError: String?
     /// Articles in the window that arrived after the edition was written.
     @Published var dispatchNewArticles = 0
+    /// While an edition is first written: the last kept edition, shown in
+    /// its place, or failing that the newest headlines the editor is reading.
+    @Published var dispatchStandIn: DispatchEdition?
+    @Published var dispatchPreview: [Article] = []
     var dispatchTask: Task<Void, Never>?
     var dispatchLoadID = UUID()
 

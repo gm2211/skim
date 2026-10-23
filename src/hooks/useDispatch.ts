@@ -58,6 +58,8 @@ export function useDispatch() {
   const attempted = useRef(new Set<string>());
   const [writing, setWriting] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // What the page shows while an edition is first written: the one before.
+  const [standIns, setStandIns] = useState<Record<string, DispatchEdition>>({});
   const key = queryKey.join(":");
 
   const write = useCallback((mode: "open" | "retry" | "rewrite") => {
@@ -67,6 +69,16 @@ export function useDispatch() {
     attempted.current.add(key);
     setWriting((state) => ({ ...state, [key]: mode === "rewrite" ? "Starting a new edition…" : "Reading your feeds…" }));
     setErrors((state) => omit(state, key));
+    const current = qc.getQueryData<DispatchEdition | null>(queryKey);
+    if (mode === "rewrite" && current?.themes.length) {
+      setStandIns((state) => ({ ...state, [key]: current }));
+    } else if (!current?.themes.length) {
+      commands.getDispatchStandIn(win.startsAt, win.endsAt, days)
+        .then((standIn) => {
+          if (standIn && inFlight.current.get(key) === requestId) setStandIns((state) => ({ ...state, [key]: standIn }));
+        })
+        .catch(() => { /* The page waits on the skeleton instead. */ });
+    }
     if (mode === "rewrite") qc.setQueryData(queryKey, null);
     commands.writeDispatch(win.startsAt, win.endsAt, days, mode, requestId)
       .then((edition) => qc.setQueryData(queryKey, edition))
@@ -74,6 +86,7 @@ export function useDispatch() {
       .finally(() => {
         if (inFlight.current.get(key) === requestId) inFlight.current.delete(key);
         setWriting((state) => omit(state, key));
+        setStandIns((state) => omit(state, key));
       });
   }, [key, qc, queryKey, win.startsAt, win.endsAt, days]);
 
@@ -105,6 +118,7 @@ export function useDispatch() {
 
   return {
     edition: edition ?? null,
+    standIn: edition?.themes.length ? null : standIns[key] ?? null,
     window: win,
     days,
     page,

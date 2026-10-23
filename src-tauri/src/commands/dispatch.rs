@@ -5,7 +5,9 @@
 //! finds the themes and ranks them by consequence. A writer then files one
 //! piece per theme from the reports behind it, citing them by number. Each
 //! piece lands on the page as it is written; the edition is kept, so it is
-//! written once per window unless the reader asks for a new one.
+//! written once per window unless the reader asks for a new one. With a hosted
+//! model a short front-page editor call picks the lead first, so its piece is
+//! written while the full plan is still being drawn up.
 
 use crate::ai::local_provider::SharedModelState;
 use crate::ai::prompts;
@@ -15,6 +17,7 @@ use crate::commands::editions::{chat_with_backoff, transient_model_error};
 use crate::db::models::{AppSettings, ArticleFilter, ArticleWithFeed};
 use crate::db::{queries, Database};
 use crate::AppHandle;
+use futures_util::future::Either;
 use futures_util::StreamExt;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -324,6 +327,48 @@ pub fn parse_plan(content: &str, pool: &[ArticleWithFeed]) -> Result<Plan, Strin
     Ok(Plan { themes, briefs })
 }
 
+/// Reads the front-page editor's answer: the lead theme alone.
+pub fn parse_lead(content: &str, pool: &[ArticleWithFeed]) -> Result<DispatchTheme, String> {
+    let object = extract_json_object(content).ok_or("The front-page editor's answer wasn't JSON")?;
+    let value: serde_json::Value =
+        serde_json::from_str(object).map_err(|_| "The front-page editor's answer wasn't valid JSON")?;
+    let theme = value
+        .get("theme")
+        .or_else(|| value.get("lead"))
+        .or_else(|| value.get("themes").and_then(|t| t.get(0)))
+        .unwrap_or(&value);
+    let plan = parse_plan(&serde_json::json!({ "themes": [theme] }).to_string(), pool)?;
+    plan.themes.into_iter().next().ok_or_else(|| "The editor didn't pick any themes from the listing".into())
+}
+
+/// Puts the lead on top of the full plan. The plan was drawn up without
+/// knowing the lead, so a theme that mostly retells it is dropped, and the
+/// lead's reports leave the other themes and the briefs.
+pub fn merge_lead(lead: DispatchTheme, plan: Plan) -> Plan {
+    let taken: HashSet<String> = lead.article_ids.iter().cloned().collect();
+    let mut themes = vec![lead];
+    for mut theme in plan.themes {
+        if themes.len() >= MAX_THEMES {
+            break;
+        }
+        let shared = theme.article_ids.iter().filter(|id| taken.contains(*id)).count();
+        if shared * 2 >= theme.article_ids.len() {
+            continue;
+        }
+        theme.article_ids.retain(|id| !taken.contains(id));
+        themes.push(theme);
+    }
+    let briefs = plan
+        .briefs
+        .into_iter()
+        .filter_map(|mut brief| {
+            brief.article_ids.retain(|id| !taken.contains(id));
+            (!brief.article_ids.is_empty()).then_some(brief)
+        })
+        .collect();
+    Plan { themes, briefs }
+}
+
 async fn ask_with_one_correction<T>(
     provider: &dyn AiProvider,
     mut request: ChatRequest,
@@ -365,6 +410,28 @@ pub async fn plan_edition(
         tools: None,
     };
     ask_with_one_correction(provider, request, |content| parse_plan(content, pool)).await
+}
+
+pub async fn plan_lead(
+    provider: &dyn AiProvider,
+    model: &str,
+    days: i64,
+    interests: Option<&str>,
+    pool: &[ArticleWithFeed],
+    excerpt_chars: usize,
+) -> Result<DispatchTheme, String> {
+    let request = ChatRequest {
+        model: model.into(),
+        messages: vec![
+            ChatMessage::text("system", prompts::dispatch_lead_system_prompt(days, interests)),
+            ChatMessage::text("user", prompts::dispatch_lead_user_prompt(&listing(pool, excerpt_chars))),
+        ],
+        temperature: Some(0.2),
+        max_tokens: Some(400),
+        json_mode: true,
+        tools: None,
+    };
+    ask_with_one_correction(provider, request, |content| parse_lead(content, pool)).await
 }
 
 // --- The writer's piece -------------------------------------------------------
@@ -541,6 +608,35 @@ pub async fn get_dispatch(db: State<'_, Database>, starts_at: i64, ends_at: i64,
     load(&conn, &edition_id(starts_at, ends_at, days))
 }
 
+/// The newest kept edition with written pieces that ended by this window's
+/// end, other than this window's own: shown while this one is first written.
+#[tauri::command]
+pub async fn get_dispatch_stand_in(
+    db: State<'_, Database>,
+    starts_at: i64,
+    ends_at: i64,
+    days: i64,
+) -> Result<Option<DispatchEdition>, String> {
+    validate_window(starts_at, ends_at, days)?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    latest_written(&conn, days, ends_at, &edition_id(starts_at, ends_at, days))
+}
+
+fn latest_written(conn: &Connection, days: i64, ends_by: i64, excluding: &str) -> Result<Option<DispatchEdition>, String> {
+    let mut statement = conn
+        .prepare("SELECT edition_json FROM dispatch_editions WHERE id LIKE ?1 AND id != ?2 ORDER BY id DESC LIMIT 12")
+        .map_err(|e| e.to_string())?;
+    let rows: Vec<String> = statement
+        .query_map(params![format!("dispatch-%-{days}"), excluding], |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?
+        .filter_map(|row| row.ok())
+        .collect();
+    Ok(rows
+        .into_iter()
+        .filter_map(|json| serde_json::from_str::<DispatchEdition>(&json).ok())
+        .find(|edition| edition.ends_at <= ends_by && edition.themes.iter().any(|theme| !theme.body.is_empty())))
+}
+
 /// Writes the edition for a window, or finishes one. `mode` is "open" (keep
 /// a written edition), "retry" (write the pieces that failed) or "rewrite"
 /// (start a new edition from what is in the window now).
@@ -623,16 +719,45 @@ pub async fn write_dispatch(
                 return Ok(edition);
             }
             emit(&format!("Reading {} articles…", pool.len()), &edition);
-            let plan = plan_edition(
-                provider.as_ref(),
-                &model,
-                days,
-                ai_settings.triage_user_prompt.as_deref(),
-                &pool,
-                if on_device { ON_DEVICE_EXCERPT_CHARS } else { HOSTED_EXCERPT_CHARS },
-            )
-            .await
-            .map_err(|e| failure_reason(&e))?;
+            let interests = ai_settings.triage_user_prompt.as_deref();
+            let excerpt = if on_device { ON_DEVICE_EXCERPT_CHARS } else { HOSTED_EXCERPT_CHARS };
+            let planning = plan_edition(provider.as_ref(), &model, days, interests, &pool, excerpt);
+            let (plan, lead) = if on_device {
+                (planning.await, None)
+            } else {
+                // The front-page editor answers in seconds with the lead, whose
+                // piece is written while the full plan is still being drawn up.
+                let leading = async {
+                    let mut lead = plan_lead(provider.as_ref(), &model, days, interests, &pool, excerpt).await?;
+                    let mut page = edition.clone();
+                    page.articles = pool.iter().filter(|a| lead.article_ids.contains(&a.article.id)).map(dispatch_article).collect();
+                    page.themes = vec![lead.clone()];
+                    emit("Writing the lead while the editor reads the rest…", &page);
+                    let piece = match theme_reports(db.inner(), &lead.article_ids).await {
+                        Ok(reports) => write_piece(provider.as_ref(), &model, &lead, &reports).await,
+                        Err(error) => Err(error),
+                    };
+                    match piece {
+                        Ok(piece) => apply_piece(&mut lead, piece),
+                        Err(error) => lead.error = Some(failure_reason(&error)),
+                    }
+                    page.themes = vec![lead.clone()];
+                    emit(&format!("Reading {} articles for the rest of the page…", pool.len()), &page);
+                    Ok::<_, String>(lead)
+                };
+                futures_util::pin_mut!(planning, leading);
+                match futures_util::future::select(planning, leading).await {
+                    Either::Left((plan, _)) => (plan, None),
+                    Either::Right((lead, planning)) => (planning.await, lead.ok()),
+                }
+            };
+            let plan = match (plan, lead) {
+                (Ok(plan), Some(lead)) => merge_lead(lead, plan),
+                (Ok(plan), None) => plan,
+                // A lead already on the page stands on its own.
+                (Err(_), Some(lead)) => Plan { themes: vec![lead], briefs: Vec::new() },
+                (Err(error), None) => return Err(failure_reason(&error)),
+            };
             let used: HashSet<&String> = plan
                 .themes
                 .iter()
@@ -825,5 +950,47 @@ mod tests {
         let loaded = load(&conn, "dispatch-0-100-1").unwrap().unwrap();
         assert_eq!(loaded.new_article_count, 1);
         assert!(validate_window(0, 100, 2).is_err());
+    }
+
+    #[test]
+    fn the_lead_is_read_alone_and_tops_the_plan() {
+        let pool: Vec<_> = (0..6).map(|i| article(&format!("a{i}"), "f", &format!("T{i}"), &format!("https://e.com/{i}"), i)).collect();
+        let lead = parse_lead(r#"Lead: {"kicker":"Security","headline":"CA breached","dek":"Certificates at risk.","importance":5,"articles":[1,2,1,40]}"#, &pool).unwrap();
+        assert_eq!(lead.headline, "CA breached");
+        assert_eq!(lead.article_ids, vec!["a1", "a2"]);
+        assert!(parse_lead(r#"{"headline":"","articles":[]}"#, &pool).is_err());
+
+        let plan = parse_plan(r#"{"themes":[
+            {"headline":"Certificate authority breach widens","importance":5,"articles":[1,2,3]},
+            {"headline":"DuckDB 2.0 ships","importance":2,"articles":[0,4]}
+        ],"briefs":[{"text":"Small thing.","articles":[5]}]}"#, &pool).unwrap();
+        let merged = merge_lead(lead, plan);
+        assert_eq!(merged.themes.iter().map(|t| t.headline.as_str()).collect::<Vec<_>>(), vec!["CA breached", "DuckDB 2.0 ships"]);
+        assert_eq!(merged.themes[1].article_ids, vec!["a0", "a4"]);
+        assert_eq!(merged.briefs.len(), 1);
+    }
+
+    #[test]
+    fn the_stand_in_is_the_newest_earlier_edition_with_pieces() {
+        let conn = Connection::open_in_memory().unwrap();
+        crate::db::migrations::run_migrations(&conn).unwrap();
+        let day = 86_400;
+        let base = 1_800_000_000;
+        let edition = |start: i64, written: bool| {
+            let mut edition = empty_edition(&edition_id(start, start + 3 * day, 3), start, start + 3 * day, 3, "complete");
+            edition.themes = vec![DispatchTheme {
+                kicker: "K".into(), headline: "H".into(), dek: String::new(), importance: 3,
+                article_ids: vec!["x".into()], body: if written { vec!["B [1].".into()] } else { vec![] }, takeaways: vec![], error: None,
+            }];
+            edition
+        };
+        for (start, written) in [(base, true), (base + day, true), (base + 2 * day, false)] {
+            save(&conn, &edition(start, written)).unwrap();
+        }
+        let current = edition_id(base + 3 * day, base + 6 * day, 3);
+        let newer = edition_id(base + day, base + 4 * day, 3);
+        assert_eq!(latest_written(&conn, 3, base + 6 * day, &current).unwrap().unwrap().id, newer);
+        assert_eq!(latest_written(&conn, 3, base + 6 * day, &newer).unwrap().unwrap().id, edition_id(base, base + 3 * day, 3));
+        assert!(latest_written(&conn, 1, base + 6 * day, &current).unwrap().is_none());
     }
 }

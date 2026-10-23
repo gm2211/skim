@@ -107,7 +107,7 @@ function Piece({ theme, index, edition, isWriting, onOpen, onAsk, image }: {
 
 export function DispatchPane() {
   const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane, todayPage, setTodayPage } = useUiStore();
-  const { edition, window: win, days, isLoading, progress, error, retry, rewrite } = useDispatch();
+  const { edition, standIn, window: win, days, isLoading, progress, error, retry, rewrite } = useDispatch();
   const { data: settings } = useSettings();
   const updateSettings = useUpdateSettings();
   const refreshFeeds = useRefreshAllFeeds();
@@ -116,7 +116,10 @@ export function DispatchPane() {
   const isFrontPage = !isPhone && !selectedArticleId;
   const themes = edition?.themes ?? [];
   const isWriting = !!progress;
-  const lead = themes[0];
+  // Until the new edition's lead is in, the page shows the edition before.
+  const shown = themes.length > 0 ? edition : standIn;
+  const shownThemes = shown?.themes ?? [];
+  const lead = shownThemes[0];
   const leadImageQuery = useQuery({
     queryKey: ["dispatchImage", lead?.article_ids.join(",")],
     queryFn: () => commands.getTodayStoryImage(lead!.article_ids),
@@ -124,7 +127,7 @@ export function DispatchPane() {
     staleTime: Infinity,
   });
   const leadImage = leadImageQuery.data
-    ?? edition?.articles.find((article) => lead?.article_ids.includes(article.id) && article.image_url)?.image_url;
+    ?? shown?.articles.find((article) => lead?.article_ids.includes(article.id) && article.image_url)?.image_url;
   const failed = themes.filter((theme) => !theme.body.length && theme.error).length;
 
   const turnTo = (page: number) => {
@@ -238,7 +241,7 @@ export function DispatchPane() {
           )}
           {refreshFeeds.isError && <p role="alert" className="text-danger" style={{ fontSize: 13 }}>Could not refresh feeds. Please try again.</p>}
 
-          {(isLoading || (isWriting && themes.length === 0)) && (
+          {(isLoading || (isWriting && themes.length === 0)) && !standIn && (
             <div className="dispatch-front" aria-label={`Writing ${PAPER_NAME}`} aria-busy="true">
               <div className="dispatch-piece dispatch-piece--lead today-story-skeleton">
                 <Bars widths={["18%"]} />
@@ -258,24 +261,27 @@ export function DispatchPane() {
             </div>
           )}
 
-          {edition && themes.length > 0 && (
+          {shown && !themes.length && (
+            <p className="dispatch-progress">Showing the edition for {formatWindowDate({ startsAt: shown.starts_at, endsAt: shown.ends_at })} while this one is written.</p>
+          )}
+          {shown && shownThemes.length > 0 && (
             <div className="dispatch-front">
-              <Piece theme={themes[0]} index={0} edition={edition} isWriting={isWriting} image={leadImage}
+              <Piece theme={shownThemes[0]} index={0} edition={shown} isWriting={isWriting} image={leadImage}
                 onOpen={openArticleFromToday}
-                onAsk={() => openAgentChat({ context: { ...pageContext, story: themeForAgent(themes[0], 0) } })} />
-              {themes.length > 1 && <div className="dispatch-grid">
-                {themes.slice(1).map((theme, i) => (
-                  <Piece key={`${i + 1}-${theme.headline}`} theme={theme} index={i + 1} edition={edition} isWriting={isWriting}
+                onAsk={() => openAgentChat({ context: { ...pageContext, story: themeForAgent(shownThemes[0], 0) } })} />
+              {shownThemes.length > 1 && <div className="dispatch-grid">
+                {shownThemes.slice(1).map((theme, i) => (
+                  <Piece key={`${i + 1}-${theme.headline}`} theme={theme} index={i + 1} edition={shown} isWriting={isWriting}
                     onOpen={openArticleFromToday}
                     onAsk={() => openAgentChat({ context: { ...pageContext, story: themeForAgent(theme, i + 1) } })} />
                 ))}
               </div>}
-              {edition.briefs.length > 0 && (
+              {shown.briefs.length > 0 && (
                 <section className="dispatch-briefs" aria-label="Also in your feeds">
                   <h4 className="today-briefs-label">Also in your feeds</h4>
                   <ul>
-                    {edition.briefs.map((brief, i) => {
-                      const article = edition.articles.find((candidate) => candidate.id === brief.article_ids[0]);
+                    {shown.briefs.map((brief, i) => {
+                      const article = shown.articles.find((candidate) => candidate.id === brief.article_ids[0]);
                       return <li key={i}>
                         <span>{brief.text}</span>
                         {article && <button type="button" className="dispatch-brief-source" onClick={() => openArticleFromToday(article.id)}>{article.publication}</button>}
@@ -285,7 +291,7 @@ export function DispatchPane() {
                 </section>
               )}
               <p className="dispatch-colophon">
-                Written by AI from your feeds{edition.model ? ` (${edition.model})` : ""}. It can get things wrong: the numbers link to the reporting.
+                Written by AI from your feeds{shown.model ? ` (${shown.model})` : ""}. It can get things wrong: the numbers link to the reporting.
               </p>
             </div>
           )}

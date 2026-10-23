@@ -11,6 +11,7 @@ import { useAgentChatStore } from "../../stores/agentChatStore";
 
 vi.mock("../../services/commands", () => ({
   getDispatch: vi.fn(),
+  getDispatchStandIn: vi.fn(async () => null),
   writeDispatch: vi.fn(),
   DISPATCH_PROGRESS_EVENT: "dispatch_progress",
   getOrGenerateTodayEdition: vi.fn(),
@@ -123,6 +124,16 @@ describe("The Briefing", () => {
     act(() => finish(edition()));
     expect(await screen.findByText("Check pinned certificates")).toBeInTheDocument();
     expect(screen.queryByText("Filed 0 of 2…")).not.toBeInTheDocument();
+  });
+
+  it("shows the edition before while a new one is first written", async () => {
+    vi.mocked(commands.getDispatch).mockResolvedValue(null);
+    vi.mocked(commands.getDispatchStandIn).mockResolvedValueOnce(edition({ starts_at: 0, ends_at: 3 * 86_400 }));
+    vi.mocked(commands.writeDispatch).mockImplementation(() => new Promise(() => {}));
+    renderPane();
+    expect(await screen.findByText(/while this one is written/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Two certificate authorities breached in a week" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Writing The Briefing")).not.toBeInTheDocument();
   });
 
   it("asks about one piece with its reports as the story", async () => {

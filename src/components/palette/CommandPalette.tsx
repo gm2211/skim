@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore, useState } from "react";
 import { createPortal } from "react-dom";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { canGoBackArticle, canGoForwardArticle, useUiStore } from "../../stores/uiStore";
@@ -12,10 +12,10 @@ import { runAppCommand } from "../../lib/appCommands";
 import { formatShortcutKey, type PaletteCommand } from "../../lib/commandPalette";
 import { createCommandRegistry, createPaletteController, isAskCommand, type AskTurn } from "@byos/commands";
 import { agentContextLabel, type AgentMessage } from "../../lib/agentContext";
-import { partitionSources } from "../../lib/chatCitations";
+import { citationOrder, type CitedSource } from "../../lib/chatCitations";
 import { useAgentContext } from "../../hooks/useAgentContext";
 import { openAgentChat } from "../../stores/agentChatStore";
-import { AgentAnswer, AgentSteps, citationStyle } from "../chat/AgentAnswer";
+import { AgentAnswer, AgentSteps, SourceTile } from "../chat/AgentAnswer";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { AiErrorText } from "../common/AiSettingsButton";
 import { PALETTE_ICONS } from "../ui/icons";
@@ -166,6 +166,7 @@ export function CommandPalette() {
   const dialogRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [hoveredSource, setHoveredSource] = useState<string | null>(null);
   useDialogFocus(dialogRef, close);
 
   const commands = useCommands();
@@ -243,10 +244,10 @@ export function CommandPalette() {
           const open = resp.actions.find((action) => action.type === "open_article");
           if (open) return { kind: "action", perform: () => openArticleById(open.article_id) };
           const data: AnswerData = { sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps };
-          // The articles the answer cited, ready to open.
-          const cited = partitionSources(resp.sources, resp.content).cited.map(({ source, number }): PaletteCommand => ({
+          // The articles the answer cited, in the order it cites them, ready to open.
+          const cited = citationOrder(resp.sources, resp.content).map(({ source, label }): PaletteCommand => ({
             id: `cited.${source.id}`,
-            group: number === null ? "Web" : `[${number}]`,
+            group: String(label),
             title: source.title,
             detail: source.feed_title,
             icon: source.source_type === "web" ? "globe" : "book",
@@ -284,6 +285,13 @@ export function CommandPalette() {
   const loading = state.mode === "pending";
   const results = state.items;
   const activeIndex = state.active;
+  // The latest answer's cited sources, keyed by the command that opens each one.
+  const lastAnswer = [...state.history].reverse().find((turn) => turn.role === "assistant");
+  const citedById = new Map<string, CitedSource>(lastAnswer
+    ? citationOrder((lastAnswer.data as AnswerData | undefined)?.sources ?? [], lastAnswer.content).map((cited) => [`cited.${cited.source.id}`, cited])
+    : []);
+  const citedSource = (command: PaletteCommand) => citedById.get(command.id);
+  const selectedSource = hoveredSource ?? (results[activeIndex] && citedSource(results[activeIndex])?.source.id) ?? null;
   const chatLabel = chatContext.current?.label ?? agentContextLabel(liveContext, openArticle?.title);
 
   useEffect(() => {
@@ -423,6 +431,8 @@ export function CommandPalette() {
                     content={turn.content}
                     sources={(turn.data as AnswerData | undefined)?.sources ?? []}
                     onOpenArticle={(id) => { close(); window.setTimeout(() => openArticleById(id), 0); }}
+                    onHoverSource={setHoveredSource}
+                    highlightId={turn === lastAnswer ? selectedSource : null}
                   />
                 </div>
               ))}
@@ -434,9 +444,9 @@ export function CommandPalette() {
                   <span style={{ fontSize: 12 }}>Looking through your articles…</span>
                 </div>
               )}
-              {results.length > 0 && !(chatting && citationStyle() === "merged") && (
+              {results.length > 0 && (
                 <div className="text-text-muted uppercase" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", padding: "14px 0 2px" }}>
-                  Articles
+                  Sources
                 </div>
               )}
             </div>
@@ -449,7 +459,24 @@ export function CommandPalette() {
               No matching commands
             </p>
           )}
-          {!(chatting && citationStyle() === "merged") && results.map(renderRow)}
+          {chatting && results.length > 0 ? (
+            <div className="source-tiles" style={{ padding: "4px 12px 8px" }}>
+              {results.map((command, index) => {
+                const cited = citedSource(command);
+                return cited ? (
+                  <SourceTile
+                    key={command.id}
+                    id={`command-${index}`}
+                    source={cited.source}
+                    label={cited.label}
+                    active={selectedSource === cited.source.id}
+                    onHover={() => { if (index !== activeIndex) controller.setActive(index); }}
+                    onOpen={() => controller.run(command)}
+                  />
+                ) : renderRow(command, index);
+              })}
+            </div>
+          ) : results.map(renderRow)}
         </div>
 
         <div className="flex items-center gap-4 border-t border-white/5 text-text-muted" style={{ padding: "8px 16px", fontSize: 11 }}>

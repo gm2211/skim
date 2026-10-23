@@ -1,140 +1,26 @@
-import { Children, isValidElement, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { AgentStep, ChatSource } from "../../services/commands";
+import { citationOrder } from "../../lib/chatCitations";
 import "./chat-markdown.css";
 
 const CITATION_HREF = "#skim-article-";
 
-/** Design mock: which of the four cited-item styles to render. */
-export type CitationStyle = "pill" | "merged" | "clipping" | "tiles";
-export function citationStyle(): CitationStyle {
-  try {
-    const value = localStorage.getItem("skim.citationStyle");
-    if (value === "merged" || value === "clipping" || value === "tiles") return value;
-  } catch { /* storage unavailable */ }
-  return "pill";
-}
-
-/** A feed's initial on a colour picked from its name, standing in for a favicon. */
-function FeedMark({ name, size = 18 }: { name: string; size?: number }) {
-  let hash = 0;
-  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return (
-    <span className="feed-mark" aria-hidden style={{ width: size, height: size, fontSize: size * 0.55, background: `hsl(${hash % 360} 45% 32%)` }}>
-      {name.trim().charAt(0).toUpperCase()}
-    </span>
-  );
-}
-
 /**
- * Turn each [n] that names a numbered article into a link, so an answer that
- * lists matches can be clicked straight through to the article.
+ * Turn each [n] that names an article into a small numbered chip, numbered as
+ * the reader meets them so it matches the card under the answer.
  */
 export function linkCitations(content: string, sources: ChatSource[]): string {
-  return content.replace(/\[(\d{1,3})\](?!\()/g, (match, digits: string) => {
+  const labels = new Map(citationOrder(sources, content).map(({ source, label }) => [source.id, label]));
+  // Chips stay on the line of the word they follow, and a run like [3][1] never splits.
+  return content.replace(/ ?\[(\d{1,3})\](?!\()/g, (match, digits: string) => {
     const source = sources[Number(digits) - 1];
-    if (!source || source.source_type === "web") return match;
-    return `[[${digits}]](${CITATION_HREF}${encodeURIComponent(source.id)})`;
+    const label = source && labels.get(source.id);
+    if (!source || !label || source.source_type === "web") return match;
+    const lead = match.startsWith(" ") ? "\u00a0" : "\u2060";
+    return `${lead}[${label}](${CITATION_HREF}${encodeURIComponent(source.id)})`;
   });
-}
-
-type HastNode = { type: string; tagName?: string; value?: string; properties?: { href?: unknown }; children?: HastNode[] };
-
-/** The article a paragraph or list item opens with, when it starts with a [n] citation. */
-function leadingCitation(node: HastNode | undefined): string | null {
-  const first = node?.children?.find((child) => !(child.type === "text" && !child.value?.trim()));
-  const href = first?.type === "element" && first.tagName === "a" ? first.properties?.href : null;
-  return typeof href === "string" && href.startsWith(CITATION_HREF) ? decodeURIComponent(href.slice(CITATION_HREF.length)) : null;
-}
-
-/** Splits a cited item's children into its bold title and the description after it. */
-function splitItem(children: ReactNode) {
-  const parts = Children.toArray(children);
-  parts.shift(); // the [n] link
-  while (typeof parts[0] === "string" && !parts[0].trim()) parts.shift();
-  let title: ReactNode = null;
-  if (isValidElement(parts[0]) && parts[0].type === "strong") {
-    title = (parts.shift() as React.ReactElement<{ children: ReactNode }>).props.children;
-    const next = parts[0] as unknown;
-    if (typeof next === "string") parts[0] = next.replace(/^\s*[-–—:]\s*/, "");
-  }
-  return { title, rest: parts };
-}
-
-function formatDate(seconds: number | null): string | null {
-  if (!seconds) return null;
-  return new Date(seconds * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function CitedItem({ id, source, style, children, onOpenArticle }: {
-  id: string;
-  number: number;
-  source: ChatSource | undefined;
-  style: CitationStyle;
-  children: ReactNode;
-  onOpenArticle: (id: string) => void;
-}) {
-  const open = () => {
-    // A drag that selected text is a selection, not a click.
-    if (window.getSelection()?.toString()) return;
-    onOpenArticle(id);
-  };
-  const { title, rest } = splitItem(children);
-  const common = {
-    role: "link" as const,
-    tabIndex: 0,
-    title: source ? `Open “${source.title}”` : undefined,
-    onClick: open,
-    onKeyDown: (event: React.KeyboardEvent) => { if (event.key === "Enter") { event.preventDefault(); onOpenArticle(id); } },
-  };
-  const arrow = (
-    <svg className="cited-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <path d="M5 12h14M13 6l6 6-6 6" />
-    </svg>
-  );
-
-  const feed = source?.feed_title ?? "";
-  const date = formatDate(source?.published_at ?? null);
-
-  if (style === "pill") {
-    return (
-      <div {...common} className="cited-item cited-pill">
-        {title && <strong className="cited-title">{title}</strong>}{title && " — "}
-        <span className="cited-desc">{rest}</span>{" "}
-        <span className="cited-source"><FeedMark name={feed} size={14} />{feed}{arrow}</span>
-      </div>
-    );
-  }
-  if (style === "merged") {
-    return (
-      <div {...common} className="cited-item cited-merged">
-        <FeedMark name={feed} size={28} />
-        <div className="cited-body">
-          <div className="cited-title truncate">{title ?? source?.title}</div>
-          <div className="cited-desc">{rest}</div>
-        </div>
-        <span className="cited-side">{date}<kbd>↵</kbd></span>
-      </div>
-    );
-  }
-  if (style === "clipping") {
-    return (
-      <div {...common} className="cited-item cited-clipping">
-        <div className="cited-kicker">{feed}{date && <span>&nbsp;· {date}</span>}<span className="cited-read">READ{arrow}</span></div>
-        {title && <div className="cited-title">{title}</div>}
-        <div className="cited-desc">{rest}</div>
-      </div>
-    );
-  }
-  return (
-    <div {...common} className="cited-item cited-tile">
-      <div className="cited-kicker"><FeedMark name={feed} size={16} /><span className="truncate">{feed}</span></div>
-      {title && <div className="cited-title">{title}</div>}
-      <div className="cited-desc">{rest}</div>
-    </div>
-  );
 }
 
 export function AgentSteps({ steps }: { steps: AgentStep[] }) {
@@ -148,47 +34,90 @@ export function AgentSteps({ steps }: { steps: AgentStep[] }) {
   );
 }
 
-/** An agent answer, with its [n] citations linked to the articles. */
-export function AgentAnswer({ content, sources, onOpenArticle }: {
+/** A feed's initial on a colour picked from its name, standing in for a favicon. */
+export function FeedMark({ name, size = 16 }: { name: string; size?: number }) {
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return (
+    <span className="feed-mark" aria-hidden style={{ width: size, height: size, fontSize: size * 0.6, background: `hsl(${hash % 360} 45% 34%)` }}>
+      {name.trim().charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+/** An agent answer, with its [n] citations as numbered chips that open the articles. */
+export function AgentAnswer({ content, sources, onOpenArticle, onHoverSource, highlightId }: {
   content: string;
   sources: ChatSource[];
   onOpenArticle: (id: string) => void;
+  /** Called with the cited article under the pointer, so its card can light up. */
+  onHoverSource?: (id: string | null) => void;
+  /** The article whose card is selected; its chips light up to match. */
+  highlightId?: string | null;
 }) {
-  const style = citationStyle();
-  const cited = (node: HastNode | undefined, children: ReactNode) => {
-    const id = leadingCitation(node);
-    if (!id) return null;
-    const index = sources.findIndex((source) => source.id === id);
-    return (
-      <CitedItem id={id} number={index + 1} source={sources[index]} style={style} onOpenArticle={onOpenArticle}>
-        {children}
-      </CitedItem>
-    );
-  };
+  const titles = new Map(sources.map((source) => [source.id, source.title]));
   return (
-    <div className={`chat-markdown text-text-primary${style === "tiles" ? " cited-tiles" : ""}`} style={{ fontSize: 14 }}>
+    <div className="chat-markdown text-text-primary" style={{ fontSize: 14 }}>
       <Markdown remarkPlugins={[remarkGfm]} skipHtml components={{
-        p: ({ node, children }) => cited(node as HastNode, children) ?? <p>{children}</p>,
-        li: ({ node, children }) => {
-          const item = cited(node as HastNode, children);
-          return item ? <li className="cited-li">{item}</li> : <li>{children}</li>;
-        },
         a: ({ href, children }) => {
           if (href?.startsWith(CITATION_HREF)) {
             const id = decodeURIComponent(href.slice(CITATION_HREF.length));
             return (
-              <a href={href} className="agent-citation" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onOpenArticle(id); }}>
+              <a
+                href={href}
+                className={`cite-chip${id === highlightId ? " active" : ""}`}
+                title={titles.get(id)}
+                onMouseEnter={() => onHoverSource?.(id)}
+                onMouseLeave={() => onHoverSource?.(null)}
+                onClick={(event) => { event.preventDefault(); onOpenArticle(id); }}
+              >
                 {children}
               </a>
             );
           }
           return href && /^https?:\/\//i.test(href)
-            ? <a href={href} target="_blank" rel="noopener noreferrer" onClick={(event) => { event.preventDefault(); event.stopPropagation(); void openUrl(href).catch(() => {}); }}>{children}</a>
+            ? <a href={href} target="_blank" rel="noopener noreferrer" onClick={(event) => { event.preventDefault(); void openUrl(href).catch(() => {}); }}>{children}</a>
             : <span>{children}</span>;
         },
         table: ({ children }) => <div className="chat-table-scroll"><table>{children}</table></div>,
         img: ({ alt }) => <span>{alt}</span>,
       }}>{linkCitations(content, sources)}</Markdown>
+    </div>
+  );
+}
+
+function formatDate(seconds: number | null): string | null {
+  if (!seconds) return null;
+  return new Date(seconds * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** One cited source as a card: the number the answer's chip carries, the feed, and the title. */
+export function SourceTile({ source, label, active, onOpen, onHover, id }: {
+  source: ChatSource;
+  label: number;
+  active: boolean;
+  onOpen: () => void;
+  onHover?: () => void;
+  id?: string;
+}) {
+  const isWeb = source.source_type === "web";
+  const date = formatDate(source.published_at);
+  return (
+    <div
+      id={id}
+      role="option"
+      aria-selected={active}
+      className={`source-tile${active ? " active" : ""}`}
+      onMouseMove={onHover}
+      onClick={onOpen}
+    >
+      <div className="source-tile-kicker">
+        <span className="source-tile-num">{label}</span>
+        <FeedMark name={isWeb ? "Web" : source.feed_title} />
+        <span className="truncate">{isWeb ? "Web" : source.feed_title}</span>
+        {date && <span className="source-tile-date">· {date}</span>}
+      </div>
+      <div className="source-tile-title">{source.title}</div>
     </div>
   );
 }

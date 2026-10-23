@@ -256,6 +256,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::editions::list_today_edition_items,
             commands::editions::set_today_edition_item_consumed,
             commands::dispatch::get_dispatch,
+            commands::dispatch::get_dispatch_stand_in,
             commands::dispatch::write_dispatch,
             // AI
             commands::ai::summarize_article,

@@ -481,6 +481,9 @@ export interface DispatchProgress {
 export const DISPATCH_PROGRESS_EVENT = "dispatch_progress";
 export const getDispatch = (startsAt: number, endsAt: number, days: number) =>
   invoke<DispatchEdition | null>("get_dispatch", { startsAt, endsAt, days });
+/** The last kept edition with pieces, shown while this window's is first written. */
+export const getDispatchStandIn = (startsAt: number, endsAt: number, days: number) =>
+  invoke<DispatchEdition | null>("get_dispatch_stand_in", { startsAt, endsAt, days });
 /** "open" keeps a written edition, "retry" writes failed pieces, "rewrite" starts over. */
 export const writeDispatch = (startsAt: number, endsAt: number, days: number, mode: "open" | "retry" | "rewrite", requestId?: string) =>
   invoke<DispatchEdition>("write_dispatch", requestId ? { startsAt, endsAt, days, mode, requestId } : { startsAt, endsAt, days, mode });

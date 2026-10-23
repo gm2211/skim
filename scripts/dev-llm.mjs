@@ -17,6 +17,9 @@ import { createServer } from "node:http";
 const PORT = Number(process.env.DEV_LLM_PORT ?? 4546);
 /** Pretend each answer takes this long, to watch a page fill in. */
 const DELAY_MS = Number(process.env.DEV_LLM_DELAY_MS ?? 0);
+// DEV_LLM_PAPER_PACE=1 answers The Briefing's calls at a hosted model's pace
+// (full plan 12s, lead pick 3s, a piece 6s), to see what the reader waits through.
+const PAPER_PACE = process.env.DEV_LLM_PAPER_PACE === "1";
 
 const MODELS = [
   "skim-dev-small",
@@ -244,6 +247,11 @@ function respond(messages) {
   const all = messages.map((m) => m.content).join("\n");
   const system = messages.find((m) => m.role === "system")?.content ?? "";
 
+  if (/front-page editor of The Briefing/.test(system)) {
+    const plan = JSON.parse(dispatchPlanFor(parseListing(messages.find((m) => m.role === "user")?.content ?? "")));
+    const lead = [...plan.themes].sort((a, b) => b.importance - a.importance)[0];
+    return JSON.stringify(lead ?? {});
+  }
   if (/editor-in-chief of The Briefing/.test(system)) return dispatchPlanFor(parseListing(messages.find((m) => m.role === "user")?.content ?? ""));
   if (/journalist at The Briefing/.test(system)) return dispatchPieceFor(messages.find((m) => m.role === "user")?.content ?? "");
 
@@ -295,7 +303,12 @@ createServer(async (req, res) => {
               .join("\n"),
     }));
     const content = respond(messages);
-    if (DELAY_MS > 0) await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+    const system = messages.find((m) => m.role === "system")?.content ?? "";
+    const pace = !PAPER_PACE ? 0
+      : /front-page editor of The Briefing/.test(system) ? 3_000
+        : /editor-in-chief of The Briefing/.test(system) ? 12_000
+          : /journalist at The Briefing/.test(system) ? 6_000 : 0;
+    if (DELAY_MS + pace > 0) await new Promise((resolve) => setTimeout(resolve, DELAY_MS + pace));
     console.log(
       `[dev-llm] ${body.model ?? "?"} json_mode=${!!body.response_format} -> ${content.slice(0, 70).replace(/\n/g, " ")}…`,
     );

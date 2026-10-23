@@ -3,7 +3,9 @@ import SkimCore
 
 /// The Briefing: the paper the AI writes from the reader's feeds. SkimCore
 /// holds the prompts and the checks; this runs the two passes with the
-/// reader's model and keeps the edition, so a window is written once.
+/// reader's model and keeps the edition, so a window is written once. While
+/// a new edition is written the page is never blank: it shows the edition
+/// before, or the newest headlines, until the lead lands.
 extension AppModel {
     enum DispatchMode { case open, retry, rewrite }
 
@@ -17,15 +19,18 @@ extension AppModel {
         var editorTokens: Int
         var writerTokens: Int
         var concurrency: Int
+        /// Ask for the lead on its own first: worth the extra call only when
+        /// requests run side by side, as they do with a hosted model.
+        var leadFirst: Bool
 
         static func forProvider(_ provider: String) -> DispatchBudget {
             switch provider {
             case "foundation-models":
-                DispatchBudget(pool: 40, excerpt: 0, reports: 3, reportCharacters: 700, editorTokens: 1_200, writerTokens: 700, concurrency: 1)
+                DispatchBudget(pool: 40, excerpt: 0, reports: 3, reportCharacters: 700, editorTokens: 1_200, writerTokens: 700, concurrency: 1, leadFirst: false)
             case "mlx":
-                DispatchBudget(pool: 60, excerpt: 60, reports: 4, reportCharacters: 1_200, editorTokens: 2_000, writerTokens: 1_000, concurrency: 1)
+                DispatchBudget(pool: 60, excerpt: 60, reports: 4, reportCharacters: 1_200, editorTokens: 2_000, writerTokens: 1_000, concurrency: 1, leadFirst: false)
             default:
-                DispatchBudget(pool: 240, excerpt: 160, reports: 6, reportCharacters: 1_800, editorTokens: 3_000, writerTokens: 1_200, concurrency: 3)
+                DispatchBudget(pool: 160, excerpt: 100, reports: 4, reportCharacters: 1_200, editorTokens: 3_000, writerTokens: 900, concurrency: 4, leadFirst: true)
             }
         }
     }
@@ -46,6 +51,8 @@ extension AppModel {
         dispatchTask = nil
         dispatchLoadID = UUID()
         dispatchStatus = nil
+        dispatchStandIn = nil
+        dispatchPreview = []
     }
 
     private func isCurrent(_ requestID: UUID) -> Bool { !Task.isCancelled && dispatchLoadID == requestID }
@@ -57,18 +64,27 @@ extension AppModel {
         var stored = try? await store.dispatchEdition(id: id)
         guard isCurrent(requestID) else { return }
         if mode != .rewrite { dispatch = stored }
+        if stored?.themes.isEmpty == false || stored?.isComplete == true { dispatchStandIn = nil; dispatchPreview = [] }
         if mode == .open, let complete = stored, complete.isComplete {
             dispatchNewArticles = (try? await store.countArticles(from: complete.startsAt, to: complete.endsAt, fetchedAfter: complete.generatedAt)) ?? 0
             // An empty page is written again once articles arrive for it.
             guard complete.themes.isEmpty, dispatchNewArticles > 0, isCurrent(requestID) else { return }
             stored = nil
         }
-        if mode == .rewrite { stored = nil; dispatch = nil }
-        defer { if dispatchLoadID == requestID { dispatchStatus = nil } }
+        var previous: DispatchEdition?
+        if mode == .rewrite { previous = stored; stored = nil; dispatch = nil }
+        defer {
+            if dispatchLoadID == requestID {
+                dispatchStatus = nil
+                dispatchStandIn = nil
+                dispatchPreview = []
+            }
+        }
         let settings = self.settings
         let budget = DispatchBudget.forProvider(settings.ai.provider)
 
         var edition: DispatchEdition
+        var pool: [Article] = []
         if let stored, !stored.themes.isEmpty {
             edition = stored
         } else {
@@ -79,7 +95,7 @@ extension AppModel {
                 guard isCurrent(requestID) else { return }
             }
             let articles = (try? await store.articles(from: window.start, to: window.end, limit: 4_000)) ?? []
-            let pool = Dispatch.pool(articles, cap: budget.pool)
+            pool = Dispatch.pool(articles, cap: budget.pool)
             let now = Date()
             edition = DispatchEdition(id: id, days: days, startsAt: window.start, endsAt: window.end,
                                       generatedAt: min(max(now, window.start), window.end.addingTimeInterval(-1)))
@@ -91,82 +107,148 @@ extension AppModel {
                 if isCurrent(requestID) { dispatch = edition; dispatchNewArticles = 0 }
                 return
             }
-            dispatchStatus = "Reading \(pool.count) articles…"
-            let instructions = Dispatch.editorInstructions(days: days, interests: settings.ai.triageUserPrompt)
-            let prompt = Dispatch.editorPrompt(listing: Dispatch.listing(pool, excerptCharacters: budget.excerpt))
-            let plan: (themes: [DispatchEdition.Theme], briefs: [DispatchEdition.Brief])
-            do {
-                plan = try await Self.askWithOneCorrection(settings: settings, instructions: instructions, prompt: prompt, maxTokens: budget.editorTokens) {
-                    try Dispatch.plan($0, pool: pool)
-                }
-            } catch {
-                if isCurrent(requestID) { dispatchError = Self.dispatchFailureReason(error) }
-                return
+            // Something to read at once: the edition before, or failing that
+            // the newest headlines, until the new edition's lead is in.
+            if previous == nil {
+                previous = try? await store.latestDispatchEdition(days: days, endingBy: window.end, excluding: id)
             }
             guard isCurrent(requestID) else { return }
-            let used = Set(plan.themes.flatMap(\.articleIDs) + plan.briefs.flatMap(\.articleIDs))
-            edition.themes = plan.themes
-            edition.briefs = plan.briefs
-            edition.articles = pool.filter { used.contains($0.id) }.map {
-                DispatchEdition.ArticleRef(id: $0.id, title: $0.title, publication: Dispatch.publication($0), imageURL: $0.imageURL)
-            }
-            try? await store.saveDispatchEdition(edition)
-            dispatch = edition
+            dispatchStandIn = previous
+            dispatchPreview = previous == nil ? Array(pool.prefix(8)) : []
+            dispatchStatus = "Reading \(pool.count) articles…"
         }
 
-        // The writers: one piece per theme, each landing as it is filed.
-        let pending = edition.themes.indices.filter { !edition.themes[$0].isWritten }
-        var jobs: [(index: Int, theme: DispatchEdition.Theme, reports: String)] = []
-        for index in pending {
-            let theme = edition.themes[index]
-            jobs.append((index, theme, await reportsText(theme.articleIDs, count: budget.reports, characters: budget.reportCharacters)))
-        }
-        guard isCurrent(requestID) else { return }
-        var filed = 0
-        dispatchStatus = "Writing \(jobs.count) \(jobs.count == 1 ? "piece" : "pieces")…"
-        for batch in stride(from: 0, to: jobs.count, by: budget.concurrency) {
-            let slice = Array(jobs[batch..<min(batch + budget.concurrency, jobs.count)])
-            let results = await withTaskGroup(of: (Int, Dispatch.Piece?, String?).self) { group in
-                for job in slice {
+        // The editors and the writers run as one group. The front-page editor
+        // answers in a few seconds with the lead, whose piece is written
+        // while the full plan is still being drawn up; every piece lands on
+        // the page the moment it is filed.
+        let needsPlan = !pool.isEmpty
+        let listing = needsPlan ? Dispatch.listing(pool, excerptCharacters: budget.excerpt) : ""
+        // Headlines alone for the lead: the short listing is what makes it quick.
+        let leadListing = needsPlan && budget.leadFirst ? Dispatch.listing(pool, excerptCharacters: 0) : ""
+        let interests = settings.ai.triageUserPrompt
+        var planned = !needsPlan
+        var hasLead = false
+        var queue = edition.themes.indices.filter { !edition.themes[$0].isWritten }
+        var writing = 0
+        var failed = false
+        await withTaskGroup(of: DispatchEvent.self) { group in
+            if needsPlan {
+                let candidates = pool
+                group.addTask {
+                    .plan(await Self.attempt {
+                        try await Self.askWithOneCorrection(
+                            settings: settings, instructions: Dispatch.editorInstructions(days: days, interests: interests),
+                            prompt: Dispatch.editorPrompt(listing: listing), maxTokens: budget.editorTokens
+                        ) { try Dispatch.plan($0, pool: candidates) }
+                    })
+                }
+                if budget.leadFirst {
                     group.addTask {
-                        let count = min(job.theme.articleIDs.count, budget.reports)
+                        .lead(await Self.attempt {
+                            try await Self.askWithOneCorrection(
+                                settings: settings, instructions: Dispatch.leadInstructions(days: days, interests: interests),
+                                prompt: Dispatch.leadPrompt(listing: leadListing), maxTokens: 400
+                            ) { try Dispatch.lead($0, pool: candidates) }
+                        })
+                    }
+                }
+            }
+            while true {
+                while writing < budget.concurrency, !queue.isEmpty {
+                    let index = queue.removeFirst()
+                    let theme = edition.themes[index]
+                    let reports = await reportsText(theme.articleIDs, count: budget.reports, characters: budget.reportCharacters)
+                    writing += 1
+                    group.addTask {
+                        let count = min(theme.articleIDs.count, budget.reports)
                         do {
                             let piece = try await Self.askWithOneCorrection(
                                 settings: settings, instructions: Dispatch.writerInstructions,
-                                prompt: Dispatch.writerPrompt(theme: job.theme, reports: job.reports), maxTokens: budget.writerTokens
+                                prompt: Dispatch.writerPrompt(theme: theme, reports: reports), maxTokens: budget.writerTokens
                             ) { try Dispatch.piece($0, reports: count) }
-                            return (job.index, piece, nil)
+                            return .piece(index: index, piece: piece, failure: nil)
                         } catch {
-                            return (job.index, nil, Self.dispatchFailureReason(error))
+                            return .piece(index: index, piece: nil, failure: Self.dispatchFailureReason(error))
                         }
                     }
                 }
-                var results: [(Int, Dispatch.Piece?, String?)] = []
-                for await result in group { results.append(result) }
-                return results
-            }
-            guard isCurrent(requestID) else { return }
-            for (index, piece, failure) in results {
-                filed += 1
-                if let piece {
-                    if let headline = piece.headline { edition.themes[index].headline = headline }
-                    if let dek = piece.dek { edition.themes[index].dek = dek }
-                    edition.themes[index].body = piece.body
-                    edition.themes[index].takeaways = piece.takeaways
-                    edition.themes[index].error = nil
-                } else {
-                    edition.themes[index].error = failure
+                guard let event = await group.next() else { break }
+                guard isCurrent(requestID) else { group.cancelAll(); failed = true; return }
+                switch event {
+                case .lead(.success(let lead)) where !planned:
+                    hasLead = true
+                    edition.themes = [lead]
+                    edition.articles = Self.refs(Set(lead.articleIDs), pool: pool)
+                    queue = [0]
+                    dispatch = edition
+                    dispatchStatus = "Writing the lead while the editor reads the rest…"
+                case .lead:
+                    break
+                case .plan(.success(let plan)):
+                    planned = true
+                    let merged = hasLead ? Dispatch.merge(lead: edition.themes[0], plan: plan) : plan
+                    edition.themes = merged.themes
+                    edition.briefs = merged.briefs
+                    let used = Set(merged.themes.flatMap(\.articleIDs) + merged.briefs.flatMap(\.articleIDs))
+                    edition.articles = Self.refs(used, pool: pool)
+                    queue = Array(edition.themes.indices.dropFirst(hasLead ? 1 : 0))
+                    try? await store.saveDispatchEdition(edition)
+                    dispatch = edition
+                case .plan(.failure(let error)):
+                    planned = true
+                    // A lead already on the page stands on its own.
+                    guard hasLead else {
+                        dispatchError = Self.dispatchFailureReason(error)
+                        group.cancelAll()
+                        failed = true
+                        return
+                    }
+                    try? await store.saveDispatchEdition(edition)
+                case .piece(let index, let piece, let failure):
+                    writing -= 1
+                    if let piece {
+                        if let headline = piece.headline { edition.themes[index].headline = headline }
+                        if let dek = piece.dek { edition.themes[index].dek = dek }
+                        edition.themes[index].body = piece.body
+                        edition.themes[index].takeaways = piece.takeaways
+                        edition.themes[index].error = nil
+                    } else {
+                        edition.themes[index].error = failure
+                    }
+                    // Kept once the plan is in, so a reopened page resumes the rest.
+                    if planned { try? await store.saveDispatchEdition(edition) }
+                    dispatch = edition
+                }
+                if !planned, hasLead, edition.themes[0].isWritten || edition.themes[0].error != nil {
+                    dispatchStatus = "Reading \(pool.count) articles for the rest of the page…"
+                } else if planned {
+                    let filed = edition.themes.filter { $0.isWritten || $0.error != nil }.count
+                    dispatchStatus = filed < edition.themes.count ? "Filed \(filed) of \(edition.themes.count)…" : nil
                 }
             }
-            try? await store.saveDispatchEdition(edition)
-            dispatch = edition
-            dispatchStatus = filed < jobs.count ? "Filed \(filed) of \(jobs.count)…" : nil
         }
+        guard !failed, isCurrent(requestID) else { return }
         edition.isComplete = true
         try? await store.saveDispatchEdition(edition)
-        guard isCurrent(requestID) else { return }
         dispatch = edition
         dispatchNewArticles = (try? await store.countArticles(from: edition.startsAt, to: edition.endsAt, fetchedAfter: edition.generatedAt)) ?? 0
+    }
+
+    private enum DispatchEvent: Sendable {
+        case lead(Result<DispatchEdition.Theme, Error>)
+        case plan(Result<(themes: [DispatchEdition.Theme], briefs: [DispatchEdition.Brief]), Error>)
+        case piece(index: Int, piece: Dispatch.Piece?, failure: String?)
+    }
+
+    nonisolated private static func attempt<T: Sendable>(_ body: @Sendable () async throws -> T) async -> Result<T, Error> {
+        do { return .success(try await body()) } catch { return .failure(error) }
+    }
+
+    private static func refs(_ ids: Set<String>, pool: [Article]) -> [DispatchEdition.ArticleRef] {
+        pool.filter { ids.contains($0.id) }.map {
+            DispatchEdition.ArticleRef(id: $0.id, title: $0.title, publication: Dispatch.publication($0), imageURL: $0.imageURL)
+        }
     }
 
     /// The numbered reports a writer reads, in the theme's order. A report

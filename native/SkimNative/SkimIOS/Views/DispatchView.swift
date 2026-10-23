@@ -29,16 +29,14 @@ struct DispatchView: View {
                         if let status = model.dispatchStatus { TodayWritingRule(status: status) }
                         notices
                         if let edition = model.dispatch, !edition.themes.isEmpty {
-                            ForEach(Array(edition.themes.enumerated()), id: \.offset) { index, theme in
-                                piece(theme, index: index, edition: edition)
-                                Rectangle().fill(SkimStyle.separator).frame(height: 1)
-                            }
-                            briefs(edition)
-                            Text("Written by AI from your feeds\(edition.model.isEmpty ? "" : " (\(edition.model))"). It can get things wrong: the numbers link to the reporting.")
-                                .font(.system(size: 12))
+                            pieces(edition)
+                        } else if let standIn = model.dispatchStandIn {
+                            Text("Showing the edition for \(Self.dateline(start: standIn.startsAt, end: standIn.endsAt)) while this one is written.")
+                                .font(.system(size: 13))
                                 .foregroundStyle(SkimStyle.secondary)
-                                .frame(maxWidth: .infinity)
-                                .multilineTextAlignment(.center)
+                            pieces(standIn)
+                        } else if !model.dispatchPreview.isEmpty {
+                            preview(model.dispatchPreview)
                         } else if model.dispatchStatus != nil || (model.dispatch == nil && model.dispatchError == nil) {
                             TodayPageSkeleton()
                         } else if model.dispatch?.isComplete == true {
@@ -194,6 +192,47 @@ struct DispatchView: View {
             Button("Browse articles") { onBrowseArticles() }.frame(minHeight: 44)
         }
         .padding(.vertical, 28)
+    }
+
+    @ViewBuilder
+    private func pieces(_ edition: DispatchEdition) -> some View {
+        ForEach(Array(edition.themes.enumerated()), id: \.offset) { index, theme in
+            piece(theme, index: index, edition: edition)
+            Rectangle().fill(SkimStyle.separator).frame(height: 1)
+        }
+        briefs(edition)
+        Text("Written by AI from your feeds\(edition.model.isEmpty ? "" : " (\(edition.model))"). It can get things wrong: the numbers link to the reporting.")
+            .font(.system(size: 12))
+            .foregroundStyle(SkimStyle.secondary)
+            .frame(maxWidth: .infinity)
+            .multilineTextAlignment(.center)
+    }
+
+    /// The newest headlines, shown while the first edition's lead is written.
+    private func preview(_ articles: [Article]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("NEWEST IN YOUR FEEDS").font(.system(size: 11, weight: .bold)).kerning(1.4).foregroundStyle(SkimStyle.secondary)
+            Text("The editor is reading these now. The paper appears here as it is written.")
+                .font(.system(size: 13))
+                .foregroundStyle(SkimStyle.secondary)
+                .padding(.top, 4)
+                .padding(.bottom, 6)
+            ForEach(articles) { article in
+                Button { openArticleID = article.id } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(Dispatch.publication(article)).font(.system(size: 12, weight: .semibold)).foregroundStyle(SkimStyle.accent)
+                        Text(article.title).font(.system(size: 17, weight: .semibold, design: .serif)).foregroundStyle(SkimStyle.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .padding(.vertical, 9)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .overlay(alignment: .bottom) { Rectangle().fill(SkimStyle.separator.opacity(0.6)).frame(height: 1) }
+            }
+        }
     }
 
     /// A paragraph with its `[n]` citations as small links to the reports.

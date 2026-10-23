@@ -8,6 +8,7 @@ pub mod claude_oauth;
 pub mod xai_oauth;
 pub mod chatgpt_oauth;
 pub mod editions;
+pub mod dispatch;
 pub mod story_image;
 pub mod ds4;
 pub mod feeds;

@@ -31,6 +31,7 @@ import type {
   SmartRules,
   TodayEditionView,
   TodayEditionItem,
+  DispatchEdition,
   AggregatorDetails,
   Ds4Status,
   DiscoveredFeed,
@@ -469,6 +470,20 @@ export const setTodayEditionItemConsumed = (
     isConsumed,
     changedAt,
   });
+
+// The Briefing
+export interface DispatchProgress {
+  edition_id: string;
+  request_id?: string;
+  message: string;
+  edition: DispatchEdition;
+}
+export const DISPATCH_PROGRESS_EVENT = "dispatch_progress";
+export const getDispatch = (startsAt: number, endsAt: number, days: number) =>
+  invoke<DispatchEdition | null>("get_dispatch", { startsAt, endsAt, days });
+/** "open" keeps a written edition, "retry" writes failed pieces, "rewrite" starts over. */
+export const writeDispatch = (startsAt: number, endsAt: number, days: number, mode: "open" | "retry" | "rewrite", requestId?: string) =>
+  invoke<DispatchEdition>("write_dispatch", requestId ? { startsAt, endsAt, days, mode, requestId } : { startsAt, endsAt, days, mode });
 
 // Learning / interactions
 export const recordReadingTime = (articleId: string, seconds: number) =>

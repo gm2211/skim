@@ -163,6 +163,16 @@ final class AppModel: ObservableObject {
     private var todayTask: Task<Void, Never>?
     private var todayLoadID = UUID()
 
+    /// The Briefing on screen: the edition the AI wrote for this page's window.
+    @Published var dispatch: DispatchEdition?
+    /// Non-nil while the edition is being read or written.
+    @Published var dispatchStatus: String?
+    @Published var dispatchError: String?
+    /// Articles in the window that arrived after the edition was written.
+    @Published var dispatchNewArticles = 0
+    var dispatchTask: Task<Void, Never>?
+    var dispatchLoadID = UUID()
+
     let store: SkimStore
     let tasteStore = TasteStore()
     let inboxScores = InboxScoreStore()
@@ -227,7 +237,7 @@ final class AppModel: ObservableObject {
     }
 
     /// Whether no feed has been fetched within `todayFeedStaleness`.
-    private func feedsAreStale() async -> Bool {
+    func feedsAreStale() async -> Bool {
         let feeds = (try? await store.listFeeds()) ?? self.feeds
         guard !feeds.isEmpty else { return false }
         let latest = feeds.compactMap(\.fetchedAt).max() ?? .distantPast
@@ -236,7 +246,7 @@ final class AppModel: ObservableObject {
 
     /// Fetches every feed for the front page, then refreshes the article list
     /// so its counts agree with the page.
-    private func fetchFeedsForToday() async {
+    func fetchFeedsForToday() async {
         isCheckingFeedsForToday = true
         isLoading = true
         defer {

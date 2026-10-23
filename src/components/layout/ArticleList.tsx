@@ -17,6 +17,7 @@ import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction, SidebarV
 import { AiSettingsButton } from "../common/AiSettingsButton";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { useAppCommand } from "../../lib/appCommands";
+import { PAPER_NAME } from "../../lib/dispatch";
 
 /** AI Inbox tiers by rank score, highest first. The list arrives sorted by score. */
 const SCORE_TIERS: { min: number; label: string }[] = [
@@ -457,7 +458,7 @@ export function ArticleList() {
         return folder?.name ?? "Folder";
       }
       case "today":
-        return "Today";
+        return PAPER_NAME;
     }
   }, [sidebarView, themes, folders]);
 
@@ -661,8 +662,8 @@ export function ArticleList() {
             <button
               onClick={() => setSidebarView({ type: "today" })}
               className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
-              title="Today — your finite, sectioned daily edition"
-              aria-label="Today"
+              title={`${PAPER_NAME} — the paper the AI writes from your feeds`}
+              aria-label={PAPER_NAME}
             >
               <NewspaperIcon />
             </button>

@@ -206,9 +206,46 @@ function chatReply(messages) {
     .join("\n");
 }
 
+/** The Briefing's editor: shared-word groups become themes, ranked so incidents lead. */
+function dispatchPlanFor(rows) {
+  const plan = JSON.parse(frontPageFor(rows));
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const kicker = (title) =>
+    /breach|vuln|exploit|security|certificate|attack|cve|probe/i.test(title) ? "Security"
+      : /regulat|court|law|policy|eu |congress/i.test(title) ? "Policy"
+        : /model|ai\b|llm|gpt|claude/i.test(title) ? "AI" : "Technology";
+  const themes = plan.stories.map((story) => {
+    const title = byId.get(story.article_ids[0])?.title ?? story.headline;
+    const k = kicker(title);
+    return {
+      kicker: k,
+      headline: story.headline,
+      dek: `${story.article_ids.length} report${story.article_ids.length === 1 ? "" : "s"} on ${topicOf(title)}.`,
+      importance: k === "Security" ? 5 : k === "Policy" ? 4 : 3,
+      articles: story.article_ids,
+    };
+  });
+  return JSON.stringify({ themes, briefs: plan.briefs.map((b) => ({ text: b.text, articles: b.article_ids })) });
+}
+
+/** The Briefing's writer: the reports' own opening sentences, each cited. */
+function dispatchPieceFor(user) {
+  const reports = [...user.matchAll(/^\[(\d+)\] (.+)\n([\s\S]*?)(?=\n\[\d+\] |\n\nOutput JSON)/gm)].map((m) => ({
+    n: Number(m[1]), title: m[2], text: m[3].replace(/\s+/g, " ").trim(),
+  }));
+  const sentences = (text) => text.split(/(?<=[.!?])\s+/).filter((s) => s.split(/\s+/).length >= 8);
+  const body = reports.slice(0, 3).map((r) => `${sentences(r.text).slice(0, 2).join(" ") || `${r.title}.`} [${r.n}]`);
+  const takeaways = reports.slice(0, 2).map((r) => `Read ${r.title.replace(/\s*\(.+\)$/, "")} for the details [${r.n}].`);
+  return JSON.stringify({ body: body.length ? body : ["The reports say little beyond their headlines [1]."], takeaways });
+}
+
 function respond(messages) {
   const user = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const all = messages.map((m) => m.content).join("\n");
+  const system = messages.find((m) => m.role === "system")?.content ?? "";
+
+  if (/editor-in-chief of The Briefing/.test(system)) return dispatchPlanFor(parseListing(messages.find((m) => m.role === "user")?.content ?? ""));
+  if (/journalist at The Briefing/.test(system)) return dispatchPieceFor(messages.find((m) => m.role === "user")?.content ?? "");
 
   if (/"themes"\s*:/.test(user)) return themesFor(parseListing(user));
   if (/"triage"\s*:/.test(user)) return triageFor(parseListing(user));

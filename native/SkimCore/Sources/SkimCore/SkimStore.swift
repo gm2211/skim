@@ -91,6 +91,27 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         try db.listArticles(filter: filter)
     }
 
+    /// Articles published (or, undated, fetched) in `[start, end)`, newest
+    /// first: what one edition of The Briefing reads.
+    public func articles(from start: Date, to end: Date, limit: Int) async throws -> [Article] {
+        try db.articles(from: start, to: end, limit: limit)
+    }
+
+    /// Articles in `[start, end)` that arrived after `date`.
+    public func countArticles(from start: Date, to end: Date, fetchedAfter date: Date) async throws -> Int {
+        try db.countArticles(from: start, to: end, fetchedAfter: date)
+    }
+
+    public func dispatchEdition(id: String) async throws -> DispatchEdition? {
+        guard let json = try db.setting(key: "dispatch:\(id)") else { return nil }
+        return try? JSONDecoder().decode(DispatchEdition.self, from: Data(json.utf8))
+    }
+
+    public func saveDispatchEdition(_ edition: DispatchEdition) async throws {
+        let data = try JSONEncoder().encode(edition)
+        try db.setSetting(key: "dispatch:\(edition.id)", value: String(decoding: data, as: UTF8.self))
+    }
+
     /// Searches the full selected library scope before retaining the highest
     /// ranked matches. A non-nil empty feed list is an explicit empty scope.
     /// The returned body uses the most relevant available RSS, HTML, or reader
@@ -1226,6 +1247,36 @@ private final class SQLiteDatabase: @unchecked Sendable {
         ) { statement in
             makeArticle(from: statement)
         }.first
+    }
+
+    func articles(from start: Date, to end: Date, limit: Int) throws -> [Article] {
+        try query(
+            """
+            SELECT id, feed_id, feed_title, title, url, author, content_text, content_html,
+                   image_url, published_at, fetched_at, is_read, is_starred,
+                   aggregator_kind, external_url, comments_url
+            FROM articles
+            WHERE COALESCE(published_at, fetched_at) >= ? AND COALESCE(published_at, fetched_at) < ?
+            ORDER BY COALESCE(published_at, fetched_at) DESC
+            LIMIT ?
+            """,
+            [.date(start), .date(end), .int(limit)]
+        ) { statement in
+            makeArticle(from: statement)
+        }
+    }
+
+    func countArticles(from start: Date, to end: Date, fetchedAfter date: Date) throws -> Int {
+        try query(
+            """
+            SELECT COUNT(*) FROM articles
+            WHERE COALESCE(published_at, fetched_at) >= ? AND COALESCE(published_at, fetched_at) < ?
+              AND fetched_at > ?
+            """,
+            [.date(start), .date(end), .date(date)]
+        ) { statement in
+            Int(sqlite3_column_int(statement, 0))
+        }.first ?? 0
     }
 
     func countUnread(feedID: String?) throws -> Int {

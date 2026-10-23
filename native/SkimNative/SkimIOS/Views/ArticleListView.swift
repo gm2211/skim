@@ -41,7 +41,14 @@ struct ArticleListView: View {
                 if isSearchActive && !showToday {
                     searchBar
                 }
-                if showToday {
+                if showToday && model.dispatchEnabled {
+                    DispatchView(
+                        showSettings: $showTodaySettings,
+                        onBrowseArticles: { showToday = false },
+                        onAsk: { request in gatedAI { dismissTextEntry(); activeAIChat = request } }
+                    )
+                    .environmentObject(model)
+                } else if showToday {
                     TodayEditionView(
                         showSettings: $showTodaySettings,
                         onBrowseArticles: { showToday = false },
@@ -424,7 +431,7 @@ struct ArticleListView: View {
 
                 if showToday {
                     topBarTitle.frame(maxWidth: .infinity)
-                    BorderlessIconButton(systemName: SkimIcon.settings, title: "Today settings", size: 20, tapSize: 42) {
+                    BorderlessIconButton(systemName: SkimIcon.settings, title: "\(Dispatch.name) settings", size: 20, tapSize: 42) {
                         showTodaySettings = true
                     }
                 } else {
@@ -444,8 +451,16 @@ struct ArticleListView: View {
                 }
 
                 Menu {
-                    if showToday, let items = model.todayEdition?.items, !items.isEmpty {
-                        Button("Ask about Today", systemImage: SkimIcon.chat) {
+                    if showToday, model.dispatchEnabled, let edition = model.dispatch, !edition.themes.isEmpty {
+                        Button("Ask about \(Dispatch.name)", systemImage: SkimIcon.chat) {
+                            gatedAI {
+                                dismissTextEntry()
+                                activeAIChat = DispatchView.pageChat(edition, model: model)
+                            }
+                        }
+                        Divider()
+                    } else if showToday, !model.dispatchEnabled, let items = model.todayEdition?.items, !items.isEmpty {
+                        Button("Ask about \(Dispatch.name)", systemImage: SkimIcon.chat) {
                             gatedAI {
                                 dismissTextEntry()
                                 activeAIChat = TodayChat.page(items, model: model)
@@ -510,6 +525,7 @@ struct ArticleListView: View {
                       : .system(size: 17, weight: .bold))
                 .foregroundStyle(SkimStyle.text)
                 .lineLimit(1)
+                .minimumScaleFactor(0.7)
 
             if showToday {
                 if model.isLoading {
@@ -789,7 +805,7 @@ struct ArticleListView: View {
 
     private var compactTitle: String {
         if showToday {
-            return "Today"
+            return Dispatch.name
         }
         if isSearchActive {
             return "Search"
@@ -867,7 +883,7 @@ private struct FeedPickerSheet: View {
                     }
 
                     VStack(alignment: .leading, spacing: 4) {
-                        pickerRow(iconSystemName: SkimIcon.today, title: "Today", count: nil, isSelected: false, action: onToday)
+                        pickerRow(iconSystemName: SkimIcon.today, title: Dispatch.shortName, count: nil, isSelected: false, action: onToday)
 
                         pickerRow(iconSystemName: SkimIcon.allArticles, title: "All Articles", count: model.totalUnreadCount, isSelected: model.selectedFeedID == nil && model.selectedFolderID == nil && model.listMode == .all) {
                             model.selectedFeedID = nil
@@ -2994,7 +3010,7 @@ enum BottomBarItem: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .today: "Today"
+        case .today: Dispatch.shortName
         case .unread: "Unread"
         case .all: "All"
         case .starred: "Starred"

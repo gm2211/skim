@@ -446,6 +446,14 @@ pub fn get_articles(
         param_values.push(Box::new(cutoff));
     }
 
+    if let Some(before) = filter.published_before {
+        conditions.push(format!(
+            "COALESCE(a.published_at, a.fetched_at) < ?{}",
+            param_values.len() + 1
+        ));
+        param_values.push(Box::new(before));
+    }
+
     if !conditions.is_empty() {
         sql.push_str(" WHERE ");
         sql.push_str(&conditions.join(" AND "));
@@ -2222,6 +2230,7 @@ mod story_persistence_tests {
                 is_starred: None,
                 limit: Some(100),
                 published_after: None,
+                published_before: None,
                 offset: None,
             },
         )
@@ -2239,6 +2248,7 @@ mod story_persistence_tests {
             &conn,
             &ArticleFilter {
                 published_after: Some(200),
+                published_before: None,
                 limit: Some(100),
                 ..Default::default()
             },
@@ -2370,6 +2380,7 @@ mod story_persistence_tests {
                 is_starred: None,
                 limit: Some(100),
                 published_after: None,
+                published_before: None,
                 offset: None,
             },
         )
@@ -2387,6 +2398,7 @@ mod story_persistence_tests {
                 is_starred: None,
                 limit: Some(100),
                 published_after: None,
+                published_before: None,
                 offset: None,
             },
         )

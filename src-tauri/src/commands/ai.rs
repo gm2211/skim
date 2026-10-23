@@ -852,6 +852,7 @@ pub async fn generate_themes(
                 is_starred: None,
                 limit: Some(200),
                 published_after: None,
+                published_before: None,
                 offset: None,
             };
             queries::get_articles(&conn, &filter).map_err(|e| e.to_string())?
@@ -1252,6 +1253,7 @@ pub async fn triage_articles(
                 is_starred: None,
                 limit: Some(MAX_PER_RUN),
                 published_after: None,
+                published_before: None,
                 offset: None,
             };
             queries::get_articles(&conn, &filter).map_err(|e| e.to_string())?
@@ -2052,7 +2054,7 @@ fn catchup_cutoff(since_hours: Option<i64>, now: i64) -> Option<i64> {
 /// Providers that run the model on this machine. For these the one big
 /// picking prompt is the slow part of a catch-up, so the page is drafted
 /// without it (see `local_front_page`).
-fn runs_on_device(provider: &str) -> bool {
+pub(crate) fn runs_on_device(provider: &str) -> bool {
     matches!(provider, "local" | "ollama" | "ds4" | "mlx" | "foundation-models")
 }
 
@@ -2243,7 +2245,7 @@ fn same_topic(a: &std::collections::HashSet<String>, b: &std::collections::HashS
 
 /// The first real picture in an article's HTML: an absolute http(s) image
 /// that is not a tracking pixel, badge or feed-service logo.
-fn lead_image(html: Option<&str>) -> Option<String> {
+pub(crate) fn lead_image(html: Option<&str>) -> Option<String> {
     static IMG: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let re = IMG.get_or_init(|| {
         regex::Regex::new(r#"(?is)<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']"#).unwrap()

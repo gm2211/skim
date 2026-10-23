@@ -1565,6 +1565,7 @@ mod tests {
                 is_starred: None,
                 limit: Some(1_000),
                 published_after: None,
+                published_before: None,
                 offset: None,
             },
         )

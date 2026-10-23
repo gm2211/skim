@@ -8,13 +8,24 @@ import "./chat-markdown.css";
 const CITATION_HREF = "#skim-article-";
 
 /** Design mock: which of the four cited-item styles to render. */
-export type CitationStyle = "row" | "headline" | "card" | "gutter";
-function citationStyle(): CitationStyle {
+export type CitationStyle = "pill" | "merged" | "clipping" | "tiles";
+export function citationStyle(): CitationStyle {
   try {
     const value = localStorage.getItem("skim.citationStyle");
-    if (value === "headline" || value === "card" || value === "gutter") return value;
+    if (value === "merged" || value === "clipping" || value === "tiles") return value;
   } catch { /* storage unavailable */ }
-  return "row";
+  return "pill";
+}
+
+/** A feed's initial on a colour picked from its name, standing in for a favicon. */
+function FeedMark({ name, size = 18 }: { name: string; size?: number }) {
+  let hash = 0;
+  for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return (
+    <span className="feed-mark" aria-hidden style={{ width: size, height: size, fontSize: size * 0.55, background: `hsl(${hash % 360} 45% 32%)` }}>
+      {name.trim().charAt(0).toUpperCase()}
+    </span>
+  );
 }
 
 /**
@@ -57,7 +68,7 @@ function formatDate(seconds: number | null): string | null {
   return new Date(seconds * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function CitedItem({ id, number, source, style, children, onOpenArticle }: {
+function CitedItem({ id, source, style, children, onOpenArticle }: {
   id: string;
   number: number;
   source: ChatSource | undefined;
@@ -71,7 +82,6 @@ function CitedItem({ id, number, source, style, children, onOpenArticle }: {
     onOpenArticle(id);
   };
   const { title, rest } = splitItem(children);
-  const meta = [source?.feed_title, formatDate(source?.published_at ?? null)].filter(Boolean).join(" · ");
   const common = {
     role: "link" as const,
     tabIndex: 0,
@@ -85,47 +95,44 @@ function CitedItem({ id, number, source, style, children, onOpenArticle }: {
     </svg>
   );
 
-  if (style === "row") {
+  const feed = source?.feed_title ?? "";
+  const date = formatDate(source?.published_at ?? null);
+
+  if (style === "pill") {
     return (
-      <div {...common} className="cited-item cited-row">
-        <span className="cited-num">{number}</span>
-        <span className="cited-body">{title && <strong>{title}</strong>}{title && " — "}{rest}</span>
-        {arrow}
+      <div {...common} className="cited-item cited-pill">
+        {title && <strong className="cited-title">{title}</strong>}{title && " — "}
+        <span className="cited-desc">{rest}</span>{" "}
+        <span className="cited-source"><FeedMark name={feed} size={14} />{feed}{arrow}</span>
       </div>
     );
   }
-  if (style === "headline") {
+  if (style === "merged") {
     return (
-      <div {...common} className="cited-item cited-headline">
-        {title && <span className="cited-title">{title}</span>}
-        <span className="cited-desc">{rest}</span>
-        {meta && <span className="cited-meta">{meta}</span>}
-      </div>
-    );
-  }
-  if (style === "card") {
-    return (
-      <div {...common} className="cited-item cited-card">
-        <div className="cited-meta">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-            <path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z" />
-          </svg>
-          <span className="truncate">{meta}</span>
-          <span className="cited-num">[{number}]</span>
+      <div {...common} className="cited-item cited-merged">
+        <FeedMark name={feed} size={28} />
+        <div className="cited-body">
+          <div className="cited-title truncate">{title ?? source?.title}</div>
+          <div className="cited-desc">{rest}</div>
         </div>
+        <span className="cited-side">{date}<kbd>↵</kbd></span>
+      </div>
+    );
+  }
+  if (style === "clipping") {
+    return (
+      <div {...common} className="cited-item cited-clipping">
+        <div className="cited-kicker">{feed}{date && <span>&nbsp;· {date}</span>}<span className="cited-read">READ{arrow}</span></div>
         {title && <div className="cited-title">{title}</div>}
         <div className="cited-desc">{rest}</div>
       </div>
     );
   }
   return (
-    <div {...common} className="cited-item cited-gutter">
-      <span className="cited-num">{number}</span>
-      <div className="cited-body">
-        {title && <div className="cited-title">{title}{arrow}</div>}
-        <div className="cited-desc">{rest}</div>
-        {meta && <div className="cited-meta">{meta}</div>}
-      </div>
+    <div {...common} className="cited-item cited-tile">
+      <div className="cited-kicker"><FeedMark name={feed} size={16} /><span className="truncate">{feed}</span></div>
+      {title && <div className="cited-title">{title}</div>}
+      <div className="cited-desc">{rest}</div>
     </div>
   );
 }
@@ -159,7 +166,7 @@ export function AgentAnswer({ content, sources, onOpenArticle }: {
     );
   };
   return (
-    <div className="chat-markdown text-text-primary" style={{ fontSize: 14 }}>
+    <div className={`chat-markdown text-text-primary${style === "tiles" ? " cited-tiles" : ""}`} style={{ fontSize: 14 }}>
       <Markdown remarkPlugins={[remarkGfm]} skipHtml components={{
         p: ({ node, children }) => cited(node as HastNode, children) ?? <p>{children}</p>,
         li: ({ node, children }) => {

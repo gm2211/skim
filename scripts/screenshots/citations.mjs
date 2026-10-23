@@ -8,7 +8,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "../..");
 const OUT = process.env.OUT || "/tmp/citations";
 const URL_ = process.env.SKIM_URL || "http://localhost:1420/";
-const STYLES = (process.env.STYLES || "row,headline,card,gutter").split(",");
+const STYLES = (process.env.STYLES || "pill,merged,clipping,tiles").split(",");
 const WIDTHS = (process.env.WIDTHS || "1440").split(",").map(Number);
 
 const PATCH = `

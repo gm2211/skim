@@ -34,36 +34,53 @@
 .cited-arrow { flex-shrink: 0; color: var(--color-accent); opacity: 0; transition: opacity .12s; }
 .cited-item:hover .cited-arrow, .cited-item:focus-visible .cited-arrow { opacity: 1; }
 
-/* A: hover row */
-.cited-row { display: flex; align-items: flex-start; gap: 10px; margin-left: -10px; margin-right: -10px; padding: 6px 10px; border-radius: 8px; }
-.cited-row:hover { background: rgba(255,255,255,.05); }
-.cited-row .cited-num { flex-shrink: 0; min-width: 20px; height: 20px; margin-top: 1px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--color-accent); background: rgba(88,166,255,.12); }
-.cited-row .cited-body { flex: 1; min-width: 0; }
-.cited-row .cited-arrow { margin-top: 4px; }
-.cited-row:hover strong { color: var(--color-accent); }
+.feed-mark { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; color: #fff; font-weight: 700; line-height: 1; }
 
-/* B: linked headline */
-.cited-headline { display: block; padding: 2px 0; }
-.cited-headline .cited-title { font-weight: 600; color: var(--color-accent); }
-.cited-headline .cited-title::after { content: " — "; display: inline-block; white-space: pre; text-decoration: none; color: var(--color-text-muted); font-weight: 400; }
-.cited-headline .cited-meta { display: block; font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
-.cited-headline:hover .cited-title { text-decoration: underline; text-underline-offset: 3px; }
+/* E: source pill — the item stays prose, with the source as a pill at its end */
+.cited-pill { display: block; margin: 0 -8px; padding: 4px 8px; border-radius: 8px; }
+.cited-pill:hover { background: rgba(255,255,255,.04); }
+.cited-pill .cited-source { display: inline-flex; align-items: center; gap: 5px; vertical-align: 1px; padding: 1px 8px 1px 3px; border-radius: 999px; font-size: 11.5px; color: var(--color-text-secondary); background: rgba(255,255,255,.07); white-space: nowrap; }
+.cited-pill .cited-source .feed-mark { border-radius: 999px; }
+.cited-pill .cited-source .cited-arrow { display: none; }
+.cited-pill:hover .cited-source .cited-arrow { display: block; opacity: 1; margin-left: -2px; }
+.cited-pill:hover .cited-source { background: rgba(88,166,255,.18); color: var(--color-text-primary); }
+.cited-pill:hover .cited-title { color: var(--color-accent); }
 
-/* C: card */
-.cited-card { display: block; border: 1px solid var(--color-border-light); background: rgba(255,255,255,.025); border-radius: 10px; padding: 9px 12px; }
-.cited-card:hover { border-color: rgba(88,166,255,.45); background: rgba(88,166,255,.06); }
-.cited-card .cited-meta { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--color-text-muted); }
-.cited-card .cited-meta .cited-num { margin-left: auto; font-variant-numeric: tabular-nums; }
-.cited-card .cited-title { font-weight: 600; margin-top: 3px; }
-.cited-card .cited-desc { color: var(--color-text-secondary); font-size: 13px; margin-top: 1px; }
-.chat-markdown > .cited-card + .cited-card, .chat-markdown li.cited-li + li.cited-li { margin-top: 8px; }
+/* F: merged list — the cited items are the article list, so there is no second list below */
+.cited-merged { display: flex; align-items: center; gap: 12px; margin: 0 -10px; padding: 8px 10px; border-radius: 8px; }
+.cited-merged:hover { background: rgba(255,255,255,.06); }
+.cited-merged .feed-mark { border-radius: 7px; }
+.cited-merged .cited-body { flex: 1; min-width: 0; }
+.cited-merged .cited-title { font-weight: 600; }
+.cited-merged .cited-desc { font-size: 12.5px; color: var(--color-text-secondary); line-height: 1.4; }
+.cited-merged .cited-side { flex-shrink: 0; display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--color-text-muted); }
+.cited-merged .cited-side kbd { visibility: hidden; border: 1px solid rgba(255,255,255,.12); border-radius: 4px; padding: 0 5px; font-family: inherit; font-size: 11px; }
+.cited-merged:hover .cited-side kbd { visibility: visible; }
+.chat-markdown > .cited-merged + .cited-merged, .chat-markdown li.cited-li + li.cited-li { margin-top: 2px; }
 
-/* D: numbered gutter */
-.cited-gutter { display: flex; gap: 12px; padding: 4px 0 4px 10px; border-left: 2px solid var(--color-border); }
-.cited-gutter:hover { border-left-color: var(--color-accent); }
-.cited-gutter .cited-num { flex-shrink: 0; width: 16px; font-size: 13px; font-weight: 600; color: var(--color-text-muted); font-variant-numeric: tabular-nums; text-align: right; }
-.cited-gutter:hover .cited-num { color: var(--color-accent); }
-.cited-gutter .cited-body { flex: 1; min-width: 0; }
-.cited-gutter .cited-title { font-weight: 600; display: flex; align-items: center; gap: 6px; }
-.cited-gutter .cited-desc { color: var(--color-text-secondary); }
-.cited-gutter .cited-meta { font-size: 12px; color: var(--color-text-muted); margin-top: 1px; }
+/* G: newspaper clipping — Skim's front-page type, items set off by hairlines */
+.cited-clipping { display: block; padding: 10px 0 8px; border-top: 1px solid var(--color-border); }
+.chat-markdown > .cited-clipping + .cited-clipping { margin-top: 0; }
+.cited-clipping .cited-kicker { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--color-accent); }
+.cited-clipping .cited-kicker span { color: var(--color-text-muted); font-weight: 600; }
+.cited-clipping .cited-title { font-family: "New York", "Iowan Old Style", "Palatino", Georgia, serif; font-size: 18px; font-weight: 600; line-height: 1.25; margin-top: 3px; }
+.cited-clipping .cited-desc { font-family: "New York", "Iowan Old Style", "Palatino", Georgia, serif; font-style: italic; color: var(--color-text-secondary); margin-top: 2px; }
+.cited-clipping .cited-kicker { display: flex; align-items: center; }
+.cited-clipping .cited-kicker .cited-read { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 11px; letter-spacing: .04em; color: var(--color-accent); opacity: 0; }
+.cited-clipping:not(:has(+ .cited-clipping)) { border-bottom: 1px solid var(--color-border); padding-bottom: 12px; }
+.cited-clipping:hover .cited-kicker .cited-read { opacity: 1; }
+.cited-clipping:hover .cited-title { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+/* H: tiles — the answer becomes a two-column grid; everything but the tiles spans both columns */
+.chat-markdown.cited-tiles { display: grid; grid-template-columns: 1fr 1fr; column-gap: 10px; }
+.chat-markdown.cited-tiles > * { grid-column: 1 / -1; }
+.chat-markdown.cited-tiles > .cited-tile { grid-column: auto; }
+.chat-markdown.cited-tiles > .cited-tile + .cited-tile { margin-top: 0; }
+.chat-markdown.cited-tiles > .cited-tile ~ .cited-tile { margin-top: 10px; }
+.chat-markdown.cited-tiles > p + .cited-tile + .cited-tile { margin-top: .65em; }
+.cited-tile { display: flex; flex-direction: column; padding: 10px 12px; border-radius: 10px; background: var(--color-bg-tertiary); border: 1px solid transparent; }
+.cited-tile:hover { border-color: rgba(88,166,255,.5); }
+.cited-tile .cited-kicker { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--color-text-muted); }
+.cited-tile .cited-title { font-weight: 600; font-size: 13.5px; line-height: 1.35; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cited-tile .cited-desc { font-size: 12.5px; line-height: 1.4; color: var(--color-text-secondary); margin-top: 3px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 560px) { .chat-markdown.cited-tiles { grid-template-columns: 1fr; } }

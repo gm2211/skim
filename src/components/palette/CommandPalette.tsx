@@ -15,7 +15,7 @@ import { agentContextLabel, type AgentMessage } from "../../lib/agentContext";
 import { partitionSources } from "../../lib/chatCitations";
 import { useAgentContext } from "../../hooks/useAgentContext";
 import { openAgentChat } from "../../stores/agentChatStore";
-import { AgentAnswer, AgentSteps } from "../chat/AgentAnswer";
+import { AgentAnswer, AgentSteps, citationStyle } from "../chat/AgentAnswer";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { AiErrorText } from "../common/AiSettingsButton";
 import { PALETTE_ICONS } from "../ui/icons";
@@ -434,7 +434,7 @@ export function CommandPalette() {
                   <span style={{ fontSize: 12 }}>Looking through your articles…</span>
                 </div>
               )}
-              {results.length > 0 && (
+              {results.length > 0 && !(chatting && citationStyle() === "merged") && (
                 <div className="text-text-muted uppercase" style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", padding: "14px 0 2px" }}>
                   Articles
                 </div>
@@ -449,7 +449,7 @@ export function CommandPalette() {
               No matching commands
             </p>
           )}
-          {results.map(renderRow)}
+          {!(chatting && citationStyle() === "merged") && results.map(renderRow)}
         </div>
 
         <div className="flex items-center gap-4 border-t border-white/5 text-text-muted" style={{ padding: "8px 16px", fontSize: 11 }}>

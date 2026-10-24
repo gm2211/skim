@@ -548,7 +548,8 @@ struct NativeLibraryChatTests {
         #expect(library.contains("prior assistant turns are context, not evidence"))
         #expect(library.contains("Answer only the latest user question"))
         #expect(library.contains("numeric handle like [3]"))
-        #expect(library.contains("Keep handles attached to the relevant sentence or bullet"))
+        #expect(library.contains("placed right after the claim it supports"))
+        #expect(library.contains("Do not list the articles"))
         #expect(library.contains("call the `web_search` tool"))
         #expect(!library.contains("using only the provided article text"))
     }

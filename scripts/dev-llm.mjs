@@ -260,7 +260,7 @@ function researchGapsFor(user) {
 
 /** Deep research: a synthetic briefing that cites what it was given. */
 function researchBriefingFor(user) {
-  const articles = [...user.matchAll(/^\[(\d+)\] (.+?) \((.+?), /gm)].map((m) => ({ n: m[1], title: m[2], feed: m[3] }));
+  const articles = [...user.matchAll(/^\[(\d+)\] (.+?) \(([^,)\n]+)(?:, |\)$)/gm)].map((m) => ({ n: m[1], title: m[2], feed: m[3] }));
   const web = [...user.matchAll(/^\[w(\d+)\] (.+?) \(([^)]+)\)$/gm)].map((m) => ({ n: m[1], title: m[2], site: m[3] }));
   const a = (i) => (articles[i] ? `[${articles[i].n}]` : "");
   const w = (i) => (web[i] ? `[w${web[i].n}]` : "");

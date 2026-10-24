@@ -5063,6 +5063,8 @@ private struct ResearchProgressList: View {
                             .controlSize(.mini)
                             .tint(SkimStyle.accent)
                             .frame(width: 14)
+                            // A spinner has no text baseline; centre it on the step's first line.
+                            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
                     } else {
                         Image(systemName: "checkmark")
                             .font(.system(size: 11, weight: .bold))

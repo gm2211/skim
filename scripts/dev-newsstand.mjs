@@ -12,6 +12,37 @@ import { createServer } from "node:http";
 const PORT = Number(process.env.NEWSSTAND_PORT ?? 4545);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 
+/** Pages that exist only "on the web", for the search stand-in to find: background the feeds lack. */
+const WEB_PAGES = [
+  {
+    id: "egress-explainer",
+    title: "What are cloud egress fees? A plain-English explainer",
+    body: [
+      "Egress fees are what a cloud provider charges to move data out of its network, to the internet or to another provider. Moving data in is almost always free.",
+      "List prices at the largest providers start at around 9 cents per gigabyte for the first tens of terabytes each month and fall with volume, so moving a petabyte out can cost tens of thousands of dollars.",
+      "Critics call the gap between ingress and egress pricing a switching cost by design; providers say it reflects the real cost of transit and peering.",
+    ],
+  },
+  {
+    id: "eu-data-act",
+    title: "EU Data Act: cloud switching charges must fall to zero by January 2027",
+    body: [
+      "The EU Data Act, which applies from September 2025, requires cloud providers to lower the charges for switching to another provider and remove them entirely from 12 January 2027.",
+      "During the transition, providers may only pass on the direct costs of a switch. The rules cover infrastructure, platform and software services sold to EU customers.",
+      "The Act does not ban egress fees for customers who stay; regulators are examining that separately under competition law.",
+    ],
+  },
+  {
+    id: "egress-history",
+    title: "A short history of egress price cuts, 2018 to 2026",
+    body: [
+      "Google Cloud was first to waive egress fees for customers leaving the platform, in January 2024. AWS and Microsoft followed within three months.",
+      "Those waivers apply only when a customer moves all of its data out and closes the account, which is why critics say they do little for multi-cloud setups.",
+      "Per-gigabyte list prices have fallen by roughly a third since 2018, mostly through larger free tiers rather than lower rates.",
+    ],
+  },
+];
+
 const hoursAgo = (h) => new Date(Date.now() - h * 3600_000);
 
 /** @type {{slug:string,title:string,desc:string,items:any[]}[]} */
@@ -269,7 +300,7 @@ ${paragraphs}
 
 const byId = new Map(FEEDS.flatMap((f) => f.items.map((i) => [i.id, i])));
 
-createServer((req, res) => {
+createServer(async (req, res) => {
   const url = new URL(req.url, ORIGIN);
   const send = (status, type, body) => {
     res.writeHead(status, {
@@ -309,6 +340,27 @@ createServer((req, res) => {
     const item = byId.get(articleMatch[1]);
     if (!item) return send(404, "text/plain", "no such article");
     return send(200, "text/html; charset=utf-8", articlePage(item));
+  }
+  // A DuckDuckGo stand-in for chat web search and deep research. Point a dev
+  // bridge build at it with SKIM_DEV_WEB_SEARCH=<origin>/search.
+  if (url.pathname === "/search") {
+    let raw = "";
+    for await (const chunk of req) raw += chunk;
+    const q = (new URLSearchParams(raw).get("q") || url.searchParams.get("q") || "").toLowerCase();
+    const words = q.split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+    const score = (page) => words.filter((w) => `${page.title} ${page.body.join(" ")}`.toLowerCase().includes(w)).length;
+    const hits = WEB_PAGES.map((page) => ({ page, n: score(page) })).filter((h) => h.n > 0).sort((a, b) => b.n - a.n);
+    const results = (hits.length ? hits.map((h) => h.page) : WEB_PAGES).slice(0, 5).map((page) => {
+      const target = encodeURIComponent(`${ORIGIN}/web/${page.id}`);
+      return `<div class="result results_links web-result"><div class="links_main links_deep result__body"><h2 class="result__title"><a rel="nofollow" class="result__a" href="//duckduckgo.com/l/?uddg=${target}&amp;rut=x">${page.title}</a></h2><a class="result__snippet" href="//duckduckgo.com/l/?uddg=${target}">${page.body[0].slice(0, 160)}</a></div></div>`;
+    });
+    return send(200, "text/html; charset=utf-8", `<html><body>${results.join("")}</body></html>`);
+  }
+  const webMatch = url.pathname.match(/^\/web\/([\w-]+)$/);
+  if (webMatch) {
+    const page = WEB_PAGES.find((p) => p.id === webMatch[1]);
+    if (!page) return send(404, "text/plain", "no such page");
+    return send(200, "text/html; charset=utf-8", `<!doctype html><html><head><title>${page.title}</title></head><body><article><h1>${page.title}</h1>${page.body.map((p) => `<p>${p}</p>`).join("")}</article></body></html>`);
   }
   send(404, "text/plain", "not found");
 }).listen(PORT, "127.0.0.1", () => {

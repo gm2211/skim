@@ -13,6 +13,8 @@ export interface AgentChatSeed {
   prompt?: string;
   /** Send `prompt` as soon as the chat opens. */
   autoSend?: boolean;
+  /** Start in deep research: feeds, then the web, written up as a cited briefing. */
+  research?: boolean;
   /** Runs when a question is sent, not when the chat merely opens. */
   onSend?: () => void;
 }

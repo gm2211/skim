@@ -143,7 +143,7 @@ const TOOL_GUIDE: &str = "Tools (call one by replying with a line `TOOL {\"name\
 - recent_articles {\"scope\": \"all\"|\"unread\"|\"starred\"}: the newest articles.
 - get_article {\"ref\": number}: read an article's text by its [n] number.
 - open_article {\"ref\": number}: open the article in the reader. Only when the user asks to open, show or read a specific article.
-- web_search {\"query\": string}: search the public web, only when the user's articles cannot answer.";
+- web_search {\"query\": string}: search the public web, only when the user's articles cannot answer. Cite a web result by its [wN] number, like [w1].";
 
 pub fn system_prompt(context_block: &str) -> String {
     format!(
@@ -355,12 +355,18 @@ impl AgentTools for LibraryTools<'_> {
                 }
                 self.step("web_search", format!("Searched the web for \u{201c}{query}\u{201d}"));
                 let results = run_web_search(&query, 5).await?;
+                let mut lines = Vec::new();
                 for r in &results {
-                    if !self.web.iter().any(|c| c.url == r.url) {
-                        self.web.push(WebCitation { title: r.title.clone(), url: r.url.clone(), snippet: r.snippet.clone(), query: query.clone() });
-                    }
+                    let index = match self.web.iter().position(|c| c.url == r.url) {
+                        Some(index) => index,
+                        None => {
+                            self.web.push(WebCitation { title: r.title.clone(), url: r.url.clone(), snippet: r.snippet.clone(), query: query.clone() });
+                            self.web.len() - 1
+                        }
+                    };
+                    lines.push(format!("[w{}] {} ({})\n    {}", index + 1, r.title, r.url, r.snippet));
                 }
-                Ok(results.iter().map(|r| format!("- {} ({})\n    {}", r.title, r.url, r.snippet)).collect::<Vec<_>>().join("\n"))
+                Ok(lines.join("\n"))
             }
             other => Err(format!("unknown tool {other}")),
         }
@@ -441,6 +447,34 @@ async fn context_block(tools: &mut LibraryTools<'_>, context: &AgentContext) -> 
     Ok(out)
 }
 
+/// The reader's chat provider and model, or an error that sends them to settings.
+pub(crate) fn chat_provider(
+    app: &AppHandle,
+    db: &Database,
+    model_state: &SharedModelState,
+) -> Result<(Box<dyn AiProvider>, String), String> {
+    let settings_json = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?
+    };
+    let settings: crate::db::models::AppSettings = settings_json
+        .as_deref()
+        .map(|s| serde_json::from_str(s).unwrap_or_default())
+        .unwrap_or_default();
+    let mut ai_settings = resolve_chat_settings(&settings.ai);
+    if ai_settings.provider == "none" {
+        return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
+    }
+    ai_settings.oauth_access_token = crate::ai::subscription_access_token(db, &ai_settings.provider);
+    let provider = create_provider_with_app(&ai_settings, Some(model_state.clone()), app)?;
+    let model = ai_settings
+        .model
+        .clone()
+        .unwrap_or_else(|| crate::commands::ai::default_model(&ai_settings.provider));
+
+    Ok((provider, model))
+}
+
 #[tauri::command]
 pub async fn ask_agent(
     app: AppHandle,
@@ -459,24 +493,7 @@ pub async fn ask_agent(
         .ok_or("Question cannot be empty")?;
     let context = context.unwrap_or_default();
 
-    let settings_json = {
-        let conn = db.conn.lock().map_err(|e| e.to_string())?;
-        queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?
-    };
-    let settings: crate::db::models::AppSettings = settings_json
-        .as_deref()
-        .map(|s| serde_json::from_str(s).unwrap_or_default())
-        .unwrap_or_default();
-    let mut ai_settings = resolve_chat_settings(&settings.ai);
-    if ai_settings.provider == "none" {
-        return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
-    }
-    ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
-    let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
-    let model = ai_settings
-        .model
-        .clone()
-        .unwrap_or_else(|| crate::commands::ai::default_model(&ai_settings.provider));
+    let (provider, model) = chat_provider(&app, db.inner(), model_state.inner())?;
 
     let mut tools = LibraryTools::new(db.inner(), &question);
     for id in prior_article_ids.unwrap_or_default().iter().take(MAX_SOURCES) {

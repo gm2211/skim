@@ -22,6 +22,9 @@ import { PALETTE_ICONS } from "../ui/icons";
 import { PAPER_NAME } from "../../lib/dispatch";
 
 const ARTICLE_RESULTS = 8;
+/** Id of the row that researches the typed topic in depth. */
+const RESEARCH_COMMAND_ID = "research.topic";
+const isResearchCommand = (command: PaletteCommand) => command.id === RESEARCH_COMMAND_ID;
 
 /** Every command the app offers right now, in the order shown for an empty query. */
 function useCommands(): PaletteCommand[] {
@@ -185,6 +188,21 @@ export function CommandPalette() {
   // A conversation keeps the context it started with, even if the view changes underneath.
   const chatContext = useRef<{ context: AgentContext; label: string } | null>(null);
 
+  /** Deep research on `topic` in the full chat, which shows its progress and the briefing. */
+  const research = (topic: string, history: readonly AskTurn[] = []) => {
+    const context = (history.length && chatContext.current?.context) || latest.current.liveContext;
+    openAgentChat({
+      context,
+      articleTitle: context.article_id ? latest.current.openArticle?.title : null,
+      messages: history.length ? toAgentMessages(history) : undefined,
+      prompt: topic,
+      autoSend: true,
+      research: true,
+    });
+  };
+  const researchRef = useRef(research);
+  researchRef.current = research;
+
   const openArticleById = (id: string) => {
     const ui = useUiStore.getState();
     if (ui.sidebarView.type === "today") ui.openArticleFromToday(id);
@@ -200,6 +218,21 @@ export function CommandPalette() {
           ...command,
           run: () => latest.current.commands.find((c) => c.id === command.id)?.run(),
         })),
+      },
+      {
+        // A question can also be researched in depth: feeds, then the web.
+        id: "research",
+        minQuery: 3,
+        debounceMs: 0,
+        limit: 1,
+        search: async (query) => query.trim().split(/\s+/).length < 2 ? [] : [{
+          id: RESEARCH_COMMAND_ID,
+          group: "Deep research",
+          title: query.trim(),
+          icon: "research",
+          shortcut: ["alt", "↵"],
+          run: () => researchRef.current(query.trim()),
+        } satisfies PaletteCommand],
       },
       {
         id: "articles",
@@ -316,6 +349,7 @@ export function CommandPalette() {
     const header = browsing && (index === 0 || results[index - 1].group !== command.group);
     const selected = index === activeIndex;
     const isAsk = isAskCommand(command);
+    const isResearch = isResearchCommand(command);
     return (
       <div key={command.id}>
         {header && (
@@ -334,7 +368,7 @@ export function CommandPalette() {
           style={{ padding: "8px 12px", fontSize: 14 }}
         >
           <span
-            className={`flex items-center justify-center flex-shrink-0 ${isAsk ? "text-accent" : selected ? "text-text-primary" : "text-text-muted"}`}
+            className={`flex items-center justify-center flex-shrink-0 ${isAsk || isResearch ? "text-accent" : selected ? "text-text-primary" : "text-text-muted"}`}
             style={{ width: 18, height: 18 }}
           >
             {(() => {
@@ -346,6 +380,10 @@ export function CommandPalette() {
             <span className="truncate min-w-0">
               <span className="text-text-muted">Ask Skim: </span>{command.title}
             </span>
+          ) : isResearch ? (
+            <span className="truncate min-w-0">
+              <span className="text-text-muted">Research in depth: </span>{command.title}
+            </span>
           ) : (
             <span className="truncate min-w-0">{command.title}</span>
           )}
@@ -353,7 +391,10 @@ export function CommandPalette() {
             <span className="text-text-muted truncate min-w-0 flex-shrink" style={{ fontSize: 12 }}>{command.detail}</span>
           )}
           <span className="flex-1" />
-          {!browsing && !isAsk && (
+          {isResearch && (
+            <span className="text-text-muted flex-shrink-0" style={{ fontSize: 11 }}>Feeds + web</span>
+          )}
+          {!browsing && !isAsk && !isResearch && (
             <span className="text-text-muted flex-shrink-0" style={{ fontSize: 11 }}>{command.group}</span>
           )}
           {isAsk && selected && (
@@ -403,7 +444,18 @@ export function CommandPalette() {
             autoFocus
             value={state.query}
             onChange={(e) => controller.setQuery(e.target.value)}
-            onKeyDown={(e) => { if (controller.handleKey(e.nativeEvent)) e.preventDefault(); }}
+            onKeyDown={(e) => {
+              // ⌥↵ researches the question in depth instead of asking it.
+              if (e.key === "Enter" && e.altKey && !e.metaKey && !e.ctrlKey && state.query.trim() && !loading) {
+                e.preventDefault();
+                const topic = state.query.trim();
+                const history = chatting ? state.history : [];
+                close();
+                window.setTimeout(() => research(topic, history), 0);
+                return;
+              }
+              if (controller.handleKey(e.nativeEvent)) e.preventDefault();
+            }}
             placeholder={chatting ? "Ask a follow-up…" : "Type a command, or ask anything…"}
             aria-label={chatting ? "Follow-up question" : "Search commands"}
             aria-controls="command-palette-list"
@@ -430,7 +482,12 @@ export function CommandPalette() {
                   <AgentAnswer
                     content={turn.content}
                     sources={(turn.data as AnswerData | undefined)?.sources ?? []}
-                    onOpenArticle={(id) => { close(); window.setTimeout(() => openArticleById(id), 0); }}
+                    onOpenArticle={(id) => {
+                      const source = ((turn.data as AnswerData | undefined)?.sources ?? []).find((s) => s.id === id);
+                      if (source?.source_type === "web") { if (source.url) void openUrl(source.url); return; }
+                      close();
+                      window.setTimeout(() => openArticleById(id), 0);
+                    }}
                     onHoverSource={setHoveredSource}
                     highlightId={turn === lastAnswer ? selectedSource : null}
                   />
@@ -486,6 +543,7 @@ export function CommandPalette() {
               {(state.query.trim() || results.length > 0) && (
                 <span className="flex items-center gap-1"><Kbd>↵</Kbd> {state.query.trim() ? "ask" : "open article"}</span>
               )}
+              {state.query.trim() && <span className="flex items-center gap-1"><Kbd>{formatShortcutKey("alt")}</Kbd><Kbd>↵</Kbd> research</span>}
               <span className="flex items-center gap-1"><Kbd>⌫</Kbd> commands</span>
               <span className="flex-1" />
               <button
@@ -503,6 +561,7 @@ export function CommandPalette() {
               <span className="flex items-center gap-1"><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
               <span className="flex items-center gap-1"><Kbd>↵</Kbd> run</span>
               {state.query.trim() && <span className="flex items-center gap-1"><Kbd>{formatShortcutKey("mod")}</Kbd><Kbd>↵</Kbd> ask in full chat</span>}
+              {state.query.trim() && <span className="flex items-center gap-1"><Kbd>{formatShortcutKey("alt")}</Kbd><Kbd>↵</Kbd> research</span>}
               <span className="flex-1" />
               <span className="flex items-center gap-1"><Kbd>{formatShortcutKey("mod")}</Kbd><Kbd>K</Kbd> toggle</span>
             </>

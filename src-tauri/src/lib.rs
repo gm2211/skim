@@ -282,6 +282,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::chat::chat_with_articles,
             commands::chat::web_search,
             commands::agent::ask_agent,
+            commands::research::research_topic,
             // Settings
             commands::settings::get_settings,
             commands::settings::update_settings,

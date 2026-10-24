@@ -172,6 +172,9 @@ struct AIChatRequest: Identifiable {
     /// A passage the reader highlighted in the article; the chat opens with it
     /// quoted above the composer, ready for a question about it.
     var initialArticleQuote: String? = nil
+    /// Deep research, when this chat offers it: the feeds first, then the web,
+    /// written up as a cited briefing. Each step is reported as it starts.
+    var research: ((AIChatConversation, @MainActor @escaping (String) -> Void) async throws -> AIChatAnswer)? = nil
     var answer: (AIChatConversation) async throws -> AIChatAnswer
 }
 
@@ -180,6 +183,8 @@ struct AIChatAnswer {
     var articles: [Article]
     var webCitations: [WebCitation] = []
     var articleHandles: [Int]? = nil
+    /// A deep research briefing, whose [wN] cite `webCitations` in order.
+    var isResearch = false
 }
 
 /// A citation the model surfaced via the `web_search` tool during a chat
@@ -3810,6 +3815,10 @@ struct AIChatSheet: View {
     @State private var quotedText: String?
     @State private var quoteSource: ChatQuoteSource = .answer
     @State private var isSending = false
+    /// Deep research: slower, reads the feeds then the web, and writes a cited briefing.
+    @State private var deepResearch = false
+    /// What the research in flight has done so far.
+    @State private var researchSteps: [String] = []
     @State private var showReauth = false
     @State private var showAISettings = false
     /// Articles opened from the chat, so a citation chip can push one like a card does.
@@ -3825,8 +3834,15 @@ struct AIChatSheet: View {
     }
 
     private var hint: some View {
-        ContentUnavailableView("Ask Skim", systemImage: SkimIcon.chat, description: Text(request.placeholder))
-            .foregroundStyle(SkimStyle.secondary)
+        Group {
+            if deepResearch {
+                ContentUnavailableView("Research a topic", systemImage: "doc.text.magnifyingglass",
+                    description: Text("Skim reads your feeds first, then searches the web for what they leave out, and writes a briefing that cites both."))
+            } else {
+                ContentUnavailableView("Ask Skim", systemImage: SkimIcon.chat, description: Text(request.placeholder))
+            }
+        }
+        .foregroundStyle(SkimStyle.secondary)
     }
 
     var body: some View {
@@ -3848,7 +3864,7 @@ struct AIChatSheet: View {
                                 } else {
                                     hint
                                         .padding(.top, 32)
-                                    if !isSending {
+                                    if !isSending && !deepResearch {
                                         ChatStarterPrompts(prompts: request.suggestedPrompts) { prompt in
                                             input = prompt
                                             Task { await send() }
@@ -3874,7 +3890,9 @@ struct AIChatSheet: View {
                                     .padding(.top, 4)
                             }
 
-                            if isSending {
+                            if isSending && deepResearch {
+                                ResearchProgressList(steps: researchSteps)
+                            } else if isSending {
                                 HStack(spacing: 10) {
                                     ProgressView()
                                         .controlSize(.small)
@@ -3902,6 +3920,9 @@ struct AIChatSheet: View {
                     }
                     .onChange(of: isSending) { _, sending in
                         if sending { scrollToLatest(proxy) }
+                    }
+                    .onChange(of: researchSteps.count) { _, _ in
+                        if isSending { scrollToLatest(proxy) }
                     }
                 }
 
@@ -3931,8 +3952,34 @@ struct AIChatSheet: View {
                         .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
 
+                    if request.research != nil {
+                        HStack(spacing: 10) {
+                            Button {
+                                deepResearch.toggle()
+                            } label: {
+                                Label("Deep research", systemImage: "doc.text.magnifyingglass")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(deepResearch ? Color.white : SkimStyle.secondary)
+                                    .padding(.horizontal, 12)
+                                    .frame(height: 32)
+                                    .background(deepResearch ? SkimStyle.accent : SkimStyle.surface, in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isSending)
+                            .accessibilityAddTraits(deepResearch ? .isSelected : [])
+                            .accessibilityHint("Reads your feeds first, then the web, and writes a cited briefing")
+                            if deepResearch {
+                                Text("Feeds first, then the web. Takes a minute or two.")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(SkimStyle.secondary)
+                                    .lineLimit(2)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+
                     HStack(spacing: 10) {
-                        TextField("Ask...", text: $input, axis: .vertical)
+                        TextField(deepResearch ? "Name a topic to research..." : "Ask...", text: $input, axis: .vertical)
                             .focused($focused)
                             .disabled(isSending)
                             .lineLimit(1...4)
@@ -4041,8 +4088,14 @@ struct AIChatSheet: View {
         let userMessage = AIChatMessage(role: .user, text: toSend, quotedText: quoteToSend, quoteSource: sourceToSend)
         messages.append(userMessage)
         isSending = true
+        researchSteps = []
         do {
-            let answer = try await request.answer(conversation)
+            let answer: AIChatAnswer
+            if deepResearch, let research = request.research {
+                answer = try await research(conversation) { @MainActor step in researchSteps.append(step) }
+            } else {
+                answer = try await request.answer(conversation)
+            }
             messages.append(
                 AIChatMessage(
                     role: .assistant,
@@ -4051,7 +4104,8 @@ struct AIChatSheet: View {
                     webCitations: answer.webCitations,
                     contextArticles: answer.articles,
                     contextHandles: answer.articleHandles ?? answer.articles.indices.map { $0 + 1 },
-                    articleHandleRegistry: NativeAI.libraryChatHandleRegistry(articles: answer.articles, conversation: conversation)
+                    articleHandleRegistry: NativeAI.libraryChatHandleRegistry(articles: answer.articles, conversation: conversation),
+                    isResearch: answer.isResearch
                 )
             )
         } catch {
@@ -4123,6 +4177,8 @@ struct AIChatMessage: Identifiable, Sendable {
     var contextArticles: [Article] = []
     var contextHandles: [Int] = []
     var articleHandleRegistry: [String: Int] = [:]
+    /// A deep research briefing rather than a quick answer.
+    var isResearch = false
     var isError = false
     var needsReauth = false
     var remedy: AIErrorRemedy = .none
@@ -4138,15 +4194,24 @@ private struct AIChatBubble: View {
     @State private var activeCitation: WebCitation?
     @State private var selectedText = ""
 
-    /// The answer with each [n] turned into a chip link numbered like its card.
+    /// The answer with each [n] turned into a chip link numbered like its card;
+    /// a briefing's [wN] web citations are numbered after the articles.
     private var citedMarkdown: String {
-        guard message.role == .assistant, !message.referencedArticles.isEmpty else { return message.text }
-        return ArticleReferenceExtractor.labeledCitations(
-            in: message.text,
-            references: message.referencedArticles,
-            contextArticles: message.contextArticles,
-            contextHandles: message.contextHandles
-        )
+        guard message.role == .assistant else { return message.text }
+        var text = message.text
+        if !message.referencedArticles.isEmpty {
+            text = ArticleReferenceExtractor.labeledCitations(
+                in: text,
+                references: message.referencedArticles,
+                contextArticles: message.contextArticles,
+                contextHandles: message.contextHandles
+            )
+        }
+        if message.isResearch, !message.webCitations.isEmpty {
+            text = ArticleReferenceExtractor.labeledWebCitations(
+                in: text, firstLabel: message.referencedArticles.count + 1, count: message.webCitations.count)
+        }
+        return text
     }
 
     var body: some View {
@@ -4156,6 +4221,12 @@ private struct AIChatBubble: View {
             }
 
             VStack(alignment: .leading, spacing: 12) {
+                if message.isResearch {
+                    Label("Research briefing", systemImage: "doc.text.magnifyingglass")
+                        .font(.system(size: 12, weight: .semibold))
+                        .textCase(.uppercase)
+                        .foregroundStyle(SkimStyle.accent)
+                }
                 if let quote = message.quotedText {
                     VStack(alignment: .leading, spacing: 3) {
                         Text(message.quoteSource.caption)
@@ -4178,6 +4249,9 @@ private struct AIChatBubble: View {
                     isError: message.isError,
                     onReply: message.role == .assistant && !message.isError ? onReply : nil,
                     onOpenCitation: onOpenArticle,
+                    onOpenWebCitation: { n in
+                        if message.webCitations.indices.contains(n - 1) { activeCitation = message.webCitations[n - 1] }
+                    },
                     onSelection: { selectedText = $0 }
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -4249,11 +4323,12 @@ private struct AIChatBubble: View {
 
                 if !message.webCitations.isEmpty {
                     ChatFlowLayout(spacing: 8) {
-                        ForEach(message.webCitations) { citation in
+                        ForEach(Array(message.webCitations.enumerated()), id: \.element.id) { index, citation in
                             Button {
                                 activeCitation = citation
                             } label: {
-                                WebCitationChip(citation: citation)
+                                WebCitationChip(citation: citation,
+                                                number: message.isResearch ? message.referencedArticles.count + index + 1 : nil)
                             }
                             .buttonStyle(.plain)
                         }
@@ -4285,6 +4360,7 @@ private struct SelectableChatText: UIViewRepresentable {
     var isError: Bool
     var onReply: ((String) -> Void)?
     var onOpenCitation: ((String) -> Void)? = nil
+    var onOpenWebCitation: ((Int) -> Void)? = nil
     var onSelection: (String) -> Void
 
     func makeUIView(context: Context) -> ChatSelectableTextView {
@@ -4306,6 +4382,7 @@ private struct SelectableChatText: UIViewRepresentable {
         context.coordinator.onSelection = onSelection
         context.coordinator.onReply = onReply
         context.coordinator.onOpenCitation = onOpenCitation
+        context.coordinator.onOpenWebCitation = onOpenWebCitation
         let rendered = makeRenderedText()
         if view.attributedText != rendered {
             view.attributedText = rendered
@@ -4354,7 +4431,9 @@ private struct SelectableChatText: UIViewRepresentable {
 
         // Citation chips: a small number on a tinted pill, matching its card under the answer.
         for run in text.runs {
-            guard let url = run.link, url.scheme == ArticleReferenceExtractor.citationScheme else { continue }
+            guard let url = run.link,
+                  url.scheme == ArticleReferenceExtractor.citationScheme || url.scheme == ArticleReferenceExtractor.webCitationScheme
+            else { continue }
             let prefix = String(text[text.startIndex..<run.range.lowerBound].characters)
             let selected = String(text[run.range].characters)
             let range = NSRange(location: prefix.utf16.count, length: selected.utf16.count)
@@ -4403,11 +4482,16 @@ private struct SelectableChatText: UIViewRepresentable {
         var onSelection: (String) -> Void
         var onReply: ((String) -> Void)?
         var onOpenCitation: ((String) -> Void)?
+        var onOpenWebCitation: ((Int) -> Void)?
         init(onSelection: @escaping (String) -> Void, onReply: ((String) -> Void)?) {
             self.onSelection = onSelection
             self.onReply = onReply
         }
         func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
+            if case .link(let url) = textItem.content, url.scheme == ArticleReferenceExtractor.webCitationScheme {
+                guard let onOpenWebCitation, let n = ArticleReferenceExtractor.citedWebNumber(url) else { return nil }
+                return UIAction { _ in onOpenWebCitation(n) }
+            }
             guard case .link(let url) = textItem.content, url.scheme == ArticleReferenceExtractor.citationScheme else { return defaultAction }
             guard let onOpenCitation, let id = ArticleReferenceExtractor.citedArticleID(url) else { return nil }
             return UIAction { _ in onOpenCitation(id) }
@@ -4455,6 +4539,8 @@ private extension UIFont {
 /// behind a globe glyph, matching desktop's "web" source treatment.
 private struct WebCitationChip: View {
     var citation: WebCitation
+    /// The number a briefing's chips carry for this source, when it has one.
+    var number: Int? = nil
 
     private var label: String {
         let trimmedTitle = citation.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4464,6 +4550,13 @@ private struct WebCitationChip: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            if let number {
+                Text("\(number)")
+                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 18, minHeight: 18)
+                    .background(SkimStyle.accent, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            }
             Image(systemName: "globe")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(SkimStyle.accent)
@@ -4691,6 +4784,34 @@ enum ArticleReferenceExtractor {
         return result + ns.substring(from: cursor)
     }
 
+    static let webCitationScheme = "skim-cite-web"
+
+    /// Rewrites each [wN] in a research briefing as a chip link labeled
+    /// `firstLabel + N - 1`, so web chips number on from the article chips.
+    static func labeledWebCitations(in text: String, firstLabel: Int, count: Int) -> String {
+        guard let regex = try? NSRegularExpression(pattern: #"( ?)\[[wW](\d{1,3})\](?!\()"#) else { return text }
+        let ns = text as NSString
+        var result = ""
+        var cursor = 0
+        for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            result += ns.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
+            cursor = NSMaxRange(match.range)
+            guard let n = Int(ns.substring(with: match.range(at: 2))), (1...max(count, 1)).contains(n), count > 0 else {
+                result += ns.substring(with: match.range)
+                continue
+            }
+            let lead = match.range(at: 1).length > 0 ? "\u{00A0}" : "\u{2060}"
+            result += "\(lead)[\u{2009}\(firstLabel + n - 1)\u{2009}](\(webCitationScheme):\(n))"
+        }
+        return result + ns.substring(from: cursor)
+    }
+
+    /// The web source number a chip link made by `labeledWebCitations` points at.
+    static func citedWebNumber(_ url: URL) -> Int? {
+        guard url.scheme == webCitationScheme else { return nil }
+        return Int(url.absoluteString.dropFirst(webCitationScheme.count + 1))
+    }
+
     /// The article a chip link made by `labeledCitations` points at.
     static func citedArticleID(_ url: URL) -> String? {
         guard url.scheme == citationScheme else { return nil }
@@ -4777,5 +4898,189 @@ private extension View {
         } else {
             self
         }
+    }
+}
+
+// MARK: - Deep research
+
+extension NativeAI {
+    /// Deep research on the latest question: the reader's feeds first, then the
+    /// web for what they leave open, written up as a briefing that cites both.
+    /// The steps and prompts match desktop (src-tauri/src/commands/research.rs);
+    /// `progress` hears each step as it starts.
+    static func research(
+        conversation: AIChatConversation,
+        settings: AppSettings,
+        store: SkimStore,
+        fullest: @escaping @Sendable ([Article]) async -> [Article],
+        progress: @MainActor @escaping (String) -> Void
+    ) async throws -> AIChatAnswer {
+        var settings = settings
+        settings.ai = AIRequestPolicy.chatSettings(settings.ai)
+        let question = conversation.latestPromptText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let history = conversation.priorTurns.map { "\($0.role == .user ? "Reader" : "Skim"): \(String($0.promptText.prefix(1500)))" }
+        let asked = history.isEmpty ? question : "Conversation so far:\n\(history.joined(separator: "\n"))\n\nQuestion: \(question)"
+
+        // 1. Plan searches of the library.
+        await progress("Planning the research")
+        let plan = ResearchPolicy.plan(
+            from: try await complete(settings: settings, instructions: ResearchPolicy.planPrompt, prompt: asked, maxTokens: 400, jsonMode: true),
+            question: conversation.latestQuestion)
+        let focus = ([conversation.latestQuestion, plan.topic] + plan.libraryQueries).joined(separator: " ")
+
+        // 2. Search the library.
+        var searches: [[Article]] = []
+        for query in plan.libraryQueries {
+            try Task.checkCancellation()
+            let terms = LibraryChatPolicy.topicKeywords(query)
+            guard !terms.isEmpty else { continue }
+            await progress("Searched your feeds for \u{201c}\(query)\u{201d}")
+            searches.append(try await store.searchArticlesForChat(filter: ArticleFilter(), feedIDs: nil,
+                terms: terms, allowRecentFallback: false, limit: 15))
+        }
+        let found = ResearchPolicy.fuse(pinned: [], searches: searches, id: \.id, limit: ResearchPolicy.libraryArticles)
+
+        // 3. Read the best of them in full, from what is already on the device.
+        let read = min(found.count, ResearchPolicy.readArticles)
+        if read > 0 { await progress("Read \(read) of your articles") }
+        let articles = await fullest(Array(found.prefix(read))) + found.dropFirst(read)
+        let handles = libraryChatHandles(articles: articles, conversation: conversation)
+        let library = articles.isEmpty ? "The reader's articles have nothing on this." : zip(articles, handles).enumerated().map { index, pair in
+            let (article, handle) = pair
+            let excerpt = LibraryChatPolicy.queryExcerpt(text: article.plainBody, query: focus,
+                maxCharacters: index < ResearchPolicy.readArticles ? 2500 : 600)
+            let url = article.externalURL?.absoluteString ?? article.url?.absoluteString ?? ""
+            return "[\(handle)] \(article.title) (\(article.feedTitle))\n\(AIRequestPolicy.publicationContext(article.publishedAt))\nURL: \(url)\n\(excerpt.isEmpty ? "(no text available)" : excerpt)"
+        }.joined(separator: "\n\n")
+
+        // 4. Find what the library leaves open.
+        await progress("Looked for gaps in your feeds' coverage")
+        let gapsReply = (try? await complete(settings: settings, instructions: ResearchPolicy.gapsPrompt,
+            prompt: "Question: \(asked)\nTopic: \(plan.topic)\n\nThe reader's articles:\n\(library)", maxTokens: 500, jsonMode: true)) ?? ""
+        let gaps = ResearchPolicy.gaps(from: gapsReply, topic: plan.topic)
+
+        // 5. Fill the gaps from the web.
+        let libraryURLs = Set(articles.compactMap { $0.url?.absoluteString } + articles.compactMap { $0.externalURL?.absoluteString })
+        var web: [SearchResult] = []
+        var perQuery: [[Int]] = []
+        for query in gaps.webQueries {
+            try Task.checkCancellation()
+            await progress("Searched the web for \u{201c}\(query)\u{201d}")
+            var indices: [Int] = []
+            do {
+                for result in try await NativeWebSearch.run(query: query, maxResults: ResearchPolicy.webResultsPerQuery)
+                where !libraryURLs.contains(result.url) {
+                    if let index = web.firstIndex(where: { $0.url == result.url }) {
+                        indices.append(index)
+                    } else {
+                        web.append(result)
+                        indices.append(web.count - 1)
+                    }
+                }
+            } catch {
+                await progress("Web search failed: \(error.localizedDescription)")
+            }
+            perQuery.append(indices)
+        }
+
+        // 6. Read the top web pages, taking each query's best result in turn.
+        var toRead: [Int] = []
+        for rank in 0..<ResearchPolicy.webResultsPerQuery {
+            for indices in perQuery where indices.count > rank && !toRead.contains(indices[rank]) && toRead.count < ResearchPolicy.webPagesRead {
+                toRead.append(indices[rank])
+            }
+        }
+        var pages: [Int: String] = [:]
+        if !toRead.isEmpty {
+            var sites: [String] = []
+            for index in toRead where !sites.contains(ResearchPolicy.domain(web[index].url)) { sites.append(ResearchPolicy.domain(web[index].url)) }
+            await progress("Read \(toRead.count == 1 ? "1 web page" : "\(toRead.count) web pages") (\(sites.joined(separator: ", ")))")
+            let targets = toRead.map { ($0, web[$0].url) }
+            pages = await withTaskGroup(of: (Int, String?).self) { group in
+                for (index, url) in targets {
+                    group.addTask { (index, await readWebPage(url)) }
+                }
+                var out: [Int: String] = [:]
+                for await (index, text) in group {
+                    if let text, text.split(whereSeparator: \.isWhitespace).count >= 60 { out[index] = text }
+                }
+                return out
+            }
+        }
+        let webText = web.isEmpty ? "None found." : web.enumerated().map { index, result in
+            let body = pages[index].map { LibraryChatPolicy.queryExcerpt(text: $0, query: focus, maxCharacters: 1800) } ?? result.snippet
+            return "[w\(index + 1)] \(result.title) (\(ResearchPolicy.domain(result.url)))\nURL: \(result.url)\n\(body)"
+        }.joined(separator: "\n\n")
+
+        // 7. Write the briefing.
+        await progress("Writing the briefing")
+        let today = Date().formatted(.iso8601.year().month().day())
+        let gapsNote = gaps.gaps.isEmpty ? "" : "\n\nGaps the web sources were found to fill: \(gaps.gaps.joined(separator: "; "))"
+        let raw = try await complete(
+            settings: settings,
+            instructions: ResearchPolicy.briefingPrompt(today: today),
+            prompt: "Question: \(asked)\n\nThe reader's articles (cite as [n]):\n\(library)\n\nWeb sources (cite as [wN]):\n\(webText)\(gapsNote)",
+            maxTokens: AIRequestPolicy.requestMaxTokens(ResearchPolicy.briefingTokens, provider: settings.ai.provider)
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { throw NativeAIError.unavailable("The model returned an empty briefing. Try again.") }
+
+        // Web sources renumbered in reading order, keeping only the ones cited.
+        let order = ResearchPolicy.citedWebOrder(in: raw, count: web.count)
+        let citations = order.map { n in
+            WebCitation(title: web[n - 1].title, url: web[n - 1].url, snippet: web[n - 1].snippet, query: "")
+        }
+        return AIChatAnswer(text: ResearchPolicy.renumberWeb(raw, order: order), articles: articles,
+                            webCitations: citations, articleHandles: handles, isResearch: true)
+    }
+
+    /// A web page's readable text, or nil when it cannot be fetched in time.
+    private static func readWebPage(_ address: String) async -> String? {
+        guard let url = URL(string: address), url.scheme?.hasPrefix("http") == true else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: 12)
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15", forHTTPHeaderField: "User-Agent")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
+              let html = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
+        else { return nil }
+        return try? ArticleExtractor.extract(from: html, baseURL: url)
+    }
+}
+
+/// The research in flight, step by step, so a slow answer never looks stuck.
+private struct ResearchProgressList: View {
+    var steps: [String]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Researching... this takes a minute or two")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(SkimStyle.text)
+            ForEach(Array((steps.isEmpty ? ["Starting..."] : steps).enumerated()), id: \.offset) { index, step in
+                let current = steps.isEmpty || index == steps.count - 1
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if current {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .tint(SkimStyle.accent)
+                            .frame(width: 14)
+                            // A spinner has no text baseline; centre it on the step's first line.
+                            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
+                    } else {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(SkimStyle.accent)
+                            .frame(width: 14)
+                    }
+                    Text(step)
+                        .font(.system(size: 14))
+                        .foregroundStyle(current ? SkimStyle.text : SkimStyle.secondary)
+                        .lineLimit(2)
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }

@@ -919,6 +919,16 @@ pub async fn web_search(query: String) -> Result<Vec<SearchResult>, String> {
 
 /// Actual DuckDuckGo HTML scrape. Factored out of the Tauri command so the
 /// tool-use loop and the direct UI call share one implementation.
+/// DuckDuckGo's HTML endpoint. A dev bridge build can point it at a local
+/// stand-in (`SKIM_DEV_WEB_SEARCH`), since sandboxes have no route to the web.
+fn web_search_endpoint() -> String {
+    #[cfg(feature = "devbridge")]
+    if let Ok(url) = std::env::var("SKIM_DEV_WEB_SEARCH") {
+        return url;
+    }
+    "https://html.duckduckgo.com/html/".into()
+}
+
 pub async fn run_web_search(query: &str, max_results: usize) -> Result<Vec<SearchResult>, String> {
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
@@ -928,7 +938,7 @@ pub async fn run_web_search(query: &str, max_results: usize) -> Result<Vec<Searc
     // POST, not GET: DuckDuckGo answers a GET of /html/?q= with its 202
     // bot-check page from many IPs while still serving the form POST.
     let response = client
-        .post("https://html.duckduckgo.com/html/")
+        .post(web_search_endpoint())
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(format!("q={}", urlencoding::encode(query)))
         .send()

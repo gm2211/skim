@@ -2,22 +2,23 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { AgentStep, ChatSource } from "../../services/commands";
-import { citationOrder } from "../../lib/chatCitations";
+import { citationOrder, citedSource } from "../../lib/chatCitations";
 import "./chat-markdown.css";
 
 export const CITATION_HREF = "#skim-article-";
 
 /**
- * Turn each [n] that names an article into a small numbered chip, numbered as
- * the reader meets them so it matches the card under the answer.
+ * Turn each [n] that names an article, and each [wN] that names a web result,
+ * into a small numbered chip, numbered as the reader meets them so it matches
+ * the card under the answer.
  */
 export function linkCitations(content: string, sources: ChatSource[]): string {
   const labels = new Map(citationOrder(sources, content).map(({ source, label }) => [source.id, label]));
   // Chips stay on the line of the word they follow, and a run like [3][1] never splits.
-  return content.replace(/ ?\[(\d{1,3})\](?!\()/g, (match, digits: string) => {
-    const source = sources[Number(digits) - 1];
+  return content.replace(/ ?\[(w?)(\d{1,3})\](?!\()/gi, (match, web: string, digits: string) => {
+    const source = citedSource(sources, web, digits);
     const label = source && labels.get(source.id);
-    if (!source || !label || source.source_type === "web") return match;
+    if (!source || !label) return match;
     const lead = match.startsWith(" ") ? "\u00a0" : "\u2060";
     return `${lead}[${label}](${CITATION_HREF}${encodeURIComponent(source.id)})`;
   });
@@ -113,6 +114,8 @@ export function SourceTile({ source, label, active, onOpen, onHover, id, inListb
   inListbox?: boolean;
 }) {
   const isWeb = source.source_type === "web";
+  // Web results name their site when Skim knows it.
+  const site = isWeb ? (source.feed_title && source.feed_title !== "Web" ? source.feed_title : "Web") : source.feed_title;
   const date = formatDate(source.published_at);
   return (
     <div
@@ -126,8 +129,14 @@ export function SourceTile({ source, label, active, onOpen, onHover, id, inListb
     >
       <div className="source-tile-kicker">
         <span className="source-tile-num">{label}</span>
-        <FeedMark name={isWeb ? "Web" : source.feed_title} />
-        <span className="truncate">{isWeb ? "Web" : source.feed_title}</span>
+        {isWeb ? (
+          <span className="feed-mark web" aria-hidden style={{ width: 16, height: 16 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <circle cx="12" cy="12" r="10" /><path d="M2 12h20" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+          </span>
+        ) : <FeedMark name={site} />}
+        <span className="truncate">{site}</span>
         {date && <span className="source-tile-date">· {date}</span>}
       </div>
       <div className="source-tile-title">{source.title}</div>

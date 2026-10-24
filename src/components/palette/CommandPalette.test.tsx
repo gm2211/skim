@@ -217,4 +217,34 @@ describe("CommandPalette", () => {
     expect(screen.getByRole("combobox")).toHaveValue("what is new in rust?");
     expect(screen.getAllByRole("option")[0]).toHaveTextContent("Ask Skim");
   });
+
+  it("offers to research a question in depth, in the full chat", async () => {
+    const user = userEvent.setup();
+    const events: string[] = [];
+    window.addEventListener(APP_COMMAND_EVENT, (e) => events.push((e as CustomEvent).detail));
+    renderPalette();
+    await user.type(screen.getByRole("combobox"), "state of fusion power");
+    const row = await screen.findByRole("option", { name: /Research in depth: state of fusion power/ });
+    expect(row).toHaveTextContent("Feeds + web");
+    await user.click(row);
+    await waitFor(() => expect(events).toContain("ask-skim"));
+    expect(useAgentChatStore.getState().seed).toMatchObject({ prompt: "state of fusion power", autoSend: true, research: true });
+    expect(askAgent).not.toHaveBeenCalled();
+  });
+
+  it("researches with Option-Enter, carrying the conversation along", async () => {
+    const user = userEvent.setup();
+    askAgent.mockResolvedValue(ANSWER);
+    renderPalette();
+    await user.type(screen.getByRole("combobox"), "where's the rust piece?{Enter}");
+    await screen.findByText(/Two matches/);
+    await user.type(screen.getByRole("combobox"), "go deeper on async runtimes");
+    await user.keyboard("{Alt>}{Enter}{/Alt}");
+    await waitFor(() => expect(useAgentChatStore.getState().seed?.research).toBe(true));
+    const seed = useAgentChatStore.getState().seed;
+    expect(seed?.prompt).toBe("go deeper on async runtimes");
+    expect(seed?.messages?.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(askAgent).toHaveBeenCalledTimes(1);
+    expect(useUiStore.getState().showCommandPalette).toBe(false);
+  });
 });

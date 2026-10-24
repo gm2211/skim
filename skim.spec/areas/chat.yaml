@@ -113,6 +113,29 @@ behaviors:
       sponsored and duplicate links, and a DuckDuckGo bot check is reported as a failed search
       rather than as no results (Giulio, 2026-10-19: "consistently only finds one result, bug
       with tool?").
+  - id: deep-research
+    description: >-
+      The reader can ask for deep research on a topic: Skim searches and reads their feeds first,
+      then searches and reads the web for what the feeds leave out, and writes a full briefing that
+      cites both.
+    details: >-
+      Opt-in and slower than a chat answer (a minute or two), with every step shown as it happens.
+      The steps are fixed so every provider follows them: plan library searches, search the feeds
+      (up to 14 articles, the best 8 read in full), find the gaps, run up to 3 web searches, read up
+      to 4 web pages, then write. The briefing opens with a 2 to 3 sentence bottom line, then
+      sections such as What's happening, Background, Where sources differ and What to watch. Articles
+      are cited [n] and web sources [wN]; both become the same numbered chips and cards, numbered in
+      reading order, and web results the briefing never cites stay under "Also searched". Desktop:
+      the Cmd+K palette offers "Research in depth" under the Ask row and on Option-Enter, which opens
+      the full Ask Skim chat in research mode; Ask Skim has a Deep research toggle by the composer.
+      iOS: Chat with Articles has the same toggle. A failed web search still produces a briefing
+      from the feeds and says the search failed. Follow-up questions continue as ordinary chat.
+    source:
+      text: >-
+        I would also like to request a full briefing on a topic (a bit like cmd+k + type question,
+        but having the option of requesting a slower and more complete research and briefing that
+        extends past just the feeds, into websearch to fill any gaps
+      reference: Giulio, project thread "Add deep research topic briefings", 2026-10-24
   - id: answer-first-on-small-models
     description: >-
       On-device models answer first, stay grounded in exact source passages, and drop chatbot

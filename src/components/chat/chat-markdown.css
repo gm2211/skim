@@ -40,3 +40,23 @@
 .source-tile-date { flex-shrink: 0; }
 .source-tile-title { font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--color-text-primary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
+
+/* Deep research: the composer's toggle, the live steps while it works, and the briefing's kicker. */
+.research-toggle { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--color-text-secondary); background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1); cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.research-toggle:hover { color: var(--color-text-primary); background: rgba(255,255,255,.08); }
+.research-toggle.on { color: #fff; background: var(--color-accent); border-color: var(--color-accent); }
+.research-toggle:disabled { opacity: .5; cursor: default; }
+.research-toggle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.research-progress { padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06); max-width: 88%; }
+.research-progress-title { font-size: 12.5px; font-weight: 600; color: var(--color-text-primary); margin-bottom: 8px; }
+.research-progress ol { display: grid; gap: 5px; }
+.research-progress li { display: flex; align-items: center; gap: 8px; font-size: 12px; min-width: 0; color: var(--color-text-muted); }
+.research-progress li svg { flex-shrink: 0; }
+.research-progress li.done svg { color: var(--color-accent); }
+.research-progress li.current { color: var(--color-text-primary); }
+.research-kicker { margin-bottom: 8px; font-size: 12px; color: var(--color-text-muted); }
+.research-kicker-label { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--color-accent); }
+.research-kicker summary { cursor: pointer; margin-top: 4px; width: fit-content; }
+.research-kicker summary:hover { color: var(--color-text-primary); }
+.research-kicker ul { margin-top: 4px !important; }
+.feed-mark.web { background: rgba(88,166,255,.18); color: var(--color-accent); }

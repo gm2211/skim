@@ -561,6 +561,14 @@ export interface AgentResponse {
 }
 export const askAgent = (messages: ChatMessageInput[], context: AgentContext, priorArticleIds?: string[]) =>
   invoke<AgentResponse>("ask_agent", { messages, context, priorArticleIds: priorArticleIds ?? null });
+/** Deep research: the reader's feeds first, then the web for what they leave open, written up as a cited briefing. */
+export const researchTopic = (messages: ChatMessageInput[], context: AgentContext, requestId: string) =>
+  invoke<AgentResponse>("research_topic", { messages, context, requestId });
+export const RESEARCH_PROGRESS_EVENT = "research-progress";
+export interface ResearchProgress {
+  request_id: string;
+  label: string;
+}
 export const webSearch = (query: string) =>
   invoke<SearchResult[]>("web_search", { query });
 

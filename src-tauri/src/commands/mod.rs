@@ -14,4 +14,5 @@ pub mod ds4;
 pub mod feeds;
 pub mod models;
 pub mod offline;
+pub mod research;
 pub mod settings;

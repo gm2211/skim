@@ -349,7 +349,12 @@ struct ArticleListView: View {
                 sessionKey: scope.sessionKey,
                 title: "Chat with Articles",
                 placeholder: "Find or ask about articles in this view.",
-                suggestedPrompts: LibraryChatPolicy.starterPrompts
+                suggestedPrompts: LibraryChatPolicy.starterPrompts,
+                research: { [model] conversation, progress in
+                    try await NativeAI.research(conversation: conversation, settings: model.settings, store: model.store,
+                                                fullest: { [model] articles in await model.articlesForTodayChat(articles) },
+                                                progress: progress)
+                }
             ) { conversation in
                 let context = try await model.articlesForLibraryChat(scope: scope, conversation: conversation)
                 guard !context.isEmpty else {

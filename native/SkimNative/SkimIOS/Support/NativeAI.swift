@@ -3247,7 +3247,7 @@ enum NativeAI {
     struct FMInboxRating {
         @Guide(description: "1-based index of the article in the provided list")
         var articleIndex: Int
-        @Guide(description: "Importance for anyone following this area, 1 (noise) to 5 (major)", .range(1...5))
+        @Guide(description: "Impact of the thing at the center of the article, in any field, 1 (noise) to 5 (changes a whole field)", .range(1...5))
         var importance: Int
         @Guide(description: "Fit with this reader's interests, 1 (outside them) to 5 (squarely in them); 3 when unknown", .range(1...5))
         var relevance: Int

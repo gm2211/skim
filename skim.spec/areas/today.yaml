@@ -34,20 +34,26 @@ behaviors:
       reference: Giulio, project chat, 2026-10-22, with a screenshot of a DuckDB release leading Today
   - id: ranked-by-consequence
     description: >-
-      Themes are ranked by consequence, not by how often something was posted: active security
-      incidents, exploited vulnerabilities, breaches, outages and decisions by governments, courts
-      or regulators outrank launches and releases, and a routine release sits low or in the briefs.
+      Themes are ranked by the impact of the thing at the center of each story, in any field: how
+      much it changes, for how many people, systems or fields, and how lastingly. No kind of news
+      outranks another by default, so a run of major hacks and a genuinely revolutionary release
+      can both lead, while a routine release never does. Only between stories of similar impact
+      does the reader's profile (interests they wrote and what they read in the app) decide.
     details: >-
       The editor rates each theme 1-5 and the page orders by that rating, the editor's order
-      breaking ties. The reader's AI Inbox interests break ties and pick briefs but never lift a
-      minor story above a consequential one. The story page's ranking (coverage, freshness, taste)
-      led with a two-report DuckDB release while single-report breach stories each scored lower,
-      and its importance rating was skipped on windows of more than 64 stories.
+      breaking ties. The reader's profile also picks briefs but never lifts a minor story above a
+      more consequential one; on desktop the learned part is used once the reader has 20
+      interactions. The story page's ranking (coverage, freshness, taste) led with a two-report
+      DuckDB release while single-report breach stories each scored lower, and its importance
+      rating was skipped on windows of more than 64 stories. An earlier editor prompt said
+      security incidents and regulators outrank launches; Giulio corrected that on 2026-10-24.
     source:
       text: >-
-        why is this my main article? With all that's going on right now with vulns and
-        certificates being breached I would have expected the main story to be about
-      reference: Giulio, project chat, 2026-10-22
+        TLDR, priority is about impact of the thing at the center of the story, so if something is
+        truly revolutionary even in a field I don't particularly care about, it should take
+        precendece. The other dimension is my learnt profile (in the app, not here) of stories
+        that I engage with and things I find interesting
+      reference: Giulio, project chat, 2026-10-24
   - id: covers-days
     description: >-
       The reader chooses how many days one edition reads: 1, 3 (the default) or 7, from the

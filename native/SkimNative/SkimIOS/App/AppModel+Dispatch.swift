@@ -127,6 +127,7 @@ extension AppModel {
         // Headlines alone for the lead: the short listing is what makes it quick.
         let leadListing = needsPlan && budget.leadFirst ? Dispatch.listing(pool, excerptCharacters: 0) : ""
         let interests = settings.ai.triageUserPrompt
+        let likedTitles = tasteStore.likedTitles()
         var planned = !needsPlan
         var hasLead = false
         var queue = edition.themes.indices.filter { !edition.themes[$0].isWritten }
@@ -138,7 +139,7 @@ extension AppModel {
                 group.addTask {
                     .plan(await Self.attempt {
                         try await Self.askWithOneCorrection(
-                            settings: settings, instructions: Dispatch.editorInstructions(days: days, interests: interests),
+                            settings: settings, instructions: Dispatch.editorInstructions(days: days, interests: interests, likedTitles: likedTitles),
                             prompt: Dispatch.editorPrompt(listing: listing), maxTokens: budget.editorTokens
                         ) { try Dispatch.plan($0, pool: candidates) }
                     })
@@ -147,7 +148,7 @@ extension AppModel {
                     group.addTask {
                         .lead(await Self.attempt {
                             try await Self.askWithOneCorrection(
-                                settings: settings, instructions: Dispatch.leadInstructions(days: days, interests: interests),
+                                settings: settings, instructions: Dispatch.leadInstructions(days: days, interests: interests, likedTitles: likedTitles),
                                 prompt: Dispatch.leadPrompt(listing: leadListing), maxTokens: 400
                             ) { try Dispatch.lead($0, pool: candidates) }
                         })

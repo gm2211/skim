@@ -109,3 +109,13 @@ private func article(_ id: String, feed: String, url: String, minutesAgo: Double
     #expect(try await store.latestDispatchEdition(days: 3, endingBy: base + 6 * day, excluding: newer.id)?.id == older.id)
     #expect(try await store.latestDispatchEdition(days: 1, endingBy: base + 6 * day, excluding: current) == nil)
 }
+
+@Test func dispatchEditorRanksByImpactThenByTheReadersProfile() {
+    let prompt = Dispatch.editorInstructions(days: 3, interests: "security", likedTitles: ["CA certificate breach"])
+    #expect(prompt.contains("impact of the thing at the center"))
+    #expect(prompt.contains("No kind of news outranks another by default"))
+    #expect(!prompt.contains("outrank launches"))
+    #expect(prompt.contains("Interests the reader wrote down: security"))
+    #expect(prompt.contains("CA certificate breach"))
+    #expect(!Dispatch.leadInstructions(days: 1, interests: nil).contains("Reader's profile"))
+}

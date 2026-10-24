@@ -4328,7 +4328,7 @@ private struct AIChatBubble: View {
                                 activeCitation = citation
                             } label: {
                                 WebCitationChip(citation: citation,
-                                                label: message.isResearch ? message.referencedArticles.count + index + 1 : nil)
+                                                number: message.isResearch ? message.referencedArticles.count + index + 1 : nil)
                             }
                             .buttonStyle(.plain)
                         }
@@ -4540,7 +4540,7 @@ private extension UIFont {
 private struct WebCitationChip: View {
     var citation: WebCitation
     /// The number a briefing's chips carry for this source, when it has one.
-    var label: Int? = nil
+    var number: Int? = nil
 
     private var label: String {
         let trimmedTitle = citation.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4550,8 +4550,8 @@ private struct WebCitationChip: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            if let label {
-                Text("\(label)")
+            if let number {
+                Text("\(number)")
                     .font(.system(size: 11, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.white)
                     .frame(minWidth: 18, minHeight: 18)

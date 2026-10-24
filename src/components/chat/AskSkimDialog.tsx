@@ -4,8 +4,8 @@ import { askAgent, chatWithArticles, type AgentContext, type AgentStep, type Cha
 import { useAgentChatStore } from "../../stores/agentChatStore";
 import { agentAskHeading, agentContextLabel, agentExamples } from "../../lib/agentContext";
 import { CHAT_STARTER_PROMPTS, isPromptTemplate } from "../../lib/chatStarterPrompts";
-import { AgentSteps } from "./AgentAnswer";
-import { partitionSources, type NumberedSource } from "../../lib/chatCitations";
+import { AgentSteps, SourceTile } from "./AgentAnswer";
+import { citationOrder, partitionSources, type NumberedSource } from "../../lib/chatCitations";
 import type { ChatMessageInput } from "../../services/types";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useUiStore } from "../../stores/uiStore";
@@ -68,6 +68,8 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
   // app agent with this context instead of the scoped article search.
   const [agentContext, setAgentContext] = useState<AgentContext | null>(null);
   const [contextArticleTitle, setContextArticleTitle] = useState<string | null>(null);
+  // The cited article under the pointer, as "<message index>:<article id>", so its chips and card light up together.
+  const [hoveredSource, setHoveredSource] = useState<string | null>(null);
   const seed = useAgentChatStore((s) => s.seed);
   const pendingSend = useRef<string | null>(null);
   const onSeedSend = useRef<(() => void) | null>(null);
@@ -167,6 +169,19 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
     void send(text);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, agentContext, messages]);
+
+  /** Opens a cited source: an article in the reader, a web result in the browser. */
+  const openSource = (source: ChatSource | undefined) => {
+    if (!source) return;
+    if (source.source_type === "web" || !onOpenArticle) {
+      if (source.url) void openUrl(source.url);
+      return;
+    }
+    restoreOpener.current = false;
+    focusAfterSend.current = false;
+    onOpenArticle(source.id);
+    onClose();
+  };
 
   return !open || showSettings ? null : createPortal(
     <div
@@ -300,19 +315,27 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
                 >
                   {m.reply && <ReplyPreview reply={m.reply} />}
                   {m.steps && <AgentSteps steps={m.steps} />}
-                  <ChatMessageContent content={m.content} role={m.role} onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }} replyDisabled={loading} />
+                  <ChatMessageContent
+                    content={m.content}
+                    role={m.role}
+                    onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }}
+                    replyDisabled={loading}
+                    citations={m.role === "assistant" && m.sources?.length ? {
+                      sources: m.sources,
+                      onOpenArticle: (id) => openSource(m.sources?.find((source) => source.id === id)),
+                      onHoverSource: (id) => setHoveredSource(id && `${i}:${id}`),
+                      highlightId: hoveredSource?.startsWith(`${i}:`) ? hoveredSource.slice(`${i}:`.length) : null,
+                    } : undefined}
+                  />
                 </div>
               </div>
               {m.role === "assistant" && m.sources && m.sources.length > 0 && (
                 <SourceGroups
                   sources={m.sources}
                   content={m.content}
-                  onOpenArticle={onOpenArticle ? (id) => {
-                    restoreOpener.current = false;
-                    focusAfterSend.current = false;
-                    onOpenArticle(id);
-                  } : undefined}
-                  onClose={onClose}
+                  onOpen={openSource}
+                  highlightId={hoveredSource?.startsWith(`${i}:`) ? hoveredSource.slice(`${i}:`.length) : null}
+                  onHoverSource={(id) => setHoveredSource(id && `${i}:${id}`)}
                 />
               )}
             </div>
@@ -386,15 +409,18 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
 function SourceGroups({
   sources,
   content,
-  onOpenArticle,
-  onClose,
+  onOpen,
+  highlightId,
+  onHoverSource,
 }: {
   sources: ChatSource[];
   content: string;
-  onOpenArticle?: (id: string) => void;
-  onClose: () => void;
+  onOpen: (source: ChatSource) => void;
+  highlightId: string | null;
+  onHoverSource: (id: string | null) => void;
 }) {
-  const { cited, searched } = partitionSources(sources, content);
+  const { searched } = partitionSources(sources, content);
+  const cited = citationOrder(sources, content);
   const renderSources = (items: NumberedSource[]) => (
     <div className="flex flex-col gap-1">
       {items.map(({ source: s, number }) => {
@@ -402,16 +428,7 @@ function SourceGroups({
         return (
           <button
             key={s.id}
-            onClick={() => {
-              if (isWeb && s.url) {
-                openUrl(s.url);
-              } else if (onOpenArticle) {
-                onOpenArticle(s.id);
-                onClose();
-              } else if (s.url) {
-                openUrl(s.url);
-              }
-            }}
+            onClick={() => onOpen(s)}
             className="text-left rounded-lg border border-white/5 hover:border-accent/30 hover:bg-white/5 transition-colors"
             style={{ padding: "6px 10px" }}
           >
@@ -435,7 +452,7 @@ function SourceGroups({
                     <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                   </svg>
                 ) : null}
-                {number === null ? "Web" : `[${number}]`}
+                {number === null && "Web"}
               </span>
               <div className="min-w-0 flex-1">
                 <div
@@ -471,7 +488,18 @@ function SourceGroups({
           >
             Sources
           </div>
-          {renderSources(cited)}
+          <div className="source-tiles" onMouseLeave={() => onHoverSource(null)}>
+            {cited.map(({ source, label }) => (
+              <SourceTile
+                key={source.id}
+                source={source}
+                label={label}
+                active={highlightId === source.id}
+                onHover={() => onHoverSource(source.id)}
+                onOpen={() => onOpen(source)}
+              />
+            ))}
+          </div>
         </div>
       )}
       {searched.length > 0 && (

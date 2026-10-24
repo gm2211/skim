@@ -18,6 +18,27 @@ behaviors:
     details: >-
       Desktop scopes are Inbox (priority 3 and up), Unread (default), and All. Enter sends and
       Shift+Enter adds a line.
+  - id: answer-first-with-source-cards
+    description: >-
+      A library chat answer leads with a short prose answer, cites articles inline as small numbered
+      chips, and shows each cited article as a clickable card under it carrying the same number.
+    details: >-
+      The model is asked for about 50 to 100 words of prose that answers the question, with [n]
+      right after the claim it supports, and not to list the articles, because the cards do that.
+      Chips are numbered 1, 2, 3 in the order the reader first meets them, whatever position the
+      article had in the search results, so a chip and its card always match. The whole card opens
+      the article, not just its number. Desktop (Cmd+K palette and full Ask Skim chat): cards sit
+      two to a row under a Sources label, hovering a chip lights up its card and hovering a card
+      lights up its chips, and in the palette the arrow keys and Enter move through and open the
+      cards. iOS Chat with Articles: tapping a chip opens the article, and the cards scroll in a row
+      under the answer.
+    source:
+      text: >-
+        I like tiles the best but 1. saying most detailed coverage is [6] doesn't help me tie back
+        to what tiles, also I could use like 50-100 words to answer the questions and then show
+        tiles, so I don't have to read everything to figure out what's going on. what I was
+        thinking more was something along the lines of how perplexity responds to questions
+      reference: Giulio, project thread "Chat answer citation design", 2026-10-23 (mock approved 2026-10-24); earlier "I want to be able to click the whole thing too not just the number"
   - id: chat-starter-prompts
     description: >-
       An empty library chat offers a few built-in starter questions, and tapping one asks it right

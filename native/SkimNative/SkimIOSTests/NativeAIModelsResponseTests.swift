@@ -210,6 +210,17 @@ struct NativeLibraryChatTests {
         #expect(NativeAI.libraryChatHandles(articles: selected, conversation: newTopic) == [3, 4])
     }
 
+    @Test func citationChipsAreNumberedLikeTheCardsUnderTheAnswer() throws {
+        let sources = [article("a"), article("b"), article("c")]
+        let text = "Most detail is in [7], with [5] agreeing [7][5]. See also [9]."
+        let references = ArticleReferenceExtractor.references(in: text, articles: sources, handles: [5, 6, 7])
+        #expect(references.map(\.id) == ["c", "a"])
+        let labeled = ArticleReferenceExtractor.labeledCitations(in: text, references: references, contextArticles: sources, contextHandles: [5, 6, 7])
+        #expect(labeled == "Most detail is in\u{00A0}[\u{2009}1\u{2009}](skim-cite:c), with\u{00A0}[\u{2009}2\u{2009}](skim-cite:a) agreeing\u{00A0}[\u{2009}1\u{2009}](skim-cite:c)\u{2060}[\u{2009}2\u{2009}](skim-cite:a). See also [9].")
+        let url = try #require(URL(string: "skim-cite:c"))
+        #expect(ArticleReferenceExtractor.citedArticleID(url) == "c")
+    }
+
     @Test func droppedCitationIdentityStaysReservedAcrossLaterTurns() {
         let a = article("old")
         let b = article("new")
@@ -537,7 +548,8 @@ struct NativeLibraryChatTests {
         #expect(library.contains("prior assistant turns are context, not evidence"))
         #expect(library.contains("Answer only the latest user question"))
         #expect(library.contains("numeric handle like [3]"))
-        #expect(library.contains("Keep handles attached to the relevant sentence or bullet"))
+        #expect(library.contains("placed right after the claim it supports"))
+        #expect(library.contains("Do not list the articles"))
         #expect(library.contains("call the `web_search` tool"))
         #expect(!library.contains("using only the provided article text"))
     }

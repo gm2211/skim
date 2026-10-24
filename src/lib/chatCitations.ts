@@ -37,3 +37,22 @@ export function partitionSources(
     searched: numbered.filter((s) => s.number !== null && !cited.has(s.number)),
   };
 }
+
+/** A cited source with the number the reader sees: its place in the answer, from 1. */
+export type CitedSource = { source: ChatSource; label: number };
+
+/**
+ * The answer's citations in the order the reader meets them, renumbered from 1,
+ * so the chip after a sentence and the card it points at carry the same small
+ * number no matter where the article sat in the model's search results. Web
+ * results the model fetched come after the articles it cited.
+ */
+export function citationOrder(sources: ChatSource[], content: string): CitedSource[] {
+  const order: ChatSource[] = [];
+  for (const match of content.matchAll(/\[(\d{1,3})\]/g)) {
+    const source = sources[Number(match[1]) - 1];
+    if (source && source.source_type !== "web" && !order.includes(source)) order.push(source);
+  }
+  for (const source of sources) if (source.source_type === "web") order.push(source);
+  return order.map((source, index) => ({ source, label: index + 1 }));
+}

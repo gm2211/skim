@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { citedNumbers, partitionSources } from "./chatCitations";
+import { citationOrder, citedNumbers, partitionSources } from "./chatCitations";
 
 const article = (n: number) => ({
   id: `a${n}`,
@@ -55,5 +55,18 @@ describe("chatCitations", () => {
     const { cited, searched } = partitionSources([article(1), article(2)], "I could not find it.");
     expect(cited).toEqual([]);
     expect(searched).toHaveLength(2);
+  });
+});
+
+describe("citationOrder", () => {
+  const sources = [article(1), article(2), article(3), article(4), web];
+
+  it("numbers cited articles by where the answer first cites them", () => {
+    const order = citationOrder(sources, "Most detail is in [4], with [2] agreeing [4][2].");
+    expect(order.map(({ source, label }) => [source.id, label])).toEqual([["a4", 1], ["a2", 2], ["web-0", 3]]);
+  });
+
+  it("skips numbers that name no article", () => {
+    expect(citationOrder([article(1)], "See [7] and [1].").map((c) => c.source.id)).toEqual(["a1"]);
   });
 });

@@ -53,6 +53,10 @@ pub struct TodayEditionItemView {
     pub member_articles: Vec<TodayEditionMemberArticle>,
     #[serde(default)]
     pub editorial: Option<TodayEditorial>,
+    /// Why the latest try could not write this story's summary. Not stored:
+    /// only views returned while summaries are written carry it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editorial_error: Option<String>,
 }
 
 /// Model-generated synthesis with verified source quotations. Quote membership
@@ -860,6 +864,7 @@ pub fn list_items(
                 member_article_ids,
                 member_articles,
                 editorial,
+                editorial_error: None,
             })
         })
         .collect()
@@ -1560,6 +1565,7 @@ mod tests {
                 is_starred: None,
                 limit: Some(1_000),
                 published_after: None,
+                published_before: None,
                 offset: None,
             },
         )

@@ -1086,7 +1086,7 @@ struct TodayPageSkeleton: View {
 }
 
 /// A live rule under the status line while the page is still being written.
-private struct TodayWritingRule: View {
+struct TodayWritingRule: View {
     var status: String
     @State private var pulse = false
 

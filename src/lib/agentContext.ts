@@ -1,5 +1,6 @@
 import type { AgentContext, AgentStep, AgentStory, ChatSource } from "../services/commands";
 import type { Feed, Folder, SidebarView, TodayEditionItem, TodayEditionView } from "../services/types";
+import { PAPER_NAME } from "./dispatch";
 
 /** One turn of an agent conversation, as both the palette and Ask Skim keep it. */
 export interface AgentMessage {
@@ -64,7 +65,7 @@ export function agentContextLabel(context: AgentContext, articleTitle?: string |
   if (context.article_id && articleTitle) return `Reading “${articleTitle}”`;
   if (context.story) return `Story: ${context.story.title}`;
   switch (context.view) {
-    case "today": return "Today’s front page";
+    case "today": return `${PAPER_NAME} front page`;
     case "inbox": return "AI Inbox";
     case "starred": return "Starred";
     case "recent": return "Recently Read";

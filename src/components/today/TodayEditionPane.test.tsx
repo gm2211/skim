@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { TodayEditionPane } from "./TodayEditionPane";
+import { StoryFrontPage as TodayEditionPane } from "./TodayEditionPane";
 import type { AppSettings, TodayEditionItem, TodayEditionView } from "../../services/types";
 import { todayWindow } from "../../lib/todayEdition";
 import { useUiStore } from "../../stores/uiStore";
@@ -198,7 +198,7 @@ describe("TodayEditionPane", () => {
     renderPane();
     await screen.findByRole("button", { name: "Second story" });
 
-    await user.click(screen.getByRole("button", { name: "Ask about Today" }));
+    await user.click(screen.getByRole("button", { name: "Ask about The Briefing" }));
     const page = useAgentChatStore.getState().seed?.context;
     expect(page?.view).toBe("today");
     expect(page?.story).toBeNull();
@@ -334,6 +334,29 @@ describe("TodayEditionPane", () => {
     expect(useUiStore.getState().showSettings).toBe(true);
   });
 
+  it("says plainly when AI is off, on both tabs, and opens AI settings from there", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    expect(await screen.findByText("AI is off, so stories aren't summarized")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Multiple reports" }));
+    expect(screen.getByText(/Without AI, Skim only groups reports whose headlines share key words/)).toBeVisible();
+    expect(screen.getByText("AI is off, so stories aren't summarized")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Set up AI" }));
+    expect(useUiStore.getState().settingsTab).toBe("ai");
+    expect(useUiStore.getState().showSettings).toBe(true);
+  });
+
+  it("does not claim AI is off while settings load or once a provider is set", async () => {
+    let resolveSettings: (settings: typeof DEFAULT_SETTINGS) => void = () => {};
+    vi.mocked(commands.getSettings).mockReturnValue(new Promise((resolve) => { resolveSettings = resolve; }));
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
+    renderPane();
+    await screen.findByText("Default snapshot title");
+    expect(screen.queryByText("AI is off, so stories aren't summarized")).not.toBeInTheDocument();
+    await act(async () => resolveSettings({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } }));
+    expect(screen.queryByText("AI is off, so stories aren't summarized")).not.toBeInTheDocument();
+  });
+
   it("does not leave skeletons forever when AI settings fail to load", async () => {
     vi.mocked(commands.getSettings).mockRejectedValue(new Error("Settings unavailable"));
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
@@ -350,8 +373,8 @@ describe("TodayEditionPane", () => {
     renderPane();
     await screen.findByText("Default snapshot title");
     expect(screen.queryByTestId("model-picker")).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Today settings" }));
-    expect(within(screen.getByRole("dialog", { name: "Today settings" })).getByTestId("model-picker")).toHaveAttribute("data-surface", "today");
+    await userEvent.click(screen.getByRole("button", { name: "The Briefing settings" }));
+    expect(within(screen.getByRole("dialog", { name: "The Briefing settings" })).getByTestId("model-picker")).toHaveAttribute("data-surface", "today");
     expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "false");
   });
 
@@ -374,7 +397,7 @@ describe("TodayEditionPane", () => {
       expect(last[0]).toBe(front[0] - 7 * 24 * 60 * 60);
     });
     expect(screen.getByText(/^Page 2/)).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Today" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "The Briefing" })).toBeInTheDocument();
     expect(screen.getAllByText(/\u2013/).length).toBeGreaterThan(0);
 
     // → turns further back, ← comes forward; the front page has no earlier page.
@@ -392,11 +415,11 @@ describe("TodayEditionPane", () => {
     });
     vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({})]));
     renderPane();
-    await userEvent.click(await screen.findByRole("button", { name: "Today settings" }));
+    await userEvent.click(await screen.findByRole("button", { name: "The Briefing settings" }));
     // The choice applies to the next pass, so the picker never reads as greyed out.
     await waitFor(() => expect(screen.getByTestId("model-picker")).toHaveAttribute("data-disabled", "false"));
     await userEvent.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog", { name: "Today settings" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "The Briefing settings" })).not.toBeInTheDocument();
   });
 
   it("keeps Skim branding visible while the sidebar is collapsed", async () => {
@@ -529,6 +552,28 @@ describe("TodayEditionPane", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Fully pruned story" }));
     expect(openUrl).toHaveBeenCalledWith("https://example.com/gone");
     expect(useUiStore.getState().selectedArticleId).toBeNull();
+  });
+
+  it("sets a short lead full width and colours unsummarized stories by publication", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([
+      makeItem({ story_id: "lead", snapshot_title: "Short lead" }),
+      makeItem({ story_id: "rail", snapshot_title: "Rail story" }),
+    ]));
+    const { container } = renderPane();
+    await screen.findByText("Short lead");
+    const lead = container.querySelector(".today-story--lead") as HTMLElement;
+    expect(lead).toHaveClass("today-story--short");
+    expect(lead.style.getPropertyValue("--today-theme")).toMatch(/^#/);
+  });
+
+  it("keeps a lead with a long summary beside the rail", async () => {
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([
+      makeItem({ story_id: "lead", editorial: editorial("A long summary sentence that keeps going with detail. ".repeat(8)) }),
+      makeItem({ story_id: "rail" }),
+    ]));
+    const { container } = renderPane();
+    await waitFor(() => expect(container.querySelector(".today-story--lead")).not.toBeNull());
+    expect(container.querySelector(".today-story--lead")).not.toHaveClass("today-story--short");
   });
 
   it("shows the whole AI summary, labeled, in rail stories", async () => {
@@ -778,6 +823,21 @@ describe("Today summary retries", () => {
     expect(commands.generateTodayEditorial).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Retry summaries" })).not.toBeInTheDocument();
     expect(screen.queryByText("Preparing summaries…")).not.toBeInTheDocument();
+  });
+
+  it("says why a story could not be summarized and clears it once a retry writes the summary", async () => {
+    enableAI();
+    const view = makeView([makeItem({ snapshot_title: "Stubborn story" })]);
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(view);
+    const reason = "The AI's summary didn't quote its reports exactly, so it wasn't kept.";
+    vi.mocked(commands.generateTodayEditorial).mockResolvedValueOnce(makeView([makeItem({ snapshot_title: "Stubborn story", editorial_error: reason })]));
+    vi.mocked(commands.generateTodayEditorial).mockResolvedValueOnce(makeView([makeItem({ snapshot_title: "Stubborn story", editorial: editorial("Finally summarized.") })]));
+    renderPane(true);
+    expect(await screen.findByText(`Not summarized: ${reason}`)).toBeVisible();
+    expect(screen.getByText("1 not summarized")).toHaveAttribute("title", reason);
+    await userEvent.click(screen.getByRole("button", { name: "Retry summaries" }));
+    expect(await screen.findByText("Finally summarized.")).toBeVisible();
+    expect(screen.queryByText(/Not summarized:/)).not.toBeInTheDocument();
   });
 
   it.each(["failure", "partial"])("allows explicit retry after %s without automatic loops or regenerating", async (outcome) => {

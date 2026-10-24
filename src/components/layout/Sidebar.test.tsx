@@ -66,7 +66,7 @@ describe("Sidebar — All Articles regression guard", () => {
 
   it("shows both the Today destination and All Articles together", () => {
     render(<Sidebar />);
-    expect(screen.getByText("Today")).toBeInTheDocument();
+    expect(screen.getByText("Briefing")).toBeInTheDocument();
     expect(screen.getByText("All Articles")).toBeInTheDocument();
   });
 
@@ -75,7 +75,7 @@ describe("Sidebar — All Articles regression guard", () => {
     useUiStore.setState({ ...INITIAL_STATE, sidebarView: { type: "all" } }, true);
     render(<Sidebar />);
 
-    await user.click(screen.getByTitle("Today — your finite, sectioned daily edition"));
+    await user.click(screen.getByTitle("The Briefing — the paper the AI writes from your feeds"));
 
     expect(useUiStore.getState().sidebarView).toEqual({ type: "today" });
   });

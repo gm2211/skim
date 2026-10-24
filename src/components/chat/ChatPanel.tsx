@@ -26,7 +26,8 @@ interface Props {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   /** A passage highlighted in the article; each new `id` quotes it in the composer. */
-  askAbout?: { id: number; text: string } | null;
+  /** A passage highlighted in the article `articleId` names; ignored for any other article. */
+  askAbout?: { id: number; text: string; articleId: string } | null;
 }
 
 const COLLAPSED_HEIGHT = 44;
@@ -76,7 +77,9 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
 
   // Quote a passage the reader highlighted, ready for a question about it.
   useEffect(() => {
-    if (!askAbout) return;
+    // The drawer can remount on the next article with the last request
+    // still set; a passage from another article must not follow the reader.
+    if (!askAbout || askAbout.articleId !== articleId) return;
     setReply({ role: "article", text: askAbout.text });
     inputRef.current?.focus({ preventScroll: true });
   }, [askAbout?.id]); // eslint-disable-line react-hooks/exhaustive-deps

@@ -17,6 +17,9 @@ import { createServer } from "node:http";
 const PORT = Number(process.env.DEV_LLM_PORT ?? 4546);
 /** Pretend each answer takes this long, to watch a page fill in. */
 const DELAY_MS = Number(process.env.DEV_LLM_DELAY_MS ?? 0);
+// DEV_LLM_PAPER_PACE=1 answers The Briefing's calls at a hosted model's pace
+// (full plan 12s, lead pick 3s, a piece 6s), to see what the reader waits through.
+const PAPER_PACE = process.env.DEV_LLM_PAPER_PACE === "1";
 
 const MODELS = [
   "skim-dev-small",
@@ -206,9 +209,51 @@ function chatReply(messages) {
     .join("\n");
 }
 
+/** The Briefing's editor: shared-word groups become themes, ranked so incidents lead. */
+function dispatchPlanFor(rows) {
+  const plan = JSON.parse(frontPageFor(rows));
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  const kicker = (title) =>
+    /breach|vuln|exploit|security|certificate|attack|cve|probe/i.test(title) ? "Security"
+      : /regulat|court|law|policy|eu |congress/i.test(title) ? "Policy"
+        : /model|ai\b|llm|gpt|claude/i.test(title) ? "AI" : "Technology";
+  const themes = plan.stories.map((story) => {
+    const title = byId.get(story.article_ids[0])?.title ?? story.headline;
+    const k = kicker(title);
+    return {
+      kicker: k,
+      headline: story.headline,
+      dek: `${story.article_ids.length} report${story.article_ids.length === 1 ? "" : "s"} on ${topicOf(title)}.`,
+      importance: k === "Security" ? 5 : k === "Policy" ? 4 : 3,
+      articles: story.article_ids,
+    };
+  });
+  return JSON.stringify({ themes, briefs: plan.briefs.map((b) => ({ text: b.text, articles: b.article_ids })) });
+}
+
+/** The Briefing's writer: the reports' own opening sentences, each cited. */
+function dispatchPieceFor(user) {
+  const reports = [...user.matchAll(/^\[(\d+)\] (.+)\n([\s\S]*?)(?=\n\[\d+\] |\n\nOutput JSON)/gm)].map((m) => ({
+    n: Number(m[1]), title: m[2], text: m[3].replace(/\s+/g, " ").trim(),
+  }));
+  const sentences = (text) => text.split(/(?<=[.!?])\s+/).filter((s) => s.split(/\s+/).length >= 8);
+  const body = reports.slice(0, 3).map((r) => `${sentences(r.text).slice(0, 2).join(" ") || `${r.title}.`} [${r.n}]`);
+  const takeaways = reports.slice(0, 2).map((r) => `Read ${r.title.replace(/\s*\(.+\)$/, "")} for the details [${r.n}].`);
+  return JSON.stringify({ body: body.length ? body : ["The reports say little beyond their headlines [1]."], takeaways });
+}
+
 function respond(messages) {
   const user = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const all = messages.map((m) => m.content).join("\n");
+  const system = messages.find((m) => m.role === "system")?.content ?? "";
+
+  if (/front-page editor of The Briefing/.test(system)) {
+    const plan = JSON.parse(dispatchPlanFor(parseListing(messages.find((m) => m.role === "user")?.content ?? "")));
+    const lead = [...plan.themes].sort((a, b) => b.importance - a.importance)[0];
+    return JSON.stringify(lead ?? {});
+  }
+  if (/editor-in-chief of The Briefing/.test(system)) return dispatchPlanFor(parseListing(messages.find((m) => m.role === "user")?.content ?? ""));
+  if (/journalist at The Briefing/.test(system)) return dispatchPieceFor(messages.find((m) => m.role === "user")?.content ?? "");
 
   if (/"themes"\s*:/.test(user)) return themesFor(parseListing(user));
   if (/"triage"\s*:/.test(user)) return triageFor(parseListing(user));
@@ -258,7 +303,12 @@ createServer(async (req, res) => {
               .join("\n"),
     }));
     const content = respond(messages);
-    if (DELAY_MS > 0) await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+    const system = messages.find((m) => m.role === "system")?.content ?? "";
+    const pace = !PAPER_PACE ? 0
+      : /front-page editor of The Briefing/.test(system) ? 3_000
+        : /editor-in-chief of The Briefing/.test(system) ? 12_000
+          : /journalist at The Briefing/.test(system) ? 6_000 : 0;
+    if (DELAY_MS + pace > 0) await new Promise((resolve) => setTimeout(resolve, DELAY_MS + pace));
     console.log(
       `[dev-llm] ${body.model ?? "?"} json_mode=${!!body.response_format} -> ${content.slice(0, 70).replace(/\n/g, " ")}…`,
     );

@@ -8,7 +8,7 @@ import { useRecentArticles, useRemoveRecent } from "../../hooks/useRecent";
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useFolders } from "../../hooks/useFolders";
 import { feedsForFolder } from "../../lib/smartFolder";
-import { CheckCircleIcon, ChatIcon, NewspaperIcon, PlusIcon, SearchIcon } from "../ui/icons";
+import { CheckCircleIcon, ChatIcon, NewspaperIcon, PlusIcon, SearchIcon, SparkleIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
@@ -17,6 +17,7 @@ import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction, SidebarV
 import { AiSettingsButton } from "../common/AiSettingsButton";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { useAppCommand } from "../../lib/appCommands";
+import { PAPER_NAME } from "../../lib/dispatch";
 
 /** AI Inbox tiers by rank score, highest first. The list arrives sorted by score. */
 const SCORE_TIERS: { min: number; label: string }[] = [
@@ -222,6 +223,38 @@ function groupByDate(articles: { published_at: number | null; fetched_at: number
   return groups;
 }
 
+/** A quiet switch that ranks the list For you; off is plain newest first. */
+function SmartSortSwitch({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={on}
+      aria-label="Smart sorting"
+      onClick={() => onChange(!on)}
+      title={on
+        ? "Smart sorting is on: unread articles ranked by importance and what you read. Click for newest first."
+        : "Smart sorting is off: newest first. Click to rank unread articles for you."}
+      className={`shrink-0 flex items-center gap-1.5 rounded-full transition-colors whitespace-nowrap ${
+        on ? "text-accent hover:bg-accent/10" : "text-text-muted hover:text-text-secondary hover:bg-white/5"
+      }`}
+      style={{ padding: "3px 6px 3px 8px", fontSize: 12, fontWeight: 500 }}
+    >
+      <SparkleIcon size={13} />
+      <span>Smart sort</span>
+      <span
+        aria-hidden
+        className={`relative inline-block rounded-full transition-colors ${on ? "bg-accent" : "bg-white/15"}`}
+        style={{ width: 22, height: 13 }}
+      >
+        <span
+          className="absolute rounded-full bg-white transition-all"
+          style={{ width: 9, height: 9, top: 2, left: on ? 11 : 2 }}
+        />
+      </span>
+    </button>
+  );
+}
+
 export function ArticleList() {
   const {
     sidebarView,
@@ -425,7 +458,7 @@ export function ArticleList() {
         return folder?.name ?? "Folder";
       }
       case "today":
-        return "Today";
+        return PAPER_NAME;
     }
   }, [sidebarView, themes, folders]);
 
@@ -537,7 +570,7 @@ export function ArticleList() {
     if (isForYou) {
       return {
         title: "Nothing unread here",
-        body: "For you ranks unread articles. Switch to Newest to browse read ones.",
+        body: "Smart sorting ranks unread articles. Turn it off to browse read ones.",
         showSourceActions: false,
       };
     }
@@ -629,8 +662,8 @@ export function ArticleList() {
             <button
               onClick={() => setSidebarView({ type: "today" })}
               className="tap-target text-text-muted hover:text-accent transition-colors rounded-lg hover:bg-white/10"
-              title="Today — your finite, sectioned daily edition"
-              aria-label="Today"
+              title={`${PAPER_NAME} — the paper the AI writes from your feeds`}
+              aria-label={PAPER_NAME}
             >
               <NewspaperIcon />
             </button>
@@ -667,11 +700,19 @@ export function ArticleList() {
         </button>
       </div>
 
-      {/* Title + unread count */}
+      {/* Title + unread count, with the smart sorting switch (the old AI Inbox) */}
       <div style={{ padding: "8px 24px 4px" }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700 }} className="text-text-primary truncate">
-          {displayTitle}
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 style={{ fontSize: 22, fontWeight: 700 }} className="text-text-primary truncate min-w-0 flex-1">
+            {displayTitle}
+          </h2>
+          {canSortForYou && (
+            <>
+              {isForYou && <AiSettingsButton size={14} />}
+              <SmartSortSwitch on={isForYou} onChange={(on) => setListSort(on ? "forYou" : "newest")} />
+            </>
+          )}
+        </div>
         {unreadCount > 0 && (
           <p className="text-text-muted" style={{ fontSize: 13, marginTop: 2 }}>
             {unreadCount} Unread Item{unreadCount !== 1 ? "s" : ""}
@@ -713,35 +754,6 @@ export function ArticleList() {
         </div>
 
       </div>
-
-      {/* Sort: newest first, or ranked for the reader (the old AI Inbox) */}
-      {canSortForYou && (
-        <div
-          className="flex items-center gap-2 border-b border-white/5"
-          style={{ padding: "8px 24px" }}
-          role="group"
-          aria-label="Sort articles"
-        >
-          <span className="text-text-muted" style={{ fontSize: 12 }}>Sort:</span>
-          {(["newest", "forYou"] as const).map((o) => (
-            <button
-              key={o}
-              onClick={() => setListSort(o)}
-              aria-pressed={listSort === o}
-              title={o === "forYou" ? "Unread articles ranked by importance and what you read" : "Newest first"}
-              className={`rounded-full transition-colors ${
-                listSort === o
-                  ? "bg-accent/20 text-accent"
-                  : "bg-white/5 text-text-secondary hover:bg-white/10 hover:text-text-primary"
-              }`}
-              style={{ padding: "4px 12px", fontSize: 12, fontWeight: 500 }}
-            >
-              {o === "forYou" ? "For you" : "Newest"}
-            </button>
-          ))}
-          {isForYou && <span className="ml-auto"><AiSettingsButton size={14} /></span>}
-        </div>
-      )}
 
       {/* Recent sort toggle */}
       {isRecent && (

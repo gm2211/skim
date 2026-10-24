@@ -127,7 +127,10 @@ final class AppModel: ObservableObject {
     @Published var folders: [FeedFolder] = []
     @Published var articles: [Article] = []
     @Published var listMode: ArticleListMode = .unread
-    @Published var listSort: ArticleListSort = .newest
+    /// Smart sorting is a standing preference, so it survives relaunches.
+    @Published var listSort: ArticleListSort = ArticleListSort(rawValue: UserDefaults.standard.string(forKey: "listSort") ?? "") ?? .newest {
+        didSet { UserDefaults.standard.set(listSort.rawValue, forKey: "listSort") }
+    }
     @Published var selectedFeedID: String?
     @Published var selectedFolderID: String?
     @Published var searchQuery = ""
@@ -159,6 +162,20 @@ final class AppModel: ObservableObject {
     @Published private(set) var failedTodaySummaries = Set<String>()
     private var todayTask: Task<Void, Never>?
     private var todayLoadID = UUID()
+
+    /// The Briefing on screen: the edition the AI wrote for this page's window.
+    @Published var dispatch: DispatchEdition?
+    /// Non-nil while the edition is being read or written.
+    @Published var dispatchStatus: String?
+    @Published var dispatchError: String?
+    /// Articles in the window that arrived after the edition was written.
+    @Published var dispatchNewArticles = 0
+    /// While an edition is first written: the last kept edition, shown in
+    /// its place, or failing that the newest headlines the editor is reading.
+    @Published var dispatchStandIn: DispatchEdition?
+    @Published var dispatchPreview: [Article] = []
+    var dispatchTask: Task<Void, Never>?
+    var dispatchLoadID = UUID()
 
     let store: SkimStore
     let tasteStore = TasteStore()
@@ -224,7 +241,7 @@ final class AppModel: ObservableObject {
     }
 
     /// Whether no feed has been fetched within `todayFeedStaleness`.
-    private func feedsAreStale() async -> Bool {
+    func feedsAreStale() async -> Bool {
         let feeds = (try? await store.listFeeds()) ?? self.feeds
         guard !feeds.isEmpty else { return false }
         let latest = feeds.compactMap(\.fetchedAt).max() ?? .distantPast
@@ -233,7 +250,7 @@ final class AppModel: ObservableObject {
 
     /// Fetches every feed for the front page, then refreshes the article list
     /// so its counts agree with the page.
-    private func fetchFeedsForToday() async {
+    func fetchFeedsForToday() async {
         isCheckingFeedsForToday = true
         isLoading = true
         defer {

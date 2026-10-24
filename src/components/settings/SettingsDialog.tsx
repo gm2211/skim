@@ -46,6 +46,7 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 import { isIOS, isMacOS } from "../../utils/platform";
 import { useSwipeToDismiss } from "../../hooks/useSwipeToDismiss";
 import { useDialogFocus } from "../../hooks/useDialogFocus";
+import { DISPATCH_DAY_CHOICES, dispatchDays } from "../../lib/dispatch";
 import {
   AI_PROVIDERS,
   aiProvidersForRuntime,
@@ -828,8 +829,8 @@ function SyncTab({
       </InputField>
 
       <InputField
-        label="Today edition size"
-        description="How many stories Today surfaces each day. Changing this starts a brand-new edition for today with its own fresh completion state — it does not resize or reset today's edition you already have."
+        label="Story page size"
+        description="How many stories the story page shows each day when AI is off. Changing this starts a brand-new edition for today with its own fresh completion state — it does not resize or reset today's edition you already have."
       >
         <div className="inline-flex rounded-lg bg-white/5 border border-white/10" style={{ padding: 2 }}>
           {([5, 10, 20] as const).map((size) => (
@@ -852,6 +853,27 @@ function SyncTab({
               style={{ padding: "6px 18px", fontSize: 13, fontWeight: 500 }}
             >
               {size}
+            </button>
+          ))}
+        </div>
+      </InputField>
+      <InputField
+        label="The Briefing covers"
+        description="How many days of articles the AI reads for each edition of The Briefing. Each page turned goes back one more edition."
+      >
+        <div className="inline-flex rounded-lg bg-white/5 border border-white/10" style={{ padding: 2 }}>
+          {DISPATCH_DAY_CHOICES.map((days) => (
+            <button
+              key={days}
+              onClick={() => setLocal({ ...local, sync: { ...local.sync, dispatch_days: days } })}
+              className={`rounded-md transition-colors ${
+                dispatchDays(local.sync.dispatch_days) === days
+                  ? "bg-accent text-white"
+                  : "text-text-secondary hover:text-text-primary"
+              }`}
+              style={{ padding: "6px 14px", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}
+            >
+              {days === 1 ? "1 day" : `${days} days`}
             </button>
           ))}
         </div>

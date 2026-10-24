@@ -63,3 +63,22 @@ nonisolated(unsafe) private let validObject: [String: Any] = [
     #expect(!TodayEditorialPolicy.usable("Comments"))
     #expect(!TodayEditorialPolicy.usable("Access denied. You do not have permission to view this page on this server."))
 }
+
+@Test func todayEditorialQuotesMatchThroughTypographyAndKeepTheReportsWords() throws {
+    let body = "The minister said \u{201C}we won\u{2019}t sign\u{201D} \u{2014} talks\n  resume in May."
+    let report = [TodayEditorialPolicy.Report(articleID: "m", body: body)]
+    let object: [String: Any] = [
+        "theme": "Talks", "summary": "Talks resume in May.",
+        "sources": [["article_id": "m", "quote": "said \"we won't sign\" - talks resume in May."]],
+    ]
+    let editorial = try TodayEditorialPolicy.validate(response(object), reports: report)
+    #expect(editorial.sources[0].quote == "said \u{201C}we won\u{2019}t sign\u{201D} \u{2014} talks\n  resume in May.")
+    #expect(TodayEditorialPolicy.reportPassage("Plain words here.", "plain words") == nil)
+}
+
+@Test func todayEditorialRepairPromptCarriesTheAnswerAndWhyItWasRejected() {
+    let repair = TodayEditorialPolicy.repairPrompt("{\"headline\":\"H\"}", answer: "{\"theme\":\"x\"}", rejection: "The summary must cite each available report exactly once")
+    #expect(repair.hasPrefix("{\"headline\":\"H\"}"))
+    #expect(repair.contains("rejected: The summary must cite each available report exactly once"))
+    #expect(repair.contains("{\"theme\":\"x\"}"))
+}

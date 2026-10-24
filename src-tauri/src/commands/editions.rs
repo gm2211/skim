@@ -329,11 +329,14 @@ pub async fn generate_today_editorial(
                     if !themes.contains(&editorial.theme) { themes.push(editorial.theme); }
                 }
             },
-            Err(error) => failures.push(format!("Could not summarize {headline}: {error}")),
+            Err(error) => {
+                log::warn!("Today summary failed for {story_id} ({headline}): {error}");
+                failures.push((story_id, format!("Could not summarize {headline}: {error}"), editorial_failure_reason(&error)));
+            },
         }
         let updated = {
             let conn = db.conn.lock().map_err(|error| error.to_string())?;
-            today_edition::load(&conn, &edition_id).map_err(|error| error.to_string())?
+            with_failure_reasons(today_edition::load(&conn, &edition_id).map_err(|error| error.to_string())?, &failures)
         };
         completed += 1;
         emit_lede_progress(&app, &edition_id, request_id.as_deref(), completed, total,
@@ -341,11 +344,20 @@ pub async fn generate_today_editorial(
     }
     drop(results);
     let conn = db.conn.lock().map_err(|error| error.to_string())?;
-    let final_view = today_edition::load(&conn, &edition_id).map_err(|error| error.to_string())?;
-    let message = failures.first().map(|failure| format!("{} {} could not be summarized. {failure}", failures.len(),
+    let final_view = with_failure_reasons(today_edition::load(&conn, &edition_id).map_err(|error| error.to_string())?, &failures);
+    let message = failures.first().map(|(_, failure, _)| format!("{} {} could not be summarized. {failure}", failures.len(),
         if failures.len() == 1 { "story" } else { "stories" })).unwrap_or_default();
     emit_lede_progress(&app, &edition_id, request_id.as_deref(), total, total, &message, &final_view);
     Ok(final_view)
+}
+
+/// Tell each card that is still unsummarized why, so it never fails silently.
+fn with_failure_reasons(mut view: TodayEditionView, failures: &[(String, String, String)]) -> TodayEditionView {
+    for item in view.items.iter_mut().filter(|item| item.editorial.is_none()) {
+        item.editorial_error = failures.iter().find(|(story_id, _, _)| *story_id == item.snapshot.story_id)
+            .map(|(_, _, reason)| reason.clone());
+    }
+    view
 }
 
 fn editorial_report_evidence(mut evidence: LedeEvidence) -> LedeEvidence {
@@ -403,22 +415,112 @@ async fn synthesize_editorial(
     let reports: Vec<_> = evidence.sources.iter().map(|source| serde_json::json!({
         "article_id": source.article_id, "text": source.body,
     })).collect();
-    let response = provider.chat(ChatRequest {
+    let mut request = ChatRequest {
         model: model.into(),
         messages: vec![ChatMessage::text("system", EDITORIAL_SYSTEM_PROMPT),
             ChatMessage::text("user", serde_json::json!({"headline":headline,"existing_themes":themes,"reports":reports}).to_string())],
         temperature: Some(0.0), max_tokens: Some(1600), json_mode: true, tools: None,
-    }).await?;
+    };
+    let response = chat_with_backoff(provider, &request).await?;
+    let rejection = match validate_editorial(&response.content, evidence) {
+        Ok(editorial) => return Ok(editorial),
+        Err(rejection) => rejection,
+    };
+    // At temperature 0 a plain retry repeats the same rejected answer, so the
+    // story stayed unsummarized however often it was retried. Say what was
+    // wrong once and let the model correct it; the checks stay as strict.
+    request.messages.push(ChatMessage::text("assistant", response.content));
+    request.messages.push(ChatMessage::text("user", format!(
+        "That answer was rejected: {rejection}. Return the corrected JSON object only, with no other text. \
+         Copy each quote character for character from its report and cite every report exactly once.")));
+    let response = chat_with_backoff(provider, &request).await?;
     validate_editorial(&response.content, evidence)
 }
 
+/// Several summaries are written at once, so a hosted model can answer one
+/// of them with a rate limit or an overload; wait and ask again, twice.
+pub(crate) async fn chat_with_backoff(provider: &dyn AiProvider, request: &ChatRequest) -> Result<crate::ai::provider::ChatResponse, String> {
+    for delay in EDITORIAL_BACKOFF {
+        match provider.chat(request.clone()).await {
+            Err(error) if transient_model_error(&error) => tokio::time::sleep(delay).await,
+            outcome => return outcome,
+        }
+    }
+    provider.chat(request.clone()).await
+}
+
+#[cfg(not(test))]
+const EDITORIAL_BACKOFF: [std::time::Duration; 2] = [std::time::Duration::from_secs(3), std::time::Duration::from_secs(10)];
+#[cfg(test)]
+const EDITORIAL_BACKOFF: [std::time::Duration; 2] = [std::time::Duration::ZERO; 2];
+
+pub(crate) fn transient_model_error(error: &str) -> bool {
+    let lowered = error.to_lowercase();
+    ["429", "529", "500 ", "502", "503", "504", "rate limit", "rate_limit", "overloaded", "timed out", "timeout"]
+        .iter().any(|marker| lowered.contains(marker))
+}
+
+/// A reason a reader can act on, for the card of a story left unsummarized.
+fn editorial_failure_reason(error: &str) -> String {
+    let lowered = error.to_lowercase();
+    if lowered.contains("no report text") {
+        "Its reports have no readable text to summarize.".into()
+    } else if transient_model_error(error) {
+        "The AI provider was busy or rate limited. Retry in a moment.".into()
+    } else if lowered.contains("quote") || lowered.contains("cite") || lowered.contains("source id") || lowered.contains("outside this story") {
+        "The AI's summary didn't quote its reports exactly, so it wasn't kept.".into()
+    } else if let Some((_, start)) = error.split_once("; it began ") {
+        format!("The AI didn't return a usable summary. Its answer began {start}")
+    } else if lowered.contains("empty or oversized") {
+        "The AI returned no summary for these reports.".into()
+    } else if lowered.contains("malformed") || lowered.contains("size limit") {
+        "The AI didn't return a usable summary for these reports.".into()
+    } else {
+        let detail: String = error.chars().take(160).collect();
+        format!("The AI provider failed: {detail}")
+    }
+}
+
+/// The summary object inside a model's answer. Only Ollama and OpenAI-style
+/// APIs enforce JSON, so Claude and ChatGPT models often fence it, put a line
+/// before it, or add a key or an empty figure; every summary failed that way.
+/// Those wrappers don't change what the summary says, so they are dropped
+/// here; the quote and length checks below stay strict.
+fn editorial_value(content: &str) -> Option<serde_json::Value> {
+    let object = crate::commands::ai::extract_json_object(content)?;
+    let mut value: serde_json::Value = serde_json::from_str(object).ok()?;
+    let editorial = value.as_object_mut()?;
+    editorial.retain(|key, _| matches!(key.as_str(), "theme" | "summary" | "sources" | "figure"));
+    for source in editorial.get_mut("sources").and_then(|sources| sources.as_array_mut()).into_iter().flatten() {
+        if let Some(source) = source.as_object_mut() {
+            source.retain(|key, _| matches!(key.as_str(), "article_id" | "quote"));
+        }
+    }
+    let figure_complete = editorial.get("figure").and_then(|figure| figure.as_object())
+        .is_some_and(|figure| figure.get("value").is_some_and(|v| v.is_string()) && figure.get("label").is_some_and(|l| l.is_string()));
+    if figure_complete {
+        if let Some(figure) = editorial.get_mut("figure").and_then(|figure| figure.as_object_mut()) {
+            figure.retain(|key, _| matches!(key.as_str(), "value" | "label"));
+        }
+    } else {
+        editorial.remove("figure");
+    }
+    Some(value)
+}
+
+/// The start of an answer that wasn't a summary, for the card's reason.
+fn answer_start(content: &str) -> String {
+    let start: String = content.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(60).collect();
+    if start.is_empty() { "an empty answer".into() } else { format!("\u{201C}{start}\u{2026}\u{201D}") }
+}
+
 fn validate_editorial(content: &str, evidence: &LedeEvidence) -> Result<TodayEditorial, String> {
-    // Reject prefixes, fences, extra fields and oversized provider output.
     if content.len() > 16_000 {
         return Err("The summary response exceeds its size limit".into());
     }
-    let mut editorial: TodayEditorial = serde_json::from_str(content)
-        .map_err(|_| "The provider returned malformed summary JSON".to_string())?;
+    let mut editorial: TodayEditorial = editorial_value(content)
+        .and_then(|value| serde_json::from_value(value).ok())
+        .ok_or_else(|| format!("The provider returned malformed summary JSON; it began {}", answer_start(content)))?;
     editorial.theme = editorial.theme.trim().to_string();
     editorial.summary = editorial.summary.trim().to_string();
     if editorial.theme.is_empty() || editorial.theme.chars().count() > 80
@@ -430,15 +532,17 @@ fn validate_editorial(content: &str, evidence: &LedeEvidence) -> Result<TodayEdi
         return Err("The summary must cite each available report exactly once".into());
     }
     let mut cited = std::collections::BTreeSet::new();
-    for citation in &editorial.sources {
-        if !cited.insert(&citation.article_id) {
+    for citation in &mut editorial.sources {
+        if !cited.insert(citation.article_id.clone()) {
             return Err("The summary repeats a source ID".into());
         }
         let source = evidence.sources.iter().find(|source| source.article_id == citation.article_id)
             .ok_or_else(|| "The summary cites a report outside this story".to_string())?;
-        if !(20..=600).contains(&citation.quote.chars().count()) || !source.body.contains(&citation.quote) {
+        let passage = report_passage(&source.body, &citation.quote).filter(|passage| (20..=600).contains(&passage.chars().count()));
+        let Some(passage) = passage else {
             return Err("A summary quote is not an exact supporting passage in its report".into());
-        }
+        };
+        citation.quote = passage;
     }
     // An unsupported figure is dropped, not fatal: the summary still stands.
     editorial.figure = editorial.figure.take().and_then(|mut figure| {
@@ -447,6 +551,40 @@ fn validate_editorial(content: &str, evidence: &LedeEvidence) -> Result<TodayEdi
         supported_figure(&figure, evidence).then_some(figure)
     });
     Ok(editorial)
+}
+
+/// The report's own words for `quote`. Models often straighten curly quotes,
+/// swap dashes or fold line breaks when they copy a passage; those differences
+/// alone don't make a quote unfaithful, and the page shows the report's text.
+fn report_passage(body: &str, quote: &str) -> Option<String> {
+    if body.contains(quote) {
+        return Some(quote.to_string());
+    }
+    fn fold(c: char) -> char {
+        match c {
+            '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}' | '\u{2032}' => '\'',
+            '\u{201C}' | '\u{201D}' | '\u{201E}' | '\u{201F}' | '\u{2033}' => '"',
+            '\u{2010}'..='\u{2015}' | '\u{2212}' => '-',
+            c if c.is_whitespace() => ' ',
+            c => c,
+        }
+    }
+    // Folded body characters, each with the byte range it came from.
+    let mut folded: Vec<(char, usize, usize)> = Vec::new();
+    for (start, original) in body.char_indices() {
+        let c = fold(original);
+        if c == ' ' && folded.last().is_some_and(|(last, _, _)| *last == ' ') { continue; }
+        folded.push((c, start, start + original.len_utf8()));
+    }
+    let mut needle: Vec<char> = Vec::new();
+    for c in quote.trim().chars().map(fold) {
+        if c == ' ' && needle.last() == Some(&' ') { continue; }
+        needle.push(c);
+    }
+    if needle.is_empty() || needle.len() > folded.len() { return None; }
+    let at = folded.windows(needle.len()).position(|window| window.iter().map(|(c, _, _)| *c).eq(needle.iter().copied()))?;
+    let (start, end) = (folded[at].1, folded[at + needle.len() - 1].2);
+    Some(body[start..end].to_string())
 }
 
 /// A figure is printed only when it is short and every run of digits in it
@@ -664,12 +802,39 @@ mod tests {
         let mut raw = valid.clone(); raw["theme"] = "x".repeat(81).into(); cases.push(raw);
         let mut raw = valid.clone(); raw["summary"] = "x".repeat(1201).into(); cases.push(raw);
         let mut raw = valid.clone(); raw["summary"] = "a ".repeat(181).into(); cases.push(raw);
-        let mut raw = valid.clone(); raw["extra"] = true.into(); cases.push(raw);
-        let mut raw = valid.clone(); raw["sources"][0]["extra"] = true.into(); cases.push(raw);
         for raw in cases { assert!(validate_editorial(&raw.to_string(), &evidence).is_err(), "{raw}"); }
-        for raw in ["{malformed".to_string(), format!("```json\n{valid}\n```"), format!("Here it is: {valid}")] {
-            assert!(validate_editorial(&raw, &evidence).is_err());
+        for raw in ["{malformed", "", "I can't summarize these reports."] {
+            assert!(validate_editorial(raw, &evidence).is_err());
         }
+    }
+
+    #[test]
+    fn editorial_reads_through_fences_preambles_extra_keys_and_empty_figures() {
+        let evidence = editorial_evidence();
+        let valid = editorial_json();
+        let expected = validate_editorial(&valid.to_string(), &evidence).unwrap();
+        let mut extra = valid.clone();
+        extra["headline"] = "Court blocks rule".into();
+        extra["sources"][0]["note"] = "lead report".into();
+        let mut empty_figure = valid.clone(); empty_figure["figure"] = serde_json::json!({});
+        let mut null_figure = valid.clone(); null_figure["figure"] = serde_json::Value::Null;
+        for raw in [
+            format!("```json\n{valid}\n```"),
+            format!("Here is the JSON:\n{valid}\nLet me know if you need changes."),
+            extra.to_string(), empty_figure.to_string(), null_figure.to_string(),
+        ] {
+            assert_eq!(validate_editorial(&raw, &evidence).as_ref(), Ok(&expected), "{raw}");
+        }
+    }
+
+    #[test]
+    fn a_reply_that_is_not_a_summary_shows_how_it_began() {
+        let evidence = editorial_evidence();
+        let error = validate_editorial("I'm sorry, but I can't help with that request.", &evidence).unwrap_err();
+        let reason = editorial_failure_reason(&error);
+        assert!(reason.starts_with("The AI didn't return a usable summary. Its answer began"), "{reason}");
+        assert!(reason.contains("I'm sorry, but I can't help"), "{reason}");
+        assert!(editorial_failure_reason(&validate_editorial("", &evidence).unwrap_err()).contains("an empty answer"));
     }
 
     #[test]
@@ -691,8 +856,9 @@ mod tests {
             let editorial = validate_editorial(&raw.to_string(), &evidence).unwrap();
             assert!(editorial.figure.is_none(), "{value}");
         }
+        raw["figure"]["value"] = "40M".into();
         raw["figure"]["extra"] = true.into();
-        assert!(validate_editorial(&raw.to_string(), &evidence).is_err());
+        assert_eq!(validate_editorial(&raw.to_string(), &evidence).unwrap().figure, Some(figure));
         raw.as_object_mut().unwrap().remove("figure");
         assert!(validate_editorial(&raw.to_string(), &evidence).unwrap().figure.is_none());
     }
@@ -764,14 +930,71 @@ mod tests {
         assert_eq!(user["existing_themes"][0], "Politics");
         assert!(requests[0].messages[0].content.contains("distinct events"));
         drop(requests);
-        for response in [Err("transport failed".into()), Ok("{malformed".into())] {
-            let provider = PreviewProvider { replies: std::sync::Mutex::new(vec![response].into()), requests: Default::default() };
+        for (replies, calls) in [
+            (vec![Err("transport failed".into())], 1),
+            (vec![Ok("{malformed".into()), Ok("{still malformed".into())], 2),
+            (vec![Err("Claude subscription API 429 Too Many Requests: rate limited".into()); 3], 3),
+        ] {
+            let provider = PreviewProvider { replies: std::sync::Mutex::new(replies.into()), requests: Default::default() };
             assert!(synthesize_editorial(&provider, "model", "Headline", &evidence, &[]).await.is_err());
-            assert_eq!(provider.requests.lock().unwrap().len(), 1);
+            assert_eq!(provider.requests.lock().unwrap().len(), calls);
         }
         let provider = PreviewProvider { replies: Default::default(), requests: Default::default() };
         assert!(synthesize_editorial(&provider, "model", "Headline", &LedeEvidence { prompt_text: String::new(), sources: vec![] }, &[]).await.is_err());
         assert!(provider.requests.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn rejected_editorial_is_corrected_once_with_the_reason() {
+        let evidence = editorial_evidence();
+        let mut wrong = editorial_json();
+        wrong["sources"] = serde_json::json!([wrong["sources"][0]]);
+        let provider = PreviewProvider {
+            replies: std::sync::Mutex::new(vec![Ok(wrong.to_string()), Ok(editorial_json().to_string())].into()),
+            requests: Default::default(),
+        };
+        let editorial = synthesize_editorial(&provider, "model", "Rule challenge", &evidence, &[]).await.unwrap();
+        assert_eq!(editorial.sources.len(), 2);
+        let requests = provider.requests.lock().unwrap();
+        assert_eq!(requests.len(), 2);
+        let repair = &requests[1].messages;
+        assert_eq!(repair.len(), 4);
+        assert_eq!(repair[2].role, "assistant");
+        assert_eq!(repair[2].content, wrong.to_string());
+        assert!(repair[3].content.contains("cite each available report exactly once"), "{}", repair[3].content);
+        assert!(requests[1].json_mode);
+    }
+
+    #[tokio::test]
+    async fn rate_limited_editorial_waits_and_asks_again() {
+        let provider = PreviewProvider {
+            replies: std::sync::Mutex::new(vec![Err("Anthropic API error (429 Too Many Requests): rate_limit_error".into()),
+                Err("Anthropic API error (529 <unknown status code>): Overloaded".into()), Ok(editorial_json().to_string())].into()),
+            requests: Default::default(),
+        };
+        assert!(synthesize_editorial(&provider, "model", "Rule challenge", &editorial_evidence(), &[]).await.is_ok());
+        assert_eq!(provider.requests.lock().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn quotes_match_through_typography_and_keep_the_reports_words() {
+        let evidence = LedeEvidence { prompt_text: String::new(), sources: vec![LedeSource { article_id: "a".into(),
+            body: "The minister said \u{201C}we won\u{2019}t sign\u{201D} \u{2014} talks\n  resume in May.".into() }] };
+        let raw = serde_json::json!({"theme":"Talks","summary":"Talks resume in May.",
+            "sources":[{"article_id":"a","quote":"said \"we won't sign\" - talks resume in May."}]});
+        let editorial = validate_editorial(&raw.to_string(), &evidence).unwrap();
+        assert_eq!(editorial.sources[0].quote, "said \u{201C}we won\u{2019}t sign\u{201D} \u{2014} talks\n  resume in May.");
+        assert_eq!(report_passage("Plain words here.", "plain words"), None);
+    }
+
+    #[test]
+    fn failed_stories_say_why_on_the_returned_view() {
+        assert_eq!(editorial_failure_reason("No report text is available for a supported summary"), "Its reports have no readable text to summarize.");
+        assert!(editorial_failure_reason("Claude subscription API 429 Too Many Requests: x").contains("rate limited"));
+        assert!(editorial_failure_reason("A summary quote is not an exact supporting passage in its report").contains("didn't quote"));
+        assert!(editorial_failure_reason("The provider returned malformed summary JSON").contains("usable summary"));
+        assert!(editorial_failure_reason("Unknown AI provider: x").starts_with("The AI provider failed: Unknown"));
+        assert!(!transient_model_error("The provider returned malformed summary JSON"));
     }
 
     struct PreviewProvider {

@@ -236,17 +236,34 @@ enum ArticleExtractor {
             options: [.caseInsensitive, .dotMatchesLineSeparators]
         ) else { return "" }
         let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        // A list item that is only a link, before the story's first real
+        // paragraph, is a site menu ("IP Data Fundamentals", "IP Data
+        // Accuracy"...), not the article.
+        var reachedProse = false
         return regex.matches(in: html, range: range)
             .compactMap { match -> String? in
-                guard let inner = Range(match.range(at: 2), in: html) else { return nil }
+                guard let tagRange = Range(match.range(at: 1), in: html),
+                      let inner = Range(match.range(at: 2), in: html) else { return nil }
+                let tag = html[tagRange].lowercased()
+                if !reachedProse, tag == "li", isLinkOnly(String(html[inner])) { return nil }
                 let block = String(html[inner])
                     .strippingHTMLTags()
                     .decodingBasicHTMLEntities()
                     .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
+                if tag == "p", block.count >= 80 { reachedProse = true }
                 return block.isEmpty ? nil : block
             }
             .joined(separator: "\n\n")
+    }
+
+    /// True when `html` is a single link and nothing else.
+    static func isLinkOnly(_ html: String) -> Bool {
+        let trimmed = html.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.range(
+            of: #"^<a\b[^>]*>(?:(?!</?a\b).)*</a>$"#,
+            options: [.regularExpression, .caseInsensitive]
+        ) != nil
     }
 
     /// Tries to find a prominent article container by scanning for common selectors.

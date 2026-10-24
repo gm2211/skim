@@ -91,6 +91,37 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         try db.listArticles(filter: filter)
     }
 
+    /// Articles published (or, undated, fetched) in `[start, end)`, newest
+    /// first: what one edition of The Briefing reads.
+    public func articles(from start: Date, to end: Date, limit: Int) async throws -> [Article] {
+        try db.articles(from: start, to: end, limit: limit)
+    }
+
+    /// Articles in `[start, end)` that arrived after `date`.
+    public func countArticles(from start: Date, to end: Date, fetchedAfter date: Date) async throws -> Int {
+        try db.countArticles(from: start, to: end, fetchedAfter: date)
+    }
+
+    public func dispatchEdition(id: String) async throws -> DispatchEdition? {
+        guard let json = try db.setting(key: "dispatch:\(id)") else { return nil }
+        return try? JSONDecoder().decode(DispatchEdition.self, from: Data(json.utf8))
+    }
+
+    /// The newest kept edition with pieces that ended by `end`, other than
+    /// `excluding`: what the page shows while a new edition is written.
+    public func latestDispatchEdition(days: Int, endingBy end: Date, excluding id: String) async throws -> DispatchEdition? {
+        let rows = try db.settings(keyLike: "dispatch:dispatch-%-\(days)", newestFirst: 12)
+        return rows.lazy
+            .filter { $0.key != "dispatch:\(id)" }
+            .compactMap { try? JSONDecoder().decode(DispatchEdition.self, from: Data($0.value.utf8)) }
+            .first { $0.endsAt <= end && $0.themes.contains(where: \.isWritten) }
+    }
+
+    public func saveDispatchEdition(_ edition: DispatchEdition) async throws {
+        let data = try JSONEncoder().encode(edition)
+        try db.setSetting(key: "dispatch:\(edition.id)", value: String(decoding: data, as: UTF8.self))
+    }
+
     /// Searches the full selected library scope before retaining the highest
     /// ranked matches. A non-nil empty feed list is an explicit empty scope.
     /// The returned body uses the most relevant available RSS, HTML, or reader
@@ -1228,6 +1259,36 @@ private final class SQLiteDatabase: @unchecked Sendable {
         }.first
     }
 
+    func articles(from start: Date, to end: Date, limit: Int) throws -> [Article] {
+        try query(
+            """
+            SELECT id, feed_id, feed_title, title, url, author, content_text, content_html,
+                   image_url, published_at, fetched_at, is_read, is_starred,
+                   aggregator_kind, external_url, comments_url
+            FROM articles
+            WHERE COALESCE(published_at, fetched_at) >= ? AND COALESCE(published_at, fetched_at) < ?
+            ORDER BY COALESCE(published_at, fetched_at) DESC
+            LIMIT ?
+            """,
+            [.date(start), .date(end), .int(limit)]
+        ) { statement in
+            makeArticle(from: statement)
+        }
+    }
+
+    func countArticles(from start: Date, to end: Date, fetchedAfter date: Date) throws -> Int {
+        try query(
+            """
+            SELECT COUNT(*) FROM articles
+            WHERE COALESCE(published_at, fetched_at) >= ? AND COALESCE(published_at, fetched_at) < ?
+              AND fetched_at > ?
+            """,
+            [.date(start), .date(end), .date(date)]
+        ) { statement in
+            Int(sqlite3_column_int(statement, 0))
+        }.first ?? 0
+    }
+
     func countUnread(feedID: String?) throws -> Int {
         var sql = "SELECT COUNT(*) FROM articles WHERE is_read = 0"
         var values: [SQLiteValue] = []
@@ -1278,6 +1339,13 @@ private final class SQLiteDatabase: @unchecked Sendable {
         try query("SELECT value FROM settings WHERE key = ? LIMIT 1", [.text(key)]) { statement in
             columnText(statement, 0)
         }.first
+    }
+
+    /// Settings whose key matches a LIKE pattern, by key, last first.
+    func settings(keyLike pattern: String, newestFirst limit: Int) throws -> [(key: String, value: String)] {
+        try query("SELECT key, value FROM settings WHERE key LIKE ? ORDER BY key DESC LIMIT ?", [.text(pattern), .int(limit)]) { statement in
+            (columnText(statement, 0), columnText(statement, 1))
+        }
     }
 
     func setSetting(key: String, value: String) throws {

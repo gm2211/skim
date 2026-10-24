@@ -7,13 +7,16 @@ import { PAGE_SIZE, TODAY_PAGE_COUNT, formatWindowDate, rankFor } from "../../li
 import { TodayStorySkeleton } from "./TodayStorySkeleton";
 import { TodayStory } from "./TodayStory";
 import { ModelPicker } from "../common/ModelPicker";
-import { ChatIcon, NewspaperIcon, RefreshIcon } from "../ui/icons";
+import { ChatIcon, NewspaperIcon, RefreshIcon, SparkleIcon } from "../ui/icons";
 import { openAgentChat } from "../../stores/agentChatStore";
 import { useAgentContext } from "../../hooks/useAgentContext";
 import { storyForAgent } from "../../lib/agentContext";
 import { IconButton } from "../common/IconButton";
 import { SettingsCog } from "../common/SettingsCog";
 import { AiErrorText, openAiSettings } from "../common/AiSettingsButton";
+import { DispatchPane } from "./DispatchPane";
+import { useSettings } from "../../hooks/useSettings";
+import { PAPER_NAME } from "../../lib/dispatch";
 import "./TodayFrontPage.css";
 
 export const NEWSPAPER_PAGE_SIZE = PAGE_SIZE;
@@ -41,7 +44,18 @@ function FrontPage({ cells }: { cells: { key: string; node: React.ReactNode }[] 
   );
 }
 
+/**
+ * With AI set up, the paper is The Briefing, written by the AI from the
+ * reader's feeds. Without it, the same page sets the feeds' own stories.
+ * Settings decide which, so neither page's work starts before they load.
+ */
 export function TodayEditionPane() {
+  const settings = useSettings();
+  if (settings.data && settings.data.ai.provider !== "none") return <DispatchPane />;
+  return <StoryFrontPage />;
+}
+
+export function StoryFrontPage() {
   const { isPhone, sidebarCollapsed, selectedArticleId, openArticleFromToday, setPhonePane, todayPage, setTodayPage } = useUiStore();
   const { data, isLoading, isError, error, window: todayWin, setConsumed, markStoryRead, ledeProgress, isWritingLedes, canRetryLedes, retryLedes, refetch, aiEnabled, isPreparingSummaries, settingsUnavailable, retrySettings } =
     useTodayEdition();
@@ -54,6 +68,8 @@ export function TodayEditionPane() {
   const refreshFeeds = useRefreshAllFeeds();
   const isFrontPage = !isPhone && !selectedArticleId;
   const items = data?.items ?? [];
+  // Settings have loaded and name no provider: say so plainly, not just with excerpts.
+  const aiOff = !aiEnabled && !settingsUnavailable && !isPreparingSummaries;
   const themes = [...new Set(items.flatMap((item) => item.editorial?.theme ? [item.editorial.theme] : []))];
   const activeTheme = themes.includes(theme ?? "") ? theme : null;
   const visibleItems = items.map((item, index) => ({ item, index })).filter(({ item }) =>
@@ -90,6 +106,7 @@ export function TodayEditionPane() {
 
   const totalCount = data?.total_count ?? 0;
   const missingSummaries = items.filter((item) => !item.editorial?.summary.trim()).length;
+  const failureReasons = [...new Set(items.flatMap((item) => item.editorial?.summary.trim() || !item.editorial_error ? [] : [item.editorial_error]))].join("\n");
   const consumedCount = data?.consumed_count ?? 0;
   const isFullyConsumed = totalCount > 0 && consumedCount === totalCount;
   const progressPct = totalCount > 0 ? Math.round((consumedCount / totalCount) * 100) : 0;
@@ -124,7 +141,7 @@ export function TodayEditionPane() {
         )}
         <div className="flex-1" />
         {items.length > 0 && <IconButton
-          label="Ask about Today"
+          label={`Ask about ${PAPER_NAME}`}
           onClick={() => openAgentChat({ context: { ...agentContext, story: null } })}
           className="text-text-secondary hover:text-text-primary hover:bg-white/10"
         >
@@ -138,7 +155,7 @@ export function TodayEditionPane() {
         >
           <RefreshIcon size={18} className={refreshFeeds.isPending ? "smooth-spin" : undefined} />
         </IconButton>
-        <SettingsCog label="Today settings" heading="Today" className="text-text-secondary">
+        <SettingsCog label={`${PAPER_NAME} settings`} heading={PAPER_NAME} className="text-text-secondary">
           {(close) => (
             <>
               <div className="today-settings-row">
@@ -162,7 +179,7 @@ export function TodayEditionPane() {
           day's reading progress. */}
       <div className="today-masthead">
         <h2 className="today-title text-text-primary truncate">
-          Today
+          {PAPER_NAME}
         </h2>
         <div className="today-dateline">
           <span>{formatWindowDate(todayWin)}</span>
@@ -171,7 +188,7 @@ export function TodayEditionPane() {
               {totalCount} {totalCount === 1 ? "story" : "stories"}
               {themes.length > 0 && <> · {themes.length} {themes.length === 1 ? "theme" : "themes"}</>}
               {canRetryLedes && missingSummaries > 0 && <>
-                {" · "}<span className="today-dateline-failed">{missingSummaries} not summarized</span>
+                {" · "}<span className="today-dateline-failed" title={failureReasons || undefined}>{missingSummaries} not summarized</span>
                 <button type="button" className="today-dateline-retry" onClick={retryLedes} aria-label="Retry summaries">Retry</button>
                 <button type="button" className="today-dateline-retry" onClick={openAiSettings}>AI settings</button>
               </>}
@@ -233,13 +250,20 @@ export function TodayEditionPane() {
         )}
 
         {!isLoading && !isError && items.length > 0 && <>
-          {!aiEnabled && !settingsUnavailable && items.some((item) => !item.editorial) && <p className="today-summary-note">Unprepared summaries show source excerpts. <button className="today-story-control text-accent" onClick={() => useUiStore.getState().setShowSettings(true)}>Set up AI for thematic summaries</button></p>}
+          {aiOff && <div role="status" className="today-ai-off">
+            <SparkleIcon size={18} className="today-ai-off-icon" />
+            <div className="today-ai-off-text">
+              <p className="today-ai-off-title">AI is off, so stories aren't summarized</p>
+              <p>Each story shows its feed's excerpt, and only reports with matching headlines are grouped.</p>
+            </div>
+            <button className="today-ai-off-action" onClick={openAiSettings}>Set up AI</button>
+          </div>}
           <nav className="today-themes" aria-label="Newspaper themes">
             <button className="today-story-control" aria-pressed={!activeTheme && !sharedOnly} onClick={() => { setTheme(null); setSharedOnly(false); }}>All stories</button>
             {themes.map((name) => <button key={name} className="today-story-control" aria-pressed={activeTheme === name} onClick={() => setTheme(activeTheme === name ? null : name)}>{name}</button>)}
             <button className="today-story-control" aria-pressed={sharedOnly} onClick={() => setSharedOnly(!sharedOnly)}>Multiple reports</button>
           </nav>
-          {visibleItems.length === 0 && <p className="today-summary-note">No stories with multiple reports in this selection.</p>}
+          {visibleItems.length === 0 && <p className="today-summary-note">No stories with multiple reports in this selection.{aiOff && " Without AI, Skim only groups reports whose headlines share key words."}</p>}
         </>}
         {!isLoading && !isError && visibleItems.length > 0 && <FrontPage cells={visibleItems.map(({ item }, index) => ({
           key: item.story_id,

@@ -7,27 +7,34 @@ prose: >-
 behaviors:
   - id: inbox-is-reachable
     description: >-
-      The AI Inbox is the "For you" sort of the article list, not a destination of its own. Unread
-      and All lists of every feed, one feed or a folder can be sorted Newest or For you; a list
-      sorted For you shows only unread articles. Desktop has a Sort control under the list's search
-      box and a "For you" command in the palette; iOS has Sort in the list's actions menu, a For you
-      row in the feed picker and an optional For you bottom bar item.
+      The AI Inbox is the "For you" sort of the article list, not a destination of its own, and the
+      list offers it as a subtle Smart sorting switch: on ranks the list For you, off shows the raw
+      articles newest first. The switch is remembered across launches. Unread and All lists of every
+      feed, one feed or a folder can be smart sorted; a smart sorted list shows only unread
+      articles.
     details: >-
-      Choosing For you from Starred or Recent switches to Unread first, since those lists are not
-      ranked. Desktop no longer has an AI Inbox row in the sidebar.
+      Desktop puts a small "Smart sort" switch beside the list title (replacing the old Sort row)
+      and keeps a "For you" command in the palette. iOS has a sparkles button in the list's top bar
+      and a Smart Sorting toggle in the list's actions menu, plus a For you row in the feed picker
+      and an optional For you bottom bar item. Choosing For you from Starred or Recent switches to
+      Unread first, since those lists are not ranked. Desktop no longer has an AI Inbox row in the
+      sidebar.
     source:
-      text: Do both
+      text: >-
+        we should have a way of toggling "smart sorting" in the all articles view, thus
+        re-introducing the ai-inbox but subtly, in case I just wanna read raw articles directly
       reference: >-
-        Giulio, project chat, 2026-10-14, choosing "Do both" on the decision card "Unify Skim's
-        taste ranking across Today and the AI Inbox?" (Today uses the inbox taste model, and the
-        AI Inbox becomes a For you sort of the article list)
+        Giulio, project chat, 2026-10-22 (earlier: "Do both" on the decision card "Unify Skim's
+        taste ranking across Today and the AI Inbox?", 2026-10-14)
   - id: ranks-by-relevance-and-importance
     description: >-
       The model assesses each unread article's relevance to the reader and its importance, and the
       AI Inbox sorts articles with the most relevant and important first.
     details: >-
-      The model rates every unread article on two 1-5 scales, importance (significance for anyone
-      following the area) and relevance (fit with this reader), plus a one-line reason. Both apps
+      The model rates every unread article on two 1-5 scales, importance (the impact of the thing
+      at the center of the article, judged the same in every field, with no kind of news given a
+      head start; see today.yaml ranked-by-consequence) and relevance (fit with this reader), plus a
+      one-line reason. Both apps
       rank by the shared skim_inbox_score in SkimStoryPolicy, which blends the two ratings with
       learned taste and a small recency decay; pinned articles stay on top. Desktop groups the
       ranked list into Top picks, Worth reading, When you have time and Low priority, and each

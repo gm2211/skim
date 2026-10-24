@@ -368,7 +368,7 @@ export function ArticleDetail() {
   useReadingTimeTracker(selectedArticleId, sidebarView.type === "recent");
   const [showSummarizeMenu, setShowSummarizeMenu] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatAskAbout, setChatAskAbout] = useState<{ id: number; text: string } | null>(null);
+  const [chatAskAbout, setChatAskAbout] = useState<{ id: number; text: string; articleId: string } | null>(null);
   const readerContentRef = useRef<HTMLDivElement>(null);
   const [perArticleLength, setPerArticleLength] = useState<string | undefined>();
   const [perArticleTone, setPerArticleTone] = useState<string | undefined>();
@@ -567,10 +567,16 @@ export function ArticleDetail() {
     [article, settings, summarize, perArticleLength, perArticleTone, perArticlePrompt, perArticleWordCount]
   );
 
-  // Mark as read when opened
+  // Mark as read when opened. A failed save used to leave the unread dot
+  // with no sign anything went wrong, so say so in the reader.
+  const [readError, setReadError] = useState<{ articleId: string; message: string } | null>(null);
   useEffect(() => {
     if (article && !article.is_read) {
-      markRead.mutate([article.id]);
+      const articleId = article.id;
+      markRead.mutate([articleId], {
+        onSuccess: () => setReadError((current) => (current?.articleId === articleId ? null : current)),
+        onError: (error) => setReadError({ articleId, message: String(error) }),
+      });
     }
   }, [article?.id]);
 
@@ -1514,6 +1520,14 @@ export function ArticleDetail() {
         </div>
       </div>
 
+      {readError && readError.articleId === article.id && !article.is_read && (
+        <div style={{ padding: "0 24px 8px" }}>
+          <p role="alert" className="text-danger" style={{ fontSize: 13 }}>
+            Couldn't mark this article read: {readError.message}
+          </p>
+        </div>
+      )}
+
       {fullError && !aggregatorPost && (
         <div style={{ padding: "0 24px 8px" }}>
           <p className="text-danger" style={{ fontSize: 13 }}>{fullError}</p>
@@ -1750,7 +1764,7 @@ export function ArticleDetail() {
                   <ReaderSelectionAsk
                     containerRef={readerContentRef}
                     onAsk={(text) => {
-                      setChatAskAbout((previous) => ({ id: (previous?.id ?? 0) + 1, text }));
+                      setChatAskAbout((previous) => ({ id: (previous?.id ?? 0) + 1, text, articleId: article.id }));
                       setChatOpen(true);
                     }}
                   />

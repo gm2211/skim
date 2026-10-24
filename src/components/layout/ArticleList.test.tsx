@@ -149,15 +149,27 @@ describe("article list scope regressions", () => {
     })).toEqual({ filter: { limit: 200, is_read: false, ...expected }, recentOnly: false });
   });
 
-  it("offers the For you sort on lists of feeds only", async () => {
+  it("offers the smart sorting switch on lists of feeds only, and remembers it", async () => {
+    const store: Record<string, string> = {};
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; } },
+    });
     useUiStore.setState({ sidebarView: { type: "all" }, listSort: "newest" });
     render(<ArticleList />);
-    await userEvent.click(screen.getByRole("button", { name: "For you" }));
+    const toggle = screen.getByRole("switch", { name: "Smart sorting" });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    await userEvent.click(toggle);
     expect(useUiStore.getState().listSort).toBe("forYou");
+    expect(localStorage.getItem("skim.listSort")).toBe("forYou");
+    expect(screen.getByRole("switch", { name: "Smart sorting" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(screen.getByRole("switch", { name: "Smart sorting" }));
+    expect(useUiStore.getState().listSort).toBe("newest");
+    expect(localStorage.getItem("skim.listSort")).toBe("newest");
     cleanup();
     useUiStore.setState({ sidebarView: { type: "starred" } });
     render(<ArticleList />);
-    expect(screen.queryByRole("button", { name: "For you" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "Smart sorting" })).not.toBeInTheDocument();
   });
 });
 
@@ -179,18 +191,18 @@ describe("article list toolbar", () => {
   it("reaches Today from the list header while the sidebar is hidden", async () => {
     useUiStore.setState({ sidebarView: { type: "all" }, isPhone: false, sidebarCollapsed: false });
     const { unmount } = render(<ArticleList />);
-    expect(screen.queryByRole("button", { name: "Today" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "The Briefing" })).not.toBeInTheDocument();
     unmount();
 
     useUiStore.setState({ sidebarCollapsed: true });
     render(<ArticleList />);
-    await userEvent.click(screen.getByRole("button", { name: "Today" }));
+    await userEvent.click(screen.getByRole("button", { name: "The Briefing" }));
     expect(useUiStore.getState().sidebarView).toEqual({ type: "today" });
   });
 
   it("offers Today in the phone list header too", () => {
     useUiStore.setState({ sidebarView: { type: "all" }, isPhone: true, sidebarCollapsed: false });
     render(<ArticleList />);
-    expect(screen.getByRole("button", { name: "Today" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "The Briefing" })).toBeInTheDocument();
   });
 });

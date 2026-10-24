@@ -1,0 +1,5052 @@
+{
+ "topics": [
+  {
+   "id": "tech",
+   "name": "Tech",
+   "feeds": [
+    {
+     "title": "The Verge",
+     "url": "https://www.theverge.com/rss/index.xml",
+     "site": "https://www.theverge.com",
+     "description": "Technology, science, art, and culture.",
+     "origin": "skim"
+    },
+    {
+     "title": "Ars Technica",
+     "url": "https://feeds.arstechnica.com/arstechnica/index",
+     "site": "https://arstechnica.com",
+     "description": "In-depth tech news, reviews, and analysis.",
+     "origin": "skim"
+    },
+    {
+     "title": "TechCrunch",
+     "url": "https://techcrunch.com/feed/",
+     "site": "https://techcrunch.com",
+     "description": "Startups, venture capital, and tech industry news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Wired",
+     "url": "https://www.wired.com/feed/rss",
+     "site": "https://www.wired.com",
+     "description": "How technology is changing every aspect of our lives.",
+     "origin": "skim"
+    },
+    {
+     "title": "Engadget",
+     "url": "https://www.engadget.com/rss.xml",
+     "site": "https://www.engadget.com",
+     "description": "Gadgets and consumer electronics.",
+     "origin": "skim"
+    },
+    {
+     "title": "Hacker News",
+     "url": "https://news.ycombinator.com/rss",
+     "site": "https://news.ycombinator.com",
+     "description": "Front page links from Y Combinator's community.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Register",
+     "url": "https://www.theregister.com/headlines.atom",
+     "site": "https://www.theregister.com",
+     "description": "Biting the hand that feeds IT.",
+     "origin": "skim"
+    },
+    {
+     "title": "404 Media",
+     "url": "https://www.404media.co/rss/",
+     "site": "https://www.404media.co",
+     "description": "Independent journalism on technology and its impact.",
+     "origin": "skim"
+    },
+    {
+     "title": "Platformer",
+     "url": "https://www.platformer.news/rss/",
+     "site": "https://www.platformer.news",
+     "description": "Casey Newton on big tech and democracy.",
+     "origin": "skim"
+    },
+    {
+     "title": "Rest of World",
+     "url": "https://restofworld.org/feed/latest",
+     "site": "https://restofworld.org",
+     "description": "Tech's impact beyond the Western bubble.",
+     "origin": "skim"
+    },
+    {
+     "title": "MIT Technology Review",
+     "url": "https://www.technologyreview.com/feed/",
+     "site": "https://www.technologyreview.com",
+     "description": "Emerging technology and its consequences.",
+     "origin": "skim"
+    },
+    {
+     "title": "Techmeme",
+     "url": "https://www.techmeme.com/feed.xml",
+     "site": "https://www.techmeme.com",
+     "description": "The day's essential tech news, on one page.",
+     "origin": "skim"
+    },
+    {
+     "title": "Hackaday",
+     "url": "https://hackaday.com/blog/feed/",
+     "site": "https://hackaday.com",
+     "description": "Fresh hacks every day.",
+     "origin": "skim"
+    },
+    {
+     "title": "Tom's Hardware",
+     "url": "https://www.tomshardware.com/feeds/all",
+     "site": "https://www.tomshardware.com",
+     "description": "PC hardware news and reviews.",
+     "origin": "skim"
+    },
+    {
+     "title": "Slashdot",
+     "url": "https://rss.slashdot.org/Slashdot/slashdotMain",
+     "site": "https://slashdot.org",
+     "description": "News for nerds.",
+     "origin": "skim"
+    },
+    {
+     "title": "Ars Technica: Gadgets",
+     "url": "https://arstechnica.com/gadgets/feed/",
+     "site": "https://arstechnica.com/gadgets/",
+     "description": "Hardware and gadget coverage from Ars.",
+     "origin": "skim"
+    },
+    {
+     "title": "Accidental Tech Podcast",
+     "url": "https://atp.fm/rss",
+     "site": "https://atp.fm",
+     "description": "Three nerds discussing tech, Apple, programming, and loosely related matters.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Analog(ue)",
+     "url": "https://www.relay.fm/analogue/feed",
+     "site": "https://www.relay.fm",
+     "description": "So many podcasts are about our digital devices.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CNET",
+     "url": "https://www.cnet.com/rss/news/",
+     "site": "https://www.cnet.com",
+     "description": "CNET news editors and reporters provide top technology news, with investigative reporting and in-depth coverage of…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CNET",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=CNETTV",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Clockwise",
+     "url": "https://www.relay.fm/clockwise/feed",
+     "site": "https://www.relay.fm",
+     "description": "Clockwise is a rapid-fire discussion of current technology issues hosted by Dan Moren and Mikah Sargent and…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Crunch Hype",
+     "url": "http://feeds.feedburner.com/TechCrunch",
+     "site": "http://feeds.feedburner.com",
+     "description": "Tech Crunch is a free Digital Marketing Site.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Gizmodo",
+     "url": "https://gizmodo.com/rss",
+     "site": "https://gizmodo.com",
+     "description": "The Future Is Here",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Lifehacker",
+     "url": "https://lifehacker.com/rss",
+     "site": "https://lifehacker.com",
+     "description": "Do everything better.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Linus Tech Tips",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=LinusTechTips",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Marques Brownlee",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=marquesbrownlee",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Mashable",
+     "url": "http://feeds.mashable.com/Mashable",
+     "site": "http://feeds.mashable.com",
+     "description": "Mashable is a leading source for news, information & resources for the Connected Generation.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NYT: Technology",
+     "url": "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
+     "site": "https://rss.nytimes.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ReadWrite",
+     "url": "https://readwrite.com/feed/",
+     "site": "https://readwrite.com",
+     "description": "Crypto, Gaming & Emerging Tech News",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Reply All",
+     "url": "https://feeds.megaphone.fm/replyall",
+     "site": "https://feeds.megaphone.fm",
+     "description": "\"'A podcast about the internet' that is actually an unfailingly original exploration of modern life and how to…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Rocket",
+     "url": "https://www.relay.fm/rocket/feed",
+     "site": "https://www.relay.fm",
+     "description": "Countdown to excitement!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Stratechery",
+     "url": "http://stratechery.com/feed/",
+     "site": "http://stratechery.com",
+     "description": "On the business, strategy, and impact of technology.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Google: The Keyword",
+     "url": "https://www.blog.google/rss/",
+     "site": "https://www.blog.google",
+     "description": "The Keyword",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Next Web",
+     "url": "https://thenextweb.com/feed/",
+     "site": "https://thenextweb.com",
+     "description": "Original and proudly opinionated perspectives for Generation T",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Verge",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=TheVerge",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Vergecast",
+     "url": "https://feeds.megaphone.fm/vergecast",
+     "site": "https://feeds.megaphone.fm",
+     "description": "The Vergecast is the flagship podcast from The Verge about small gadgets, Big Tech, and everything in between.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "This Week in Tech (Audio)",
+     "url": "https://feeds.twit.tv/twit.xml",
+     "site": "https://feeds.twit.tv",
+     "description": "This Week in Tech is the top-ranked flagship tech podcast from TWiT.tv.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Unbox Therapy",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=unboxtherapy",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Register: Security",
+     "url": "https://www.theregister.com/headlines.rss",
+     "site": "https://www.theregister.com",
+     "description": "Articles from www.theregister.com",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "programming",
+   "name": "Programming",
+   "feeds": [
+    {
+     "title": "Lobsters",
+     "url": "https://lobste.rs/rss",
+     "site": "https://lobste.rs",
+     "description": "A computing-focused link aggregator.",
+     "origin": "skim"
+    },
+    {
+     "title": "Hacker News: Best",
+     "url": "https://hnrss.org/best",
+     "site": "https://news.ycombinator.com/best",
+     "description": "The highest-voted recent Hacker News stories.",
+     "origin": "skim"
+    },
+    {
+     "title": "Simon Willison",
+     "url": "https://simonwillison.net/atom/everything/",
+     "site": "https://simonwillison.net",
+     "description": "Notes on LLMs, Python, Datasette, and the web.",
+     "origin": "skim"
+    },
+    {
+     "title": "Julia Evans",
+     "url": "https://jvns.ca/atom.xml",
+     "site": "https://jvns.ca",
+     "description": "Friendly explanations of how computers work.",
+     "origin": "skim"
+    },
+    {
+     "title": "Martin Fowler",
+     "url": "https://martinfowler.com/feed.atom",
+     "site": "https://martinfowler.com",
+     "description": "Software design, architecture, and agile delivery.",
+     "origin": "skim"
+    },
+    {
+     "title": "The GitHub Blog",
+     "url": "https://github.blog/feed/",
+     "site": "https://github.blog",
+     "description": "Updates, ideas, and engineering from GitHub.",
+     "origin": "skim"
+    },
+    {
+     "title": "This Week in Rust",
+     "url": "https://this-week-in-rust.org/rss.xml",
+     "site": "https://this-week-in-rust.org",
+     "description": "Weekly Rust community news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Hacker News: Front Page",
+     "url": "https://hnrss.org/frontpage",
+     "site": "https://news.ycombinator.com",
+     "description": "What's on the Hacker News front page right now.",
+     "origin": "skim"
+    },
+    {
+     "title": "Dan Luu",
+     "url": "https://danluu.com/atom.xml",
+     "site": "https://danluu.com",
+     "description": "Long, data-heavy essays on software and hardware.",
+     "origin": "skim"
+    },
+    {
+     "title": "rachelbythebay",
+     "url": "https://rachelbythebay.com/w/atom.xml",
+     "site": "https://rachelbythebay.com/w/",
+     "description": "War stories from production systems.",
+     "origin": "skim"
+    },
+    {
+     "title": "Eli Bendersky",
+     "url": "https://eli.thegreenplace.net/feeds/all.atom.xml",
+     "site": "https://eli.thegreenplace.net",
+     "description": "Go, compilers, and programming deep dives.",
+     "origin": "skim"
+    },
+    {
+     "title": "Mitchell Hashimoto",
+     "url": "https://mitchellh.com/feed.xml",
+     "site": "https://mitchellh.com",
+     "description": "Notes from the creator of Ghostty and Terraform.",
+     "origin": "skim"
+    },
+    {
+     "title": "Xe Iaso",
+     "url": "https://xeiaso.net/blog.rss",
+     "site": "https://xeiaso.net",
+     "description": "Systems, Nix, and the craft of programming.",
+     "origin": "skim"
+    },
+    {
+     "title": "Jeff Geerling",
+     "url": "https://www.jeffgeerling.com/blog.xml",
+     "site": "https://www.jeffgeerling.com",
+     "description": "Raspberry Pi, Ansible, and homelab projects.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Pragmatic Engineer",
+     "url": "https://newsletter.pragmaticengineer.com/feed",
+     "site": "https://newsletter.pragmaticengineer.com",
+     "description": "Big tech and startups, from the inside.",
+     "origin": "skim"
+    },
+    {
+     "title": "matklad",
+     "url": "https://matklad.github.io/feed.xml",
+     "site": "https://matklad.github.io",
+     "description": "Rust, Zig, and software design.",
+     "origin": "skim"
+    },
+    {
+     "title": "fasterthanlime",
+     "url": "https://fasterthanli.me/index.xml",
+     "site": "https://fasterthanli.me",
+     "description": "Long-form Rust and systems explorations.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Go Blog",
+     "url": "https://go.dev/blog/feed.atom",
+     "site": "https://go.dev/blog/",
+     "description": "News from the Go team.",
+     "origin": "skim"
+    },
+    {
+     "title": "Rust Blog",
+     "url": "https://blog.rust-lang.org/feed.xml",
+     "site": "https://blog.rust-lang.org",
+     "description": "Releases and news from the Rust project.",
+     "origin": "skim"
+    },
+    {
+     "title": "Python Insider",
+     "url": "https://blog.python.org/feeds/posts/default?alt=rss",
+     "site": "https://blog.python.org",
+     "description": "News from the Python core team.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Cloudflare Blog",
+     "url": "https://blog.cloudflare.com/rss/",
+     "site": "https://blog.cloudflare.com",
+     "description": "Networking, security, and performance engineering.",
+     "origin": "skim"
+    },
+    {
+     "title": "Netflix TechBlog",
+     "url": "https://netflixtechblog.com/feed",
+     "site": "https://netflixtechblog.com",
+     "description": "Engineering at Netflix.",
+     "origin": "skim"
+    },
+    {
+     "title": "Hillel Wayne",
+     "url": "https://buttondown.com/hillelwayne/rss",
+     "site": "https://buttondown.com/hillelwayne",
+     "description": "Formal methods, history, and software engineering.",
+     "origin": "skim"
+    },
+    {
+     "title": "Josh W. Comeau",
+     "url": "https://www.joshwcomeau.com/rss.xml",
+     "site": "https://www.joshwcomeau.com",
+     "description": "Interactive CSS and React tutorials.",
+     "origin": "skim"
+    },
+    {
+     "title": "LWN.net",
+     "url": "https://lwn.net/headlines/rss",
+     "site": "https://lwn.net",
+     "description": "Linux and free software news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Daniel Stenberg",
+     "url": "https://daniel.haxx.se/blog/feed/",
+     "site": "https://daniel.haxx.se/blog/",
+     "description": "The curl maintainer's blog.",
+     "origin": "skim"
+    },
+    {
+     "title": "Brendan Gregg",
+     "url": "https://www.brendangregg.com/blog/rss.xml",
+     "site": "https://www.brendangregg.com",
+     "description": "Systems performance and observability.",
+     "origin": "skim"
+    },
+    {
+     "title": "Armin Ronacher",
+     "url": "https://lucumr.pocoo.org/feed.atom",
+     "site": "https://lucumr.pocoo.org",
+     "description": "Python, Rust, and open source.",
+     "origin": "skim"
+    },
+    {
+     "title": "Ned Batchelder",
+     "url": "https://nedbatchelder.com/blog/rss.xml",
+     "site": "https://nedbatchelder.com/blog/",
+     "description": "Python and the craft of software.",
+     "origin": "skim"
+    },
+    {
+     "title": "Jake Archibald",
+     "url": "https://jakearchibald.com/posts.rss",
+     "site": "https://jakearchibald.com",
+     "description": "The web platform, explained.",
+     "origin": "skim"
+    },
+    {
+     "title": "Smashing Magazine",
+     "url": "https://www.smashingmagazine.com/feed/",
+     "site": "https://www.smashingmagazine.com",
+     "description": "Web design and development techniques.",
+     "origin": "skim"
+    },
+    {
+     "title": "Drew DeVault",
+     "url": "https://drewdevault.com/blog/index.xml",
+     "site": "https://drewdevault.com",
+     "description": "Free software and systems programming.",
+     "origin": "skim"
+    },
+    {
+     "title": "Better Programming",
+     "url": "https://medium.com/feed/better-programming",
+     "site": "https://medium.com",
+     "description": "Advice for programmers. - Medium",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CodeNewbie",
+     "url": "http://feeds.codenewbie.org/cnpodcast.xml",
+     "site": "http://feeds.codenewbie.org",
+     "description": "The CodeNewbie podcast was born from CodeNewbie, an organization which fosters a supportive, international community…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Coding Horror",
+     "url": "https://feeds.feedburner.com/codinghorror",
+     "site": "https://feeds.feedburner.com",
+     "description": "programming and human factors",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Developer Tea",
+     "url": "https://feeds.simplecast.com/dLRotFGk",
+     "site": "https://feeds.simplecast.com",
+     "description": "Developer Tea exists to help driven developers connect to their ultimate purpose and excel at their work so that…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Engineering at Meta",
+     "url": "https://engineering.fb.com/feed/",
+     "site": "https://engineering.fb.com",
+     "description": "Engineering at Meta Blog",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Engineering at Slack",
+     "url": "https://slack.engineering/feed",
+     "site": "https://slack.engineering",
+     "description": "Hear directly from Slack's engineers about what we build, why and how we build it, and how you can use it.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Etsy: Code as Craft",
+     "url": "https://codeascraft.com/feed/atom/",
+     "site": "https://codeascraft.com",
+     "description": "The engineers who make Etsy make our living with a craft we love: software.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "FLOSS Weekly (Audio)",
+     "url": "https://feeds.twit.tv/floss.xml",
+     "site": "https://feeds.twit.tv",
+     "description": "We're not talking dentistry here; FLOSS is all about Free Libre Open Source Software.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "GitLab",
+     "url": "https://about.gitlab.com/atom.xml",
+     "site": "https://about.gitlab.com",
+     "description": "GitLab Blog RSS feed",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Google Developers Blog",
+     "url": "http://feeds.feedburner.com/GDBcode",
+     "site": "http://feeds.feedburner.com",
+     "description": "Updates on changes and additions to the Google Developers Blog.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Google TechTalks",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=GoogleTechTalks",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "HackerNoon.com",
+     "url": "https://medium.com/feed/hackernoon",
+     "site": "https://medium.com",
+     "description": "Elijah McClain, George Floyd, Eric Garner, Breonna Taylor, Ahmaud Arbery, Michael Brown, Oscar Grant, Atatiana…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Hanselminutes with Scott Hanselman",
+     "url": "https://feeds.simplecast.com/gvtxUiIf",
+     "site": "https://feeds.simplecast.com",
+     "description": "Hanselminutes is Fresh Air for Developers.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "InfoQ",
+     "url": "https://feed.infoq.com",
+     "site": "https://feed.infoq.com",
+     "description": "InfoQ feed",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Java, SQL and jOOQ.",
+     "url": "https://blog.jooq.org/feed",
+     "site": "https://blog.jooq.org",
+     "description": "Best Practices and Lessons Learned from Writing Awesome Java and SQL Code.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Joel on Software",
+     "url": "https://www.joelonsoftware.com/feed/",
+     "site": "https://www.joelonsoftware.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Buffer: Overflow",
+     "url": "https://buffer.com/resources/overflow/rss/",
+     "site": "https://buffer.com",
+     "description": "In-depth ideas and guides to social media & online marketing strategy, published by the team at Buffer",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Podcast Archives - Software Engineering Daily",
+     "url": "https://softwareengineeringdaily.com/category/podcast/feed",
+     "site": "https://softwareengineeringdaily.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Programming Archives - The Crazy Programmer",
+     "url": "https://www.thecrazyprogrammer.com/category/programming/feed",
+     "site": "https://www.thecrazyprogrammer.com",
+     "description": "Programming, Design and Development",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Programming Throwdown",
+     "url": "http://feeds.feedburner.com/ProgrammingThrowdown",
+     "site": "http://feeds.feedburner.com",
+     "description": "Programming Throwdown educates Computer Scientists and Software Engineers on a cavalcade of programming and tech…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Robert Heaton | Blog",
+     "url": "https://robertheaton.com/feed.xml",
+     "site": "https://robertheaton.com",
+     "description": "Software engineer. One-track lover down a two-way lane",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Scott Hanselman's Blog",
+     "url": "http://feeds.hanselman.com/ScottHanselman",
+     "site": "http://feeds.hanselman.com",
+     "description": "Scott Hanselman on Programming, User Experience, The Zen of Computers and Life in General",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Scripting News",
+     "url": "http://scripting.com/rss.xml",
+     "site": "http://scripting.com",
+     "description": "Dave Winer, OG blogger, podcaster, developed first apps in many categories.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Software Defined Talk",
+     "url": "https://feeds.fireside.fm/sdt/rss",
+     "site": "https://feeds.fireside.fm",
+     "description": "Get ready for a weekly dose of all things Enterprise Software and Cloud Computing!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Software Engineering Radio - The Podcast for Professional Software Developers",
+     "url": "http://feeds.feedburner.com/se-radio",
+     "site": "http://feeds.feedburner.com",
+     "description": "Software Engineering Radio is a podcast targeted at the professional software developer.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "SoundCloud Backstage Blog",
+     "url": "https://developers.soundcloud.com/blog/blog.rss",
+     "site": "https://developers.soundcloud.com",
+     "description": "SoundCloud's developer blog.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Spotify Engineering",
+     "url": "https://labs.spotify.com/feed/",
+     "site": "https://labs.spotify.com",
+     "description": "Spotify’s official technology blog",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Stack Abuse",
+     "url": "https://stackabuse.com/rss/",
+     "site": "https://stackabuse.com",
+     "description": "Learn Python, Java, JavaScript/Node, Machine Learning, and Web Development through articles, code examples, and…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Stack Overflow Blog",
+     "url": "https://stackoverflow.blog/feed/",
+     "site": "https://stackoverflow.blog",
+     "description": "Essays, opinions, and advice on the act of computer programming from Stack Overflow.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The 6 Figure Developer",
+     "url": "http://6figuredev.com/feed/rss/",
+     "site": "http://6figuredev.com",
+     "description": "Helping others reach their potential",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Airbnb Tech Blog",
+     "url": "https://medium.com/feed/airbnb-engineering",
+     "site": "https://medium.com",
+     "description": "Creative engineers and data scientists building a world where you can belong anywhere. http://airbnb.io - Medium",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Cynical Developer",
+     "url": "https://cynicaldeveloper.com/feed/podcast",
+     "site": "https://cynicaldeveloper.com",
+     "description": "A UK based Technology and Software Developer Podcast that helps you to improve your development knowledge and…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The JetBrains Blog",
+     "url": "https://blog.jetbrains.com/feed",
+     "site": "https://blog.jetbrains.com",
+     "description": "Developer Tools for Professionals and Teams",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The PIT Show: Reflections and Interviews in the Tech World",
+     "url": "https://feeds.transistor.fm/productivity-in-tech-podcast",
+     "site": "https://feeds.transistor.fm",
+     "description": "This is the show where I sit down with people in the tech space and talk about what they are doing and how they get…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Stack Overflow Podcast",
+     "url": "https://feeds.simplecast.com/XA_851k3",
+     "site": "https://feeds.simplecast.com",
+     "description": "For well over a decade, the Stack Overflow Podcast has been exploring what it means to be a developer and how the…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Women in Tech Show: A Technical Podcast",
+     "url": "https://thewomenintechshow.com/category/podcast/feed/",
+     "site": "https://thewomenintechshow.com",
+     "description": "A podcast about what we work on, not what it feels like to be a woman in tech.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "overreacted",
+     "url": "https://overreacted.io/rss.xml",
+     "site": "https://overreacted.io",
+     "description": "A blog by Dan Abramov",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "r/programming",
+     "url": "https://www.reddit.com/r/programming/.rss",
+     "site": "https://www.reddit.com",
+     "description": "Computer Programming",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "A List Apart",
+     "url": "https://alistapart.com/main/feed/",
+     "site": "https://alistapart.com",
+     "description": "Articles for people who make web sites.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CSS-Tricks",
+     "url": "https://css-tricks.com/feed/",
+     "site": "https://css-tricks.com",
+     "description": "Tips, Tricks, and Techniques on using Cascading Style Sheets.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Code Wall",
+     "url": "https://www.codewall.co.uk/feed/",
+     "site": "https://www.codewall.co.uk",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "David Walsh Blog",
+     "url": "https://davidwalsh.name/feed",
+     "site": "https://davidwalsh.name",
+     "description": "A blog featuring tutorials about JavaScript, HTML5, AJAX, PHP, CSS, WordPress, and everything else development.",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "ai",
+   "name": "AI",
+   "feeds": [
+    {
+     "title": "Hugging Face Blog",
+     "url": "https://huggingface.co/blog/feed.xml",
+     "site": "https://huggingface.co/blog",
+     "description": "Open models, datasets, and machine learning tools.",
+     "origin": "skim"
+    },
+    {
+     "title": "Import AI",
+     "url": "https://importai.substack.com/feed",
+     "site": "https://importai.substack.com",
+     "description": "Jack Clark's weekly newsletter on AI research and policy.",
+     "origin": "skim"
+    },
+    {
+     "title": "Google AI",
+     "url": "https://blog.google/technology/ai/rss/",
+     "site": "https://blog.google/technology/ai/",
+     "description": "AI news and research from Google.",
+     "origin": "skim"
+    },
+    {
+     "title": "MIT Technology Review: AI",
+     "url": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+     "site": "https://www.technologyreview.com/topic/artificial-intelligence/",
+     "description": "Reporting on artificial intelligence.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Gradient",
+     "url": "https://thegradient.pub/rss/",
+     "site": "https://thegradient.pub",
+     "description": "Essays and perspectives on AI research.",
+     "origin": "skim"
+    },
+    {
+     "title": "Simon Willison",
+     "url": "https://simonwillison.net/atom/everything/",
+     "site": "https://simonwillison.net",
+     "description": "Notes on LLMs, Python, Datasette, and the web.",
+     "origin": "skim"
+    },
+    {
+     "title": "OpenAI News",
+     "url": "https://openai.com/news/rss.xml",
+     "site": "https://openai.com/news/",
+     "description": "Research and product news from OpenAI.",
+     "origin": "skim"
+    },
+    {
+     "title": "Google DeepMind",
+     "url": "https://deepmind.google/blog/rss.xml",
+     "site": "https://deepmind.google/discover/blog/",
+     "description": "Research from Google DeepMind.",
+     "origin": "skim"
+    },
+    {
+     "title": "Ahead of AI",
+     "url": "https://magazine.sebastianraschka.com/feed",
+     "site": "https://magazine.sebastianraschka.com",
+     "description": "Sebastian Raschka on LLM research.",
+     "origin": "skim"
+    },
+    {
+     "title": "Lil'Log",
+     "url": "https://lilianweng.github.io/index.xml",
+     "site": "https://lilianweng.github.io",
+     "description": "Lilian Weng's deep dives on ML.",
+     "origin": "skim"
+    },
+    {
+     "title": "Interconnects",
+     "url": "https://www.interconnects.ai/feed",
+     "site": "https://www.interconnects.ai",
+     "description": "Nathan Lambert on open models and RLHF.",
+     "origin": "skim"
+    },
+    {
+     "title": "Latent Space",
+     "url": "https://www.latent.space/feed",
+     "site": "https://www.latent.space",
+     "description": "The AI engineer newsletter.",
+     "origin": "skim"
+    },
+    {
+     "title": "One Useful Thing",
+     "url": "https://www.oneusefulthing.org/feed",
+     "site": "https://www.oneusefulthing.org",
+     "description": "Ethan Mollick on using AI at work and school.",
+     "origin": "skim"
+    },
+    {
+     "title": "Marcus on AI",
+     "url": "https://garymarcus.substack.com/feed",
+     "site": "https://garymarcus.substack.com",
+     "description": "A skeptic's take on AI hype.",
+     "origin": "skim"
+    },
+    {
+     "title": "Google Research",
+     "url": "https://research.google/blog/rss/",
+     "site": "https://research.google/blog/",
+     "description": "Research across Google.",
+     "origin": "skim"
+    },
+    {
+     "title": "Ars Technica: AI",
+     "url": "https://arstechnica.com/ai/feed/",
+     "site": "https://arstechnica.com/ai/",
+     "description": "AI news and analysis from Ars.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Verge: AI",
+     "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+     "site": "https://www.theverge.com/ai-artificial-intelligence",
+     "description": "AI coverage from The Verge.",
+     "origin": "skim"
+    },
+    {
+     "title": "Microsoft Research",
+     "url": "https://www.microsoft.com/en-us/research/feed/",
+     "site": "https://www.microsoft.com/en-us/research/",
+     "description": "Research from Microsoft.",
+     "origin": "skim"
+    },
+    {
+     "title": "BAIR Blog",
+     "url": "https://bair.berkeley.edu/blog/feed.xml",
+     "site": "https://bair.berkeley.edu/blog/",
+     "description": "Berkeley AI Research.",
+     "origin": "skim"
+    },
+    {
+     "title": "Chip Huyen",
+     "url": "https://huyenchip.com/feed.xml",
+     "site": "https://huyenchip.com",
+     "description": "ML systems in production.",
+     "origin": "skim"
+    },
+    {
+     "title": "Andrej Karpathy",
+     "url": "https://karpathy.bearblog.dev/feed/",
+     "site": "https://karpathy.bearblog.dev",
+     "description": "Andrej Karpathy's blog.",
+     "origin": "skim"
+    },
+    {
+     "title": "arXiv: Artificial Intelligence",
+     "url": "https://rss.arxiv.org/rss/cs.AI",
+     "site": "https://arxiv.org/list/cs.AI/recent",
+     "description": "New AI papers on arXiv, daily.",
+     "origin": "skim"
+    },
+    {
+     "title": "Last Week in AI",
+     "url": "https://lastweekin.ai/feed",
+     "site": "https://lastweekin.ai",
+     "description": "A weekly digest of AI news.",
+     "origin": "skim"
+    }
+   ]
+  },
+  {
+   "id": "security",
+   "name": "Security",
+   "feeds": [
+    {
+     "title": "Krebs on Security",
+     "url": "https://krebsonsecurity.com/feed/",
+     "site": "https://krebsonsecurity.com",
+     "description": "In-depth security news and investigation.",
+     "origin": "skim"
+    },
+    {
+     "title": "Schneier on Security",
+     "url": "https://www.schneier.com/feed/atom/",
+     "site": "https://www.schneier.com",
+     "description": "Bruce Schneier on security and society.",
+     "origin": "skim"
+    },
+    {
+     "title": "BleepingComputer",
+     "url": "https://www.bleepingcomputer.com/feed/",
+     "site": "https://www.bleepingcomputer.com",
+     "description": "Security and malware news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Troy Hunt",
+     "url": "https://www.troyhunt.com/rss/",
+     "site": "https://www.troyhunt.com",
+     "description": "Data breaches and web security.",
+     "origin": "skim"
+    },
+    {
+     "title": "Project Zero",
+     "url": "https://googleprojectzero.blogspot.com/feeds/posts/default",
+     "site": "https://googleprojectzero.blogspot.com",
+     "description": "Vulnerability research from Google.",
+     "origin": "skim"
+    },
+    {
+     "title": "Ars Technica: Security",
+     "url": "https://arstechnica.com/security/feed/",
+     "site": "https://arstechnica.com/security/",
+     "description": "Security coverage from Ars.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Hacker News",
+     "url": "https://feeds.feedburner.com/TheHackersNews",
+     "site": "https://thehackernews.com",
+     "description": "Cybersecurity news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Dark Reading",
+     "url": "https://www.darkreading.com/rss.xml",
+     "site": "https://www.darkreading.com",
+     "description": "Enterprise security news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Blackhat Library: Hacking techniques and research",
+     "url": "https://www.reddit.com/r/blackhat/.rss",
+     "site": "https://www.reddit.com",
+     "description": "Focused on the ongoing discussion and documentation of vulnerabilities and exploitation techniques.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CyberWire Daily",
+     "url": "https://feeds.megaphone.fm/cyberwire-daily-podcast",
+     "site": "https://feeds.megaphone.fm",
+     "description": "The daily cybersecurity news and analysis industry leaders depend on.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Darknet Diaries",
+     "url": "https://feeds.megaphone.fm/darknetdiaries",
+     "site": "https://feeds.megaphone.fm",
+     "description": "Explore true stories of the dark side of the Internet with host Jack Rhysider as he takes you on a journey through…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Darknet",
+     "url": "http://feeds.feedburner.com/darknethackers",
+     "site": "http://feeds.feedburner.com",
+     "description": "Darknet is your best source for the latest hacking tools, hacker news, cyber security best practices, ethical…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Google Online Security Blog",
+     "url": "http://googleonlinesecurity.blogspot.com/atom.xml",
+     "site": "http://googleonlinesecurity.blogspot.com",
+     "description": "The latest news and insights from Google on security and safety on the Internet.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Hacking Humans",
+     "url": "https://feeds.megaphone.fm/hacking-humans",
+     "site": "https://feeds.megaphone.fm",
+     "description": "Deception, influence, and social engineering in the world of cyber crime.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ISF Podcast",
+     "url": "https://audioboom.com/channels/4991893.rss",
+     "site": "https://audioboom.com",
+     "description": "The ISF Podcast brings you cutting-edge conversation, tailored to CISOs, CTOs, CROs, and other global security pros.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ZDNET: Security",
+     "url": "https://www.zdnet.com/topic/security/rss.xml",
+     "site": "https://www.zdnet.com",
+     "description": "Most recent news",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Malicious Life",
+     "url": "https://malicious.life/feed/podcast/",
+     "site": "https://malicious.life",
+     "description": "Malicious Life by Cybereason tells the unknown stories of the history of cybersecurity, with comments and…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Risky Business",
+     "url": "https://risky.biz/feeds/risky-business",
+     "site": "https://risky.biz",
+     "description": "Risky Business is a weekly information security podcast featuring news and in-depth interviews with industry…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Schneier on Security",
+     "url": "http://www.schneier.com/blog/index.rdf",
+     "site": "http://www.schneier.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Security Affairs",
+     "url": "http://securityaffairs.co/wordpress/feed",
+     "site": "http://securityaffairs.co",
+     "description": "Read, think, share … Security is everyone's responsibility",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Smashing Security",
+     "url": "http://www.smashingsecurity.com/rss",
+     "site": "http://www.smashingsecurity.com",
+     "description": "Stories from the world of hacking, cybersecurity, and rogue AI.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Technical Information Security Content & Discussion",
+     "url": "https://www.reddit.com/r/netsec/.rss",
+     "site": "https://www.reddit.com",
+     "description": "/r/netsec is a community-curated aggregator of technical information security content.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Hacker News",
+     "url": "http://thehackernews.com/feeds/posts/default",
+     "site": "http://thehackernews.com",
+     "description": "Most trusted, widely-read independent cybersecurity news source for everyone; supported by hackers and IT…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Privacy, Security, & OSINT Show",
+     "url": "http://feeds.soundcloud.com/users/soundcloud:users:261098918/sounds.rss",
+     "site": "http://feeds.soundcloud.com",
+     "description": "Show status update: https://inteltechniques.com/blog/2023/11/20/my-irish-exit/",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Threatpost",
+     "url": "http://threatpost.com/feed",
+     "site": "http://threatpost.com",
+     "description": "The First Stop For Security News",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "cybersecurity",
+     "url": "https://www.reddit.com/r/cybersecurity/.rss",
+     "site": "https://www.reddit.com",
+     "description": "This subreddit is for discussing cybersecurity topics, research, and emergent threats/findings.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "TechCrunch: Cybersecurity",
+     "url": "https://techcrunch.com/tag/cybersecurity/feed/",
+     "site": "https://techcrunch.com",
+     "description": "Startup and Technology News",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Register: Security",
+     "url": "http://www.theregister.co.uk/security/headlines.atom",
+     "site": "http://www.theregister.co.uk",
+     "description": "Articles from www.theregister.com",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "apple",
+   "name": "Apple",
+   "feeds": [
+    {
+     "title": "Daring Fireball",
+     "url": "https://daringfireball.net/feeds/main",
+     "site": "https://daringfireball.net",
+     "description": "John Gruber on Apple, technology, and design.",
+     "origin": "skim"
+    },
+    {
+     "title": "MacRumors",
+     "url": "https://feeds.macrumors.com/MacRumors-All",
+     "site": "https://www.macrumors.com",
+     "description": "Apple news and rumors.",
+     "origin": "skim"
+    },
+    {
+     "title": "9to5Mac",
+     "url": "https://9to5mac.com/feed/",
+     "site": "https://9to5mac.com",
+     "description": "Apple news, reviews, and how-tos.",
+     "origin": "skim"
+    },
+    {
+     "title": "Six Colors",
+     "url": "https://sixcolors.com/feed/",
+     "site": "https://sixcolors.com",
+     "description": "Jason Snell and Dan Moren on Apple and technology.",
+     "origin": "skim"
+    },
+    {
+     "title": "Apple Newsroom",
+     "url": "https://www.apple.com/newsroom/rss-feed.rss",
+     "site": "https://www.apple.com/newsroom/",
+     "description": "Official news from Apple.",
+     "origin": "skim"
+    },
+    {
+     "title": "Michael Tsai",
+     "url": "https://mjtsai.com/blog/feed/",
+     "site": "https://mjtsai.com/blog/",
+     "description": "Mac and iOS development news, linked and quoted.",
+     "origin": "skim"
+    },
+    {
+     "title": "MacStories",
+     "url": "https://www.macstories.net/feed/",
+     "site": "https://www.macstories.net",
+     "description": "Apple apps, automation, and reviews.",
+     "origin": "skim"
+    },
+    {
+     "title": "AppleInsider",
+     "url": "https://appleinsider.com/rss/news/",
+     "site": "https://appleinsider.com",
+     "description": "Apple news and rumors.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Eclectic Light Company",
+     "url": "https://eclecticlight.co/feed/",
+     "site": "https://eclecticlight.co",
+     "description": "How macOS really works.",
+     "origin": "skim"
+    },
+    {
+     "title": "Swift by Sundell",
+     "url": "https://www.swiftbysundell.com/rss",
+     "site": "https://www.swiftbysundell.com",
+     "description": "Swift tips and articles.",
+     "origin": "skim"
+    },
+    {
+     "title": "Hacking with Swift",
+     "url": "https://www.hackingwithswift.com/articles/rss",
+     "site": "https://www.hackingwithswift.com",
+     "description": "Swift and SwiftUI tutorials.",
+     "origin": "skim"
+    },
+    {
+     "title": "Swift.org",
+     "url": "https://www.swift.org/atom.xml",
+     "site": "https://www.swift.org/blog/",
+     "description": "News from the Swift project.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Loop",
+     "url": "https://www.loopinsight.com/feed/",
+     "site": "https://www.loopinsight.com",
+     "description": "Apple news with opinion.",
+     "origin": "skim"
+    },
+    {
+     "title": "Apple",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=Apple",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Cult of Mac",
+     "url": "https://www.cultofmac.com/feed",
+     "site": "https://www.cultofmac.com",
+     "description": "Your source for the latest Apple news, rumors, analysis, reviews, how-tos and deals.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "MacRumors",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=macrumors",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "MacRumors: Mac News and Rumors - Mac Blog",
+     "url": "http://feeds.macrumors.com/MacRumors-Mac",
+     "site": "http://feeds.macrumors.com",
+     "description": "Apple, iPhone, iPad, Mac News and Rumors",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Macworld",
+     "url": "https://www.macworld.com/index.rss",
+     "site": "https://www.macworld.com",
+     "description": "Macworld is your best source for all things Apple.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Marco.org",
+     "url": "https://marco.org/rss",
+     "site": "https://marco.org",
+     "description": "I’m Marco Arment, creator of Overcast, technology podcaster and writer, and coffee enthusiast.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "OS X Daily",
+     "url": "http://feeds.feedburner.com/osxdaily",
+     "site": "http://feeds.feedburner.com",
+     "description": "News, tips, software, reviews, and more for Mac OS X, iPhone, iPad",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "iMore - The #1 iPhone, iPad, and iPod touch blog",
+     "url": "http://feeds.feedburner.com/TheiPhoneBlog",
+     "site": "http://feeds.feedburner.com",
+     "description": "More news and rumors, more help and how-tos, more app and accessory reviews, more iPhone and iPad and iPod touch.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "r/Apple: Unofficial Apple Community",
+     "url": "https://www.reddit.com/r/apple/.rss",
+     "site": "https://www.reddit.com",
+     "description": "An unofficial community about Apple and all of its devices and software.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "r/iPhone",
+     "url": "https://www.reddit.com/r/iphone/.rss",
+     "site": "https://www.reddit.com",
+     "description": "Reddit’s little corner for iPhone lovers (and some people who just mildly enjoy it…)",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Alberto De Bortoli",
+     "url": "https://albertodebortoli.com/rss/",
+     "site": "https://albertodebortoli.com",
+     "description": "Principal Software Engineer @ Just Eat Takeaway, London.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Augmented Code",
+     "url": "https://augmentedcode.io/feed/",
+     "site": "https://augmentedcode.io",
+     "description": "Performant, sleek and elegant.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Benoit Pasquier",
+     "url": "https://benoitpasquier.com/index.xml",
+     "site": "https://benoitpasquier.com",
+     "description": "Recent content on Benoit Pasquier",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Bruno Rocha",
+     "url": "https://swiftrocks.com/rss.xml",
+     "site": "https://swiftrocks.com",
+     "description": "SwiftRocks is Bruno Rocha's blog about Swift / iOS and the software engineering industry.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Apple Developer News",
+     "url": "https://developer.apple.com/news/rss/news.rss",
+     "site": "https://developer.apple.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Mobile A11y",
+     "url": "https://mobilea11y.com/index.xml",
+     "site": "https://mobilea11y.com",
+     "description": "Recent content on Mobile A11y",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Ole Begemann",
+     "url": "https://oleb.net/blog/atom.xml",
+     "site": "https://oleb.net",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Swift by Sundell",
+     "url": "https://www.swiftbysundell.com/feed.rss",
+     "site": "https://www.swiftbysundell.com",
+     "description": "Weekly Swift articles, podcasts and tips by John Sundell",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Swift by Sundell",
+     "url": "https://swiftbysundell.com/feed.rss",
+     "site": "https://swiftbysundell.com",
+     "description": "Weekly Swift articles, podcasts and tips by John Sundell",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Atomic Birdhouse",
+     "url": "https://atomicbird.com/index.xml",
+     "site": "https://atomicbird.com",
+     "description": "Recent content on The Atomic Birdhouse",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Joe Fabisevich",
+     "url": "https://www.fabisevi.ch/feed.xml",
+     "site": "https://www.fabisevi.ch",
+     "description": "The personal website of the one and only Joe Fabisevich, and indie developer building Red Panda Club Inc.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Under the Radar",
+     "url": "https://www.relay.fm/radar/feed",
+     "site": "https://www.relay.fm",
+     "description": "From development and design to marketing and support, Under the Radar was all about independent app development.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Use Your Loaf - iOS Development News & Tips",
+     "url": "https://useyourloaf.com/blog/rss.xml",
+     "site": "https://useyourloaf.com",
+     "description": "Recent content on Use Your Loaf - iOS Development News & Tips",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "inessential.com",
+     "url": "https://inessential.com/xml/rss.xml",
+     "site": "https://inessential.com",
+     "description": "Brent Simmons's weblog.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "tyler.io",
+     "url": "https://tyler.io/feed/",
+     "site": "https://tyler.io",
+     "description": "mostly nonsense",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "android",
+   "name": "Android",
+   "feeds": [
+    {
+     "title": "Android Police",
+     "url": "https://www.androidpolice.com/feed/",
+     "site": "https://www.androidpolice.com",
+     "description": "Android news and reviews.",
+     "origin": "skim"
+    },
+    {
+     "title": "9to5Google",
+     "url": "https://9to5google.com/feed/",
+     "site": "https://9to5google.com",
+     "description": "Google and Android news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Android Authority",
+     "url": "https://www.androidauthority.com/feed/",
+     "site": "https://www.androidauthority.com",
+     "description": "Android news and reviews.",
+     "origin": "skim"
+    },
+    {
+     "title": "Android Developers Blog",
+     "url": "https://android-developers.googleblog.com/feeds/posts/default",
+     "site": "https://android-developers.googleblog.com",
+     "description": "News from the Android team.",
+     "origin": "skim"
+    },
+    {
+     "title": "",
+     "url": "https://www.cyanogenmods.org/feed",
+     "site": "https://www.cyanogenmods.org",
+     "description": "GCam APK | LineageOS | AI Mods",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "All About Android (Audio)",
+     "url": "https://feeds.twit.tv/aaa.xml",
+     "site": "https://feeds.twit.tv",
+     "description": "All About Android delivers everything you want to know about Android each week--the biggest news, freshest hardware,…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Google: Android",
+     "url": "https://blog.google/products/android/rss",
+     "site": "https://blog.google",
+     "description": "Android",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android",
+     "url": "https://www.reddit.com/r/android/.rss",
+     "site": "https://www.reddit.com",
+     "description": "Android news, reviews, tips, and discussions about rooting, tutorials, and apps.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android Authority",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=AndroidAuthority",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android Authority Podcast",
+     "url": "https://androidauthority.libsyn.com/rss",
+     "site": "https://androidauthority.libsyn.com",
+     "description": "The Android Authority Podcast – discussing topics in Android every week.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android Central Podcast",
+     "url": "http://feeds.feedburner.com/AndroidCentralPodcast",
+     "site": "http://feeds.feedburner.com",
+     "description": "The Android and Google Podcast for Everyone. Hosted by Daniel Bader.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android Community",
+     "url": "https://androidcommunity.com/feed/",
+     "site": "https://androidcommunity.com",
+     "description": "Android News, Reviews, and Apps",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android Police",
+     "url": "http://feeds.feedburner.com/AndroidPolice",
+     "site": "http://feeds.feedburner.com",
+     "description": "All the latest mobile tech news, deals, reviews, guides, editorials, and more. Embracing the green bubble since 2009.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Blind Android Users Podcast",
+     "url": "https://anchor.fm/s/4495abac/podcast/rss",
+     "site": "https://anchor.fm",
+     "description": "At Blind Android Users, we strive to make using Android as easy as possible for every blind person who's starting…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Cult of Android",
+     "url": "https://www.cultofandroid.com/feed",
+     "site": "https://www.cultofandroid.com",
+     "description": "Breaking news for Android fans",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Droid Life",
+     "url": "https://www.droid-life.com/feed",
+     "site": "https://www.droid-life.com",
+     "description": "Opinionated Android news.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "GSMArena.com - Latest articles",
+     "url": "https://www.gsmarena.com/rss-news-reviews.php3",
+     "site": "https://www.gsmarena.com",
+     "description": "GSMArena.com is the ultimate resource for GSM handset information.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android Central",
+     "url": "http://feeds.androidcentral.com/androidcentral",
+     "site": "http://feeds.androidcentral.com",
+     "description": "All the latest content from the Android Central team",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Phandroid",
+     "url": "http://feeds2.feedburner.com/AndroidPhoneFans",
+     "site": "http://feeds2.feedburner.com",
+     "description": "Android Phone News, Rumors, Reviews, Apps, Forums & More!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "TalkAndroid",
+     "url": "http://feeds.feedburner.com/AndroidNewsGoogleAndroidForums",
+     "site": "http://feeds.feedburner.com",
+     "description": "The latest in android news, rumours, and updates, including device news and apps!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android Developers",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=androiddevelopers",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android Developers",
+     "url": "https://medium.com/feed/androiddevelopers",
+     "site": "https://medium.com",
+     "description": "Articles on modern tools and resources to help you build experiences that people love, faster and easier, across…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android Developers Backstage",
+     "url": "http://feeds.feedburner.com/blogspot/androiddevelopersbackstage",
+     "site": "http://feeds.feedburner.com",
+     "description": "Android Backstage, a podcast by and for Android developers.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android Developers Blog",
+     "url": "http://feeds.feedburner.com/blogspot/hsDu",
+     "site": "http://feeds.feedburner.com",
+     "description": "An Open Handset Alliance Project.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android in MindOrks on Medium",
+     "url": "https://medium.com/feed/mindorks/tagged/android",
+     "site": "https://medium.com",
+     "description": "Latest stories tagged with Android in MindOrks on Medium",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Android in The Airbnb Tech Blog on Medium",
+     "url": "https://medium.com/feed/airbnb-engineering/tagged/android",
+     "site": "https://medium.com",
+     "description": "Latest stories tagged with Android in The Airbnb Tech Blog on Medium",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Chris Keenan Codes",
+     "url": "https://chrynan.codes/rss/",
+     "site": "https://chrynan.codes",
+     "description": "Software Development Blog",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Dan Lew Codes",
+     "url": "https://blog.danlew.net/rss/",
+     "site": "https://blog.danlew.net",
+     "description": "Thoughts on life, the universe and the mystery of it all; but actually mostly just code.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Developing Android Apps",
+     "url": "https://reddit.com/r/androiddev.rss",
+     "site": "https://reddit.com",
+     "description": "News for Android developers with the who, what, where, when and how of the Android community.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Fragmented - AI Developer Podcast",
+     "url": "https://feeds.simplecast.com/LpAGSLnY",
+     "site": "https://feeds.simplecast.com",
+     "description": "Fragmented is an AI developer podcast for engineers who want to go beyond vibe coding and ship real software.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Handstand Sam",
+     "url": "https://handstandsam.com/feed/",
+     "site": "https://handstandsam.com",
+     "description": "Sam Edwards - Handstands, Travel, Android & Web",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Jake Wharton",
+     "url": "https://jakewharton.com/atom.xml",
+     "site": "https://jakewharton.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Kotlin",
+     "url": "https://www.youtube.com/feeds/videos.xml?playlist_id=PLQ176FUIyIUa6SChjajjVc-LMzxWiz6dy",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "OkKotlin",
+     "url": "https://okkotlin.com/rss.xml",
+     "site": "https://okkotlin.com",
+     "description": "A premier blog on Kotlin.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ProAndroidDev",
+     "url": "https://proandroiddev.com/feed",
+     "site": "https://proandroiddev.com",
+     "description": "The latest posts from Android Professionals and Google Developer Experts. - Medium",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Public Object",
+     "url": "https://publicobject.com/rss/",
+     "site": "https://publicobject.com",
+     "description": "Jesse Wilson on programming.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Saket Narayan",
+     "url": "https://saket.me/feed/",
+     "site": "https://saket.me",
+     "description": "A wild developer appears. He works at Square . Find him on Twitter and Bluesky .",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Android Arsenal",
+     "url": "https://feeds.feedburner.com/Android_Arsenal",
+     "site": "https://feeds.feedburner.com",
+     "description": "A categorized directory of libraries and tools for Android",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Zac Sweers",
+     "url": "https://www.zacsweers.dev/rss/",
+     "site": "https://www.zacsweers.dev",
+     "description": "Musings on Kotlin, mobile, open source, and building good things.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Zarah Dominguez",
+     "url": "https://zarah.dev/feed.xml",
+     "site": "https://zarah.dev",
+     "description": "An Android Love Affair",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "droidcon SF",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCKubKoe1CBw_-n_GXetEQbg",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "zsmb.co",
+     "url": "https://zsmb.co/index.xml",
+     "site": "https://zsmb.co",
+     "description": "Recent content on zsmb.co",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "science",
+   "name": "Science",
+   "feeds": [
+    {
+     "title": "Quanta Magazine",
+     "url": "https://www.quantamagazine.org/feed/",
+     "site": "https://www.quantamagazine.org",
+     "description": "Mathematics, physics, biology, and computer science.",
+     "origin": "skim"
+    },
+    {
+     "title": "Nature",
+     "url": "https://www.nature.com/nature.rss",
+     "site": "https://www.nature.com",
+     "description": "The international journal of science.",
+     "origin": "skim"
+    },
+    {
+     "title": "ScienceDaily",
+     "url": "https://www.sciencedaily.com/rss/all.xml",
+     "site": "https://www.sciencedaily.com",
+     "description": "Breaking science news from research institutions.",
+     "origin": "skim"
+    },
+    {
+     "title": "New Scientist",
+     "url": "https://www.newscientist.com/feed/home/",
+     "site": "https://www.newscientist.com",
+     "description": "Science and technology news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Scientific American",
+     "url": "http://rss.sciam.com/ScientificAmerican-Global",
+     "site": "https://www.scientificamerican.com",
+     "description": "Science news and ideas.",
+     "origin": "skim"
+    },
+    {
+     "title": "Phys.org",
+     "url": "https://phys.org/rss-feed/",
+     "site": "https://phys.org",
+     "description": "Daily physics and science news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Ars Technica: Science",
+     "url": "https://arstechnica.com/science/feed/",
+     "site": "https://arstechnica.com/science/",
+     "description": "Science coverage from Ars.",
+     "origin": "skim"
+    },
+    {
+     "title": "Knowable Magazine",
+     "url": "https://knowablemagazine.org/rss",
+     "site": "https://knowablemagazine.org",
+     "description": "Science explained by experts.",
+     "origin": "skim"
+    },
+    {
+     "title": "Aeon",
+     "url": "https://aeon.co/feed.rss",
+     "site": "https://aeon.co",
+     "description": "Essays on science, philosophy and culture.",
+     "origin": "skim"
+    },
+    {
+     "title": "Nautilus",
+     "url": "https://nautil.us/feed/",
+     "site": "https://nautil.us",
+     "description": "Science connected to culture.",
+     "origin": "skim"
+    },
+    {
+     "title": "60-Second Science",
+     "url": "http://rss.sciam.com/sciam/60secsciencepodcast",
+     "site": "http://rss.sciam.com",
+     "description": "Tune in every weekday for quick reports and commentaries on the world of science—it'll just take a minute",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "BBC News: Science",
+     "url": "http://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+     "site": "http://feeds.bbci.co.uk",
+     "description": "BBC News - Science & Environment",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Discovery",
+     "url": "https://podcasts.files.bbci.co.uk/p002w557.rss",
+     "site": "https://podcasts.files.bbci.co.uk",
+     "description": "Explorations in the world of science.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "FlowingData",
+     "url": "https://flowingdata.com/feed",
+     "site": "https://flowingdata.com",
+     "description": "Strength in Numbers",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Gastropod",
+     "url": "https://www.omnycontent.com/d/playlist/aaea4e69-af51-495e-afc9-a9760146922b/2a195077-f014-41d2-8313-ab190186b4c2/277bcd5c-0a05-4c14-8ba6-ab190186b4d5/podcast.rss",
+     "site": "https://www.omnycontent.com",
+     "description": "Food with a side of science and history.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Hidden Brain",
+     "url": "https://feeds.npr.org/510308/podcast.xml",
+     "site": "https://feeds.npr.org",
+     "description": "Why do I feel stuck? How can I become more creative?",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Invisibilia",
+     "url": "https://feeds.npr.org/510307/podcast.xml",
+     "site": "https://feeds.npr.org",
+     "description": "Unseeable forces control human behavior and shape our ideas, beliefs, and assumptions.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NYT: Science",
+     "url": "https://rss.nytimes.com/services/xml/rss/nyt/Science.xml",
+     "site": "https://rss.nytimes.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Popular Science",
+     "url": "https://www.popsci.com/arcio/rss/",
+     "site": "https://www.popsci.com",
+     "description": "Awe-inspiring science reporting, technology news, and DIY projects.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Probably Science",
+     "url": "https://probablyscience.libsyn.com/rss",
+     "site": "https://probablyscience.libsyn.com",
+     "description": "Professional comedians with so-so STEM pedigrees take you through this week in science.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Radiolab",
+     "url": "http://feeds.wnyc.org/radiolab",
+     "site": "http://feeds.wnyc.org",
+     "description": "Radiolab is on a curiosity bender.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Reddit Science",
+     "url": "https://reddit.com/r/science/.rss",
+     "site": "https://reddit.com",
+     "description": "This community is a place to share and discuss new scientific research.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Sawbones: A Marital Tour of Misguided Medicine",
+     "url": "https://feeds.simplecast.com/y1LF_sn2",
+     "site": "https://feeds.simplecast.com",
+     "description": "Join Dr. Sydnee McElroy and her husband Justin McElroy for a tour of all the dumb, bad, gross, weird and wrong ways…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Gizmodo: Science",
+     "url": "https://gizmodo.com/tag/science/rss",
+     "site": "https://gizmodo.com",
+     "description": "The Future Is Here",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Wired: Science",
+     "url": "https://www.wired.com/feed/category/science/latest/rss",
+     "site": "https://www.wired.com",
+     "description": "Channel Description",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Shirtloads of Science",
+     "url": "https://shirtloadsofscience.libsyn.com/rss",
+     "site": "https://shirtloadsofscience.libsyn.com",
+     "description": "Dr Karl's a curious optimist – a great combination for a science lover.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "TED Talks Daily",
+     "url": "https://pa.tedcdn.com/feeds/talks.rss",
+     "site": "https://pa.tedcdn.com",
+     "description": "Want TED Talks on the go?",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Infinite Monkey Cage",
+     "url": "https://podcasts.files.bbci.co.uk/b00snr0w.rss",
+     "site": "https://podcasts.files.bbci.co.uk",
+     "description": "Professor Brian Cox and Robin Ince host a witty, irreverent look at the world through scientists’ eyes.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "This Week in Science – The Kickass Science Podcast",
+     "url": "http://www.twis.org/feed/",
+     "site": "http://www.twis.org",
+     "description": "The kickass science and technology radio show that delivers an irreverent look at the week in science and technology.",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "space",
+   "name": "Space",
+   "feeds": [
+    {
+     "title": "NASA",
+     "url": "https://www.nasa.gov/feed/",
+     "site": "https://www.nasa.gov",
+     "description": "News and features from NASA.",
+     "origin": "skim"
+    },
+    {
+     "title": "Space.com",
+     "url": "https://www.space.com/feeds/all",
+     "site": "https://www.space.com",
+     "description": "Space exploration, astronomy, and skywatching.",
+     "origin": "skim"
+    },
+    {
+     "title": "SpaceNews",
+     "url": "https://spacenews.com/feed/",
+     "site": "https://spacenews.com",
+     "description": "The space industry and space policy.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Planetary Society",
+     "url": "https://www.planetary.org/rss/articles",
+     "site": "https://www.planetary.org",
+     "description": "Planetary science and space advocacy.",
+     "origin": "skim"
+    },
+    {
+     "title": "ESA",
+     "url": "https://www.esa.int/rssfeed/Our_Activities/Space_News",
+     "site": "https://www.esa.int",
+     "description": "News from the European Space Agency.",
+     "origin": "skim"
+    },
+    {
+     "title": "NASASpaceflight",
+     "url": "https://www.nasaspaceflight.com/feed/",
+     "site": "https://www.nasaspaceflight.com",
+     "description": "Launch and spaceflight news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Universe Today",
+     "url": "https://www.universetoday.com/feed/",
+     "site": "https://www.universetoday.com",
+     "description": "Space and astronomy news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Centauri Dreams",
+     "url": "https://www.centauri-dreams.org/feed/",
+     "site": "https://www.centauri-dreams.org",
+     "description": "Deep-space exploration research.",
+     "origin": "skim"
+    },
+    {
+     "title": "Payload",
+     "url": "https://payloadspace.com/feed/",
+     "site": "https://payloadspace.com",
+     "description": "The business of space.",
+     "origin": "skim"
+    },
+    {
+     "title": "Ars Technica: Space",
+     "url": "https://arstechnica.com/space/feed/",
+     "site": "https://arstechnica.com/space/",
+     "description": "Space coverage from Ars.",
+     "origin": "skim"
+    },
+    {
+     "title": "/r/space: news, articles and discussion",
+     "url": "https://www.reddit.com/r/space/.rss?format=xml",
+     "site": "https://www.reddit.com",
+     "description": "Share & discuss informative content on: * Astrophysics * Cosmology * Space Exploration * Planetary Science *…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NASA",
+     "url": "https://www.nasa.gov/rss/dyn/breaking_news.rss",
+     "site": "https://www.nasa.gov",
+     "description": "Official National Aeronautics and Space Administration Website",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "New Scientist - Space",
+     "url": "https://www.newscientist.com/subject/space/feed/",
+     "site": "https://www.newscientist.com",
+     "description": "New Scientist - Space",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Guardian: Space",
+     "url": "https://www.theguardian.com/science/space/rss",
+     "site": "https://www.theguardian.com",
+     "description": "Latest news and features from theguardian.com, the world's leading liberal voice",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "SpaceX",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=spacexchannel",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "climate",
+   "name": "Climate & nature",
+   "feeds": [
+    {
+     "title": "Inside Climate News",
+     "url": "https://insideclimatenews.org/feed/",
+     "site": "https://insideclimatenews.org",
+     "description": "Pulitzer-winning climate journalism.",
+     "origin": "skim"
+    },
+    {
+     "title": "Carbon Brief",
+     "url": "https://www.carbonbrief.org/feed/",
+     "site": "https://www.carbonbrief.org",
+     "description": "Climate science and policy, clearly explained.",
+     "origin": "skim"
+    },
+    {
+     "title": "Grist",
+     "url": "https://grist.org/feed/",
+     "site": "https://grist.org",
+     "description": "Climate, justice, and solutions.",
+     "origin": "skim"
+    },
+    {
+     "title": "Canary Media",
+     "url": "https://www.canarymedia.com/rss.rss",
+     "site": "https://www.canarymedia.com",
+     "description": "The clean energy transition.",
+     "origin": "skim"
+    },
+    {
+     "title": "\"Human Nature\" Blog Feed",
+     "url": "http://feeds.feedburner.com/ConservationInternationalBlog",
+     "site": "http://feeds.feedburner.com",
+     "description": "RSS feed for news, views and features from the front lines of conservation",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Bionic Planet: Reversing Climate Change by Restoring Nature",
+     "url": "https://bionicplanet.libsyn.com/rss",
+     "site": "https://bionicplanet.libsyn.com",
+     "description": "We've entered a new epoch: the Anthropocene, and nothing is as it was.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Conservation International",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCam5sCp6mzGBcn8ZBB2RBJg",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Environment",
+     "url": "https://www.reddit.com/r/environment/.rss",
+     "site": "https://www.reddit.com",
+     "description": "Current news, information and issues related to the environment.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Conversation: Environment",
+     "url": "https://theconversation.com/au/environment/articles.atom",
+     "site": "https://theconversation.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Times of India: Environment",
+     "url": "https://timesofindia.indiatimes.com/rssfeeds/2647163.cms",
+     "site": "https://timesofindia.indiatimes.com",
+     "description": "World news on global warming, climate change, wildlife, pollution, carbon business and climate politics.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Guardian: Environment",
+     "url": "https://www.theguardian.com/us/environment/rss",
+     "site": "https://www.theguardian.com",
+     "description": "Latest environmental news, opinion and analysis from the Guardian.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Good Good Good",
+     "url": "https://www.goodgoodgood.co/articles/rss.xml",
+     "site": "https://www.goodgoodgood.co",
+     "description": "At Good Good Good we help you feel more hopeful and do more good.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NPR Topics: Environment",
+     "url": "https://feeds.npr.org/1025/rss.xml",
+     "site": "https://feeds.npr.org",
+     "description": "Breaking news on the environment, climate change, pollution, and endangered species.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NYT: Climate and Environment",
+     "url": "https://rss.nytimes.com/services/xml/rss/nyt/Climate.xml",
+     "site": "https://rss.nytimes.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Prakati India",
+     "url": "https://www.prakati.in/feed/",
+     "site": "https://www.prakati.in",
+     "description": "Eco Friendly Natural Organic Sustainable Living",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Vox",
+     "url": "https://www.vox.com/rss/energy-and-environment/index.xml",
+     "site": "https://www.vox.com",
+     "description": "Our world has too much noise and too little context. Vox helps you understand what matters.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "BBC Earth",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCwmZiChSryoWQCZMIQezgTg",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "BBC Earth Podcast",
+     "url": "https://rss.acast.com/bbcearthpodcast",
+     "site": "https://rss.acast.com",
+     "description": "Each week the BBC Earth podcast brings you entertainment, humour, an abundance of amazing animal stories and…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Mark Avery",
+     "url": "https://markavery.info/blog/feed/",
+     "site": "https://markavery.info",
+     "description": "Standing up for Nature",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "PBS Nature: Blog",
+     "url": "https://www.pbs.org/wnet/nature/blog/feed/",
+     "site": "https://www.pbs.org",
+     "description": "The premiere natural history program on television.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "EarthPorn: Amazing images of light and landscape",
+     "url": "https://www.reddit.com/r/EarthPorn/.rss",
+     "site": "https://www.reddit.com",
+     "description": "The internet's largest community of landscape photographers and Earth lovers.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Explore Oceans",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCSyg9cb3Iq-NtlbxqNB9wGw",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "National Geographic",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCpVm7bg6pXKo1Pr6k5kxG9A",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Nature",
+     "url": "http://feeds.nature.com/nature/rss/current?x=1",
+     "site": "http://feeds.nature.com",
+     "description": "Nature is the foremost international weekly scientific journal in the world and is the flagship journal for Nature…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Nature",
+     "url": "https://www.reddit.com/r/nature/.rss",
+     "site": "https://www.reddit.com",
+     "description": "* Share your fascinating links about nature * Discuss endangered parts of nature * Contribute news about the wonders…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Nature Gifs",
+     "url": "https://www.reddit.com/r/NatureGifs/.rss",
+     "site": "https://www.reddit.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Nature on PBS",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCcBp_9YPyma4c3HTadmRJ3Q",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Reflections of the Natural World",
+     "url": "https://reflectionsofthenaturalworld.com/feed/",
+     "site": "https://reflectionsofthenaturalworld.com",
+     "description": "Travel with me as I explore the wild things and wild places of our planet. - Jim Gain",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Nature Canada",
+     "url": "https://naturecanada.ca/category/news/blog/feed/",
+     "site": "https://naturecanada.ca",
+     "description": "Your voice for nature!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "nature video",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC7c8mE90qCtu11z47U0KErg",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Active Wild",
+     "url": "https://www.activewild.com/feed/",
+     "site": "https://www.activewild.com",
+     "description": "Animals, Science & Nature – Facts, News, Information & Pictures",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Focusing on Wildlife",
+     "url": "https://focusingonwildlife.com/news/feed/",
+     "site": "https://focusingonwildlife.com",
+     "description": "Celebrating the biodiversity of Planet Earth",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Love Nature",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCRZPkuHwaoKwTP3CYPdVldg",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Real Wild",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCbq-4OJxnziD3awH-aTezeA",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Wildlife India",
+     "url": "https://www.thewildlifeindia.com/feeds/posts/default",
+     "site": "https://www.thewildlifeindia.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Wildlife Photography: Gear, Photos & Discussion",
+     "url": "https://www.reddit.com/r/wildlifephotography/.rss",
+     "site": "https://www.reddit.com",
+     "description": "A subreddit for those interested in shooting wildlife...with a camera.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Guardian: Wildlife",
+     "url": "https://www.theguardian.com/environment/wildlife/rss",
+     "site": "https://www.theguardian.com",
+     "description": "Latest news and features from theguardian.com, the world's leading liberal voice",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "🔥 Nature Is Fucking Lit",
+     "url": "https://www.reddit.com/r/NatureIsFuckingLit/.rss",
+     "site": "https://www.reddit.com",
+     "description": "We are here to appreciate the awesome majesty and incredibly cool aspects of nature. 🔥 Banner done by u/esoterix_luke",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "news",
+   "name": "World news",
+   "feeds": [
+    {
+     "title": "BBC News: World",
+     "url": "https://feeds.bbci.co.uk/news/world/rss.xml",
+     "site": "https://www.bbc.com/news/world",
+     "description": "International news from the BBC.",
+     "origin": "skim"
+    },
+    {
+     "title": "NPR News",
+     "url": "https://feeds.npr.org/1001/rss.xml",
+     "site": "https://www.npr.org",
+     "description": "Top stories from NPR.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Guardian: World",
+     "url": "https://www.theguardian.com/world/rss",
+     "site": "https://www.theguardian.com/world",
+     "description": "World news from The Guardian.",
+     "origin": "skim"
+    },
+    {
+     "title": "Al Jazeera",
+     "url": "https://www.aljazeera.com/xml/rss/all.xml",
+     "site": "https://www.aljazeera.com",
+     "description": "News from around the world.",
+     "origin": "skim"
+    },
+    {
+     "title": "The New York Times",
+     "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
+     "site": "https://www.nytimes.com",
+     "description": "Top stories from the Times home page.",
+     "origin": "skim"
+    },
+    {
+     "title": "Deutsche Welle",
+     "url": "https://rss.dw.com/rdf/rss-en-all",
+     "site": "https://www.dw.com/en/",
+     "description": "German international news, in English.",
+     "origin": "skim"
+    },
+    {
+     "title": "France 24",
+     "url": "https://www.france24.com/en/rss",
+     "site": "https://www.france24.com/en/",
+     "description": "International news from France.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Atlantic",
+     "url": "https://www.theatlantic.com/feed/all/",
+     "site": "https://www.theatlantic.com",
+     "description": "Ideas, politics, and culture.",
+     "origin": "skim"
+    },
+    {
+     "title": "ProPublica",
+     "url": "https://feeds.propublica.org/propublica/main",
+     "site": "https://www.propublica.org",
+     "description": "Investigative journalism in the public interest.",
+     "origin": "skim"
+    },
+    {
+     "title": "CNN.com - RSS Channel - World",
+     "url": "http://rss.cnn.com/rss/edition_world.rss",
+     "site": "http://rss.cnn.com",
+     "description": "CNN.com delivers up-to-the-minute news and information on the latest top stories, weather, entertainment, politics…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CNBC: International",
+     "url": "https://www.cnbc.com/id/100727362/device/rss/rss.html",
+     "site": "https://www.cnbc.com",
+     "description": "CNBC International is the world leader for news on business, technology, China, trade, oil prices, the Middle East…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NDTV: World",
+     "url": "http://feeds.feedburner.com/ndtvnews-world-news",
+     "site": "http://feeds.feedburner.com",
+     "description": "NDTV.com provides the latest information from and in-depth coverage of India and the world.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NYT: World News",
+     "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+     "site": "https://rss.nytimes.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Google News: Top Stories",
+     "url": "https://news.google.com/rss",
+     "site": "https://news.google.com",
+     "description": "Google News",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "World",
+     "url": "http://feeds.washingtonpost.com/rss/world",
+     "site": "http://feeds.washingtonpost.com",
+     "description": "The Washington Post World section provides information and analysis of breaking world news stories.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "World News",
+     "url": "https://www.reddit.com/r/worldnews/.rss",
+     "site": "https://www.reddit.com",
+     "description": "A place for major news from around the world, excluding US-internal news.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Times of India: World",
+     "url": "https://timesofindia.indiatimes.com/rssfeeds/296589292.cms",
+     "site": "https://timesofindia.indiatimes.com",
+     "description": "World News Today: Read the latest world news headlines, Current International breaking news world wide.",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "business",
+   "name": "Business",
+   "feeds": [
+    {
+     "title": "Stratechery",
+     "url": "https://stratechery.com/feed/",
+     "site": "https://stratechery.com",
+     "description": "Ben Thompson on the strategy and business of technology.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Economist: Latest",
+     "url": "https://www.economist.com/latest/rss.xml",
+     "site": "https://www.economist.com",
+     "description": "The latest from The Economist.",
+     "origin": "skim"
+    },
+    {
+     "title": "Harvard Business Review",
+     "url": "https://feeds.hbr.org/harvardbusiness",
+     "site": "https://hbr.org",
+     "description": "Management ideas and research.",
+     "origin": "skim"
+    },
+    {
+     "title": "Marginal Revolution",
+     "url": "https://marginalrevolution.com/feed",
+     "site": "https://marginalrevolution.com",
+     "description": "Economics blog by Tyler Cowen and Alex Tabarrok.",
+     "origin": "skim"
+    },
+    {
+     "title": "Calculated Risk",
+     "url": "https://www.calculatedriskblog.com/feeds/posts/default",
+     "site": "https://www.calculatedriskblog.com",
+     "description": "Housing and economic data.",
+     "origin": "skim"
+    },
+    {
+     "title": "Noahpinion",
+     "url": "https://www.noahpinion.blog/feed",
+     "site": "https://www.noahpinion.blog",
+     "description": "Noah Smith on economics.",
+     "origin": "skim"
+    },
+    {
+     "title": "Apricitas Economics",
+     "url": "https://www.apricitas.io/feed",
+     "site": "https://www.apricitas.io",
+     "description": "Economics in charts.",
+     "origin": "skim"
+    },
+    {
+     "title": "Net Interest",
+     "url": "https://www.netinterest.co/feed",
+     "site": "https://www.netinterest.co",
+     "description": "Banks, markets and financial history.",
+     "origin": "skim"
+    },
+    {
+     "title": "CNBC: Top News",
+     "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+     "site": "https://www.cnbc.com",
+     "description": "Business and markets news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Investing.com News",
+     "url": "https://www.investing.com/rss/news.rss",
+     "site": "https://www.investing.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Bloomberg Originals",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=Bloomberg",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Seeking Alpha",
+     "url": "https://seekingalpha.com/market_currents.xml",
+     "site": "https://seekingalpha.com",
+     "description": "© seekingalpha.com. Use of this feed is limited to personal, non-commercial use and is governed by Seeking Alpha's…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Business Insider",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=businessinsider",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "EconTalk",
+     "url": "https://feeds.simplecast.com/wgl4xEgL",
+     "site": "https://feeds.simplecast.com",
+     "description": "EconTalk: Conversations for the Curious is an award-winning weekly podcast hosted by Russ Roberts of Shalem College…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Economic Times",
+     "url": "https://economictimes.indiatimes.com/rssfeedsdefault.cms",
+     "site": "https://economictimes.indiatimes.com",
+     "description": "The Economic Times: Latest business, finance, markets, stocks, company news from India.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Forbes: Business",
+     "url": "https://www.forbes.com/business/feed/",
+     "site": "https://www.forbes.com",
+     "description": "Forbes - Business",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Fortune",
+     "url": "https://fortune.com/feed",
+     "site": "https://fortune.com",
+     "description": "Fortune 500 Daily & Breaking Business News",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "HBR IdeaCast",
+     "url": "http://feeds.harvardbusiness.org/harvardbusiness/ideacast",
+     "site": "http://feeds.harvardbusiness.org",
+     "description": "A weekly podcast featuring the leading thinkers in business and management.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "How I Built This with Guy Raz",
+     "url": "https://feeds.npr.org/510313/podcast.xml",
+     "site": "https://feeds.npr.org",
+     "description": "Guy Raz interviews the world’s best-known entrepreneurs to learn how they built their iconic brands.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Planet Money",
+     "url": "https://feeds.npr.org/510289/podcast.xml",
+     "site": "https://feeds.npr.org",
+     "description": "Wanna see a trick? Give us any topic and we can tie it back to the economy.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Startup Stories - Mixergy",
+     "url": "https://feeds.feedburner.com/Mixergy-main-podcast",
+     "site": "https://feeds.feedburner.com",
+     "description": "Business tips for startups by proven entrepreneurs",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Blog of Author Tim Ferriss",
+     "url": "https://tim.blog/feed/",
+     "site": "https://tim.blog",
+     "description": "Tim Ferriss is the author of five #1 New York Times bestsellers and host of The Tim Ferriss Show podcast.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Duct Tape Marketing Podcast",
+     "url": "https://ducttape.libsyn.com/rss",
+     "site": "https://ducttape.libsyn.com",
+     "description": "Insightful interviews with authors, experts, entrepreneurs, and thought leaders who share valuable marketing tips,…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Growth Show",
+     "url": "http://thegrowthshow.hubspot.libsynpro.com/",
+     "site": "http://thegrowthshow.hubspot.libsynpro.com",
+     "description": "Starting a business has never been easier.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Yahoo Finance",
+     "url": "https://finance.yahoo.com/news/rssindex",
+     "site": "https://finance.yahoo.com",
+     "description": "At Yahoo Finance, you get free stock quotes, up-to-date news, portfolio management resources, international market…",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "startups",
+   "name": "Startups",
+   "feeds": [
+    {
+     "title": "Lenny's Newsletter",
+     "url": "https://www.lennysnewsletter.com/feed",
+     "site": "https://www.lennysnewsletter.com",
+     "description": "Product, growth, and careers.",
+     "origin": "skim"
+    },
+    {
+     "title": "Not Boring",
+     "url": "https://www.notboring.co/feed",
+     "site": "https://www.notboring.co",
+     "description": "Strategy and storytelling about tech companies.",
+     "origin": "skim"
+    },
+    {
+     "title": "Y Combinator Blog",
+     "url": "https://www.ycombinator.com/blog/rss/",
+     "site": "https://www.ycombinator.com/blog/",
+     "description": "News and essays from YC.",
+     "origin": "skim"
+    },
+    {
+     "title": "a16z",
+     "url": "https://a16z.com/feed/",
+     "site": "https://a16z.com",
+     "description": "Andreessen Horowitz on tech and startups.",
+     "origin": "skim"
+    },
+    {
+     "title": "AVC",
+     "url": "https://avc.com/feed/",
+     "site": "https://avc.com",
+     "description": "Musings of a VC in NYC",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Blog on Feld Thoughts",
+     "url": "https://feld.com/archives/tag/blog/feed",
+     "site": "https://feld.com",
+     "description": "Recent content in Blog on Feld Thoughts",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Entrepreneur",
+     "url": "http://feeds.feedburner.com/entrepreneur/latest",
+     "site": "http://feeds.feedburner.com",
+     "description": "The latest small business tips and advice from Entrepreneur",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Feld Thoughts",
+     "url": "https://feld.com/feed",
+     "site": "https://feld.com",
+     "description": "Recent content on Feld Thoughts",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "GaryVee",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=GaryVaynerchuk",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Hacker News: Front Page",
+     "url": "https://hnrss.org/frontpage",
+     "site": "https://hnrss.org",
+     "description": "Hacker News RSS",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Inc.com",
+     "url": "https://www.inc.com/rss/",
+     "site": "https://www.inc.com",
+     "description": "Inc.com, the daily resource for entrepreneurs.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Marie Forleo",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=marieforleo",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Masters of Scale",
+     "url": "https://rss.art19.com/masters-of-scale",
+     "site": "https://rss.art19.com",
+     "description": "On Masters of Scale, iconic business leaders share lessons and strategies that have helped them grow the world's…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Paul Graham: Essays",
+     "url": "http://www.aaronsw.com/2002/feeds/pgessays.rss",
+     "site": "http://www.aaronsw.com",
+     "description": "Scraped feed provided by aaronsw.com",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Product Hunt",
+     "url": "https://www.producthunt.com/feed",
+     "site": "https://www.producthunt.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Small Business Trends",
+     "url": "https://feeds2.feedburner.com/SmallBusinessTrends",
+     "site": "https://feeds2.feedburner.com",
+     "description": "Founded in 2003, Small Business Trends is an award-winning online publication for small business owners,…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Smart Passive Income",
+     "url": "http://feeds.feedburner.com/smartpassiveincome",
+     "site": "http://feeds.feedburner.com",
+     "description": "Become the entrepreneur you want to be",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Steve Blank",
+     "url": "https://steveblank.com/feed/",
+     "site": "https://steveblank.com",
+     "description": "Innovation and Entrepreneurship",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Intercom Blog",
+     "url": "https://www.intercom.com/blog/feed",
+     "site": "https://www.intercom.com",
+     "description": "Articles and Podcasts on Customer Service, AI and Automation, Product, and more",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Startup Junkies Podcast",
+     "url": "https://startupjunkie.libsyn.com/rss",
+     "site": "https://startupjunkie.libsyn.com",
+     "description": "The Startup Junkies podcast is hosted by Jeff Amerine and his team at Startup Junkie Consulting.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Tim Ferriss Show",
+     "url": "https://rss.art19.com/tim-ferriss-show",
+     "site": "https://rss.art19.com",
+     "description": "Tim Ferriss is a self-experimenter and bestselling author, best known for The 4-Hour Workweek, which has been…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "VentureBeat",
+     "url": "https://feeds.feedburner.com/venturebeat/SZYF",
+     "site": "https://feeds.feedburner.com",
+     "description": "Transformative tech coverage that matters",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "finance",
+   "name": "Personal finance",
+   "feeds": [
+    {
+     "title": "Afford Anything®",
+     "url": "https://affordanything.com/feed/",
+     "site": "https://affordanything.com",
+     "description": "You Can Afford Anything ... Just Not Everything™. What's It Gonna Be?",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Afford Anything®",
+     "url": "https://feeds.feedburner.com/AffordAnythingFeed",
+     "site": "https://feeds.feedburner.com",
+     "description": "You Can Afford Anything ... Just Not Everything™. What's It Gonna Be?",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Budgets Are Sexy",
+     "url": "https://feeds2.feedburner.com/budgetsaresexy",
+     "site": "https://feeds2.feedburner.com",
+     "description": "Money | Minimalism | Mohawks",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Financial Samurai",
+     "url": "https://www.financialsamurai.com/feed/",
+     "site": "https://www.financialsamurai.com",
+     "description": "Slicing Through Money's Mysteries",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Frugalwoods",
+     "url": "https://feeds.feedburner.com/Frugalwoods",
+     "site": "https://feeds.feedburner.com",
+     "description": "Financial independence and simple living",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Good Financial Cents®",
+     "url": "https://www.goodfinancialcents.com/feed/",
+     "site": "https://www.goodfinancialcents.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Invest Like the Best with Patrick O'Shaughnessy",
+     "url": "http://investlikethebest.libsyn.com/rss",
+     "site": "http://investlikethebest.libsyn.com",
+     "description": "Conversations with the best investors and business leaders in the world.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Learn To Trade The Market",
+     "url": "https://www.learntotradethemarket.com/feed",
+     "site": "https://www.learntotradethemarket.com",
+     "description": "Learn Price Action Trading with Nial Fuller",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Listen Money Matters - Free your inner financial badass. All the stuff you should know about personal finance.",
+     "url": "https://feeds.megaphone.fm/listen-money-matters",
+     "site": "https://feeds.megaphone.fm",
+     "description": "Honest and uncensored - this is not your father’s boring finance show.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Making Sense Of Cents",
+     "url": "https://www.makingsenseofcents.com/feed",
+     "site": "https://www.makingsenseofcents.com",
+     "description": "Learn how to make extra money, how to save money, how to start a blog, and more.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Millennial Money",
+     "url": "https://millennialmoney.com/feed/",
+     "site": "https://millennialmoney.com",
+     "description": "Next Level Personal Finance",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Money Crashers",
+     "url": "https://www.moneycrashers.com/feed/",
+     "site": "https://www.moneycrashers.com",
+     "description": "Turn the Tables on Money",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Money For the Rest of Us",
+     "url": "https://rss.art19.com/money-for-the-rest-of-us",
+     "site": "https://rss.art19.com",
+     "description": "A personal finance and investing podcast on money, how it works, how to invest it and how to live without worrying…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Money Saving Mom",
+     "url": "https://moneysavingmom.com/feed/",
+     "site": "https://moneysavingmom.com",
+     "description": "Saving Families Money Since 2007",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Money Under 30",
+     "url": "https://www.moneyunder30.com/feed",
+     "site": "https://www.moneyunder30.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "MoneyNing",
+     "url": "http://feeds.feedburner.com/MoneyNing",
+     "site": "http://feeds.feedburner.com",
+     "description": "Sharing insights since 2007 on carefully saving money, investing, frugal living, coupons, promo codes because the…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "MyWifeQuitHerJob.com",
+     "url": "https://mywifequitherjob.com/feed/",
+     "site": "https://mywifequitherjob.com",
+     "description": "Starting An Online Store So Your Spouse Can Quit And Stay At Home With The Kids",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Kitces: Nerd's Eye View",
+     "url": "http://feeds.feedblitz.com/kitcesnerdseyeview&x=1",
+     "site": "http://feeds.feedblitz.com",
+     "description": "Commentary from Michael Kitces on Financial Planning News & Strategies",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NerdWallet",
+     "url": "https://www.nerdwallet.com/blog/feed/",
+     "site": "https://www.nerdwallet.com",
+     "description": "NerdWallet is a free tool to find you the best credit cards, cd rates, savings, checking accounts, scholarships,…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Oblivious Investor",
+     "url": "https://obliviousinvestor.com/feed/",
+     "site": "https://obliviousinvestor.com",
+     "description": "Low-Maintenance Investing with Index Funds and ETFs",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Personal Finance",
+     "url": "https://reddit.com/r/personalfinance/.rss",
+     "site": "https://reddit.com",
+     "description": "Learn about budgeting, saving, getting out of debt, credit, investing, and retirement planning.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "SavingAdvice.com Blog",
+     "url": "https://www.savingadvice.com/feed/",
+     "site": "https://www.savingadvice.com",
+     "description": "SavingAdvice.com is a trusted personal finance community with expert articles on saving money, budgeting, debt…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Side Hustle Nation",
+     "url": "https://www.sidehustlenation.com/feed",
+     "site": "https://www.sidehustlenation.com",
+     "description": "Amplify your earning power",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "So Money with Farnoosh Torabi",
+     "url": "https://feeds.megaphone.fm/somoney",
+     "site": "https://feeds.megaphone.fm",
+     "description": "*** Named a Best Podcast By The New York Times, Time Magazine, Real Simple and MSNBC *** Host Farnoosh Torabi is an…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Clark Howard Podcast",
+     "url": "https://feeds.megaphone.fm/clarkhoward",
+     "site": "https://feeds.megaphone.fm",
+     "description": "Save more and spend less is more than just a motto for money expert Clark Howard; it’s a way of life.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The College Investor",
+     "url": "https://thecollegeinvestor.com/feed/",
+     "site": "https://thecollegeinvestor.com",
+     "description": "Navigating Money And Education",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Ramsey Show",
+     "url": "https://daveramsey.libsyn.com/rss",
+     "site": "https://daveramsey.libsyn.com",
+     "description": "The Ramsey Show believes you can build wealth and take control of your life—no matter what stupid mistakes you've…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Stacking Benjamins Show",
+     "url": "https://feeds.megaphone.fm/stacking-benjamins",
+     "site": "https://feeds.megaphone.fm",
+     "description": "Named Best Personal Finance Podcast by Bankrate.com and Kiplinger — and the only podcast the Plutus Awards retired…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Well Kept Wallet",
+     "url": "https://wellkeptwallet.com/feed/",
+     "site": "https://wellkeptwallet.com",
+     "description": "Helping you save money, make money and pay off debt.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Wise Bread",
+     "url": "http://feeds.killeraces.com/wisebread",
+     "site": "http://feeds.killeraces.com",
+     "description": "Living large on a small budget",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "crypto",
+   "name": "Crypto",
+   "feeds": [
+    {
+     "title": "Citation Needed",
+     "url": "https://www.citationneeded.news/rss/",
+     "site": "https://www.citationneeded.news",
+     "description": "Molly White's critical take on crypto and tech.",
+     "origin": "skim"
+    },
+    {
+     "title": "Bitcoin & Crypto Trading: Ledger Cast",
+     "url": "https://feeds.simplecast.com/j5Cx9jps",
+     "site": "https://feeds.simplecast.com",
+     "description": "Ledger Cast covers the cryptocurrency industry (Bitcoin, Ethereum, and alt coins), including technical and trading…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Bitcoin - The Currency of the Internet",
+     "url": "https://www.reddit.com/r/Bitcoin/.rss",
+     "site": "https://www.reddit.com",
+     "description": "Bitcoin is the currency of the Internet: a distributed, worldwide, decentralized digital money.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Bitcoin Audible",
+     "url": "https://bitcoinaudible.com/feed/",
+     "site": "https://bitcoinaudible.com",
+     "description": "The Best in Bitcoin, Ai, & Development - Made Audible",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Bitcoin News",
+     "url": "https://news.bitcoin.com/feed/",
+     "site": "https://news.bitcoin.com",
+     "description": "Daily Bitcoin News",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "BuyUcoin Talks",
+     "url": "https://medium.com/feed/buyucoin-talks",
+     "site": "https://medium.com",
+     "description": "BuyUcoin (https://www.buyucoin.com/) provides a simple and secure online platform for trading cryptocurrencies and…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Cointelegraph",
+     "url": "https://cointelegraph.com/rss",
+     "site": "https://cointelegraph.com",
+     "description": "Cointelegraph covers fintech, blockchain and Bitcoin bringing you the latest crypto news and analyses on the future…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Finance Magnates: Crypto",
+     "url": "https://www.financemagnates.com/cryptocurrency/feed/",
+     "site": "https://www.financemagnates.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CryptoNinjas",
+     "url": "https://www.cryptoninjas.net/feed/",
+     "site": "https://www.cryptoninjas.net",
+     "description": "Bitcoin, Cryptocurrency and Blockchain Asset Source",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CryptoPotato",
+     "url": "https://cryptopotato.com/feed/",
+     "site": "https://cryptopotato.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Cryptocurrency News & Discussion",
+     "url": "https://www.reddit.com/r/CryptoCurrency/.rss",
+     "site": "https://www.reddit.com",
+     "description": "The leading community for cryptocurrency news, discussion, and analysis.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "DailyCoin",
+     "url": "https://dailycoin.com/feed/",
+     "site": "https://dailycoin.com",
+     "description": "Cryptocurrency News",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Epicenter - Learn about Crypto, Blockchain, Ethereum, Bitcoin and Distributed Technologies",
+     "url": "https://feeds.simplecast.com/lKmQDG9R",
+     "site": "https://feeds.simplecast.com",
+     "description": "Epicenter brings you in-depth conversations about the technical, economic and social implications of…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Ethereum",
+     "url": "https://www.reddit.com/r/ethereum/.rss",
+     "site": "https://www.reddit.com",
+     "description": "Next-generation platform for decentralised applications. Dive in at ethereum.org",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Ethereum Foundation Blog",
+     "url": "https://blog.ethereum.org/feed.xml",
+     "site": "https://blog.ethereum.org",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "INCRYPTED",
+     "url": "https://incrypted.net/feed/",
+     "site": "https://incrypted.net",
+     "description": "Все о Блокчейн и Криптовалютах",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Interviews",
+     "url": "https://feed.podbean.com/nuggetsnews/feed.xml",
+     "site": "https://feed.podbean.com",
+     "description": "#Investing #Finance #Markets",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Kraken Blog",
+     "url": "https://blog.kraken.com/feed/",
+     "site": "https://blog.kraken.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "News - Cryptonews",
+     "url": "https://cryptonews.com/news/feed",
+     "site": "https://cryptonews.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NewsBTC",
+     "url": "https://www.newsbtc.com/feed/",
+     "site": "https://www.newsbtc.com",
+     "description": "Bitcoin & Cryptocurrency News Today",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Stephan Livera Podcast",
+     "url": "https://anchor.fm/s/7d083a4/podcast/rss",
+     "site": "https://anchor.fm",
+     "description": "Join Stephan as he interviews the sharpest economic and technical minds in Bitcoin & Austrian Economics to help you…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Bad Crypto Podcast",
+     "url": "https://badcryptopodcast.com/feed/",
+     "site": "https://badcryptopodcast.com",
+     "description": "The World's Top Bitcoin Podcast covering Blockchain, Cryptocurrency, Ethereum, ICOs, Altcoins, Fintech and Digital…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Bitcoin Knowledge Podcast",
+     "url": "https://www.bitcoin.kn/feed/podcast/",
+     "site": "https://www.bitcoin.kn",
+     "description": "Interviews with top people in Bitcoin, blockchain and fintech including Adam Back, Caitlin Long, Saifedean Ammous,…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Bitcoin Podcast",
+     "url": "https://feeds.simplecast.com/xCQr3ykc",
+     "site": "https://feeds.simplecast.com",
+     "description": "The Bitcoin Podcast is a show that discusses Bitcoin and Crypto topics in a laid back nature.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Market's Compass Technical View",
+     "url": "https://themarketscompass.substack.com/feed",
+     "site": "https://themarketscompass.substack.com",
+     "description": "Using Technical Analysis to Navigate the Waters of the Global Financial Markets",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Today in Web 3",
+     "url": "https://feeds.soundcloud.com/users/soundcloud:users:844321453/sounds.rss",
+     "site": "https://feeds.soundcloud.com",
+     "description": "Coming Soon by Matthew Diemer",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ZebPay",
+     "url": "https://zebpay.com/feed/",
+     "site": "https://zebpay.com",
+     "description": "Buy Bitcoin and Cryptocurrency at India’s Leading Exchange",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "TechCrunch: Cryptocurrency",
+     "url": "https://techcrunch.com/tag/cryptocurrency/feed",
+     "site": "https://techcrunch.com",
+     "description": "Startup and Technology News",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "design",
+   "name": "Design",
+   "feeds": [
+    {
+     "title": "Smashing Magazine",
+     "url": "https://www.smashingmagazine.com/feed/",
+     "site": "https://www.smashingmagazine.com",
+     "description": "Web design and front-end development.",
+     "origin": "skim"
+    },
+    {
+     "title": "CSS-Tricks",
+     "url": "https://css-tricks.com/feed/",
+     "site": "https://css-tricks.com",
+     "description": "Tips, tricks, and techniques on CSS.",
+     "origin": "skim"
+    },
+    {
+     "title": "A List Apart",
+     "url": "https://alistapart.com/main/feed/",
+     "site": "https://alistapart.com",
+     "description": "Design, development, and meaning of web content.",
+     "origin": "skim"
+    },
+    {
+     "title": "Dezeen",
+     "url": "https://www.dezeen.com/feed/",
+     "site": "https://www.dezeen.com",
+     "description": "Architecture and design magazine.",
+     "origin": "skim"
+    },
+    {
+     "title": "Nielsen Norman Group",
+     "url": "https://www.nngroup.com/feed/rss/",
+     "site": "https://www.nngroup.com",
+     "description": "Evidence-based user experience research.",
+     "origin": "skim"
+    },
+    {
+     "title": "Codrops",
+     "url": "https://tympanus.net/codrops/feed/",
+     "site": "https://tympanus.net/codrops/",
+     "description": "Creative web design and front-end experiments.",
+     "origin": "skim"
+    },
+    {
+     "title": "It's Nice That",
+     "url": "https://www.itsnicethat.com/rss",
+     "site": "https://www.itsnicethat.com",
+     "description": "Creativity across art and design.",
+     "origin": "skim"
+    },
+    {
+     "title": "Colossal",
+     "url": "https://www.thisiscolossal.com/feed/",
+     "site": "https://www.thisiscolossal.com",
+     "description": "Art and visual culture.",
+     "origin": "skim"
+    },
+    {
+     "title": "Creative Bloq",
+     "url": "https://www.creativebloq.com/feed",
+     "site": "https://www.creativebloq.com",
+     "description": "Design and creativity news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Sidebar",
+     "url": "https://sidebar.io/feed.xml",
+     "site": "https://sidebar.io",
+     "description": "The five best design links, every day.",
+     "origin": "skim"
+    },
+    {
+     "title": "Boxes and Arrows",
+     "url": "http://boxesandarrows.com/rss/",
+     "site": "http://boxesandarrows.com",
+     "description": "The design behind the design",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "JUST™ Creative",
+     "url": "https://feeds.feedburner.com/JustCreativeDesignBlog",
+     "site": "https://feeds.feedburner.com",
+     "description": "Logo Designer, Graphic Designer, Graphic Design Portfolio, Logo Design, Logo, Graphic, Design, Graphic Design, Brand…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "UX Collective",
+     "url": "https://uxdesign.cc/feed",
+     "site": "https://uxdesign.cc",
+     "description": "We believe designers are thinkers as much as they are makers. https://linktr.ee/uxc - Medium",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "UX Movement",
+     "url": "https://uxmovement.com/feed/",
+     "site": "https://uxmovement.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Usability Geek",
+     "url": "https://usabilitygeek.com/feed/",
+     "site": "https://usabilitygeek.com",
+     "description": "Usability & User Experience (UX) Blog",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "User Experience",
+     "url": "https://www.reddit.com/r/userexperience/.rss",
+     "site": "https://www.reddit.com",
+     "description": "A community where professionals, enthusiasts, and individuals interested in the field of user experience can share…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "A Weekly Dose of Architecture Books",
+     "url": "http://feeds.feedburner.com/archidose",
+     "site": "http://feeds.feedburner.com",
+     "description": "This blog wrapped in early 2024, though it continues as a Substack newsletter with the same name: archidose.substack.com",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ArchDaily Global",
+     "url": "http://feeds.feedburner.com/Archdaily",
+     "site": "http://feeds.feedburner.com",
+     "description": "ArchDaily | Broadcasting Architecture Worldwide",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Architectural Digest",
+     "url": "https://www.architecturaldigest.com/feed/rss",
+     "site": "https://www.architecturaldigest.com",
+     "description": "The latest from www.architecturaldigest.com",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Architectural Digest",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=ArchitecturalDigest",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Architecture",
+     "url": "https://www.reddit.com/r/architecture/.rss",
+     "site": "https://www.reddit.com",
+     "description": "A community for students, professionals, and lovers of architecture.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Dezeen: Architecture",
+     "url": "https://www.dezeen.com/architecture/feed/",
+     "site": "https://www.dezeen.com",
+     "description": "architecture and design magazine",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Design Milk: Architecture",
+     "url": "https://design-milk.com/category/architecture/feed/",
+     "site": "https://design-milk.com",
+     "description": "Dedicated to modern design",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Journal",
+     "url": "https://architizer.wpengine.com/feed/",
+     "site": "https://architizer.wpengine.com",
+     "description": "Inspiration and Tools for Architects",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Living Big In A Tiny House",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=livingbigtinyhouse",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Architect’s Newspaper",
+     "url": "https://archpaper.com/feed",
+     "site": "https://archpaper.com",
+     "description": "The most authoritative voice on architecture and design in the United States.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "designboom: Architecture",
+     "url": "https://www.designboom.com/architecture/feed/",
+     "site": "https://www.designboom.com",
+     "description": "designboom magazine | your first source for architecture, design & art news",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "decor8",
+     "url": "https://www.decor8blog.com/blog?format=rss",
+     "site": "https://www.decor8blog.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Core77",
+     "url": "http://feeds.feedburner.com/core77/blog",
+     "site": "http://feeds.feedburner.com",
+     "description": "Launched in 1995, Core77 serves a devoted global audience of design professionals, corporations, students,…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Design Milk: Interiors",
+     "url": "https://design-milk.com/category/interior-design/feed/",
+     "site": "https://design-milk.com",
+     "description": "Dedicated to modern design",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Fubiz Media",
+     "url": "http://feeds.feedburner.com/fubiz",
+     "site": "http://feeds.feedburner.com",
+     "description": "The latest creative news from Fubiz about art, design and pop-culture.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "In My Own Style",
+     "url": "https://inmyownstyle.com/feed",
+     "site": "https://inmyownstyle.com",
+     "description": "Top Budget DIY Home Decorating Blog and Creative Lifestyle Ideas",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Interior Design",
+     "url": "https://www.interiordesign.net/rss/",
+     "site": "https://www.interiordesign.net",
+     "description": "The leading authority for the Architecture & Design community",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Interior Design (Interior Architecture)",
+     "url": "https://www.reddit.com/r/InteriorDesign/.rss",
+     "site": "https://www.reddit.com",
+     "description": "Interior Design is the art and science of understanding people's behavior to create functional spaces within a…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Home Designing",
+     "url": "http://www.home-designing.com/feed",
+     "site": "http://www.home-designing.com",
+     "description": "Inspirational Interior Design Ideas",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Dezeen: Interior design",
+     "url": "https://www.dezeen.com/interiors/feed/",
+     "site": "https://www.dezeen.com",
+     "description": "architecture and design magazine",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Ideal Home",
+     "url": "https://www.idealhome.co.uk/feed",
+     "site": "https://www.idealhome.co.uk",
+     "description": "All the latest news content from the Ideal Home team",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Liz Marie Blog",
+     "url": "https://www.lizmarieblog.com/feed/",
+     "site": "https://www.lizmarieblog.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Inspired Room",
+     "url": "https://theinspiredroom.net/feed/",
+     "site": "https://theinspiredroom.net",
+     "description": "Voted Readers' Favorite Top Decorating Blog Better Homes and Gardens, Decorating Ideas, How to Organize, How to…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Thrifty Decor Chick | Thrifty DIY, Decor and Organizing",
+     "url": "http://feeds.feedburner.com/blogspot/ZBcZ",
+     "site": "http://feeds.feedburner.com",
+     "description": "Thrifty decorating blog with easy DIY, decor, entertaining and organizing ideas. Make your home beautiful for less.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Trendir",
+     "url": "https://www.trendir.com/feed/",
+     "site": "https://www.trendir.com",
+     "description": "The Latest Trends in Modern House Design and Decorating",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Yanko Design",
+     "url": "http://feeds.feedburner.com/yankodesign",
+     "site": "http://feeds.feedburner.com",
+     "description": "Modern Industrial Design News",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Yatzer",
+     "url": "https://www.yatzer.com/rss.xml",
+     "site": "https://www.yatzer.com",
+     "description": "Since 2006, Yatzer has explored the many ways design shapes our lives,curating soulful interiors, visionary…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Young House Love",
+     "url": "https://www.younghouselove.com/feed/",
+     "site": "https://www.younghouselove.com",
+     "description": "Home Decorating & DIY Tutorials",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "decoist",
+     "url": "https://www.decoist.com/feed/",
+     "site": "https://www.decoist.com",
+     "description": "Obsessed with the cult of beauty",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "designboom: Design",
+     "url": "https://www.designboom.com/design/feed",
+     "site": "https://www.designboom.com",
+     "description": "designboom magazine | your first source for architecture, design & art news",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "gaming",
+   "name": "Gaming",
+   "feeds": [
+    {
+     "title": "Polygon",
+     "url": "https://www.polygon.com/rss/index.xml",
+     "site": "https://www.polygon.com",
+     "description": "Video games, entertainment, and culture.",
+     "origin": "skim"
+    },
+    {
+     "title": "Rock Paper Shotgun",
+     "url": "https://www.rockpapershotgun.com/feed",
+     "site": "https://www.rockpapershotgun.com",
+     "description": "PC gaming news and reviews.",
+     "origin": "skim"
+    },
+    {
+     "title": "Kotaku",
+     "url": "https://kotaku.com/rss",
+     "site": "https://kotaku.com",
+     "description": "Gaming news and culture.",
+     "origin": "skim"
+    },
+    {
+     "title": "IGN",
+     "url": "https://feeds.ign.com/ign/all",
+     "site": "https://www.ign.com",
+     "description": "Games, movies, and TV.",
+     "origin": "skim"
+    },
+    {
+     "title": "Eurogamer",
+     "url": "https://www.eurogamer.net/feed",
+     "site": "https://www.eurogamer.net",
+     "description": "Game news and reviews.",
+     "origin": "skim"
+    },
+    {
+     "title": "PC Gamer",
+     "url": "https://www.pcgamer.com/rss/",
+     "site": "https://www.pcgamer.com",
+     "description": "PC gaming news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Game Developer",
+     "url": "https://www.gamedeveloper.com/rss.xml",
+     "site": "https://www.gamedeveloper.com",
+     "description": "The business and craft of making games.",
+     "origin": "skim"
+    },
+    {
+     "title": "Nintendo Life",
+     "url": "https://www.nintendolife.com/feeds/latest",
+     "site": "https://www.nintendolife.com",
+     "description": "Nintendo news and reviews.",
+     "origin": "skim"
+    },
+    {
+     "title": "Aftermath",
+     "url": "https://aftermath.site/rss",
+     "site": "https://aftermath.site",
+     "description": "Worker-owned video game journalism.",
+     "origin": "skim"
+    },
+    {
+     "title": "GamesIndustry.biz",
+     "url": "https://www.gamesindustry.biz/feed",
+     "site": "https://www.gamesindustry.biz",
+     "description": "The games business.",
+     "origin": "skim"
+    },
+    {
+     "title": "Eurogamer: Latest",
+     "url": "https://www.eurogamer.net/?format=rss",
+     "site": "https://www.eurogamer.net",
+     "description": "This is a feed of the latest articles from Eurogamer.net.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "GameSpot",
+     "url": "https://www.gamespot.com/feeds/mashup/",
+     "site": "https://www.gamespot.com",
+     "description": "GameSpot's Everything Feed! All the latest from GameSpot",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Indie Games Plus",
+     "url": "https://indiegamesplus.com/feed",
+     "site": "https://indiegamesplus.com",
+     "description": "Creative, Personal, Passionate Digital Experiences",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Makeup and Beauty Blog | Makeup Reviews, Swatches and How-To Makeup",
+     "url": "https://www.makeupandbeautyblog.com/feed/",
+     "site": "https://www.makeupandbeautyblog.com",
+     "description": "A beauty blog blooming with fresh makeup reviews, swatches and beauty tips from your friendly neighborhood beauty addict",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "PlayStation.Blog",
+     "url": "http://feeds.feedburner.com/psblog",
+     "site": "http://feeds.feedburner.com",
+     "description": "Official PlayStation Blog for news and video updates on PlayStation, PS5, PS4, PS VR, PlayStation Plus and more.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Rock, Paper, Shotgun",
+     "url": "http://feeds.feedburner.com/RockPaperShotgun",
+     "site": "http://feeds.feedburner.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Steam News",
+     "url": "https://store.steampowered.com/feeds/news.xml",
+     "site": "https://store.steampowered.com",
+     "description": "All Steam news, all the time!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Ancient Gaming Noob",
+     "url": "http://feeds.feedburner.com/TheAncientGamingNoob",
+     "site": "http://feeds.feedburner.com",
+     "description": "Veni, Vidi, Scripsi",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Escapist",
+     "url": "https://www.escapistmagazine.com/v2/feed/",
+     "site": "https://www.escapistmagazine.com",
+     "description": "Everything fun",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "TouchArcade",
+     "url": "https://toucharcade.com/community/forums/-/index.rss",
+     "site": "https://toucharcade.com",
+     "description": "iPhone and iPad Games and News",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "r/gaming",
+     "url": "https://www.reddit.com/r/gaming.rss",
+     "site": "https://www.reddit.com",
+     "description": "The Number One Gaming forum on the Internet.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Better Chess",
+     "url": "https://betterchess.net/feed/",
+     "site": "https://betterchess.net",
+     "description": "A chess blog dedicated to help players improve their play and to promote the great game of chess.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Chess News",
+     "url": "https://en.chessbase.com/feed",
+     "site": "https://en.chessbase.com",
+     "description": "Chess News",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Chess Talk",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC6HDXr-sNPnWLF_Q-y3KduA",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Guardian: Chess",
+     "url": "https://www.theguardian.com/sport/chess/rss",
+     "site": "https://www.theguardian.com",
+     "description": "Latest news and features from theguardian.com, the world's leading liberal voice",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Chess.com",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=wwwChesscom",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Chess.com News",
+     "url": "https://www.chess.com/rss/news",
+     "site": "https://www.chess.com",
+     "description": "The latest news from Chess.com.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ChessBase India",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCIsEhwBMPkRHsEgqYAPQHsA",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Chessable Blog",
+     "url": "https://www.chessable.com/blog/feed/",
+     "site": "https://www.chessable.com",
+     "description": "Chessable uses science to make learning chess better and in this blog we share that journey",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "For the budding patzer",
+     "url": "https://www.reddit.com/r/chessbeginners/.rss",
+     "site": "https://www.reddit.com",
+     "description": "A place for new chess players to hang out, ask questions, discover tactics, get advice from others and learn more…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Lichess's Blog",
+     "url": "https://lichess.org/blog.atom",
+     "site": "https://lichess.org",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Perpetual Chess Podcast",
+     "url": "https://feeds.megaphone.fm/BLU4811105299",
+     "site": "https://feeds.megaphone.fm",
+     "description": "Perpetual Chess features weekly conversations with the chess world's best players, trainers and accomplished…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Week in Chess",
+     "url": "https://theweekinchess.com/twic-rss-feed",
+     "site": "https://theweekinchess.com",
+     "description": "Chess News from throughout the World",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "agadmator's Chess Channel",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCL5YbN5WLFD8dLIegT5QAbA",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "chess24",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=chess24media",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "r/Chess",
+     "url": "https://www.reddit.com/r/chess/.rss",
+     "site": "https://www.reddit.com",
+     "description": "All about the game of chess, including discussions on professional tournaments, game analysis and theory.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "thechesswebsite",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=thechesswebsite",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "photography",
+   "name": "Photography",
+   "feeds": [
+    {
+     "title": "PetaPixel",
+     "url": "https://petapixel.com/feed/",
+     "site": "https://petapixel.com",
+     "description": "Photography news and gear.",
+     "origin": "skim"
+    },
+    {
+     "title": "DPReview",
+     "url": "https://www.dpreview.com/feeds/news.xml",
+     "site": "https://www.dpreview.com",
+     "description": "Cameras and photography reviews.",
+     "origin": "skim"
+    },
+    {
+     "title": "500px",
+     "url": "https://iso.500px.com/feed/",
+     "site": "https://iso.500px.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Digital Photography School",
+     "url": "https://feeds.feedburner.com/DigitalPhotographySchool",
+     "site": "https://feeds.feedburner.com",
+     "description": "Digital Photography Tips and Tutorials",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Light Stalking",
+     "url": "https://www.lightstalking.com/feed/",
+     "site": "https://www.lightstalking.com",
+     "description": "Illuminating Your Passion",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "One Big Photo",
+     "url": "http://feeds.feedburner.com/OneBigPhoto",
+     "site": "http://feeds.feedburner.com",
+     "description": "a Picture is Worth a Thousand Words | Submit Your Photo | World's Best Photography",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Strobist",
+     "url": "http://feeds.feedburner.com/blogspot/WOBq",
+     "site": "http://feeds.feedburner.com",
+     "description": "Learn How to Light.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Stuck in Customs",
+     "url": "https://stuckincustoms.com/feed/",
+     "site": "https://stuckincustoms.com",
+     "description": "Trey Ratcliff's Travel Photography blog with daily inspiration to motivate you!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Boston Globe",
+     "url": "https://www.bostonglobe.com/rss/bigpicture",
+     "site": "https://www.bostonglobe.com",
+     "description": "The Boston Globe News Feed",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "film-tv",
+   "name": "Film & TV",
+   "feeds": [
+    {
+     "title": "IndieWire",
+     "url": "https://www.indiewire.com/feed/",
+     "site": "https://www.indiewire.com",
+     "description": "Film and TV news and criticism.",
+     "origin": "skim"
+    },
+    {
+     "title": "Variety",
+     "url": "https://variety.com/feed/",
+     "site": "https://variety.com",
+     "description": "Entertainment industry news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Vulture",
+     "url": "https://www.vulture.com/rss/index.xml",
+     "site": "https://www.vulture.com",
+     "description": "Pop culture coverage.",
+     "origin": "skim"
+    },
+    {
+     "title": "/Film",
+     "url": "https://feeds2.feedburner.com/slashfilm",
+     "site": "https://feeds2.feedburner.com",
+     "description": "Movie News and Reviews This feed is for non commercial use. Content Copyright Slashfilm.com.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Ain't It Cool News Feed",
+     "url": "https://www.aintitcool.com/node/feed/",
+     "site": "https://www.aintitcool.com",
+     "description": "The best in movie, TV, DVD and comic book news.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ComingSoon.net",
+     "url": "https://www.comingsoon.net/feed",
+     "site": "https://www.comingsoon.net",
+     "description": "ComingSoon.net features the latest movie trailers and news, TV updates, video game reviews, anime releases, and more.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Deadline",
+     "url": "https://deadline.com/feed/",
+     "site": "https://deadline.com",
+     "description": "Hollywood Entertainment Breaking News",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "FirstShowing.net",
+     "url": "https://www.firstshowing.net/feed/",
+     "site": "https://www.firstshowing.net",
+     "description": "Connecting Hollywood with its Audience",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Movie News and Discussion",
+     "url": "https://reddit.com/r/movies/.rss",
+     "site": "https://reddit.com",
+     "description": "/r/movies is the world's largest online film community, with over 37,000,000 members.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Bleeding Cool: Movies",
+     "url": "https://www.bleedingcool.com/movies/feed/",
+     "site": "https://www.bleedingcool.com",
+     "description": "Comics, Movies, TV, Games",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "TV",
+     "url": "https://www.bleedingcool.com/tv/feed/",
+     "site": "https://www.bleedingcool.com",
+     "description": "Comics, Movies, TV, Games",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "TV Fanatic",
+     "url": "https://www.tvfanatic.com/rss.xml",
+     "site": "https://www.tvfanatic.com",
+     "description": "Your Home for TV Show Reviews, Opinions, Spoilers, and News!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "TVLine",
+     "url": "https://tvline.com/feed/",
+     "site": "https://tvline.com",
+     "description": "Stay up to date with the latest TV news, previews, spoilers, casting updates, interviews, and more from TVLine.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "the TV addict",
+     "url": "http://feeds.feedburner.com/thetvaddict/AXob",
+     "site": "http://feeds.feedburner.com",
+     "description": "TV News, Previews, Spoilers and Reviews",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "📺Television News and Discussion",
+     "url": "https://reddit.com/r/television/.rss",
+     "site": "https://reddit.com",
+     "description": "Subreddit for content primarily about and related to scripted television programming",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "music",
+   "name": "Music",
+   "feeds": [
+    {
+     "title": "Pitchfork",
+     "url": "https://pitchfork.com/feed/feed-news/rss",
+     "site": "https://pitchfork.com",
+     "description": "Music news and reviews.",
+     "origin": "skim"
+    },
+    {
+     "title": "Stereogum",
+     "url": "https://www.stereogum.com/feed/",
+     "site": "https://www.stereogum.com",
+     "description": "Indie music news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Consequence",
+     "url": "http://consequenceofsound.net/feed",
+     "site": "http://consequenceofsound.net",
+     "description": "Music, Film, TV and Pop Culture News for the Mainstream and Underground",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Metal Injection",
+     "url": "http://feeds.feedburner.com/metalinjection",
+     "site": "http://feeds.feedburner.com",
+     "description": "Heavy metal news, metal music videos, tour dates, live footage, exclusive documentaries, funny clips and more.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Music Business Worldwide",
+     "url": "https://www.musicbusinessworldwide.com/feed/",
+     "site": "https://www.musicbusinessworldwide.com",
+     "description": "News, jobs and analysis for the global music industry",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "RSS: News",
+     "url": "http://pitchfork.com/rss/news",
+     "site": "http://pitchfork.com",
+     "description": "News content RSS feed",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Song Exploder",
+     "url": "http://feed.songexploder.net/songexploder",
+     "site": "http://feed.songexploder.net",
+     "description": "Song Exploder is a podcast where musicians take apart their songs, and piece by piece, tell the story of how they…",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "books",
+   "name": "Books",
+   "feeds": [
+    {
+     "title": "Literary Hub",
+     "url": "https://lithub.com/feed/",
+     "site": "https://lithub.com",
+     "description": "The best of the literary internet.",
+     "origin": "skim"
+    },
+    {
+     "title": "A year of reading the world",
+     "url": "https://ayearofreadingtheworld.com/feed/",
+     "site": "https://ayearofreadingtheworld.com",
+     "description": "196 countries, countless stories...",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Aestas Book Blog",
+     "url": "https://aestasbookblog.com/feed/",
+     "site": "https://aestasbookblog.com",
+     "description": "Romance book reviews. Reviews of books that make my heart race, have a beautiful love story, and a happy ending.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "BOOK RIOT",
+     "url": "https://bookriot.com/feed/",
+     "site": "https://bookriot.com",
+     "description": "Book Recommendations and Reviews",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Harry Potter and the Sacred Text",
+     "url": "https://rss.acast.com/harrypottersacredtext",
+     "site": "https://rss.acast.com",
+     "description": "It’s the English class you didn't know you missed and the meaningful conversations you didn't know you craved.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Kirkus Reviews",
+     "url": "https://www.kirkusreviews.com/feeds/rss/",
+     "site": "https://www.kirkusreviews.com",
+     "description": "Latest book reviews from Kirkus Reviews.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NewInBooks",
+     "url": "https://www.newinbooks.com/feed/",
+     "site": "https://www.newinbooks.com",
+     "description": "Answering the Age old question - What are you reading?",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "So many books, so little time",
+     "url": "https://reddit.com/r/books/.rss",
+     "site": "https://reddit.com",
+     "description": "This is a moderated subreddit.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Wokeread",
+     "url": "https://wokeread.home.blog/feed/",
+     "site": "https://wokeread.home.blog",
+     "description": "Books any time any day.",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "history",
+   "name": "History",
+   "feeds": [
+    {
+     "title": "30 for 30 Podcasts",
+     "url": "https://feeds.megaphone.fm/ESP5765452710",
+     "site": "https://feeds.megaphone.fm",
+     "description": "Original audio documentaries from the makers of the acclaimed 30 for 30 film series, featuring stories from the…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Dan Carlin's Hardcore History",
+     "url": "https://feeds.feedburner.com/dancarlin/history?format=xml",
+     "site": "https://feeds.feedburner.com",
+     "description": "In \"Hardcore History\" journalist and broadcaster Dan Carlin takes his \"Martian\", unorthodox way of thinking and…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "History in 28-minutes",
+     "url": "https://www.historyisnowmagazine.com/blog?format=RSS",
+     "site": "https://www.historyisnowmagazine.com",
+     "description": "We create a variety of exclusive modern international and American history content!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "HistoryNet",
+     "url": "http://www.historynet.com/feed",
+     "site": "http://www.historynet.com",
+     "description": "The most comprehensive and authoritative history site on the Internet.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Throughline",
+     "url": "https://feeds.npr.org/510333/podcast.xml",
+     "site": "https://feeds.npr.org",
+     "description": "Throughline is a time machine.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "You Must Remember This",
+     "url": "https://feeds.megaphone.fm/YMRT7068253588",
+     "site": "https://feeds.megaphone.fm",
+     "description": "You Must Remember This is a storytelling podcast exploring the secret and/or forgotten histories of Hollywood’s…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "the memory palace",
+     "url": "http://feeds.thememorypalace.us/thememorypalace",
+     "site": "http://feeds.thememorypalace.us",
+     "description": "the memory palace",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "food",
+   "name": "Food",
+   "feeds": [
+    {
+     "title": "Smitten Kitchen",
+     "url": "https://smittenkitchen.com/feed/",
+     "site": "https://smittenkitchen.com",
+     "description": "Fearless cooking from a tiny NYC kitchen.",
+     "origin": "skim"
+    },
+    {
+     "title": "Eater",
+     "url": "https://www.eater.com/rss/index.xml",
+     "site": "https://www.eater.com",
+     "description": "Food and restaurant news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Bon Appétit",
+     "url": "https://www.bonappetit.com/feed/rss",
+     "site": "https://www.bonappetit.com",
+     "description": "Recipes and food culture.",
+     "origin": "skim"
+    },
+    {
+     "title": "Binging with Babish",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=bgfilms",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Bon Appétit",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=BonAppetitDotCom",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Budget Bytes",
+     "url": "http://budgetbytes.blogspot.com/feeds/posts/default",
+     "site": "http://budgetbytes.blogspot.com",
+     "description": "Delicious Recipes Designed for Small Budgets",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Chocolate & Zucchini",
+     "url": "https://cnz.to/feed/",
+     "site": "https://cnz.to",
+     "description": "Simple Recipes from my Paris Kitchen",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "David Lebovitz",
+     "url": "https://www.davidlebovitz.com/feed/",
+     "site": "https://www.davidlebovitz.com",
+     "description": "Baking and cooking recipes for everyone",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Dinner: A Love Story",
+     "url": "http://www.dinneralovestory.com/feed/",
+     "site": "http://www.dinneralovestory.com",
+     "description": "It All Begins At the Family Table",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Food52",
+     "url": "http://feeds.feedburner.com/food52-TheAandMBlog",
+     "site": "http://feeds.feedburner.com",
+     "description": "Eat thoughtfully, live joyfully.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Green Kitchen Stories",
+     "url": "https://greenkitchenstories.com/feed/",
+     "site": "https://greenkitchenstories.com",
+     "description": "Healthy Vegetarian Recipes.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "How Sweet Eats",
+     "url": "https://www.howsweeteats.com/feed/",
+     "site": "https://www.howsweeteats.com",
+     "description": "For people who, like, totally love food.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Kitchn",
+     "url": "https://www.thekitchn.com/main.rss",
+     "site": "https://www.thekitchn.com",
+     "description": "Inspiring cooks, nourishing homes",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Laura in the Kitchen",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=LauraVitalesKitchen",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Love and Lemons",
+     "url": "http://www.loveandlemons.com/feed/",
+     "site": "http://www.loveandlemons.com",
+     "description": "Healthy, whole food, vegan and vegetarian recipes",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Love and Olive Oil",
+     "url": "https://www.loveandoliveoil.com/feed",
+     "site": "https://www.loveandoliveoil.com",
+     "description": "Eat to Live. Cook to Love.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NYT: Food",
+     "url": "https://rss.nytimes.com/services/xml/rss/nyt/DiningandWine.xml",
+     "site": "https://rss.nytimes.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Serious Eats",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=SeriousEats",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Serious Eats: Recipes",
+     "url": "http://feeds.feedburner.com/seriouseats/recipes",
+     "site": "http://feeds.feedburner.com",
+     "description": "Our Favorite Recipes, Curated and Collected",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Shutterbean",
+     "url": "http://www.shutterbean.com/feed/",
+     "site": "http://www.shutterbean.com",
+     "description": "food, photography & creative inspiration",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Sprouted Kitchen",
+     "url": "https://www.sproutedkitchen.com/home?format=rss",
+     "site": "https://www.sproutedkitchen.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "smitten kitchen",
+     "url": "http://feeds.feedburner.com/smittenkitchen",
+     "site": "http://feeds.feedburner.com",
+     "description": "Fearless cooking from a tiny NYC kitchen.",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "travel",
+   "name": "Travel",
+   "feeds": [
+    {
+     "title": "Atlas Obscura",
+     "url": "https://www.atlasobscura.com/feeds/latest",
+     "site": "https://www.atlasobscura.com",
+     "description": "The world's hidden wonders.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Points Guy",
+     "url": "https://thepointsguy.com/feed/",
+     "site": "https://thepointsguy.com",
+     "description": "Travel rewards and airline news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Adventure.com",
+     "url": "http://adventure.com/feed/",
+     "site": "http://adventure.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CNN.com - RSS Channel - App Travel Section",
+     "url": "http://rss.cnn.com/rss/cnn_travel.rss",
+     "site": "http://rss.cnn.com",
+     "description": "CNN.com delivers up-to-the-minute news and information on the latest top stories, weather, entertainment, politics…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Everything Everywhere Travel",
+     "url": "http://feeds2.feedburner.com/EverythingEverywhere/",
+     "site": "http://feeds2.feedburner.com",
+     "description": "Learn Something New Every Day!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Live Life Travel",
+     "url": "https://www.livelifetravel.world/feed/",
+     "site": "https://www.livelifetravel.world",
+     "description": "Your travel partner for life",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Million Mile Secrets",
+     "url": "http://feeds.feedburner.com/MillionMileSecrets",
+     "site": "http://feeds.feedburner.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NYT: Travel",
+     "url": "https://rss.nytimes.com/services/xml/rss/nyt/Travel.xml",
+     "site": "https://rss.nytimes.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "TFIL (Traveling to EVERY COUNTRY in A-Z Order)",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=ECastee",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Points Guy: Articles",
+     "url": "http://feeds.feedburner.com/thepointsguy",
+     "site": "http://feeds.feedburner.com",
+     "description": "The Points Guy Articles Feed",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Nomadic Matt",
+     "url": "https://www.nomadicmatt.com/travel-blog/feed/",
+     "site": "https://www.nomadicmatt.com",
+     "description": "Travel Better, Cheaper, Longer",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Travel Dudes",
+     "url": "https://www.traveldudes.com/feed/",
+     "site": "https://www.traveldudes.com",
+     "description": "For Travelers, By Travelers!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Guardian: Travel",
+     "url": "https://www.theguardian.com/uk/travel/rss",
+     "site": "https://www.theguardian.com",
+     "description": "Latest travel news and reviews on UK and world holidays, travel guides to global destinations, city breaks, hotels…",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "sports",
+   "name": "Sports",
+   "feeds": [
+    {
+     "title": "BBC Sport",
+     "url": "https://feeds.bbci.co.uk/sport/rss.xml",
+     "site": "https://www.bbc.com/sport",
+     "description": "Sports news from the BBC.",
+     "origin": "skim"
+    },
+    {
+     "title": "ESPN",
+     "url": "https://www.espn.com/espn/rss/news",
+     "site": "https://www.espn.com",
+     "description": "Top sports headlines.",
+     "origin": "skim"
+    },
+    {
+     "title": "",
+     "url": "https://sports.yahoo.com/rss/",
+     "site": "https://sports.yahoo.com",
+     "description": "Yahoo! Sports - Comprehensive news, scores, standings, fantasy games, rumors, and more",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CNN.com - RSS Channel - Sport",
+     "url": "http://rss.cnn.com/rss/edition_sport.rss",
+     "site": "http://rss.cnn.com",
+     "description": "CNN.com delivers up-to-the-minute news and information on the latest top stories, weather, entertainment, politics…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NYT: Sports",
+     "url": "https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml",
+     "site": "https://rss.nytimes.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Reddit Sports",
+     "url": "https://www.reddit.com/r/sports.rss",
+     "site": "https://www.reddit.com",
+     "description": "Sports News and Highlights from the NFL, NBA, NHL, MLB, MLS, NCAA, F1, and other leagues around the world.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Guardian: Sport",
+     "url": "https://www.theguardian.com/uk/sport/rss",
+     "site": "https://www.theguardian.com",
+     "description": "Latest Sport news, comment and analysis from the Guardian, the world's leading liberal voice",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Sky News: Sports",
+     "url": "http://feeds.skynews.com/feeds/rss/sports.xml",
+     "site": "http://feeds.skynews.com",
+     "description": "The best sports coverage from around the world, covering: Football, Cricket, Golf, Rugby, WWE, Boxing, Tennis and…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Times of India: Sports",
+     "url": "https://timesofindia.indiatimes.com/rssfeeds/4719148.cms",
+     "site": "https://timesofindia.indiatimes.com",
+     "description": "Get the latest sports news, live cricket scores and in-depth coverage of Cricket, Football, NBA, NFL, WWE, F1,…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Indian Express: Sports",
+     "url": "https://indianexpress.com/section/sports/feed/",
+     "site": "https://indianexpress.com",
+     "description": "Latest News Today, Breaking News, India News, Top Headlines",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Sportskeeda",
+     "url": "https://www.sportskeeda.com/feed",
+     "site": "https://www.sportskeeda.com",
+     "description": "Latest Sports News & Live Updates",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "BBC Sport",
+     "url": "https://feeds.bbci.co.uk/sport/football/rss.xml",
+     "site": "https://feeds.bbci.co.uk",
+     "description": "BBC Sport - Football",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CNN.com - RSS Channel - Sport - Football",
+     "url": "http://rss.cnn.com/rss/edition_football.rss",
+     "site": "http://rss.cnn.com",
+     "description": "CNN.com delivers up-to-the-minute news and information on the latest top stories, weather, entertainment, politics…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "EFL Championship",
+     "url": "https://www.reddit.com/r/Championship/.rss?format=xml",
+     "site": "https://www.reddit.com",
+     "description": "Home of the EFL Championship on Reddit",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Football - The People's Sport",
+     "url": "https://www.reddit.com/r/football/.rss?format=xml",
+     "site": "https://www.reddit.com",
+     "description": "Home of Football. Official Sponsors of Redditch United. News, Rumours, Analysis, gossip and much more.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Hindu: Football",
+     "url": "https://www.thehindu.com/sport/football/feeder/default.rss",
+     "site": "https://www.thehindu.com",
+     "description": "Get Football News, Updates, Fixtures, Commentary &amp; Live Scores From Top Leagues Like The Premier League, La…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Guardian: Football",
+     "url": "https://www.theguardian.com/football/rss",
+     "site": "https://www.theguardian.com",
+     "description": "Latest Football news, comment and analysis from the Guardian, the world's leading liberal voice",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NYT: Sports > Soccer",
+     "url": "https://rss.nytimes.com/services/xml/rss/nyt/Soccer.xml",
+     "site": "https://rss.nytimes.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Soccer News",
+     "url": "https://www.soccernews.com/feed",
+     "site": "https://www.soccernews.com",
+     "description": "The Latest Soccer News from around the globe.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "BBC Sport",
+     "url": "http://feeds.bbci.co.uk/sport/cricket/rss.xml",
+     "site": "http://feeds.bbci.co.uk",
+     "description": "BBC Sport - Cricket",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Can't Bowl Can't Throw Cricket Show",
+     "url": "http://feeds.feedburner.com/cantbowlcantthrow",
+     "site": "http://feeds.feedburner.com",
+     "description": "The third season of the Can't Bowl Can't Throw Cricket Show, in which we talk about cricket on a podcast.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Cricbuzz",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCSRQXk5yErn4e14vN76upOw",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Cricket",
+     "url": "https://www.reddit.com/r/Cricket/.rss",
+     "site": "https://www.reddit.com",
+     "description": "News, banter and occasional serious discussion on the great game.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Times of India: Cricket",
+     "url": "https://timesofindia.indiatimes.com/rssfeeds/54829575.cms",
+     "site": "https://timesofindia.indiatimes.com",
+     "description": "Latest and Breaking Cricket News: Check live cricket scores, schedule, results, scorecard, upcoming matches list and…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Wisden",
+     "url": "https://www.wisden.com/feed",
+     "site": "https://www.wisden.com",
+     "description": "The independent voice of cricket",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ESPNcricinfo",
+     "url": "http://www.espncricinfo.com/rss/content/story/feeds/0.xml",
+     "site": "http://www.espncricinfo.com",
+     "description": "Visit Cricinfo.com for up-to-the-minute cricket news, breaking cricket news, live cricket commentary, ball-by-ball…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Guardian: Cricket",
+     "url": "https://www.theguardian.com/sport/cricket/rss",
+     "site": "https://www.theguardian.com",
+     "description": "Latest news and features from theguardian.com, the world's leading liberal voice",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Indian Express: Cricket",
+     "url": "https://indianexpress.com/section/sports/cricket/feed/",
+     "site": "https://indianexpress.com",
+     "description": "Latest News Today, Breaking News, India News, Top Headlines",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Cricket – The Roar",
+     "url": "https://www.theroar.com.au/cricket/feed/",
+     "site": "https://www.theroar.com.au",
+     "description": "Australia's Biggest Sporting Debate",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "England & Wales Cricket Board",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=ecbcricket",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NDTV: Cricket",
+     "url": "http://feeds.feedburner.com/ndtvsports-cricket",
+     "site": "http://feeds.feedburner.com",
+     "description": "NDTV.com provides the latest information from and in-depth coverage of India and the world.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Pakistan Cricket",
+     "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCiWrjBhlICf_L_RK5y6Vrxw",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Sri Lanka Cricket",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=TheOfficialSLC",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Stumped",
+     "url": "https://podcasts.files.bbci.co.uk/p02gsrmh.rss",
+     "site": "https://podcasts.files.bbci.co.uk",
+     "description": "The weekly cricket show from BBC Sport in association with ABC and Akashvani.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Switch Hit Podcast",
+     "url": "https://feeds.megaphone.fm/ESP9247246951",
+     "site": "https://feeds.megaphone.fm",
+     "description": "Lively debate and discussion about the game on and off the field with a focus on English cricket.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Tailenders",
+     "url": "https://podcasts.files.bbci.co.uk/p02pcb4w.rss",
+     "site": "https://podcasts.files.bbci.co.uk",
+     "description": "Greg James, Jimmy Anderson and Felix White take an alternative (and sometimes musical) look at cricket...",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Test Match Special",
+     "url": "https://podcasts.files.bbci.co.uk/p02nrsl2.rss",
+     "site": "https://podcasts.files.bbci.co.uk",
+     "description": "The Test Match Special team bring you the very best cricket reaction, insight & analysis.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "cricket.com.au",
+     "url": "https://www.youtube.com/feeds/videos.xml?user=cricketaustraliatv",
+     "site": "https://www.youtube.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "BBC Sport",
+     "url": "http://feeds.bbci.co.uk/sport/tennis/rss.xml",
+     "site": "http://feeds.bbci.co.uk",
+     "description": "BBC Sport - Tennis",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "CNN.com - RSS Channel - Sport - Tennis",
+     "url": "http://rss.cnn.com/rss/edition_tennis.rss",
+     "site": "http://rss.cnn.com",
+     "description": "CNN.com delivers up-to-the-minute news and information on the latest top stories, weather, entertainment, politics…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Essential Tennis Podcast - Instruction, Lessons, Tips",
+     "url": "https://feed.podbean.com/essentialtennis/feed.xml",
+     "site": "https://feed.podbean.com",
+     "description": "Improve your tennis with the Essential Tennis Podcast, the very first podcast dedicated to tennis lessons and…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NYT: Sports > Tennis",
+     "url": "https://rss.nytimes.com/services/xml/rss/nyt/Tennis.xml",
+     "site": "https://rss.nytimes.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Perfect Tennis",
+     "url": "https://www.perfect-tennis.com/feed/",
+     "site": "https://www.perfect-tennis.com",
+     "description": "Tennis Blog",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Tennis News & Discussion",
+     "url": "https://www.reddit.com/r/tennis/.rss",
+     "site": "https://www.reddit.com",
+     "description": "Professional tennis discussion. Feel free to visit our sister sub for more information on technique, r/10s.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Hindu: Tennis",
+     "url": "https://www.thehindu.com/sport/tennis/feeder/default.rss",
+     "site": "https://www.thehindu.com",
+     "description": "Find Tennis Results, Commentary, Highlights, Live Scores, Latest News From The ATP Tour, WTA Tour &amp; All The…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Guardian: Tennis",
+     "url": "https://www.theguardian.com/sport/tennis/rss",
+     "site": "https://www.theguardian.com",
+     "description": "Latest news and features from theguardian.com, the world's leading liberal voice",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Indian Express: Tennis",
+     "url": "https://indianexpress.com/section/sports/tennis/feed/",
+     "site": "https://indianexpress.com",
+     "description": "Latest News Today, Breaking News, India News, Top Headlines",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ESPN: Tennis",
+     "url": "https://www.espn.com/espn/rss/tennis/news",
+     "site": "https://www.espn.com",
+     "description": "Latest TENNIS news from www.espn.com",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "cars",
+   "name": "Cars",
+   "feeds": [
+    {
+     "title": "Electrek",
+     "url": "https://electrek.co/feed/",
+     "site": "https://electrek.co",
+     "description": "Electric vehicles and clean transport.",
+     "origin": "skim"
+    },
+    {
+     "title": "The Drive",
+     "url": "https://www.thedrive.com/feed",
+     "site": "https://www.thedrive.com",
+     "description": "Car news and reviews.",
+     "origin": "skim"
+    },
+    {
+     "title": "Jalopnik",
+     "url": "https://jalopnik.com/rss",
+     "site": "https://jalopnik.com",
+     "description": "Car culture and news.",
+     "origin": "skim"
+    },
+    {
+     "title": "Autocar RSS Feed",
+     "url": "https://www.autocar.co.uk/rss",
+     "site": "https://www.autocar.co.uk",
+     "description": "Welcome to nirvana for car enthusiasts.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "BMWBLOG",
+     "url": "https://feeds.feedburner.com/BmwBlog",
+     "site": "https://feeds.feedburner.com",
+     "description": "Latest BMW News, Reviews and New Models",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "BikeEXIF",
+     "url": "https://www.bikeexif.com/feed",
+     "site": "https://www.bikeexif.com",
+     "description": "Latest updates from BikeEXIF",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Car Body Design",
+     "url": "https://www.carbodydesign.com/feed/",
+     "site": "https://www.carbodydesign.com",
+     "description": "Car Design Resources, News and Tutorials",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Carscoops",
+     "url": "https://www.carscoops.com/feed/",
+     "site": "https://www.carscoops.com",
+     "description": "Breaking Car News, Scoops & Reviews",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Formula 1",
+     "url": "https://www.reddit.com/r/formula1/.rss",
+     "site": "https://www.reddit.com",
+     "description": "Welcome to r/formula1, the largest independent online Formula 1 community!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Car and Driver",
+     "url": "https://www.caranddriver.com/rss/all.xml/",
+     "site": "https://www.caranddriver.com",
+     "description": "RSS feed for Latest Content - Car and Driver",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Speedhunters",
+     "url": "http://feeds.feedburner.com/speedhunters",
+     "site": "http://feeds.feedburner.com",
+     "description": "Global Car Culture Since 2008",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Bring a Trailer",
+     "url": "https://bringatrailer.com/feed/",
+     "site": "https://bringatrailer.com",
+     "description": "Barn finds, rally cars, and needles in the haystack.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "TheTruthAboutCars",
+     "url": "https://www.thetruthaboutcars.com/feed/",
+     "site": "https://www.thetruthaboutcars.com",
+     "description": "TheTruthAboutCars RSS feed",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "diy",
+   "name": "DIY & making",
+   "feeds": [
+    {
+     "title": "Make:",
+     "url": "https://makezine.com/feed/",
+     "site": "https://makezine.com",
+     "description": "Projects and news for makers.",
+     "origin": "skim"
+    },
+    {
+     "title": "Hackaday",
+     "url": "https://hackaday.com/blog/feed/",
+     "site": "https://hackaday.com",
+     "description": "Fresh hacks every day.",
+     "origin": "skim"
+    },
+    {
+     "title": "A Beautiful Mess",
+     "url": "https://abeautifulmess.com/feed",
+     "site": "https://abeautifulmess.com",
+     "description": "Crafts, Home Décor, Recipes",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Centsational Style",
+     "url": "https://centsationalstyle.com/feed/",
+     "site": "https://centsationalstyle.com",
+     "description": "Design, Decorating & DIY",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "How-To Geek",
+     "url": "https://www.howtogeek.com/feed/",
+     "site": "https://www.howtogeek.com",
+     "description": "We explain technology.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "IKEA Hackers",
+     "url": "https://www.ikeahackers.net/feed",
+     "site": "https://www.ikeahackers.net",
+     "description": "Clever ideas and hacks for your IKEA Furniture",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "MakeUseOf",
+     "url": "https://www.makeuseof.com/feed/",
+     "site": "https://www.makeuseof.com",
+     "description": "MUO is your guide to modern tech.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Oh Happy Day!",
+     "url": "http://ohhappyday.com/feed/",
+     "site": "http://ohhappyday.com",
+     "description": "Oh Happy Day is a party and lifestyle blog based in San Francisco. We love to throw parties and make things!",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "WonderHowTo",
+     "url": "https://www.wonderhowto.com/rss.xml",
+     "site": "https://www.wonderhowto.com",
+     "description": "Wonder How To is your guide to free how to videos on the Web.",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  },
+  {
+   "id": "style",
+   "name": "Style",
+   "feeds": [
+    {
+     "title": "",
+     "url": "https://www.fashionbeans.com/rss-feed/?category=fashion",
+     "site": "https://www.fashionbeans.com",
+     "description": "Men's Fashion Tips and Men's Style Guide - Updated Daily",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ELLE: Fashion",
+     "url": "https://www.elle.com/rss/fashion.xml/",
+     "site": "https://www.elle.com",
+     "description": "RSS feed for Fashion - ELLE",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Guardian: Fashion",
+     "url": "https://www.theguardian.com/fashion/rss",
+     "site": "https://www.theguardian.com",
+     "description": "The latest fashion news, advice and comment from the Guardian",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Fashionista",
+     "url": "https://fashionista.com/.rss/excerpt/",
+     "site": "https://fashionista.com",
+     "description": "Fashionista Full",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Who What Wear",
+     "url": "https://www.whowhatwear.com/rss",
+     "site": "https://www.whowhatwear.com",
+     "description": "All the latest content from the Who What Wear team",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "NYT: Style",
+     "url": "https://rss.nytimes.com/services/xml/rss/nyt/FashionandStyle.xml",
+     "site": "https://rss.nytimes.com",
+     "description": "",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "POPSUGAR Fashion",
+     "url": "https://www.popsugar.com/fashion/feed",
+     "site": "https://www.popsugar.com",
+     "description": "Top Fashion Stories",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Refinery29",
+     "url": "https://www.refinery29.com/fashion/rss.xml",
+     "site": "https://www.refinery29.com",
+     "description": "Refinery29",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "ELLE: Beauty",
+     "url": "https://www.elle.com/rss/beauty.xml/",
+     "site": "https://www.elle.com",
+     "description": "RSS feed for Beauty - ELLE",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Fashionista",
+     "url": "https://fashionista.com/.rss/excerpt/beauty",
+     "site": "https://fashionista.com",
+     "description": "Fashionista Full",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "From Head To Toe",
+     "url": "http://feeds.feedburner.com/frmheadtotoe",
+     "site": "http://feeds.feedburner.com",
+     "description": "A beauty blog by Korean-American Jen Chae \"From Head To Toe\" @frmheadtotoe that showcases monolid and asian eyes…",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Into The Gloss - Beauty Tips, Trends, And Product Reviews",
+     "url": "https://feeds.feedburner.com/intothegloss/oqoU",
+     "site": "https://feeds.feedburner.com",
+     "description": "The best in beauty tips, makeup tutorials, product reviews, and techniques from industry leaders worldwide.",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "POPSUGAR Beauty",
+     "url": "https://www.popsugar.com/beauty/feed",
+     "site": "https://www.popsugar.com",
+     "description": "Top Beauty Stories",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "Refinery29",
+     "url": "https://www.refinery29.com/beauty/rss.xml",
+     "site": "https://www.refinery29.com",
+     "description": "Refinery29",
+     "origin": "awesome-rss-feeds"
+    },
+    {
+     "title": "The Beauty Look Book",
+     "url": "https://thebeautylookbook.com/feed",
+     "site": "https://thebeautylookbook.com",
+     "description": "Beauty Blog, Reviews + Makeup Looks",
+     "origin": "awesome-rss-feeds"
+    }
+   ]
+  }
+ ]
+}

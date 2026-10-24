@@ -186,6 +186,7 @@ const main = async () => {
     // SKIM_MOCK=0 drives the real app (over the dev bridge) instead of the
     // demo fixtures; the mid-run scenes then show whatever the backend has.
     if (process.env.SKIM_MOCK !== "0") {
+      await p.addInitScript({ content: `window.__SKIM_CATALOG__ = ${await fs.readFile(path.join(path.resolve(HERE, "../.."), "shared/feed-catalog.json"), "utf8")};` });
       await p.addInitScript({ path: path.join(HERE, "fixtures.js") });
       await p.addInitScript({ path: path.join(HERE, "mock-backend.js") });
       if (scene.init) await p.addInitScript(scene.init);

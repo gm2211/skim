@@ -163,7 +163,7 @@ final class TasteStore {
 
 /// The model's two-axis rating of one article for the AI Inbox.
 struct InboxAIScore: Codable, Equatable {
-    /// Significance for anyone following the area, 1-5.
+    /// Impact of the thing at the center of the article, in any field, 1-5.
     var importance: Int
     /// Fit with this reader's interests, 1-5.
     var relevance: Int

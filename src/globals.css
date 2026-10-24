@@ -995,6 +995,14 @@ select option {
 .today-themes { display: flex; flex-wrap: wrap; gap: 6px 12px; border-bottom: 1px solid var(--color-border); padding-block: 12px; margin-bottom: 24px; }
 .today-themes button[aria-pressed="true"] { color: var(--color-accent); box-shadow: inset 0 -2px var(--color-accent); }
 .today-summary-kind, .today-summary-note { font-size: 12px; color: var(--color-text-muted); margin-top: 10px; line-height: 1.5; }
+.today-ai-off { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--color-warning) 45%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--color-warning) 9%, transparent); font-size: 12.5px; line-height: 1.45; color: var(--color-text-secondary); }
+.today-ai-off-icon { flex-shrink: 0; color: var(--color-warning); }
+.today-ai-off-text { flex: 1; min-width: 0; }
+.today-ai-off-title { font-size: 13.5px; font-weight: 600; color: var(--color-text-primary); }
+.today-ai-off-action { flex-shrink: 0; min-height: 36px; padding: 0 14px; border-radius: 8px; background: var(--color-accent); color: var(--color-bg-primary); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.today-ai-off-action:hover { background: var(--color-accent-hover); }
+@container (max-width: 520px) { .today-ai-off { flex-wrap: wrap; } .today-ai-off-action { width: 100%; } }
+.today-summary-failed { font-size: 12px; color: var(--color-warning); margin-top: 10px; line-height: 1.5; }
 .today-coverage { font-weight: 400; letter-spacing: 0; text-transform: none; }
 .today-evidence { font-family: Georgia, serif; font-size: 13px; line-height: 1.6; border-left: 2px solid var(--color-border); padding-left: 12px; margin-block: 4px 14px; color: var(--color-text-secondary); }
 

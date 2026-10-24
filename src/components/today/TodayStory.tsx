@@ -138,6 +138,7 @@ function Figure({ value, label }: { value: string; label: string }) {
 }
 
 /** Ledes shorter than this stay in one column. */
+const LEAD_SHORT_CHARS = 320;
 const LEAD_COLUMNS_MIN_CHARS = 260;
 
 export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onOpenArticle, onAsk, isWritingSummary = false }: Props) {
@@ -179,14 +180,20 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
   // Image lookups prefer the representative report, then the rest of the coverage.
   const imageArticleIds = [articleId, ...members.map((member) => member.article_id)]
     .filter((id, index, ids): id is string => !!id && ids.indexOf(id) === index);
-  const accent = themeColor(item.editorial?.theme);
+  const kicker = item.editorial?.theme || primary?.publication || primary?.feed_title;
+  // Unsummarized stories take their publication's colour so a page without
+  // summaries still reads in colour; a theme takes over once it is written.
+  const accent = themeColor(kicker);
+  // A lead with only a line or two of text would leave a tall gap beside the
+  // rail; the page then sets it full width with the rail beneath.
+  const short = lead && !isWritingSummary && body.length < LEAD_SHORT_CHARS && !quotes.length && !figure;
 
   return (
-    <article className={`story-rise-in today-story today-story--${rank} ${item.is_consumed ? "today-story--read" : ""}`}
+    <article className={`story-rise-in today-story today-story--${rank} ${short ? "today-story--short" : ""} ${item.is_consumed ? "today-story--read" : ""}`}
       style={accent ? { "--today-theme": accent } as CSSProperties : undefined}>
       {showsImage && <ReportImage key={imageArticleIds.join(",")} articleIds={imageArticleIds} title={item.snapshot_title} />}
       <div className="today-byline today-kicker">
-        {item.editorial?.theme || primary?.publication || primary?.feed_title}
+        {kicker}
         {coverageCount > 1 && <span className="today-coverage"> · {coverageCount} reports covering this story</span>}
       </div>
       {rank === "feature" && figure && <Figure value={figure.value} label={figure.label} />}
@@ -216,6 +223,9 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
           <span className="today-story-skeleton-bar" />
           <span className="today-story-skeleton-bar" />
         </div>
+      )}
+      {!isWritingSummary && !summary && item.editorial_error && (
+        <p className="today-summary-failed" role="note">Not summarized: {item.editorial_error}</p>
       )}
       {body && item.editorial && !brief && (
         <p className="today-summary-kind">AI summary · Based on {item.editorial.sources.length} of {members.length} {members.length === 1 ? "report" : "reports"}</p>

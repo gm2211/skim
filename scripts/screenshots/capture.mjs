@@ -123,6 +123,8 @@ const STEPS = [
 
 async function freshPage(ctx) {
   const p = await ctx.newPage();
+  const catalog = await fs.readFile(path.join(ROOT, "shared/feed-catalog.json"), "utf8");
+  await p.addInitScript({ content: `window.__SKIM_CATALOG__ = ${catalog};` });
   await p.addInitScript({ path: path.join(HERE, "fixtures.js") });
   await p.addInitScript({ path: path.join(HERE, "mock-backend.js") });
   await p.goto(URL_, { waitUntil: "networkidle" });

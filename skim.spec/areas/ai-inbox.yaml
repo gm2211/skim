@@ -31,8 +31,10 @@ behaviors:
       The model assesses each unread article's relevance to the reader and its importance, and the
       AI Inbox sorts articles with the most relevant and important first.
     details: >-
-      The model rates every unread article on two 1-5 scales, importance (significance for anyone
-      following the area) and relevance (fit with this reader), plus a one-line reason. Both apps
+      The model rates every unread article on two 1-5 scales, importance (the impact of the thing
+      at the center of the article, judged the same in every field, with no kind of news given a
+      head start; see today.yaml ranked-by-consequence) and relevance (fit with this reader), plus a
+      one-line reason. Both apps
       rank by the shared skim_inbox_score in SkimStoryPolicy, which blends the two ratings with
       learned taste and a small recency decay; pinned articles stay on top. Desktop groups the
       ranked list into Top picks, Worth reading, When you have time and Low priority, and each

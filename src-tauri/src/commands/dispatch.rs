@@ -14,7 +14,7 @@ use crate::ai::prompts;
 use crate::ai::provider::{create_provider_with_app, AiProvider, ChatMessage, ChatRequest};
 use crate::commands::ai::{default_model, extract_json_object, lead_image, runs_on_device};
 use crate::commands::editions::{chat_with_backoff, transient_model_error};
-use crate::db::models::{AppSettings, ArticleFilter, ArticleWithFeed};
+use crate::db::models::{AppSettings, ArticleFilter, ArticleWithFeed, UserPreferenceProfile};
 use crate::db::{queries, Database};
 use crate::AppHandle;
 use futures_util::future::Either;
@@ -397,11 +397,12 @@ pub async fn plan_edition(
     interests: Option<&str>,
     pool: &[ArticleWithFeed],
     excerpt_chars: usize,
+    preferences: Option<&UserPreferenceProfile>,
 ) -> Result<Plan, String> {
     let request = ChatRequest {
         model: model.into(),
         messages: vec![
-            ChatMessage::text("system", prompts::dispatch_editor_system_prompt(days, interests)),
+            ChatMessage::text("system", prompts::dispatch_editor_system_prompt(days, interests, preferences)),
             ChatMessage::text("user", prompts::dispatch_editor_user_prompt(&listing(pool, excerpt_chars))),
         ],
         temperature: Some(0.2),
@@ -419,11 +420,12 @@ pub async fn plan_lead(
     interests: Option<&str>,
     pool: &[ArticleWithFeed],
     excerpt_chars: usize,
+    preferences: Option<&UserPreferenceProfile>,
 ) -> Result<DispatchTheme, String> {
     let request = ChatRequest {
         model: model.into(),
         messages: vec![
-            ChatMessage::text("system", prompts::dispatch_lead_system_prompt(days, interests)),
+            ChatMessage::text("system", prompts::dispatch_lead_system_prompt(days, interests, preferences)),
             ChatMessage::text("user", prompts::dispatch_lead_user_prompt(&listing(pool, excerpt_chars))),
         ],
         temperature: Some(0.2),
@@ -655,14 +657,14 @@ pub async fn write_dispatch(
     validate_window(starts_at, ends_at, days)?;
     let id = edition_id(starts_at, ends_at, days);
     let mode = mode.unwrap_or_else(|| "open".into());
-    let (existing, settings) = {
+    let (existing, settings, preferences) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let settings: AppSettings = queries::get_setting(&conn, "app_settings")
             .map_err(|e| e.to_string())?
             .as_deref()
             .and_then(|json| serde_json::from_str(json).ok())
             .unwrap_or_default();
-        (load(&conn, &id)?, settings)
+        (load(&conn, &id)?, settings, queries::build_preference_profile(&conn).ok())
     };
     if !writing().lock().map_err(|e| e.to_string())?.insert(id.clone()) {
         // Another call is writing it; hand back the page as it stands.
@@ -721,7 +723,7 @@ pub async fn write_dispatch(
             emit(&format!("Reading {} articles…", pool.len()), &edition);
             let interests = ai_settings.triage_user_prompt.as_deref();
             let excerpt = if on_device { ON_DEVICE_EXCERPT_CHARS } else { HOSTED_EXCERPT_CHARS };
-            let planning = plan_edition(provider.as_ref(), &model, days, interests, &pool, excerpt);
+            let planning = plan_edition(provider.as_ref(), &model, days, interests, &pool, excerpt, preferences.as_ref());
             let (plan, lead) = if on_device {
                 (planning.await, None)
             } else {
@@ -729,7 +731,7 @@ pub async fn write_dispatch(
                 // piece is written while the full plan is still being drawn up.
                 let leading = async {
                     // Headlines alone: the short listing is what makes this answer quick.
-                    let mut lead = plan_lead(provider.as_ref(), &model, days, interests, &pool, 0).await?;
+                    let mut lead = plan_lead(provider.as_ref(), &model, days, interests, &pool, 0, preferences.as_ref()).await?;
                     let mut page = edition.clone();
                     page.articles = pool.iter().filter(|a| lead.article_ids.contains(&a.article.id)).map(dispatch_article).collect();
                     page.themes = vec![lead.clone()];

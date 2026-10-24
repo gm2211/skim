@@ -45,7 +45,7 @@
       "entitlements": "Entitlements.plist",
       "infoPlist": "Info.plist",
       "signingIdentity": "-",
-      "bundleVersion": "69"
+      "bundleVersion": "70"
     },
     "icon": [
       "icons/32x32.png",

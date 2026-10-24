@@ -1,4 +1,7 @@
-// Design mock captures for the cited-item styles in the Cmd+K answer.
+// Captures a chat answer with citation chips and source cards, for the visual check
+// before a ship: the Cmd+K palette at rest, with a chip hovered, with a card hovered,
+// and the full Ask Skim chat (FULL=1).
+//   pnpm dev; OUT=/tmp/cit WIDTHS=1440,640 node scripts/screenshots/citations.mjs
 import { chromium } from "playwright";
 import path from "node:path";
 import fs from "node:fs/promises";
@@ -8,7 +11,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "../..");
 const OUT = process.env.OUT || "/tmp/citations";
 const URL_ = process.env.SKIM_URL || "http://localhost:1420/";
-const STYLES = (process.env.STYLES || "perplexity").split(",");
+const STYLES = ["chat"];
 const WIDTHS = (process.env.WIDTHS || "1440").split(",").map(Number);
 
 const PATCH = `
@@ -38,7 +41,7 @@ const main = async () => {
       const p = await ctx.newPage();
       p.on("pageerror", (e) => console.warn(`! ${style}: ${e}`));
       const catalog = await fs.readFile(path.join(ROOT, "shared/feed-catalog.json"), "utf8");
-      await p.addInitScript({ content: `window.__SKIM_CATALOG__ = ${catalog}; try { localStorage.setItem("skim.citationStyle", ${JSON.stringify(style)}); } catch {}` });
+      await p.addInitScript({ content: `window.__SKIM_CATALOG__ = ${catalog};` });
       await p.addInitScript({ path: path.join(HERE, "fixtures.js") });
       await p.addInitScript({ path: path.join(HERE, "mock-backend.js") });
       await p.addInitScript({ content: PATCH });
@@ -53,13 +56,18 @@ const main = async () => {
       await p.waitForSelector(".source-tile", { timeout: 5000 });
       await p.waitForTimeout(300);
       // Hover the second cited item to show the hover state.
+      if (process.env.FULL) {
+        await p.getByRole("button", { name: /Open full chat/ }).click();
+        await p.waitForSelector('[role="dialog"] .source-tile', { timeout: 5000 });
+        await p.waitForTimeout(300);
+      }
       if (process.env.HOVER === "chip") await p.locator(".cite-chip").nth(1).hover();
       else if (process.env.HOVER === "tile") await p.locator(".source-tile").nth(2).hover();
       else await p.mouse.move(2, 2);
       await p.waitForTimeout(200);
-      const dialog = p.locator('[role="dialog"]').first();
+      const dialog = p.locator('[role="dialog"]').last();
       const box = (await dialog.count()) ? await dialog.boundingBox() : null;
-      const file = path.join(OUT, `${style}-${process.env.HOVER || "rest"}-${width}.png`);
+      const file = path.join(OUT, `${process.env.FULL ? "full" : "palette"}-${process.env.HOVER || "rest"}-${width}.png`);
       await p.screenshot({ path: file, clip: box || undefined });
       console.log("captured", file);
       await p.close();

@@ -466,6 +466,7 @@ export function CommandPalette() {
                 return cited ? (
                   <SourceTile
                     key={command.id}
+                    inListbox
                     id={`command-${index}`}
                     source={cited.source}
                     label={cited.label}

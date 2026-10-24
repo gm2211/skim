@@ -1605,7 +1605,7 @@ enum NativeAI {
 
     static func chatInstructions(isLibrary: Bool, enableWebSearch: Bool) -> String {
         let base = isLibrary
-            ? "You answer questions across a set of RSS articles using the provided article list and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks. When mentioning, ranking, recommending, or listing articles, cite each article with its numeric handle like [3] and its title. Keep handles attached to the relevant sentence or bullet so the app can make them clickable. If the answer is not supported by the supplied articles or web results, say so."
+            ? "You answer questions across a set of RSS articles using the provided article list and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks. Answer first, in plain prose of about 50 to 100 words, so the reader gets the gist without opening the articles. Cite each article you draw on with its numeric handle like [3], placed right after the claim it supports. Do not list the articles or repeat their titles as a list: the app shows every cited article as a card under the answer. If the answer is not supported by the supplied articles or web results, say so."
             : "You answer questions about a single article using the provided article text and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks you to recap it. If the answer is not supported by the supplied article text or web results, say so."
         guard enableWebSearch else { return base }
         return base + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices."
@@ -3812,6 +3812,8 @@ struct AIChatSheet: View {
     @State private var isSending = false
     @State private var showReauth = false
     @State private var showAISettings = false
+    /// Articles opened from the chat, so a citation chip can push one like a card does.
+    @State private var path: [String] = []
     @FocusState private var focused: Bool
     private var initialAssistantMessage: String?
     private let bottomAnchorID = "chat-bottom-anchor"
@@ -3828,7 +3830,7 @@ struct AIChatSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -3857,6 +3859,7 @@ struct AIChatSheet: View {
                                 ForEach(messages) { message in
                                     AIChatBubble(
                                         message: message,
+                                        onOpenArticle: { path.append($0) },
                                         onReauth: { showReauth = true },
                                         onOpenSettings: { showAISettings = true },
                                         onReply: isSending ? nil : { quote in
@@ -4127,12 +4130,24 @@ struct AIChatMessage: Identifiable, Sendable {
 
 private struct AIChatBubble: View {
     var message: AIChatMessage
+    var onOpenArticle: ((String) -> Void)? = nil
     var onReauth: (() -> Void)? = nil
     var onOpenSettings: (() -> Void)? = nil
     var onReply: ((String) -> Void)? = nil
 
     @State private var activeCitation: WebCitation?
     @State private var selectedText = ""
+
+    /// The answer with each [n] turned into a chip link numbered like its card.
+    private var citedMarkdown: String {
+        guard message.role == .assistant, !message.referencedArticles.isEmpty else { return message.text }
+        return ArticleReferenceExtractor.labeledCitations(
+            in: message.text,
+            references: message.referencedArticles,
+            contextArticles: message.contextArticles,
+            contextHandles: message.contextHandles
+        )
+    }
 
     var body: some View {
         HStack {
@@ -4158,10 +4173,11 @@ private struct AIChatBubble: View {
                 }
 
                 SelectableChatText(
-                    text: message.role == .assistant && !message.isError ? ChatMarkdown.attributed(message.text) : AttributedString(message.text),
+                    text: message.role == .assistant && !message.isError ? ChatMarkdown.attributed(citedMarkdown) : AttributedString(message.text),
                     sourceMarkdown: message.text,
                     isError: message.isError,
                     onReply: message.role == .assistant && !message.isError ? onReply : nil,
+                    onOpenCitation: onOpenArticle,
                     onSelection: { selectedText = $0 }
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -4217,14 +4233,18 @@ private struct AIChatBubble: View {
                 }
 
                 if !message.referencedArticles.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(message.referencedArticles) { article in
-                            NavigationLink(value: article.id) {
-                                ChatArticleReferenceRow(article: article)
+                    // The cited articles as cards, numbered like the chips in the answer.
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 8) {
+                            ForEach(Array(message.referencedArticles.enumerated()), id: \.element.id) { index, article in
+                                NavigationLink(value: article.id) {
+                                    ChatSourceTile(article: article, label: index + 1)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
+                    .scrollClipDisabled()
                 }
 
                 if !message.webCitations.isEmpty {
@@ -4264,6 +4284,7 @@ private struct SelectableChatText: UIViewRepresentable {
     var sourceMarkdown: String
     var isError: Bool
     var onReply: ((String) -> Void)?
+    var onOpenCitation: ((String) -> Void)? = nil
     var onSelection: (String) -> Void
 
     func makeUIView(context: Context) -> ChatSelectableTextView {
@@ -4284,6 +4305,7 @@ private struct SelectableChatText: UIViewRepresentable {
     func updateUIView(_ view: ChatSelectableTextView, context: Context) {
         context.coordinator.onSelection = onSelection
         context.coordinator.onReply = onReply
+        context.coordinator.onOpenCitation = onOpenCitation
         let rendered = makeRenderedText()
         if view.attributedText != rendered {
             view.attributedText = rendered
@@ -4330,6 +4352,17 @@ private struct SelectableChatText: UIViewRepresentable {
             rendered.addAttribute(.font, value: font, range: range)
         }
 
+        // Citation chips: a small number on a tinted pill, matching its card under the answer.
+        for run in text.runs {
+            guard let url = run.link, url.scheme == ArticleReferenceExtractor.citationScheme else { continue }
+            let prefix = String(text[text.startIndex..<run.range.lowerBound].characters)
+            let selected = String(text[run.range].characters)
+            let range = NSRange(location: prefix.utf16.count, length: selected.utf16.count)
+            rendered.addAttribute(.font, value: UIFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold), range: range)
+            rendered.addAttribute(.backgroundColor, value: UIColor.tintColor.withAlphaComponent(0.18), range: range)
+            rendered.addAttribute(.baselineOffset, value: 1, range: range)
+        }
+
         let renderedString = rendered.string as NSString
         var searchLocation = 0
         var headingCodeFence: (marker: Character, length: Int)?
@@ -4369,9 +4402,15 @@ private struct SelectableChatText: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var onSelection: (String) -> Void
         var onReply: ((String) -> Void)?
+        var onOpenCitation: ((String) -> Void)?
         init(onSelection: @escaping (String) -> Void, onReply: ((String) -> Void)?) {
             self.onSelection = onSelection
             self.onReply = onReply
+        }
+        func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
+            guard case .link(let url) = textItem.content, url.scheme == ArticleReferenceExtractor.citationScheme else { return defaultAction }
+            guard let onOpenCitation, let id = ArticleReferenceExtractor.citedArticleID(url) else { return nil }
+            return UIAction { _ in onOpenCitation(id) }
         }
         func textViewDidChangeSelection(_ textView: UITextView) {
             guard let range = textView.selectedTextRange else { onSelection(""); return }
@@ -4548,6 +4587,44 @@ private struct CitationBrowserSheet: View {
     }
 }
 
+/// A cited article as a card: the number its chips carry, the feed, and the title.
+private struct ChatSourceTile: View {
+    var article: Article
+    var label: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text("\(label)")
+                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .frame(minWidth: 18, minHeight: 18)
+                    .background(SkimStyle.accent, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                Text(article.feedTitle)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+            }
+            Text(article.title)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(SkimStyle.text)
+                .lineLimit(3)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(width: 196, height: 104, alignment: .topLeading)
+        .background(SkimStyle.chrome.opacity(0.64), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(SkimStyle.separator.opacity(0.6), lineWidth: 1)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Source \(label): \(article.title), \(article.feedTitle)")
+    }
+}
+
 private struct ChatArticleReferenceRow: View {
     var article: Article
 
@@ -4588,6 +4665,39 @@ private struct ChatArticleReferenceRow: View {
 }
 
 enum ArticleReferenceExtractor {
+    static let citationScheme = "skim-cite"
+
+    /// Rewrites each [n] the answer cites as a chip link numbered by its place in
+    /// `references` (where the reader first meets it), so the chip and the card
+    /// under the answer carry the same number. Chips stay on their word's line.
+    static func labeledCitations(in text: String, references: [Article], contextArticles: [Article], contextHandles: [Int]) -> String {
+        guard let regex = try? NSRegularExpression(pattern: #"( ?)\[(\d+)\](?!\()"#) else { return text }
+        let ns = text as NSString
+        var result = ""
+        var cursor = 0
+        for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            result += ns.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
+            cursor = NSMaxRange(match.range)
+            let original = ns.substring(with: match.range)
+            guard let handle = Int(ns.substring(with: match.range(at: 2))) else { result += original; continue }
+            let position = contextHandles.isEmpty ? handle - 1 : (contextHandles.firstIndex(of: handle) ?? -1)
+            guard contextArticles.indices.contains(position),
+                  let label = references.firstIndex(where: { $0.id == contextArticles[position].id }),
+                  let id = contextArticles[position].id.addingPercentEncoding(withAllowedCharacters: .alphanumerics)
+            else { result += original; continue }
+            let lead = match.range(at: 1).length > 0 ? "\u{00A0}" : "\u{2060}"
+            result += "\(lead)[\u{2009}\(label + 1)\u{2009}](\(citationScheme):\(id))"
+        }
+        return result + ns.substring(from: cursor)
+    }
+
+    /// The article a chip link made by `labeledCitations` points at.
+    static func citedArticleID(_ url: URL) -> String? {
+        guard url.scheme == citationScheme else { return nil }
+        let encoded = url.absoluteString.dropFirst(citationScheme.count + 1)
+        return String(encoded).removingPercentEncoding
+    }
+
     static func references(in text: String, articles: [Article], handles: [Int]? = nil) -> [Article] {
         var references: [Article] = []
         var seenIDs: Set<String> = []

@@ -27,7 +27,7 @@ beforeEach(() => {
 });
 
 describe("AskSkimDialog setup recovery", () => {
-  it("keeps uncited candidates collapsed and preserves their original citation numbers when opened", async () => {
+  it("shows cited sources as cards numbered like their chips and keeps uncited candidates collapsed", async () => {
     settings = { ai: { provider: "openai", chat_provider: "same" } };
     const onOpenArticle = vi.fn();
     vi.mocked(chatWithArticles).mockResolvedValueOnce({
@@ -41,10 +41,11 @@ describe("AskSkimDialog setup recovery", () => {
     render(<AskSkimDialog onClose={vi.fn()} onOpenArticle={onOpenArticle} />);
     await user.type(screen.getByRole("textbox"), "Find court ruling");
     await user.click(screen.getByRole("button", { name: "Send" }));
-    expect(await screen.findByRole("button", { name: /\[2\] Court ruling/ })).toBeVisible();
+    expect(await screen.findByRole("button", { name: /^1.*Court ruling/ })).toBeVisible();
+    expect(screen.getByRole("link", { name: "1" })).toHaveAttribute("title", "Court ruling");
     expect(screen.getByRole("button", { name: /Wallpaper/ })).not.toBeVisible();
     await user.click(screen.getByText("Also searched (2)"));
-    await user.click(screen.getByRole("button", { name: /\[3\] Phone colors/ }));
+    await user.click(screen.getByRole("button", { name: /Phone colors/ }));
     expect(onOpenArticle).toHaveBeenCalledWith("source-2");
   });
 
@@ -114,7 +115,7 @@ describe("AskSkimDialog setup recovery", () => {
     await user.selectOptions(screen.getByRole("combobox"), "all");
     await user.type(screen.getByRole("textbox"), "Find quasar");
     await user.click(screen.getByRole("button", { name: "Send" }));
-    await screen.findByText("Evidence [1]");
+    await screen.findByText(/^Evidence/);
     await user.type(screen.getByRole("textbox"), "Summarize that");
     await user.click(screen.getByRole("button", { name: /Quasar report/ }));
     expect(onOpenArticle).toHaveBeenCalledWith("a");
@@ -124,7 +125,7 @@ describe("AskSkimDialog setup recovery", () => {
     view.rerender(<AskSkimDialog open onClose={onClose} onOpenArticle={onOpenArticle} />);
     expect(screen.getByRole("combobox")).toHaveValue("all");
     expect(screen.getByRole("textbox")).toHaveValue("Summarize that");
-    expect(screen.getByText("Evidence [1]")).toBeInTheDocument();
+    expect(screen.getByText(/^Evidence/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Send" }));
     await screen.findByText("Answer");
     expect(chatWithArticles).toHaveBeenLastCalledWith("all", "Summarize that", [{ role: "user", content: "Find quasar" }, { role: "assistant", content: "Evidence [1]" }], ["a"]);
@@ -249,7 +250,7 @@ describe("AskSkimDialog continuing an agent conversation", () => {
     } });
     const user = userEvent.setup();
     render(<AskSkimDialog onClose={vi.fn()} />);
-    expect(screen.getByText("Found it: [1]")).toBeInTheDocument();
+    expect(screen.getByText(/^Found it:/)).toBeInTheDocument();
     expect(screen.getByText("Story: Async Rust")).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Articles to search" })).not.toBeInTheDocument();
     expect(useAgentChatStore.getState().seed).toBeNull();

@@ -4318,7 +4318,11 @@ private struct AIChatBubble: View {
                             }
                         }
                     }
-                    .scrollClipDisabled()
+                    // Scroll edge to edge inside the bubble and clip at its border,
+                    // so a card that doesn't fit peeks rather than spilling past it.
+                    .contentMargins(.horizontal, 15, for: .scrollContent)
+                    .contentMargins(.vertical, 1, for: .scrollContent)
+                    .padding(.horizontal, -15)
                 }
 
                 if !message.webCitations.isEmpty {
@@ -4335,7 +4339,11 @@ private struct AIChatBubble: View {
                             }
                         }
                     }
-                    .scrollClipDisabled()
+                    // Scroll edge to edge inside the bubble and clip at its border,
+                    // so a card that doesn't fit peeks rather than spilling past it.
+                    .contentMargins(.horizontal, 15, for: .scrollContent)
+                    .contentMargins(.vertical, 1, for: .scrollContent)
+                    .padding(.horizontal, -15)
                 }
             }
             .padding(.horizontal, 15)

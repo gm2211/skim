@@ -55,7 +55,8 @@ fi
 
 # Default ship: bump iOS and macOS together to the next shared version, so every
 # build appears as a new version in TestFlight (not only a new build number).
-if [[ -z "${SKIM_VERSION:-}" && -z "${SKIM_BUILD_NUMBER:-}" ]]; then
+if [[ -z "${SKIM_VERSION:-}" && -z "${SKIM_BUILD_NUMBER:-}" \
+      && "${SKIM_USE_COMMITTED_VERSION:-false}" != true ]]; then
   bash "$ROOT/scripts/bump-version.sh"
   SKIM_VERSION="$(awk '/MARKETING_VERSION:/ { print $2; exit }' "$PROJECT_SPEC")"
   SKIM_BUILD_NUMBER="$(awk '/CURRENT_PROJECT_VERSION:/ { print $2; exit }' "$PROJECT_SPEC")"

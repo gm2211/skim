@@ -190,6 +190,9 @@ final class AppModel: ObservableObject {
     private let readLingerDuration: TimeInterval = 30 * 60
     private var recentlyReadArticles: [String: (article: Article, expiresAt: Date)] = [:]
     private var readLingerTask: Task<Void, Never>?
+    /// Articles open in a reader. They never linger out of the unread list;
+    /// their linger restarts when the reader closes.
+    private var openArticleIDs: [String] = []
 
     init() {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -696,7 +699,22 @@ final class AppModel: ObservableObject {
 
     private func pruneReadLinger() {
         let now = Date()
-        recentlyReadArticles = recentlyReadArticles.filter { $0.value.expiresAt > now }
+        recentlyReadArticles = recentlyReadArticles.filter { id, entry in
+            entry.expiresAt > now || openArticleIDs.contains(id)
+        }
+    }
+
+    func readerOpened(articleID: String) {
+        openArticleIDs.append(articleID)
+    }
+
+    func readerClosed(articleID: String) {
+        if let index = openArticleIDs.lastIndex(of: articleID) {
+            openArticleIDs.remove(at: index)
+        }
+        guard !openArticleIDs.contains(articleID), let entry = recentlyReadArticles[articleID] else { return }
+        recentlyReadArticles[articleID] = (entry.article, Date().addingTimeInterval(readLingerDuration))
+        scheduleReadLingerExpiry()
     }
 
     private func clearReadLingerState() {
@@ -713,7 +731,10 @@ final class AppModel: ObservableObject {
     private func scheduleReadLingerExpiry() {
         readLingerTask?.cancel()
         pruneReadLinger()
-        guard let nextExpiry = recentlyReadArticles.values.map(\.expiresAt).min() else {
+        guard let nextExpiry = recentlyReadArticles
+            .filter({ !openArticleIDs.contains($0.key) })
+            .map(\.value.expiresAt)
+            .min() else {
             readLingerTask = nil
             return
         }

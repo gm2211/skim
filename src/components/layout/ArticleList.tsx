@@ -359,13 +359,19 @@ export function ArticleList() {
   // Bumped whenever we deliberately want to drop the sticky map and
   // re-derive `articles` from rawArticles only.
   const [stickyEpoch, setStickyEpoch] = useState(0);
-  const clearStickyArticles = useCallback(() => {
-    stickyMapRef.current = new Map();
+  const selectedArticleIdRef = useRef(selectedArticleId);
+  selectedArticleIdRef.current = selectedArticleId;
+  // Refreshing the same list keeps the article open in the reader; a new
+  // scope, filter, sort or search starts from an empty map.
+  const clearStickyArticles = useCallback((keepOpenArticle = true) => {
+    const openId = selectedArticleIdRef.current;
+    const open = keepOpenArticle && openId ? stickyMapRef.current.get(openId) : undefined;
+    stickyMapRef.current = open && openId ? new Map([[openId, open]]) : new Map();
     setStickyEpoch((n) => n + 1);
   }, []);
 
   useEffect(() => {
-    clearStickyArticles();
+    clearStickyArticles(false);
   }, [clearStickyArticles, sidebarView, listFilter, listSort, normalizedSearch]);
 
   // Only accumulate sticky entries while we are actually in an
@@ -379,16 +385,28 @@ export function ArticleList() {
     }
   }
 
+  // The article open in the reader never lingers out: it stays in the list
+  // while it is open, and its linger timer restarts when the user moves on.
+  const previousSelectedRef = useRef(selectedArticleId);
+  if (previousSelectedRef.current !== selectedArticleId) {
+    const left = previousSelectedRef.current && stickyMapRef.current.get(previousSelectedRef.current);
+    if (left) left.expiresAt = Date.now() + STICKY_READ_TTL_MS;
+    previousSelectedRef.current = selectedArticleId;
+  }
+
   useEffect(() => {
-    if (!stickyEnabled || stickyMapRef.current.size === 0) return;
+    const expiring = Array.from(stickyMapRef.current)
+      .filter(([id]) => id !== selectedArticleId)
+      .map(([, entry]) => entry.expiresAt);
+    if (!stickyEnabled || expiring.length === 0) return;
 
     const now = Date.now();
-    const nextExpiry = Math.min(...Array.from(stickyMapRef.current.values(), (entry) => entry.expiresAt));
+    const nextExpiry = Math.min(...expiring);
     const timeout = window.setTimeout(() => {
       const cutoff = Date.now();
       let changed = false;
       for (const [id, entry] of stickyMapRef.current) {
-        if (entry.expiresAt <= cutoff) {
+        if (id !== selectedArticleId && entry.expiresAt <= cutoff) {
           stickyMapRef.current.delete(id);
           changed = true;
         }
@@ -397,7 +415,7 @@ export function ArticleList() {
     }, Math.max(0, nextExpiry - now) + 50);
 
     return () => window.clearTimeout(timeout);
-  }, [rawArticles, stickyEnabled, stickyEpoch]);
+  }, [rawArticles, stickyEnabled, stickyEpoch, selectedArticleId]);
 
   const articles = useMemo(() => {
     if (!rawArticles) return rawArticles;
@@ -412,7 +430,7 @@ export function ArticleList() {
     const unreadOnly = stickyEnabled;
     if (unreadOnly) {
       for (const [id, entry] of stickyMapRef.current) {
-        if (entry.expiresAt <= now) {
+        if (id !== selectedArticleId && entry.expiresAt <= now) {
           stickyMapRef.current.delete(id);
         } else if (!have.has(id)) {
           injected.push({ ...entry.article, is_read: true });
@@ -420,7 +438,7 @@ export function ArticleList() {
       }
     } else if (!isSearchActive && selectedArticleId && !have.has(selectedArticleId)) {
       const cached = stickyMapRef.current.get(selectedArticleId);
-      if (cached && cached.expiresAt > now) injected.push(cached.article);
+      if (cached) injected.push(cached.article);
     }
     if (injected.length === 0) return rawArticles;
     const combined = [...(rawArticles as any[]), ...injected];
@@ -507,13 +525,13 @@ export function ArticleList() {
 
   const handleMarkAllRead = () => {
     if (sidebarView.type === "all" && !isSearchActive && listFilter !== "starred" && !(isForYou && activeThemeId)) {
-      markAllRead.mutate(null, { onSuccess: clearStickyArticles });
+      markAllRead.mutate(null, { onSuccess: () => clearStickyArticles() });
       return;
     }
     markAllRead.mutate(buildMarkAllReadScope({
       sidebarView, listFilter, searchQuery, folderFeedIds: selectedFolderFeedIds, activeThemeId,
       forYou: isForYou,
-    }), { onSuccess: clearStickyArticles });
+    }), { onSuccess: () => clearStickyArticles() });
   };
 
   useAppCommand("mark-all-read", handleMarkAllRead);
@@ -612,8 +630,7 @@ export function ArticleList() {
     enabled: isPhone,
     canStart: () => (scrollRef.current?.scrollTop ?? 0) <= 0 && !refreshAllFeeds.isPending,
     onRefresh: async () => {
-      stickyMapRef.current = new Map();
-      setStickyEpoch((n) => n + 1);
+      clearStickyArticles();
       await refreshAllFeeds.mutateAsync();
     },
   });

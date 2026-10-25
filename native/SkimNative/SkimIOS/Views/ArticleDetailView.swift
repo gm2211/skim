@@ -72,6 +72,7 @@ struct ArticleDetailView: View {
         }
         .onAppear {
             openedAt = Date()
+            model.readerOpened(articleID: articleID)
             if let article {
                 let signal = model.tasteStore.signal(for: article.id)
                 currentPriorityOverride = signal?.priorityOverride ?? .none
@@ -79,6 +80,7 @@ struct ArticleDetailView: View {
         }
         .onDisappear {
             recordDwell()
+            model.readerClosed(articleID: articleID)
         }
         .alert("Skim", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) {}

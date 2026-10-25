@@ -259,9 +259,13 @@ struct ArticleDetailView: View {
                 presentArticleChat()
             }
 
-            if let url = article.url {
-                Divider()
+            Divider()
 
+            Button("Copy Title", systemImage: SkimIcon.copy) {
+                UIPasteboard.general.string = article.title
+            }
+
+            if let url = article.url {
                 Button("Open in Browser", systemImage: SkimIcon.openExternal) {
                     openURL(url)
                 }

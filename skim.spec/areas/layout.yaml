@@ -73,3 +73,25 @@ behaviors:
     source:
       text: bottom row in ios can use improvement (maybe let me choose the today view instead of the favorite view)
       reference: Giulio, project chat, 2026-10-12
+  - id: chrome-not-selectable
+    description: >-
+      Fixed UI is not text-selectable: headers, counts, labels, section headings, toggles, buttons
+      and search placeholders. Only reading content selects: the article title and body, comments,
+      summaries and chat answers, plus fields you type into.
+    details: >-
+      Desktop sets user-select none on the body and opts content back in (.article-reader-title,
+      .article-content, .full-article-content, .chat-markdown, .selectable-text, inputs). iOS gets
+      this from SwiftUI, where Text is not selectable unless it opts in.
+    source:
+      text: >-
+        unless it's article title or body (and even then maybe a copy button for the title is
+        better?) it should not be selectable - aka "fixed" ui elements should not be selectable
+      reference: Giulio, project thread, 2026-10-25
+  - id: copy-article-title
+    description: >-
+      The reader offers a one-tap copy of the article title: a copy button at the end of the
+      desktop reader's byline (it confirms with "Copied"), and Copy Title in the iOS reader header
+      menu.
+    source:
+      text: maybe a copy button for the title is better?
+      reference: Giulio, project thread, 2026-10-25

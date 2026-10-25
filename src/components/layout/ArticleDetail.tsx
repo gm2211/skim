@@ -16,7 +16,7 @@ import { AIDisclaimer } from "../common/AIDisclaimer";
 import { ModelPicker } from "../common/ModelPicker";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { ArticleLearningActions } from "../article/ArticleLearningActions";
-import { CogIcon, MoreIcon, ShareIcon, TickIcon } from "../ui/icons";
+import { CogIcon, CopyIcon, MoreIcon, ShareIcon, TickIcon } from "../ui/icons";
 import { AiErrorText, AiSettingsButton, openAiSettings } from "../common/AiSettingsButton";
 import { shareArticle } from "../../lib/shareArticle";
 import { AggregatorPostView } from "../article/AggregatorPostView";
@@ -1581,11 +1581,11 @@ export function ArticleDetail() {
             </div>
             <div style={{ padding: "12px 16px 16px" }}>
               {summarize.data.bullet_summary && (
-                <div className="text-text-primary whitespace-pre-wrap" style={{ fontSize: 14, marginBottom: 10, lineHeight: 1.6 }}>{summarize.data.bullet_summary}</div>
+                <div className="selectable-text text-text-primary whitespace-pre-wrap" style={{ fontSize: 14, marginBottom: 10, lineHeight: 1.6 }}>{summarize.data.bullet_summary}</div>
               )}
               {summarize.data.full_summary && (
                 <div
-                  className="text-text-primary leading-relaxed prose prose-invert prose-sm max-w-none"
+                  className="selectable-text text-text-primary leading-relaxed prose prose-invert prose-sm max-w-none"
                   style={{ fontSize: 14, opacity: 0.85 }}
                   dangerouslySetInnerHTML={{
                     __html: summarize.data.full_summary
@@ -1730,6 +1730,7 @@ export function ArticleDetail() {
                       )}
                       <span className="text-text-muted">·</span>
                       <span className="text-text-muted">{formatDate(article.published_at)}</span>
+                      <CopyTitleButton title={article.title} />
                     </div>
                   </div>
                   {aggregatorPost ? (
@@ -1743,12 +1744,12 @@ export function ArticleDetail() {
                     <div className="full-article-content" dangerouslySetInnerHTML={{ __html: fullContent }} />
                   ) : rssHtml ? (
                     <div className="article-content text-text-primary">
-                      <div className="text-text-muted uppercase tracking-wider" style={{ fontSize: 10, marginBottom: 10 }}>Feed preview</div>
+                      <div className="text-text-muted uppercase tracking-wider select-none" style={{ fontSize: 10, marginBottom: 10 }}>Feed preview</div>
                       <div dangerouslySetInnerHTML={{ __html: rssHtml }} />
                     </div>
                   ) : article.content_text ? (
                     <div className="article-content text-text-primary whitespace-pre-wrap">
-                      <div className="text-text-muted uppercase tracking-wider" style={{ fontSize: 10, marginBottom: 10 }}>Feed preview</div>
+                      <div className="text-text-muted uppercase tracking-wider select-none" style={{ fontSize: 10, marginBottom: 10 }}>Feed preview</div>
                       {article.content_text}
                     </div>
                   ) : loadingFull ? (
@@ -1852,5 +1853,34 @@ export function ArticleDetail() {
       {/* Chat drawer — collapsible bottom pane */}
       <ChatDrawer articleId={article.id} articleTitle={article.title} summaryContext={summarize.data?.article_id === article.id ? ([summarize.data.bullet_summary, summarize.data.full_summary].filter(Boolean).join("\n\n") || undefined) : undefined} open={chatOpen} onOpenChange={setChatOpen} askAbout={chatAskAbout} />
     </div>
+  );
+}
+
+/** Copies the article title, so the title needn't be drag-selected out of the header. */
+function CopyTitleButton({ title }: { title: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(title);
+          setCopied(true);
+        } catch {
+          setCopied(false);
+        }
+      }}
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-white/10 ${copied ? "text-success" : "text-text-muted hover:text-text-primary"}`}
+      title="Copy title"
+      aria-label={copied ? "Title copied" : "Copy title"}
+    >
+      {copied ? <TickIcon size={13} /> : <CopyIcon size={13} />}
+      {copied && <span style={{ fontSize: 12 }}>Copied</span>}
+    </button>
   );
 }

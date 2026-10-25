@@ -53,6 +53,14 @@ if [[ -z "$current_version" || -z "$current_build" ]]; then
   exit 1
 fi
 
+# Default ship: bump iOS and macOS together to the next shared version, so every
+# build appears as a new version in TestFlight (not only a new build number).
+if [[ -z "${SKIM_VERSION:-}" && -z "${SKIM_BUILD_NUMBER:-}" ]]; then
+  bash "$ROOT/scripts/bump-version.sh"
+  SKIM_VERSION="$(awk '/MARKETING_VERSION:/ { print $2; exit }' "$PROJECT_SPEC")"
+  SKIM_BUILD_NUMBER="$(awk '/CURRENT_PROJECT_VERSION:/ { print $2; exit }' "$PROJECT_SPEC")"
+fi
+
 version="${SKIM_VERSION:-$current_version}"
 if [[ -n "${SKIM_BUILD_NUMBER:-}" ]]; then
   build_number="$SKIM_BUILD_NUMBER"
@@ -63,9 +71,26 @@ else
   exit 1
 fi
 
-if [[ "$version" == "$current_version" && "$build_number" == "$current_build" ]]; then
+# A ship that already ran scripts/bump-version.sh and committed the bump uploads
+# that committed metadata as is.
+if [[ "${SKIM_USE_COMMITTED_VERSION:-false}" == true ]]; then
+  version="$current_version"
+  build_number="$current_build"
+  if ! git -C "$ROOT" log -1 --format=%s -- "$PROJECT_SPEC" | grep -q "$version"; then
+    echo "Last commit touching $PROJECT_SPEC does not mention version $version."
+    echo "Commit the scripts/bump-version.sh bump first."
+    exit 1
+  fi
+elif [[ "$version" == "$current_version" && "$build_number" == "$current_build" ]]; then
   echo "Refusing to archive unchanged version/build metadata ($version/$build_number)."
   echo "Set SKIM_BUILD_NUMBER or SKIM_VERSION to a bumped value."
+  exit 1
+fi
+
+if [[ "$version" == "$current_version" && "${SKIM_USE_COMMITTED_VERSION:-false}" != true \
+      && "${SKIM_ALLOW_SAME_VERSION:-false}" != true ]]; then
+  echo "Refusing to upload build $build_number under unchanged version $version."
+  echo "Every TestFlight build bumps the version; run scripts/bump-version.sh or set SKIM_VERSION."
   exit 1
 fi
 

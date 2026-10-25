@@ -30,7 +30,7 @@ cp -rf source dest          # NOT: cp -r source dest
 
 ## Release Archives
 
-Before creating, exporting, or uploading an Xcode Organizer / App Store Connect archive, bump the app version/build metadata — never do so from an unchanged version. Verify the final archive/package reports the bumped version and build number before handing it off.
+Before creating, exporting, or uploading an Xcode Organizer / App Store Connect archive, bump the app version/build metadata — never do so from an unchanged version. Verify the final archive/package reports the bumped version and build number before handing it off. Every new TestFlight build bumps the version itself, not only the build number, on both iOS and macOS (Giulio: "please let's always bump the version when having new builds"). Run `scripts/bump-version.sh`, which moves both platforms to the next shared patch version and bumps both build numbers. Every new TestFlight build bumps the version itself, not only the build number, on both iOS and macOS (Giulio: "please let's always bump the version when having new builds"). Run `scripts/bump-version.sh`, which moves both platforms to the next shared patch version and bumps both build numbers.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker

@@ -160,8 +160,8 @@ describe("Settings provider drafts", () => {
     expect(screen.getByRole("tab", { name: "Account" })).toHaveAttribute("aria-selected", "true");
     await user.click(screen.getByRole("tab", { name: "Model" }));
     expect(screen.getByRole("combobox", { name: "Model" })).toHaveValue("");
-    await user.click(screen.getByRole("button", { name: "Load available models" }));
-    expect(listRemoteModels).toHaveBeenCalledWith("xai", null, null);
+    // The model list loads on its own when the Model tab opens.
+    await vi.waitFor(() => expect(listRemoteModels).toHaveBeenCalledWith("xai", null, null));
     await user.click(screen.getByRole("button", { name: "Change AI service" }));
     await user.click(screen.getByRole("button", { name: /^OpenAI/ }));
     expect(screen.getByRole("combobox", { name: "Model" })).toHaveValue("saved-model");

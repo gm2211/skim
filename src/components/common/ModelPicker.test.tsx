@@ -177,4 +177,36 @@ describe("ModelPicker", () => {
     const current = await screen.findByRole("option", { name: "gpt-4-turbo" });
     expect((current as HTMLOptionElement).disabled).toBe(false);
   });
+
+  it("fetches the list again when it reopens after an empty or failed load, without a manual refresh", async () => {
+    vi.mocked(commands.listRemoteModels).mockResolvedValueOnce([]);
+    const { qc, unmount } = renderPicker("chat", settingsWith({ provider: "openai", model: null }));
+    await waitFor(() => expect(commands.listRemoteModels).toHaveBeenCalledTimes(1));
+    unmount();
+
+    vi.mocked(commands.listRemoteModels).mockResolvedValue([{ id: "gpt-4o-mini", display_name: "GPT-4o mini" }]);
+    render(
+      <QueryClientProvider client={qc}>
+        <ModelPicker surface="chat" />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByRole("option", { name: "GPT-4o mini" })).toBeInTheDocument();
+    expect(commands.listRemoteModels).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks again under a new key instead of reusing the list cached for the old one", async () => {
+    vi.mocked(commands.listRemoteModels).mockResolvedValue([{ id: "gpt-4o-mini", display_name: "GPT-4o mini" }]);
+    const { qc, unmount } = renderPicker("today", settingsWith({ provider: "openai", api_key: "sk-old" }));
+    await screen.findByRole("option", { name: "GPT-4o mini" });
+    unmount();
+
+    vi.mocked(commands.getSettings).mockResolvedValue(settingsWith({ provider: "openai", api_key: "sk-new" }));
+    await qc.invalidateQueries({ queryKey: ["settings"] });
+    render(
+      <QueryClientProvider client={qc}>
+        <ModelPicker surface="today" />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(commands.listRemoteModels).toHaveBeenLastCalledWith("openai", "sk-new", null));
+  });
 });

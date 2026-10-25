@@ -333,7 +333,7 @@ struct SettingsSheet: View {
                     modelID: aiModelBinding,
                     settings: draft.ai,
                     placeholder: "Select a model",
-                    reloadKey: "\(draft.ai.provider)|\(draft.ai.apiKey ?? "")|\(xaiSignedIn)|\(chatgptSignedIn)",
+                    reloadKey: "\(draft.ai.provider)|\(draft.ai.apiKey ?? "")|\(draft.ai.endpoint ?? "")|\(xaiSignedIn)|\(chatgptSignedIn)",
                     fetch: modelFetcher(for: draft.ai.provider)
                 )
             } else {

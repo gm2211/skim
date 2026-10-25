@@ -79,7 +79,7 @@ SKIM_USE_COMMITTED_VERSION=true pnpm testflight   # iOS: archive and upload the 
 ./scripts/upload-macos-testflight.sh     # macOS: export the built Skim.app for TestFlight
 ```
 
-Run without `SKIM_USE_COMMITTED_VERSION`, `pnpm testflight` bumps the version itself. It refuses to upload a build under an unchanged version (per-PR builds from `scripts/tf-pr.sh` are the exception).
+Plain `pnpm testflight` uploads a bump that HEAD already carries as is; otherwise it bumps the version itself. It refuses to upload a build under an unchanged version (per-PR builds from `scripts/tf-pr.sh` are the exception).
 
 ## Setting up AI
 

@@ -39,6 +39,20 @@ behaviors:
         tiles, so I don't have to read everything to figure out what's going on. what I was
         thinking more was something along the lines of how perplexity responds to questions
       reference: Giulio, project thread "Chat answer citation design", 2026-10-23 (mock approved 2026-10-24); earlier "I want to be able to click the whole thing too not just the number"
+  - id: web-sources-cited-inline
+    description: >-
+      When a chat answer uses web search, it cites each web result inline as a numbered chip that
+      opens the page, and shows the cited results as cards with their site, title and a snippet.
+    details: >-
+      Web results reach the model numbered [w1], [w2] and it is asked to cite them right after the
+      claim they support. Chips are numbered in reading order like article chips, so a chip and its
+      card match. Desktop article chat: cards fill the panel width (as many across as fit), chips
+      and cards light each other up on hover, and results the answer did not cite fold under
+      "Also found on the web (n)". iOS: the same chips in every web-enabled answer, and the cards
+      scroll in a row under it, replacing the plain link pills.
+    source:
+      text: would be nice to have links to refrences also in text and better looking sources
+      reference: Giulio, project thread "Chat answer citation design", 2026-10-25
   - id: chat-starter-prompts
     description: >-
       An empty library chat offers a few built-in starter questions, and tapping one asks it right

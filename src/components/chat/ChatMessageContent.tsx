@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ChatSource } from "../../services/commands";
-import { citationChip, linkCitations } from "./AgentAnswer";
+import { linkCitations, useChatMarkdownComponents } from "./AgentAnswer";
 import "./chat-markdown.css";
 
 /** The articles an answer cites, so its [n] become chips that open them. */
@@ -47,6 +46,7 @@ export function ChatMessageContent({ content, role, onReply, replyDisabled = fal
   citations?: ChatCitations;
 }) {
   const titles = new Map((citations?.sources ?? []).map((source) => [source.id, source.title]));
+  const components = useChatMarkdownComponents(citations && { titles, ...citations });
   const contentRef = useRef<HTMLDivElement>(null);
   const [selection, setSelection] = useState<{ text: string; top: number; left: number } | null>(null);
 
@@ -80,13 +80,7 @@ export function ChatMessageContent({ content, role, onReply, replyDisabled = fal
   return (
     <div className="chat-message-content" style={{ position: "relative", minWidth: 0 }}>
       <div ref={contentRef} className="chat-markdown">
-        <Markdown remarkPlugins={[remarkGfm]} skipHtml components={{
-          a: ({ href, children }) => (citations && citationChip(href, children, { titles, ...citations })) || (href && /^https?:\/\//i.test(href)
-            ? <a href={href} target="_blank" rel="noopener noreferrer" onClick={(event) => { event.preventDefault(); void openUrl(href).catch(() => {}); }}>{children}</a>
-            : <span>{children}</span>),
-          table: ({ children }) => <div className="chat-table-scroll"><table>{children}</table></div>,
-          img: ({ alt }) => <span>{alt}</span>,
-        }}>{citations ? linkCitations(content, citations.sources) : content}</Markdown>
+        <Markdown remarkPlugins={[remarkGfm]} skipHtml components={components}>{citations ? linkCitations(content, citations.sources) : content}</Markdown>
       </div>
       {selection && !replyDisabled && (
         <button type="button" className="chat-selection-reply" style={{ top: selection.top, left: selection.left }}

@@ -9,6 +9,10 @@ import { ModelPicker } from "../common/ModelPicker";
 import { SettingsCog } from "../common/SettingsCog";
 import { AiErrorText } from "../common/AiSettingsButton";
 import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./ChatMessageContent";
+import { SourceTile, siteName } from "./AgentAnswer";
+import { citationOrder } from "../../lib/chatCitations";
+import type { ChatSource } from "../../services/commands";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 interface ChatMessage {
   role: "user" | "assistant" | "search";
@@ -42,6 +46,8 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
   const provider = chatProvider && chatProvider !== "same" ? chatProvider : settings?.ai.provider;
   const needsSetup = provider === "none";
   const [localOpen, setLocalOpen] = useState(false);
+  // The web source under the pointer in one answer, so its chips and card light up together.
+  const [hovered, setHovered] = useState<{ index: number; id: string } | null>(null);
   const open = controlledOpen ?? localOpen;
   const setOpen = (value: boolean) => {
     setLocalOpen(value);
@@ -375,60 +381,26 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
                     lineHeight: 1.4,
                   }}
                 >
-                  <ChatMessageContent content={msg.content} role="assistant" onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }} replyDisabled={loading || searchLoading} />
+                  <ChatMessageContent
+                    content={msg.content}
+                    role="assistant"
+                    onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }}
+                    replyDisabled={loading || searchLoading}
+                    citations={msg.webCitations?.length ? {
+                      sources: webSources(msg.webCitations),
+                      onOpenArticle: (id) => openWebSource(msg.webCitations!, id),
+                      onHoverSource: (id) => setHovered(id ? { index: i, id } : null),
+                      highlightId: hovered?.index === i ? hovered.id : null,
+                    } : undefined}
+                  />
                 </div>
                 {msg.webCitations && msg.webCitations.length > 0 && (
-                  <div
-                    className="rounded-md border border-white/10"
-                    style={{
-                      padding: "4px 8px",
-                      background: "rgba(255,255,255,0.02)",
-                      maxWidth: "85%",
-                      overflowWrap: "anywhere",
-                    }}
-                  >
-                    <div
-                      className="text-text-muted uppercase tracking-wider flex items-center gap-1"
-                      style={{ fontSize: 9, fontWeight: 600, marginBottom: 3 }}
-                    >
-                      <svg
-                        width="9"
-                        height="9"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        aria-label="Web source"
-                      >
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M2 12h20" />
-                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                      </svg>
-                      Web sources
-                    </div>
-                    {msg.webCitations.map((c, j) => (
-                      <div
-                        key={c.url}
-                        style={{
-                          marginBottom:
-                            j < msg.webCitations!.length - 1 ? 4 : 0,
-                        }}
-                      >
-                        <a
-                          href={c.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-accent hover:underline"
-                          style={{ fontSize: 11 }}
-                        >
-                          {c.title}
-                        </a>
-                        <p className="text-text-muted" style={{ fontSize: 10 }}>
-                          {c.snippet}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                  <WebSources
+                    citations={msg.webCitations}
+                    content={msg.content}
+                    highlightId={hovered?.index === i ? hovered.id : null}
+                    onHover={(id) => setHovered(id ? { index: i, id } : null)}
+                  />
                 )}
               </div>
             )}
@@ -509,6 +481,74 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
           <AIDisclaimer />
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Web results as chat sources, so [wN] in the answer can become chips. */
+function webSources(citations: WebCitation[]): ChatSource[] {
+  return citations.map((c, index) => ({
+    id: `web-${index}`,
+    title: c.title,
+    feed_title: siteName(c.url),
+    url: c.url,
+    published_at: null,
+    source_type: "web",
+  }));
+}
+
+function openWebSource(citations: WebCitation[], id: string) {
+  const url = citations[Number(id.replace("web-", ""))]?.url;
+  if (url) void openUrl(url).catch(() => {});
+}
+
+/**
+ * The web results an answer drew on, as cards numbered like its [wN] chips.
+ * Results the answer never cited stay behind a disclosure.
+ */
+function WebSources({ citations, content, highlightId, onHover }: {
+  citations: WebCitation[];
+  content: string;
+  highlightId: string | null;
+  onHover: (id: string | null) => void;
+}) {
+  const sources = webSources(citations);
+  const cited = citationOrder(sources, content);
+  const rest = sources.filter((source) => !cited.some((c) => c.source === source));
+  const snippet = (id: string) => citations[Number(id.replace("web-", ""))]?.snippet || undefined;
+  const tiles = (items: { source: ChatSource; label: number | null }[]) => (
+    <div className="source-tiles" onMouseLeave={() => onHover(null)}>
+      {items.map(({ source, label }) => (
+        <SourceTile
+          key={source.id}
+          source={source}
+          label={label ?? undefined}
+          snippet={snippet(source.id)}
+          active={highlightId === source.id}
+          onHover={() => onHover(source.id)}
+          onOpen={() => openWebSource(citations, source.id)}
+        />
+      ))}
+    </div>
+  );
+  return (
+    <div style={{ width: "100%", marginTop: 2 }}>
+      {cited.length > 0 && (
+        <>
+          <div className="text-text-muted uppercase tracking-wider" style={{ fontSize: 10, fontWeight: 600, margin: "4px 0 6px" }}>
+            Web sources
+          </div>
+          {tiles(cited)}
+        </>
+      )}
+      {rest.length > 0 && (
+        <details style={{ marginTop: 6 }}>
+          <summary className="text-text-muted cursor-pointer rounded-lg hover:bg-white/5" style={{ padding: "6px 4px", fontSize: 11 }}>
+            Also found on the web ({rest.length})
+          </summary>
+          {tiles(rest.map((source) => ({ source, label: null })))}
+        </details>
+      )}
     </div>
   );
 }

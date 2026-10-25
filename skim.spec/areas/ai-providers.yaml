@@ -27,6 +27,20 @@ behaviors:
     source:
       text: "also why am i not getting dropdown with model names ?"
       reference: Giulio, project chat, 2026-10-15 (desktop Claude Pro/Max showed a plain text box)
+  - id: model-lists-load-on-their-own
+    description: >-
+      Every model picker loads its provider's model list on its own, with no refresh button to
+      press: AI settings when it opens and whenever the provider, key, or endpoint changes, and the
+      inline pickers each time they open after an empty or failed load.
+    details: >-
+      Settings and the inline pickers share one cached list per provider, endpoint and key, so a
+      list one loads shows up in the others. In desktop AI settings the list shows as a menu under
+      the Model field with the friendly name first and the id beneath, the current model checked,
+      and whole rows that scroll; typing filters it and any model id can still be entered. iOS
+      settings reload the list when the provider, key, endpoint, or sign-in changes.
+    source:
+      text: "models should always autorefresh without having to hit refresh - also the dropdown should look better"
+      reference: Giulio, project thread "Auto-refresh model list and polish picker", 2026-10-25 (also "this dropdown from chat config wasn't showing models till i opened the ai settings and hit refresh")
   - id: model-list-provider-order
     description: >-
       Model pickers list a provider's models in the order its API returns them, and leave out

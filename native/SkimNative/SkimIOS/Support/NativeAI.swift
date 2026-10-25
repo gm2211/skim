@@ -1466,9 +1466,9 @@ enum NativeAI {
 
     /// Format web search results into a plain numbered block for injection into the answer prompt.
     static func formatWebResultsBlock(query: String, results: [SearchResult]) -> String {
-        let header = "Web search results for \"\(query)\" (use for facts not in the article; answer in prose):"
+        let header = "Web search results for \"\(query)\" (use for facts not in the article; answer in prose, and cite a result you use by its number, like [w1], right after the claim):"
         let body = results.enumerated().map { index, result in
-            let label = "(W\(index + 1))"
+            let label = "[w\(index + 1)]"
             return "\(label) \(result.title)\n    \(result.snippet)\n    \(result.url)"
         }
         .joined(separator: "\n")
@@ -1613,7 +1613,7 @@ enum NativeAI {
             ? "You answer questions across a set of RSS articles using the provided article list and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks. Answer first, in plain prose of about 50 to 100 words, so the reader gets the gist without opening the articles. Cite each article you draw on with its numeric handle like [3], placed right after the claim it supports. Do not list the articles or repeat their titles as a list: the app shows every cited article as a card under the answer. If the answer is not supported by the supplied articles or web results, say so."
             : "You answer questions about a single article using the provided article text and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks you to recap it. If the answer is not supported by the supplied article text or web results, say so."
         guard enableWebSearch else { return base }
-        return base + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices."
+        return base + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices. Cite each web result you use by its number, like [w2], right after the claim it supports."
     }
 
     /// Local MLX chat with optional web-search augmentation (2-pass: router + answer).
@@ -2962,17 +2962,17 @@ enum NativeAI {
                                 "content": "web_search returned no results for: \(query)"
                             ])
                         } else {
-                            // Capture citations for the UI, deduped by URL across iterations.
-                            for r in results where seenCitationURLs.insert(r.url).inserted {
-                                citations.append(WebCitation(title: r.title, url: r.url, snippet: r.snippet, query: query))
+                            // Capture citations for the UI, deduped by URL across iterations, and
+                            // number each result by its place there so [wN] names the N-th card.
+                            var lines: [String] = []
+                            for r in results {
+                                if seenCitationURLs.insert(r.url).inserted {
+                                    citations.append(WebCitation(title: r.title, url: r.url, snippet: r.snippet, query: query))
+                                }
+                                let number = (citations.firstIndex { $0.url == r.url } ?? 0) + 1
+                                lines.append("[w\(number)] \(r.title) (\(r.url))\n    \(r.snippet)")
                             }
-
-                            let payload: [String: Any] = [
-                                "query": query,
-                                "results": results.map { ["title": $0.title, "url": $0.url, "snippet": $0.snippet] }
-                            ]
-                            let payloadData = try JSONSerialization.data(withJSONObject: payload)
-                            let payloadString = String(data: payloadData, encoding: .utf8) ?? "{}"
+                            let payloadString = "Results for \u{201C}\(query)\u{201D} (cite one you use as [wN]):\n" + lines.joined(separator: "\n")
                             resultBlocks.append([
                                 "type": "tool_result",
                                 "tool_use_id": toolUseID,
@@ -4195,7 +4195,7 @@ private struct AIChatBubble: View {
     @State private var selectedText = ""
 
     /// The answer with each [n] turned into a chip link numbered like its card;
-    /// a briefing's [wN] web citations are numbered after the articles.
+    /// [wN] web citations are numbered after the articles.
     private var citedMarkdown: String {
         guard message.role == .assistant else { return message.text }
         var text = message.text
@@ -4207,7 +4207,7 @@ private struct AIChatBubble: View {
                 contextHandles: message.contextHandles
             )
         }
-        if message.isResearch, !message.webCitations.isEmpty {
+        if !message.webCitations.isEmpty {
             text = ArticleReferenceExtractor.labeledWebCitations(
                 in: text, firstLabel: message.referencedArticles.count + 1, count: message.webCitations.count)
         }
@@ -4318,21 +4318,32 @@ private struct AIChatBubble: View {
                             }
                         }
                     }
-                    .scrollClipDisabled()
+                    // Scroll edge to edge inside the bubble and clip at its border,
+                    // so a card that doesn't fit peeks rather than spilling past it.
+                    .contentMargins(.horizontal, 15, for: .scrollContent)
+                    .contentMargins(.vertical, 1, for: .scrollContent)
+                    .padding(.horizontal, -15)
                 }
 
                 if !message.webCitations.isEmpty {
-                    ChatFlowLayout(spacing: 8) {
-                        ForEach(Array(message.webCitations.enumerated()), id: \.element.id) { index, citation in
-                            Button {
-                                activeCitation = citation
-                            } label: {
-                                WebCitationChip(citation: citation,
-                                                number: message.isResearch ? message.referencedArticles.count + index + 1 : nil)
+                    // Web sources as cards, numbered after the articles like their [wN] chips.
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(alignment: .top, spacing: 8) {
+                            ForEach(Array(message.webCitations.enumerated()), id: \.element.id) { index, citation in
+                                Button {
+                                    activeCitation = citation
+                                } label: {
+                                    WebSourceTile(citation: citation, label: message.referencedArticles.count + index + 1)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(.plain)
                         }
                     }
+                    // Scroll edge to edge inside the bubble and clip at its border,
+                    // so a card that doesn't fit peeks rather than spilling past it.
+                    .contentMargins(.horizontal, 15, for: .scrollContent)
+                    .contentMargins(.vertical, 1, for: .scrollContent)
+                    .padding(.horizontal, -15)
                 }
             }
             .padding(.horizontal, 15)
@@ -4537,102 +4548,54 @@ private extension UIFont {
 /// A tappable source chip for a single web-search citation. Shows the
 /// citation's title (falling back to its domain when the title is empty)
 /// behind a globe glyph, matching desktop's "web" source treatment.
-private struct WebCitationChip: View {
+/// A web source as a card: the number its chips carry, the site, the title and a line of what it says.
+private struct WebSourceTile: View {
     var citation: WebCitation
-    /// The number a briefing's chips carry for this source, when it has one.
-    var number: Int? = nil
+    var label: Int
 
-    private var label: String {
-        let trimmedTitle = citation.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedTitle.isEmpty { return trimmedTitle }
-        return URL(string: citation.url)?.host(percentEncoded: false) ?? citation.url
+    private var site: String {
+        (URL(string: citation.url)?.host(percentEncoded: false) ?? "Web").replacingOccurrences(of: "www.", with: "")
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            if let number {
-                Text("\(number)")
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text("\(label)")
                     .font(.system(size: 11, weight: .semibold).monospacedDigit())
                     .foregroundStyle(.white)
                     .frame(minWidth: 18, minHeight: 18)
                     .background(SkimStyle.accent, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                Image(systemName: "globe")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(SkimStyle.accent)
+                Text(site)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
             }
-            Image(systemName: "globe")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(SkimStyle.accent)
-
-            Text(label)
-                .font(.system(size: 13, weight: .semibold))
+            Text(citation.title)
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(SkimStyle.text)
-                .lineLimit(1)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            if !citation.snippet.isEmpty {
+                Text(citation.snippet)
+                    .font(.system(size: 12))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(SkimStyle.chrome.opacity(0.72), in: Capsule())
+        .padding(10)
+        .frame(width: 220, height: 124, alignment: .topLeading)
+        .background(SkimStyle.chrome.opacity(0.64), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
-            Capsule()
-                .stroke(SkimStyle.separator.opacity(0.7), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(SkimStyle.separator.opacity(0.6), lineWidth: 1)
         }
-        .accessibilityLabel("Open source \(label)")
-    }
-}
-
-/// Simple left-to-right, top-to-bottom wrapping layout for chip rows.
-/// A chip wider than the row is capped at the row width (its label then
-/// truncates) so a long source title can't widen the chat bubble.
-private struct ChatFlowLayout: Layout {
-    var spacing: CGFloat = 8
-
-    private func chipSize(_ subview: LayoutSubview, maxWidth: CGFloat) -> CGSize {
-        let ideal = subview.sizeThatFits(.unspecified)
-        guard ideal.width > maxWidth else { return ideal }
-        return subview.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
-    }
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var rowWidth: CGFloat = 0
-        var totalWidth: CGFloat = 0
-        var totalHeight: CGFloat = 0
-        var rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = chipSize(subview, maxWidth: maxWidth)
-            if rowWidth + size.width > maxWidth, rowWidth > 0 {
-                totalHeight += rowHeight + spacing
-                totalWidth = max(totalWidth, rowWidth)
-                rowWidth = 0
-                rowHeight = 0
-            }
-            rowWidth += size.width + (rowWidth > 0 ? spacing : 0)
-            rowHeight = max(rowHeight, size.height)
-        }
-        totalHeight += rowHeight
-        totalWidth = max(totalWidth, rowWidth)
-        return CGSize(width: totalWidth, height: totalHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let maxWidth = bounds.width
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var rowHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = chipSize(subview, maxWidth: maxWidth)
-            if x + size.width > maxWidth, x > 0 {
-                x = 0
-                y += rowHeight + spacing
-                rowHeight = 0
-            }
-            subview.place(
-                at: CGPoint(x: bounds.minX + x, y: bounds.minY + y),
-                anchor: .topLeading,
-                proposal: ProposedViewSize(size)
-            )
-            x += size.width + spacing
-            rowHeight = max(rowHeight, size.height)
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Web source \(label): \(citation.title), \(site)")
     }
 }
 

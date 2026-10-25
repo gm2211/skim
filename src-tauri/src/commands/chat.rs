@@ -80,7 +80,9 @@ pub async fn chat_with_article(
 
     let tool_hint = if provider_supports_tools(&provider_kind) {
         "When the article doesn't contain enough information to answer, you may call the \
-         `web_search` tool to pull in fresh results. Prefer article context when it suffices.\n\n"
+         `web_search` tool to pull in fresh results. Prefer article context when it suffices. \
+         Cite each web result you use by its number, like [w2], right after the claim it \
+         supports; Skim links the number to the source.\n\n"
     } else {
         ""
     };
@@ -116,7 +118,7 @@ pub async fn chat_with_article(
         chat_messages.push(ChatMessage::text(msg.role.clone(), msg.content.clone()));
     }
 
-    let (content, mut web_citations) = invoke_chat_with_tools(
+    let (content, tool_citations) = invoke_chat_with_tools(
         provider.as_ref(),
         &provider_kind,
         chat_messages,
@@ -125,7 +127,9 @@ pub async fn chat_with_article(
         Some(crate::db::story_policy::ai_request_max_tokens(2048, &provider_kind)),
     )
     .await?;
-    web_citations.extend(local_citations);
+    // The local search block numbers its results [w1].. in the prompt, so they come first.
+    let mut web_citations = local_citations;
+    web_citations.extend(tool_citations);
 
     // Track chat interaction for learning system
     {
@@ -561,7 +565,8 @@ pub async fn chat_with_articles(
 
     let tool_clause = if provider_supports_tools(&provider_kind) {
         "If the articles don't contain the answer, call the `web_search` tool to pull in fresh \
-         web results before saying you can't answer. "
+         web results before saying you can't answer, and cite each web result you use by its \
+         number, like [w2]. "
     } else {
         ""
     };
@@ -667,11 +672,14 @@ fn format_web_results_block(results: &[SearchResult]) -> String {
         .iter()
         .enumerate()
         .map(|(index, result)| {
-            format!("(W{}) {}\n    {}\n    {}", index + 1, result.title, result.snippet, result.url)
+            format!("[w{}] {}\n    {}\n    {}", index + 1, result.title, result.snippet, result.url)
         })
         .collect::<Vec<_>>()
         .join("\n");
-    format!("Web search results (use for facts not in the article; answer in prose):\n{body}")
+    format!(
+        "Web search results (use for facts not in the article; answer in prose, and cite a result \
+         you use by its number, like [w1], right after the claim):\n{body}"
+    )
 }
 
 async fn local_chat_search(
@@ -873,26 +881,32 @@ async fn execute_tool(tu: &ToolUse, citations: &mut Vec<WebCitation>) -> serde_j
             }
             match run_web_search(&query, max_results).await {
                 Ok(results) => {
-                    // Capture citations for the UI.
+                    // Capture citations for the UI, deduped across iterations. Each
+                    // result is numbered by its place in that list, so the model's
+                    // [wN] names the card the UI shows as the N-th web source.
+                    let mut lines = Vec::new();
                     for r in &results {
-                        // Avoid duplicates across iterations.
-                        if !citations.iter().any(|c| c.url == r.url) {
-                            citations.push(WebCitation {
-                                title: r.title.clone(),
-                                url: r.url.clone(),
-                                snippet: r.snippet.clone(),
-                                query: query.clone(),
-                            });
-                        }
+                        let index = match citations.iter().position(|c| c.url == r.url) {
+                            Some(index) => index,
+                            None => {
+                                citations.push(WebCitation {
+                                    title: r.title.clone(),
+                                    url: r.url.clone(),
+                                    snippet: r.snippet.clone(),
+                                    query: query.clone(),
+                                });
+                                citations.len() - 1
+                            }
+                        };
+                        lines.push(format!("[w{}] {} ({})\n    {}", index + 1, r.title, r.url, r.snippet));
                     }
-                    let payload = serde_json::json!({
-                        "query": query,
-                        "results": results,
-                    });
                     serde_json::json!({
                         "type": "tool_result",
                         "tool_use_id": tu.id,
-                        "content": payload.to_string(),
+                        "content": format!(
+                            "Results for \u{201c}{query}\u{201d} (cite one you use as [wN]):\n{}",
+                            lines.join("\n")
+                        ),
                     })
                 }
                 Err(e) => serde_json::json!({
@@ -1590,7 +1604,7 @@ mod tests {
             snippet: "A snippet".into(),
         }];
         let block = format_web_results_block(&results);
-        assert!(block.contains("(W1) A result"));
+        assert!(block.contains("[w1] A result"));
         assert!(block.contains("https://example.com/a"));
     }
 }

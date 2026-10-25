@@ -5,6 +5,7 @@ import { ChatDrawer } from "./ChatPanel";
 import { chatWithArticle, webSearch } from "../../services/commands";
 import { selectChatText } from "../../test/selectChatText";
 import { useUiStore } from "../../stores/uiStore";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 vi.mock("../../services/commands", () => ({
   chatWithArticle: vi.fn(),
@@ -15,6 +16,7 @@ let settings = { ai: { provider: "openai", chat_provider: "same" } };
 vi.mock("../../hooks/useSettings", () => ({
   useSettings: () => ({ data: settings }),
 }));
+vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("../common/ModelPicker", () => ({
   ModelPicker: (p: { surface: string; disabled?: boolean }) => (
     <div data-testid="model-picker" data-surface={p.surface} data-disabled={String(!!p.disabled)} />
@@ -43,6 +45,23 @@ async function openAndType(text: string) {
 }
 
 describe("ChatDrawer", () => {
+  it("links [wN] in the answer to numbered web source cards and keeps uncited results collapsed", async () => {
+    const web = (n: number) => ({ title: `Result ${n}`, url: `https://www.site${n}.com/post`, snippet: `Snippet ${n}`, query: "q" });
+    vi.mocked(chatWithArticle).mockResolvedValue({ content: "Confirmed elsewhere [w2], and again [w2][w1].", web_citations: [web(1), web(2), web(3)], provider: "openai", model: "test" });
+    render(<ChatDrawer articleId="article-1" articleTitle="Article" open />);
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText("Ask about this article..."), "Anyone else?{Enter}");
+    const first = await screen.findByRole("button", { name: /^1.*site2\.com.*Result 2.*Snippet 2/ });
+    expect(screen.getByRole("button", { name: /^2.*site1\.com.*Result 1/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Result 3/ })).not.toBeVisible();
+    expect(screen.getByText("Also found on the web (1)")).toBeInTheDocument();
+    await user.click(screen.getAllByRole("link", { name: "1" })[0]);
+    expect(openUrl).toHaveBeenLastCalledWith("https://www.site2.com/post");
+    await user.click(first);
+    expect(openUrl).toHaveBeenCalledTimes(2);
+  });
+
+
   it("opens by keyboard, focuses the composer, and sends without scrolling the document", async () => {
     vi.mocked(chatWithArticle).mockResolvedValue({ content: "Answer", web_citations: [], provider: "openai", model: "test" });
     const user = userEvent.setup();

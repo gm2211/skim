@@ -45,6 +45,9 @@ const main = async () => {
       await p.addInitScript({ path: path.join(HERE, "fixtures.js") });
       await p.addInitScript({ path: path.join(HERE, "mock-backend.js") });
       await p.addInitScript({ content: PATCH });
+      // On a Mac host the app leaves #root transparent for the native window's glass, which a
+      // plain browser lacks; paint the opaque fallback it uses under reduced transparency.
+      await p.addInitScript({ content: `document.addEventListener("DOMContentLoaded", () => { const s = document.createElement("style"); s.textContent = "html.macos #root { background: var(--color-bg-primary) !important; }"; document.head.appendChild(s); });` });
       await p.goto(URL_, { waitUntil: "networkidle" });
       await p.waitForTimeout(1200);
       const gotIt = p.getByRole("button", { name: /got it/i });

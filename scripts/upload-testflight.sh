@@ -55,7 +55,20 @@ fi
 
 # Default ship: bump iOS and macOS together to the next shared version, so every
 # build appears as a new version in TestFlight (not only a new build number).
-if [[ -z "${SKIM_VERSION:-}" && -z "${SKIM_BUILD_NUMBER:-}" ]]; then
+# When HEAD already carries a committed bump (the last commit touching the spec
+# names the current version and the metadata files are unchanged), upload that
+# bump as is instead of bumping a second time.
+committed_bump=false
+if git -C "$ROOT" log -1 --format=%s -- "$PROJECT_SPEC" | grep -qF "$current_version" \
+    && git -C "$ROOT" diff --quiet HEAD -- "$PROJECT_SPEC" "$ROOT/src-tauri/tauri.conf.json" \
+         "$ROOT/native/SkimNative/SkimNative.xcodeproj/project.pbxproj"; then
+  committed_bump=true
+fi
+if [[ -z "${SKIM_VERSION:-}" && -z "${SKIM_BUILD_NUMBER:-}" && "${SKIM_ALLOW_SAME_VERSION:-false}" != true \
+      && "$committed_bump" == true ]]; then
+  echo "HEAD already carries the bump to $current_version ($current_build); uploading it as is."
+  SKIM_USE_COMMITTED_VERSION=true
+elif [[ -z "${SKIM_VERSION:-}" && -z "${SKIM_BUILD_NUMBER:-}" ]]; then
   bash "$ROOT/scripts/bump-version.sh"
   SKIM_VERSION="$(awk '/MARKETING_VERSION:/ { print $2; exit }' "$PROJECT_SPEC")"
   SKIM_BUILD_NUMBER="$(awk '/CURRENT_PROJECT_VERSION:/ { print $2; exit }' "$PROJECT_SPEC")"
@@ -76,7 +89,7 @@ fi
 if [[ "${SKIM_USE_COMMITTED_VERSION:-false}" == true ]]; then
   version="$current_version"
   build_number="$current_build"
-  if ! git -C "$ROOT" log -1 --format=%s -- "$PROJECT_SPEC" | grep -q "$version"; then
+  if [[ "$committed_bump" != true ]]; then
     echo "Last commit touching $PROJECT_SPEC does not mention version $version."
     echo "Commit the scripts/bump-version.sh bump first."
     exit 1

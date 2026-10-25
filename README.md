@@ -70,12 +70,16 @@ swift test --package-path native/SkimCore          # iOS core
 
 Copy `scripts/testflight.env.example` to `.env.testflight.local` and fill in your App Store Connect API key. Then:
 
+Every TestFlight build gets a new version, on iOS and macOS alike, so each one shows up as a new entry in TestFlight. Both platforms share one version.
+
 ```bash
-pnpm testflight                          # iOS: archive and upload the "Skim iOS" scheme
+./scripts/bump-version.sh                # 0.1.53 -> 0.1.54, iOS and macOS build numbers +1
+git commit -am "Bump to 0.1.54"          # merge the bump, then build and upload it:
+SKIM_USE_COMMITTED_VERSION=true pnpm testflight   # iOS: archive and upload the "Skim iOS" scheme
 ./scripts/upload-macos-testflight.sh     # macOS: export the built Skim.app for TestFlight
 ```
 
-Bump the version or build number before every upload.
+Run without `SKIM_USE_COMMITTED_VERSION`, `pnpm testflight` bumps the version itself. It refuses to upload a build under an unchanged version (per-PR builds from `scripts/tf-pr.sh` are the exception).
 
 ## Setting up AI
 

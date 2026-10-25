@@ -17,6 +17,19 @@ behaviors:
     description: >-
       Every App Store Connect or TestFlight archive carries a bumped version or build number; the
       upload refuses an unchanged one.
+  - id: version-bump-every-build
+    description: >-
+      Every new TestFlight build, iOS and macOS, ships under a new version, not only a new build
+      number, so each build shows up as new in TestFlight. Both platforms share one version.
+    details: >-
+      scripts/bump-version.sh moves iOS and macOS to the next patch after the higher current
+      version and bumps both build numbers; the iOS upload refuses an unchanged version except for
+      per-PR builds from scripts/tf-pr.sh. Sharing one version across platforms is an agent choice
+      made with this rule, not a separate request.
+    source:
+      text: >-
+        even on macos and please let's alwasy bump the version when having new builds
+      reference: Giulio, project thread "Bump version on every TestFlight build", 2026-10-25
   - id: desktop-release-checks
     description: >-
       A desktop release is signed, passes codesign verification and the on-device AI self-check, and

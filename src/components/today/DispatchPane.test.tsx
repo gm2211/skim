@@ -8,6 +8,7 @@ import type { AppSettings, DispatchEdition } from "../../services/types";
 import { dispatchWindow, splitCitations } from "../../lib/dispatch";
 import { useUiStore } from "../../stores/uiStore";
 import { useAgentChatStore } from "../../stores/agentChatStore";
+import { selectChatText } from "../../test/selectChatText";
 
 vi.mock("../../services/commands", () => ({
   getDispatch: vi.fn(),
@@ -145,6 +146,18 @@ describe("The Briefing", () => {
     expect(story?.title).toBe("Two certificate authorities breached in a week");
     expect(story?.article_ids).toEqual(["a1", "a2"]);
     expect(story?.summary).not.toContain("[1]");
+  });
+
+  it("asks about a passage highlighted in a piece, quoted from the story", async () => {
+    vi.mocked(commands.getDispatch).mockResolvedValue(edition());
+    renderPane();
+    const lead = (await screen.findAllByRole("article"))[0];
+    expect(within(lead).getByText(/Attackers issued rogue certificates/).closest(".selectable-text")).not.toBeNull();
+    selectChatText(within(lead).getByText(/Attackers issued rogue certificates/).firstChild!, 0, 9);
+    await userEvent.click(within(lead).getByRole("button", { name: "Ask in chat" }));
+    const seed = useAgentChatStore.getState().seed;
+    expect(seed?.reply).toEqual({ role: "story", text: "Attackers" });
+    expect(seed?.context.story?.title).toBe("Two certificate authorities breached in a week");
   });
 
   it("offers a new edition when articles arrived after this one was written", async () => {

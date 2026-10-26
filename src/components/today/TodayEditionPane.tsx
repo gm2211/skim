@@ -280,6 +280,11 @@ export function StoryFrontPage() {
               context: { ...agentContext, story: storyForAgent(item) },
               onSend: () => markStoryRead(item.story_id),
             })}
+            onAskAbout={(text) => openAgentChat({
+              context: { ...agentContext, story: storyForAgent(item) },
+              reply: { role: "story", text },
+              onSend: () => markStoryRead(item.story_id),
+            })}
           />,
         }))} />}
 

@@ -91,7 +91,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
     setContextArticleTitle(seed.articleTitle ?? null);
     setDeep(!!seed.research);
     setMessages(seed.messages ?? []);
-    setReply(null);
+    setReply(seed.reply ?? null);
     setError(null);
     if (seed.autoSend && seed.prompt?.trim()) {
       setInput("");

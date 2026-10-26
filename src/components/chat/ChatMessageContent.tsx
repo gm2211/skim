@@ -14,15 +14,18 @@ export interface ChatCitations {
 }
 
 export interface ChatReply {
-  /** "article" is a passage the reader highlighted in the article itself. */
-  role: "user" | "assistant" | "article";
+  /** "article" is a passage the reader highlighted in the article itself;
+   *  "story" is one highlighted in an AI-written newspaper story. */
+  role: "user" | "assistant" | "article" | "story";
   text: string;
 }
 
 /** Keep quoted text in every subsequent history turn, not just the first send. */
 export function chatPrompt(content: string, reply?: ChatReply | null): string {
   if (!reply) return content;
-  const lead = reply.role === "article" ? "About this passage from the article" : `Replying to ${reply.role === "assistant" ? "Skim" : "my message"}`;
+  const lead = reply.role === "article" ? "About this passage from the article"
+    : reply.role === "story" ? "About this passage from the story"
+    : `Replying to ${reply.role === "assistant" ? "Skim" : "my message"}`;
   return `${lead}:\n${reply.text.split("\n").map((line) => `> ${line}`).join("\n")}\n\n${content}`;
 }
 
@@ -30,7 +33,7 @@ export function ReplyPreview({ reply, onRemove }: { reply: ChatReply; onRemove?:
   return (
     <div className="chat-reply-preview" role={onRemove ? "note" : undefined} aria-label="Quoted text">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-text-secondary">{reply.role === "article" ? "From the article" : `Replying to ${reply.role === "assistant" ? "Skim" : "you"}`}</span>
+        <span className="text-text-secondary">{reply.role === "article" ? "From the article" : reply.role === "story" ? "From the story" : `Replying to ${reply.role === "assistant" ? "Skim" : "you"}`}</span>
         {onRemove && <button type="button" onClick={onRemove} className="tap-target rounded-lg hover:bg-white/10" aria-label="Remove quoted text">×</button>}
       </div>
       <blockquote>{reply.text}</blockquote>

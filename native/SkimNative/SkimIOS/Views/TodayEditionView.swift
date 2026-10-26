@@ -122,17 +122,17 @@ struct TodayEditionView: View {
                 pageLabel(alignment: .leading)
                 Spacer(minLength: 8)
                 Button { turn(to: 2) } label: {
-                    Label("Next page", systemImage: "chevron.right").labelStyle(TrailingIconLabel())
+                    Label("Next page", systemImage: "chevron.right").labelStyle(TrailingIconLabel()).fixedSize()
                 }
             } else {
                 Button { turn(to: model.todayPage - 1) } label: {
-                    Label("Previous page", systemImage: "chevron.left")
+                    Label("Previous page", systemImage: "chevron.left").fixedSize()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 pageLabel(alignment: .center)
                     .layoutPriority(1)
                 Button { turn(to: model.todayPage + 1) } label: {
-                    Label("Next page", systemImage: "chevron.right").labelStyle(TrailingIconLabel())
+                    Label("Next page", systemImage: "chevron.right").labelStyle(TrailingIconLabel()).fixedSize()
                 }
                 .disabled(model.todayPage >= AppModel.todayPageCount)
                 .opacity(model.todayPage >= AppModel.todayPageCount ? 0.35 : 1)
@@ -156,6 +156,7 @@ struct TodayEditionView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(SkimStyle.secondary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
         }
     }

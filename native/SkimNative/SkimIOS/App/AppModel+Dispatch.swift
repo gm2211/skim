@@ -285,13 +285,16 @@ extension AppModel {
 
     /// A reason the reader can act on.
     nonisolated static func dispatchFailureReason(_ error: Error) -> String {
-        let text = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+        if let failure = error as? Dispatch.Failure {
+            let text = failure.errorDescription ?? "\(failure)"
+            return text.hasSuffix(".") ? text : "\(text)."
+        }
+        let text = NativeAI.userFacingMessage(error)
         let lowered = text.lowercased()
         if ["429", "529", "rate limit", "rate_limit", "overloaded", "timed out", "timeout"].contains(where: lowered.contains) {
             return "The AI provider was busy or rate limited. Try again in a moment."
         }
-        if error is Dispatch.Failure { return "\(text)." }
-        return "The AI provider failed: \(text.prefix(160))"
+        return text
     }
 
     /// The reports a theme was written from, for a chat about it.

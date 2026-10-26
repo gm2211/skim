@@ -1,11 +1,32 @@
 import { useEffect, useState, type RefObject } from "react";
 import "../chat/chat-markdown.css";
 
+/** Matches `.reader-selection-ask` in chat-markdown.css. */
+const PILL_HEIGHT = 28;
+const PILL_GAP = 6;
+
+/**
+ * Where the pill goes for a selection: above it when the pill still fits
+ * inside the selected block, otherwise below. Anchoring to the block, not to
+ * the container, keeps the pill off whatever sits above — a selection in the
+ * first line of the lead paragraph used to park it on the headline.
+ */
+function pillTop(range: Range, bounds: DOMRect, containerTop: number): number {
+  const node = range.startContainer;
+  const block = (node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement)?.closest(
+    "p, li, blockquote, h1, h2, h3, h4, h5, h6, pre, td, div",
+  );
+  const limit = block?.getBoundingClientRect().top ?? bounds.top;
+  const above = bounds.top - PILL_HEIGHT - PILL_GAP;
+  return (above >= limit ? above : bounds.bottom + PILL_GAP) - containerTop;
+}
+
 /**
  * Floating "Ask in chat" button over text the reader highlights in the
  * article. `containerRef` must be positioned (relative) and hold the article
- * text; the button is placed just above the selection inside it.
+ * text; the button is placed just outside the selection inside it.
  */
+
 export function ReaderSelectionAsk({ containerRef, onAsk }: {
   containerRef: RefObject<HTMLElement | null>;
   onAsk: (text: string) => void;
@@ -31,7 +52,7 @@ export function ReaderSelectionAsk({ containerRef, onAsk }: {
       const container = element.getBoundingClientRect();
       setSelection({
         text,
-        top: Math.max(0, bounds.top - container.top - 36),
+        top: Math.max(0, pillTop(range, bounds, container.top)),
         left: Math.max(0, Math.min(bounds.left - container.left, container.width - 80)),
       });
     };

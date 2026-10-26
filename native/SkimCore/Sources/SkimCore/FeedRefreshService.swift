@@ -286,7 +286,7 @@ private final class FeedParserDelegate: NSObject, XMLParserDelegate {
         switch context {
         case .channel:
             if localName == "title", !value.isEmpty {
-                feedTitle = value.decodingHTMLEntities()
+                feedTitle = value.decodingHTMLEntities
             } else if localName == "link", siteURL == nil {
                 siteURL = URL(string: value)
             }
@@ -310,14 +310,14 @@ private final class FeedParserDelegate: NSObject, XMLParserDelegate {
         case "guid", "id":
             item.guid = value
         case "title":
-            item.title = value.decodingHTMLEntities()
+            item.title = value.decodingHTMLEntities
         case "link":
             if item.url == nil { item.url = URL(string: value) }
         case "comments":
             // HN RSS: <comments>https://news.ycombinator.com/item?id=…</comments>
             item.commentsURL = URL(string: value)
         case "author", "dc:creator", "name":
-            if item.author == nil { item.author = value.decodingHTMLEntities() }
+            if item.author == nil { item.author = value.decodingHTMLEntities }
         case "description", "summary":
             if item.contentText == nil { item.contentText = value.strippingTags() }
             if item.contentHTML == nil { item.contentHTML = value }
@@ -404,7 +404,7 @@ extension Date {
 private extension URL {
     static func imageURL(from value: String?, relativeTo baseURL: URL?) -> URL? {
         guard let value else { return nil }
-        let decoded = value.decodingHTMLEntities()
+        let decoded = value.decodingHTMLEntities
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !decoded.isEmpty else { return nil }
         return URL(string: decoded, relativeTo: baseURL)?.absoluteURL.upgradingHTTPToHTTPS()
@@ -415,43 +415,9 @@ extension String {
     func strippingTags() -> String {
         replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .decodingHTMLEntities()
+            .decodingHTMLEntities
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    func decodingHTMLEntities() -> String {
-        var decoded = self
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-            .replacingOccurrences(of: "&#160;", with: " ")
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
-            .replacingOccurrences(of: "&apos;", with: "'")
-
-        let pattern = #"&#(x?[0-9A-Fa-f]+);"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return decoded }
-        let matches = regex.matches(in: decoded, range: NSRange(decoded.startIndex..<decoded.endIndex, in: decoded)).reversed()
-
-        for match in matches {
-            guard match.numberOfRanges == 2,
-                  let fullRange = Range(match.range(at: 0), in: decoded),
-                  let valueRange = Range(match.range(at: 1), in: decoded)
-            else { continue }
-
-            let value = decoded[valueRange]
-            let radix = value.lowercased().hasPrefix("x") ? 16 : 10
-            let scalarText = radix == 16 ? value.dropFirst() : Substring(value)
-            guard let codepoint = UInt32(scalarText, radix: radix),
-                  let scalar = UnicodeScalar(codepoint)
-            else { continue }
-
-            decoded.replaceSubrange(fullRange, with: String(scalar))
-        }
-
-        return decoded
     }
 
     func firstImageURL(relativeTo baseURL: URL?) -> URL? {
@@ -577,7 +543,7 @@ public enum AggregatorDetector {
            let match = regex.firstMatch(in: html, range: NSRange(html.startIndex..<html.endIndex, in: html)),
            let hrefRange = Range(match.range(at: 1), in: html) {
             let href = String(html[hrefRange])
-                .decodingHTMLEntities()
+                .decodingHTMLEntities
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard let url = URL(string: href),
                   let host = url.host?.lowercased(),
@@ -598,7 +564,7 @@ public enum AggregatorDetector {
                   let hrefRange = Range(match.range(at: 1), in: html)
             else { continue }
             let href = String(html[hrefRange])
-                .decodingHTMLEntities()
+                .decodingHTMLEntities
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard let url = URL(string: href),
                   let host = url.host?.lowercased(),

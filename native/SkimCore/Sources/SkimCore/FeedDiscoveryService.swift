@@ -397,7 +397,7 @@ public struct FeedDiscoveryService: Sendable {
 
     static func cleanText(_ s: String) -> String {
         let noTags = s.replacingOccurrences(of: "<[^>]*>", with: " ", options: .regularExpression)
-        return noTags.decodingHTMLEntities()
+        return noTags.decodingHTMLEntities
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
     }

@@ -116,16 +116,7 @@ public enum StoryText {
     }
 
     private static func decodeEntities(_ text: String) -> String {
-        var out = text
-        let entities = [
-            ("&nbsp;", " "), ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"),
-            ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"),
-            ("&hellip;", "…"), ("&mdash;", "—"), ("&ndash;", "–"),
-        ]
-        for (entity, replacement) in entities {
-            out = out.replacingOccurrences(of: entity, with: replacement)
-        }
-        return out
+        HTMLEntities.decode(text)
     }
 
     private static func stripBareURLs(_ text: String) -> String {

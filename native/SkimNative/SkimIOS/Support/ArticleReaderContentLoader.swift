@@ -200,37 +200,7 @@ private extension String {
     }
 
     var articleReaderDecodingHTMLEntities: String {
-        var decoded = self
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-            .replacingOccurrences(of: "&#160;", with: " ")
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
-            .replacingOccurrences(of: "&apos;", with: "'")
-
-        let pattern = #"&#(x?[0-9A-Fa-f]+);"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return decoded }
-        let matches = regex.matches(in: decoded, range: NSRange(decoded.startIndex..<decoded.endIndex, in: decoded)).reversed()
-
-        for match in matches {
-            guard match.numberOfRanges == 2,
-                  let fullRange = Range(match.range(at: 0), in: decoded),
-                  let valueRange = Range(match.range(at: 1), in: decoded)
-            else { continue }
-
-            let value = decoded[valueRange]
-            let radix = value.lowercased().hasPrefix("x") ? 16 : 10
-            let scalarText = radix == 16 ? value.dropFirst() : Substring(value)
-            guard let codepoint = UInt32(scalarText, radix: radix),
-                  let scalar = UnicodeScalar(codepoint)
-            else { continue }
-
-            decoded.replaceSubrange(fullRange, with: String(scalar))
-        }
-
-        return decoded
+        HTMLEntities.decode(self)
     }
 
     var articleReaderUnescapingLiteralEscapes: String {

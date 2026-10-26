@@ -3,6 +3,7 @@
 // Ported from src-tauri/src/commands/chat.rs (run_web_search / parse_ddg_results).
 
 import Foundation
+import SkimCore
 
 struct SearchResult: Codable, Sendable {
     let title: String
@@ -178,49 +179,8 @@ enum NativeWebSearch {
         return result
     }
 
-    /// Decode a minimal set of HTML entities (matching the Rust reference).
+    /// Named and numeric HTML entities, via the app's one decoder.
     private static func htmlEntitiesDecode(_ s: String) -> String {
-        var result = s
-            .replacingOccurrences(of: "&amp;",  with: "&")
-            .replacingOccurrences(of: "&lt;",   with: "<")
-            .replacingOccurrences(of: "&gt;",   with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#x27;", with: "'")
-            .replacingOccurrences(of: "&#39;",  with: "'")
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-
-        // Decode decimal numeric entities &#NNN;
-        result = decodeNumericEntities(result)
-        return result
-    }
-
-    private static func decodeNumericEntities(_ s: String) -> String {
-        var out = s
-        // Simple scan for &#digits; patterns
-        var searchStart = out.startIndex
-        while searchStart < out.endIndex,
-              let ampRange = out.range(of: "&#", range: searchStart..<out.endIndex) {
-            let afterAmp = ampRange.upperBound
-            guard afterAmp < out.endIndex else { break }
-            // Collect digits
-            var idx = afterAmp
-            while idx < out.endIndex && out[idx].isNumber {
-                idx = out.index(after: idx)
-            }
-            guard idx < out.endIndex && out[idx] == ";" && idx > afterAmp else {
-                searchStart = ampRange.upperBound
-                continue
-            }
-            let digits = String(out[afterAmp..<idx])
-            let entityEnd = out.index(after: idx)
-            if let codepoint = UInt32(digits), let scalar = Unicode.Scalar(codepoint) {
-                out.replaceSubrange(ampRange.lowerBound..<entityEnd, with: String(scalar))
-                // After replacement the indices shift; restart from same position
-                searchStart = ampRange.lowerBound
-            } else {
-                searchStart = entityEnd
-            }
-        }
-        return out
+        HTMLEntities.decode(s)
     }
 }

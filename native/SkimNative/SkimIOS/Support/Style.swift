@@ -79,6 +79,32 @@ struct BorderlessIconButton: View {
     }
 }
 
+/// An on/off switch for Smart sorting: a sparkles capsule, filled with the
+/// accent when the list is ranked For you, outlined when it is newest first.
+struct SmartSortToggle: View {
+    var isOn: Bool
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(isOn ? Color.white : SkimStyle.secondary)
+                .frame(width: 44, height: 28)
+                .background(Capsule().fill(isOn ? SkimStyle.accent : Color.clear))
+                .overlay(Capsule().strokeBorder(isOn ? Color.clear : SkimStyle.secondary.opacity(0.45), lineWidth: 1))
+                .frame(height: 42)
+                .contentShape(Rectangle())
+                .animation(.smooth(duration: 0.18), value: isOn)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Smart sorting")
+        .accessibilityValue(isOn ? "On" : "Off")
+        .accessibilityAddTraits(.isToggle)
+        .accessibilityHint("Ranks unread articles for you when on; newest first when off")
+    }
+}
+
 struct SkimWordmark: View {
     var size: CGFloat = 48
 

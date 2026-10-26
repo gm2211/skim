@@ -415,18 +415,9 @@ struct ArticleListView: View {
 
     private var topBar: some View {
         ZStack {
-            // On Today the title sits between the clusters (the way a
-            // navigation bar does when its buttons leave no room to centre it
-            // on the screen); elsewhere it is centred on the screen.
-            if !showToday {
-                HStack {
-                    Spacer()
-                    topBarTitle.frame(maxWidth: model.canSortForYou ? 160 : 190)
-                    Spacer()
-                }
-            }
-
-            HStack(alignment: .center, spacing: showToday ? 12 : 18) {
+            // The title sits between the clusters, the way a navigation bar
+            // does when its buttons leave no room to centre it on the screen.
+            HStack(alignment: .center, spacing: 12) {
                 BorderlessIconButton(systemName: SkimIcon.feeds, title: "Feeds", size: 20, tapSize: 42) {
                     dismissTextEntry()
                     withAnimation(.smooth(duration: 0.26)) {
@@ -440,18 +431,18 @@ struct ArticleListView: View {
                         showTodaySettings = true
                     }
                 } else {
-                    Spacer()
-                    if model.canSortForYou {
-                        BorderlessIconButton(systemName: "sparkles",
-                                             title: "Smart sorting",
-                                             isActive: model.isForYou,
-                                             size: 17, tapSize: 36) {
-                            dismissTextEntry()
-                            smartSortingBinding.wrappedValue.toggle()
+                    topBarTitle.frame(maxWidth: .infinity)
+                    HStack(spacing: 4) {
+                        BorderlessIconButton(systemName: SkimIcon.chat, title: "Chat with Articles",
+                                             size: 19, tapSize: 38) {
+                            presentArticleChat()
                         }
-                        .opacity(model.isForYou ? 1 : 0.55)
-                        .accessibilityValue(model.isForYou ? "On" : "Off")
-                        .accessibilityHint("Ranks unread articles for you when on; newest first when off")
+                        if model.canSortForYou {
+                            SmartSortToggle(isOn: model.isForYou) {
+                                dismissTextEntry()
+                                smartSortingBinding.wrappedValue.toggle()
+                            }
+                        }
                     }
                 }
 
@@ -473,19 +464,18 @@ struct ArticleListView: View {
                         }
                         Divider()
                     }
-                    Button("Chat with Articles", systemImage: SkimIcon.chat) {
-                        presentArticleChat()
-                    }
-                    if !showToday && model.canSortForYou {
-                        Toggle(isOn: smartSortingBinding) {
-                            Label("Smart Sorting", systemImage: "sparkles")
+                    // Chat and Smart sorting are toolbar buttons on the lists.
+                    if showToday {
+                        Button("Chat with Articles", systemImage: SkimIcon.chat) {
+                            presentArticleChat()
                         }
-                    } else {
+                    }
+                    if showToday || !model.canSortForYou {
                         Button("For you", systemImage: SkimIcon.aiInbox) {
                             presentAIInbox()
                         }
+                        Divider()
                     }
-                    Divider()
                     Button("Discover Feeds", systemImage: SkimIcon.addFeed) {
                         dismissTextEntry()
                         showAddFeed = true

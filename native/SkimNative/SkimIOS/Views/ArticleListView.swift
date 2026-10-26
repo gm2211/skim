@@ -684,6 +684,11 @@ struct ArticleListView: View {
                             .padding(.trailing, 18)
                             .padding(.top, 13)
                             .padding(.bottom, 7)
+                            // The header pins while rows scroll under it, and the
+                            // list's own background is hidden, so it needs one.
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(SkimStyle.chrome)
+                            .listRowInsets(EdgeInsets())
                     }
                 }
             }

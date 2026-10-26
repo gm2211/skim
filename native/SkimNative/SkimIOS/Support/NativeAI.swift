@@ -3129,7 +3129,8 @@ enum NativeAI {
     static func userFacingMessage(_ error: Error) -> String {
         if let aiError = error as? NativeAIError {
             switch aiError {
-            case .unavailable(let message): return message
+            case .unavailable(let message) where isPresentableErrorText(message): return message
+            case .unavailable: break
             case .requiresReauthentication: return "Your Claude session expired. Sign in again."
             }
         }

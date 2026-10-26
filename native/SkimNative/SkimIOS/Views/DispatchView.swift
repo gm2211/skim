@@ -409,18 +409,18 @@ struct DispatchView: View {
     private var pageBar: some View {
         HStack(spacing: 12) {
             Button { turn(to: model.todayPage - 1) } label: {
-                Label("Previous page", systemImage: "chevron.left")
+                Label("Previous page", systemImage: "chevron.left").fixedSize()
             }
             .disabled(model.todayPage <= 1)
             .opacity(model.todayPage <= 1 ? 0.35 : 1)
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(spacing: 1) {
                 Text(model.todayPage == 1 ? "Front page" : "Page \(model.todayPage)").font(.system(size: 12, weight: .semibold))
-                Text(Self.dateline(start: window.start, end: window.end)).font(.system(size: 11)).foregroundStyle(SkimStyle.secondary).lineLimit(1)
+                Text(Self.dateline(start: window.start, end: window.end)).font(.system(size: 11)).foregroundStyle(SkimStyle.secondary).lineLimit(1).minimumScaleFactor(0.75)
             }
             .layoutPriority(1)
             Button { turn(to: model.todayPage + 1) } label: {
-                HStack(spacing: 4) { Text("Next page"); Image(systemName: "chevron.right") }
+                HStack(spacing: 4) { Text("Next page"); Image(systemName: "chevron.right") }.fixedSize()
             }
             .disabled(model.todayPage >= AppModel.todayPageCount)
             .frame(maxWidth: .infinity, alignment: .trailing)

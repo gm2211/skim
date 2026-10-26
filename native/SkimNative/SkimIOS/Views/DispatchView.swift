@@ -409,7 +409,7 @@ struct DispatchView: View {
     private var pageBar: some View {
         HStack(spacing: 12) {
             Button { turn(to: model.todayPage - 1) } label: {
-                Label(model.todayPage == 2 ? "Latest" : "Newer", systemImage: "chevron.left")
+                Label("Previous page", systemImage: "chevron.left")
             }
             .disabled(model.todayPage <= 1)
             .opacity(model.todayPage <= 1 ? 0.35 : 1)
@@ -420,7 +420,7 @@ struct DispatchView: View {
             }
             .layoutPriority(1)
             Button { turn(to: model.todayPage + 1) } label: {
-                HStack(spacing: 4) { Text("Older"); Image(systemName: "chevron.right") }
+                HStack(spacing: 4) { Text("Next page"); Image(systemName: "chevron.right") }
             }
             .disabled(model.todayPage >= AppModel.todayPageCount)
             .frame(maxWidth: .infinity, alignment: .trailing)

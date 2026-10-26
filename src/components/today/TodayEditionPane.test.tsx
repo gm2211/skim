@@ -389,7 +389,7 @@ describe("TodayEditionPane", () => {
     expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
 
     // Page 2 is the seven days before today.
-    await userEvent.click(screen.getByRole("button", { name: "Last week" }));
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
     expect(useUiStore.getState().todayPage).toBe(2);
     await waitFor(() => {
       const last = calls[calls.length - 1];

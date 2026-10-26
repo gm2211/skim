@@ -226,8 +226,8 @@ behaviors:
       and no picture runs full width with the rail as a row of three beneath it, so no tall empty
       column sits beside the rail, and a story without a summary takes its publication's colour
       until a theme is written; on iOS a status line above them says when the feeds
-      are being checked. The iOS page strip names the front page on the left and offers "Last
-      week" on the right; later pages centre the page between equal-width turns. A turned page
+      are being checked. The iOS page strip names the front page on the left and offers "Next
+      page" on the right; later pages centre the page between equal-width turns. A turned page
       opens at its top.
     source:
       text: >-
@@ -247,7 +247,10 @@ behaviors:
       Each page is its own frozen edition (window plus size), so turning back and returning keeps
       a page as it was; an earlier week's page is made when first turned to. An edition shows on
       one page whatever its size, so a 20-story edition has more briefs rather than a second page.
-      The paper offers a year of weeks. The page is per launch, not remembered.
+      The paper offers a year of weeks. The page is per launch, not remembered. Every pager, on
+      desktop and iOS, front page and later pages alike, labels its turns exactly "Previous page"
+      and "Next page" (never Newer/Older, Latest, Today, Last week or Previous edition); Giulio,
+      2026-10-26: "let's stick to next page previous page".
     source:
       text: >-
         in fact, maybe we should have the front page be today and each page of newspaper view be

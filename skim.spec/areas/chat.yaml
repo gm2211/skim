@@ -113,6 +113,19 @@ behaviors:
     source:
       text: I'd like the ability to easily highlight text and ask about it in chat
       reference: Giulio, project thread "highlight text and ask in chat", 2026-10-14
+  - id: ask-about-briefing-highlight
+    description: >-
+      A reader can highlight a passage in an AI-written Briefing or Today story and ask about it in
+      chat: the chat about that story opens with the passage quoted above the composer.
+    details: >-
+      The story's headline, dek, body, takeaways, pull quotes and briefs stay selectable even though
+      app chrome is not. Desktop shows the same floating "Ask" pill as the reader, above the
+      selection inside the story; iOS Briefing paragraphs and takeaways offer "Ask in Chat" first in
+      the selection menu, and their citation numbers still open the report. The quote is sent as
+      "About this passage from the story" and labelled "From the story".
+    source:
+      text: i wanna be able to select and ask
+      reference: Giulio, project thread "Select and ask in briefings", 2026-10-26
   - id: web-search
     description: >-
       Chat can search the web when the library does not cover a question, and web sources are marked

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { AgentContext } from "../services/commands";
 import type { AgentMessage } from "../lib/agentContext";
 import { runAppCommand } from "../lib/appCommands";
+import type { ChatReply } from "../components/chat/ChatMessageContent";
 
 /** A conversation handed to the full Ask Skim chat to continue there. */
 export interface AgentChatSeed {
@@ -9,6 +10,8 @@ export interface AgentChatSeed {
   /** Title of the article open in the reader, for naming the context. */
   articleTitle?: string | null;
   messages?: AgentMessage[];
+  /** A highlighted passage, quoted above the input for the question. */
+  reply?: ChatReply;
   /** Text for the input. */
   prompt?: string;
   /** Send `prompt` as soon as the chat opens. */

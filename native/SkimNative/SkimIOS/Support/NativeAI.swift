@@ -37,16 +37,19 @@ struct AIResultAnswer {
 }
 
 /// Where a quoted passage in a chat question came from: a sentence of an
-/// earlier Skim answer, or a passage the reader highlighted in the article.
+/// earlier Skim answer, or a passage the reader highlighted in the article
+/// or in a story the AI wrote for the Briefing.
 enum ChatQuoteSource: Sendable, Equatable {
     case answer
     case article
+    case story
 
     /// Lead line before the quoted passage in the prompt.
     var promptLead: String {
         switch self {
         case .answer: "Replying to Skim"
         case .article: "About this passage from the article"
+        case .story: "About this passage from the story"
         }
     }
 
@@ -55,6 +58,7 @@ enum ChatQuoteSource: Sendable, Equatable {
         switch self {
         case .answer: "Replying to Skim"
         case .article: "From the article"
+        case .story: "From the story"
         }
     }
 
@@ -172,6 +176,8 @@ struct AIChatRequest: Identifiable {
     /// A passage the reader highlighted in the article; the chat opens with it
     /// quoted above the composer, ready for a question about it.
     var initialArticleQuote: String? = nil
+    /// Where `initialArticleQuote` was highlighted.
+    var initialQuoteSource: ChatQuoteSource = .article
     /// Deep research, when this chat offers it: the feeds first, then the web,
     /// written up as a cited briefing. Each step is reported as it starts.
     var research: ((AIChatConversation, @MainActor @escaping (String) -> Void) async throws -> AIChatAnswer)? = nil
@@ -4035,7 +4041,7 @@ struct AIChatSheet: View {
                 seedInitialMessageIfNeeded()
                 if let quote = request.initialArticleQuote?.trimmingCharacters(in: .whitespacesAndNewlines), !quote.isEmpty {
                     quotedText = quote
-                    quoteSource = .article
+                    quoteSource = request.initialQuoteSource
                 }
                 // The keyboard would cover the starter questions, so wait for a tap.
                 focused = !(messages.isEmpty && quotedText == nil && !request.suggestedPrompts.isEmpty)

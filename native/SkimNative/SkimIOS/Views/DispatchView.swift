@@ -236,20 +236,27 @@ struct DispatchView: View {
     }
 
     /// A paragraph with its `[n]` citations as small links to the reports.
-    private func cited(_ paragraph: String, ids: [String], color: Color) -> AttributedString {
-        var result = AttributedString()
+    private func citedText(_ paragraph: String, ids: [String], color: Color, size: CGFloat) -> NSAttributedString {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 3
+        let body: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: size),
+            .foregroundColor: UIColor(SkimStyle.text),
+            .paragraphStyle: paragraphStyle,
+        ]
+        let result = NSMutableAttributedString()
         for part in Dispatch.parts(paragraph) {
             switch part {
             case .text(let text):
-                result += AttributedString(text)
+                result.append(NSAttributedString(string: text, attributes: body))
             case .cites(let numbers):
                 for number in numbers where number >= 1 && number <= ids.count {
-                    var cite = AttributedString(" \(number)")
-                    cite.baselineOffset = 6
-                    cite.font = .system(size: 10, weight: .bold)
-                    cite.foregroundColor = color
-                    cite.link = URL(string: "\(Self.citeScheme)://\(ids[number - 1])")
-                    result += cite
+                    var cite = body
+                    cite[.font] = UIFont.systemFont(ofSize: 10, weight: .bold)
+                    cite[.foregroundColor] = UIColor(color)
+                    cite[.baselineOffset] = 6
+                    cite[.link] = URL(string: "\(Self.citeScheme)://\(ids[number - 1])")
+                    result.append(NSAttributedString(string: " \(number)", attributes: cite))
                 }
             }
         }
@@ -286,10 +293,10 @@ struct DispatchView: View {
             }
             if theme.isWritten {
                 ForEach(Array(theme.body.enumerated()), id: \.offset) { _, paragraph in
-                    Text(cited(paragraph, ids: theme.articleIDs, color: color))
-                        .font(.system(size: lead ? 17 : 16))
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
+                    SelectableCitedText(text: citedText(paragraph, ids: theme.articleIDs, color: color, size: lead ? 17 : 16),
+                                        onCite: { openArticleID = $0 },
+                                        onAsk: { onAsk(chat(theme, edition: edition, quote: $0)) })
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if !theme.takeaways.isEmpty {
                     VStack(alignment: .leading, spacing: 7) {
@@ -297,7 +304,10 @@ struct DispatchView: View {
                         ForEach(Array(theme.takeaways.enumerated()), id: \.offset) { _, line in
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text("•").foregroundStyle(color)
-                                Text(cited(line, ids: theme.articleIDs, color: color)).fixedSize(horizontal: false, vertical: true)
+                                SelectableCitedText(text: citedText(line, ids: theme.articleIDs, color: color, size: 14.5),
+                                                    onCite: { openArticleID = $0 },
+                                                    onAsk: { onAsk(chat(theme, edition: edition, quote: $0)) })
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .font(.system(size: 14.5))
                         }
@@ -376,11 +386,14 @@ struct DispatchView: View {
         }
     }
 
-    private func chat(_ theme: DispatchEdition.Theme, edition: DispatchEdition) -> AIChatRequest {
+    /// A chat about one piece; `quote` is a passage highlighted in it, which
+    /// the chat opens with, ready for a question about it.
+    private func chat(_ theme: DispatchEdition.Theme, edition: DispatchEdition, quote: String? = nil) -> AIChatRequest {
         let model = self.model
         let ids = theme.articleIDs
         return AIChatRequest(sessionKey: "\(edition.id)-\(theme.headline)", title: "Ask about this",
-                             placeholder: "\(theme.headline)\n\nAsk why it matters, where the reports disagree, or what happens next.") { conversation in
+                             placeholder: "\(theme.headline)\n\nAsk why it matters, where the reports disagree, or what happens next.",
+                             initialArticleQuote: quote, initialQuoteSource: .story) { conversation in
             let context = await model.articlesForTodayChat(await model.dispatchReports(ids))
             guard !context.isEmpty else {
                 return AIChatAnswer(text: "These reports are no longer on this device. Refresh your feeds and try again.", articles: [])
@@ -471,5 +484,84 @@ struct DispatchView: View {
         // Tall enough for the actions on an iPhone SE, where half the screen hides them.
         .presentationDetents([.height(480), .large])
         .sheet(isPresented: $showAISettings) { SettingsSheet(isPresented: $showAISettings, aiOnly: true) }
+    }
+}
+
+// MARK: - Selectable piece text
+
+/// A paragraph of a piece on a UITextView, so the reader can highlight any
+/// passage: SwiftUI `Text` with text selection only copies a whole block. The
+/// selection menu leads with "Ask in Chat", and the citation numbers still
+/// open their reports.
+private struct SelectableCitedText: UIViewRepresentable {
+    var text: NSAttributedString
+    var onCite: (String) -> Void
+    var onAsk: (String) -> Void
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.delegate = context.coordinator
+        view.backgroundColor = .clear
+        view.isEditable = false
+        view.isSelectable = true
+        view.isScrollEnabled = false
+        view.dataDetectorTypes = []
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        // Citations keep their own colour and size, not the system link style.
+        view.linkTextAttributes = [:]
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.parent = self
+        guard !view.attributedText.isEqual(to: text) else { return }
+        view.attributedText = text
+        view.invalidateIntrinsicContentSize()
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width.isFinite else { return nil }
+        return CGSize(width: width, height: ceil(uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height))
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: SelectableCitedText
+
+        init(parent: SelectableCitedText) { self.parent = parent }
+
+        func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
+            guard case .link(let url) = textItem.content, let id = url.host() else { return defaultAction }
+            return UIAction { [weak self] _ in self?.parent.onCite(id) }
+        }
+
+        func textView(_ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
+            // A long press on a citation shouldn't offer to open a made-up URL.
+            guard case .link = textItem.content else { return UITextItem.MenuConfiguration(menu: defaultMenu) }
+            return nil
+        }
+
+        func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            menu(for: textView, suggestedActions: suggestedActions)
+        }
+
+        func textView(_ textView: UITextView, editMenuForTextInRanges ranges: [NSValue], suggestedActions: [UIMenuElement]) -> UIMenu? {
+            menu(for: textView, suggestedActions: suggestedActions)
+        }
+
+        private func menu(for textView: UITextView, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            guard textView.selectedRange.length > 0 else { return UIMenu(children: suggestedActions) }
+            let ask = UIAction(title: "Ask in Chat", image: UIImage(systemName: SkimIcon.chat)) { [weak self, weak textView] _ in
+                guard let self, let textView, let selection = textView.selectedTextRange,
+                      let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !quote.isEmpty else { return }
+                textView.selectedTextRange = nil
+                self.parent.onAsk(quote)
+            }
+            return UIMenu(children: [ask] + suggestedActions)
+        }
     }
 }

@@ -297,12 +297,12 @@ export function StoryFrontPage() {
       </div>
       {/* Turning the page goes back a week; the dateline names the week. */}
       <nav className="today-pagination" aria-label="Newspaper pages">
-        <button className="today-story-control" disabled={!canTurnForward} onClick={() => turnTo(todayPage - 1)}>{todayPage === 2 ? "Today" : "Previous page"}</button>
+        <button className="today-story-control" disabled={!canTurnForward} onClick={() => turnTo(todayPage - 1)}>Previous page</button>
         <div className="today-page-position">
           <span role="status" aria-live="polite">{todayPage === 1 ? "Front page" : `Page ${todayPage}`}<span className="text-text-muted"> · {formatWindowDate(todayWin)}</span></span>
           <button className="today-story-control text-text-muted" onClick={() => useUiStore.getState().setShowSettings(true, "sync")}>Edition size</button>
         </div>
-        <button className="today-story-control" disabled={!canTurnBack} onClick={() => turnTo(todayPage + 1)}>{todayPage === 1 ? "Last week" : "Next page"}</button>
+        <button className="today-story-control" disabled={!canTurnBack} onClick={() => turnTo(todayPage + 1)}>Next page</button>
       </nav>
     </div>
   );

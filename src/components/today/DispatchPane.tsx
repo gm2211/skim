@@ -298,11 +298,11 @@ export function DispatchPane() {
         </div>
       </div>
       <nav className="today-pagination" aria-label="Newspaper pages">
-        <button className="today-story-control" disabled={todayPage <= 1} onClick={() => turnTo(todayPage - 1)}>{todayPage === 2 ? "Latest" : "Newer"}</button>
+        <button className="today-story-control" disabled={todayPage <= 1} onClick={() => turnTo(todayPage - 1)}>Previous page</button>
         <div className="today-page-position">
           <span role="status" aria-live="polite">{todayPage === 1 ? "Front page" : `Page ${todayPage}`}<span className="text-text-muted"> · {formatWindowDate(win)}</span></span>
         </div>
-        <button className="today-story-control" disabled={todayPage >= TODAY_PAGE_COUNT} onClick={() => turnTo(todayPage + 1)}>{todayPage === 1 ? "Previous edition" : "Older"}</button>
+        <button className="today-story-control" disabled={todayPage >= TODAY_PAGE_COUNT} onClick={() => turnTo(todayPage + 1)}>Next page</button>
       </nav>
     </div>
   );

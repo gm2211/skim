@@ -60,7 +60,10 @@
 .dispatch-takeaways ul { display: grid; gap: 7px; margin: 0; padding-left: 16px; list-style: disc; }
 .dispatch-takeaways li { font-size: 13.5px; line-height: 1.45; color: var(--color-text-primary); }
 
-.dispatch-sources { display: grid; gap: 2px; margin: 14px 0 0; padding: 10px 0 0; border-top: 1px solid var(--color-border-light); list-style: none; }
+/* The one column is minmax(0, 1fr), not auto: an auto track grows to a
+   nowrap title's full width and the row spills into the next piece. */
+.dispatch-sources { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin: 14px 0 0; padding: 10px 0 0; border-top: 1px solid var(--color-border-light); list-style: none; }
+.dispatch-sources li { min-width: 0; }
 .dispatch-sources button {
   display: flex; align-items: baseline; gap: 8px; width: 100%; min-width: 0; padding: 3px 0;
   border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer;

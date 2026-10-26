@@ -142,6 +142,7 @@ final class AppModel: ObservableObject {
     @Published var isPreloadingArticles = false
     @Published var preloadProgress: OfflinePreloadProgress?
     @Published var offlineCachedArticleCount = 0
+    @Published var offlineImageBytes = 0
     @Published var offlinePreloadMessage: String?
 
     @Published var todayEdition: TodayEditionSnapshot?
@@ -751,11 +752,22 @@ final class AppModel: ObservableObject {
         do {
             try await refresher.refreshAll(store: store)
             await reloadArticles()
+            preloadAfterRefreshIfWanted()
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
         await reloadTodayAfterFeeds()
+    }
+
+    /// After a refresh on Wi-Fi, save the newest articles and their pictures
+    /// in the background so they open with no connection (on the subway, say).
+    /// Cellular and Low Data Mode are left alone.
+    private func preloadAfterRefreshIfWanted() {
+        guard settings.offlineAutoPreload, !isPreloadingArticles, NetworkStatus.shared.unmeteredNow else { return }
+        Task { [weak self] in
+            await self?.preloadArticlesForOffline()
+        }
     }
 
     func importOPML(url: URL) async {
@@ -875,6 +887,8 @@ final class AppModel: ObservableObject {
 
     func refreshOfflineCacheStats() async {
         offlineCachedArticleCount = (try? await store.countCachedReaderTexts()) ?? offlineCachedArticleCount
+        let images = OfflineImageCache.shared
+        offlineImageBytes = await Task.detached(priority: .utility) { images.totalBytes() }.value
     }
 
     func preloadArticlesForOffline() async {
@@ -920,6 +934,10 @@ final class AppModel: ObservableObject {
                     currentTitle: article.title
                 )
 
+                if let imageURL = article.imageURL {
+                    await OfflineImageCache.shared.prefetch(imageURL)
+                }
+
                 if ArticleReaderContentLoader.isSufficientRSSBody(article) {
                     alreadyReady += 1
                 } else if let cachedText = try await store.cachedReaderText(articleID: article.id),
@@ -947,6 +965,8 @@ final class AppModel: ObservableObject {
                 )
             }
 
+            let images = OfflineImageCache.shared
+            await Task.detached(priority: .utility) { images.trim() }.value
             await refreshOfflineCacheStats()
             offlinePreloadMessage = "Offline preload finished: \(alreadyReady + cached) ready, \(cached) newly cached, \(failed) failed."
         } catch {

@@ -548,7 +548,7 @@ private struct TodayStoryView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 260)
                     .overlay {
-                        AsyncImage(url: image) { phase in
+                        CachedAsyncImage(url: image) { phase in
                             if let picture = phase.image {
                                 picture.resizable().scaledToFill()
                             } else {
@@ -615,7 +615,7 @@ private struct TodayStoryView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 190)
                     .overlay {
-                        AsyncImage(url: image) { phase in
+                        CachedAsyncImage(url: image) { phase in
                             if let picture = phase.image { picture.resizable().scaledToFill() } else { accent.opacity(0.2) }
                         }
                     }

@@ -119,17 +119,27 @@ public struct ArticleFilter: Sendable, Equatable {
 public struct AppSettings: Codable, Equatable, Sendable {
     public var prefersUnreadOnly: Bool
     public var offlinePreloadLimit: Int
+    /// Save the newest articles for offline reading after each refresh on
+    /// Wi-Fi. On unless the reader turns it off.
+    public var offlineAutoPreload: Bool
     public var ai: AISettings
 
-    public init(prefersUnreadOnly: Bool = true, offlinePreloadLimit: Int = 300, ai: AISettings = AISettings()) {
+    public init(
+        prefersUnreadOnly: Bool = true,
+        offlinePreloadLimit: Int = 300,
+        offlineAutoPreload: Bool = true,
+        ai: AISettings = AISettings()
+    ) {
         self.prefersUnreadOnly = prefersUnreadOnly
         self.offlinePreloadLimit = offlinePreloadLimit
+        self.offlineAutoPreload = offlineAutoPreload
         self.ai = ai
     }
 
     enum CodingKeys: String, CodingKey {
         case prefersUnreadOnly
         case offlinePreloadLimit
+        case offlineAutoPreload
         case ai
     }
 
@@ -137,6 +147,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         prefersUnreadOnly = try container.decodeIfPresent(Bool.self, forKey: .prefersUnreadOnly) ?? true
         offlinePreloadLimit = try container.decodeIfPresent(Int.self, forKey: .offlinePreloadLimit) ?? 300
+        offlineAutoPreload = try container.decodeIfPresent(Bool.self, forKey: .offlineAutoPreload) ?? true
         ai = try container.decodeIfPresent(AISettings.self, forKey: .ai) ?? AISettings()
     }
 }

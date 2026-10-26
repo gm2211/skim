@@ -60,6 +60,8 @@ pub async fn chat_with_article(
     }
 
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider_kind = ai_settings.provider.clone();
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
@@ -534,6 +536,8 @@ pub async fn chat_with_articles(
     }
 
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider_kind = ai_settings.provider.clone();
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings

@@ -517,7 +517,7 @@ struct SettingsSheet: View {
                 SettingRow(
                     systemName: "tray.and.arrow.down",
                     title: "Offline Cache",
-                    detail: "\(model.offlineCachedArticleCount.formatted()) extracted articles cached. RSS article bodies are already stored locally."
+                    detail: "\(model.offlineCachedArticleCount.formatted()) extracted articles cached\(model.offlineImageBytes > 0 ? ", with \(ByteCountFormatter.string(fromByteCount: Int64(model.offlineImageBytes), countStyle: .file)) of pictures" : ""). RSS article bodies are already stored locally."
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -547,6 +547,26 @@ struct SettingsSheet: View {
                     }
                 }
             }
+            .tint(SkimStyle.accent)
+
+            Toggle(isOn: Binding(
+                get: { draft.offlineAutoPreload },
+                set: { value in
+                    var next = draft
+                    next.offlineAutoPreload = value
+                    draft = next
+                }
+            )) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Save new articles on Wi-Fi")
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundStyle(SkimStyle.text)
+                    Text("After each refresh, the newest articles and their pictures are saved so they open with no connection. Not on cellular or Low Data Mode.")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                }
+            }
+            .toggleStyle(.switch)
             .tint(SkimStyle.accent)
 
             if let progress = model.preloadProgress, model.isPreloadingArticles {

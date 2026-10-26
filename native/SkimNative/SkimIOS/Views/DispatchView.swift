@@ -283,7 +283,7 @@ struct DispatchView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if lead, let image = reports.lazy.compactMap(\.imageURL).first {
-                AsyncImage(url: image) { phase in
+                CachedAsyncImage(url: image) { phase in
                     if let picture = phase.image {
                         picture.resizable().scaledToFill()
                             .frame(maxWidth: .infinity).frame(height: 190).clipped()

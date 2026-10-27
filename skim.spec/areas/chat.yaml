@@ -227,3 +227,18 @@ behaviors:
         of chat response, it auto scrolls all the way to the botton and you can't see much till i
         scroll back up
       reference: Giulio, project chat, 2026-10-14
+  - id: queue-chat-messages
+    description: >-
+      While Skim is still answering, the reader can keep typing and sending; each question waits in
+      a visible queue and sends in order as the answer before it lands.
+    details: >-
+      Every chat: desktop article chat and Ask Skim, and the iOS chat sheet. Queued questions sit
+      under the conversation as outlined, dimmed bubbles labelled "Queued", each with edit (in place)
+      and remove; the composer reads "Queue a follow-up" and the send button queues. A question
+      keeps the quote it was asked with. If an answer fails, the failed question returns to the
+      composer (or to the front of the queue when the reader is already typing the next one) and the
+      queue pauses until the reader taps Resume or sends again. The queue is dropped when the
+      article changes or the chat is cleared.
+    source:
+      text: would be nice to be able to queue messages
+      reference: Giulio, project thread "Queue chat messages while answering", 2026-10-27, with a screenshot of the desktop article chat

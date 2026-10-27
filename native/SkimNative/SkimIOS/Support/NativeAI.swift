@@ -3931,6 +3931,13 @@ struct AIChatSheet: View {
     @State private var quotedText: String?
     @State private var quoteSource: ChatQuoteSource = .answer
     @State private var isSending = false
+    /// Questions asked while an answer is in flight; they send in order as each one lands.
+    @State private var queued: [QueuedChatMessage] = []
+    /// A failed answer holds the queue until the reader resumes it.
+    @State private var queuePaused = false
+    @State private var editingQueuedID: UUID?
+    @State private var queuedDraft = ""
+    @FocusState private var queuedEditorFocused: Bool
     /// Deep research: slower, reads the feeds then the web, and writes a cited briefing.
     @State private var deepResearch = false
     /// What the research in flight has done so far.
@@ -3994,7 +4001,7 @@ struct AIChatSheet: View {
                                         onOpenArticle: { path.append($0) },
                                         onReauth: { showReauth = true },
                                         onOpenSettings: { showAISettings = true },
-                                        onReply: isSending ? nil : { quote in
+                                        onReply: { quote in
                                             quotedText = quote
                                             quoteSource = .answer
                                             focusComposer()
@@ -4020,6 +4027,10 @@ struct AIChatSheet: View {
                                 .padding(.vertical, 12)
                             }
 
+                            if !queued.isEmpty {
+                                queuedList
+                            }
+
                             Color.clear
                                 .frame(height: 1)
                                 .id(bottomAnchorID)
@@ -4039,6 +4050,26 @@ struct AIChatSheet: View {
                     }
                     .onChange(of: researchSteps.count) { _, _ in
                         if isSending { scrollToLatest(proxy) }
+                    }
+                    // Keep a queued question in view above the keyboard while it's edited.
+                    .onChange(of: editingQueuedID) { _, id in
+                        guard let id else { return }
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(350))
+                            withAnimation(.smooth(duration: 0.22)) { proxy.scrollTo(id, anchor: .bottom) }
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                        guard let id = editingQueuedID else { return }
+                        withAnimation(.smooth(duration: 0.22)) { proxy.scrollTo(id, anchor: .bottom) }
+                    }
+                    .onChange(of: queued.count) { old, new in
+                        if new > old {
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(80))
+                                withAnimation(.smooth(duration: 0.22)) { proxy.scrollTo(bottomAnchorID, anchor: .bottom) }
+                            }
+                        }
                     }
                 }
 
@@ -4095,9 +4126,8 @@ struct AIChatSheet: View {
                     }
 
                     HStack(spacing: 10) {
-                        TextField(deepResearch ? "Name a topic to research..." : "Ask...", text: $input, axis: .vertical)
+                        TextField(isSending ? "Queue a follow-up..." : deepResearch ? "Name a topic to research..." : "Ask...", text: $input, axis: .vertical)
                             .focused($focused)
-                            .disabled(isSending)
                             .lineLimit(1...4)
                             .font(.system(size: 17, weight: .regular))
                             .foregroundStyle(SkimStyle.text)
@@ -4128,7 +4158,9 @@ struct AIChatSheet: View {
                                 .foregroundStyle(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SkimStyle.secondary : SkimStyle.accent)
                         }
                         .buttonStyle(.plain)
-                        .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
+                        .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .accessibilityLabel(isSending ? "Queue message" : "Send")
+                        .accessibilityHint(isSending ? "Sends when Skim finishes the current answer" : "")
                     }
                 }
                 .padding(14)
@@ -4206,17 +4238,37 @@ struct AIChatSheet: View {
         }
     }
 
+    /// Sends the composer, or queues it while an answer is still coming.
     private func send() async {
         let question = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !question.isEmpty, !isSending else { return }
-        let toSend = question
-        let quoteToSend = quotedText
-        let sourceToSend = quoteSource
-        let priorMessages = messages
-        let conversation = AIChatConversation(latestQuestion: toSend, quotedText: quoteToSend, quoteSource: sourceToSend, priorMessages: priorMessages, generatedSummaryContext: request.generatedSummaryContext ?? initialAssistantMessage)
+        guard !question.isEmpty else { return }
+        let item = QueuedChatMessage(text: question, quotedText: quotedText, quoteSource: quoteSource)
         input = ""
         quotedText = nil
         focused = true
+        if isSending {
+            queued.append(item)
+            return
+        }
+        await send(item)
+    }
+
+    /// Sends the next queued question once nothing is in flight, unless the
+    /// queue is paused or the reader is editing that question.
+    private func sendNextQueued() async {
+        guard !isSending, !queuePaused, let next = queued.first, next.id != editingQueuedID else { return }
+        queued.removeFirst()
+        await send(next)
+    }
+
+    private func send(_ item: QueuedChatMessage) async {
+        guard !isSending else { return }
+        queuePaused = false
+        let toSend = item.text
+        let quoteToSend = item.quotedText
+        let sourceToSend = item.quoteSource
+        let priorMessages = messages
+        let conversation = AIChatConversation(latestQuestion: toSend, quotedText: quoteToSend, quoteSource: sourceToSend, priorMessages: priorMessages, generatedSummaryContext: request.generatedSummaryContext ?? initialAssistantMessage)
         let userMessage = AIChatMessage(role: .user, text: toSend, quotedText: quoteToSend, quoteSource: sourceToSend)
         messages.append(userMessage)
         isSending = true
@@ -4251,9 +4303,16 @@ struct AIChatSheet: View {
             )
         } catch {
             messages.removeAll { $0.id == userMessage.id }
-            input = toSend
-            quotedText = quoteToSend
-            quoteSource = sourceToSend
+            // Back to the composer, or to the front of the queue when the
+            // reader has started typing the next question.
+            if input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                input = toSend
+                quotedText = quoteToSend
+                quoteSource = sourceToSend
+            } else {
+                queued.insert(item, at: 0)
+            }
+            queuePaused = !queued.isEmpty
             let reauth: Bool = {
                 if case NativeAIError.requiresReauthentication = error { return true }
                 return false
@@ -4261,7 +4320,129 @@ struct AIChatSheet: View {
             messages.append(AIChatMessage(role: .assistant, text: error.localizedDescription, isError: true, needsReauth: reauth, remedy: AIErrorRemedy.classify(error)))
         }
         isSending = false
+        await sendNextQueued()
     }
+
+    /// Queued questions as dimmed, outlined bubbles under the conversation;
+    /// each can be edited in place or removed before it sends.
+    private var queuedList: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("QUEUED")
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(0.6)
+                Text(queuePaused ? "paused after an error" : "sends when Skim finishes")
+                    .font(.system(size: 12))
+                if queuePaused && !isSending {
+                    Button("Resume") {
+                        queuePaused = false
+                        Task { await sendNextQueued() }
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(SkimStyle.accent)
+                    .buttonStyle(.plain)
+                }
+            }
+            .foregroundStyle(SkimStyle.secondary)
+            ForEach(Array(queued.enumerated()), id: \.element.id) { index, item in
+                queuedRow(item, position: index + 1)
+                    .id(item.id)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private func queuedRow(_ item: QueuedChatMessage, position: Int) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        let editing = editingQueuedID == item.id
+        return VStack(alignment: .leading, spacing: 4) {
+            if let quote = item.quotedText {
+                Text("\(item.quoteSource.caption): “\(quote)”")
+                    .font(.system(size: 12))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+            }
+            if editing {
+                HStack(alignment: .bottom, spacing: 8) {
+                    TextField("Edit question", text: $queuedDraft, axis: .vertical)
+                        .focused($queuedEditorFocused)
+                        .lineLimit(1...4)
+                        .font(.system(size: 16))
+                        .foregroundStyle(SkimStyle.text)
+                        .submitLabel(.done)
+                        .onSubmit { saveQueuedEdit(item.id) }
+                    Button("Done") { saveQueuedEdit(item.id) }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SkimStyle.accent)
+                        .buttonStyle(.plain)
+                }
+            } else {
+                HStack(alignment: .top, spacing: 0) {
+                    Text(item.text)
+                        .font(.system(size: 16))
+                        .foregroundStyle(SkimStyle.text.opacity(0.75))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        queuedDraft = item.text
+                        editingQueuedID = item.id
+                        queuedEditorFocused = true
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 14, weight: .medium))
+                            .frame(width: 40, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .padding(.vertical, -7)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(SkimStyle.secondary)
+                    .accessibilityLabel("Edit queued message")
+                    Button {
+                        queued.removeAll { $0.id == item.id }
+                        if queued.isEmpty { queuePaused = false }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(width: 40, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .padding(.vertical, -7)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(SkimStyle.secondary)
+                    .accessibilityLabel("Remove queued message")
+                }
+            }
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, editing ? 12 : 4)
+        .padding(.vertical, 6)
+        .background(SkimStyle.accent.opacity(0.07), in: shape)
+        .overlay(shape.strokeBorder(SkimStyle.accent.opacity(editing ? 0.6 : 0.35), style: StrokeStyle(lineWidth: 1, dash: editing ? [] : [4, 3])))
+        .frame(maxWidth: 320, alignment: .trailing)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Queued message \(position)")
+    }
+
+    /// Saving an empty question removes it.
+    private func saveQueuedEdit(_ id: UUID) {
+        let text = queuedDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty {
+            queued.removeAll { $0.id == id }
+        } else if let index = queued.firstIndex(where: { $0.id == id }) {
+            queued[index].text = text
+        }
+        editingQueuedID = nil
+        queuedEditorFocused = false
+        if queued.isEmpty { queuePaused = false }
+        Task { await sendNextQueued() }
+    }
+}
+
+/// A question written while Skim was still answering, waiting its turn.
+struct QueuedChatMessage: Identifiable, Equatable {
+    let id = UUID()
+    var text: String
+    var quotedText: String?
+    var quoteSource: ChatQuoteSource
 }
 
 /// Tappable starter questions for an empty chat.

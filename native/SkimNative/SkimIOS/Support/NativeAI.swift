@@ -3954,7 +3954,7 @@ struct AIChatSheet: View {
                                         onReply: isSending ? nil : { quote in
                                             quotedText = quote
                                             quoteSource = .answer
-                                            focused = true
+                                            focusComposer()
                                         }
                                     )
                                         .id(message.id)
@@ -4111,7 +4111,9 @@ struct AIChatSheet: View {
                     quoteSource = request.initialQuoteSource
                 }
                 // The keyboard would cover the starter questions, so wait for a tap.
-                focused = !(messages.isEmpty && quotedText == nil && !request.suggestedPrompts.isEmpty)
+                if !(messages.isEmpty && quotedText == nil && !request.suggestedPrompts.isEmpty) {
+                    focusComposer()
+                }
             }
             .sheet(isPresented: $showReauth) {
                 ClaudeReauthSheet()
@@ -4119,6 +4121,20 @@ struct AIChatSheet: View {
             .sheet(isPresented: $showAISettings) {
                 SettingsSheet(isPresented: $showAISettings, aiOnly: true)
             }
+        }
+    }
+
+    /// Puts the cursor in the composer with the keyboard up, so a quoted
+    /// passage is ready for a question. The text the passage was selected in
+    /// still holds first responder, and a sheet that is still sliding up drops
+    /// a focus change, so let go of the selection first and ask again once the
+    /// sheet has settled.
+    private func focusComposer() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        focused = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            if !focused { focused = true }
         }
     }
 
@@ -4596,6 +4612,8 @@ private struct SelectableChatText: UIViewRepresentable {
                 guard let textView, let selection = textView.selectedTextRange,
                       let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !quote.isEmpty else { return }
+                textView.selectedTextRange = nil
+                textView.resignFirstResponder()
                 onReply(quote)
             }
             return UIMenu(children: suggestedActions + [action])

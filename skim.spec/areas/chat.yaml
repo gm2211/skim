@@ -126,6 +126,18 @@ behaviors:
     source:
       text: i wanna be able to select and ask
       reference: Giulio, project thread "Select and ask in briefings", 2026-10-26
+  - id: quote-focuses-composer
+    description: >-
+      Asking about a highlighted passage, or replying to a selection in one of Skim's answers, puts
+      the cursor in the chat's text box so the reader can type the question straight away.
+    details: >-
+      Applies to the reader, Briefing and Today stories, and chat answers, on desktop and iOS. On
+      iOS the keyboard comes up with the quote; the selected text lets go of its selection first so
+      the keyboard is not held by it. Desktop focuses the box at every window width, including the
+      phone-width layout, where opening Ask Skim without a quote still leaves the keyboard down.
+    source:
+      text: when I select text and hit Ask or Reply to selection, focus should move to the chat textbox so I can type right away
+      reference: Giulio, project thread "Focus chat box after Ask on selection", 2026-10-27
   - id: web-search
     description: >-
       Chat can search the web when the library does not cover a question, and web sources are marked

@@ -1837,6 +1837,7 @@ private struct ReaderSelectableText: UIViewRepresentable {
                       let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !quote.isEmpty else { return }
                 textView.selectedTextRange = nil
+                textView.resignFirstResponder()
                 self.onSelectionChange(false)
                 onAsk(quote)
             }

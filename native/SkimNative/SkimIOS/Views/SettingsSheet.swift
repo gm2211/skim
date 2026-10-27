@@ -557,13 +557,20 @@ struct SettingsSheet: View {
                     draft = next
                 }
             )) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Save new articles on Wi-Fi")
-                        .font(.system(size: 16, weight: .regular))
-                        .foregroundStyle(SkimStyle.text)
-                    Text("After each refresh, the newest articles and their pictures are saved so they open with no connection. Not on cellular or Low Data Mode.")
-                        .font(.system(size: 13, weight: .regular))
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: "wifi")
+                        .font(.system(size: 20, weight: .regular))
                         .foregroundStyle(SkimStyle.secondary)
+                        .frame(width: 26)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Save new articles on Wi-Fi")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(SkimStyle.text)
+                        Text("After each refresh, the newest articles and their pictures are saved so they open with no connection. Not on cellular or Low Data Mode.")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
                 }
             }
             .toggleStyle(.switch)

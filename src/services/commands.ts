@@ -48,6 +48,8 @@ export const searchFeeds = (query: string) =>
 export const previewFeed = (url: string) =>
   invoke<DiscoveredFeed>("preview_feed", { url });
 export const feedCatalog = () => invoke<FeedCatalogTopic[]>("feed_catalog");
+export const subscribedFeed = (url: string) =>
+  invoke<Feed | null>("subscribed_feed", { url });
 export const removeFeed = (feedId: string) =>
   invoke<void>("remove_feed", { feedId });
 export const renameFeed = (feedId: string, title: string) =>

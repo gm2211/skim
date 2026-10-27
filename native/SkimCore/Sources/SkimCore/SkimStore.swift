@@ -47,6 +47,21 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         try db.listFeeds()
     }
 
+    /// Unfollows a feed. Its articles, starred ones included, go with it.
+    public func deleteFeed(id: String) async throws {
+        try db.transaction {
+            try db.execute("DELETE FROM articles WHERE feed_id = ?", [.text(id)])
+            try db.execute("DELETE FROM feeds WHERE id = ?", [.text(id)])
+        }
+    }
+
+    /// How many starred articles unfollowing this feed would delete.
+    public func countStarred(feedID: String) async throws -> Int {
+        try db.query("SELECT COUNT(*) FROM articles WHERE feed_id = ? AND is_starred = 1", [.text(feedID)]) { statement in
+            Int(sqlite3_column_int(statement, 0))
+        }.first ?? 0
+    }
+
     public func importFeeds(_ feeds: [ImportedFeed]) async throws {
         try db.transaction {
             for imported in feeds {

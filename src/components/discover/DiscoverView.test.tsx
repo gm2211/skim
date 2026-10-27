@@ -87,6 +87,7 @@ describe("Discover", () => {
         feed({ title: "Top Stories", url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", site_url: "https://www.nytimes.com" }),
         feed({ title: "World", url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", site_url: "https://www.nytimes.com", already_subscribed: true }),
       ],
+         note: null,
     });
     vi.mocked(commands.listNewspapers).mockResolvedValue([nyt(false)]);
     vi.mocked(commands.addFeed).mockResolvedValue({} as never);
@@ -111,6 +112,29 @@ describe("Discover", () => {
     expect(await screen.findByText("Signed in")).toBeInTheDocument();
     await user.click(await screen.findByRole("button", { name: "Sign out" }));
     expect(commands.signOutNewspaper).toHaveBeenCalledWith("nyt");
+  });
+
+  it("explains a newspaper with no RSS feeds instead of offering to follow it", async () => {
+    const user = userEvent.setup();
+    const note = "The Post's servers turn away RSS readers, so Skim can't follow its sections.";
+    vi.mocked(commands.listNewspapers).mockResolvedValue([{
+      id: "wapo",
+      name: "The Washington Post",
+      site: "https://www.washingtonpost.com",
+      icon_url: null,
+      free: false,
+      can_sign_in: true,
+      signed_in: false,
+      sections: [],
+      note,
+    }]);
+    renderView();
+
+    expect(await screen.findByText("Subscription · No RSS feeds")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /The Washington Post/ }));
+    expect(screen.getByText(note)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Follow all sections" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
   it("opens a topic, then a feed's page, and follows it", async () => {

@@ -41,6 +41,9 @@ pub struct Newspaper {
     #[serde(default)]
     pub session_cookies: Vec<String>,
     pub sections: Vec<NewspaperSection>,
+    /// Shown in place of the sections when the paper has none Skim can follow.
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -162,6 +165,7 @@ pub struct NewspaperView {
     pub can_sign_in: bool,
     pub signed_in: bool,
     pub sections: Vec<DiscoveredFeed>,
+    pub note: Option<String>,
 }
 
 fn section_feed(paper: &Newspaper, section: &NewspaperSection) -> DiscoveredFeed {
@@ -215,6 +219,7 @@ pub async fn list_newspapers(app: AppHandle, db: State<'_, Database>) -> Result<
                 can_sign_in: paper.sign_in.is_some(),
                 signed_in: paper.sign_in.is_some() && signed_in(paper, marked, jar.get(&paper.id)),
                 sections,
+                note: paper.note.clone(),
             }
         })
         .collect())
@@ -354,7 +359,12 @@ mod tests {
         let ids: Vec<&str> = newspapers().iter().map(|p| p.id.as_str()).collect();
         assert_eq!(ids, ["nyt", "wsj", "wapo", "ft", "guardian"]);
         for paper in newspapers() {
-            assert!(paper.sections.len() >= 5, "{} has too few sections", paper.id);
+            // A paper without followable feeds says why instead.
+            if paper.sections.is_empty() {
+                assert!(paper.note.is_some(), "{} has no sections and no note", paper.id);
+            } else {
+                assert!(paper.sections.len() >= 5, "{} has too few sections", paper.id);
+            }
             assert!(paper.sections.iter().all(|s| s.url.starts_with("https://")));
             assert_eq!(paper.sign_in.is_some(), paper.access == "subscription", "{}", paper.id);
         }

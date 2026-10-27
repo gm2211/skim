@@ -358,6 +358,14 @@
       return [...hits.map(discoverEntry), ...DISCOVER_SEARCH_EXTRA.map(discoverEntry)];
     },
     discover_feeds: ({ query }) => DISCOVER_SITE(query),
+    // newspapers.mjs injects shared/newspapers.json as __SKIM_NEWSPAPERS__.
+    list_newspapers: () => (window.__SKIM_NEWSPAPERS__?.newspapers ?? []).map((n) => ({
+      id: n.id, name: n.name, site: n.site, icon_url: null,
+      free: n.access === "free", can_sign_in: !!n.signIn, signed_in: false,
+      sections: n.sections.map((s) => ({ ...discoverEntry({ title: s.title, url: s.url, site: n.site }), already_subscribed: false })),
+    })),
+    sign_in_newspaper: () => null,
+    sign_out_newspaper: () => null,
     preview_feed: ({ url }) => ({ ...discoverEntry({ title: "", url, site: url, description: "" }), items: DISCOVER_ITEMS }),
     subscribed_feed: ({ url }) => feeds.find((x) => x.url === url)
       ?? { id: "followed-" + url, title: discoverEntry({ title: "", url, site: url }).title || url, url },

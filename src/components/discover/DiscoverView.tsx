@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { addFeed, countStarredInFeed, discoverFeeds, feedCatalog, previewFeed, removeFeed, searchFeeds, subscribedFeed } from "../../services/commands";
-import type { DiscoveredFeed, Feed, FeedCatalogTopic, FeedPreviewItem } from "../../services/types";
+import {
+  addFeed, countStarredInFeed, discoverFeeds, feedCatalog, listNewspapers, previewFeed, removeFeed, searchFeeds,
+  signInNewspaper, signOutNewspaper, subscribedFeed,
+} from "../../services/commands";
+import type { DiscoveredFeed, Feed, FeedCatalogTopic, FeedPreviewItem, Newspaper } from "../../services/types";
 import { useUiStore } from "../../stores/uiStore";
 import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
 import { UnfollowDialog } from "../common/UnfollowDialog";
@@ -14,6 +18,7 @@ import "./DiscoverView.css";
 type Page =
   | { kind: "home" }
   | { kind: "topic"; topicId: string }
+  | { kind: "paper"; paperId: string }
   | { kind: "feed"; feed: DiscoveredFeed; from: string };
 
 /** "unfollowed" outlives the cached `already_subscribed` until the lists refetch. */
@@ -46,6 +51,8 @@ export function DiscoverView() {
   const qc = useQueryClient();
   const catalog = useQuery({ queryKey: ["feedCatalog"], queryFn: feedCatalog, staleTime: 60_000 });
   const topics = catalog.data ?? [];
+  const newspapers = useQuery({ queryKey: ["newspapers"], queryFn: listNewspapers, staleTime: 60_000 });
+  const papers = newspapers.data ?? [];
   const page = stack[stack.length - 1];
 
   const push = (next: Page) => {
@@ -53,6 +60,15 @@ export function DiscoverView() {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   };
   const pop = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
+
+  // The sign-in window closing changes what the reader is signed in to.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen("newspaper-auth-changed", () => void qc.invalidateQueries({ queryKey: ["newspapers"] }))
+      .then((fn) => { unlisten = fn; })
+      .catch(() => {});
+    return () => { if (unlisten) unlisten(); };
+  }, [qc]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -70,7 +86,7 @@ export function DiscoverView() {
 
   const refreshLibrary = () =>
     Promise.all(
-      ["feeds", "articles", "articleCount", "todayEdition", "feedCatalog"].map((key) =>
+      ["feeds", "articles", "articleCount", "todayEdition", "feedCatalog", "newspapers"].map((key) =>
         qc.invalidateQueries({ queryKey: [key] }),
       ),
     );
@@ -152,7 +168,7 @@ export function DiscoverView() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
               <path d="m15 6-6 6 6 6" />
             </svg>
-            {backLabel(stack[stack.length - 2], topics)}
+            {backLabel(stack[stack.length - 2], topics, papers)}
           </button>
         )}
         <div className="flex-1" />
@@ -170,8 +186,10 @@ export function DiscoverView() {
           {page.kind === "home" && (
             <HomePage
               topics={topics}
+              papers={papers}
               loading={catalog.isLoading}
               onTopic={(id) => push({ kind: "topic", topicId: id })}
+              onPaper={(id) => push({ kind: "paper", paperId: id })}
               onFeed={(feed) => openFeed(feed, "Discover")}
               followProps={followProps}
             />
@@ -183,6 +201,16 @@ export function DiscoverView() {
               onTopic={(id) => setStack((s) => [...s.slice(0, -1), { kind: "topic", topicId: id }])}
               onFeed={(feed, from) => openFeed(feed, from)}
               followProps={followProps}
+            />
+          )}
+          {page.kind === "paper" && (
+            <NewspaperPage
+              paper={papers.find((p) => p.id === page.paperId)}
+              onFeed={(feed, from) => openFeed(feed, from)}
+              followProps={followProps}
+              onFollowAll={(feeds) => {
+                for (const feed of feeds) if (!isFollowing(feed) && follow[feed.url] !== "adding") void followFeed(feed);
+              }}
             />
           )}
           {page.kind === "feed" && <FeedPage feed={page.feed} {...followProps(page.feed)} />}
@@ -201,8 +229,9 @@ export function DiscoverView() {
   );
 }
 
-function backLabel(page: Page, topics: FeedCatalogTopic[]): string {
+function backLabel(page: Page, topics: FeedCatalogTopic[], papers: Newspaper[] = []): string {
   if (page.kind === "home") return "Discover";
+  if (page.kind === "paper") return papers.find((p) => p.id === page.paperId)?.name ?? "Back";
   if (page.kind === "topic") return topics.find((t) => t.id === page.topicId)?.name ?? "Back";
   return page.feed.title;
 }
@@ -216,10 +245,12 @@ type FollowProps = (feed: DiscoveredFeed) => {
 
 // MARK: Home
 
-function HomePage({ topics, loading, onTopic, onFeed, followProps }: {
+function HomePage({ topics, papers, loading, onTopic, onPaper, onFeed, followProps }: {
   topics: FeedCatalogTopic[];
+  papers: Newspaper[];
   loading: boolean;
   onTopic: (id: string) => void;
+  onPaper: (id: string) => void;
   onFeed: (feed: DiscoveredFeed) => void;
   followProps: FollowProps;
 }) {
@@ -270,6 +301,24 @@ function HomePage({ topics, loading, onTopic, onFeed, followProps }: {
         </section>
       ) : (
         <>
+          {papers.length > 0 && (
+            <>
+              <h2 className="discover-label">Newspapers</h2>
+              <div className="discover-papers">
+                {papers.map((paper) => (
+                  <button key={paper.id} className="discover-paper" onClick={() => onPaper(paper.id)}>
+                    <PaperIcon paper={paper} size={44} />
+                    <span className="flex-1 min-w-0 text-left">
+                      <span className="block text-text-primary truncate" style={{ fontSize: 15, fontWeight: 600 }}>{paper.name}</span>
+                      <PaperStatus paper={paper} />
+                    </span>
+                    <Chevron />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
           <h2 className="discover-label">Featured</h2>
           <div className="discover-featured">
             {loading
@@ -384,6 +433,124 @@ function TopicPage({ topic, topics, onTopic, onFeed, followProps }: {
       <h2 className="discover-label">Top feeds</h2>
       <FeedList feeds={feeds} onOpen={(f) => onFeed(f, topic.name)} followProps={followProps} />
       {more.isFetching && <SkeletonRows count={2} />}
+    </>
+  );
+}
+
+// MARK: Newspaper
+
+function paperStatusText(paper: Newspaper): string {
+  const count = `${paper.sections.length} sections`;
+  if (paper.free) return `Free to read · ${count}`;
+  return paper.signed_in ? `Signed in · ${count}` : `Subscription · ${count}`;
+}
+
+function PaperStatus({ paper }: { paper: Newspaper }) {
+  return (
+    <span className={`block truncate ${paper.signed_in ? "text-success" : "text-text-muted"}`} style={{ fontSize: 12.5 }}>
+      {paperStatusText(paper)}
+    </span>
+  );
+}
+
+function PaperIcon({ paper, size }: { paper: Newspaper; size: number }) {
+  return (
+    <FeedIcon
+      feed={{ url: paper.site, title: paper.name.replace(/^The /, ""), site_url: paper.site, description: null, icon_url: paper.icon_url, subscribers: null, items: [], already_subscribed: false }}
+      size={size}
+    />
+  );
+}
+
+function NewspaperPage({ paper, onFeed, followProps, onFollowAll }: {
+  paper: Newspaper | undefined;
+  onFeed: (feed: DiscoveredFeed, from: string) => void;
+  followProps: FollowProps;
+  onFollowAll: (feeds: DiscoveredFeed[]) => void;
+}) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!paper) return <SkeletonRows />;
+  const states = paper.sections.map(followProps);
+  const allFollowing = states.every((s) => s.following);
+  const anyAdding = states.some((s) => s.state === "adding");
+
+  const signIn = async () => {
+    setError(null);
+    try {
+      await signInNewspaper(paper.id);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+  const signOut = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await signOutNewspaper(paper.id);
+      await qc.invalidateQueries({ queryKey: ["newspapers"] });
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <header className="discover-feed-header">
+        <PaperIcon paper={paper} size={56} />
+        <div className="flex-1 min-w-0">
+          <h1 className="text-text-primary">{paper.name}</h1>
+          <p className="text-text-muted" style={{ fontSize: 13 }}>{displayHost(paper.site)}</p>
+        </div>
+        <button
+          type="button"
+          className={`discover-follow discover-follow--large ${allFollowing ? "discover-follow--on" : ""}`}
+          disabled={allFollowing || anyAdding}
+          onClick={() => onFollowAll(paper.sections)}
+        >
+          {allFollowing ? "Following all sections" : anyAdding ? "Following…" : "Follow all sections"}
+        </button>
+      </header>
+
+      <div className={`discover-account ${paper.signed_in ? "discover-account--on" : ""}`}>
+        <span className="discover-account-icon" aria-hidden="true">
+          {paper.free ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5" /></svg>
+          ) : paper.signed_in ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="m5 12 4 4L19 6" /></svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+          )}
+        </span>
+        <span className="discover-account-text flex-1 min-w-0">
+          <span className="block text-text-primary" style={{ fontSize: 14.5, fontWeight: 600 }}>
+            {paper.free ? "Free to read" : paper.signed_in ? "Signed in" : "Have a subscription?"}
+          </span>
+          <span className="block text-text-secondary" style={{ fontSize: 13, marginTop: 2 }}>
+            {paper.free
+              ? "Full articles open in Skim's reader without an account."
+              : paper.signed_in
+                ? "Full articles open in Skim's reader with your subscription."
+                : `Sign in to ${paper.name} so full articles open in Skim's reader.`}
+          </span>
+        </span>
+        {paper.can_sign_in && (
+          paper.signed_in ? (
+            <button type="button" className="discover-account-action text-text-secondary hover:text-text-primary" disabled={busy} onClick={() => void signOut()}>
+              {busy ? "Signing out…" : "Sign out"}
+            </button>
+          ) : (
+            <button type="button" className="discover-follow" onClick={() => void signIn()}>Sign in</button>
+          )
+        )}
+      </div>
+      {error && <ErrorBox>{error}</ErrorBox>}
+
+      <h2 className="discover-label">Sections</h2>
+      <FeedList feeds={paper.sections} onOpen={(f) => onFeed(f, paper.name)} followProps={followProps} />
     </>
   );
 }

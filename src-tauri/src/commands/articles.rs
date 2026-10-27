@@ -466,8 +466,13 @@ async fn fetch_article_content_uncached(url: &str) -> ReaderResult {
         .unwrap_or_else(|| url.to_string());
     let effective_url = rewrite_for_static(&target_url);
 
-    let response = client
-        .get(&effective_url)
+    let mut request = client.get(&effective_url);
+    // A newspaper the reader signed in to gets its own cookies, so a
+    // subscriber's article loads in full. No other site sees them.
+    if let Some(cookie) = super::newspapers::cookie_header_for(&effective_url) {
+        request = request.header(reqwest::header::COOKIE, cookie);
+    }
+    let response = request
         .send()
         .await
         .map_err(|e| format!("Failed to fetch article: {}", e))?;

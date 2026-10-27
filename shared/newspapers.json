@@ -1,0 +1,100 @@
+{
+  "_comment": "Hand-kept list of major newspapers for Discover's Newspapers shelf. Every section is the paper's own RSS feed. signIn is the paper's login page; Skim opens it in an in-app browser and sends that browser's cookies for these domains when it loads the paper's articles in the reader. sessionCookies, when listed, are the paper's login cookies, so Skim can tell a lapsed sign-in. Checked October 2026.",
+  "newspapers": [
+    {
+      "id": "nyt",
+      "name": "The New York Times",
+      "site": "https://www.nytimes.com",
+      "domains": ["nytimes.com"],
+      "access": "subscription",
+      "signIn": "https://myaccount.nytimes.com/auth/login",
+      "sessionCookies": ["NYT-S"],
+      "sections": [
+        { "title": "Top Stories", "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml" },
+        { "title": "World", "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml" },
+        { "title": "U.S.", "url": "https://rss.nytimes.com/services/xml/rss/nyt/US.xml" },
+        { "title": "Politics", "url": "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml" },
+        { "title": "Business", "url": "https://rss.nytimes.com/services/xml/rss/nyt/Business.xml" },
+        { "title": "Technology", "url": "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml" },
+        { "title": "Science", "url": "https://rss.nytimes.com/services/xml/rss/nyt/Science.xml" },
+        { "title": "Opinion", "url": "https://rss.nytimes.com/services/xml/rss/nyt/Opinion.xml" },
+        { "title": "Arts", "url": "https://rss.nytimes.com/services/xml/rss/nyt/Arts.xml" }
+      ]
+    },
+    {
+      "id": "wsj",
+      "name": "The Wall Street Journal",
+      "site": "https://www.wsj.com",
+      "domains": ["wsj.com"],
+      "access": "subscription",
+      "signIn": "https://accounts.wsj.com/login",
+      "sessionCookies": [],
+      "sections": [
+        { "title": "World News", "url": "https://feeds.content.dowjones.io/public/rss/RSSWorldNews" },
+        { "title": "U.S. News", "url": "https://feeds.content.dowjones.io/public/rss/RSSUSnews" },
+        { "title": "Politics", "url": "https://feeds.content.dowjones.io/public/rss/socialpoliticsfeed" },
+        { "title": "Economy", "url": "https://feeds.content.dowjones.io/public/rss/socialeconomyfeed" },
+        { "title": "Business", "url": "https://feeds.content.dowjones.io/public/rss/WSJcomUSBusiness" },
+        { "title": "Markets", "url": "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain" },
+        { "title": "Technology", "url": "https://feeds.content.dowjones.io/public/rss/RSSWSJD" },
+        { "title": "Opinion", "url": "https://feeds.content.dowjones.io/public/rss/RSSOpinion" },
+        { "title": "Lifestyle", "url": "https://feeds.content.dowjones.io/public/rss/RSSLifestyle" }
+      ]
+    },
+    {
+      "id": "wapo",
+      "name": "The Washington Post",
+      "site": "https://www.washingtonpost.com",
+      "domains": ["washingtonpost.com"],
+      "access": "subscription",
+      "signIn": "https://www.washingtonpost.com/subscribe/signin/",
+      "sessionCookies": [],
+      "sections": [
+        { "title": "All Stories", "url": "https://www.washingtonpost.com/arcio/rss/" },
+        { "title": "Politics", "url": "https://feeds.washingtonpost.com/rss/politics" },
+        { "title": "World", "url": "https://feeds.washingtonpost.com/rss/world" },
+        { "title": "U.S.", "url": "https://feeds.washingtonpost.com/rss/national" },
+        { "title": "Business", "url": "https://feeds.washingtonpost.com/rss/business" },
+        { "title": "Technology", "url": "https://feeds.washingtonpost.com/rss/business/technology" },
+        { "title": "Climate", "url": "https://feeds.washingtonpost.com/rss/national/energy-environment" },
+        { "title": "Opinions", "url": "https://feeds.washingtonpost.com/rss/opinions" }
+      ]
+    },
+    {
+      "id": "ft",
+      "name": "Financial Times",
+      "site": "https://www.ft.com",
+      "domains": ["ft.com"],
+      "access": "subscription",
+      "signIn": "https://accounts.ft.com/login",
+      "sessionCookies": ["FTSession_s"],
+      "sections": [
+        { "title": "Home", "url": "https://www.ft.com/rss/home" },
+        { "title": "World", "url": "https://www.ft.com/world?format=rss" },
+        { "title": "Global Economy", "url": "https://www.ft.com/global-economy?format=rss" },
+        { "title": "Companies", "url": "https://www.ft.com/companies?format=rss" },
+        { "title": "Markets", "url": "https://www.ft.com/markets?format=rss" },
+        { "title": "Technology", "url": "https://www.ft.com/companies/technology?format=rss" },
+        { "title": "Climate Capital", "url": "https://www.ft.com/climate-capital?format=rss" },
+        { "title": "Opinion", "url": "https://www.ft.com/opinion?format=rss" }
+      ]
+    },
+    {
+      "id": "guardian",
+      "name": "The Guardian",
+      "site": "https://www.theguardian.com",
+      "domains": ["theguardian.com"],
+      "access": "free",
+      "sections": [
+        { "title": "International", "url": "https://www.theguardian.com/international/rss" },
+        { "title": "World", "url": "https://www.theguardian.com/world/rss" },
+        { "title": "US News", "url": "https://www.theguardian.com/us-news/rss" },
+        { "title": "UK News", "url": "https://www.theguardian.com/uk-news/rss" },
+        { "title": "Business", "url": "https://www.theguardian.com/business/rss" },
+        { "title": "Technology", "url": "https://www.theguardian.com/technology/rss" },
+        { "title": "Science", "url": "https://www.theguardian.com/science/rss" },
+        { "title": "Opinion", "url": "https://www.theguardian.com/commentisfree/rss" }
+      ]
+    }
+  ]
+}

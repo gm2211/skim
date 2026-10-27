@@ -184,6 +184,18 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         try db.cacheReaderText(articleID: articleID, url: url, text: text, cachedAt: Date())
     }
 
+    /// Drops saved reader copies fetched from these pages, so they load again,
+    /// say after the reader signs in to the newspaper that published them.
+    public func forgetReaderTexts(where matches: @Sendable (URL) -> Bool) async throws {
+        let rows = try db.query("SELECT article_id, url FROM article_reader_cache WHERE url IS NOT NULL") { statement in
+            (columnText(statement, 0), columnText(statement, 1))
+        }
+        for (id, raw) in rows {
+            guard let url = URL(string: raw), matches(url) else { continue }
+            try db.execute("DELETE FROM article_reader_cache WHERE article_id = ?", [.text(id)])
+        }
+    }
+
     public func countCachedReaderTexts() async throws -> Int {
         try db.countCachedReaderTexts()
     }

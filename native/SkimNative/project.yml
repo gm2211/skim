@@ -23,6 +23,8 @@ targets:
         buildPhase: resources
       - path: ../../shared/feed-catalog.json
         buildPhase: resources
+      - path: ../../shared/newspapers.json
+        buildPhase: resources
     dependencies:
       - package: SkimCore
       - package: SkimInferencePolicy

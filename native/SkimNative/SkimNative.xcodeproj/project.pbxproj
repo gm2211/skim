@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9167BE3C78659C05031D238 /* SettingsSheet.swift */; };
+		01B8B7E9CF8D02389FAFE966 /* NewspaperAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5F5FE4D2B3F5E4A193C591 /* NewspaperAccounts.swift */; };
 		10732BECDD3CCAF0FA28F79B /* NativeWebSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A4E78386B28FBBCC93D3318 /* NativeWebSearchTests.swift */; };
 		17C51EA54BB8D84F05DA92F4 /* NativeXAIOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0272CBDAB77DD88C76A52E91 /* NativeXAIOAuth.swift */; };
 		18CED8EE0C6AA5C517B1D143 /* AIInboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE465769D153A0A0D17504 /* AIInboxView.swift */; };
@@ -49,6 +50,7 @@
 		BA16BAF00F8137DD11BABC16 /* OfflineSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC4D61FE17D1BB84AD8BF52C /* OfflineSupportTests.swift */; };
 		BCE83B6AED9AC4923D1F9A6D /* NativeAIDegenerateRepetitionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFC1D459A8E191D2264A703F /* NativeAIDegenerateRepetitionTests.swift */; };
 		C0EC10B0B82C5D4EC9815658 /* NativeAI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BCD3DD03D305C558D07614 /* NativeAI.swift */; };
+		C1932B1C382D5D66392FE498 /* newspapers.json in Resources */ = {isa = PBXBuildFile; fileRef = 60AD076D832BF1FD2BEF7BB7 /* newspapers.json */; };
 		C1D91C8A78E543F0F69FFE82 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0C79E51007F91AE5C8286F40 /* Assets.xcassets */; };
 		D357B98D7AFF8B7E71A67F2A /* ClaudeReauthSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AD1C797EBFBB9448A83E919 /* ClaudeReauthSheet.swift */; };
 		D5D2795C99FD3003AA0F056B /* NativeWebSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A1B88832F456973EA297F0F /* NativeWebSearch.swift */; };
@@ -97,9 +99,11 @@
 		54CAAD47A242C4D4DFB941C6 /* AIProviderProfiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProviderProfiles.swift; sourceTree = "<group>"; };
 		55C58C12B9B2AB383B4BA89C /* SkimCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimCore; path = ../SkimCore; sourceTree = SOURCE_ROOT; };
 		5AD1C797EBFBB9448A83E919 /* ClaudeReauthSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeReauthSheet.swift; sourceTree = "<group>"; };
+		60AD076D832BF1FD2BEF7BB7 /* newspapers.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = newspapers.json; sourceTree = "<group>"; };
 		63A1EF775C8B6EF7CCFE3F8F /* AquireBold.otf */ = {isa = PBXFileReference; lastKnownFileType = file; path = AquireBold.otf; sourceTree = "<group>"; };
 		6785D2075A65E843FF20D6D3 /* ModelCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelCatalogTests.swift; sourceTree = "<group>"; };
 		6B28A301EB6A7BA1E2CC3912 /* ArticleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleListView.swift; sourceTree = "<group>"; };
+		7A5F5FE4D2B3F5E4A193C591 /* NewspaperAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewspaperAccounts.swift; sourceTree = "<group>"; };
 		7D0B3F4B1BD0D6523873DFE5 /* NativeAIAnthropicRequestTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIAnthropicRequestTests.swift; sourceTree = "<group>"; };
 		7F3443A5887489D35EB406EF /* feed-catalog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "feed-catalog.json"; sourceTree = "<group>"; };
 		7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleExtractor.swift; sourceTree = "<group>"; };
@@ -174,6 +178,7 @@
 			isa = PBXGroup;
 			children = (
 				7F3443A5887489D35EB406EF /* feed-catalog.json */,
+				60AD076D832BF1FD2BEF7BB7 /* newspapers.json */,
 			);
 			name = shared;
 			path = ../../shared;
@@ -252,6 +257,7 @@
 				F6BA45434D97C1ACA953B839 /* NativeMLX.swift */,
 				8A1B88832F456973EA297F0F /* NativeWebSearch.swift */,
 				0272CBDAB77DD88C76A52E91 /* NativeXAIOAuth.swift */,
+				7A5F5FE4D2B3F5E4A193C591 /* NewspaperAccounts.swift */,
 				8C4360B4A9F50D56A66E8B86 /* OfflineSupport.swift */,
 				038284DEE00F91A360324653 /* Style.swift */,
 				1474BA38A4E522DB5D3ECB21 /* WebView.swift */,
@@ -448,6 +454,7 @@
 				8B797999B22B89495C05CA39 /* AquireBold.otf in Resources */,
 				C1D91C8A78E543F0F69FFE82 /* Assets.xcassets in Resources */,
 				EF7551C40707A39B423718A4 /* feed-catalog.json in Resources */,
+				C1932B1C382D5D66392FE498 /* newspapers.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -508,6 +515,7 @@
 				DBB5FBDEDA1A12B4D0F4B932 /* NativeMLX.swift in Sources */,
 				D5D2795C99FD3003AA0F056B /* NativeWebSearch.swift in Sources */,
 				17C51EA54BB8D84F05DA92F4 /* NativeXAIOAuth.swift in Sources */,
+				01B8B7E9CF8D02389FAFE966 /* NewspaperAccounts.swift in Sources */,
 				51B6BCE716AD43EBD27068F4 /* OfflineSupport.swift in Sources */,
 				E0006C62ED6F6DE502164145 /* RootView.swift in Sources */,
 				014FD9EC4DBAD3062C31670C /* SettingsSheet.swift in Sources */,

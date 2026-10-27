@@ -196,6 +196,9 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::feeds::search_feeds,
             commands::feeds::preview_feed,
             commands::feeds::feed_catalog,
+            commands::newspapers::list_newspapers,
+            commands::newspapers::sign_in_newspaper,
+            commands::newspapers::sign_out_newspaper,
             commands::feeds::list_feeds,
             commands::feeds::remove_feed,
             commands::feeds::subscribed_feed,
@@ -409,6 +412,12 @@ pub fn run() {
                 .app_data_dir()
                 .expect("Failed to get app data directory");
             init_state(&app.handle().clone(), app_dir);
+            // Load newspaper sign-ins once the main window's cookie store is up.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                commands::newspapers::refresh_cookie_jar(&handle);
+            });
             Ok(())
         })
         .invoke_handler(invoke_handler())

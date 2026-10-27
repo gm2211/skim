@@ -657,7 +657,7 @@ struct ArticleListView: View {
             .padding(.horizontal, 32)
             .padding(.bottom, 18)
         } else if model.isForYou {
-            AIInboxView()
+            AIInboxView(onSummarize: { presentSummary(for: $0) })
                 .environmentObject(model)
                 // A new feed or folder is a new ranking.
                 .id("\(model.selectedFeedID ?? "")|\(model.selectedFolderID ?? "")")
@@ -2783,7 +2783,7 @@ private struct FeedIcon: View {
     }
 }
 
-private struct ArticleRow: View {
+struct ArticleRow: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openURL) private var openURL
 

@@ -311,9 +311,8 @@ pub async fn sign_in_newspaper(app: AppHandle, id: String) -> Result<(), String>
                 let db = handle.state::<Database>();
                 if let Ok(paper) = paper_by_id(&paper_id) {
                     if finished {
-                        if let Ok(conn) = db.conn.lock() {
-                            let _ = queries::set_setting(&conn, &connected_key(&paper.id), "1");
-                        }
+                        let Ok(conn) = db.conn.lock();
+                        let _ = queries::set_setting(&conn, &connected_key(&paper.id), "1");
                     }
                     let _ = forget_reader_copies(db.inner(), paper);
                 }

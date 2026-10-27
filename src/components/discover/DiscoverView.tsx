@@ -525,7 +525,7 @@ function NewspaperPage({ paper, onFeed, followProps, onFollowAll }: {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
           )}
         </span>
-        <span className="flex-1 min-w-0">
+        <span className="discover-account-text flex-1 min-w-0">
           <span className="block text-text-primary" style={{ fontSize: 14.5, fontWeight: 600 }}>
             {paper.free ? "Free to read" : paper.signed_in ? "Signed in" : "Have a subscription?"}
           </span>

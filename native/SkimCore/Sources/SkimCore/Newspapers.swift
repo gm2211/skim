@@ -18,6 +18,8 @@ public struct Newspaper: Identifiable, Hashable, Sendable {
     /// The paper's login cookies, when known, so a lapsed sign-in shows.
     public var sessionCookies: [String]
     public var sections: [Section]
+    /// Shown in place of the sections when the paper has none Skim can follow.
+    public var note: String?
 
     /// Sections as Discover feed rows, titled by section.
     public var sectionFeeds: [DiscoveredFeed] {
@@ -69,6 +71,7 @@ public struct NewspaperCatalog: Sendable {
             var signIn: String?
             var sessionCookies: [String]?
             var sections: [RawSection]
+            var note: String?
         }
         struct Raw: Decodable { var newspapers: [RawPaper] }
         let raw = try JSONDecoder().decode(Raw.self, from: data)
@@ -84,7 +87,8 @@ public struct NewspaperCatalog: Sendable {
                 sessionCookies: paper.sessionCookies ?? [],
                 sections: paper.sections.compactMap { section in
                     URL(string: section.url).map { Newspaper.Section(title: section.title, url: $0) }
-                }
+                },
+                note: paper.note
             )
         }
     }

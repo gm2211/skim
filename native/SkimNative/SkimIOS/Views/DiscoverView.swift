@@ -397,7 +397,7 @@ struct DiscoverTopicView: View {
 // MARK: Newspaper
 
 private func newspaperStatus(_ paper: Newspaper, signedIn: Bool) -> String {
-    let count = "\(paper.sections.count) sections"
+    let count = paper.sections.isEmpty ? "No RSS feeds" : "\(paper.sections.count) sections"
     if paper.isFree { return "Free to read · \(count)" }
     return signedIn ? "Signed in · \(count)" : "Subscription · \(count)"
 }
@@ -447,14 +447,23 @@ struct DiscoverNewspaperView: View {
                         }
                     }
 
-                    followAllButton
-                        .padding(.top, 16)
+                    if !sections.isEmpty {
+                        followAllButton
+                            .padding(.top, 16)
+                    }
 
                     accountCard
                         .padding(.top, 14)
 
                     DiscoverSectionLabel("Sections")
-                    DiscoverFeedList(feeds: sections, backTitle: paper.name)
+                    if sections.isEmpty {
+                        Text(paper.note ?? "")
+                            .font(.system(size: 15))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        DiscoverFeedList(feeds: sections, backTitle: paper.name)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 32)

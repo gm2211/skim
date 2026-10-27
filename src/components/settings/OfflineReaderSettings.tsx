@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   getOfflineCacheStats,
@@ -71,18 +71,18 @@ export function OfflineReaderSettings() {
 
   const fraction = progress?.total ? progress.completed / progress.total : 0;
   return (
-    <section className="rounded-xl border border-border bg-bg-tertiary" style={{ padding: 20 }} aria-labelledby="offline-reader-title">
+    <section className="settings-card" style={{ padding: 20 }} aria-labelledby="offline-reader-title">
       <h3 id="offline-reader-title" className="text-text-primary" style={{ fontSize: 16, fontWeight: 600 }}>Offline reading</h3>
       <p className="text-text-secondary" style={{ marginTop: 6, fontSize: 13, lineHeight: 1.5 }}>
         {cached === null ? "Checking the reader cache…" : cached < 0 ? "Reader cache statistics are unavailable." : `${cached.toLocaleString()} extracted article${cached === 1 ? "" : "s"} cached${imageBytes ? `, with ${formatBytes(imageBytes)} of pictures` : ""}. RSS article bodies are already stored locally.`}
       </p>
       <label className="flex flex-col gap-2" style={{ marginTop: 16 }}>
         <span className="text-text-primary" style={{ fontSize: 14, fontWeight: 600 }}>Preload limit: {limit.toLocaleString()} articles</span>
-        <input aria-label="Offline preload limit" type="range" min={25} max={1000} step={25} value={limit} onChange={(event) => changeLimit(Number(event.target.value))} />
+        <input aria-label="Offline preload limit" type="range" min={25} max={1000} step={25} value={limit} onChange={(event) => changeLimit(Number(event.target.value))} style={{ "--fill": `${((limit - 25) / (1000 - 25)) * 100}%` } as CSSProperties} />
         <span className="text-text-muted" style={{ fontSize: 12 }}>Newest articles are prepared for offline reading, pictures included (up to 300 MB of pictures; the oldest are dropped first).</span>
       </label>
-      <label className="flex items-start gap-3" style={{ marginTop: 16 }}>
-        <input type="checkbox" checked={auto} onChange={(event) => changeAuto(event.target.checked)} style={{ marginTop: 3 }} />
+      <label className="settings-row" style={{ marginTop: 16 }}>
+        <input type="checkbox" checked={auto} onChange={(event) => changeAuto(event.target.checked)} />
         <span className="flex flex-col gap-1">
           <span className="text-text-primary" style={{ fontSize: 14, fontWeight: 600 }}>Save new articles after each refresh</span>
           <span className="text-text-muted" style={{ fontSize: 12 }}>Runs in the background so the latest articles open with no connection.</span>
@@ -96,7 +96,7 @@ export function OfflineReaderSettings() {
         </div>
       )}
       {message && <p role="status" className="text-text-secondary" style={{ marginTop: 12, fontSize: 13 }}>{message}</p>}
-      <button onClick={preload} disabled={running} className="rounded-lg bg-accent text-bg-primary hover:bg-accent-hover disabled:opacity-50" style={{ minHeight: 44, marginTop: 16, padding: "10px 16px", fontSize: 14, fontWeight: 600 }}>
+      <button onClick={preload} disabled={running} className="settings-btn settings-btn-primary" style={{ marginTop: 16 }}>
         {running ? "Preloading articles…" : "Preload articles"}
       </button>
     </section>

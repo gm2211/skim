@@ -14,7 +14,6 @@ import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
 import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction, SidebarView } from "../../services/types";
-import { IconButton } from "../common/IconButton";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { useAppCommand } from "../../lib/appCommands";
 import { PAPER_NAME } from "../../lib/dispatch";
@@ -724,17 +723,21 @@ export function ArticleList() {
             {displayTitle}
           </h2>
           {canSortForYou && (
-            <>
-              <IconButton
-                label="Smart sort settings"
-                tooltipAlign="right"
-                onClick={() => useUiStore.getState().setShowSettings(true, "smartSort")}
-                className="text-text-muted hover:text-text-primary hover:bg-white/10"
-              >
-                <CogIcon size={14} />
-              </IconButton>
+            // One quiet pill: the switch, then its settings cog.
+            <div className="shrink-0 flex items-center rounded-full border border-white/10">
               <SmartSortSwitch on={isForYou} onChange={(on) => setListSort(on ? "forYou" : "newest")} />
-            </>
+              <span aria-hidden className="bg-white/10" style={{ width: 1, height: 12 }} />
+              <button
+                type="button"
+                aria-label="Smart sort settings"
+                title="Smart sort settings"
+                onClick={() => useUiStore.getState().setShowSettings(true, "smartSort")}
+                className="flex items-center rounded-full text-text-muted hover:text-text-primary transition-colors focus-visible:outline-2 focus-visible:outline-accent"
+                style={{ padding: "4px 8px 4px 6px" }}
+              >
+                <CogIcon size={13} />
+              </button>
+            </div>
           )}
         </div>
         {unreadCount > 0 && (

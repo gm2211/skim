@@ -46,5 +46,12 @@
   "terms": [
     {"title": "Apple ships the new M5 MacBook Pro with faster GPUs", "terms": ["apple", "ships", "macbook", "faster", "gpus"]},
     {"title": "Why the Fed's rate decision matters for your mortgage", "terms": ["rate", "decision", "matters", "mortgage"]}
+  ],
+  "learn_due": [
+    {"name": "first note waits for 20 signals", "new_signals": 19, "hours": null, "has_note": false, "due": false},
+    {"name": "first note at 20 signals", "new_signals": 20, "hours": null, "has_note": false, "due": true},
+    {"name": "rewrite at 15 signals", "new_signals": 15, "hours": 12, "has_note": true, "due": true},
+    {"name": "rewrite waits for more signals", "new_signals": 14, "hours": 48, "has_note": true, "due": false},
+    {"name": "rewrite waits 6 hours", "new_signals": 40, "hours": 5.5, "has_note": true, "due": false}
   ]
 }

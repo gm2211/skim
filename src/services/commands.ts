@@ -4,6 +4,7 @@ export type RemoteModel = { id: string; display_name: string };
 export const listRemoteModels = (provider: string, apiKey: string | null, endpoint: string | null) =>
   invoke<RemoteModel[]>("list_remote_models", { provider, apiKey, endpoint });
 import type {
+  SmartSortPrompts,
   Feed,
   Article,
   ArticleSummary,
@@ -390,6 +391,10 @@ export interface ArticleThemeTag {
 }
 export const getArticleThemeTags = () =>
   invoke<ArticleThemeTag[]>("get_article_theme_tags");
+export const getSmartSortPrompts = () => invoke<SmartSortPrompts>("get_smart_sort_prompts");
+export const saveLearnedPreferences = (text: string, learning: boolean) =>
+  invoke<SmartSortPrompts>("save_learned_preferences", { text, learning });
+export const learnPreferencesNow = () => invoke<SmartSortPrompts>("learn_preferences_now");
 export const triageArticles = (force?: boolean) =>
   invoke<TriageResult>("triage_articles", { force: force ?? null });
 export const getInboxArticles = (opts?: {

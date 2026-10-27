@@ -21,6 +21,7 @@ struct ArticleListView: View {
     @State private var showAddFeed = false
     @State private var showAutoGroup = false
     @State private var showSettings = false
+    @State private var showSmartSortSettings = false
     @State private var activeAIResult: AIResultRequest?
     @State private var activeAIChat: AIChatRequest?
     @State private var chatMessagesBySession: [String: [AIChatMessage]] = [:]
@@ -141,6 +142,10 @@ struct ArticleListView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
+        }
+        .sheet(isPresented: $showSmartSortSettings) {
+            SmartSortSettingsSheet(isPresented: $showSmartSortSettings)
+                .environmentObject(model)
         }
         .sheet(isPresented: $showSettings) {
             SettingsSheet(
@@ -442,6 +447,12 @@ struct ArticleListView: View {
                                 dismissTextEntry()
                                 smartSortingBinding.wrappedValue.toggle()
                             }
+                            .contextMenu {
+                                Button("Smart sort settings", systemImage: SkimIcon.settings) {
+                                    dismissTextEntry()
+                                    showSmartSortSettings = true
+                                }
+                            }
                         }
                     }
                 }
@@ -479,6 +490,12 @@ struct ArticleListView: View {
                     Button("Discover Feeds", systemImage: SkimIcon.addFeed) {
                         dismissTextEntry()
                         showAddFeed = true
+                    }
+                    if !showToday, model.canSortForYou {
+                        Button("Smart sort settings", systemImage: "sparkles") {
+                            dismissTextEntry()
+                            showSmartSortSettings = true
+                        }
                     }
                     Button("Customize Bottom Bar", systemImage: "slider.horizontal.3") {
                         dismissTextEntry()

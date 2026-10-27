@@ -86,6 +86,7 @@ struct SettingsSheet: View {
     @State private var accountFirst = false
     @State private var xaiSignedIn = XAIKeychainStore.isSignedIn
     @State private var chatgptSignedIn = ChatGPTKeychainStore.isSignedIn
+    @State private var showSmartSort = false
 
     var onAddFeed: () -> Void = {}
     var onImportOPML: () -> Void = {}
@@ -469,13 +470,33 @@ struct SettingsSheet: View {
                 )
             }
 
-            SettingsSection(title: "AI Inbox") {
-                SettingsTextField(
-                    title: "Interests",
-                    placeholder: "Prioritize distributed systems, Swift, local AI...",
-                    text: triagePromptBinding,
-                    axis: .vertical
-                )
+            SettingsSection(title: "Smart sort") {
+                Button {
+                    showSmartSort = true
+                } label: {
+                    HStack(spacing: 14) {
+                        SettingRow(
+                            systemName: "sparkles",
+                            title: "Smart sort prompts",
+                            detail: "The base prompt, your own prompt, and the preferences learned from your reading."
+                        )
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .sheet(isPresented: $showSmartSort) {
+                    SmartSortSettingsView(
+                        learned: model.learnedPreferences,
+                        isPresented: $showSmartSort,
+                        initialInterests: draft.ai.triageUserPrompt ?? "",
+                        onInterestsChange: { triagePromptBinding.wrappedValue = $0 }
+                    )
+                    .environmentObject(model)
+                }
             }
 
             SettingsSection(title: "Features") {
@@ -2497,5 +2518,262 @@ extension View {
             SafariSignInView(url: page.url)
                 .ignoresSafeArea()
         }
+    }
+}
+
+// MARK: - Smart sort
+
+/// Smart sort's three prompt layers, in the order the model reads them: the
+/// shared base prompt (read-only), the reader's own prompt, and the note
+/// learned from their reading, which they can edit or delete. Mirrors the
+/// desktop Smart sort settings tab.
+struct SmartSortSettingsView: View {
+    @EnvironmentObject private var model: AppModel
+    @ObservedObject var learned: LearnedPreferencesStore
+    @Binding var isPresented: Bool
+    var initialInterests: String
+    var onInterestsChange: @MainActor (String) -> Void
+
+    @State private var interests = ""
+    @State private var note = ""
+    @State private var learning = true
+    @State private var loaded = false
+    @State private var isLearning = false
+    @State private var message: (text: String, isError: Bool)?
+    @State private var confirmDelete = false
+    @FocusState private var noteFocused: Bool
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 26) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Smart sort")
+                            .font(.system(size: 31, weight: .heavy))
+                            .foregroundStyle(SkimStyle.text)
+                        Text("Smart sort ranks unread articles by importance and by fit with you. The model reads these three prompts in order; your prompt outweighs what it learns.")
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        modelRow
+                    }
+                    .padding(.top, 12)
+
+                    SettingsSection(title: "1 · Base prompt") {
+                        layerCaption("Built in. How every article is rated for importance and relevance; the same for everyone and not editable.")
+                        DisclosureGroup("Show the base prompt") {
+                            Text(InboxRanking.triagePrompt)
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(SkimStyle.secondary)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.top, 8)
+                        }
+                        .font(.system(size: 15, weight: .medium))
+                        .tint(SkimStyle.accent)
+                    }
+
+                    SettingsSection(title: "2 · Your prompt") {
+                        layerCaption("Optional. Tell smart sort what to favor or skip, in your own words.")
+                        SettingsTextField(
+                            title: "Your prompt",
+                            placeholder: "Prioritize AI infrastructure and Rust. Deprioritize sports...",
+                            text: $interests,
+                            axis: .vertical
+                        )
+                    }
+
+                    SettingsSection(title: "3 · Learned preferences") {
+                        layerCaption("What smart sort has noticed you read, chat about and dismiss. Edit it to correct it; your edits are kept as it learns.")
+                        SettingsTextField(
+                            title: "Learned preferences",
+                            placeholder: "Nothing learned yet. After about 20 articles, smart sort writes down what you seem to like and skip here.",
+                            text: $note,
+                            axis: .vertical
+                        )
+                        .focused($noteFocused)
+                        if let status {
+                            Text(status)
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundStyle(SkimStyle.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if let message {
+                            Text(message.text)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(message.isError ? Color.red : SkimStyle.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Toggle(isOn: $learning) {
+                            Text("Keep learning from my reading")
+                                .font(.system(size: 16, weight: .regular))
+                                .foregroundStyle(SkimStyle.text)
+                        }
+                        .tint(SkimStyle.accent)
+                        HStack(spacing: 12) {
+                            Button {
+                                Task { await learnNow() }
+                            } label: {
+                                if isLearning {
+                                    ProgressView().controlSize(.small)
+                                } else {
+                                    Label("Learn now", systemImage: "sparkles")
+                                }
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(SkimStyle.accent)
+                            .disabled(isLearning || model.settings.ai.provider == "none")
+
+                            Button(role: .destructive) {
+                                confirmDelete = true
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            Spacer(minLength: 0)
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 6)
+                .padding(.bottom, 36)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .background(SkimStyle.background.ignoresSafeArea())
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isPresented = false
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close Smart sort settings")
+                }
+            }
+            .confirmationDialog("Delete learned preferences?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                Button("Delete", role: .destructive) {
+                    note = ""
+                    commitNote()
+                    message = ("Deleted. Smart sort learns again only from what you read next.", false)
+                }
+            } message: {
+                Text("Smart sort forgets what it learned and starts over from what you read next.")
+            }
+        }
+        .onAppear {
+            guard !loaded else { return }
+            loaded = true
+            interests = initialInterests
+            note = learned.value.text
+            learning = learned.value.learning
+        }
+        .onChange(of: interests) { _, value in onInterestsChange(value) }
+        .onChange(of: learning) { _, _ in commitNote() }
+        .onChange(of: noteFocused) { _, focused in if !focused { commitNote() } }
+        // Background learning rewrote the note: show it unless mid-edit.
+        .onChange(of: learned.value) { _, value in if !noteFocused { note = value.text } }
+        .onDisappear { commitNote() }
+    }
+
+    private var modelRow: some View {
+        HStack(spacing: 8) {
+            Text(model.settings.ai.provider == "none"
+                 ? "No AI model chosen yet: ranking uses only what you read."
+                 : "Rates with \(NativeAIProviderChoice.name(for: model.settings.ai.provider))")
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(SkimStyle.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            AISettingsButton(titled: true, font: .system(size: 13, weight: .semibold), color: SkimStyle.accent)
+        }
+    }
+
+    private func layerCaption(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 14, weight: .regular))
+            .foregroundStyle(SkimStyle.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var status: String? {
+        let value = learned.value
+        let fresh = model.tasteStore.evidence(since: value.learnedThrough).signals
+        let articles = "\(fresh) article\(fresh == 1 ? "" : "s")"
+        if let updatedAt = value.updatedAt, !value.text.isEmpty {
+            let ago = RelativeDateTimeFormatter().localizedString(for: updatedAt, relativeTo: Date())
+            return fresh > 0 ? "Updated \(ago) · \(articles) read since" : "Updated \(ago)"
+        }
+        return fresh > 0 ? "\(articles) read so far. Smart sort writes this note once it has about 20." : nil
+    }
+
+    private func commitNote() {
+        guard loaded else { return }
+        learned.save(text: note, learning: learning)
+    }
+
+    private func learnNow() async {
+        // Learn on top of the reader's edits, not the note they replaced.
+        commitNote()
+        isLearning = true
+        message = nil
+        defer { isLearning = false }
+        do {
+            try await model.learnPreferences(force: true)
+            note = learned.value.text
+            message = ("Updated from your latest reading.", false)
+        } catch {
+            message = (NativeAI.userFacingMessage(error), true)
+        }
+    }
+}
+
+/// A cog that opens Smart sort settings, for the header of a smart sorted list.
+struct SmartSortSettingsButton: View {
+    @EnvironmentObject private var model: AppModel
+    var onDismiss: (() -> Void)? = nil
+    @State private var isPresented = false
+
+    var body: some View {
+        Button {
+            isPresented = true
+        } label: {
+            Label("Smart sort settings", systemImage: SkimIcon.settings)
+                .labelStyle(.iconOnly)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(SkimStyle.secondary)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        // Borderless so it stays its own tap target inside a List row.
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Smart sort settings")
+        .sheet(isPresented: $isPresented, onDismiss: { onDismiss?() }) {
+            SmartSortSettingsSheet(isPresented: $isPresented)
+                .environmentObject(model)
+        }
+    }
+}
+
+/// Smart sort settings presented on their own, saving the reader's prompt
+/// straight to the app settings.
+struct SmartSortSettingsSheet: View {
+    @EnvironmentObject private var model: AppModel
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        SmartSortSettingsView(
+            learned: model.learnedPreferences,
+            isPresented: $isPresented,
+            initialInterests: model.settings.ai.triageUserPrompt ?? "",
+            onInterestsChange: { value in
+                Task { await model.updateAISettings { $0.triageUserPrompt = value.nilIfEmpty } }
+            }
+        )
     }
 }

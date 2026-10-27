@@ -40,6 +40,8 @@ import { ModelBrowser } from "./ModelBrowser";
 import { Ds4Settings } from "./Ds4Settings";
 import { RemoteModelPicker } from "./RemoteModelPicker";
 import { OfflineReaderSettings } from "./OfflineReaderSettings";
+import { SmartSortSettings, useSmartSortDraft } from "./SmartSortSettings";
+import { SparkleIcon } from "../ui/icons";
 import { NumberInput } from "../ui/NumberInput";
 import { Select } from "../ui/Select";
 import { AIDisclaimer } from "../common/AIDisclaimer";
@@ -78,6 +80,11 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
         <circle cx="12" cy="14" r="1" />
       </svg>
     ),
+  },
+  {
+    id: "smartSort",
+    label: "Smart sort",
+    icon: <SparkleIcon size={16} />,
   },
   {
     id: "sync",
@@ -136,6 +143,12 @@ function summaryHint(ai: AppSettings["ai"]): string {
   return parts.join(" · ");
 }
 
+function smartSortModelLabel(ai: AppSettings["ai"]): string | null {
+  if (!ai.provider || ai.provider === "none") return null;
+  const provider = AI_PROVIDERS.find((p) => p.value === ai.provider)?.label ?? ai.provider;
+  return ai.model ? `${provider} · ${ai.model}` : provider;
+}
+
 /** Collapsed-by-default group so the common provider setup fits without scrolling. */
 function SettingsDisclosure({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -169,6 +182,7 @@ export function SettingsDialog() {
   const [subscription, setSubscription] = useState<{ provider: string; signedIn: boolean } | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => useUiStore.getState().settingsTab);
   const [choosingProvider, setChoosingProvider] = useState(false);
+  const smartSort = useSmartSortDraft();
   const providerPickerRef = useRef<HTMLDivElement>(null);
   const settingsPaneRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -208,6 +222,7 @@ export function SettingsDialog() {
   const handleSave = async () => {
     try {
       await updateSettings.mutateAsync(local);
+      await smartSort.commit();
       // A saved provider/key/endpoint change invalidates any cached remote
       // model list fetched under the old credentials.
       qc.invalidateQueries({ queryKey: ["remote-models"] });
@@ -455,24 +470,6 @@ export function SettingsDialog() {
                     </InputField>
                     </SettingsDisclosure>
 
-                    <SettingsDisclosure
-                      title="AI Inbox interests"
-                      hint={local.ai.triage_user_prompt ? "Custom" : "Learned from your reading"}
-                    >
-                    <InputField
-                      label="Your interests"
-                      description="This prompt runs alongside the preferences learned from your reading habits."
-                    >
-                      <textarea
-                        value={local.ai.triage_user_prompt ?? ""}
-                        onChange={(e) => updateAi({ triage_user_prompt: e.target.value || null })}
-                        placeholder="e.g., Prioritize distributed systems, Rust/Go internals, Claude/Anthropic news. Deprioritize crypto drama and celebrity tech."
-                        className={inputClass}
-                        style={{ ...inputStyle, minHeight: 120, resize: "vertical" }}
-                        rows={5}
-                      />
-                    </InputField>
-                    </SettingsDisclosure>
                   </>
                 )}
   </>);
@@ -601,6 +598,18 @@ export function SettingsDialog() {
                   <AIDisclaimer variant="block" />
                 </div>
               </>
+            )}
+
+            {activeTab === "smartSort" && (
+              <SmartSortSettings
+                interests={local.ai.triage_user_prompt ?? ""}
+                onInterestsChange={(value) => updateAi({ triage_user_prompt: value || null })}
+                state={smartSort}
+                modelLabel={smartSortModelLabel(local.ai)}
+                onChangeModel={() => setActiveTab("ai")}
+                inputClass={inputClass}
+                inputStyle={inputStyle}
+              />
             )}
 
             {activeTab === "sync" && (

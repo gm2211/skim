@@ -89,7 +89,7 @@ struct AIInboxView: View {
                             .foregroundStyle(SkimStyle.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
-                        AISettingsButton(onDismiss: { Task { await rateNewArticles() } })
+                        SmartSortSettingsButton(onDismiss: { Task { await rateNewArticles() } })
                         rateMenu
                     }
                     if let ratingStatus {
@@ -217,9 +217,16 @@ struct AIInboxView: View {
 
         let provider = model.settings.ai.provider
         let batchSize = (provider == "mlx" || provider == "foundation-models") ? 10 : 20
+        // Smart sort's learned layer keeps learning: rewrite the note first
+        // when enough new reading has come in. A failure never blocks ranking.
+        do {
+            try await model.learnPreferences()
+        } catch {
+            print("[AIInbox] Learning smart sort preferences failed: \(error.localizedDescription)")
+        }
         let readerContext = NativeAI.inboxReaderContext(
             interests: model.settings.ai.triageUserPrompt,
-            likedTitles: model.tasteStore.likedTitles()
+            learned: model.learnedPreferences.value.text
         )
         var rated = 0
         var unrated = 0

@@ -104,49 +104,68 @@ Do not use arrays or add other keys or text outside the JSON object."#
     )
 }
 
-pub fn triage_system_prompt(
-    preferences: Option<&crate::db::models::UserPreferenceProfile>,
-    user_prompt: Option<&str>,
-) -> String {
-    let base = crate::db::inbox_rank::triage_prompt();
+/// Smart sort's system prompt, in three layers: the built-in base prompt,
+/// the interests the reader wrote, and the preferences learned from their
+/// reading (a note the reader can read, edit or delete).
+pub fn triage_system_prompt(user_prompt: Option<&str>, learned: Option<&str>) -> String {
+    let mut context = String::from(crate::db::inbox_rank::triage_prompt());
 
-    let mut context = String::from(base);
-
-    // Explicit user-authored prompt comes first — it's the strongest signal
-    // because the reader wrote it themselves.
-    if let Some(p) = user_prompt {
-        let trimmed = p.trim();
-        if !trimmed.is_empty() {
-            context.push_str("\n\n--- Reader's interests (explicit) ---\n");
-            context.push_str(trimmed);
-            context.push('\n');
-        }
+    // The reader's own words come first: the strongest signal.
+    if let Some(p) = user_prompt.map(str::trim).filter(|p| !p.is_empty()) {
+        context.push_str("\n\n--- Reader's interests (explicit) ---\n");
+        context.push_str(p);
+        context.push('\n');
     }
 
-    // Only inject learned preferences after the reader has meaningfully
-    // engaged with articles. Below 20 interactions the signal is too noisy
-    // and produces hallucinated "tracked topic" reasons.
-    if let Some(prefs) = preferences {
-        if prefs.total_interactions >= 20 {
-            context.push_str("\n--- Reader's learned preferences ---\n");
-            context.push_str("(soft personalization hints — use as a gentle nudge, not a justification)\n");
-
-            if !prefs.top_feeds.is_empty() {
-                context.push_str(&format!("Sources the reader tends to open: {}\n", prefs.top_feeds.join(", ")));
-            }
-            if !prefs.preferred_topics.is_empty() {
-                let sample: Vec<&str> = prefs.preferred_topics.iter().take(15).map(|s| s.as_str()).collect();
-                context.push_str(&format!("Sample titles the reader spent time on (inspiration only, do not cite):\n{}\n", sample.join("\n")));
-            }
-            if !prefs.deprioritized_topics.is_empty() {
-                let sample: Vec<&str> = prefs.deprioritized_topics.iter().take(10).map(|s| s.as_str()).collect();
-                context.push_str(&format!("Sample titles the reader deprioritized (inspiration only, do not cite):\n{}\n", sample.join("\n")));
-            }
-            context.push_str("Reasons must still describe only the article itself.\n");
-        }
+    if let Some(note) = learned.map(str::trim).filter(|n| !n.is_empty()) {
+        context.push_str("\n--- Reader's learned preferences ---\n");
+        context.push_str("(learned from their reading; a gentle nudge, weaker than their explicit interests)\n");
+        context.push_str(note);
+        context.push_str("\nReasons must still describe only the article itself.\n");
     }
 
     context
+}
+
+/// What the learned-preferences rewrite sees: the current note and the
+/// reading recorded since it was written.
+pub fn learn_preferences_user_prompt(current: &str, new: &crate::db::models::UserPreferenceProfile) -> String {
+    let current = current.trim();
+    let mut out = String::from("Current note:\n");
+    out.push_str(if current.is_empty() { "(none yet)" } else { current });
+    out.push_str("\n\nNew reading since the note was written:\n");
+    if !new.top_feeds.is_empty() {
+        out.push_str(&format!("Sources the reader read most: {}\n", new.top_feeds.join(", ")));
+    }
+    if !new.preferred_topics.is_empty() {
+        out.push_str("Articles the reader spent time on, chatted about or asked for more of:\n");
+        for t in new.preferred_topics.iter().take(30) {
+            out.push_str(&format!("- {}\n", t.trim()));
+        }
+    }
+    if !new.deprioritized_topics.is_empty() {
+        out.push_str("Articles the reader asked for less of:\n");
+        for t in new.deprioritized_topics.iter().take(20) {
+            out.push_str(&format!("- {}\n", t.trim()));
+        }
+    }
+    out.push_str("\nReturn only the updated note.");
+    out
+}
+
+/// The model's rewritten note, trimmed to the lines it should hold.
+pub fn clean_learned_note(raw: &str) -> String {
+    let lines: Vec<&str> = raw
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with("```"))
+        .take(8)
+        .collect();
+    let mut note = lines.join("\n");
+    if note.chars().count() > 800 {
+        note = note.chars().take(800).collect();
+    }
+    note
 }
 
 pub fn triage_user_prompt(articles_listing: &str) -> String {
@@ -549,5 +568,39 @@ mod dispatch_prompt_tests {
         // Too little reading to learn from: only what the reader wrote.
         let early = dispatch_lead_system_prompt(3, None, Some(&profile(5)));
         assert!(!early.contains("Reader's profile"));
+    }
+}
+
+#[cfg(test)]
+mod triage_prompt_tests {
+    use super::*;
+    use crate::db::models::UserPreferenceProfile;
+
+    #[test]
+    fn smart_sort_layers_base_then_the_readers_words_then_the_learned_note() {
+        let prompt = triage_system_prompt(Some("  Prioritize AI infra  "), Some("- Likes Rust\n- Skips sports"));
+        let base = prompt.find("Rate EVERY article").unwrap();
+        let explicit = prompt.find("Prioritize AI infra").unwrap();
+        let learned = prompt.find("- Skips sports").unwrap();
+        assert!(base < explicit && explicit < learned);
+        // Nothing written and nothing learned: the base prompt alone.
+        assert_eq!(triage_system_prompt(Some(" "), Some("")), crate::db::inbox_rank::triage_prompt());
+    }
+
+    #[test]
+    fn the_learned_note_rewrite_sees_the_note_and_only_new_reading() {
+        let new = UserPreferenceProfile {
+            top_feeds: vec!["Ars Technica".into()],
+            preferred_topics: vec!["GPU cluster networking".into()],
+            deprioritized_topics: vec!["Transfer window rumours".into()],
+            avg_reading_time_sec: 0.0,
+            total_interactions: 3,
+        };
+        let prompt = learn_preferences_user_prompt("- Likes Rust", &new);
+        assert!(prompt.contains("Current note:\n- Likes Rust"));
+        assert!(prompt.contains("- GPU cluster networking"));
+        assert!(prompt.contains("asked for less of:\n- Transfer window rumours"));
+        assert!(learn_preferences_user_prompt("", &new).contains("(none yet)"));
+        assert_eq!(clean_learned_note("```\n- a\n\n- b\n```"), "- a\n- b");
     }
 }

@@ -5,6 +5,14 @@ import SkimStoryPolicy
 /// The model rates importance and relevance; taste is learned on device.
 public enum InboxRanking {
     public static var triagePrompt: String { String(cString: skim_inbox_triage_prompt()) }
+    /// Instructions for rewriting the reader's learned-preferences note.
+    public static var learnPrompt: String { String(cString: skim_inbox_learn_prompt()) }
+
+    /// Whether the learned note is due a rewrite. `hoursSinceUpdate` is nil
+    /// when it was never written.
+    public static func learnDue(newSignals: Int, hoursSinceUpdate: Double?, hasNote: Bool) -> Bool {
+        skim_inbox_learn_due(Int64(newSignals), hoursSinceUpdate ?? .nan, hasNote ? 1 : 0) != 0
+    }
 
     public struct Signal: Equatable, Sendable {
         public var dwellSeconds: Double

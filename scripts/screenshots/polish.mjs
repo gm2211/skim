@@ -168,6 +168,10 @@ const SCENES = [
     await p.getByText("Settings", { exact: true }).first().click();
     await p.waitForTimeout(600);
   } },
+  { name: "smart-sort-settings", viewport: DESKTOP, run: async (p) => {
+    await p.getByRole("button", { name: "Smart sort settings" }).first().click();
+    await p.waitForTimeout(600);
+  } },
 ];
 
 const main = async () => {

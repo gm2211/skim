@@ -8,13 +8,13 @@ import { useRecentArticles, useRemoveRecent } from "../../hooks/useRecent";
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useFolders } from "../../hooks/useFolders";
 import { feedsForFolder } from "../../lib/smartFolder";
-import { CheckCircleIcon, ChatIcon, NewspaperIcon, PlusIcon, SearchIcon, SparkleIcon } from "../ui/icons";
+import { CheckCircleIcon, ChatIcon, CogIcon, NewspaperIcon, PlusIcon, SearchIcon, SparkleIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
 import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction, SidebarView } from "../../services/types";
-import { AiSettingsButton } from "../common/AiSettingsButton";
+import { IconButton } from "../common/IconButton";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { useAppCommand } from "../../lib/appCommands";
 import { PAPER_NAME } from "../../lib/dispatch";
@@ -725,7 +725,14 @@ export function ArticleList() {
           </h2>
           {canSortForYou && (
             <>
-              {isForYou && <AiSettingsButton size={14} />}
+              <IconButton
+                label="Smart sort settings"
+                tooltipAlign="right"
+                onClick={() => useUiStore.getState().setShowSettings(true, "smartSort")}
+                className="text-text-muted hover:text-text-primary hover:bg-white/10"
+              >
+                <CogIcon size={14} />
+              </IconButton>
               <SmartSortSwitch on={isForYou} onChange={(on) => setListSort(on ? "forYou" : "newest")} />
             </>
           )}

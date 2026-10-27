@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import SkimCore
 
@@ -108,6 +109,23 @@ final class TasteStore {
             .map { $0 }
     }
 
+    /// What the reader did after `since`, for Smart sort's learned note.
+    func evidence(since: Date?) -> ReadingEvidence {
+        let recent = signals.values.filter { since == nil || $0.recordedAt > since! }
+        let liked = recent.filter { $0.dwellSeconds >= 30 || $0.priorityOverride == .pin || ($0.chatMessages ?? 0) > 0 }
+        var feedTime: [String: Double] = [:]
+        for signal in liked {
+            feedTime[signal.feedTitle, default: 0] += signal.dwellSeconds + Double(signal.chatMessages ?? 0) * 60
+        }
+        return ReadingEvidence(
+            signals: recent.count,
+            topFeeds: feedTime.sorted { $0.value > $1.value }.prefix(10).map(\.key),
+            liked: liked.sorted { $0.recordedAt > $1.recordedAt }.compactMap(\.title).prefix(30).map { $0 },
+            skipped: recent.filter { $0.dismissed == true }
+                .sorted { $0.recordedAt > $1.recordedAt }.compactMap(\.title).prefix(20).map { $0 }
+        )
+    }
+
     /// On-device taste for the AI Inbox: reading time, pins, dismissals and
     /// saved (starred) articles, weighted by the policy shared with desktop.
     func inboxTaste(starred: [Article]) -> InboxTaste {
@@ -156,6 +174,106 @@ final class TasteStore {
     private func save() {
         guard let data = try? JSONEncoder().encode(signals) else { return }
         UserDefaults.standard.set(data, forKey: Self.defaultsKey)
+    }
+}
+
+/// Reading recorded since Smart sort's learned note was written.
+struct ReadingEvidence: Equatable {
+    var signals: Int
+    var topFeeds: [String]
+    var liked: [String]
+    var skipped: [String]
+
+    var isEmpty: Bool { topFeeds.isEmpty && liked.isEmpty && skipped.isEmpty }
+}
+
+// MARK: - Learned Preferences
+
+/// Smart sort's learned layer: a short note of what the reader likes and
+/// skips, written by the model from reading on this device. The reader can
+/// read, edit or delete it; while `learning` is on it keeps being rewritten
+/// from new reading, keeping the reader's edits. Mirrors desktop's
+/// `LearnedPreferences`.
+struct LearnedPreferences: Codable, Equatable {
+    var text = ""
+    var learning = true
+    /// When the note was last written or edited. It learns from signals after this.
+    var updatedAt: Date?
+    /// Set on delete: never learn from signals before this.
+    var since: Date?
+
+    /// Signals newer than this are new to the note.
+    var learnedThrough: Date? {
+        switch (updatedAt, since) {
+        case let (a?, b?): return max(a, b)
+        case let (a, b): return a ?? b
+        }
+    }
+}
+
+@MainActor
+final class LearnedPreferencesStore: ObservableObject {
+    private static let defaultsKey = "skim.smartSort.learnedPreferences"
+    @Published private(set) var value: LearnedPreferences
+
+    init() {
+        value = UserDefaults.standard.data(forKey: Self.defaultsKey)
+            .flatMap { try? JSONDecoder().decode(LearnedPreferences.self, from: $0) } ?? LearnedPreferences()
+    }
+
+    /// The reader's edit. Clearing the note deletes it: learning starts over
+    /// from reading after now, never from older history.
+    func save(text: String, learning: Bool) {
+        var next = value
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text != next.text {
+            if text.isEmpty { next.since = Date() }
+            next.text = text
+            next.updatedAt = Date()
+        }
+        next.learning = learning
+        set(next)
+    }
+
+    /// The model's rewrite of the note.
+    func learned(_ text: String) {
+        var next = value
+        next.text = text
+        next.updatedAt = Date()
+        set(next)
+    }
+
+    private func set(_ next: LearnedPreferences) {
+        guard next != value else { return }
+        value = next
+        if let data = try? JSONEncoder().encode(next) {
+            UserDefaults.standard.set(data, forKey: Self.defaultsKey)
+        }
+    }
+}
+
+extension AppModel {
+    /// Rewrite Smart sort's learned note from reading it has not seen.
+    /// Unforced, it runs only while learning is on and the shared policy says
+    /// a rewrite is due.
+    func learnPreferences(force: Bool = false) async throws {
+        let prefs = learnedPreferences.value
+        let evidence = tasteStore.evidence(since: prefs.learnedThrough)
+        let hours = prefs.updatedAt.map { Date().timeIntervalSince($0) / 3600 }
+        if !force {
+            guard prefs.learning,
+                  InboxRanking.learnDue(newSignals: evidence.signals, hoursSinceUpdate: hours, hasNote: !prefs.text.isEmpty)
+            else { return }
+        }
+        guard !evidence.isEmpty else {
+            if force { throw NativeAIError.unavailable("Nothing new to learn from yet. Read a few articles first.") }
+            return
+        }
+        let note = try await NativeAI.learnedPreferencesNote(current: prefs.text, evidence: evidence, settings: settings)
+        guard !note.isEmpty else { throw NativeAIError.unavailable("The AI model returned an empty note.") }
+        // The reader may have edited or deleted the note while the model wrote.
+        guard learnedPreferences.value == prefs else { return }
+        learnedPreferences.learned(note)
     }
 }
 

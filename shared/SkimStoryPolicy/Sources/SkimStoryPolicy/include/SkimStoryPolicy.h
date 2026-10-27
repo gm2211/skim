@@ -152,6 +152,16 @@ int32_t skim_semantic_partition(const double *members, size_t member_count,
  * opened, read, starred, pinned and dismissed, then rank with
  * skim_inbox_score. Scores are plain doubles; higher ranks first. */
 const char *skim_inbox_triage_prompt(void);
+/* Learned preferences: a short note of what the reader likes and skips,
+ * shown to the reader, who may edit or delete it, and rewritten from new
+ * reading. The instructions for rewriting it from the current note plus the
+ * signals recorded since. */
+const char *skim_inbox_learn_prompt(void);
+/* 1 when the note should be rewritten: 20 new signals for a first note, 15
+ * for a rewrite, and 6 hours since the last one (pass INFINITY or NAN when
+ * it was never written). */
+int32_t skim_inbox_learn_due(int64_t new_signals, double hours_since_update,
+                             int32_t has_note);
 /* Weight one reader signal. dwell_seconds is total reading time; flags are
  * 0/1; feedback is -1 (less), 0 or +1 (more). read_unopened marks an inbox
  * article dismissed (marked read without ever being opened). */

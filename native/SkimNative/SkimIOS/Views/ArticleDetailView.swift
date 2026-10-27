@@ -1262,7 +1262,7 @@ private struct ReaderPage<HeaderMenu: View, HeaderMenuPreview: View>: View {
     private func linkCard(url: URL, article: Article) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if let imageURL = article.imageURL {
-                AsyncImage(url: imageURL) { phase in
+                CachedAsyncImage(url: imageURL) { phase in
                     if let image = phase.image {
                         image
                             .resizable()
@@ -1837,6 +1837,7 @@ private struct ReaderSelectableText: UIViewRepresentable {
                       let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !quote.isEmpty else { return }
                 textView.selectedTextRange = nil
+                textView.resignFirstResponder()
                 self.onSelectionChange(false)
                 onAsk(quote)
             }

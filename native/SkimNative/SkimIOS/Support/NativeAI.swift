@@ -365,7 +365,8 @@ enum NativeAI {
     }
 
     static func evaluateToday(candidates: [TodaySemanticCandidate], settings: AppSettings) async throws -> [TodaySemanticGroup] {
-        try await evaluateToday(candidates: candidates, provider: settings.ai.provider) { instructions, payload, maxTokens in
+        let settings = OfflineAIFallback.effective(settings)
+        return try await evaluateToday(candidates: candidates, provider: settings.ai.provider) { instructions, payload, maxTokens in
             try await complete(settings: settings, instructions: instructions, prompt: payload,
                 maxTokens: maxTokens, jsonMode: true, temperature: 0)
         }
@@ -436,6 +437,7 @@ enum NativeAI {
     }
 
     static func loadingStatusLabel(for ai: AISettings) -> String {
+        let ai = OfflineAIFallback.effective(ai)
         switch ai.provider {
         case "foundation-models":
             return "Asking Apple Intelligence..."
@@ -578,6 +580,7 @@ enum NativeAI {
     /// headlines. Returns nil when the model's answer cannot be read, so the
     /// caller can draft the page from the articles instead.
     static func catchUpPicks(articles: [Article], settings: AppSettings) async throws -> CatchUpPage? {
+        let settings = OfflineAIFallback.effective(settings)
         // On-device models skip this pass: one prompt over the whole listing
         // is the slowest step of the run on a phone, and small models (Gemma 3
         // 1B) rarely answer it with JSON that can be read. The page is drafted
@@ -734,6 +737,7 @@ enum NativeAI {
         themes: [String],
         settings: AppSettings
     ) async throws -> TodayEditorial? {
+        let settings = OfflineAIFallback.effective(settings)
         // Apple's on-device model has a small context window, so it reads two
         // shorter reports, as it does for ledes.
         let onDevice = settings.ai.provider == "foundation-models"
@@ -775,6 +779,7 @@ enum NativeAI {
         settings: AppSettings
     ) async throws -> TodayPreview? {
         guard !articles.isEmpty else { return nil }
+        let settings = OfflineAIFallback.effective(settings)
 
         // Apple's on-device model has a small context window: four reports
         // of 3,000 characters each overflowed it, so every lede failed and
@@ -1092,6 +1097,7 @@ enum NativeAI {
     /// AI Inbox prompt. Returns ratings keyed by 1-based handle.
     static func inboxRatings(articles: [Article], readerContext: String, settings: AppSettings) async throws -> [Int: InboxRating] {
         guard !articles.isEmpty else { return [:] }
+        let settings = OfflineAIFallback.effective(settings)
         let digest = articleDigest(articles, limit: articles.count, wordsPerArticle: 40)
 #if canImport(FoundationModels)
         if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
@@ -1311,6 +1317,7 @@ enum NativeAI {
     }
 
     static func summarize(article: Article, settings: AppSettings) async throws -> String {
+        let settings = OfflineAIFallback.effective(settings)
         let publication = AIPublicationGate()
         defer { publication.cancel() }
         return try await withTaskCancellationHandler {
@@ -1349,6 +1356,7 @@ enum NativeAI {
         settings: AppSettings,
         onToken: @MainActor @escaping (String) -> Void
     ) async throws -> String {
+        let settings = OfflineAIFallback.effective(settings)
         let publication = AIPublicationGate()
         defer { publication.cancel() }
         return try await withTaskCancellationHandler {
@@ -1699,7 +1707,7 @@ enum NativeAI {
         urlSession: URLSession = .shared
     ) async throws -> (text: String, citations: [WebCitation]) {
         var settings = settings
-        settings.ai = AIRequestPolicy.chatSettings(settings.ai)
+        settings.ai = OfflineAIFallback.effective(AIRequestPolicy.chatSettings(settings.ai))
         let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
         let instructions = chatInstructions(isLibrary: false, enableWebSearch: toolsOK)
 
@@ -1844,7 +1852,7 @@ enum NativeAI {
         urlSession: URLSession = .shared
     ) async throws -> (text: String, citations: [WebCitation]) {
         var settings = settings
-        settings.ai = AIRequestPolicy.chatSettings(settings.ai)
+        settings.ai = OfflineAIFallback.effective(AIRequestPolicy.chatSettings(settings.ai))
         let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
         let instructions = chatInstructions(isLibrary: true, enableWebSearch: toolsOK)
         let context = try libraryChatContext(articles: articles, conversation: conversation)
@@ -1883,6 +1891,23 @@ enum NativeAI {
         jsonMode: Bool = false,
         enableWebSearch: Bool = false,
         temperature: Double? = nil
+    ) async throws -> String {
+        try await OfflineAIFallback.run(settings) { settings in
+            try await completeOnProvider(
+                settings: settings, instructions: instructions, prompt: prompt, maxTokens: maxTokens,
+                jsonMode: jsonMode, enableWebSearch: enableWebSearch, temperature: temperature
+            )
+        }
+    }
+
+    private static func completeOnProvider(
+        settings: AppSettings,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        jsonMode: Bool,
+        enableWebSearch: Bool,
+        temperature: Double?
     ) async throws -> String {
         var ai = settings.ai
         if let temperature { ai.mlxTemperature = temperature }
@@ -1926,6 +1951,23 @@ enum NativeAI {
         enableWebSearch: Bool = false,
         urlSession: URLSession = .shared,
         messages: [[String: String]]? = nil
+    ) async throws -> (text: String, citations: [WebCitation]) {
+        try await OfflineAIFallback.run(settings) { settings in
+            try await completeWithCitationsOnProvider(
+                settings: settings, instructions: instructions, prompt: prompt, maxTokens: maxTokens,
+                enableWebSearch: enableWebSearch, urlSession: urlSession, messages: messages
+            )
+        }
+    }
+
+    private static func completeWithCitationsOnProvider(
+        settings: AppSettings,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        enableWebSearch: Bool,
+        urlSession: URLSession,
+        messages: [[String: String]]?
     ) async throws -> (text: String, citations: [WebCitation]) {
         let ai = settings.ai
         if let messages {
@@ -3961,7 +4003,7 @@ struct AIChatSheet: View {
                                         onReply: { quote in
                                             quotedText = quote
                                             quoteSource = .answer
-                                            focused = true
+                                            focusComposer()
                                         }
                                     )
                                         .id(message.id)
@@ -4143,7 +4185,9 @@ struct AIChatSheet: View {
                     quoteSource = request.initialQuoteSource
                 }
                 // The keyboard would cover the starter questions, so wait for a tap.
-                focused = !(messages.isEmpty && quotedText == nil && !request.suggestedPrompts.isEmpty)
+                if !(messages.isEmpty && quotedText == nil && !request.suggestedPrompts.isEmpty) {
+                    focusComposer()
+                }
             }
             .sheet(isPresented: $showReauth) {
                 ClaudeReauthSheet()
@@ -4151,6 +4195,20 @@ struct AIChatSheet: View {
             .sheet(isPresented: $showAISettings) {
                 SettingsSheet(isPresented: $showAISettings, aiOnly: true)
             }
+        }
+    }
+
+    /// Puts the cursor in the composer with the keyboard up, so a quoted
+    /// passage is ready for a question. The text the passage was selected in
+    /// still holds first responder, and a sheet that is still sliding up drops
+    /// a focus change, so let go of the selection first and ask again once the
+    /// sheet has settled.
+    private func focusComposer() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        focused = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            if !focused { focused = true }
         }
     }
 
@@ -4777,6 +4835,8 @@ private struct SelectableChatText: UIViewRepresentable {
                 guard let textView, let selection = textView.selectedTextRange,
                       let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !quote.isEmpty else { return }
+                textView.selectedTextRange = nil
+                textView.resignFirstResponder()
                 onReply(quote)
             }
             return UIMenu(children: suggestedActions + [action])
@@ -5133,7 +5193,7 @@ extension NativeAI {
         progress: @MainActor @escaping (String) -> Void
     ) async throws -> AIChatAnswer {
         var settings = settings
-        settings.ai = AIRequestPolicy.chatSettings(settings.ai)
+        settings.ai = OfflineAIFallback.effective(AIRequestPolicy.chatSettings(settings.ai))
         let question = conversation.latestPromptText.trimmingCharacters(in: .whitespacesAndNewlines)
         let history = conversation.priorTurns.map { "\($0.role == .user ? "Reader" : "Skim"): \(String($0.promptText.prefix(1500)))" }
         let asked = history.isEmpty ? question : "Conversation so far:\n\(history.joined(separator: "\n"))\n\nQuestion: \(question)"

@@ -53,6 +53,7 @@ pub async fn get_or_generate_today_edition(
     {
         let mut ai_settings = settings.ai.clone();
         ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+        crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
         if let Ok(provider) =
             create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)
         {
@@ -204,6 +205,7 @@ pub async fn generate_today_ledes(
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
         .model
@@ -292,6 +294,7 @@ pub async fn generate_today_editorial(
     }
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
     let mut themes: Vec<_> = view.items.iter().filter_map(|item| item.editorial.as_ref().map(|editorial| editorial.theme.clone())).collect();

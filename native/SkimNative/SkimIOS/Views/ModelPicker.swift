@@ -14,6 +14,17 @@ struct ModelPickerMenu: View {
     var onOpenSettings: (() -> Void)?
 
     @State private var choices: ModelChoices = .list([])
+    @ObservedObject private var network = NetworkStatus.shared
+
+    /// The on-device model answering while the chosen provider is offline.
+    private var offlineFallback: AISettings? {
+        OfflineAIFallback.activeFallback(for: effectiveAI, offline: network.isOffline)
+    }
+
+    private var chipTitle: String {
+        guard let offlineFallback else { return ModelCatalog.currentLabel(effectiveAI) }
+        return "\(OfflineAIFallback.label(for: offlineFallback.provider)) · offline"
+    }
 
     /// The settings actually in effect for display: for chat, a chat
     /// override (different provider and/or model) takes precedence over the
@@ -42,6 +53,11 @@ struct ModelPickerMenu: View {
                 Divider()
             }
 
+            if let offlineFallback {
+                Text("No connection: \(OfflineAIFallback.label(for: offlineFallback.provider)) answers until you're back online.")
+                Divider()
+            }
+
             if isReadOnlyOverride {
                 Text("Chat override: \(ModelCatalog.currentLabel(effectiveAI))")
                 Text("Change it in AI Settings.")
@@ -49,14 +65,16 @@ struct ModelPickerMenu: View {
                 choiceItems
             }
         } label: {
-            PickerChipLabel(title: ModelCatalog.currentLabel(effectiveAI), systemImage: "cpu")
+            PickerChipLabel(title: chipTitle, systemImage: offlineFallback == nil ? "cpu" : "wifi.slash")
         }
         // Keep the written order even when the menu opens upward, which
         // would otherwise put the first item at the bottom.
         .menuOrder(.fixed)
         .buttonStyle(.plain)
         .disabled(isDisabled)
-        .accessibilityLabel("AI model: \(ModelCatalog.currentLabel(effectiveAI))")
+        .accessibilityLabel(offlineFallback.map {
+            "Offline, using \(OfflineAIFallback.label(for: $0.provider)) instead of \(ModelCatalog.currentLabel(effectiveAI))"
+        } ?? "AI model: \(ModelCatalog.currentLabel(effectiveAI))")
         .task(id: "\(ai.provider)|\(ai.apiKey ?? "")") {
             guard !isReadOnlyOverride else { return }
             choices = await ModelCatalog.choices(for: ai)

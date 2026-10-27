@@ -8,6 +8,7 @@ pub mod claude_oauth;
 pub mod xai_oauth;
 pub mod chatgpt_oauth;
 pub mod chatgpt_provider;
+pub mod offline;
 
 /// The signed-in subscription token for `provider`: xAI (SuperGrok) for
 /// "xai", ChatGPT for "chatgpt-subscription", otherwise Claude Pro/Max.

@@ -248,6 +248,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::offline::get_cached_reader_content,
             commands::offline::get_or_fetch_reader_content,
             commands::offline::preload_articles_for_offline,
+            ai::offline::get_offline_ai_status,
             // Editions
             commands::editions::get_or_generate_today_edition,
             commands::editions::generate_today_ledes,

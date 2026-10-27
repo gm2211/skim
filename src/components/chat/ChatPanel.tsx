@@ -64,6 +64,8 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The conversation the reader just cleared, kept until they send again so Undo can bring it back.
+  const [cleared, setCleared] = useState<ChatMessage[] | null>(null);
   const requestSeqRef = useRef(0);
   const messagesRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -86,7 +88,15 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     setLoading(false);
     setSearchLoading(false);
     setError(null);
+    setCleared(null);
   }, [articleId]);
+
+  const clearConversation = () => {
+    setCleared(messages);
+    setMessages([]);
+    setReply(null);
+    queue.clear();
+  };
 
   // Quote a passage the reader highlighted, ready for a question about it.
   useEffect(() => {
@@ -146,6 +156,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
 
     const requestSeq = ++requestSeqRef.current;
     setError(null);
+    setCleared(null);
     const userMsg: ChatMessage = { role: "user", content: text, reply: reply ?? undefined };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -182,6 +193,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     if (needsSetup || loading || searchLoading) return;
     const requestSeq = ++requestSeqRef.current;
     setError(null);
+    setCleared(null);
     setSearchLoading(true);
     try {
       const results = await webSearch(query);
@@ -307,16 +319,30 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
         <div className="rounded-full" style={{ width: 32, height: 3, background: "rgba(255,255,255,0.15)" }} />
       </div>
 
-      {/* Header */}
-      <div
-        className="flex-shrink-0 flex items-center justify-between"
-        style={{ padding: isPhone ? "4px 12px 8px" : "4px 16px 6px", minHeight: isPhone ? 52 : undefined }}
-      >
-        <div className="flex items-center gap-2">
+      {/* Header: the whole row collapses the chat. The cog sits over the row, and Clear
+          lives inside it, so a quick click near the chevron never wipes the conversation. */}
+      <div className="flex-shrink-0 relative" style={{ padding: isPhone ? "0 4px 4px" : "0 8px 2px" }}>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="group w-full flex items-center gap-2 text-left rounded-lg hover:bg-white/5 transition-colors"
+          style={{ paddingLeft: 8, minHeight: isPhone ? 48 : 32 }}
+          aria-label="Collapse chat"
+          aria-expanded={true}
+          title="Collapse chat"
+        >
           <span className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 10 }}>Chat</span>
-          <span className="text-text-muted" style={{ fontSize: 10 }}>ephemeral</span>
-        </div>
-        <div className="flex items-center gap-2">
+          <span className="text-text-muted flex-1" style={{ fontSize: 10 }}>ephemeral</span>
+          <span
+            className="flex items-center justify-center text-text-muted group-hover:text-text-primary transition-colors"
+            style={{ width: isPhone ? 44 : 32, height: isPhone ? 44 : 32 }}
+          >
+            <svg width={isPhone ? 18 : 16} height={isPhone ? 18 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </span>
+        </button>
+        <div className="absolute top-0 flex items-center" style={{ right: isPhone ? 52 : 44, height: isPhone ? 48 : 32 }}>
           <SettingsCog label="Chat settings" heading="Chat" size={isPhone ? 16 : 14}>
             {(close) => (
               <>
@@ -326,32 +352,37 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
                 </div>
                 <hr />
                 <button className="today-settings-row" onClick={() => { close(); useUiStore.getState().setShowSettings(true, "ai"); }}>AI settings…</button>
+                {messages.length > 0 && (
+                  <>
+                    <hr />
+                    <button
+                      className="today-settings-row text-danger disabled:opacity-50"
+                      disabled={loading || searchLoading}
+                      onClick={() => { close(); clearConversation(); }}
+                    >
+                      Clear conversation
+                    </button>
+                  </>
+                )}
               </>
             )}
           </SettingsCog>
-          {messages.length > 0 && (
-            <button
-              onClick={() => { setMessages([]); setReply(null); queue.clear(); }}
-              disabled={loading || searchLoading}
-              className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
-              style={{ fontSize: isPhone ? 12 : 10 }}
-            >
-              Clear
-            </button>
-          )}
-          <button
-            onClick={() => setOpen(false)}
-            className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
-            style={{ lineHeight: 0 }}
-            aria-label="Collapse chat"
-            title="Collapse chat"
-          >
-            <svg width={isPhone ? 16 : 10} height={isPhone ? 16 : 10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </button>
         </div>
       </div>
+
+      {messages.length === 0 && cleared && cleared.length > 0 && (
+        <div role="status" className="flex-shrink-0 flex items-center justify-center gap-2 text-text-muted" style={{ paddingTop: 4, fontSize: isPhone ? 12 : 11 }}>
+          Conversation cleared.
+          <button
+            type="button"
+            onClick={() => { setMessages(cleared); setCleared(null); }}
+            className="text-accent hover:underline"
+            style={{ padding: isPhone ? "8px 4px" : "2px 4px" }}
+          >
+            Undo
+          </button>
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={messagesRef} className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0" style={{ padding: "4px 16px" }}>

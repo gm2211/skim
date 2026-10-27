@@ -2812,7 +2812,7 @@ private struct ArticleRow: View {
             // image-less rows let the title block expand to the full row width.
             if let imageURL = article.imageURL {
                 Spacer(minLength: 4)
-                AsyncImage(url: imageURL) { phase in
+                CachedAsyncImage(url: imageURL) { phase in
                     switch phase {
                     case .success(let image):
                         image

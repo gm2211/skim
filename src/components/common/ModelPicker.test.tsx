@@ -14,6 +14,7 @@ vi.mock("../../services/commands", () => ({
   mlxIsModelDownloaded: vi.fn(),
   listLocalModels: vi.fn(),
   getSystemInfo: vi.fn(),
+  getOfflineAiStatus: vi.fn(),
 }));
 
 import * as commands from "../../services/commands";
@@ -72,9 +73,38 @@ beforeEach(() => {
   vi.mocked(commands.mlxIsModelDownloaded).mockResolvedValue(false);
   vi.mocked(commands.listRemoteModels).mockResolvedValue([]);
   vi.mocked(commands.getSystemInfo).mockResolvedValue({ total_memory_gb: 8, available_memory_gb: 7, max_model_size_gb: 4 });
+  vi.mocked(commands.getOfflineAiStatus).mockResolvedValue({ offline: false, fallback_provider: null, fallback_label: null });
 });
 
 describe("ModelPicker", () => {
+  it("says which on-device model answers while the provider is offline", async () => {
+    vi.mocked(commands.getOfflineAiStatus).mockResolvedValue({
+      offline: true,
+      fallback_provider: "foundation-models",
+      fallback_label: "Apple Intelligence",
+    });
+    renderPicker("summarize", settingsWith({ provider: "openai", model: "gpt-4-turbo" }));
+    expect(await screen.findByText("Offline · using Apple Intelligence")).toBeInTheDocument();
+  });
+
+  it("shows only an icon with the note as its label in compact toolbars, and nothing when online", async () => {
+    vi.mocked(commands.getOfflineAiStatus).mockResolvedValue({
+      offline: true,
+      fallback_provider: "mlx",
+      fallback_label: "On-device MLX",
+    });
+    const { unmount } = renderPicker("chat", settingsWith({ provider: "openai", model: "gpt-4-turbo" }), { compact: true });
+    expect(await screen.findByRole("status", { name: "Offline · using On-device MLX" })).toBeInTheDocument();
+    expect(screen.queryByText("Offline · using On-device MLX")).toBeNull();
+    unmount();
+
+    vi.mocked(commands.getOfflineAiStatus).mockResolvedValue({ offline: false, fallback_provider: null, fallback_label: null });
+    renderPicker("chat", settingsWith({ provider: "openai", model: "gpt-4-turbo" }), { compact: true });
+    await screen.findByRole("combobox", { name: "AI model" });
+    await waitFor(() => expect(commands.getOfflineAiStatus).toHaveBeenCalled());
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("lists remote models for a provider like openai and saves the one picked", async () => {
     vi.mocked(commands.listRemoteModels).mockResolvedValue([
       { id: "gpt-4o-mini", display_name: "GPT-4o mini" },

@@ -680,7 +680,8 @@ struct ArticleListView: View {
                             .tracking(1.15)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                            .padding(.leading, 72)
+                            // Lines up with the row titles: 18 inset + 34 icon + 12 gap.
+                            .padding(.leading, 64)
                             .padding(.trailing, 18)
                             .padding(.top, 13)
                             .padding(.bottom, 7)

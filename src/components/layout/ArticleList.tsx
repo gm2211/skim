@@ -13,22 +13,10 @@ import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
-import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction, SidebarView } from "../../services/types";
+import type { ArticleFilter, ArticleWithInteraction, SidebarView } from "../../services/types";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { useAppCommand } from "../../lib/appCommands";
 import { PAPER_NAME } from "../../lib/dispatch";
-
-/** AI Inbox tiers by rank score, highest first. The list arrives sorted by score. */
-const SCORE_TIERS: { min: number; label: string }[] = [
-  { min: 75, label: "TOP PICKS" },
-  { min: 55, label: "WORTH READING" },
-  { min: 35, label: "WHEN YOU HAVE TIME" },
-  { min: -Infinity, label: "LOW PRIORITY" },
-];
-
-function inboxTierLabel(score: number) {
-  return SCORE_TIERS.find((tier) => score >= tier.min)!.label;
-}
 
 const STICKY_READ_TTL_MS = 2 * 60 * 1000;
 
@@ -174,16 +162,6 @@ function EmptyArticleState({
       )}
     </div>
   );
-}
-
-function groupByScore(articles: ArticleWithTriage[]) {
-  const groups: { label: string; indices: number[] }[] = [];
-  articles.forEach((article, i) => {
-    const label = inboxTierLabel(article.score ?? 0);
-    if (groups[groups.length - 1]?.label !== label) groups.push({ label, indices: [] });
-    groups[groups.length - 1].indices.push(i);
-  });
-  return groups;
 }
 
 function groupByDate(articles: { published_at: number | null; fetched_at: number }[]) {
@@ -515,7 +493,8 @@ export function ArticleList() {
 
   const articleGroups = useMemo(() => {
     if (!filteredArticles) return [];
-    if (isForYou) return groupByScore(filteredArticles as ArticleWithTriage[]);
+    // Smart sort only reorders: one run of the usual cards, no tier headers.
+    if (isForYou) return [{ label: "", indices: filteredArticles.map((_, i) => i) }];
     if (isRecent && recentOrder === "engagement") {
       return [{ label: "MOST ENGAGED", indices: filteredArticles.map((_, i) => i) }];
     }
@@ -862,27 +841,20 @@ export function ArticleList() {
           ) : filteredArticles && filteredArticles.length > 0 ? (
             articleGroups.map((group) => (
               <div key={group.label}>
-                <div
-                  className="text-text-muted uppercase tracking-wider font-semibold"
-                  style={{ fontSize: 11, padding: "16px 24px 8px" }}
-                >
-                  {group.label}
-                </div>
+                {group.label && (
+                  <div
+                    className="text-text-muted uppercase tracking-wider font-semibold"
+                    style={{ fontSize: 11, padding: "16px 24px 8px" }}
+                  >
+                    {group.label}
+                  </div>
+                )}
                 {group.indices.map((i) => {
                   const article = filteredArticles[i];
-                  const ranked = article as ArticleWithTriage;
-                  const triageData = isForYou ? {
-                    priority: ranked.priority ?? 3,
-                    reason: ranked.reason ?? "",
-                    importance: ranked.importance,
-                    relevance: ranked.relevance,
-                  } : null;
                   return (
                     <ArticleCard
                       key={article.id}
                       article={article}
-                      triage={triageData}
-                      themeTags={isForYou ? themeTagsByArticle.get(article.id) : undefined}
                       isSelected={selectedArticleId === article.id}
                       onSelect={() => setSelectedArticleId(article.id)}
                       onContextMenu={(e) => handleArticleContextMenu(e, i)}

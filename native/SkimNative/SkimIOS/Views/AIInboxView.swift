@@ -19,6 +19,7 @@ struct InboxRankedArticle: Identifiable {
 /// reading time, chats, saves, pins and dismissals re-ranks on every visit.
 struct AIInboxView: View {
     @EnvironmentObject private var model: AppModel
+    var onSummarize: (Article) -> Void = { _ in }
 
     /// Most articles rated per visit, so a big backlog doesn't stall the page.
     private static let ratingsPerVisit = 60
@@ -56,42 +57,16 @@ struct AIInboxView: View {
         .onDisappear { ratingTask?.cancel() }
     }
 
-    // MARK: Rating controls
-
-    private var rateMenu: some View {
-        Menu {
-            Button("Rate new articles", systemImage: SkimIcon.rate) {
-                Task { await rateNewArticles() }
-            }
-            Button("Re-rate everything", systemImage: SkimIcon.refresh) {
-                Task { await rateNewArticles(rerateAll: true) }
-            }
-        } label: {
-            Image(systemName: SkimIcon.refresh)
-                .font(.system(size: 15, weight: .semibold))
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .foregroundStyle(SkimStyle.secondary)
-        .accessibilityLabel("Rate articles")
-        .disabled(ratingStatus != nil)
-    }
-
     // MARK: List
 
+    /// The usual article rows, only in ranked order: smart sorting changes
+    /// the order, not the look. A status line shows only while rating runs
+    /// or after it failed.
     private var articleList: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Text("Smart sorted for you")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(SkimStyle.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: 0)
-                        SmartSortSettingsButton(onDismiss: { Task { await rateNewArticles() } })
-                        rateMenu
-                    }
+        let visible = items.map(\.article)
+        return List {
+            if ratingStatus != nil || errorMessage != nil {
+                VStack(alignment: .leading, spacing: 6) {
                     if let ratingStatus {
                         HStack(spacing: 8) {
                             ProgressView().controlSize(.small).tint(SkimStyle.accent)
@@ -104,24 +79,36 @@ struct AIInboxView: View {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
                             .font(.system(size: 13))
                             .foregroundStyle(SkimStyle.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         AISettingsButton(titled: true, font: .system(size: 13, weight: .semibold), color: SkimStyle.accent,
                                          onDismiss: { Task { await rateNewArticles() } })
                     }
-                    AIDisclaimerLabel()
                 }
+                // Lines up with the row titles, like the list's date headers.
+                .padding(.leading, 64)
+                .padding(.trailing, 18)
+                .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(SkimStyle.chrome)
                 .listRowSeparator(.hidden)
             }
 
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+            ForEach(items) { item in
                 NavigationLink {
                     ArticleDetailView(articleID: item.article.id)
                 } label: {
-                    InboxArticleRow(rank: index + 1, item: item)
+                    ArticleRow(
+                        article: item.article,
+                        feed: model.feeds.first(where: { $0.id == item.article.feedID }),
+                        visibleArticles: visible,
+                        onSummarize: onSummarize
+                    )
                 }
+                .buttonStyle(.plain)
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                .listRowSeparator(.hidden)
                 .listRowBackground(SkimStyle.chrome)
-                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 12))
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     Button {
                         dismissArticle(item.article)
@@ -130,25 +117,10 @@ struct AIInboxView: View {
                     }
                     .tint(SkimStyle.secondary)
                 }
-                .swipeActions(edge: .leading) {
-                    Button {
-                        Task { await model.toggleStar(item.article); await rank() }
-                    } label: {
-                        Label(item.article.isStarred ? "Unsave" : "Save",
-                              systemImage: item.article.isStarred ? SkimIcon.unstar : SkimIcon.star)
-                    }
-                    .tint(.yellow)
-                }
-                .contextMenu {
-                    Button("Dismiss", systemImage: "checkmark") { dismissArticle(item.article) }
-                    Button(item.article.isStarred ? "Unsave" : "Save",
-                           systemImage: item.article.isStarred ? SkimIcon.unstar : SkimIcon.star) {
-                        Task { await model.toggleStar(item.article); await rank() }
-                    }
-                }
             }
         }
         .listStyle(.plain)
+        .scrollDismissesKeyboard(.immediately)
         .scrollContentBackground(.hidden)
         .refreshable { await rateNewArticles() }
     }
@@ -276,96 +248,5 @@ struct AIInboxView: View {
                 reason: rating.reason, scoredAt: now)
         }
         model.inboxScores.set(stored)
-    }
-}
-
-// MARK: - Inbox Article Row
-
-private struct InboxArticleRow: View {
-    var rank: Int
-    var item: InboxRankedArticle
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Text("\(rank)")
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(SkimStyle.accent)
-                .frame(width: 26, height: 26)
-                .background(SkimStyle.accent.opacity(0.12), in: Circle())
-                .padding(.top, 2)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(item.article.title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(SkimStyle.text)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let reason = item.rating?.reason, !reason.isEmpty {
-                    Text(reason)
-                        .font(.system(size: 13, weight: .regular))
-                        .foregroundStyle(SkimStyle.secondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                HStack(spacing: 6) {
-                    Text(item.article.feedTitle)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(SkimStyle.accent)
-                        .lineLimit(1)
-                    if let publishedAt = item.article.publishedAt {
-                        Text("·").foregroundStyle(SkimStyle.secondary)
-                        Text(publishedAt, style: .relative)
-                            .font(.system(size: 13, weight: .regular))
-                            .foregroundStyle(SkimStyle.secondary)
-                            .lineLimit(1)
-                    }
-                    if item.article.isStarred {
-                        Image(systemName: SkimIcon.starFilled)
-                            .font(.system(size: 11))
-                            .foregroundStyle(.yellow)
-                    }
-                }
-
-                if let rating = item.rating {
-                    HStack(spacing: 14) {
-                        RatingDots(label: "Importance", value: rating.importance)
-                        RatingDots(label: "For you", value: rating.relevance)
-                    }
-                } else {
-                    Text("Not rated yet")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(SkimStyle.secondary.opacity(0.8))
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.leading, 18)
-        .padding(.vertical, 14)
-        .contentShape(Rectangle())
-    }
-}
-
-/// Five-dot rating; filled dots carry the value, the label carries the axis.
-private struct RatingDots: View {
-    var label: String
-    var value: Int
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Text(label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(SkimStyle.secondary)
-            HStack(spacing: 2) {
-                ForEach(1...5, id: \.self) { n in
-                    Circle()
-                        .fill(n <= value ? SkimStyle.accent : SkimStyle.secondary.opacity(0.3))
-                        .frame(width: 5, height: 5)
-                }
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label) \(value) of 5")
     }
 }

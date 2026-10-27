@@ -154,6 +154,19 @@ public enum AIRequestPolicy {
         return Int(provider.withCString { skim_ai_request_max_tokens(budget, $0) })
     }
 
+    /// How much article text one article chat request to `provider` may carry:
+    /// the whole article for hosted models, question-selected passages otherwise.
+    public static func articleChatEvidenceCharacters(provider: String) -> Int {
+        guard !provider.contains("\0") else { return Int(skim_article_chat_evidence_scalars(nil)) }
+        return Int(provider.withCString { skim_article_chat_evidence_scalars($0) })
+    }
+
+    /// What the article text in an article chat is, and how to keep the article,
+    /// web results, background knowledge and earlier replies apart.
+    public static func articleChatSourceRules(complete: Bool) -> String {
+        String(cString: skim_article_chat_source_rules(complete ? 1 : 0))
+    }
+
     public static func summaryRequestMaxTokens(_ settings: AISettings) -> Int {
         requestMaxTokens(summaryPlan(settings).fullMaxTokens, provider: settings.provider)
     }

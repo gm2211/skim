@@ -12,8 +12,9 @@ export type AskTurn = {
 
 /** What the application's assistant decided. The palette acts on it; it never sees credentials. */
 export type AskResult =
-  /** Show an answer in the palette. `commands` are follow-up rows (cited items to open). */
-  | { kind: 'answer'; text: string; data?: unknown; commands?: readonly Command[] }
+  /** Show an answer in the palette. `commands` are follow-up rows (cited items to open).
+   *  `history` replaces the earlier turns, when the answer revised one of them. */
+  | { kind: 'answer'; text: string; data?: unknown; commands?: readonly Command[]; history?: readonly AskTurn[] }
   /** Run one of the palette's own commands by id. */
   | { kind: 'run'; commandId: string }
   /** Narrow the list to these command ids, in this order, with an optional note. */
@@ -261,7 +262,8 @@ export function createPaletteController(options: PaletteControllerOptions): Pale
         if (abort.signal.aborted) return;
         askAbort = null;
         if (result.kind === 'answer') {
-          set({ mode: 'answered', pendingQuery: undefined, history: [...history, { role: 'assistant', content: result.text, data: result.data }], items: result.commands ?? [], active: 0, showGroups: false });
+          const earlier = result.history ? [...result.history, { role: 'user' as const, content: query }] : history;
+          set({ mode: 'answered', pendingQuery: undefined, history: [...earlier, { role: 'assistant', content: result.text, data: result.data }], items: result.commands ?? [], active: 0, showGroups: false });
         } else if (result.kind === 'run') {
           const command = registry.commands().find(entry => entry.id === result.commandId);
           if (!command) throw new Error('That command is no longer available. Search again.');

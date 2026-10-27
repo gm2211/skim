@@ -155,7 +155,8 @@ pub fn system_prompt(context_block: &str) -> String {
          list: Skim shows every article you cite as a card under your answer. When the user is \
          looking for an article, search, then say in a sentence or two which ones fit and why, \
          citing them. If nothing matches, say so plainly. No emoji. Never invent articles or \
-         numbers.\n\n{TOOL_GUIDE}\n\n{context_block}"
+         numbers.\n\n{TOOL_GUIDE}\n\n{correction}\n\n{context_block}",
+        correction = crate::commands::chat::CORRECTION_GUIDE,
     )
 }
 
@@ -549,6 +550,13 @@ mod tests {
     use super::*;
     use crate::ai::provider::ChatResponse as ProviderChatResponse;
     use std::sync::Mutex;
+
+    #[test]
+    fn system_prompt_asks_for_in_place_corrections() {
+        let prompt = system_prompt("CONTEXT");
+        assert!(prompt.contains("<correction><was>"));
+        assert!(prompt.ends_with("CONTEXT"));
+    }
 
     struct Scripted {
         replies: Mutex<Vec<String>>,

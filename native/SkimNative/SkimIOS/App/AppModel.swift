@@ -34,6 +34,12 @@ final class ExtractedContentCache: @unchecked Sendable {
         store[articleID] = value
         order.append(articleID)
     }
+
+    func removeAll() {
+        lock.lock(); defer { lock.unlock() }
+        store.removeAll()
+        order.removeAll()
+    }
 }
 
 /// Immutable scope captured when library chat opens. An empty folder remains empty.

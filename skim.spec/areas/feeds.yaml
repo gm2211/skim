@@ -40,6 +40,20 @@ behaviors:
         Add feeds should not be a modal - it should be a dedicated browsing view where I can see
         categories of feeds, open feeds and also start "following" feeds
       reference: Giulio, feed discovery thread, 2026-10-14
+  - id: newspaper-shelf
+    description: >-
+      Discover's home has a Newspapers list with The New York Times, The Wall Street Journal, The
+      Washington Post, the Financial Times and The Guardian. A paper's page lists its official RSS
+      sections, each with a Follow button, plus "Follow all sections", and says whether the paper is
+      free or needs a subscription and whether the reader is signed in.
+    details: >-
+      The papers and sections live in shared/newspapers.json, read by desktop and iOS. Sections are
+      the papers' own feeds, checked October 2026: WSJ moved from feeds.a.dj.com (stale since
+      January 2025) to feeds.content.dowjones.io; The Washington Post's homepage feed stopped in July
+      2026, so its all-stories feed is washingtonpost.com/arcio/rss/; FT sections use ?format=rss.
+    source:
+      text: I wanna be able to easily connect my major newspapers subscriptions / follow free newspapers (wsj, ny times, wp post, ft, guardian)
+      reference: Giulio, Connect major newspaper subscriptions thread, 2026-10-27
   - id: unfollow-feed
     description: >-
       Unfollowing a feed, from Discover's Following button or the feed list's menu, asks first

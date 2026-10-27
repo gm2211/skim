@@ -124,3 +124,30 @@ button.discover-post:hover { background: rgba(255, 255, 255, 0.035); }
 }
 .discover-post-image { flex-shrink: 0; width: 148px; height: 98px; object-fit: cover; border-radius: 10px; background: rgba(255, 255, 255, 0.05); }
 @container (max-width: 600px) { .discover-post-image { width: 104px; height: 78px; } .discover-post-title { font-size: 15.5px; } }
+
+.discover-papers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 20px; }
+@container (max-width: 600px) { .discover-papers { grid-template-columns: 1fr; } }
+.discover-paper {
+  display: flex; align-items: center; gap: 14px; padding: 9px 8px; margin: 0 -8px; border-radius: 12px;
+  transition: background 120ms;
+}
+.discover-paper:hover { background: rgba(255, 255, 255, 0.04); }
+.discover-paper .discover-feed-icon { background: #fff; }
+
+.discover-account {
+  display: flex; align-items: center; gap: 14px; margin-top: 22px; padding: 14px 16px; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.discover-account--on { border-color: color-mix(in srgb, var(--color-success) 35%, transparent); }
+.discover-account-icon {
+  flex-shrink: 0; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+  color: var(--color-accent); background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+}
+.discover-account--on .discover-account-icon { color: var(--color-success); background: color-mix(in srgb, var(--color-success) 14%, transparent); }
+.discover-account-action { flex-shrink: 0; font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: 8px; }
+.discover-account-action:hover { background: rgba(255, 255, 255, 0.06); }
+@container (max-width: 600px) {
+  .discover-account { flex-wrap: wrap; }
+  .discover-account > .discover-follow, .discover-account > .discover-account-action { margin-left: 50px; }
+}
+.discover-feed-header .discover-follow--on:disabled { opacity: 1; }

@@ -497,6 +497,18 @@ export interface DiscoveredFeed {
   already_subscribed: boolean;
 }
 
+/** A major newspaper: its official RSS sections and the reader's sign-in. */
+export interface Newspaper {
+  id: string;
+  name: string;
+  site: string;
+  icon_url: string | null;
+  free: boolean;
+  can_sign_in: boolean;
+  signed_in: boolean;
+  sections: DiscoveredFeed[];
+}
+
 export interface FeedCatalogTopic {
   id: string;
   name: string;

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DiscoverView } from "./DiscoverView";
@@ -17,8 +17,18 @@ vi.mock("../../services/commands", () => ({
   subscribedFeed: vi.fn(),
   countStarredInFeed: vi.fn(),
   removeFeed: vi.fn(),
+  listNewspapers: vi.fn(),
+  signInNewspaper: vi.fn(),
+  signOutNewspaper: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
+const events = vi.hoisted(() => ({ handlers: new Map<string, () => void>() }));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn((name: string, handler: () => void) => {
+    events.handlers.set(name, handler);
+    return Promise.resolve(() => {});
+  }),
+}));
 
 function feed(over: Partial<DiscoveredFeed> = {}): DiscoveredFeed {
   return {
@@ -57,11 +67,52 @@ beforeEach(() => {
     { id: "space", name: "Space", feeds: [nasa] },
   ]);
   vi.mocked(commands.searchFeeds).mockResolvedValue([]);
+  vi.mocked(commands.listNewspapers).mockResolvedValue([]);
   vi.mocked(commands.previewFeed).mockResolvedValue(feed({ items: [] }));
   vi.mocked(openUrl).mockResolvedValue(undefined);
 });
 
 describe("Discover", () => {
+  it("follows every section of a newspaper and signs in to it", async () => {
+    const user = userEvent.setup();
+    const nyt = (signedIn: boolean) => ({
+      id: "nyt",
+      name: "The New York Times",
+      site: "https://www.nytimes.com",
+      icon_url: null,
+      free: false,
+      can_sign_in: true,
+      signed_in: signedIn,
+      sections: [
+        feed({ title: "Top Stories", url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", site_url: "https://www.nytimes.com" }),
+        feed({ title: "World", url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", site_url: "https://www.nytimes.com", already_subscribed: true }),
+      ],
+    });
+    vi.mocked(commands.listNewspapers).mockResolvedValue([nyt(false)]);
+    vi.mocked(commands.addFeed).mockResolvedValue({} as never);
+    vi.mocked(commands.signInNewspaper).mockResolvedValue(undefined);
+    vi.mocked(commands.signOutNewspaper).mockResolvedValue(undefined);
+    renderView();
+
+    expect(await screen.findByText("Subscription · 2 sections")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /The New York Times/ }));
+    expect(screen.getByRole("heading", { name: "The New York Times" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Follow all sections" }));
+    expect(commands.addFeed).toHaveBeenCalledTimes(1);
+    expect(commands.addFeed).toHaveBeenCalledWith("https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml");
+
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(commands.signInNewspaper).toHaveBeenCalledWith("nyt");
+
+    // Closing the sign-in window tells Discover to reload sign-in state.
+    vi.mocked(commands.listNewspapers).mockResolvedValue([nyt(true)]);
+    act(() => events.handlers.get("newspaper-auth-changed")?.());
+    expect(await screen.findByText("Signed in")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Sign out" }));
+    expect(commands.signOutNewspaper).toHaveBeenCalledWith("nyt");
+  });
+
   it("opens a topic, then a feed's page, and follows it", async () => {
     const user = userEvent.setup();
     vi.mocked(commands.addFeed).mockResolvedValue({} as never);

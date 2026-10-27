@@ -138,6 +138,14 @@ enum ArticleReaderContentLoader {
     private static func loadDocument(at url: URL) async throws -> ArticleReaderContent {
         var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 20)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        // A newspaper the reader signed in to gets its own cookies, so a
+        // subscriber's article loads in full. No other site sees them, and a
+        // copy cached before the sign-in is not reused.
+        if let cookie = await NewspaperAccounts.cookieHeader(for: url) {
+            request.cachePolicy = .reloadIgnoringLocalCacheData
+            request.httpShouldHandleCookies = false
+            request.setValue(cookie, forHTTPHeaderField: "Cookie")
+        }
         request.setValue("text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.8", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await URLSession.shared.data(for: request)

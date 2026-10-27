@@ -37,6 +37,7 @@ import type {
   Ds4Status,
   DiscoveredFeed,
   FeedCatalogTopic,
+  Newspaper,
 } from "./types";
 
 // Feeds
@@ -49,6 +50,9 @@ export const searchFeeds = (query: string) =>
 export const previewFeed = (url: string) =>
   invoke<DiscoveredFeed>("preview_feed", { url });
 export const feedCatalog = () => invoke<FeedCatalogTopic[]>("feed_catalog");
+export const listNewspapers = () => invoke<Newspaper[]>("list_newspapers");
+export const signInNewspaper = (id: string) => invoke<void>("sign_in_newspaper", { id });
+export const signOutNewspaper = (id: string) => invoke<void>("sign_out_newspaper", { id });
 export const subscribedFeed = (url: string) =>
   invoke<Feed | null>("subscribed_feed", { url });
 export const removeFeed = (feedId: string) =>

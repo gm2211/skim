@@ -92,6 +92,19 @@ behaviors:
     source:
       text: can we have cog icon instead of model selector?
       reference: Giulio, project chat about the article chat header, 2026-10-12
+  - id: chat-collapse-not-clear
+    description: >-
+      The article chat collapses from a click anywhere on its header row, and clearing the
+      conversation sits inside the cog with an Undo, so a quick click near collapse never wipes it.
+    details: >-
+      Desktop and the narrow web layout: the header row (Chat, ephemeral, chevron) is one collapse
+      button with a 32px chevron target (44px on phones). The cog sits over the row; "Clear
+      conversation" is the last item in its popover, in red. After clearing, a "Conversation
+      cleared. Undo" line sits under the header until the reader sends again or changes article.
+      The iOS chat sheet has no Clear button, so it is unaffected.
+    source:
+      text: collaps button should be easier to click and it should be hard to misclick "Clear" instead
+      reference: Giulio, project thread "Make chat collapse easy, Clear hard to misclick", 2026-10-27
   - id: article-chat
     description: >-
       A reader can chat with any article; answers are grounded in the article's full text and the

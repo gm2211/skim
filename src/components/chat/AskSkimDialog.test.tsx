@@ -287,6 +287,23 @@ describe("AskSkimDialog continuing an agent conversation", () => {
     expect(onSend).toHaveBeenCalledTimes(1);
   });
 
+  it("focuses the box for a passage asked about from a selection, even on a phone", () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    useUiStore.setState({ isPhone: true });
+    useAgentChatStore.setState({ seed: { context: { view: "today", story: { story_id: "s1", title: "Async Rust", article_ids: ["r1"] } }, reply: { role: "story", text: "Tokio is the default" } } });
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(screen.getByText("Tokio is the default")).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveFocus();
+  });
+
+  it("leaves the keyboard down on a phone when the chat opens without a quote", () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    useUiStore.setState({ isPhone: true });
+    useAgentChatStore.setState({ seed: { context: { view: "today" } } });
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(screen.getByRole("textbox")).not.toHaveFocus();
+  });
+
   it("sends a handed-over question straight away", async () => {
     settings = { ai: { provider: "openai", chat_provider: "same" } };
     vi.mocked(askAgent).mockResolvedValue(agentAnswer);

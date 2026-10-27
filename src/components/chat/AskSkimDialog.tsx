@@ -115,6 +115,14 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
     inputRef.current?.focus();
   }, [open, isPhone, needsSetup, showSettings]);
 
+  // A passage quoted from a selection ("Ask" or "Reply to selection") is
+  // waiting for a question, so the box takes focus even on a phone, where
+  // opening the chat otherwise leaves the keyboard down.
+  useEffect(() => {
+    if (!open || !reply || needsSetup || showSettings) return;
+    inputRef.current?.focus({ preventScroll: true });
+  }, [open, reply, needsSetup, showSettings]);
+
   useEffect(() => {
     setError((previous) => isAiSetupError(previous) ? null : previous);
   }, [settings]);

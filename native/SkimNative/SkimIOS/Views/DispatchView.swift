@@ -559,6 +559,7 @@ private struct SelectableCitedText: UIViewRepresentable {
                       let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !quote.isEmpty else { return }
                 textView.selectedTextRange = nil
+                textView.resignFirstResponder()
                 self.parent.onAsk(quote)
             }
             return UIMenu(children: [ask] + suggestedActions)

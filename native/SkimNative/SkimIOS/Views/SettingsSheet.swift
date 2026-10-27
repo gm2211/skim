@@ -2631,6 +2631,17 @@ struct SmartSortSettingsView: View {
                             }
                             .buttonStyle(.bordered)
                             .disabled(note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            // Anchored on the button, so on iOS 26 the dialog's
+                            // popover points at Delete rather than mid-sheet.
+                            .confirmationDialog("Delete learned preferences?", isPresented: $confirmDelete, titleVisibility: .visible) {
+                                Button("Delete", role: .destructive) {
+                                    note = ""
+                                    commitNote()
+                                    message = ("Deleted. Smart sort learns again only from what you read next.", false)
+                                }
+                            } message: {
+                                Text("Smart sort forgets what it learned and starts over from what you read next.")
+                            }
                             Spacer(minLength: 0)
                         }
                         .font(.system(size: 15, weight: .semibold))
@@ -2655,15 +2666,6 @@ struct SmartSortSettingsView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("Close Smart sort settings")
                 }
-            }
-            .confirmationDialog("Delete learned preferences?", isPresented: $confirmDelete, titleVisibility: .visible) {
-                Button("Delete", role: .destructive) {
-                    note = ""
-                    commitNote()
-                    message = ("Deleted. Smart sort learns again only from what you read next.", false)
-                }
-            } message: {
-                Text("Smart sort forgets what it learned and starts over from what you read next.")
             }
         }
         .onAppear {

@@ -679,7 +679,6 @@ pub async fn write_dispatch(
     crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
-    let on_device = runs_on_device(&ai_settings.provider);
     let emit = |message: &str, edition: &DispatchEdition| {
         let _ = app.emit(
             DISPATCH_PROGRESS_EVENT,
@@ -691,7 +690,68 @@ pub async fn write_dispatch(
             },
         );
     };
+    let trace = Trace::default();
+    let result = run_edition(
+        db.inner(),
+        provider.as_ref(),
+        &model,
+        runs_on_device(&ai_settings.provider),
+        (starts_at, ends_at, days),
+        &mode,
+        existing,
+        ai_settings.triage_user_prompt.as_deref(),
+        preferences.as_ref(),
+        &emit,
+        &trace,
+    )
+    .await;
+    log::info!("The Briefing {id}: {}", trace.summary());
+    result
+}
 
+/// When each step of writing an edition began and ended, from the start.
+#[derive(Default)]
+pub struct Trace {
+    start: std::sync::OnceLock<std::time::Instant>,
+    marks: std::sync::Mutex<Vec<(f64, String)>>,
+}
+
+impl Trace {
+    pub fn mark(&self, label: impl Into<String>) {
+        let start = *self.start.get_or_init(std::time::Instant::now);
+        if let Ok(mut marks) = self.marks.lock() {
+            marks.push((start.elapsed().as_secs_f64(), label.into()));
+        }
+    }
+
+    pub fn marks(&self) -> Vec<(f64, String)> {
+        self.marks.lock().map(|marks| marks.clone()).unwrap_or_default()
+    }
+
+    pub fn summary(&self) -> String {
+        self.marks().iter().map(|(at, label)| format!("{at:.1}s {label}")).collect::<Vec<_>>().join("; ")
+    }
+}
+
+/// Writes or finishes the edition for a window with the reader's model,
+/// handing each version of the page to `emit` as it changes.
+#[allow(clippy::too_many_arguments)]
+pub async fn run_edition(
+    db: &Database,
+    provider: &dyn AiProvider,
+    model: &str,
+    on_device: bool,
+    (starts_at, ends_at, days): (i64, i64, i64),
+    mode: &str,
+    existing: Option<DispatchEdition>,
+    interests: Option<&str>,
+    preferences: Option<&UserPreferenceProfile>,
+    emit: &(dyn Fn(&str, &DispatchEdition) + Sync),
+    trace: &Trace,
+) -> Result<DispatchEdition, String> {
+    trace.mark("start");
+    let id = edition_id(starts_at, ends_at, days);
+    let model = model.to_string();
     let mut edition = match existing {
         Some(edition) if mode != "rewrite" && edition.status == "complete" && mode != "retry" => return Ok(edition),
         Some(edition) if mode != "rewrite" && !edition.themes.is_empty() => edition,
@@ -721,10 +781,14 @@ pub async fn write_dispatch(
                 save(&conn, &edition)?;
                 return Ok(edition);
             }
+            trace.mark(format!("pool of {} articles", pool.len()));
             emit(&format!("Reading {} articles…", pool.len()), &edition);
-            let interests = ai_settings.triage_user_prompt.as_deref();
             let excerpt = if on_device { ON_DEVICE_EXCERPT_CHARS } else { HOSTED_EXCERPT_CHARS };
-            let planning = plan_edition(provider.as_ref(), &model, days, interests, &pool, excerpt, preferences.as_ref());
+            let planning = async {
+                let plan = plan_edition(provider, &model, days, interests, &pool, excerpt, preferences).await;
+                trace.mark(match &plan { Ok(plan) => format!("plan: {} themes, {} briefs", plan.themes.len(), plan.briefs.len()), Err(e) => format!("plan failed: {e}") });
+                plan
+            };
             let (plan, lead) = if on_device {
                 (planning.await, None)
             } else {
@@ -732,15 +796,20 @@ pub async fn write_dispatch(
                 // piece is written while the full plan is still being drawn up.
                 let leading = async {
                     // Headlines alone: the short listing is what makes this answer quick.
-                    let mut lead = plan_lead(provider.as_ref(), &model, days, interests, &pool, 0, preferences.as_ref()).await?;
+                    let mut lead = plan_lead(provider, &model, days, interests, &pool, 0, preferences).await?;
+                    trace.mark("lead picked");
                     let mut page = edition.clone();
                     page.articles = pool.iter().filter(|a| lead.article_ids.contains(&a.article.id)).map(dispatch_article).collect();
                     page.themes = vec![lead.clone()];
                     emit("Writing the lead while the editor reads the rest…", &page);
-                    let piece = match theme_reports(db.inner(), &lead.article_ids).await {
-                        Ok(reports) => write_piece(provider.as_ref(), &model, &lead, &reports).await,
+                    let piece = match theme_reports(db, &lead.article_ids).await {
+                        Ok(reports) => {
+                            trace.mark("lead reports read");
+                            write_piece(provider, &model, &lead, &reports).await
+                        }
                         Err(error) => Err(error),
                     };
+                    trace.mark("lead piece filed");
                     match piece {
                         Ok(piece) => apply_piece(&mut lead, piece),
                         Err(error) => lead.error = Some(failure_reason(&error)),
@@ -787,14 +856,17 @@ pub async fn write_dispatch(
         .collect();
     let total = pending.len();
     emit(&format!("Writing {total} {}…", if total == 1 { "piece" } else { "pieces" }), &edition);
-    let database: &Database = &db;
-    let provider_ref = provider.as_ref();
+    let database: &Database = db;
+    let provider_ref = provider;
     let model_ref = &model;
     let assignments: Vec<(usize, DispatchTheme)> = pending.into_iter().map(|index| (index, edition.themes[index].clone())).collect();
     let jobs = assignments.into_iter().map(|(index, theme)| {
         async move {
             let result = match theme_reports(database, &theme.article_ids).await {
-                Ok(reports) => write_piece(provider_ref, model_ref, &theme, &reports).await,
+                Ok(reports) => {
+                    trace.mark(format!("piece {index} reports read"));
+                    write_piece(provider_ref, model_ref, &theme, &reports).await
+                }
                 Err(error) => Err(error),
             };
             (index, result)
@@ -812,9 +884,11 @@ pub async fn write_dispatch(
             let conn = db.conn.lock().map_err(|e| e.to_string())?;
             save(&conn, &edition)?;
         }
+        trace.mark(format!("piece {index} filed{}", if edition.themes[index].error.is_some() { " (failed)" } else { "" }));
         emit(&format!("Filed {done} of {total}…"), &edition);
     }
     edition.status = "complete".into();
+    trace.mark("complete");
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     save(&conn, &edition)?;
     let edition = load(&conn, &id)?.unwrap_or(edition);
@@ -972,6 +1046,67 @@ mod tests {
         assert_eq!(merged.themes.iter().map(|t| t.headline.as_str()).collect::<Vec<_>>(), vec!["CA breached", "DuckDB 2.0 ships"]);
         assert_eq!(merged.themes[1].article_ids, vec!["a0", "a4"]);
         assert_eq!(merged.briefs.len(), 1);
+    }
+
+    /// Marks each model call's start, end, and tokens on the trace.
+    struct Timed<'a> {
+        inner: Box<dyn AiProvider>,
+        trace: &'a Trace,
+    }
+    #[async_trait::async_trait]
+    impl AiProvider for Timed<'_> {
+        async fn chat(&self, request: ChatRequest) -> Result<crate::ai::provider::ChatResponse, String> {
+            let system = request.messages.first().map(|m| m.content.as_str()).unwrap_or_default();
+            let kind = if system.contains("front-page") { "lead pick" } else if system.contains("editor") { "plan" } else { "writer" };
+            let input: usize = request.messages.iter().map(|m| m.content.len()).sum();
+            self.trace.mark(format!("  -> {kind} call ({input} chars in)"));
+            let started = std::time::Instant::now();
+            let response = self.inner.chat(request).await;
+            let tokens = response.as_ref().ok().and_then(|r| r.usage.as_ref())
+                .map(|u| format!("{} in / {} out tokens", u.prompt_tokens.unwrap_or(0), u.completion_tokens.unwrap_or(0))).unwrap_or_default();
+            self.trace.mark(format!("  <- {kind} {:.1}s {tokens}{}", started.elapsed().as_secs_f64(),
+                response.as_ref().err().map(|e| format!(" error {e}")).unwrap_or_default()));
+            response
+        }
+        fn name(&self) -> &str { self.inner.name() }
+    }
+
+    /// Writes a fresh edition from a copy of a real library with its own AI
+    /// settings and prints when each step landed:
+    /// `SKIM_BENCH_DIR=/path/to/copy cargo test bench_real_edition -- --ignored --nocapture`
+    #[tokio::test]
+    #[ignore = "talks to the library's AI provider; set SKIM_BENCH_DIR"]
+    async fn bench_real_edition() {
+        let dir = std::env::var("SKIM_BENCH_DIR").expect("SKIM_BENCH_DIR: a copy of the app's data folder");
+        let days: i64 = std::env::var("SKIM_BENCH_DAYS").ok().and_then(|d| d.parse().ok()).unwrap_or(1);
+        let db = Database::new(dir.into()).unwrap();
+        let (settings, preferences) = {
+            let conn = db.conn.lock().unwrap();
+            let settings: AppSettings = queries::get_setting(&conn, "app_settings").unwrap()
+                .as_deref().and_then(|json| serde_json::from_str(json).ok()).unwrap_or_default();
+            (settings, queries::build_preference_profile(&conn).ok())
+        };
+        let mut ai = settings.ai.clone();
+        ai.oauth_access_token = crate::ai::subscription_access_token(&db, &ai.provider);
+        let model = ai.model.clone().unwrap_or_else(|| default_model(&ai.provider));
+        let ends_at = chrono::Utc::now().timestamp();
+        let trace = Trace::default();
+        trace.mark("start");
+        let provider = Timed { inner: crate::ai::provider::create_provider(&ai, None).unwrap(), trace: &trace };
+        let emit = |message: &str, edition: &DispatchEdition| {
+            let written = edition.themes.iter().filter(|t| !t.body.is_empty()).count();
+            trace.mark(format!("page: {written}/{} pieces written ({message})", edition.themes.len()));
+        };
+        let edition = run_edition(&db, &provider, &model, runs_on_device(&ai.provider),
+            (ends_at - days * 86_400, ends_at, days), "rewrite", None,
+            ai.triage_user_prompt.as_deref(), preferences.as_ref(), &emit, &trace).await;
+        println!("provider {} model {model}", ai.provider);
+        for (at, label) in trace.marks() {
+            println!("{at:>6.1}s  {label}");
+        }
+        let edition = edition.unwrap();
+        println!("themes {} (failed {}), briefs {}", edition.themes.len(),
+            edition.themes.iter().filter(|t| t.error.is_some()).count(), edition.briefs.len());
     }
 
     #[test]

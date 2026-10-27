@@ -359,6 +359,9 @@
     },
     discover_feeds: ({ query }) => DISCOVER_SITE(query),
     preview_feed: ({ url }) => ({ ...discoverEntry({ title: "", url, site: url, description: "" }), items: DISCOVER_ITEMS }),
+    subscribed_feed: ({ url }) => feeds.find((x) => x.url === url)
+      ?? { id: "followed-" + url, title: discoverEntry({ title: "", url, site: url }).title || url, url },
+    count_starred_in_feed: () => 2,
     add_feed: async ({ url }) => {
       await new Promise((r) => setTimeout(r, 400));
       return { id: "new-" + url, title: url, url };

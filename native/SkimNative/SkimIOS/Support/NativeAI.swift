@@ -365,7 +365,8 @@ enum NativeAI {
     }
 
     static func evaluateToday(candidates: [TodaySemanticCandidate], settings: AppSettings) async throws -> [TodaySemanticGroup] {
-        try await evaluateToday(candidates: candidates, provider: settings.ai.provider) { instructions, payload, maxTokens in
+        let settings = OfflineAIFallback.effective(settings)
+        return try await evaluateToday(candidates: candidates, provider: settings.ai.provider) { instructions, payload, maxTokens in
             try await complete(settings: settings, instructions: instructions, prompt: payload,
                 maxTokens: maxTokens, jsonMode: true, temperature: 0)
         }
@@ -436,6 +437,7 @@ enum NativeAI {
     }
 
     static func loadingStatusLabel(for ai: AISettings) -> String {
+        let ai = OfflineAIFallback.effective(ai)
         switch ai.provider {
         case "foundation-models":
             return "Asking Apple Intelligence..."
@@ -578,6 +580,7 @@ enum NativeAI {
     /// headlines. Returns nil when the model's answer cannot be read, so the
     /// caller can draft the page from the articles instead.
     static func catchUpPicks(articles: [Article], settings: AppSettings) async throws -> CatchUpPage? {
+        let settings = OfflineAIFallback.effective(settings)
         // On-device models skip this pass: one prompt over the whole listing
         // is the slowest step of the run on a phone, and small models (Gemma 3
         // 1B) rarely answer it with JSON that can be read. The page is drafted
@@ -734,6 +737,7 @@ enum NativeAI {
         themes: [String],
         settings: AppSettings
     ) async throws -> TodayEditorial? {
+        let settings = OfflineAIFallback.effective(settings)
         // Apple's on-device model has a small context window, so it reads two
         // shorter reports, as it does for ledes.
         let onDevice = settings.ai.provider == "foundation-models"
@@ -775,6 +779,7 @@ enum NativeAI {
         settings: AppSettings
     ) async throws -> TodayPreview? {
         guard !articles.isEmpty else { return nil }
+        let settings = OfflineAIFallback.effective(settings)
 
         // Apple's on-device model has a small context window: four reports
         // of 3,000 characters each overflowed it, so every lede failed and
@@ -1135,6 +1140,7 @@ enum NativeAI {
     /// AI Inbox prompt. Returns ratings keyed by 1-based handle.
     static func inboxRatings(articles: [Article], readerContext: String, settings: AppSettings) async throws -> [Int: InboxRating] {
         guard !articles.isEmpty else { return [:] }
+        let settings = OfflineAIFallback.effective(settings)
         let digest = articleDigest(articles, limit: articles.count, wordsPerArticle: 40)
 #if canImport(FoundationModels)
         if #available(iOS 26.0, *), settings.ai.provider == "foundation-models" {
@@ -1354,6 +1360,7 @@ enum NativeAI {
     }
 
     static func summarize(article: Article, settings: AppSettings) async throws -> String {
+        let settings = OfflineAIFallback.effective(settings)
         let publication = AIPublicationGate()
         defer { publication.cancel() }
         return try await withTaskCancellationHandler {
@@ -1392,6 +1399,7 @@ enum NativeAI {
         settings: AppSettings,
         onToken: @MainActor @escaping (String) -> Void
     ) async throws -> String {
+        let settings = OfflineAIFallback.effective(settings)
         let publication = AIPublicationGate()
         defer { publication.cancel() }
         return try await withTaskCancellationHandler {
@@ -1661,8 +1669,9 @@ enum NativeAI {
         let base = isLibrary
             ? "You answer questions across a set of RSS articles using the provided article list and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks. Answer first, in plain prose of about 50 to 100 words, so the reader gets the gist without opening the articles. Cite each article you draw on with its numeric handle like [3], placed right after the claim it supports. Do not list the articles or repeat their titles as a list: the app shows every cited article as a card under the answer. If the answer is not supported by the supplied articles or web results, say so."
             : "You answer questions about a single article using the provided article text and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks you to recap it. If the answer is not supported by the supplied article text or web results, say so."
-        guard enableWebSearch else { return base }
-        return base + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices. Cite each web result you use by its number, like [w2], right after the claim it supports."
+        let corrected = base + "\n\n" + ChatCorrections.instructions
+        guard enableWebSearch else { return corrected }
+        return corrected + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices. Cite each web result you use by its number, like [w2], right after the claim it supports."
     }
 
     /// Local MLX chat with optional web-search augmentation (2-pass: router + answer).
@@ -1742,7 +1751,7 @@ enum NativeAI {
         urlSession: URLSession = .shared
     ) async throws -> (text: String, citations: [WebCitation]) {
         var settings = settings
-        settings.ai = AIRequestPolicy.chatSettings(settings.ai)
+        settings.ai = OfflineAIFallback.effective(AIRequestPolicy.chatSettings(settings.ai))
         let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
         let instructions = chatInstructions(isLibrary: false, enableWebSearch: toolsOK)
 
@@ -1887,7 +1896,7 @@ enum NativeAI {
         urlSession: URLSession = .shared
     ) async throws -> (text: String, citations: [WebCitation]) {
         var settings = settings
-        settings.ai = AIRequestPolicy.chatSettings(settings.ai)
+        settings.ai = OfflineAIFallback.effective(AIRequestPolicy.chatSettings(settings.ai))
         let toolsOK = ["anthropic", "claude-subscription"].contains(settings.ai.provider)
         let instructions = chatInstructions(isLibrary: true, enableWebSearch: toolsOK)
         let context = try libraryChatContext(articles: articles, conversation: conversation)
@@ -1926,6 +1935,23 @@ enum NativeAI {
         jsonMode: Bool = false,
         enableWebSearch: Bool = false,
         temperature: Double? = nil
+    ) async throws -> String {
+        try await OfflineAIFallback.run(settings) { settings in
+            try await completeOnProvider(
+                settings: settings, instructions: instructions, prompt: prompt, maxTokens: maxTokens,
+                jsonMode: jsonMode, enableWebSearch: enableWebSearch, temperature: temperature
+            )
+        }
+    }
+
+    private static func completeOnProvider(
+        settings: AppSettings,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        jsonMode: Bool,
+        enableWebSearch: Bool,
+        temperature: Double?
     ) async throws -> String {
         var ai = settings.ai
         if let temperature { ai.mlxTemperature = temperature }
@@ -1969,6 +1995,23 @@ enum NativeAI {
         enableWebSearch: Bool = false,
         urlSession: URLSession = .shared,
         messages: [[String: String]]? = nil
+    ) async throws -> (text: String, citations: [WebCitation]) {
+        try await OfflineAIFallback.run(settings) { settings in
+            try await completeWithCitationsOnProvider(
+                settings: settings, instructions: instructions, prompt: prompt, maxTokens: maxTokens,
+                enableWebSearch: enableWebSearch, urlSession: urlSession, messages: messages
+            )
+        }
+    }
+
+    private static func completeWithCitationsOnProvider(
+        settings: AppSettings,
+        instructions: String,
+        prompt: String,
+        maxTokens: Int,
+        enableWebSearch: Bool,
+        urlSession: URLSession,
+        messages: [[String: String]]?
     ) async throws -> (text: String, citations: [WebCitation]) {
         let ai = settings.ai
         if let messages {
@@ -3931,6 +3974,13 @@ struct AIChatSheet: View {
     @State private var quotedText: String?
     @State private var quoteSource: ChatQuoteSource = .answer
     @State private var isSending = false
+    /// Questions asked while an answer is in flight; they send in order as each one lands.
+    @State private var queued: [QueuedChatMessage] = []
+    /// A failed answer holds the queue until the reader resumes it.
+    @State private var queuePaused = false
+    @State private var editingQueuedID: UUID?
+    @State private var queuedDraft = ""
+    @FocusState private var queuedEditorFocused: Bool
     /// Deep research: slower, reads the feeds then the web, and writes a cited briefing.
     @State private var deepResearch = false
     /// What the research in flight has done so far.
@@ -3994,10 +4044,10 @@ struct AIChatSheet: View {
                                         onOpenArticle: { path.append($0) },
                                         onReauth: { showReauth = true },
                                         onOpenSettings: { showAISettings = true },
-                                        onReply: isSending ? nil : { quote in
+                                        onReply: { quote in
                                             quotedText = quote
                                             quoteSource = .answer
-                                            focused = true
+                                            focusComposer()
                                         }
                                     )
                                         .id(message.id)
@@ -4020,6 +4070,10 @@ struct AIChatSheet: View {
                                 .padding(.vertical, 12)
                             }
 
+                            if !queued.isEmpty {
+                                queuedList
+                            }
+
                             Color.clear
                                 .frame(height: 1)
                                 .id(bottomAnchorID)
@@ -4039,6 +4093,26 @@ struct AIChatSheet: View {
                     }
                     .onChange(of: researchSteps.count) { _, _ in
                         if isSending { scrollToLatest(proxy) }
+                    }
+                    // Keep a queued question in view above the keyboard while it's edited.
+                    .onChange(of: editingQueuedID) { _, id in
+                        guard let id else { return }
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(350))
+                            withAnimation(.smooth(duration: 0.22)) { proxy.scrollTo(id, anchor: .bottom) }
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                        guard let id = editingQueuedID else { return }
+                        withAnimation(.smooth(duration: 0.22)) { proxy.scrollTo(id, anchor: .bottom) }
+                    }
+                    .onChange(of: queued.count) { old, new in
+                        if new > old {
+                            Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(80))
+                                withAnimation(.smooth(duration: 0.22)) { proxy.scrollTo(bottomAnchorID, anchor: .bottom) }
+                            }
+                        }
                     }
                 }
 
@@ -4095,9 +4169,8 @@ struct AIChatSheet: View {
                     }
 
                     HStack(spacing: 10) {
-                        TextField(deepResearch ? "Name a topic to research..." : "Ask...", text: $input, axis: .vertical)
+                        TextField(isSending ? "Queue a follow-up..." : deepResearch ? "Name a topic to research..." : "Ask...", text: $input, axis: .vertical)
                             .focused($focused)
-                            .disabled(isSending)
                             .lineLimit(1...4)
                             .font(.system(size: 17, weight: .regular))
                             .foregroundStyle(SkimStyle.text)
@@ -4128,7 +4201,9 @@ struct AIChatSheet: View {
                                 .foregroundStyle(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? SkimStyle.secondary : SkimStyle.accent)
                         }
                         .buttonStyle(.plain)
-                        .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSending)
+                        .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .accessibilityLabel(isSending ? "Queue message" : "Send")
+                        .accessibilityHint(isSending ? "Sends when Skim finishes the current answer" : "")
                     }
                 }
                 .padding(14)
@@ -4154,7 +4229,9 @@ struct AIChatSheet: View {
                     quoteSource = request.initialQuoteSource
                 }
                 // The keyboard would cover the starter questions, so wait for a tap.
-                focused = !(messages.isEmpty && quotedText == nil && !request.suggestedPrompts.isEmpty)
+                if !(messages.isEmpty && quotedText == nil && !request.suggestedPrompts.isEmpty) {
+                    focusComposer()
+                }
             }
             .sheet(isPresented: $showReauth) {
                 ClaudeReauthSheet()
@@ -4162,6 +4239,20 @@ struct AIChatSheet: View {
             .sheet(isPresented: $showAISettings) {
                 SettingsSheet(isPresented: $showAISettings, aiOnly: true)
             }
+        }
+    }
+
+    /// Puts the cursor in the composer with the keyboard up, so a quoted
+    /// passage is ready for a question. The text the passage was selected in
+    /// still holds first responder, and a sheet that is still sliding up drops
+    /// a focus change, so let go of the selection first and ask again once the
+    /// sheet has settled.
+    private func focusComposer() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        focused = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            if !focused { focused = true }
         }
     }
 
@@ -4190,17 +4281,37 @@ struct AIChatSheet: View {
         }
     }
 
+    /// Sends the composer, or queues it while an answer is still coming.
     private func send() async {
         let question = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !question.isEmpty, !isSending else { return }
-        let toSend = question
-        let quoteToSend = quotedText
-        let sourceToSend = quoteSource
-        let priorMessages = messages
-        let conversation = AIChatConversation(latestQuestion: toSend, quotedText: quoteToSend, quoteSource: sourceToSend, priorMessages: priorMessages, generatedSummaryContext: request.generatedSummaryContext ?? initialAssistantMessage)
+        guard !question.isEmpty else { return }
+        let item = QueuedChatMessage(text: question, quotedText: quotedText, quoteSource: quoteSource)
         input = ""
         quotedText = nil
         focused = true
+        if isSending {
+            queued.append(item)
+            return
+        }
+        await send(item)
+    }
+
+    /// Sends the next queued question once nothing is in flight, unless the
+    /// queue is paused or the reader is editing that question.
+    private func sendNextQueued() async {
+        guard !isSending, !queuePaused, let next = queued.first, next.id != editingQueuedID else { return }
+        queued.removeFirst()
+        await send(next)
+    }
+
+    private func send(_ item: QueuedChatMessage) async {
+        guard !isSending else { return }
+        queuePaused = false
+        let toSend = item.text
+        let quoteToSend = item.quotedText
+        let sourceToSend = item.quoteSource
+        let priorMessages = messages
+        let conversation = AIChatConversation(latestQuestion: toSend, quotedText: quoteToSend, quoteSource: sourceToSend, priorMessages: priorMessages, generatedSummaryContext: request.generatedSummaryContext ?? initialAssistantMessage)
         let userMessage = AIChatMessage(role: .user, text: toSend, quotedText: quoteToSend, quoteSource: sourceToSend)
         messages.append(userMessage)
         isSending = true
@@ -4212,11 +4323,20 @@ struct AIChatSheet: View {
             } else {
                 answer = try await request.answer(conversation)
             }
+            // A correction edits the earlier reply it fixes, struck through with the fix beside it.
+            let corrections = ChatCorrections.apply(
+                to: messages.map { $0.role == .assistant && !$0.isError ? $0.text : nil },
+                answer: answer.text
+            )
+            for (index, revised) in corrections.earlier.enumerated() {
+                if let revised, messages.indices.contains(index), messages[index].text != revised { messages[index].text = revised }
+            }
+            let answerText = corrections.answer
             messages.append(
                 AIChatMessage(
                     role: .assistant,
-                    text: answer.text,
-                    referencedArticles: ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles, handles: answer.articleHandles),
+                    text: answerText,
+                    referencedArticles: ArticleReferenceExtractor.references(in: answerText, articles: answer.articles, handles: answer.articleHandles),
                     webCitations: answer.webCitations,
                     contextArticles: answer.articles,
                     contextHandles: answer.articleHandles ?? answer.articles.indices.map { $0 + 1 },
@@ -4226,9 +4346,16 @@ struct AIChatSheet: View {
             )
         } catch {
             messages.removeAll { $0.id == userMessage.id }
-            input = toSend
-            quotedText = quoteToSend
-            quoteSource = sourceToSend
+            // Back to the composer, or to the front of the queue when the
+            // reader has started typing the next question.
+            if input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                input = toSend
+                quotedText = quoteToSend
+                quoteSource = sourceToSend
+            } else {
+                queued.insert(item, at: 0)
+            }
+            queuePaused = !queued.isEmpty
             let reauth: Bool = {
                 if case NativeAIError.requiresReauthentication = error { return true }
                 return false
@@ -4236,7 +4363,129 @@ struct AIChatSheet: View {
             messages.append(AIChatMessage(role: .assistant, text: error.localizedDescription, isError: true, needsReauth: reauth, remedy: AIErrorRemedy.classify(error)))
         }
         isSending = false
+        await sendNextQueued()
     }
+
+    /// Queued questions as dimmed, outlined bubbles under the conversation;
+    /// each can be edited in place or removed before it sends.
+    private var queuedList: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            HStack(spacing: 6) {
+                Text("QUEUED")
+                    .font(.system(size: 11, weight: .semibold))
+                    .tracking(0.6)
+                Text(queuePaused ? "paused after an error" : "sends when Skim finishes")
+                    .font(.system(size: 12))
+                if queuePaused && !isSending {
+                    Button("Resume") {
+                        queuePaused = false
+                        Task { await sendNextQueued() }
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(SkimStyle.accent)
+                    .buttonStyle(.plain)
+                }
+            }
+            .foregroundStyle(SkimStyle.secondary)
+            ForEach(Array(queued.enumerated()), id: \.element.id) { index, item in
+                queuedRow(item, position: index + 1)
+                    .id(item.id)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    private func queuedRow(_ item: QueuedChatMessage, position: Int) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        let editing = editingQueuedID == item.id
+        return VStack(alignment: .leading, spacing: 4) {
+            if let quote = item.quotedText {
+                Text("\(item.quoteSource.caption): “\(quote)”")
+                    .font(.system(size: 12))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .lineLimit(1)
+            }
+            if editing {
+                HStack(alignment: .bottom, spacing: 8) {
+                    TextField("Edit question", text: $queuedDraft, axis: .vertical)
+                        .focused($queuedEditorFocused)
+                        .lineLimit(1...4)
+                        .font(.system(size: 16))
+                        .foregroundStyle(SkimStyle.text)
+                        .submitLabel(.done)
+                        .onSubmit { saveQueuedEdit(item.id) }
+                    Button("Done") { saveQueuedEdit(item.id) }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SkimStyle.accent)
+                        .buttonStyle(.plain)
+                }
+            } else {
+                HStack(alignment: .top, spacing: 0) {
+                    Text(item.text)
+                        .font(.system(size: 16))
+                        .foregroundStyle(SkimStyle.text.opacity(0.75))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        queuedDraft = item.text
+                        editingQueuedID = item.id
+                        queuedEditorFocused = true
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 14, weight: .medium))
+                            .frame(width: 40, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .padding(.vertical, -7)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(SkimStyle.secondary)
+                    .accessibilityLabel("Edit queued message")
+                    Button {
+                        queued.removeAll { $0.id == item.id }
+                        if queued.isEmpty { queuePaused = false }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(width: 40, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .padding(.vertical, -7)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(SkimStyle.secondary)
+                    .accessibilityLabel("Remove queued message")
+                }
+            }
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, editing ? 12 : 4)
+        .padding(.vertical, 6)
+        .background(SkimStyle.accent.opacity(0.07), in: shape)
+        .overlay(shape.strokeBorder(SkimStyle.accent.opacity(editing ? 0.6 : 0.35), style: StrokeStyle(lineWidth: 1, dash: editing ? [] : [4, 3])))
+        .frame(maxWidth: 320, alignment: .trailing)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Queued message \(position)")
+    }
+
+    /// Saving an empty question removes it.
+    private func saveQueuedEdit(_ id: UUID) {
+        let text = queuedDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.isEmpty {
+            queued.removeAll { $0.id == id }
+        } else if let index = queued.firstIndex(where: { $0.id == id }) {
+            queued[index].text = text
+        }
+        editingQueuedID = nil
+        queuedEditorFocused = false
+        if queued.isEmpty { queuePaused = false }
+        Task { await sendNextQueued() }
+    }
+}
+
+/// A question written while Skim was still answering, waiting its turn.
+struct QueuedChatMessage: Identifiable, Equatable {
+    let id = UUID()
+    var text: String
+    var quotedText: String?
+    var quoteSource: ChatQuoteSource
 }
 
 /// Tappable starter questions for an empty chat.
@@ -4515,7 +4764,6 @@ private struct SelectableChatText: UIViewRepresentable {
             view.attributedText = rendered
             view.invalidateIntrinsicContentSize()
         }
-        view.textColor = isError ? UIColor.systemRed : UIColor.label
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: ChatSelectableTextView, context: Context) -> CGSize? {
@@ -4528,6 +4776,8 @@ private struct SelectableChatText: UIViewRepresentable {
         let fullRange = NSRange(location: 0, length: rendered.length)
         let baseFont = UIFont.systemFont(ofSize: 17)
         rendered.addAttribute(.font, value: baseFont, range: fullRange)
+        // In the text itself rather than textColor, which would repaint struck-through corrections.
+        rendered.addAttribute(.foregroundColor, value: isError ? UIColor.systemRed : UIColor.label, range: fullRange)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = 4
         rendered.addAttribute(.paragraphStyle, value: paragraph, range: fullRange)
@@ -4537,6 +4787,11 @@ private struct SelectableChatText: UIViewRepresentable {
             let prefix = String(text[text.startIndex..<run.range.lowerBound].characters)
             let selected = String(text[run.range].characters)
             let range = NSRange(location: prefix.utf16.count, length: selected.utf16.count)
+            if intent.contains(.strikethrough) {
+                // An in-place correction: the wrong words struck through and dimmed.
+                rendered.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+                rendered.addAttribute(.foregroundColor, value: UIColor.secondaryLabel, range: range)
+            }
             let isCode = intent.contains(.code)
             let isBold = intent.contains(.stronglyEmphasized)
             let isItalic = intent.contains(.emphasized)
@@ -4554,6 +4809,16 @@ private struct SelectableChatText: UIViewRepresentable {
                 continue
             }
             rendered.addAttribute(.font, value: font, range: range)
+        }
+
+        // The "[updated]:" label of an in-place correction, in the accent like desktop.
+        let plain = rendered.string as NSString
+        var labelSearch = NSRange(location: 0, length: plain.length)
+        while true {
+            let found = plain.range(of: "[updated]:", range: labelSearch)
+            if found.location == NSNotFound { break }
+            rendered.addAttribute(.foregroundColor, value: UIColor.tintColor, range: found)
+            labelSearch = NSRange(location: found.upperBound, length: plain.length - found.upperBound)
         }
 
         // Citation chips: a small number on a tinted pill, matching its card under the answer.
@@ -4639,6 +4904,8 @@ private struct SelectableChatText: UIViewRepresentable {
                 guard let textView, let selection = textView.selectedTextRange,
                       let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !quote.isEmpty else { return }
+                textView.selectedTextRange = nil
+                textView.resignFirstResponder()
                 onReply(quote)
             }
             return UIMenu(children: suggestedActions + [action])
@@ -4995,7 +5262,7 @@ extension NativeAI {
         progress: @MainActor @escaping (String) -> Void
     ) async throws -> AIChatAnswer {
         var settings = settings
-        settings.ai = AIRequestPolicy.chatSettings(settings.ai)
+        settings.ai = OfflineAIFallback.effective(AIRequestPolicy.chatSettings(settings.ai))
         let question = conversation.latestPromptText.trimmingCharacters(in: .whitespacesAndNewlines)
         let history = conversation.priorTurns.map { "\($0.role == .user ? "Reader" : "Skim"): \(String($0.promptText.prefix(1500)))" }
         let asked = history.isEmpty ? question : "Conversation so far:\n\(history.joined(separator: "\n"))\n\nQuestion: \(question)"

@@ -1008,7 +1008,7 @@ private struct FeedPickerSheet: View {
                                         count: model.unreadCounts[feed.id],
                                         isSelected: model.selectedFeedID == feed.id
                                     ) { selectFeed(feed) }
-                                    .contextMenu { MoveToFolderMenu(model: model, feed: feed) }
+                                    .contextMenu { FeedRowMenu(model: model, feed: feed) }
                                 }
                             }
                             .padding(.bottom, 34)
@@ -1051,7 +1051,7 @@ private struct FeedPickerSheet: View {
                                                 count: model.unreadCounts[feed.id],
                                                 isSelected: model.selectedFeedID == feed.id
                                             ) { selectFeed(feed) }
-                                            .contextMenu { MoveToFolderMenu(model: model, feed: feed) }
+                                            .contextMenu { FeedRowMenu(model: model, feed: feed) }
                                         }
                                     }
                                 }
@@ -1104,6 +1104,7 @@ private struct FeedPickerSheet: View {
             .presentationDragIndicator(.visible)
             .presentationBackground(SkimStyle.chrome)
         }
+        .unfollowConfirmation(model: model, feed: $model.feedToUnfollow)
     }
 
     private enum NewFolderKind {
@@ -1392,7 +1393,7 @@ private struct FolderSection: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { MoveToFolderMenu(model: model, feed: feed) }
+                        .contextMenu { FeedRowMenu(model: model, feed: feed) }
                     }
                 }
             }
@@ -1501,7 +1502,23 @@ private enum AutoGroupNameStyle: String, CaseIterable, Identifiable {
     }
 }
 
-/// Long-press menu on a feed: move it into a regular folder, or out of its folder.
+/// Long-press menu on a feed in the feed list.
+private struct FeedRowMenu: View {
+    @ObservedObject var model: AppModel
+    let feed: Feed
+
+    var body: some View {
+        MoveToFolderMenu(model: model, feed: feed)
+        Divider()
+        Button("Unfollow", systemImage: "minus.circle", role: .destructive) {
+            model.feedToUnfollow = feed
+        }
+        // The app's accent tint would otherwise paint the icon blue beside a red label.
+        .tint(.red)
+    }
+}
+
+/// Moves a feed it into a regular folder, or out of its folder.
 private struct MoveToFolderMenu: View {
     @ObservedObject var model: AppModel
     let feed: Feed
@@ -2829,7 +2846,7 @@ private struct ArticleRow: View {
             // image-less rows let the title block expand to the full row width.
             if let imageURL = article.imageURL {
                 Spacer(minLength: 4)
-                AsyncImage(url: imageURL) { phase in
+                CachedAsyncImage(url: imageURL) { phase in
                     switch phase {
                     case .success(let image):
                         image

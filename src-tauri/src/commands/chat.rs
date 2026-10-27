@@ -26,6 +26,17 @@ pub struct ChatResponse {
     pub web_citations: Vec<WebCitation>,
 }
 
+/// Lets the model fix an earlier reply in place instead of appending a
+/// correction paragraph. The app strikes the wrong words through in that reply
+/// and shows the fix beside them (src/lib/chatCorrections.ts; iOS mirrors this
+/// in ChatCorrections.swift).
+pub const CORRECTION_GUIDE: &str = "If you find that something you said in an earlier reply was wrong, \
+fix it in place rather than writing a paragraph about the mistake: add \
+<correction><was>the wrong words, copied exactly from your earlier reply</was><now>what is right</now></correction> \
+anywhere in your answer, one block per fix. Keep <was> to the shortest phrase or sentence that is wrong, \
+and put no citation numbers in <now>. Skim strikes the wrong words through in the earlier reply and shows \
+your fix beside them, so do not also explain the correction in prose; answer the new question as usual.";
+
 #[tauri::command]
 pub async fn chat_with_article(
     app: AppHandle,
@@ -60,6 +71,8 @@ pub async fn chat_with_article(
     }
 
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider_kind = ai_settings.provider.clone();
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
@@ -89,7 +102,7 @@ pub async fn chat_with_article(
     let mut system_prompt = format!(
         "You are a helpful assistant discussing a news article. Answer questions about the article, \
          provide context, and help the user understand the topic better. Be concise and direct. \
-         No emoji.\n\n{tool_hint}{context}",
+         No emoji.\n\n{tool_hint}{CORRECTION_GUIDE}\n\n{context}",
         context = article_chat_context(&article, &article_text),
     );
 
@@ -534,6 +547,8 @@ pub async fn chat_with_articles(
     }
 
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider_kind = ai_settings.provider.clone();
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
@@ -573,7 +588,7 @@ pub async fn chat_with_articles(
     let system_prompt = format!(
         "You answer the user's questions about articles from their RSS feed. Prefer the articles \
          below as evidence and cite them with their bracket number like [2]. \
-         {tool_clause}Be concise. No emoji.\n\n{context}",
+         {tool_clause}Be concise. No emoji.\n\n{CORRECTION_GUIDE}\n\n{context}",
         tool_clause = tool_clause,
         context = context,
     );

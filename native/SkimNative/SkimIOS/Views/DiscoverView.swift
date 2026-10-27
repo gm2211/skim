@@ -554,17 +554,27 @@ struct FollowButton: View {
     @EnvironmentObject private var follow: DiscoverFollowState
     let feed: DiscoveredFeed
     var large = false
+    @State private var unfollowing: Feed?
 
     var body: some View {
         let state = follow.states[feed.id]
         VStack(alignment: .trailing, spacing: 4) {
             if state == .following || model.isSubscribed(feed.url) {
-                Label("Following", systemImage: "checkmark")
-                    .font(.system(size: large ? 16 : 14, weight: .semibold))
-                    .foregroundStyle(.green)
-                    .frame(maxWidth: large ? .infinity : nil)
-                    .frame(minWidth: 104, minHeight: large ? 44 : 34)
-                    .background(Color.green.opacity(0.12), in: Capsule())
+                // Tapping Following asks to unfollow, so a stray tap loses nothing.
+                Button {
+                    unfollowing = model.libraryFeed(for: feed)
+                } label: {
+                    Label("Following", systemImage: "checkmark")
+                        .font(.system(size: large ? 16 : 14, weight: .semibold))
+                        .foregroundStyle(.green)
+                        .frame(maxWidth: large ? .infinity : nil)
+                        .frame(minWidth: 104, minHeight: large ? 44 : 34)
+                        .background(Color.green.opacity(0.12), in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Following \(feed.title)")
+                .accessibilityHint("Unfollow")
             } else {
                 Button {
                     Task { await follow.follow(feed, model: model) }
@@ -593,8 +603,14 @@ struct FollowButton: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.red)
                     .lineLimit(2)
-                    .frame(maxWidth: 220, alignment: .trailing)
+                    .multilineTextAlignment(.trailing)
+                    // In a list row, wrap under the button rather than widen it and squeeze the title.
+                    .frame(maxWidth: large ? 220 : 104, alignment: .trailing)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+        }
+        .unfollowConfirmation(model: model, feed: $unfollowing) { _ in
+            follow.states[feed.id] = nil
         }
     }
 }

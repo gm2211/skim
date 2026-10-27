@@ -136,12 +136,15 @@ final class AppModel: ObservableObject {
     @Published var searchQuery = ""
     @Published var isLoading = false
     @Published var errorMessage: String?
+    /// A feed the reader asked to unfollow from the feed list, awaiting confirmation.
+    @Published var feedToUnfollow: Feed?
     @Published var unreadCounts: [String: Int] = [:]
     @Published var totalUnreadCount = 0
     @Published var settings = AppSettings()
     @Published var isPreloadingArticles = false
     @Published var preloadProgress: OfflinePreloadProgress?
     @Published var offlineCachedArticleCount = 0
+    @Published var offlineImageBytes = 0
     @Published var offlinePreloadMessage: String?
 
     @Published var todayEdition: TodayEditionSnapshot?
@@ -753,11 +756,22 @@ final class AppModel: ObservableObject {
         do {
             try await refresher.refreshAll(store: store)
             await reloadArticles()
+            preloadAfterRefreshIfWanted()
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
         await reloadTodayAfterFeeds()
+    }
+
+    /// After a refresh on Wi-Fi, save the newest articles and their pictures
+    /// in the background so they open with no connection (on the subway, say).
+    /// Cellular and Low Data Mode are left alone.
+    private func preloadAfterRefreshIfWanted() {
+        guard settings.offlineAutoPreload, !isPreloadingArticles, NetworkStatus.shared.unmeteredNow else { return }
+        Task { [weak self] in
+            await self?.preloadArticlesForOffline()
+        }
     }
 
     func importOPML(url: URL) async {
@@ -804,7 +818,7 @@ final class AppModel: ObservableObject {
 
     /// True when a feed with this address is already in the library.
     func isSubscribed(_ url: URL) -> Bool {
-        feeds.contains { FeedDiscoveryService.sameFeed($0.url, url) }
+        subscribedFeed(url) != nil
     }
 
     /// Subscribes to a discovered feed without leaving the Add Feeds sheet.
@@ -877,6 +891,8 @@ final class AppModel: ObservableObject {
 
     func refreshOfflineCacheStats() async {
         offlineCachedArticleCount = (try? await store.countCachedReaderTexts()) ?? offlineCachedArticleCount
+        let images = OfflineImageCache.shared
+        offlineImageBytes = await Task.detached(priority: .utility) { images.totalBytes() }.value
     }
 
     func preloadArticlesForOffline() async {
@@ -922,6 +938,10 @@ final class AppModel: ObservableObject {
                     currentTitle: article.title
                 )
 
+                if let imageURL = article.imageURL {
+                    await OfflineImageCache.shared.prefetch(imageURL)
+                }
+
                 if ArticleReaderContentLoader.isSufficientRSSBody(article) {
                     alreadyReady += 1
                 } else if let cachedText = try await store.cachedReaderText(articleID: article.id),
@@ -949,6 +969,8 @@ final class AppModel: ObservableObject {
                 )
             }
 
+            let images = OfflineImageCache.shared
+            await Task.detached(priority: .utility) { images.trim() }.value
             await refreshOfflineCacheStats()
             offlinePreloadMessage = "Offline preload finished: \(alreadyReady + cached) ready, \(cached) newly cached, \(failed) failed."
         } catch {
@@ -996,6 +1018,40 @@ final class AppModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// The feed in the library that has this address, if any.
+    func subscribedFeed(_ url: URL) -> Feed? {
+        feeds.first { FeedDiscoveryService.sameFeed($0.url, url) }
+    }
+
+    /// How many starred articles unfollowing a feed would delete.
+    func starredCount(feedID: String) async -> Int {
+        (try? await store.countStarred(feedID: feedID)) ?? 0
+    }
+
+    /// The library feed a Discover result was followed as. Following can
+    /// land on a redirected address, so the id it was saved under counts too.
+    func libraryFeed(for discovered: DiscoveredFeed) -> Feed? {
+        let savedID = stableID(prefix: "feed", value: discovered.url.absoluteString)
+        return subscribedFeed(discovered.url) ?? feeds.first { $0.id == savedID }
+    }
+
+    /// Unfollows a feed and deletes its articles. False when it failed.
+    @discardableResult
+    func unfollowFeed(id feedID: String) async -> Bool {
+        do {
+            try await store.deleteFeed(id: feedID)
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+        if selectedFeedID == feedID {
+            selectedFeedID = nil
+        }
+        await reloadArticles()
+        await reloadTodayAfterFeeds()
+        return true
     }
 
     /// Puts a feed in a regular folder, or takes it out of its folder when `folderID` is nil.

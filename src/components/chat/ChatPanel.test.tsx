@@ -45,6 +45,62 @@ async function openAndType(text: string) {
 }
 
 describe("ChatDrawer", () => {
+  it("queues questions asked mid-answer and sends them in order, with edits and removals", async () => {
+    const answers = [deferred<{ content: string; web_citations: []; provider: string; model: string }>(), deferred<{ content: string; web_citations: []; provider: string; model: string }>()];
+    let call = 0;
+    vi.mocked(chatWithArticle).mockImplementation(() => answers[call++].promise);
+    render(<ChatDrawer articleId="article-1" articleTitle="Article" open />);
+    const user = userEvent.setup();
+    const input = screen.getByPlaceholderText("Ask about this article...");
+    await user.type(input, "First{Enter}");
+    expect(screen.getByPlaceholderText("Queue a follow-up...")).toBeEnabled();
+    await user.type(input, "Second{Enter}");
+    await user.type(input, "Third{Enter}");
+    const queued = screen.getByRole("list", { name: "Queued messages" });
+    expect(queued).toHaveTextContent("Second");
+    expect(queued).toHaveTextContent("Third");
+    expect(chatWithArticle).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getAllByRole("button", { name: "Edit queued message" })[0]);
+    const editor = screen.getByRole("textbox", { name: "Edit queued message" });
+    await user.clear(editor);
+    await user.type(editor, "Second, edited{Enter}");
+    await user.click(screen.getAllByRole("button", { name: "Remove queued message" })[1]);
+    expect(queued).not.toHaveTextContent("Third");
+
+    await act(async () => answers[0].resolve({ content: "Answer one", web_citations: [], provider: "openai", model: "test" }));
+    await waitFor(() => expect(chatWithArticle).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(chatWithArticle).mock.calls[1][1]).toEqual([
+      { role: "user", content: "First" },
+      { role: "assistant", content: "Answer one" },
+      { role: "user", content: "Second, edited" },
+    ]);
+    expect(screen.queryByRole("list", { name: "Queued messages" })).not.toBeInTheDocument();
+    await act(async () => answers[1].resolve({ content: "Answer two", web_citations: [], provider: "openai", model: "test" }));
+    expect(await screen.findByText("Answer two")).toBeInTheDocument();
+    expect(chatWithArticle).toHaveBeenCalledTimes(2);
+  });
+
+  it("holds the queue after a failed answer until the reader resumes it", async () => {
+    let rejectFirst!: (error: Error) => void;
+    const failing = new Promise<never>((_, reject) => { rejectFirst = reject; });
+    vi.mocked(chatWithArticle)
+      .mockImplementationOnce(() => failing)
+      .mockResolvedValue({ content: "Later answer", web_citations: [], provider: "openai", model: "test" });
+    render(<ChatDrawer articleId="article-1" articleTitle="Article" open />);
+    const user = userEvent.setup();
+    const input = screen.getByPlaceholderText("Ask about this article...");
+    await user.type(input, "First{Enter}");
+    await user.type(input, "Next{Enter}");
+    await act(async () => rejectFirst(new Error("Provider is down")));
+    expect(await screen.findByText(/paused after an error/)).toBeInTheDocument();
+    expect(input).toHaveValue("First");
+    expect(chatWithArticle).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Resume" }));
+    expect(await screen.findByText("Later answer")).toBeInTheDocument();
+    expect(vi.mocked(chatWithArticle).mock.calls[1][1]).toEqual([{ role: "user", content: "Next" }]);
+  });
+
   it("links [wN] in the answer to numbered web source cards and keeps uncited results collapsed", async () => {
     const web = (n: number) => ({ title: `Result ${n}`, url: `https://www.site${n}.com/post`, snippet: `Snippet ${n}`, query: "q" });
     vi.mocked(chatWithArticle).mockResolvedValue({ content: "Confirmed elsewhere [w2], and again [w2][w1].", web_citations: [web(1), web(2), web(3)], provider: "openai", model: "test" });
@@ -236,5 +292,33 @@ describe("ChatDrawer quoted replies", () => {
     view.unmount();
     render(<ChatDrawer articleId="article-2" articleTitle="Other" open askAbout={quote} />);
     expect(screen.queryByRole("note", { name: "Quoted text" })).not.toBeInTheDocument();
+  });
+
+  it("collapses from anywhere on the header row, not just the chevron", async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(<ChatDrawer articleId="article-1" articleTitle="Article" onOpenChange={onOpenChange} />);
+    await user.click(screen.getByRole("button", { name: "Chat with article" }));
+    await user.click(screen.getByText("ephemeral"));
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole("button", { name: "Chat with article" })).toBeInTheDocument();
+  });
+
+  it("keeps Clear inside the cog, away from collapse, and offers Undo", async () => {
+    vi.mocked(chatWithArticle).mockResolvedValue({ content: "Answer", web_citations: [], provider: "openai", model: "test" });
+    render(<ChatDrawer articleId="article-1" articleTitle="Article" open />);
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText("Ask about this article..."), "Explain this{Enter}");
+    await screen.findByText("Answer");
+    expect(screen.queryByRole("button", { name: /clear/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Chat settings" }));
+    await user.click(screen.getByRole("button", { name: "Clear conversation" }));
+    expect(screen.queryByText("Answer")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Conversation cleared.");
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.getByText("Answer")).toBeInTheDocument();
+    expect(screen.queryByText("Conversation cleared.")).not.toBeInTheDocument();
   });
 });

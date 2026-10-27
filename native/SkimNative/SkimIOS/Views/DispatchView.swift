@@ -283,7 +283,7 @@ struct DispatchView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if lead, let image = reports.lazy.compactMap(\.imageURL).first {
-                AsyncImage(url: image) { phase in
+                CachedAsyncImage(url: image) { phase in
                     if let picture = phase.image {
                         picture.resizable().scaledToFill()
                             .frame(maxWidth: .infinity).frame(height: 190).clipped()
@@ -559,6 +559,7 @@ private struct SelectableCitedText: UIViewRepresentable {
                       let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !quote.isEmpty else { return }
                 textView.selectedTextRange = nil
+                textView.resignFirstResponder()
                 self.parent.onAsk(quote)
             }
             return UIMenu(children: [ask] + suggestedActions)

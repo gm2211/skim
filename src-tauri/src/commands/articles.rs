@@ -428,7 +428,7 @@ pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, Strin
 type ReaderResult = Result<FullArticleContent, String>;
 type PendingReader = tokio::sync::OnceCell<ReaderResult>;
 
-fn reader_http_client() -> Result<&'static reqwest::Client, String> {
+pub(crate) fn reader_http_client() -> Result<&'static reqwest::Client, String> {
     static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
     CLIENT.get_or_init(|| reqwest::Client::builder()
         // Preserve the existing browser identity and complete fetch timeout.

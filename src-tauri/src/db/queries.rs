@@ -2184,6 +2184,56 @@ pub fn count_reader_cache(conn: &Connection) -> Result<i64, rusqlite::Error> {
     })
 }
 
+/// Drops the oldest reader copies beyond `keep`, never a starred article's.
+pub fn prune_reader_cache(conn: &Connection, keep: i64) -> Result<usize, rusqlite::Error> {
+    conn.execute(
+        "DELETE FROM article_reader_cache
+         WHERE article_id NOT IN (
+             SELECT article_id FROM article_reader_cache ORDER BY cached_at DESC LIMIT ?1
+         )
+         AND article_id NOT IN (SELECT id FROM articles WHERE is_starred = 1)",
+        [keep],
+    )
+}
+
+pub fn has_offline_image(conn: &Connection, url: &str) -> Result<bool, rusqlite::Error> {
+    conn.query_row("SELECT EXISTS(SELECT 1 FROM offline_images WHERE url = ?1)", [url], |row| row.get(0))
+}
+
+pub fn get_offline_image(conn: &Connection, url: &str) -> Result<Option<(String, Vec<u8>)>, rusqlite::Error> {
+    let mut stmt = conn.prepare("SELECT mime, data FROM offline_images WHERE url = ?1")?;
+    let mut rows = stmt.query([url])?;
+    rows.next()?.map(|row| Ok((row.get(0)?, row.get(1)?))).transpose()
+}
+
+pub fn put_offline_image(conn: &Connection, url: &str, mime: &str, data: &[u8]) -> Result<(), rusqlite::Error> {
+    conn.execute(
+        "INSERT INTO offline_images (url, mime, data, bytes, cached_at)
+         VALUES (?1, ?2, ?3, ?4, strftime('%s','now'))
+         ON CONFLICT(url) DO UPDATE SET mime=excluded.mime, data=excluded.data,
+           bytes=excluded.bytes, cached_at=excluded.cached_at",
+        params![url, mime, data, data.len() as i64],
+    )?;
+    Ok(())
+}
+
+pub fn offline_image_bytes(conn: &Connection) -> Result<i64, rusqlite::Error> {
+    conn.query_row("SELECT COALESCE(SUM(bytes), 0) FROM offline_images", [], |row| row.get(0))
+}
+
+/// Deletes the oldest saved images until the rest fit in `budget` bytes.
+pub fn prune_offline_images(conn: &Connection, budget: i64) -> Result<usize, rusqlite::Error> {
+    conn.execute(
+        "DELETE FROM offline_images WHERE url IN (
+             SELECT url FROM (
+                 SELECT url, SUM(bytes) OVER (ORDER BY cached_at DESC, url) AS running
+                 FROM offline_images
+             ) WHERE running > ?1
+         )",
+        [budget],
+    )
+}
+
 pub fn offline_preload_candidates(
     conn: &Connection,
     limit: i64,

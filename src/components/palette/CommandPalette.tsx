@@ -15,6 +15,7 @@ import { agentContextLabel, type AgentMessage } from "../../lib/agentContext";
 import { citationOrder, type CitedSource } from "../../lib/chatCitations";
 import { useAgentContext } from "../../hooks/useAgentContext";
 import { openAgentChat } from "../../stores/agentChatStore";
+import { applyChatCorrections } from "../../lib/chatCorrections";
 import { AgentAnswer, AgentSteps, SourceTile } from "../chat/AgentAnswer";
 import { AiSetupNotice, isAiSetupError } from "../common/AiSetupNotice";
 import { AiErrorText } from "../common/AiSettingsButton";
@@ -278,7 +279,9 @@ export function CommandPalette() {
           if (open) return { kind: "action", perform: () => openArticleById(open.article_id) };
           const data: AnswerData = { sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps };
           // The articles the answer cited, in the order it cites them, ready to open.
-          const cited = citationOrder(resp.sources, resp.content).map(({ source, label }): PaletteCommand => ({
+          // A correction edits the earlier answer it fixes, struck through with the fix beside it.
+          const { messages: revised, answer, corrected } = applyChatCorrections(history, resp.content);
+          const cited = citationOrder(resp.sources, answer).map(({ source, label }): PaletteCommand => ({
             id: `cited.${source.id}`,
             group: String(label),
             title: source.title,
@@ -289,7 +292,7 @@ export function CommandPalette() {
               else openArticleById(source.id);
             },
           }));
-          return { kind: "answer", text: resp.content, data, commands: cited };
+          return { kind: "answer", text: answer, data, commands: cited, history: corrected ? revised : undefined };
         },
         openFull: (prompt, history) => {
           const context = chatContext.current?.context ?? latest.current.liveContext;

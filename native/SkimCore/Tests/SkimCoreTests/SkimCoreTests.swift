@@ -2011,3 +2011,23 @@ private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
     // Re-persisting the frozen snapshot is not a conflict.
     try await store.persistEdition(written.edition, items: written.items.map(\.snapshot))
 }
+
+@Test func deletingAFeedRemovesItAndItsArticles() async throws {
+    let store = try temporaryStore()
+    let kept = Feed(id: "feed-kept", title: "Kept", url: URL(string: "https://example.com/kept.xml")!)
+    let gone = Feed(id: "feed-gone", title: "Gone", url: URL(string: "https://example.com/gone.xml")!)
+    try await store.upsert(feed: kept, articles: [
+        Article(id: "kept-1", feedID: kept.id, feedTitle: kept.title, title: "Stays", publishedAt: Date(timeIntervalSince1970: 100)),
+    ])
+    try await store.upsert(feed: gone, articles: [
+        Article(id: "gone-1", feedID: gone.id, feedTitle: gone.title, title: "Goes", publishedAt: Date(timeIntervalSince1970: 200), isStarred: true),
+        Article(id: "gone-2", feedID: gone.id, feedTitle: gone.title, title: "Also goes", publishedAt: Date(timeIntervalSince1970: 300)),
+    ])
+    #expect(try await store.countStarred(feedID: gone.id) == 1)
+
+    try await store.deleteFeed(id: gone.id)
+
+    #expect(try await store.listFeeds().map(\.id) == [kept.id])
+    #expect(try await store.listArticles(filter: ArticleFilter()).map(\.id) == ["kept-1"])
+    #expect(try await store.countStarred(feedID: gone.id) == 0)
+}

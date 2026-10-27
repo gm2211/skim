@@ -589,6 +589,9 @@ pub async fn summarize_article(
         return Err("No article content to summarize.".to_string());
     }
     generation.check(gen_id)?;
+    // Before the cache key, so an offline summary is filed under the model
+    // that wrote it rather than the cloud one it stood in for.
+    crate::ai::offline::fallback_when_offline(&mut settings.ai, &app).await;
     let cache_key = summary_cache_key(&article_id, &article.article.title, &text, &settings.ai);
     if let Some(existing) = cached_summary(
         db.inner(), summary_cache.inner(), generation.inner(), gen_id,
@@ -880,6 +883,7 @@ pub async fn generate_themes(
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
 
     let model = ai_settings
@@ -1429,6 +1433,7 @@ pub async fn triage_articles(
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
         .model
@@ -2648,6 +2653,7 @@ async fn build_catchup_report(
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
         .model

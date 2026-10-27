@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useSettings, useSelectModel } from "../../hooks/useSettings";
 import { useModelChoices, type ModelSurface } from "../../hooks/useModelChoices";
+import { offlineFallbackNote, useOfflineAi } from "../../hooks/useOfflineAi";
 import { useUiStore } from "../../stores/uiStore";
 import { modelPatch } from "../../lib/aiModels";
 import { Select } from "../ui/Select";
@@ -63,6 +64,7 @@ export function ModelPicker({ surface, disabled, compact, label, controlStyle }:
 
   const ai = settings?.ai ?? FALLBACK_AI;
   const choices = useModelChoices(ai, { isPhone, surface });
+  const offlineNote = offlineFallbackNote(useOfflineAi(!!settings && ai.provider !== "none"));
 
   if (!settings || ai.provider === "none") return null;
 
@@ -96,28 +98,59 @@ export function ModelPicker({ surface, disabled, compact, label, controlStyle }:
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-      <Select
-        ref={selectRef}
-        aria-label={label ?? "AI model"}
-        value={choices.current}
-        onChange={handleChange}
-        disabled={disabled || saving}
-        fullWidth={!compact}
-        style={{ ...(compact ? { width: 220, maxWidth: "100%", height: 32, minHeight: 32, fontSize: 12.5, padding: "0 28px 0 10px" } : {}), ...controlStyle }}
-      >
-        {options.map((choice) => (
-          <option key={choice.value} value={choice.value} disabled={choice.disabled}>
-            {choice.label}
-            {choice.hint ? ` (${choice.hint})` : ""}
-          </option>
-        ))}
-        <option value={SETTINGS_VALUE}>AI settings…</option>
-      </Select>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        {offlineNote && compact && <OfflineBadge note={offlineNote} showText={false} />}
+        <Select
+          ref={selectRef}
+          aria-label={label ?? "AI model"}
+          value={choices.current}
+          onChange={handleChange}
+          disabled={disabled || saving}
+          fullWidth={!compact}
+          style={{ ...(compact ? { width: 220, maxWidth: "100%", height: 32, minHeight: 32, fontSize: 12.5, padding: "0 28px 0 10px" } : {}), ...controlStyle }}
+        >
+          {options.map((choice) => (
+            <option key={choice.value} value={choice.value} disabled={choice.disabled}>
+              {choice.label}
+              {choice.hint ? ` (${choice.hint})` : ""}
+            </option>
+          ))}
+          <option value={SETTINGS_VALUE}>AI settings…</option>
+        </Select>
+      </div>
+      {offlineNote && !compact && <OfflineBadge note={offlineNote} showText />}
       {error && (
         <p role="alert" className="text-danger" style={{ fontSize: 11 }}>
           {error}
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * A quiet marker beside the model picker while requests go to an on-device
+ * model because the configured provider can't be reached.
+ */
+function OfflineBadge({ note, showText }: { note: string; showText: boolean }) {
+  return (
+    <span
+      role="status"
+      title={`${note}. Your chosen model is back as soon as you are online.`}
+      aria-label={note}
+      className="text-text-muted"
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, minWidth: 18, height: 18, fontSize: 12, whiteSpace: "nowrap" }}
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 20h.01" />
+        <path d="M8.5 16.43a5 5 0 0 1 7 0" />
+        <path d="M5 12.86a10 10 0 0 1 5.17-2.69" />
+        <path d="M19 12.86a10 10 0 0 0-2-1.5" />
+        <path d="M2 8.82a15 15 0 0 1 4.18-2.65" />
+        <path d="M22 8.82a15 15 0 0 0-11.29-3.76" />
+        <path d="m2 2 20 20" />
+      </svg>
+      {showText && <span>{note}</span>}
+    </span>
   );
 }

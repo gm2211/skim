@@ -10,7 +10,9 @@ import { SettingsCog } from "../common/SettingsCog";
 import { AiErrorText } from "../common/AiSettingsButton";
 import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./ChatMessageContent";
 import { SourceTile, siteName } from "./AgentAnswer";
+import { QueuedMessages, useMessageQueue } from "./QueuedMessages";
 import { citationOrder } from "../../lib/chatCitations";
+import { applyChatCorrections } from "../../lib/chatCorrections";
 import type { ChatSource } from "../../services/commands";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -32,6 +34,12 @@ interface Props {
   /** A passage highlighted in the article; each new `id` quotes it in the composer. */
   /** A passage highlighted in the article `articleId` names; ignored for any other article. */
   askAbout?: { id: number; text: string; articleId: string } | null;
+}
+
+/** Append an answer, applying any in-place corrections it makes to earlier replies. */
+function withAnswer(prev: ChatMessage[], content: string, webCitations?: WebCitation[]): ChatMessage[] {
+  const { messages, answer } = applyChatCorrections(prev, content);
+  return [...messages, { role: "assistant", content: answer, webCitations }];
 }
 
 const COLLAPSED_HEIGHT = 44;
@@ -63,6 +71,8 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
   const [loading, setLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The conversation the reader just cleared, kept until they send again so Undo can bring it back.
+  const [cleared, setCleared] = useState<ChatMessage[] | null>(null);
   const requestSeqRef = useRef(0);
   const messagesRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -70,16 +80,30 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
   const dragStartY = useRef(0);
   const dragStartH = useRef(0);
 
+  const busy = loading || searchLoading;
+  // Questions asked mid-answer wait here and go out in order; an error holds them.
+  const submitRef = useRef<(text: string, reply: ChatReply | null) => void>(() => {});
+  const queue = useMessageQueue({ busy, paused: needsSetup || !!error, onSend: (item) => submitRef.current(item.text, item.reply) });
+
   // Reset on article change
   useEffect(() => {
     requestSeqRef.current += 1;
+    queue.clear();
     setMessages([]);
     setInput("");
     setReply(null);
     setLoading(false);
     setSearchLoading(false);
     setError(null);
+    setCleared(null);
   }, [articleId]);
+
+  const clearConversation = () => {
+    setCleared(messages);
+    setMessages([]);
+    setReply(null);
+    queue.clear();
+  };
 
   // Quote a passage the reader highlighted, ready for a question about it.
   useEffect(() => {
@@ -100,7 +124,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
   useEffect(() => {
     const pane = messagesRef.current;
     if (pane) pane.scrollTop = pane.scrollHeight;
-  }, [messages, loading, searchLoading, open]);
+  }, [messages, loading, searchLoading, open, queue.queue.length]);
 
   // Focus input when opened
   useEffect(() => {
@@ -123,12 +147,23 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     };
   }, []);
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim();
+  // A failed question returns to the composer, or to the front of the queue
+  // when the reader has started typing the next one.
+  const restoreFailed = (text: string, failedReply: ChatReply | null) => {
+    if (inputRef.current?.value.trim()) {
+      queue.enqueue(text, failedReply, { first: true });
+    } else {
+      setInput(text);
+      setReply(failedReply);
+    }
+  };
+
+  const sendMessage = useCallback(async (text: string, reply: ChatReply | null) => {
     if (!text || loading || searchLoading || needsSetup) return;
 
     const requestSeq = ++requestSeqRef.current;
     setError(null);
+    setCleared(null);
     const userMsg: ChatMessage = { role: "user", content: text, reply: reply ?? undefined };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -143,29 +178,22 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
 
       const response = await chatWithArticle(articleId, history, summaryContext);
       if (requestSeqRef.current !== requestSeq) return;
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: response.content,
-          webCitations: response.web_citations,
-        },
-      ]);
+      setMessages((prev) => withAnswer(prev, response.content, response.web_citations));
     } catch (e) {
       if (requestSeqRef.current !== requestSeq) return;
       setMessages((prev) => prev.slice(0, -1));
-      setInput(text);
-      setReply(reply);
+      restoreFailed(text, reply);
       setError(String(e instanceof Error ? e.message : e));
     } finally {
       if (requestSeqRef.current === requestSeq) setLoading(false);
     }
-  }, [input, reply, messages, loading, searchLoading, needsSetup, articleId, summaryContext]);
+  }, [messages, loading, searchLoading, needsSetup, articleId, summaryContext]);
 
   const doSearch = useCallback(async (query: string) => {
     if (needsSetup || loading || searchLoading) return;
     const requestSeq = ++requestSeqRef.current;
     setError(null);
+    setCleared(null);
     setSearchLoading(true);
     try {
       const results = await webSearch(query);
@@ -191,17 +219,10 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
       setLoading(true);
       const response = await chatWithArticle(articleId, history, summaryContext);
       if (requestSeqRef.current !== requestSeq) return;
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: response.content,
-          webCitations: response.web_citations,
-        },
-      ]);
+      setMessages((prev) => withAnswer(prev, response.content, response.web_citations));
     } catch (e) {
       if (requestSeqRef.current !== requestSeq) return;
-      setInput(`/search ${query}`);
+      restoreFailed(`/search ${query}`, null);
       setError(String(e instanceof Error ? e.message : e));
     } finally {
       if (requestSeqRef.current === requestSeq) {
@@ -211,26 +232,34 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     }
   }, [messages, articleId, loading, needsSetup, searchLoading, summaryContext]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      const text = input.trim();
-      if (!reply && text.startsWith("/search ")) {
-        const query = text.slice(8).trim();
-        if (query) { setInput(""); doSearch(query); }
-      } else {
-        sendMessage();
-      }
+  const submit = (text: string, reply: ChatReply | null) => {
+    if (!reply && text.startsWith("/search ")) {
+      const query = text.slice(8).trim();
+      if (query) doSearch(query);
+    } else {
+      sendMessage(text, reply);
     }
   };
+  submitRef.current = submit;
+
 
   const handleSubmit = () => {
     const text = input.trim();
-    if (!reply && text.startsWith("/search ")) {
-      const query = text.slice(8).trim();
-      if (query) { setInput(""); doSearch(query); }
-    } else {
-      sendMessage();
+    if (!text || needsSetup) return;
+    if (busy) {
+      queue.enqueue(text, reply);
+      setInput("");
+      setReply(null);
+      return;
+    }
+    if (!reply && text.startsWith("/search ")) setInput("");
+    submit(text, reply);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
@@ -283,16 +312,30 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
         <div className="rounded-full" style={{ width: 32, height: 3, background: "rgba(255,255,255,0.15)" }} />
       </div>
 
-      {/* Header */}
-      <div
-        className="flex-shrink-0 flex items-center justify-between"
-        style={{ padding: isPhone ? "4px 12px 8px" : "4px 16px 6px", minHeight: isPhone ? 52 : undefined }}
-      >
-        <div className="flex items-center gap-2">
+      {/* Header: the whole row collapses the chat. The cog sits over the row, and Clear
+          lives inside it, so a quick click near the chevron never wipes the conversation. */}
+      <div className="flex-shrink-0 relative" style={{ padding: isPhone ? "0 4px 4px" : "0 8px 2px" }}>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="group w-full flex items-center gap-2 text-left rounded-lg hover:bg-white/5 transition-colors"
+          style={{ paddingLeft: 8, minHeight: isPhone ? 48 : 32 }}
+          aria-label="Collapse chat"
+          aria-expanded={true}
+          title="Collapse chat"
+        >
           <span className="text-text-muted uppercase tracking-wider font-semibold" style={{ fontSize: 10 }}>Chat</span>
-          <span className="text-text-muted" style={{ fontSize: 10 }}>ephemeral</span>
-        </div>
-        <div className="flex items-center gap-2">
+          <span className="text-text-muted flex-1" style={{ fontSize: 10 }}>ephemeral</span>
+          <span
+            className="flex items-center justify-center text-text-muted group-hover:text-text-primary transition-colors"
+            style={{ width: isPhone ? 44 : 32, height: isPhone ? 44 : 32 }}
+          >
+            <svg width={isPhone ? 18 : 16} height={isPhone ? 18 : 16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </span>
+        </button>
+        <div className="absolute top-0 flex items-center" style={{ right: isPhone ? 52 : 44, height: isPhone ? 48 : 32 }}>
           <SettingsCog label="Chat settings" heading="Chat" size={isPhone ? 16 : 14}>
             {(close) => (
               <>
@@ -302,32 +345,37 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
                 </div>
                 <hr />
                 <button className="today-settings-row" onClick={() => { close(); useUiStore.getState().setShowSettings(true, "ai"); }}>AI settings…</button>
+                {messages.length > 0 && (
+                  <>
+                    <hr />
+                    <button
+                      className="today-settings-row text-danger disabled:opacity-50"
+                      disabled={loading || searchLoading}
+                      onClick={() => { close(); clearConversation(); }}
+                    >
+                      Clear conversation
+                    </button>
+                  </>
+                )}
               </>
             )}
           </SettingsCog>
-          {messages.length > 0 && (
-            <button
-              onClick={() => { setMessages([]); setReply(null); }}
-              disabled={loading || searchLoading}
-              className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
-              style={{ fontSize: isPhone ? 12 : 10 }}
-            >
-              Clear
-            </button>
-          )}
-          <button
-            onClick={() => setOpen(false)}
-            className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
-            style={{ lineHeight: 0 }}
-            aria-label="Collapse chat"
-            title="Collapse chat"
-          >
-            <svg width={isPhone ? 16 : 10} height={isPhone ? 16 : 10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </button>
         </div>
       </div>
+
+      {messages.length === 0 && cleared && cleared.length > 0 && (
+        <div role="status" className="flex-shrink-0 flex items-center justify-center gap-2 text-text-muted" style={{ paddingTop: 4, fontSize: isPhone ? 12 : 11 }}>
+          Conversation cleared.
+          <button
+            type="button"
+            onClick={() => { setMessages(cleared); setCleared(null); }}
+            className="text-accent hover:underline"
+            style={{ padding: isPhone ? "8px 4px" : "2px 4px" }}
+          >
+            Undo
+          </button>
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={messagesRef} className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 min-w-0" style={{ padding: "4px 16px" }}>
@@ -365,7 +413,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
                   }}
                 >
                   {msg.reply && <ReplyPreview reply={msg.reply} />}
-                  <ChatMessageContent content={msg.content} role="user" onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }} replyDisabled={loading || searchLoading} />
+                  <ChatMessageContent content={msg.content} role="user" onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }} replyDisabled={false} />
                 </div>
               </div>
             )}
@@ -385,7 +433,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
                     content={msg.content}
                     role="assistant"
                     onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }}
-                    replyDisabled={loading || searchLoading}
+                    replyDisabled={false}
                     citations={msg.webCitations?.length ? {
                       sources: webSources(msg.webCitations),
                       onOpenArticle: (id) => openWebSource(msg.webCitations!, id),
@@ -444,7 +492,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
           </div>
         )}
 
-
+        <QueuedMessages queue={queue} paused={!!error && !busy && !needsSetup} onResume={() => setError(null)} />
       </div>
 
       {/* Input */}
@@ -458,19 +506,19 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about this article..."
+            placeholder={busy ? "Queue a follow-up..." : "Ask about this article..."}
             className="flex-1 min-w-0 border border-white/10 rounded-lg text-text-primary bg-white/5 placeholder-text-muted resize-none focus:outline-none focus:border-accent/40"
             style={{ padding: isPhone ? "10px 12px" : "6px 10px", fontSize: isPhone ? 16 : 12, maxHeight: 80, lineHeight: 1.4, width: 0, minHeight: isPhone ? 44 : undefined }}
             rows={1}
-            disabled={loading || searchLoading || needsSetup}
+            disabled={needsSetup}
           />
           <button
             onClick={handleSubmit}
-            disabled={loading || searchLoading || needsSetup || !input.trim()}
+            disabled={needsSetup || !input.trim()}
             className="tap-target text-accent hover:bg-accent/10 disabled:opacity-30 rounded-lg transition-colors flex-shrink-0"
             style={{ padding: isPhone ? 0 : "6px 10px" }}
-            aria-label="Send message"
-            title="Send"
+            aria-label={busy ? "Queue message" : "Send message"}
+            title={busy ? "Queue: sends when Skim finishes" : "Send"}
           >
             <svg width={isPhone ? 18 : 14} height={isPhone ? 18 : 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />

@@ -56,6 +56,26 @@ describe("AskSkimDialog setup recovery", () => {
     expect(onOpenArticle).toHaveBeenCalledWith("source-2");
   });
 
+  it("queues a question asked mid-answer and sends it when the answer lands", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    let finish!: (value: Awaited<ReturnType<typeof chatWithArticles>>) => void;
+    vi.mocked(chatWithArticles)
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }))
+      .mockResolvedValueOnce({ content: "Second answer", sources: [], provider: "openai", model: "test", article_ids: [] });
+    const user = userEvent.setup();
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    const input = screen.getByRole("textbox", { name: "Question about your articles" });
+    await user.type(input, "First{Enter}");
+    await user.type(input, "Follow-up");
+    await user.click(screen.getByRole("button", { name: "Queue" }));
+    expect(screen.getByRole("listitem", { name: "Queued message 1" })).toHaveTextContent("Follow-up");
+    expect(chatWithArticles).toHaveBeenCalledTimes(1);
+    await act(async () => finish({ content: "First answer", sources: [], provider: "openai", model: "test", article_ids: [] }));
+    expect(await screen.findByText("Second answer")).toBeInTheDocument();
+    expect(vi.mocked(chatWithArticles).mock.calls[1][1]).toBe("Follow-up");
+    expect(screen.queryByRole("list", { name: "Queued messages" })).not.toBeInTheDocument();
+  });
+
   it("asks a starter question as soon as it is clicked", async () => {
     settings = { ai: { provider: "openai", chat_provider: "same" } };
     const user = userEvent.setup();
@@ -285,6 +305,23 @@ describe("AskSkimDialog continuing an agent conversation", () => {
     await user.click(screen.getByRole("button", { name: "Send" }));
     expect(await screen.findByText(/compares Tokio and smol/)).toBeInTheDocument();
     expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
+  it("focuses the box for a passage asked about from a selection, even on a phone", () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    useUiStore.setState({ isPhone: true });
+    useAgentChatStore.setState({ seed: { context: { view: "today", story: { story_id: "s1", title: "Async Rust", article_ids: ["r1"] } }, reply: { role: "story", text: "Tokio is the default" } } });
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(screen.getByText("Tokio is the default")).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveFocus();
+  });
+
+  it("leaves the keyboard down on a phone when the chat opens without a quote", () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    useUiStore.setState({ isPhone: true });
+    useAgentChatStore.setState({ seed: { context: { view: "today" } } });
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(screen.getByRole("textbox")).not.toHaveFocus();
   });
 
   it("sends a handed-over question straight away", async () => {

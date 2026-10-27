@@ -81,5 +81,16 @@ behaviors:
       reference: Giulio, project thread "Share button", 2026-10-14
   - id: offline-preload
     description: >-
-      The newest articles are prepared for offline reading, up to a limit the reader sets (desktop
-      Settings > Reading, 25-1000; iOS Settings > Library).
+      The newest articles are saved for offline reading, reader copy and pictures included, up to a
+      limit the reader sets (desktop Settings > Reading, 25-1000; iOS Settings > Library). It runs on
+      its own after each refresh unless turned off (on iOS only on Wi-Fi, not cellular or Low Data
+      Mode), and on demand from the same settings.
+    details: >-
+      Storage is bounded: saved pictures share 300 MB on desktop and 200 MB on iOS, dropping the
+      least recently saved or used first, and desktop keeps at most the newest 2,000 reader copies
+      (or twice the limit) besides starred articles. Desktop shows saved pictures inside the reader
+      copy itself; iOS shows them in lists, link cards, Today and the Briefing. Pictures seen online
+      are kept too. Reddit and Hacker News discussions are not saved.
+    source:
+      text: I want articles cached locall so I can read on subway
+      reference: Giulio, project thread "Read and use AI offline", 2026-10-26

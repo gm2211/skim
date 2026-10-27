@@ -155,7 +155,8 @@ pub fn system_prompt(context_block: &str) -> String {
          list: Skim shows every article you cite as a card under your answer. When the user is \
          looking for an article, search, then say in a sentence or two which ones fit and why, \
          citing them. If nothing matches, say so plainly. No emoji. Never invent articles or \
-         numbers.\n\n{TOOL_GUIDE}\n\n{context_block}"
+         numbers.\n\n{TOOL_GUIDE}\n\n{correction}\n\n{context_block}",
+        correction = crate::commands::chat::CORRECTION_GUIDE,
     )
 }
 
@@ -448,7 +449,7 @@ async fn context_block(tools: &mut LibraryTools<'_>, context: &AgentContext) -> 
 }
 
 /// The reader's chat provider and model, or an error that sends them to settings.
-pub(crate) fn chat_provider(
+pub(crate) async fn chat_provider(
     app: &AppHandle,
     db: &Database,
     model_state: &SharedModelState,
@@ -466,6 +467,7 @@ pub(crate) fn chat_provider(
         return Err("No AI provider configured. Go to Settings to set up an AI provider.".to_string());
     }
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(db, &ai_settings.provider);
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, app).await;
     let provider = create_provider_with_app(&ai_settings, Some(model_state.clone()), app)?;
     let model = ai_settings
         .model
@@ -493,7 +495,7 @@ pub async fn ask_agent(
         .ok_or("Question cannot be empty")?;
     let context = context.unwrap_or_default();
 
-    let (provider, model) = chat_provider(&app, db.inner(), model_state.inner())?;
+    let (provider, model) = chat_provider(&app, db.inner(), model_state.inner()).await?;
 
     let mut tools = LibraryTools::new(db.inner(), &question);
     for id in prior_article_ids.unwrap_or_default().iter().take(MAX_SOURCES) {
@@ -549,6 +551,13 @@ mod tests {
     use super::*;
     use crate::ai::provider::ChatResponse as ProviderChatResponse;
     use std::sync::Mutex;
+
+    #[test]
+    fn system_prompt_asks_for_in_place_corrections() {
+        let prompt = system_prompt("CONTEXT");
+        assert!(prompt.contains("<correction><was>"));
+        assert!(prompt.ends_with("CONTEXT"));
+    }
 
     struct Scripted {
         replies: Mutex<Vec<String>>,

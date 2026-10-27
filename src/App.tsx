@@ -12,6 +12,7 @@ import { useUiStore } from "./stores/uiStore";
 import { openArticleLink } from "./lib/externalLinks";
 import { useEffect, useRef, useState } from "react";
 import { triageArticles, refreshAllFeeds, importOpml } from "./services/commands";
+import { preloadAfterRefresh } from "./lib/offlinePreload";
 import { useQueryClient } from "@tanstack/react-query";
 import { AIBootDisclaimer } from "./components/common/AIBootDisclaimer";
 import { acceptAiDisclaimer, hasAcceptedAiDisclaimer } from "./lib/aiDisclaimer";
@@ -78,6 +79,7 @@ function App() {
       .then(async (inserted) => {
         lastRefreshRef.current = Date.now();
         await invalidate();
+        preloadAfterRefresh();
         await triageArticles(false).catch(() => undefined);
         await invalidate();
         if (!cancelled && inserted > 0) {
@@ -145,6 +147,7 @@ function App() {
       lastRefreshRef.current = Date.now();
       refreshAllFeeds()
         .then(() => {
+          preloadAfterRefresh();
           qc.invalidateQueries({ queryKey: ["feeds"] });
           qc.invalidateQueries({ queryKey: ["articles"] });
           qc.invalidateQueries({ queryKey: ["todayEdition"] });

@@ -53,6 +53,22 @@ behaviors:
     source:
       text: would be nice to have links to refrences also in text and better looking sources
       reference: Giulio, project thread "Chat answer citation design", 2026-10-25
+  - id: inline-corrections
+    description: >-
+      When the assistant finds that something it said in an earlier reply was wrong, it fixes that
+      reply in place: the wrong words are struck through and "[updated]: ..." with the right words
+      sits beside them, instead of a correction paragraph in the new answer.
+    details: >-
+      The model adds <correction><was>wrong words</was><now>fix</now></correction> to its answer;
+      the app takes the block out and edits the latest earlier reply containing those words (exactly,
+      else ignoring spacing and case), rendering "~~wrong~~ **[updated]:** fix". A correction that
+      matches no earlier reply stays visible in the new answer in the same form, and an answer that
+      only corrected earlier replies says "Updated my earlier reply above." The edited reply is what
+      later turns send back to the model. Desktop article chat, Ask Skim and the command palette,
+      and iOS chat on hosted providers; the small on-device grounded prompt does not ask for it.
+    source:
+      text: "chat should be albe to make corrections (with strikethrough and [updated]: ....) to previous text"
+      reference: Giulio, project thread "Let chat correct earlier replies inline", 2026-10-27
   - id: chat-starter-prompts
     description: >-
       An empty library chat offers a few built-in starter questions, and tapping one asks it right
@@ -92,6 +108,19 @@ behaviors:
     source:
       text: can we have cog icon instead of model selector?
       reference: Giulio, project chat about the article chat header, 2026-10-12
+  - id: chat-collapse-not-clear
+    description: >-
+      The article chat collapses from a click anywhere on its header row, and clearing the
+      conversation sits inside the cog with an Undo, so a quick click near collapse never wipes it.
+    details: >-
+      Desktop and the narrow web layout: the header row (Chat, ephemeral, chevron) is one collapse
+      button with a 32px chevron target (44px on phones). The cog sits over the row; "Clear
+      conversation" is the last item in its popover, in red. After clearing, a "Conversation
+      cleared. Undo" line sits under the header until the reader sends again or changes article.
+      The iOS chat sheet has no Clear button, so it is unaffected.
+    source:
+      text: collaps button should be easier to click and it should be hard to misclick "Clear" instead
+      reference: Giulio, project thread "Make chat collapse easy, Clear hard to misclick", 2026-10-27
   - id: article-chat
     description: >-
       A reader can chat with any article; answers are grounded in the article's full text and the
@@ -126,6 +155,18 @@ behaviors:
     source:
       text: i wanna be able to select and ask
       reference: Giulio, project thread "Select and ask in briefings", 2026-10-26
+  - id: quote-focuses-composer
+    description: >-
+      Asking about a highlighted passage, or replying to a selection in one of Skim's answers, puts
+      the cursor in the chat's text box so the reader can type the question straight away.
+    details: >-
+      Applies to the reader, Briefing and Today stories, and chat answers, on desktop and iOS. On
+      iOS the keyboard comes up with the quote; the selected text lets go of its selection first so
+      the keyboard is not held by it. Desktop focuses the box at every window width, including the
+      phone-width layout, where opening Ask Skim without a quote still leaves the keyboard down.
+    source:
+      text: when I select text and hit Ask or Reply to selection, focus should move to the chat textbox so I can type right away
+      reference: Giulio, project thread "Focus chat box after Ask on selection", 2026-10-27
   - id: web-search
     description: >-
       Chat can search the web when the library does not cover a question, and web sources are marked
@@ -186,3 +227,18 @@ behaviors:
         of chat response, it auto scrolls all the way to the botton and you can't see much till i
         scroll back up
       reference: Giulio, project chat, 2026-10-14
+  - id: queue-chat-messages
+    description: >-
+      While Skim is still answering, the reader can keep typing and sending; each question waits in
+      a visible queue and sends in order as the answer before it lands.
+    details: >-
+      Every chat: desktop article chat and Ask Skim, and the iOS chat sheet. Queued questions sit
+      under the conversation as outlined, dimmed bubbles labelled "Queued", each with edit (in place)
+      and remove; the composer reads "Queue a follow-up" and the send button queues. A question
+      keeps the quote it was asked with. If an answer fails, the failed question returns to the
+      composer (or to the front of the queue when the reader is already typing the next one) and the
+      queue pauses until the reader taps Resume or sends again. The queue is dropped when the
+      article changes or the chat is cleared.
+    source:
+      text: would be nice to be able to queue messages
+      reference: Giulio, project thread "Queue chat messages while answering", 2026-10-27, with a screenshot of the desktop article chat

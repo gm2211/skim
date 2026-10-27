@@ -49,6 +49,8 @@ export const searchFeeds = (query: string) =>
 export const previewFeed = (url: string) =>
   invoke<DiscoveredFeed>("preview_feed", { url });
 export const feedCatalog = () => invoke<FeedCatalogTopic[]>("feed_catalog");
+export const subscribedFeed = (url: string) =>
+  invoke<Feed | null>("subscribed_feed", { url });
 export const removeFeed = (feedId: string) =>
   invoke<void>("remove_feed", { feedId });
 export const renameFeed = (feedId: string, title: string) =>
@@ -353,7 +355,7 @@ export const getCachedReaderContent = (articleId: string) =>
 export const getOrFetchReaderContent = (articleId: string, url: string, forceRefresh = false) =>
   invoke<{ html: string; raw_html: string }>("get_or_fetch_reader_content", { articleId, url, forceRefresh });
 
-export interface OfflineCacheStats { extracted_articles: number }
+export interface OfflineCacheStats { extracted_articles: number; image_bytes?: number }
 export interface OfflinePreloadProgress {
   completed: number;
   total: number;
@@ -366,6 +368,13 @@ export const OFFLINE_PRELOAD_PROGRESS_EVENT = "skim-reader://offline-preload-pro
 export const getOfflineCacheStats = () => invoke<OfflineCacheStats>("get_offline_cache_stats");
 export const preloadArticlesForOffline = (limit: number) =>
   invoke<OfflinePreloadProgress>("preload_articles_for_offline", { limit });
+
+export interface OfflineAiStatus {
+  offline: boolean;
+  fallback_provider: string | null;
+  fallback_label: string | null;
+}
+export const getOfflineAiStatus = () => invoke<OfflineAiStatus>("get_offline_ai_status");
 
 // AI
 export const summarizeArticle = (

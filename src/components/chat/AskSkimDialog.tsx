@@ -8,6 +8,7 @@ import { CHAT_STARTER_PROMPTS, isPromptTemplate } from "../../lib/chatStarterPro
 import { AgentSteps, SourceTile } from "./AgentAnswer";
 import { ResearchIcon } from "../ui/icons";
 import { citationOrder, partitionSources, type NumberedSource } from "../../lib/chatCitations";
+import { applyChatCorrections } from "../../lib/chatCorrections";
 import type { ChatMessageInput } from "../../services/types";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useUiStore } from "../../stores/uiStore";
@@ -22,6 +23,7 @@ import { ModelPicker } from "../common/ModelPicker";
 import { SettingsCog } from "../common/SettingsCog";
 import { AiErrorText } from "../common/AiSettingsButton";
 import { Select } from "../ui/Select";
+import { QueuedMessages, useMessageQueue } from "./QueuedMessages";
 import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./ChatMessageContent";
 
 type Scope = "inbox" | "unread" | "all";
@@ -35,6 +37,12 @@ interface Message {
   steps?: AgentStep[];
   /** A deep research briefing rather than a quick answer. */
   research?: boolean;
+}
+
+/** Append an answer, applying any in-place corrections it makes to earlier replies. */
+function withAnswer(prev: Message[], content: string, extra: Omit<Message, "role" | "content">): Message[] {
+  const { messages, answer } = applyChatCorrections(prev, content);
+  return [...messages, { role: "assistant", content: answer, ...extra }];
 }
 
 interface Props {
@@ -60,7 +68,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
   const { swipeToDismissHandlers, swipeToDismissStyle } = useSwipeToDismiss(open && isPhone, onClose);
   const [scope, setScope] = useState<Scope>("unread");
   const [input, setInput] = useState("");
-  const [reply, setReply] = useState<ChatReply | null>(null);
+  const [composerReply, setReply] = useState<ChatReply | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [completedSends, setCompletedSends] = useState(0);
@@ -82,6 +90,9 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
   const seed = useAgentChatStore((s) => s.seed);
   const pendingSend = useRef<string | null>(null);
   const onSeedSend = useRef<(() => void) | null>(null);
+  // Questions asked mid-answer wait here and go out in order; an error holds them.
+  const sendRef = useRef<(text: string, reply: ChatReply | null) => void>(() => {});
+  const queue = useMessageQueue({ busy: loading, paused: needsSetup || !!error, onSend: (item) => sendRef.current(item.text, item.reply) });
 
   useEffect(() => {
     if (!open || !seed) return;
@@ -93,6 +104,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
     setMessages(seed.messages ?? []);
     setReply(seed.reply ?? null);
     setError(null);
+    queue.clear();
     if (seed.autoSend && seed.prompt?.trim()) {
       setInput("");
       pendingSend.current = seed.prompt.trim();
@@ -115,6 +127,14 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
     inputRef.current?.focus();
   }, [open, isPhone, needsSetup, showSettings]);
 
+  // A passage quoted from a selection ("Ask" or "Reply to selection") is
+  // waiting for a question, so the box takes focus even on a phone, where
+  // opening the chat otherwise leaves the keyboard down.
+  useEffect(() => {
+    if (!open || !composerReply || needsSetup || showSettings) return;
+    inputRef.current?.focus({ preventScroll: true });
+  }, [open, composerReply, needsSetup, showSettings]);
+
   useEffect(() => {
     setError((previous) => isAiSetupError(previous) ? null : previous);
   }, [settings]);
@@ -127,19 +147,31 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
     const briefing = !loading && last?.research ? scroller.querySelector<HTMLElement>(`[data-message="${messages.length - 1}"]`) : null;
     if (briefing) scroller.scrollTo?.({ top: briefing.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 12, behavior: "smooth" });
     else scroller.scrollTo?.({ top: scroller.scrollHeight, behavior: "smooth" });
-  }, [messages, loading, progress]);
+  }, [messages, loading, progress, queue.queue.length]);
 
-  const send = async (text?: string) => {
+  /** `queuedReply` marks a send from the queue, which leaves the composer alone. */
+  const send = async (text?: string, queuedReply?: ChatReply | null) => {
+    const fromQueue = queuedReply !== undefined;
+    const reply = fromQueue ? queuedReply : composerReply;
     const query = (text ?? input).trim();
-    if (!query || loading || needsSetup) return;
+    if (!query || needsSetup) return;
+    if (loading) {
+      if (fromQueue) return;
+      queue.enqueue(query, reply);
+      setInput("");
+      setReply(null);
+      return;
+    }
     setError(null);
 
     const userMsg: Message = { role: "user", content: query, reply: reply ?? undefined };
     const next = [...messages, userMsg];
     setMessages(next);
-    setInput("");
-    setReply(null);
-    focusAfterSend.current = true;
+    if (!fromQueue) {
+      setInput("");
+      setReply(null);
+      focusAfterSend.current = true;
+    }
     setLoading(true);
 
     const history: ChatMessageInput[] = messages.map((m) => ({ role: m.role, content: chatPrompt(m.content, m.reply) }));
@@ -155,10 +187,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
         }).catch(() => null);
         try {
           const resp = await researchTopic([...history, { role: "user", content: chatPrompt(query, reply) }], agentContext ?? {}, requestId);
-          setMessages((m) => [
-            ...m,
-            { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps, research: true },
-          ]);
+          setMessages((m) => withAnswer(m, resp.content, { sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps, research: true }));
         } finally {
           unlisten?.();
           setProgress([]);
@@ -168,34 +197,36 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
       if (agentContext) {
         onSeedSend.current?.();
         const resp = await askAgent([...history, { role: "user", content: chatPrompt(query, reply) }], agentContext, priorIds);
-        setMessages((m) => [
-          ...m,
-          { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps },
-        ]);
+        setMessages((m) => withAnswer(m, resp.content, { sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps }));
         const open = resp.actions.find((action) => action.type === "open_article");
         if (open && onOpenArticle) {
           restoreOpener.current = false;
           focusAfterSend.current = false;
+          queue.clear();
           onOpenArticle(open.article_id);
           onClose();
         }
         return;
       }
       const resp = await chatWithArticles(scope, chatPrompt(query, reply), history, priorIds);
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids },
-      ]);
+      setMessages((m) => withAnswer(m, resp.content, { sources: resp.sources, articleIds: resp.article_ids }));
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
       setMessages((m) => m.slice(0, -1));
-      setInput(query);
-      setReply(reply);
+      // Back to the composer, or to the front of the queue when the
+      // reader has started typing the next question.
+      if (inputRef.current?.value.trim()) {
+        queue.enqueue(query, reply, { first: true });
+      } else {
+        setInput(query);
+        setReply(reply);
+      }
     } finally {
       setLoading(false);
       setCompletedSends((count) => count + 1);
     }
   };
+  sendRef.current = (text, reply) => void send(text, reply);
 
   useEffect(() => {
     const text = pendingSend.current;
@@ -360,7 +391,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
                     content={m.content}
                     role={m.role}
                     onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }}
-                    replyDisabled={loading}
+                    replyDisabled={false}
                     citations={m.role === "assistant" && m.sources?.length ? {
                       sources: m.sources,
                       onOpenArticle: (id) => openSource(m.sources?.find((source) => source.id === id)),
@@ -402,11 +433,13 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
           )}
 
           {error && !isAiSetupError(error) && <AiErrorText error={error} style={{ fontSize: 14 }} />}
+
+          <QueuedMessages queue={queue} paused={!!error && !loading && !needsSetup} onResume={() => setError(null)} fontSize={13} />
         </div>
 
         {/* Input */}
         <div className="border-t border-white/5 min-w-0" style={{ padding: "12px 16px 8px" }}>
-          {reply && <ReplyPreview reply={reply} onRemove={() => setReply(null)} />}
+          {composerReply && <ReplyPreview reply={composerReply} onRemove={() => setReply(null)} />}
           <div className="flex items-center gap-2 min-w-0">
             <textarea
               ref={inputRef}
@@ -419,18 +452,19 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
                   send();
                 }
               }}
-              placeholder={deep ? "Name a topic to research…" : "Ask about your articles…"}
+              placeholder={loading ? "Queue a follow-up…" : deep ? "Name a topic to research…" : "Ask about your articles…"}
               rows={2}
               className="flex-1 min-w-0 border border-white/10 rounded-xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/50 focus:ring-1 focus:ring-accent/30 transition-colors resize-none"
               style={{ background: "rgba(255, 255, 255, 0.05)", padding: "10px 12px", fontSize: 13, width: 0 }}
             />
             <button
               onClick={() => void send()}
-              disabled={loading || needsSetup || !input.trim()}
+              disabled={needsSetup || !input.trim()}
+              title={loading ? "Sends when Skim finishes" : undefined}
               className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors flex-shrink-0"
               style={{ padding: "10px 16px", fontSize: 13 }}
             >
-              {deep ? "Research" : "Send"}
+              {loading ? "Queue" : deep ? "Research" : "Send"}
             </button>
           </div>
           <div className="flex items-center gap-3 min-w-0" style={{ marginTop: 8 }}>

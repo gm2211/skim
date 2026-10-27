@@ -118,6 +118,25 @@ describe("ChatDrawer", () => {
   });
 
 
+  it("tells the next turn which facts in an earlier answer came from the web, not the article", async () => {
+    vi.mocked(chatWithArticle)
+      .mockResolvedValueOnce({ content: "Search says 4,000 namespaces [w1].", web_citations: [{ title: "Lambda post", url: "https://example.com/lambda", snippet: "s", query: "q" }], provider: "anthropic", model: "test" })
+      .mockResolvedValueOnce({ content: "From the article.", web_citations: [], provider: "anthropic", model: "test" })
+      .mockResolvedValue({ content: "Done", web_citations: [], provider: "anthropic", model: "test" });
+    render(<ChatDrawer articleId="article-1" articleTitle="Article" open />);
+    const user = userEvent.setup();
+    const input = screen.getByPlaceholderText("Ask about this article...");
+    await user.type(input, "How many?{Enter}");
+    await screen.findByText(/Search says/);
+    await user.type(input, "read the article{Enter}");
+    await screen.findByText("From the article.");
+    await user.type(input, "thanks{Enter}");
+    await screen.findByText("Done");
+    const history = vi.mocked(chatWithArticle).mock.calls[2][1];
+    expect(history[1]).toEqual({ role: "assistant", content: "Search says 4,000 namespaces [w1].\n\n[Skim note, not part of the reply: its [w] citations are web search results, not article text: [w1] Lambda post (https://example.com/lambda)]" });
+    expect(history[3]).toEqual({ role: "assistant", content: "From the article." });
+  });
+
   it("opens by keyboard, focuses the composer, and sends without scrolling the document", async () => {
     vi.mocked(chatWithArticle).mockResolvedValue({ content: "Answer", web_citations: [], provider: "openai", model: "test" });
     const user = userEvent.setup();

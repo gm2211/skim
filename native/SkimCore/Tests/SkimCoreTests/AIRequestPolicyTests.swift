@@ -187,3 +187,18 @@ import SkimStoryPolicy
     let other = AIRequestPolicy.fallbackSettings(for: base, hasClaudeSubscription: false, downloadedMLXRepoIds: ["x/y"], preferredMLXRepoId: "a/b")
     #expect(other?.localModelPath == "x/y")
 }
+
+@Test func hostedArticleChatGetsTheWholeArticleAndSourceRules() {
+    for provider in ["anthropic", "claude-subscription", "openai", "xai", "openrouter", "chatgpt-subscription", "claude-cli"] {
+        #expect(AIRequestPolicy.articleChatEvidenceCharacters(provider: provider) == 120000)
+    }
+    for provider in ["mlx", "foundation-models", "ollama", "custom", "", "xai\0mlx"] {
+        #expect(AIRequestPolicy.articleChatEvidenceCharacters(provider: provider) == 12000)
+    }
+    let complete = AIRequestPolicy.articleChatSourceRules(complete: true)
+    #expect(complete.contains("never describe it as an excerpt"))
+    #expect(complete.contains("Earlier replies in this conversation are not evidence"))
+    let partial = AIRequestPolicy.articleChatSourceRules(complete: false)
+    #expect(partial.contains("\u{2026} marks text that was left out"))
+    #expect(partial.contains("never that the article does not mention it"))
+}

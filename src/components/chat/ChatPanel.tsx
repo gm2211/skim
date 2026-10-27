@@ -174,7 +174,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     try {
       const history = newMessages
         .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role as "user" | "assistant", content: chatPrompt(m.content, "reply" in m ? m.reply : undefined) }));
+        .map((m) => ({ role: m.role as "user" | "assistant", content: historyContent(m) }));
 
       const response = await chatWithArticle(articleId, history, summaryContext);
       if (requestSeqRef.current !== requestSeq) return;
@@ -214,7 +214,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
       const allMessages = [...messages, { role: "user" as const, content: contextContent }];
       const history = allMessages
         .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({ role: m.role as "user" | "assistant", content: chatPrompt(m.content, "reply" in m ? m.reply : undefined) }));
+        .map((m) => ({ role: m.role as "user" | "assistant", content: historyContent(m) }));
 
       setLoading(true);
       const response = await chatWithArticle(articleId, history, summaryContext);
@@ -534,6 +534,15 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
 }
 
 /** Web results as chat sources, so [wN] in the answer can become chips. */
+/** A past turn as the model sees it. An answer that drew on web results says
+ * so, so a later turn does not mistake those facts for the article's. */
+function historyContent(m: ChatMessage): string {
+  const content = chatPrompt(m.content, "reply" in m ? m.reply : undefined);
+  if (m.role !== "assistant" || !m.webCitations?.length) return content;
+  const sources = m.webCitations.map((c, i) => `[w${i + 1}] ${c.title} (${c.url})`).join("; ");
+  return `${content}\n\n[Skim note, not part of the reply: its [w] citations are web search results, not article text: ${sources}]`;
+}
+
 function webSources(citations: WebCitation[]): ChatSource[] {
   return citations.map((c, index) => ({
     id: `web-${index}`,

@@ -66,6 +66,26 @@ int32_t skim_ai_request_max_tokens(int32_t budget, const char *provider) {
     return budget > 8192 ? budget : 8192;
 }
 
+/* About 30k tokens: every hosted chat model holds that with room for the
+ * conversation, and it covers long-form articles whole. */
+#define ARTICLE_CHAT_HOSTED_SCALARS 120000
+#define ARTICLE_CHAT_LOCAL_SCALARS 12000
+
+size_t skim_article_chat_evidence_scalars(const char *provider) {
+    return ai_provider_is_hosted(provider) ? ARTICLE_CHAT_HOSTED_SCALARS : ARTICLE_CHAT_LOCAL_SCALARS;
+}
+
+#define ARTICLE_CHAT_PROVENANCE " Keep sources apart. Say the article says something only when the article text above says it. Facts from web search results are cited by their [wN] number; background knowledge of your own is labelled as such (for example \"outside the article\"). Earlier replies in this conversation are not evidence: they may have drawn on web results or contained mistakes, so check any claim about the article against the article text before repeating it, and correct any earlier reply that misstated the article."
+
+const char *skim_article_chat_source_rules(int32_t complete) {
+    if (complete)
+        return "The article text above is the complete article, the same text the reader sees. If asked to read or reread the article, answer from that text: you already have all of it, so never describe it as an excerpt or as partial." ARTICLE_CHAT_PROVENANCE;
+    return "The article is too long to include whole, so the text above is selected passages; "
+        "\xe2\x80\xa6" " marks text that was left out. You cannot see the omitted text: say a point is not in the passages you were given, never that the article does not mention it." ARTICLE_CHAT_PROVENANCE;
+}
+
+#undef ARTICLE_CHAT_PROVENANCE
+
 static int summary_is_space(uint8_t c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
 
 /* Steps back over closing quotes, brackets and Markdown emphasis that may

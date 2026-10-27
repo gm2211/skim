@@ -81,6 +81,17 @@ const char *skim_summary_style_prompt(const char *tone);
  * The prompt, not this ceiling, controls length. */
 int32_t skim_ai_request_max_tokens(int32_t budget, const char *provider);
 
+/* Unicode-scalar budget for the article text one article chat request sends.
+ * Hosted providers get enough for the complete article, so every turn sees the
+ * same text; on-device and self-hosted providers (NULL/unknown) keep a small
+ * budget of question-selected passages. */
+size_t skim_article_chat_evidence_scalars(const char *provider);
+
+/* System-prompt rules on what the article text is and how to keep the article,
+ * web results, background knowledge and earlier replies apart. complete is
+ * nonzero when the whole article was sent. Returns immutable static storage. */
+const char *skim_article_chat_source_rules(int32_t complete);
+
 /* Bytes of a generated summary to keep (length-delimited UTF-8). Drops an
  * unfinished final sentence left by a token cutoff: the final line is cut
  * back to its last sentence end, or dropped when it has none and the text

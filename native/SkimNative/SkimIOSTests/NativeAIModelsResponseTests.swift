@@ -296,6 +296,30 @@ struct NativeLibraryChatTests {
         }
     }
 
+    @Test func hostedArticleChatLabelsTheCompleteArticleAndEarlierWebSources() throws {
+        let facts = ["SnapStart clones need tap, bridge, veth and tunnel devices.", "Creating devices in parallel queued behind the RTNL lock.",
+                     "All 4,000 networks are created at worker boot.", "Reordering veth operations and batching eBPF attachments cut RTNL contention."]
+        let body = facts.map { String(repeating: "The team measured the change across many hosts. ", count: 90) + $0 }.joined(separator: "\n\n")
+        #expect(body.unicodeScalars.count > 12000)
+        let source = article("lambda", body: body)
+        let pooling = AIChatConversation(latestQuestion: "ok so by pooling we increase parallel actions")
+        let reread = AIChatConversation(latestQuestion: "read the article", priorMessages: [
+            AIChatMessage(role: .user, text: "ok so by pooling we increase parallel actions"),
+            AIChatMessage(role: .assistant, text: "Search says 4,000 [w1].",
+                          webCitations: [WebCitation(title: "Lambda post", url: "https://example.com/l", snippet: "s", query: "q")])])
+        let budget = AIRequestPolicy.articleChatEvidenceCharacters(provider: "claude-subscription")
+        let first = try NativeAI.singleArticleChatContext(article: source, conversation: pooling, maxCharacters: budget)
+        let second = try NativeAI.singleArticleChatContext(article: source, conversation: reread, maxCharacters: budget)
+        #expect(first == second)
+        #expect(first.hasPrefix(NativeAI.completeArticleMarker(source)))
+        for fact in facts { #expect(first.contains(fact)) }
+        let local = try NativeAI.singleArticleChatContext(article: source, conversation: reread, maxCharacters: 12000)
+        #expect(local.contains("Excerpt: "))
+        #expect(reread.priorTurns[1].promptText.hasSuffix(
+            "[Skim note, not part of the reply: its [w] citations are web search results, not article text: [w1] Lambda post (https://example.com/l)]"))
+        #expect(reread.priorTurns[0].promptText == "ok so by pooling we increase parallel actions")
+    }
+
     @Test func articleEvidenceFailureStopsBeforeProviderRequest() {
         let source = article("unsupported", body: "Available reader evidence.")
         let conversation = AIChatConversation(latestQuestion: "What happened?")

@@ -517,7 +517,7 @@ struct SettingsSheet: View {
                 SettingRow(
                     systemName: "tray.and.arrow.down",
                     title: "Offline Cache",
-                    detail: "\(model.offlineCachedArticleCount.formatted()) extracted articles cached. RSS article bodies are already stored locally."
+                    detail: "\(model.offlineCachedArticleCount.formatted()) extracted articles cached\(model.offlineImageBytes > 0 ? ", with \(ByteCountFormatter.string(fromByteCount: Int64(model.offlineImageBytes), countStyle: .file)) of pictures" : ""). RSS article bodies are already stored locally."
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -547,6 +547,33 @@ struct SettingsSheet: View {
                     }
                 }
             }
+            .tint(SkimStyle.accent)
+
+            Toggle(isOn: Binding(
+                get: { draft.offlineAutoPreload },
+                set: { value in
+                    var next = draft
+                    next.offlineAutoPreload = value
+                    draft = next
+                }
+            )) {
+                HStack(alignment: .top, spacing: 14) {
+                    Image(systemName: "wifi")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .frame(width: 26)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Auto-save on Wi-Fi")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(SkimStyle.text)
+                        Text("After each refresh, the newest articles and their pictures are saved so they open with no connection. Not on cellular or Low Data Mode.")
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(SkimStyle.secondary)
+                    }
+                }
+            }
+            .toggleStyle(.switch)
             .tint(SkimStyle.accent)
 
             if let progress = model.preloadProgress, model.isPreloadingArticles {

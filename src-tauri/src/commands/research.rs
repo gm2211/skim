@@ -485,7 +485,7 @@ pub async fn research_topic(
         .collect::<Vec<_>>();
     let history = if history.is_empty() { String::new() } else { format!("Conversation so far:\n{}", history.join("\n")) };
     let context = context.unwrap_or_default();
-    let (provider, model) = chat_provider(&app, db.inner(), model_state.inner())?;
+    let (provider, model) = chat_provider(&app, db.inner(), model_state.inner()).await?;
     let pinned = pinned_articles(&db, &context)?;
     let tools = AppResearchTools { db: db.inner() };
     let progress = |label: &str| {

@@ -12,6 +12,7 @@ import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./
 import { SourceTile, siteName } from "./AgentAnswer";
 import { QueuedMessages, useMessageQueue } from "./QueuedMessages";
 import { citationOrder } from "../../lib/chatCitations";
+import { applyChatCorrections } from "../../lib/chatCorrections";
 import type { ChatSource } from "../../services/commands";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
@@ -33,6 +34,12 @@ interface Props {
   /** A passage highlighted in the article; each new `id` quotes it in the composer. */
   /** A passage highlighted in the article `articleId` names; ignored for any other article. */
   askAbout?: { id: number; text: string; articleId: string } | null;
+}
+
+/** Append an answer, applying any in-place corrections it makes to earlier replies. */
+function withAnswer(prev: ChatMessage[], content: string, webCitations?: WebCitation[]): ChatMessage[] {
+  const { messages, answer } = applyChatCorrections(prev, content);
+  return [...messages, { role: "assistant", content: answer, webCitations }];
 }
 
 const COLLAPSED_HEIGHT = 44;
@@ -171,14 +178,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
 
       const response = await chatWithArticle(articleId, history, summaryContext);
       if (requestSeqRef.current !== requestSeq) return;
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: response.content,
-          webCitations: response.web_citations,
-        },
-      ]);
+      setMessages((prev) => withAnswer(prev, response.content, response.web_citations));
     } catch (e) {
       if (requestSeqRef.current !== requestSeq) return;
       setMessages((prev) => prev.slice(0, -1));
@@ -219,14 +219,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
       setLoading(true);
       const response = await chatWithArticle(articleId, history, summaryContext);
       if (requestSeqRef.current !== requestSeq) return;
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: response.content,
-          webCitations: response.web_citations,
-        },
-      ]);
+      setMessages((prev) => withAnswer(prev, response.content, response.web_citations));
     } catch (e) {
       if (requestSeqRef.current !== requestSeq) return;
       restoreFailed(`/search ${query}`, null);

@@ -1626,8 +1626,9 @@ enum NativeAI {
         let base = isLibrary
             ? "You answer questions across a set of RSS articles using the provided article list and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks. Answer first, in plain prose of about 50 to 100 words, so the reader gets the gist without opening the articles. Cite each article you draw on with its numeric handle like [3], placed right after the claim it supports. Do not list the articles or repeat their titles as a list: the app shows every cited article as a card under the answer. If the answer is not supported by the supplied articles or web results, say so."
             : "You answer questions about a single article using the provided article text and any supplied web search results. Use previous turns only to resolve references like 'that' or 'the second one'; prior assistant turns are context, not evidence. Answer only the latest user question. Do not repeat a prior answer unless the latest question explicitly asks you to recap it. If the answer is not supported by the supplied article text or web results, say so."
-        guard enableWebSearch else { return base }
-        return base + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices. Cite each web result you use by its number, like [w2], right after the claim it supports."
+        let corrected = base + "\n\n" + ChatCorrections.instructions
+        guard enableWebSearch else { return corrected }
+        return corrected + "\n\nIf the provided article context doesn't answer the latest question, call the `web_search` tool to fetch fresh web results, then answer using them. Prefer the article context when it suffices. Cite each web result you use by its number, like [w2], right after the claim it supports."
     }
 
     /// Local MLX chat with optional web-search augmentation (2-pass: router + answer).
@@ -4279,11 +4280,20 @@ struct AIChatSheet: View {
             } else {
                 answer = try await request.answer(conversation)
             }
+            // A correction edits the earlier reply it fixes, struck through with the fix beside it.
+            let corrections = ChatCorrections.apply(
+                to: messages.map { $0.role == .assistant && !$0.isError ? $0.text : nil },
+                answer: answer.text
+            )
+            for (index, revised) in corrections.earlier.enumerated() {
+                if let revised, messages.indices.contains(index), messages[index].text != revised { messages[index].text = revised }
+            }
+            let answerText = corrections.answer
             messages.append(
                 AIChatMessage(
                     role: .assistant,
-                    text: answer.text,
-                    referencedArticles: ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles, handles: answer.articleHandles),
+                    text: answerText,
+                    referencedArticles: ArticleReferenceExtractor.references(in: answerText, articles: answer.articles, handles: answer.articleHandles),
                     webCitations: answer.webCitations,
                     contextArticles: answer.articles,
                     contextHandles: answer.articleHandles ?? answer.articles.indices.map { $0 + 1 },
@@ -4711,7 +4721,6 @@ private struct SelectableChatText: UIViewRepresentable {
             view.attributedText = rendered
             view.invalidateIntrinsicContentSize()
         }
-        view.textColor = isError ? UIColor.systemRed : UIColor.label
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: ChatSelectableTextView, context: Context) -> CGSize? {
@@ -4724,6 +4733,8 @@ private struct SelectableChatText: UIViewRepresentable {
         let fullRange = NSRange(location: 0, length: rendered.length)
         let baseFont = UIFont.systemFont(ofSize: 17)
         rendered.addAttribute(.font, value: baseFont, range: fullRange)
+        // In the text itself rather than textColor, which would repaint struck-through corrections.
+        rendered.addAttribute(.foregroundColor, value: isError ? UIColor.systemRed : UIColor.label, range: fullRange)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineSpacing = 4
         rendered.addAttribute(.paragraphStyle, value: paragraph, range: fullRange)
@@ -4733,6 +4744,11 @@ private struct SelectableChatText: UIViewRepresentable {
             let prefix = String(text[text.startIndex..<run.range.lowerBound].characters)
             let selected = String(text[run.range].characters)
             let range = NSRange(location: prefix.utf16.count, length: selected.utf16.count)
+            if intent.contains(.strikethrough) {
+                // An in-place correction: the wrong words struck through and dimmed.
+                rendered.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+                rendered.addAttribute(.foregroundColor, value: UIColor.secondaryLabel, range: range)
+            }
             let isCode = intent.contains(.code)
             let isBold = intent.contains(.stronglyEmphasized)
             let isItalic = intent.contains(.emphasized)
@@ -4750,6 +4766,16 @@ private struct SelectableChatText: UIViewRepresentable {
                 continue
             }
             rendered.addAttribute(.font, value: font, range: range)
+        }
+
+        // The "[updated]:" label of an in-place correction, in the accent like desktop.
+        let plain = rendered.string as NSString
+        var labelSearch = NSRange(location: 0, length: plain.length)
+        while true {
+            let found = plain.range(of: "[updated]:", range: labelSearch)
+            if found.location == NSNotFound { break }
+            rendered.addAttribute(.foregroundColor, value: UIColor.tintColor, range: found)
+            labelSearch = NSRange(location: found.upperBound, length: plain.length - found.upperBound)
         }
 
         // Citation chips: a small number on a tinted pill, matching its card under the answer.

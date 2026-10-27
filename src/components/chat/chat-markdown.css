@@ -65,3 +65,7 @@
 .queued-message { padding: 6px 10px; border: 1px dashed rgba(88, 166, 255, 0.35); background: rgba(88, 166, 255, 0.06); }
 .queued-message:focus-within { border-style: solid; border-color: rgba(88, 166, 255, 0.55); }
 @media (pointer: coarse) { .queued-message-actions button { padding: 8px !important; } }
+
+/* An in-place correction: the wrong words struck through, "[updated]: …" beside them. */
+.chat-markdown del { text-decoration-thickness: 1.5px; color: var(--color-text-muted); }
+.chat-markdown del + strong { color: var(--color-accent); }

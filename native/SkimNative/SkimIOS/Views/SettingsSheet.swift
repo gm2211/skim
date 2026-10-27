@@ -2763,33 +2763,6 @@ struct SmartSortSettingsView: View {
     }
 }
 
-/// A cog that opens Smart sort settings, for the header of a smart sorted list.
-struct SmartSortSettingsButton: View {
-    @EnvironmentObject private var model: AppModel
-    var onDismiss: (() -> Void)? = nil
-    @State private var isPresented = false
-
-    var body: some View {
-        Button {
-            isPresented = true
-        } label: {
-            Label("Smart sort settings", systemImage: SkimIcon.settings)
-                .labelStyle(.iconOnly)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(SkimStyle.secondary)
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
-        }
-        // Borderless so it stays its own tap target inside a List row.
-        .buttonStyle(.borderless)
-        .accessibilityLabel("Smart sort settings")
-        .sheet(isPresented: $isPresented, onDismiss: { onDismiss?() }) {
-            SmartSortSettingsSheet(isPresented: $isPresented)
-                .environmentObject(model)
-        }
-    }
-}
-
 /// Smart sort settings presented on their own, saving the reader's prompt
 /// straight to the app settings.
 struct SmartSortSettingsSheet: View {

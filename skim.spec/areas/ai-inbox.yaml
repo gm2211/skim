@@ -26,6 +26,20 @@ behaviors:
       reference: >-
         Giulio, project chat, 2026-10-22 (earlier: "Do both" on the decision card "Unify Skim's
         taste ranking across Today and the AI Inbox?", 2026-10-14)
+  - id: sort-keeps-the-look
+    description: >-
+      Smart sorting only reorders the list. Rows look exactly as in the plain list (feed icon,
+      source, date, thumbnail), with no rank numbers, rating meters, reasons, "Not rated yet"
+      lines, tier headers or extra header and disclaimer.
+    details: >-
+      Date headers are dropped while smart sorted, since the order is no longer by date. iOS shows
+      one status line, aligned with the row titles, only while rating runs or after it failed;
+      pull to refresh rates new articles. Desktop keeps the theme chips above the list. Replaces
+      the earlier desktop tiers (Top picks, Worth reading, When you have time, Low priority) with
+      Importance and For you meters, and iOS's numbered rows.
+    source:
+      text: Sorting should just sort not change the looks
+      reference: Giulio, project thread "Customize smart sort with layered prompts", 2026-10-27
   - id: ios-list-toolbar-actions
     description: >-
       On iOS the Unread and All lists put Chat with Articles and the Smart sorting switch directly
@@ -50,10 +64,9 @@ behaviors:
       head start; see today.yaml ranked-by-consequence) and relevance (fit with this reader), plus a
       one-line reason. Both apps
       rank by the shared skim_inbox_score in SkimStoryPolicy, which blends the two ratings with
-      learned taste and a small recency decay; pinned articles stay on top. Desktop groups the
-      ranked list into Top picks, Worth reading, When you have time and Low priority, and each
-      card shows Importance and For you meters. iOS opens the AI Inbox full screen, stores each
-      article's rating so it is rated once, and re-ranks on every visit. The legacy priority is
+      learned taste and a small recency decay; pinned articles stay on top. The ranked list
+      looks like the plain list (see sort-keeps-the-look). iOS stores each article's rating so it
+      is rated once, and re-ranks on every visit. The legacy priority is
       derived from the two ratings. Contract: shared/fixtures/inbox-ranking.json.
     source:
       text: >-
@@ -86,10 +99,9 @@ behaviors:
       three; the base prompt is shown read-only.
     details: >-
       The base prompt is skim_inbox_triage_prompt in SkimStoryPolicy, shared by both apps. The
-      reader's prompt is AiSettings.triage_user_prompt. Desktop: a cog beside the Smart sort switch
+      reader's prompt is AiSettings.triage_user_prompt. Desktop: a cog at the end of the Smart sort switch's pill
       opens Settings on its Smart sort tab, which also names the AI model ranking uses and links to
-      AI Provider; edits there save with Settings' Save. iOS: the cog in the smart sorted list's
-      header, a Smart sort settings row in the list's actions menu, a long press on the sparkles
+      AI Provider; edits there save with Settings' Save. iOS: a Smart sort settings row in the list's actions menu, a long press on the sparkles
       capsule, and Settings > AI > Preferences > Smart sort all open the same screen, which saves as
       you go. The raw learned titles the triage prompt used to carry are replaced by the note.
     source:

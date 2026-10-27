@@ -237,4 +237,32 @@ describe("ChatDrawer quoted replies", () => {
     render(<ChatDrawer articleId="article-2" articleTitle="Other" open askAbout={quote} />);
     expect(screen.queryByRole("note", { name: "Quoted text" })).not.toBeInTheDocument();
   });
+
+  it("collapses from anywhere on the header row, not just the chevron", async () => {
+    const onOpenChange = vi.fn();
+    const user = userEvent.setup();
+    render(<ChatDrawer articleId="article-1" articleTitle="Article" onOpenChange={onOpenChange} />);
+    await user.click(screen.getByRole("button", { name: "Chat with article" }));
+    await user.click(screen.getByText("ephemeral"));
+    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    expect(screen.getByRole("button", { name: "Chat with article" })).toBeInTheDocument();
+  });
+
+  it("keeps Clear inside the cog, away from collapse, and offers Undo", async () => {
+    vi.mocked(chatWithArticle).mockResolvedValue({ content: "Answer", web_citations: [], provider: "openai", model: "test" });
+    render(<ChatDrawer articleId="article-1" articleTitle="Article" open />);
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText("Ask about this article..."), "Explain this{Enter}");
+    await screen.findByText("Answer");
+    expect(screen.queryByRole("button", { name: /clear/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Chat settings" }));
+    await user.click(screen.getByRole("button", { name: "Clear conversation" }));
+    expect(screen.queryByText("Answer")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Conversation cleared.");
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+    expect(screen.getByText("Answer")).toBeInTheDocument();
+    expect(screen.queryByText("Conversation cleared.")).not.toBeInTheDocument();
+  });
 });

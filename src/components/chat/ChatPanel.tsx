@@ -10,6 +10,7 @@ import { SettingsCog } from "../common/SettingsCog";
 import { AiErrorText } from "../common/AiSettingsButton";
 import { ChatMessageContent, ReplyPreview, chatPrompt, type ChatReply } from "./ChatMessageContent";
 import { SourceTile, siteName } from "./AgentAnswer";
+import { QueuedMessages, useMessageQueue } from "./QueuedMessages";
 import { citationOrder } from "../../lib/chatCitations";
 import type { ChatSource } from "../../services/commands";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -70,9 +71,15 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
   const dragStartY = useRef(0);
   const dragStartH = useRef(0);
 
+  const busy = loading || searchLoading;
+  // Questions asked mid-answer wait here and go out in order; an error holds them.
+  const submitRef = useRef<(text: string, reply: ChatReply | null) => void>(() => {});
+  const queue = useMessageQueue({ busy, paused: needsSetup || !!error, onSend: (item) => submitRef.current(item.text, item.reply) });
+
   // Reset on article change
   useEffect(() => {
     requestSeqRef.current += 1;
+    queue.clear();
     setMessages([]);
     setInput("");
     setReply(null);
@@ -100,7 +107,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
   useEffect(() => {
     const pane = messagesRef.current;
     if (pane) pane.scrollTop = pane.scrollHeight;
-  }, [messages, loading, searchLoading, open]);
+  }, [messages, loading, searchLoading, open, queue.queue.length]);
 
   // Focus input when opened
   useEffect(() => {
@@ -123,8 +130,18 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     };
   }, []);
 
-  const sendMessage = useCallback(async () => {
-    const text = input.trim();
+  // A failed question returns to the composer, or to the front of the queue
+  // when the reader has started typing the next one.
+  const restoreFailed = (text: string, failedReply: ChatReply | null) => {
+    if (inputRef.current?.value.trim()) {
+      queue.enqueue(text, failedReply, { first: true });
+    } else {
+      setInput(text);
+      setReply(failedReply);
+    }
+  };
+
+  const sendMessage = useCallback(async (text: string, reply: ChatReply | null) => {
     if (!text || loading || searchLoading || needsSetup) return;
 
     const requestSeq = ++requestSeqRef.current;
@@ -154,13 +171,12 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     } catch (e) {
       if (requestSeqRef.current !== requestSeq) return;
       setMessages((prev) => prev.slice(0, -1));
-      setInput(text);
-      setReply(reply);
+      restoreFailed(text, reply);
       setError(String(e instanceof Error ? e.message : e));
     } finally {
       if (requestSeqRef.current === requestSeq) setLoading(false);
     }
-  }, [input, reply, messages, loading, searchLoading, needsSetup, articleId, summaryContext]);
+  }, [messages, loading, searchLoading, needsSetup, articleId, summaryContext]);
 
   const doSearch = useCallback(async (query: string) => {
     if (needsSetup || loading || searchLoading) return;
@@ -201,7 +217,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
       ]);
     } catch (e) {
       if (requestSeqRef.current !== requestSeq) return;
-      setInput(`/search ${query}`);
+      restoreFailed(`/search ${query}`, null);
       setError(String(e instanceof Error ? e.message : e));
     } finally {
       if (requestSeqRef.current === requestSeq) {
@@ -211,26 +227,34 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
     }
   }, [messages, articleId, loading, needsSetup, searchLoading, summaryContext]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      const text = input.trim();
-      if (!reply && text.startsWith("/search ")) {
-        const query = text.slice(8).trim();
-        if (query) { setInput(""); doSearch(query); }
-      } else {
-        sendMessage();
-      }
+  const submit = (text: string, reply: ChatReply | null) => {
+    if (!reply && text.startsWith("/search ")) {
+      const query = text.slice(8).trim();
+      if (query) doSearch(query);
+    } else {
+      sendMessage(text, reply);
     }
   };
+  submitRef.current = submit;
+
 
   const handleSubmit = () => {
     const text = input.trim();
-    if (!reply && text.startsWith("/search ")) {
-      const query = text.slice(8).trim();
-      if (query) { setInput(""); doSearch(query); }
-    } else {
-      sendMessage();
+    if (!text || needsSetup) return;
+    if (busy) {
+      queue.enqueue(text, reply);
+      setInput("");
+      setReply(null);
+      return;
+    }
+    if (!reply && text.startsWith("/search ")) setInput("");
+    submit(text, reply);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
   };
 
@@ -307,7 +331,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
           </SettingsCog>
           {messages.length > 0 && (
             <button
-              onClick={() => { setMessages([]); setReply(null); }}
+              onClick={() => { setMessages([]); setReply(null); queue.clear(); }}
               disabled={loading || searchLoading}
               className="tap-target text-text-muted hover:text-text-primary rounded-lg hover:bg-white/10 transition-colors"
               style={{ fontSize: isPhone ? 12 : 10 }}
@@ -365,7 +389,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
                   }}
                 >
                   {msg.reply && <ReplyPreview reply={msg.reply} />}
-                  <ChatMessageContent content={msg.content} role="user" onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }} replyDisabled={loading || searchLoading} />
+                  <ChatMessageContent content={msg.content} role="user" onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }} replyDisabled={false} />
                 </div>
               </div>
             )}
@@ -385,7 +409,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
                     content={msg.content}
                     role="assistant"
                     onReply={(quote) => { setReply(quote); inputRef.current?.focus({ preventScroll: true }); }}
-                    replyDisabled={loading || searchLoading}
+                    replyDisabled={false}
                     citations={msg.webCitations?.length ? {
                       sources: webSources(msg.webCitations),
                       onOpenArticle: (id) => openWebSource(msg.webCitations!, id),
@@ -444,7 +468,7 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
           </div>
         )}
 
-
+        <QueuedMessages queue={queue} paused={!!error && !busy && !needsSetup} onResume={() => setError(null)} />
       </div>
 
       {/* Input */}
@@ -458,19 +482,19 @@ export function ChatDrawer({ articleId, summaryContext, open: controlledOpen, on
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about this article..."
+            placeholder={busy ? "Queue a follow-up..." : "Ask about this article..."}
             className="flex-1 min-w-0 border border-white/10 rounded-lg text-text-primary bg-white/5 placeholder-text-muted resize-none focus:outline-none focus:border-accent/40"
             style={{ padding: isPhone ? "10px 12px" : "6px 10px", fontSize: isPhone ? 16 : 12, maxHeight: 80, lineHeight: 1.4, width: 0, minHeight: isPhone ? 44 : undefined }}
             rows={1}
-            disabled={loading || searchLoading || needsSetup}
+            disabled={needsSetup}
           />
           <button
             onClick={handleSubmit}
-            disabled={loading || searchLoading || needsSetup || !input.trim()}
+            disabled={needsSetup || !input.trim()}
             className="tap-target text-accent hover:bg-accent/10 disabled:opacity-30 rounded-lg transition-colors flex-shrink-0"
             style={{ padding: isPhone ? 0 : "6px 10px" }}
-            aria-label="Send message"
-            title="Send"
+            aria-label={busy ? "Queue message" : "Send message"}
+            title={busy ? "Queue: sends when Skim finishes" : "Send"}
           >
             <svg width={isPhone ? 18 : 14} height={isPhone ? 18 : 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />

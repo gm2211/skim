@@ -61,3 +61,7 @@
 .research-kicker summary:hover { color: var(--color-text-primary); }
 .research-kicker ul { margin-top: 4px !important; }
 .feed-mark.web { background: rgba(88,166,255,.18); color: var(--color-accent); }
+/* A question waiting for the current answer: a user bubble, dimmed and outlined. */
+.queued-message { padding: 6px 10px; border: 1px dashed rgba(88, 166, 255, 0.35); background: rgba(88, 166, 255, 0.06); }
+.queued-message:focus-within { border-style: solid; border-color: rgba(88, 166, 255, 0.55); }
+@media (pointer: coarse) { .queued-message-actions button { padding: 8px !important; } }

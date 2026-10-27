@@ -125,6 +125,19 @@ behaviors:
     description: >-
       A reader can chat with any article; answers are grounded in the article's full text and the
       conversation so far, not just the feed teaser.
+    details: >-
+      Hosted models (Claude, OpenAI, xAI, OpenRouter, ChatGPT) receive the whole reader text, up to
+      120,000 characters, on every turn, labelled as the complete article, so asking it to "read the
+      article" answers from the article rather than a shifting excerpt. On-device and self-hosted
+      models keep 12,000 characters of passages chosen for the question, labelled as selected
+      passages. Both platforms share these budgets and the prompt's source rules: say the article
+      says something only when its text does, cite web results as [wN], label background knowledge,
+      treat earlier replies as unverified, and correct one that misstated the article. An earlier
+      answer that cited web results carries a note naming them, so later turns keep web facts apart
+      from the article's.
+    source:
+      text: i started with haiku and ended with opus and still BS
+      reference: Giulio, project thread "Stop article chat contradicting itself", 2026-10-27
   - id: ask-about-highlight
     description: >-
       A reader can highlight a passage in the article and ask about it in chat: the chat opens with

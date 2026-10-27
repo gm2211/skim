@@ -78,10 +78,16 @@ struct AIChatConversation: Sendable {
         var text: String
         var quotedText: String?
         var quoteSource: ChatQuoteSource = .answer
+        var webCitations: [WebCitation] = []
 
+        /// The turn as the model sees it. An answer that drew on web results
+        /// says so, so a later turn does not mistake those facts for the article's.
         var promptText: String {
-            guard let quotedText, !quotedText.isEmpty else { return text }
-            return quoteSource.prompt(quote: quotedText, question: text)
+            let base = quotedText.flatMap { $0.isEmpty ? nil : quoteSource.prompt(quote: $0, question: text) } ?? text
+            guard role == .assistant, !webCitations.isEmpty else { return base }
+            let sources = webCitations.enumerated().map { "[w\($0.offset + 1)] \($0.element.title) (\($0.element.url))" }
+                .joined(separator: "; ")
+            return base + "\n\n[Skim note, not part of the reply: its [w] citations are web search results, not article text: \(sources)]"
         }
     }
 
@@ -126,7 +132,8 @@ struct AIChatConversation: Sendable {
                     role: message.role == .user ? .user : .assistant,
                     text: message.text,
                     quotedText: message.quotedText,
-                    quoteSource: message.quoteSource
+                    quoteSource: message.quoteSource,
+                    webCitations: message.webCitations
                 )
             }
     }
@@ -1786,7 +1793,12 @@ enum NativeAI {
             return (text, [])
         }
 
-        let articleContext = try singleArticleChatContext(article: article, conversation: conversation)
+        // Hosted models get the whole article, so every turn sees the same text
+        // and "read the article" means the article, not a shifting excerpt.
+        let budget = AIRequestPolicy.articleChatEvidenceCharacters(provider: settings.ai.provider)
+        let selected = try singleArticleChatContext(article: article, conversation: conversation, maxCharacters: budget)
+        let complete = selected.hasPrefix(Self.completeArticleMarker(article))
+        let articleContext = selected + "\n\n" + AIRequestPolicy.articleChatSourceRules(complete: complete)
         return try await completeWithCitations(
             settings: settings,
             instructions: instructions,
@@ -1821,7 +1833,18 @@ enum NativeAI {
         let excerpt = body.isEmpty ? "No reader text available."
             : ChatEvidencePolicy.excerpt(text: body, query: query, maxCharacters: maxCharacters)
         try validateChatEvidence(source: body, excerpt: excerpt)
-        return "[1] \(article.title)\nFeed: \(article.feedTitle)\nAuthor: \(article.author ?? "unknown")\n\(AIRequestPolicy.publicationContext(article.publishedAt))\nExcerpt: \(excerpt)"
+        // The label tells the model whether it holds the whole article.
+        let complete = !body.isEmpty && excerpt.trimmingCharacters(in: .whitespacesAndNewlines) == body
+        return complete ? completeArticleMarker(article) + excerpt : articleChatHeader(article) + "Excerpt: " + excerpt
+    }
+
+    private static func articleChatHeader(_ article: Article) -> String {
+        "[1] \(article.title)\nFeed: \(article.feedTitle)\nAuthor: \(article.author ?? "unknown")\n\(AIRequestPolicy.publicationContext(article.publishedAt))\n"
+    }
+
+    /// How `singleArticleChatContext` opens when it carries the whole article.
+    static func completeArticleMarker(_ article: Article) -> String {
+        articleChatHeader(article) + "Article text (complete): "
     }
 
     /// Grounded-chat successor to `singleArticleChatContext`: builds the same

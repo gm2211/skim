@@ -73,8 +73,51 @@ behaviors:
       earlier feedback still counts.
   - id: explicit-interests
     description: >-
-      The reader can describe their interests in Settings > AI, and ranking uses that text alongside
-      the learned preferences.
+      The reader can write their own smart sort prompt (for example "prioritize AI infra,
+      deprioritize sports"), and ranking uses it ahead of the learned preferences.
+    details: >-
+      It is layer 2 of smart-sort-prompt-layers and lives in the Smart sort settings (desktop
+      Settings > Smart sort; iOS Smart sort settings), no longer in Settings > AI.
+  - id: smart-sort-prompt-layers
+    description: >-
+      Smart sort ranks with three prompts, in this order: a built-in base prompt, an optional prompt
+      the reader writes, and a "learned preferences" note generated from the reader's reading. A
+      Smart sort settings surface on desktop and iOS, reachable from the Smart sort switch, shows all
+      three; the base prompt is shown read-only.
+    details: >-
+      The base prompt is skim_inbox_triage_prompt in SkimStoryPolicy, shared by both apps. The
+      reader's prompt is AiSettings.triage_user_prompt. Desktop: a cog beside the Smart sort switch
+      opens Settings on its Smart sort tab, which also names the AI model ranking uses and links to
+      AI Provider; edits there save with Settings' Save. iOS: the cog in the smart sorted list's
+      header, a Smart sort settings row in the list's actions menu, a long press on the sparkles
+      capsule, and Settings > AI > Preferences > Smart sort all open the same screen, which saves as
+      you go. The raw learned titles the triage prompt used to carry are replaced by the note.
+    source:
+      text: >-
+        there should be some sort of base prompt for smart sort and then an additional prompt that
+        users can provide and also a learnt "user preferences" prompt that can still be deleted /
+        modified
+      reference: Giulio, project thread "Customize smart sort with layered prompts", 2026-10-27
+  - id: learned-preferences-note
+    description: >-
+      The learned preferences are a short plain-text note of what the reader likes and skips. The
+      reader can read, edit or delete it, and smart sort keeps learning afterward: it rewrites the
+      note from new reading while keeping the reader's edits.
+    details: >-
+      The note is at most 8 lines and 800 characters, rewritten by the reader's AI model with the
+      shared skim_inbox_learn_prompt from the current note plus only the signals recorded since it
+      was last written or edited (desktop: reading time, chats, more/less feedback and pins; iOS:
+      reading time, chats, pins and dismissals). skim_inbox_learn_due decides when: 20 new signals
+      for a first note, 15 for a rewrite, and at least 6 hours apart. It runs before a triage run
+      and from a Learn now button. Deleting clears the note and learning restarts from reading after
+      the delete, never from older history. Turning off "Keep learning from my reading" freezes the
+      note. A rewrite that finishes after the reader edited the note is dropped. Each device keeps
+      its own note (desktop in its settings table, iOS in UserDefaults). Learned taste in the
+      ranking score itself (learns-preferences) is separate and unaffected.
+    source:
+      text: >-
+        a learnt "user preferences" prompt that can still be deleted / modified
+      reference: Giulio, project thread "Customize smart sort with layered prompts", 2026-10-27
   - id: triage-on-open
     description: >-
       Opening the AI Inbox runs triage on new unread articles with visible progress, and the reader

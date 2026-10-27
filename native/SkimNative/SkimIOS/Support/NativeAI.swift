@@ -1079,18 +1079,61 @@ enum NativeAI {
         var reason: String
     }
 
-    /// Words of reader context for AI Inbox relevance: explicit interests plus
-    /// titles the reader spent time on. Never cited back in reasons.
-    static func inboxReaderContext(interests: String?, likedTitles: [String]) -> String {
+    /// Smart sort's reader layers after the shared base prompt: the
+    /// interests the reader wrote, then the note learned from their reading
+    /// (which the reader can edit or delete). Never cited back in reasons.
+    static func inboxReaderContext(interests: String?, learned: String?) -> String {
         var lines: [String] = []
         if let interests = interests?.trimmingCharacters(in: .whitespacesAndNewlines), !interests.isEmpty {
             lines.append("Reader's interests (explicit): \(interests)")
         }
-        if !likedTitles.isEmpty {
-            lines.append("Titles the reader spent time on (inspiration only, do not cite):")
-            lines.append(contentsOf: likedTitles.prefix(15).map { "- \($0)" })
+        if let learned = learned?.trimmingCharacters(in: .whitespacesAndNewlines), !learned.isEmpty {
+            lines.append("Reader's learned preferences (learned from their reading; a gentle nudge, weaker than their explicit interests; do not cite):")
+            lines.append(learned)
         }
         return lines.isEmpty ? "No interest information is available." : lines.joined(separator: "\n")
+    }
+
+    /// What the learned-preferences rewrite sees: the current note and the
+    /// reading recorded since it was written.
+    static func learnPreferencesPrompt(current: String, evidence: ReadingEvidence) -> String {
+        let current = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        var lines = ["Current note:", current.isEmpty ? "(none yet)" : current, "", "New reading since the note was written:"]
+        if !evidence.topFeeds.isEmpty {
+            lines.append("Sources the reader read most: \(evidence.topFeeds.joined(separator: ", "))")
+        }
+        if !evidence.liked.isEmpty {
+            lines.append("Articles the reader spent time on, pinned or chatted about:")
+            lines.append(contentsOf: evidence.liked.map { "- \($0)" })
+        }
+        if !evidence.skipped.isEmpty {
+            lines.append("Articles the reader dismissed without opening:")
+            lines.append(contentsOf: evidence.skipped.map { "- \($0)" })
+        }
+        lines.append("")
+        lines.append("Return only the updated note.")
+        return lines.joined(separator: "\n")
+    }
+
+    /// The model's rewritten note, trimmed to the lines it should hold.
+    static func cleanLearnedNote(_ raw: String) -> String {
+        let lines = raw.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("```") }
+            .prefix(8)
+        return String(lines.joined(separator: "\n").prefix(800))
+    }
+
+    /// Rewrite Smart sort's learned note with the shared instructions.
+    static func learnedPreferencesNote(current: String, evidence: ReadingEvidence, settings: AppSettings) async throws -> String {
+        let raw = try await complete(
+            settings: settings,
+            instructions: InboxRanking.learnPrompt,
+            prompt: learnPreferencesPrompt(current: current, evidence: evidence),
+            maxTokens: 600,
+            temperature: 0.2
+        )
+        return cleanLearnedNote(raw)
     }
 
     /// Rate every article on importance and relevance (1-5) with the shared

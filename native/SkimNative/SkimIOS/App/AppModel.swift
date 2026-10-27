@@ -183,6 +183,8 @@ final class AppModel: ObservableObject {
     let store: SkimStore
     let tasteStore = TasteStore()
     let inboxScores = InboxScoreStore()
+    /// Smart sort's learned-preferences note.
+    let learnedPreferences = LearnedPreferencesStore()
     private let importer = OPMLImportService()
     private let refresher = FeedRefreshService()
     let discovery = FeedDiscoveryService()

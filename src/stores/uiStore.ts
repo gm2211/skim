@@ -5,7 +5,7 @@ type ListFilter = "all" | "unread" | "starred";
 /** "For you" ranks a list's unread articles the way the AI Inbox did. */
 export type ListSort = "newest" | "forYou";
 export type AddFeedTab = "url" | "feedly";
-export type SettingsTab = "ai" | "sync" | "appearance" | "reading";
+export type SettingsTab = "ai" | "smartSort" | "sync" | "appearance" | "reading";
 
 // Smart sorting is a standing preference, so it survives relaunches.
 const LIST_SORT_KEY = "skim.listSort";

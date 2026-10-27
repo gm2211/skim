@@ -7,6 +7,8 @@ use std::ffi::CStr;
 
 extern "C" {
     fn skim_inbox_triage_prompt() -> *const std::os::raw::c_char;
+    fn skim_inbox_learn_prompt() -> *const std::os::raw::c_char;
+    fn skim_inbox_learn_due(new_signals: i64, hours_since_update: f64, has_note: i32) -> i32;
     fn skim_inbox_signal_weight(
         dwell_seconds: f64,
         opened: i32,
@@ -35,6 +37,21 @@ pub fn triage_prompt() -> &'static str {
     unsafe { CStr::from_ptr(skim_inbox_triage_prompt()) }
         .to_str()
         .unwrap_or("")
+}
+
+/// Instructions for rewriting the reader's learned-preferences note.
+pub fn learn_prompt() -> &'static str {
+    unsafe { CStr::from_ptr(skim_inbox_learn_prompt()) }
+        .to_str()
+        .unwrap_or("")
+}
+
+/// Whether the learned note is due a rewrite. `hours_since_update` is None
+/// when it was never written.
+pub fn learn_due(new_signals: i64, hours_since_update: Option<f64>, has_note: bool) -> bool {
+    unsafe {
+        skim_inbox_learn_due(new_signals, hours_since_update.unwrap_or(f64::NAN), i32::from(has_note)) != 0
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -254,6 +271,15 @@ mod tests {
         priority: Vec<PriorityCase>,
         story_preference: Vec<StoryPreferenceCase>,
         terms: Vec<TermsCase>,
+        learn_due: Vec<LearnDueCase>,
+    }
+    #[derive(Deserialize)]
+    struct LearnDueCase {
+        name: String,
+        new_signals: i64,
+        hours: Option<f64>,
+        has_note: bool,
+        due: bool,
     }
     #[derive(Deserialize)]
     struct StoryPreferenceCase {
@@ -355,7 +381,11 @@ mod tests {
         for c in f.terms {
             assert_eq!(terms(&c.title), c.terms, "{}", c.title);
         }
+        for c in f.learn_due {
+            assert_eq!(learn_due(c.new_signals, c.hours, c.has_note), c.due, "{}", c.name);
+        }
         assert!(triage_prompt().contains("importance"));
+        assert!(learn_prompt().contains("edited the note"));
     }
 
     #[test]

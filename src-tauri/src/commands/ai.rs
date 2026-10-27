@@ -1129,6 +1129,148 @@ pub async fn get_article_theme_tags(
         .collect())
 }
 
+// ── Smart sort prompts ─────────────────────────────────────────────
+
+/// Smart sort's three prompt layers as Settings shows them. The reader's own
+/// interests live in `AiSettings::triage_user_prompt`.
+#[derive(Debug, Clone, Serialize)]
+pub struct SmartSortPrompts {
+    pub base_prompt: String,
+    pub learned: crate::db::models::LearnedPreferences,
+    /// Reader signals the learned note has not seen yet.
+    pub new_signals: i64,
+}
+
+fn smart_sort_prompts(conn: &rusqlite::Connection) -> Result<SmartSortPrompts, String> {
+    let learned = queries::get_learned_preferences(conn).map_err(|e| e.to_string())?;
+    let new_signals = queries::count_interactions_since(conn, learned.learned_through()).map_err(|e| e.to_string())?;
+    Ok(SmartSortPrompts {
+        base_prompt: crate::db::inbox_rank::triage_prompt().to_string(),
+        learned,
+        new_signals,
+    })
+}
+
+#[tauri::command]
+pub fn get_smart_sort_prompts(db: State<'_, Database>) -> Result<SmartSortPrompts, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    smart_sort_prompts(&conn)
+}
+
+/// Save the reader's edit of the learned note. Clearing the note deletes it:
+/// learning starts over from reading after now, never from older history.
+#[tauri::command]
+pub fn save_learned_preferences(
+    db: State<'_, Database>,
+    text: String,
+    learning: bool,
+) -> Result<SmartSortPrompts, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut prefs = queries::get_learned_preferences(&conn).map_err(|e| e.to_string())?;
+    let text = text.trim().to_string();
+    let now = Utc::now().timestamp();
+    if text != prefs.text {
+        if text.is_empty() {
+            prefs.since = Some(now);
+        }
+        prefs.text = text;
+        prefs.updated_at = Some(now);
+    }
+    prefs.learning = learning;
+    queries::set_learned_preferences(&conn, &prefs).map_err(|e| e.to_string())?;
+    smart_sort_prompts(&conn)
+}
+
+/// Rewrite the learned note from reading it has not seen. Unforced, it runs
+/// only while learning is on and the shared policy says a rewrite is due.
+async fn learn_preferences(
+    db: &Database,
+    provider: &dyn crate::ai::provider::AiProvider,
+    model: &str,
+    force: bool,
+) -> Result<crate::db::models::LearnedPreferences, String> {
+    let (prefs, new_signals, profile) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let prefs = queries::get_learned_preferences(&conn).map_err(|e| e.to_string())?;
+        let since = prefs.learned_through();
+        let count = queries::count_interactions_since(&conn, since).map_err(|e| e.to_string())?;
+        let profile = queries::build_preference_profile_since(&conn, since).map_err(|e| e.to_string())?;
+        (prefs, count, profile)
+    };
+    let now = Utc::now().timestamp();
+    let hours = prefs.updated_at.map(|t| (now - t) as f64 / 3600.0);
+    if !force && (!prefs.learning || !crate::db::inbox_rank::learn_due(new_signals, hours, !prefs.text.is_empty())) {
+        return Ok(prefs);
+    }
+    if profile.preferred_topics.is_empty() && profile.deprioritized_topics.is_empty() && profile.top_feeds.is_empty() {
+        return if force {
+            Err("Nothing new to learn from yet. Read a few articles first.".to_string())
+        } else {
+            Ok(prefs)
+        };
+    }
+    let request = ChatRequest {
+        model: model.to_string(),
+        messages: vec![
+            ChatMessage {
+                role: "system".to_string(),
+                content: crate::db::inbox_rank::learn_prompt().to_string(),
+                content_blocks: None,
+            },
+            ChatMessage {
+                role: "user".to_string(),
+                content: prompts::learn_preferences_user_prompt(&prefs.text, &profile),
+                content_blocks: None,
+            },
+        ],
+        temperature: Some(0.2),
+        max_tokens: Some(600),
+        json_mode: false,
+        tools: None,
+    };
+    let response = provider.chat(request).await.map_err(|e| e.to_string())?;
+    let note = prompts::clean_learned_note(&response.content);
+    if note.is_empty() {
+        return Err("The AI model returned an empty note.".to_string());
+    }
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    // The reader may have edited or deleted the note while the model wrote.
+    let mut latest = queries::get_learned_preferences(&conn).map_err(|e| e.to_string())?;
+    if latest != prefs {
+        return Ok(latest);
+    }
+    latest.text = note;
+    latest.updated_at = Some(now);
+    queries::set_learned_preferences(&conn, &latest).map_err(|e| e.to_string())?;
+    Ok(latest)
+}
+
+/// Settings' "Learn now": rewrite the note from new reading right away.
+#[tauri::command]
+pub async fn learn_preferences_now(
+    app: AppHandle,
+    db: State<'_, Database>,
+    model_state: State<'_, SharedModelState>,
+) -> Result<SmartSortPrompts, String> {
+    let settings: crate::db::models::AppSettings = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        queries::get_setting(&conn, "app_settings")
+            .map_err(|e| e.to_string())?
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default()
+    };
+    if settings.ai.provider == "none" {
+        return Err("Choose an AI model in Settings > AI Provider to learn your preferences.".to_string());
+    }
+    let mut ai_settings = settings.ai.clone();
+    ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+    let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
+    let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
+    learn_preferences(db.inner(), provider.as_ref(), &model, true).await?;
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    smart_sort_prompts(&conn)
+}
+
 // ── Triage (AI Inbox) ──────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -1244,7 +1386,7 @@ pub async fn triage_articles(
         }
     }
 
-    let (articles, settings_json, preferences) = {
+    let (articles, settings_json) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let articles = if force.unwrap_or(false) {
             queries::clear_triage(&conn).map_err(|e| e.to_string())?;
@@ -1266,8 +1408,7 @@ pub async fn triage_articles(
         };
         let settings_json =
             queries::get_setting(&conn, "app_settings").map_err(|e| e.to_string())?;
-        let prefs = queries::build_preference_profile(&conn).ok();
-        (articles, settings_json, prefs)
+        (articles, settings_json)
     };
 
     if articles.is_empty() {
@@ -1303,6 +1444,16 @@ pub async fn triage_articles(
         "local" => 15,
         "ollama" => 20,
         _ => 30,
+    };
+
+    // Smart sort's learned layer keeps learning: rewrite the note first when
+    // enough new reading has come in. A failure never blocks ranking.
+    let learned = match learn_preferences(db.inner(), provider.as_ref(), &model, false).await {
+        Ok(prefs) => prefs.text,
+        Err(e) => {
+            log::warn!("Learning smart sort preferences failed: {e}");
+            db.conn.lock().ok().and_then(|c| queries::get_learned_preferences(&c).ok()).unwrap_or_default().text
+        }
     };
 
     let mut triaged_count = 0i32;
@@ -1355,8 +1506,8 @@ pub async fn triage_articles(
                 ChatMessage {
                     role: "system".to_string(),
                     content: prompts::triage_system_prompt(
-                        preferences.as_ref(),
                         ai_settings.triage_user_prompt.as_deref(),
+                        Some(&learned),
                     ),
                     content_blocks: None,
                 },

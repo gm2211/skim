@@ -1994,19 +1994,29 @@ pub fn set_priority_override(
 pub fn build_preference_profile(
     conn: &Connection,
 ) -> Result<UserPreferenceProfile, rusqlite::Error> {
+    build_preference_profile_since(conn, 0)
+}
+
+/// The preference profile from interactions recorded after `since` (Unix
+/// seconds), so the learned note learns only from what is new to it.
+pub fn build_preference_profile_since(
+    conn: &Connection,
+    since: i64,
+) -> Result<UserPreferenceProfile, rusqlite::Error> {
     // Top feeds by engagement (reading_time weighted)
     let mut stmt = conn.prepare(
         "SELECT f.title, SUM(i.reading_time_sec) + SUM(i.chat_messages) * 60 as engagement
          FROM article_interactions i
          JOIN articles a ON i.article_id = a.id
          JOIN feeds f ON a.feed_id = f.id
-         WHERE i.reading_time_sec > 10 OR i.chat_messages > 0 OR i.feedback = 'more'
+         WHERE i.updated_at > ?1
+           AND (i.reading_time_sec > 10 OR i.chat_messages > 0 OR i.feedback = 'more')
          GROUP BY f.id
          ORDER BY engagement DESC
          LIMIT 10",
     )?;
     let top_feeds: Vec<String> = stmt
-        .query_map([], |row| row.get::<_, String>(0))?
+        .query_map(params![since], |row| row.get::<_, String>(0))?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -2015,13 +2025,14 @@ pub fn build_preference_profile(
         "SELECT a.title
          FROM article_interactions i
          JOIN articles a ON i.article_id = a.id
-         WHERE i.feedback = 'more' OR i.reading_time_sec > 120 OR i.chat_messages >= 2
-             OR i.priority_override >= 4
+         WHERE i.updated_at > ?1
+           AND (i.feedback = 'more' OR i.reading_time_sec > 120 OR i.chat_messages >= 2
+             OR i.priority_override >= 4)
          ORDER BY i.updated_at DESC
          LIMIT 30",
     )?;
     let preferred_topics: Vec<String> = stmt
-        .query_map([], |row| row.get::<_, String>(0))?
+        .query_map(params![since], |row| row.get::<_, String>(0))?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -2030,19 +2041,20 @@ pub fn build_preference_profile(
         "SELECT a.title
          FROM article_interactions i
          JOIN articles a ON i.article_id = a.id
-         WHERE i.feedback = 'less'
+         WHERE i.feedback = 'less' AND i.updated_at > ?1
          ORDER BY i.updated_at DESC
          LIMIT 20",
     )?;
     let deprioritized_topics: Vec<String> = stmt
-        .query_map([], |row| row.get::<_, String>(0))?
+        .query_map(params![since], |row| row.get::<_, String>(0))?
         .filter_map(|r| r.ok())
         .collect();
 
     // Stats
     let (avg_reading, total): (f64, i64) = conn.query_row(
-        "SELECT COALESCE(AVG(reading_time_sec), 0), COUNT(*) FROM article_interactions WHERE reading_time_sec > 0",
-        [],
+        "SELECT COALESCE(AVG(reading_time_sec), 0), COUNT(*) FROM article_interactions
+         WHERE reading_time_sec > 0 AND updated_at > ?1",
+        params![since],
         |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
 
@@ -2053,6 +2065,34 @@ pub fn build_preference_profile(
         avg_reading_time_sec: avg_reading,
         total_interactions: total,
     })
+}
+
+/// Reader signals recorded after `since` (Unix seconds): reading, chats,
+/// feedback and pins, each article counted once.
+pub fn count_interactions_since(conn: &Connection, since: i64) -> Result<i64, rusqlite::Error> {
+    conn.query_row(
+        "SELECT COUNT(*) FROM article_interactions
+         WHERE updated_at > ?1
+           AND (reading_time_sec > 0 OR chat_messages > 0 OR feedback IS NOT NULL
+             OR priority_override IS NOT NULL)",
+        params![since],
+        |row| row.get(0),
+    )
+}
+
+const LEARNED_PREFERENCES_KEY: &str = "smart_sort_learned_preferences";
+
+/// Smart sort's learned-preferences note. Kept out of `app_settings`, so
+/// background learning never races a Settings save.
+pub fn get_learned_preferences(conn: &Connection) -> Result<LearnedPreferences, rusqlite::Error> {
+    Ok(get_setting(conn, LEARNED_PREFERENCES_KEY)?
+        .and_then(|json| serde_json::from_str(&json).ok())
+        .unwrap_or_default())
+}
+
+pub fn set_learned_preferences(conn: &Connection, prefs: &LearnedPreferences) -> Result<(), rusqlite::Error> {
+    let json = serde_json::to_string(prefs).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+    set_setting(conn, LEARNED_PREFERENCES_KEY, &json)
 }
 
 pub fn get_article_interaction(

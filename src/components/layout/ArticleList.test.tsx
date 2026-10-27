@@ -167,6 +167,9 @@ describe("article list scope regressions", () => {
     await userEvent.click(screen.getByRole("switch", { name: "Smart sorting" }));
     expect(useUiStore.getState().listSort).toBe("newest");
     expect(localStorage.getItem("skim.listSort")).toBe("newest");
+    // The cog beside the switch opens Smart sort's own settings.
+    await userEvent.click(screen.getByRole("button", { name: "Smart sort settings" }));
+    expect(useUiStore.getState()).toMatchObject({ showSettings: true, settingsTab: "smartSort" });
     cleanup();
     useUiStore.setState({ sidebarView: { type: "starred" } });
     render(<ArticleList />);

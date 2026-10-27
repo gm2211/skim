@@ -4008,6 +4008,18 @@ struct AIChatSheet: View {
                     .onChange(of: researchSteps.count) { _, _ in
                         if isSending { scrollToLatest(proxy) }
                     }
+                    // Keep a queued question in view above the keyboard while it's edited.
+                    .onChange(of: editingQueuedID) { _, id in
+                        guard let id else { return }
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(350))
+                            withAnimation(.smooth(duration: 0.22)) { proxy.scrollTo(id, anchor: .bottom) }
+                        }
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                        guard let id = editingQueuedID else { return }
+                        withAnimation(.smooth(duration: 0.22)) { proxy.scrollTo(id, anchor: .bottom) }
+                    }
                     .onChange(of: queued.count) { old, new in
                         if new > old {
                             Task { @MainActor in
@@ -4266,6 +4278,7 @@ struct AIChatSheet: View {
             .foregroundStyle(SkimStyle.secondary)
             ForEach(Array(queued.enumerated()), id: \.element.id) { index, item in
                 queuedRow(item, position: index + 1)
+                    .id(item.id)
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -4296,7 +4309,7 @@ struct AIChatSheet: View {
                         .buttonStyle(.plain)
                 }
             } else {
-                HStack(alignment: .top, spacing: 6) {
+                HStack(alignment: .top, spacing: 0) {
                     Text(item.text)
                         .font(.system(size: 16))
                         .foregroundStyle(SkimStyle.text.opacity(0.75))
@@ -4308,8 +4321,10 @@ struct AIChatSheet: View {
                     } label: {
                         Image(systemName: "pencil")
                             .font(.system(size: 14, weight: .medium))
-                            .frame(width: 30, height: 30)
+                            .frame(width: 40, height: 44)
+                            .contentShape(Rectangle())
                     }
+                    .padding(.vertical, -7)
                     .buttonStyle(.plain)
                     .foregroundStyle(SkimStyle.secondary)
                     .accessibilityLabel("Edit queued message")
@@ -4319,8 +4334,10 @@ struct AIChatSheet: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 13, weight: .semibold))
-                            .frame(width: 30, height: 30)
+                            .frame(width: 40, height: 44)
+                            .contentShape(Rectangle())
                     }
+                    .padding(.vertical, -7)
                     .buttonStyle(.plain)
                     .foregroundStyle(SkimStyle.secondary)
                     .accessibilityLabel("Remove queued message")

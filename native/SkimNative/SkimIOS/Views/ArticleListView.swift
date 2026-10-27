@@ -670,10 +670,16 @@ struct ArticleListView: View {
                             .tracking(1.15)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                            .padding(.leading, 72)
+                            // Lines up with the row titles: 18 inset + 34 icon + 12 gap.
+                            .padding(.leading, 64)
                             .padding(.trailing, 18)
                             .padding(.top, 13)
                             .padding(.bottom, 7)
+                            // The header pins while rows scroll under it, and the
+                            // list's own background is hidden, so it needs one.
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(SkimStyle.chrome)
+                            .listRowInsets(EdgeInsets())
                     }
                 }
             }

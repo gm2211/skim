@@ -186,7 +186,7 @@ struct AIInboxView: View {
                 return ($0.article.publishedAt ?? $0.article.fetchedAt) > ($1.article.publishedAt ?? $1.article.fetchedAt)
             }
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = NativeAI.userFacingMessage(error)
         }
         isLoading = false
     }
@@ -254,7 +254,7 @@ struct AIInboxView: View {
             }
         }
         if let firstError, rated == 0 {
-            errorMessage = firstError.localizedDescription
+            errorMessage = NativeAI.userFacingMessage(firstError)
         } else if unrated > 0 {
             errorMessage = "Rated \(rated) of \(pending.count). The rest stay ranked by what you read; rate again to retry them."
         }

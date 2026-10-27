@@ -3120,6 +3120,73 @@ enum NativeAI {
         }
     }
 
+    /// One sentence a reader can act on for any AI failure, whichever provider
+    /// raised it. Provider HTTP failures already carry a friendly message
+    /// (`friendlyErrorMessage`); this covers the rest, above all Apple's
+    /// on-device model, whose errors are enums and NSErrors with no
+    /// `errorDescription` — printing those put a raw dump on the page
+    /// ("The operation couldn't be completed. (FoundationModels…error 2.)").
+    static func userFacingMessage(_ error: Error) -> String {
+        if let aiError = error as? NativeAIError {
+            switch aiError {
+            case .unavailable(let message) where isPresentableErrorText(message): return message
+            case .unavailable: break
+            case .requiresReauthentication: return "Your Claude session expired. Sign in again."
+            }
+        }
+        if isGuardrailRefusal(error) { return guardrailRefusalMessage }
+#if canImport(FoundationModels)
+        if #available(iOS 26.0, *), let generationError = error as? LanguageModelSession.GenerationError {
+            switch generationError {
+            case .exceededContextWindowSize:
+                return "That was too much text for Apple's on-device model. Try fewer articles, or pick Claude in AI Settings."
+            case .assetsUnavailable:
+                return "Apple Intelligence is still downloading its model. Keep this device on Wi-Fi and charging, then try again."
+            case .rateLimited:
+                return "Apple's on-device model is busy. Try again in a moment."
+            case .unsupportedLanguageOrLocale:
+                return "Apple's on-device model doesn't support this language. Pick Claude in AI Settings."
+            case .decodingFailure, .unsupportedGuide:
+                return "Apple's on-device model returned an answer Skim couldn't read. Try again, or pick Claude in AI Settings."
+            case .concurrentRequests:
+                return "Another AI request is still running. Try again in a moment."
+            default:
+                return "Apple's on-device model couldn't finish this. Try again, or pick Claude in AI Settings."
+            }
+        }
+#endif
+        if let localized = (error as? LocalizedError)?.errorDescription, isPresentableErrorText(localized) {
+            return localized
+        }
+        if error is CancellationError { return "The request was cancelled." }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return nsError.code == NSURLErrorNotConnectedToInternet || nsError.code == NSURLErrorNetworkConnectionLost
+                ? "No internet connection. Try again once you're back online."
+                : "Couldn't reach the AI provider. Check your connection and try again."
+        }
+        if isPresentableErrorText(nsError.localizedDescription) { return nsError.localizedDescription }
+        print("[NativeAI] Unmapped error surfaced to the UI: \(error)")
+        return "The AI request failed. Try again, or pick another model in AI Settings."
+    }
+
+    /// Whether an error string reads as a sentence rather than a debug dump.
+    /// Rejects Swift's placeholder for an error with no description, NSError
+    /// dumps, and anything with raw enum or JSON punctuation in it.
+    static func isPresentableErrorText(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > 10 else { return false }
+        let lowered = trimmed.lowercased()
+        let dumpMarkers = [
+            "the operation couldn’t be completed", "the operation couldn't be completed",
+            "error domain=", "userinfo=", "nserror", "debugdescription",
+            "foundationmodels", "languagemodelsession",
+        ]
+        if dumpMarkers.contains(where: lowered.contains) { return false }
+        // `"\(error)"` on an enum case with a payload, e.g. `unavailable("…")`.
+        return !(trimmed.contains("(") && trimmed.hasSuffix(")") && !trimmed.contains(" "))
+    }
+
     /// Parses the `error` object out of a provider error body, e.g.
     /// `{"type":"error","error":{"type":"rate_limit_error","message":"..."}}` (Anthropic)
     /// or `{"error":{"message":"...","type":"...","code":"..."}}` (OpenAI-compatible).

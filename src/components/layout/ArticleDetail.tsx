@@ -1856,7 +1856,11 @@ export function ArticleDetail() {
   );
 }
 
-/** Copies the article title, so the title needn't be drag-selected out of the header. */
+/**
+ * Copies the article title, so the title needn't be drag-selected out of the
+ * header. The glyph takes the byline's secondary colour, not the date's muted
+ * one: a thin stroke at this size reads as a smudge when it is muted too.
+ */
 function CopyTitleButton({ title }: { title: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -1875,11 +1879,11 @@ function CopyTitleButton({ title }: { title: string }) {
           setCopied(false);
         }
       }}
-      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-white/10 ${copied ? "text-success" : "text-text-muted hover:text-text-primary"}`}
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors hover:bg-white/10 ${copied ? "text-success" : "text-text-secondary hover:text-text-primary"}`}
       title="Copy title"
       aria-label={copied ? "Title copied" : "Copy title"}
     >
-      {copied ? <TickIcon size={13} /> : <CopyIcon size={13} />}
+      {copied ? <TickIcon size={14} /> : <CopyIcon size={14} />}
       {copied && <span style={{ fontSize: 12 }}>Copied</span>}
     </button>
   );

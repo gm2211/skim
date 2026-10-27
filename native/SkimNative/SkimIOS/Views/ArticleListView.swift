@@ -687,6 +687,11 @@ struct ArticleListView: View {
             .scrollDismissesKeyboard(.immediately)
             .scrollContentBackground(.hidden)
             .background(SkimStyle.chrome)
+            .overlay {
+                if model.articles.isEmpty && !model.isLoading {
+                    emptyListState
+                }
+            }
             .refreshable {
                 await model.refreshAll()
             }
@@ -695,6 +700,25 @@ struct ArticleListView: View {
                 ArticleDetailView(articleID: id)
             }
         }
+    }
+
+    /// What an empty list says, so it never reads as a blank screen.
+    private var emptyListState: some View {
+        let (title, icon, detail): (String, String, String) = {
+            if isSearchActive {
+                return ("No results", "magnifyingglass", "Try another word, source or URL.")
+            }
+            switch model.listMode {
+            case .unread: return ("Nothing unread", "checkmark.circle", "You're all caught up here.")
+            case .starred: return ("No starred articles", "star", "Star an article to keep it here.")
+            case .recent: return ("Nothing read yet", "clock", "Articles you open show up here.")
+            case .all: return ("No articles", "tray", "Pull to refresh to check for new ones.")
+            }
+        }()
+        return ContentUnavailableView(title, systemImage: icon, description: Text(detail))
+            .foregroundStyle(SkimStyle.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
     }
 
     private var bottomSafeAreaInset: CGFloat {
@@ -1181,7 +1205,9 @@ private struct FeedPickerSheet: View {
         dismissUIKitKeyboard()
         model.selectedFeedID = feed.id
         model.selectedFolderID = nil
-        if model.listMode == .recent {
+        // Starred and Recent are library-wide views; picking a feed means
+        // reading it, so the list opens on its unread articles.
+        if model.listMode == .recent || model.listMode == .starred {
             model.listMode = .unread
         }
         onShowList()

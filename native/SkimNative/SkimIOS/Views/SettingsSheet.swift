@@ -2630,6 +2630,7 @@ struct SmartSortSettingsView: View {
                                 Label("Delete", systemImage: "trash")
                             }
                             .buttonStyle(.bordered)
+                            .tint(.red)
                             .disabled(note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                             // Anchored on the button, so on iOS 26 the dialog's
                             // popover points at Delete rather than mid-sheet.

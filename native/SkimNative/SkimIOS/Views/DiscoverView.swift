@@ -603,7 +603,10 @@ struct FollowButton: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.red)
                     .lineLimit(2)
-                    .frame(maxWidth: 220, alignment: .trailing)
+                    .multilineTextAlignment(.trailing)
+                    // In a list row, wrap under the button rather than widen it and squeeze the title.
+                    .frame(maxWidth: large ? 220 : 104, alignment: .trailing)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .unfollowConfirmation(model: model, feed: $unfollowing) { _ in

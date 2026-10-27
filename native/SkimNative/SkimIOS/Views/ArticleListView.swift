@@ -1496,6 +1496,8 @@ private struct FeedRowMenu: View {
         Button("Unfollow", systemImage: "minus.circle", role: .destructive) {
             model.feedToUnfollow = feed
         }
+        // The app's accent tint would otherwise paint the icon blue beside a red label.
+        .tint(.red)
     }
 }
 

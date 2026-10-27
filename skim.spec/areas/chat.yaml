@@ -53,6 +53,22 @@ behaviors:
     source:
       text: would be nice to have links to refrences also in text and better looking sources
       reference: Giulio, project thread "Chat answer citation design", 2026-10-25
+  - id: inline-corrections
+    description: >-
+      When the assistant finds that something it said in an earlier reply was wrong, it fixes that
+      reply in place: the wrong words are struck through and "[updated]: ..." with the right words
+      sits beside them, instead of a correction paragraph in the new answer.
+    details: >-
+      The model adds <correction><was>wrong words</was><now>fix</now></correction> to its answer;
+      the app takes the block out and edits the latest earlier reply containing those words (exactly,
+      else ignoring spacing and case), rendering "~~wrong~~ **[updated]:** fix". A correction that
+      matches no earlier reply stays visible in the new answer in the same form, and an answer that
+      only corrected earlier replies says "Updated my earlier reply above." The edited reply is what
+      later turns send back to the model. Desktop article chat, Ask Skim and the command palette,
+      and iOS chat on hosted providers; the small on-device grounded prompt does not ask for it.
+    source:
+      text: "chat should be albe to make corrections (with strikethrough and [updated]: ....) to previous text"
+      reference: Giulio, project thread "Let chat correct earlier replies inline", 2026-10-27
   - id: chat-starter-prompts
     description: >-
       An empty library chat offers a few built-in starter questions, and tapping one asks it right

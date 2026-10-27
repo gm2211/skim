@@ -61,3 +61,7 @@
 .research-kicker summary:hover { color: var(--color-text-primary); }
 .research-kicker ul { margin-top: 4px !important; }
 .feed-mark.web { background: rgba(88,166,255,.18); color: var(--color-accent); }
+
+/* An in-place correction: the wrong words struck through, "[updated]: …" beside them. */
+.chat-markdown del { text-decoration-thickness: 1.5px; color: var(--color-text-muted); }
+.chat-markdown del + strong { color: var(--color-accent); }

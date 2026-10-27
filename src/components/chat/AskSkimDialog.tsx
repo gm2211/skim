@@ -8,6 +8,7 @@ import { CHAT_STARTER_PROMPTS, isPromptTemplate } from "../../lib/chatStarterPro
 import { AgentSteps, SourceTile } from "./AgentAnswer";
 import { ResearchIcon } from "../ui/icons";
 import { citationOrder, partitionSources, type NumberedSource } from "../../lib/chatCitations";
+import { applyChatCorrections } from "../../lib/chatCorrections";
 import type { ChatMessageInput } from "../../services/types";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useUiStore } from "../../stores/uiStore";
@@ -35,6 +36,12 @@ interface Message {
   steps?: AgentStep[];
   /** A deep research briefing rather than a quick answer. */
   research?: boolean;
+}
+
+/** Append an answer, applying any in-place corrections it makes to earlier replies. */
+function withAnswer(prev: Message[], content: string, extra: Omit<Message, "role" | "content">): Message[] {
+  const { messages, answer } = applyChatCorrections(prev, content);
+  return [...messages, { role: "assistant", content: answer, ...extra }];
 }
 
 interface Props {
@@ -163,10 +170,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
         }).catch(() => null);
         try {
           const resp = await researchTopic([...history, { role: "user", content: chatPrompt(query, reply) }], agentContext ?? {}, requestId);
-          setMessages((m) => [
-            ...m,
-            { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps, research: true },
-          ]);
+          setMessages((m) => withAnswer(m, resp.content, { sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps, research: true }));
         } finally {
           unlisten?.();
           setProgress([]);
@@ -176,10 +180,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
       if (agentContext) {
         onSeedSend.current?.();
         const resp = await askAgent([...history, { role: "user", content: chatPrompt(query, reply) }], agentContext, priorIds);
-        setMessages((m) => [
-          ...m,
-          { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps },
-        ]);
+        setMessages((m) => withAnswer(m, resp.content, { sources: resp.sources, articleIds: resp.article_ids, steps: resp.steps }));
         const open = resp.actions.find((action) => action.type === "open_article");
         if (open && onOpenArticle) {
           restoreOpener.current = false;
@@ -190,10 +191,7 @@ export function AskSkimDialog({ open = true, restoreFocusTarget, onClose, onOpen
         return;
       }
       const resp = await chatWithArticles(scope, chatPrompt(query, reply), history, priorIds);
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", content: resp.content, sources: resp.sources, articleIds: resp.article_ids },
-      ]);
+      setMessages((m) => withAnswer(m, resp.content, { sources: resp.sources, articleIds: resp.article_ids }));
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
       setMessages((m) => m.slice(0, -1));

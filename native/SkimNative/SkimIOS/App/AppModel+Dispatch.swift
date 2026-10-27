@@ -30,7 +30,7 @@ extension AppModel {
             case "mlx":
                 DispatchBudget(pool: 60, excerpt: 60, reports: 4, reportCharacters: 1_200, editorTokens: 2_000, writerTokens: 1_000, concurrency: 1, leadFirst: false)
             default:
-                DispatchBudget(pool: 160, excerpt: 100, reports: 4, reportCharacters: 1_200, editorTokens: 3_000, writerTokens: 900, concurrency: 4, leadFirst: true)
+                DispatchBudget(pool: 160, excerpt: 100, reports: 4, reportCharacters: 1_200, editorTokens: 3_000, writerTokens: 900, concurrency: Dispatch.maxThemes, leadFirst: true)
             }
         }
     }
@@ -88,6 +88,13 @@ extension AppModel {
         if let stored, !stored.themes.isEmpty {
             edition = stored
         } else {
+            // Something to read at once: the edition before, shown while the
+            // feeds are checked and until the new edition's lead is in.
+            if previous == nil {
+                previous = try? await store.latestDispatchEdition(days: days, endingBy: window.end, excluding: id)
+                guard isCurrent(requestID) else { return }
+            }
+            dispatchStandIn = previous
             // A new front page is written from fresh feeds: iOS fetches only when asked.
             if checkFeeds, todayPage == 1, !isLoading, await feedsAreStale() {
                 dispatchStatus = "Checking your feeds…"
@@ -107,13 +114,8 @@ extension AppModel {
                 if isCurrent(requestID) { dispatch = edition; dispatchNewArticles = 0 }
                 return
             }
-            // Something to read at once: the edition before, or failing that
-            // the newest headlines, until the new edition's lead is in.
-            if previous == nil {
-                previous = try? await store.latestDispatchEdition(days: days, endingBy: window.end, excluding: id)
-            }
+            // Failing an edition before, the newest headlines.
             guard isCurrent(requestID) else { return }
-            dispatchStandIn = previous
             dispatchPreview = previous == nil ? Array(pool.prefix(8)) : []
             dispatchStatus = "Reading \(pool.count) articles…"
         }

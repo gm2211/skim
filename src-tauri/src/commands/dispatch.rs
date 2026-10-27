@@ -38,7 +38,9 @@ const MAX_BRIEFS: usize = 8;
 /// Reports a writer reads for one piece, and how much of each.
 const WRITER_REPORTS: usize = 4;
 const WRITER_REPORT_CHARS: usize = 1_200;
-const WRITER_CONCURRENCY: usize = 4;
+/// Every piece of a page at once on a hosted model, so none waits for a
+/// second round of writers.
+const WRITER_CONCURRENCY: usize = MAX_THEMES;
 /// The widest window an edition may cover, with a day of slack for DST.
 const MAX_WINDOW_SECONDS: i64 = 8 * 24 * 60 * 60;
 

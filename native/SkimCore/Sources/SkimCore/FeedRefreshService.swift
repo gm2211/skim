@@ -33,13 +33,23 @@ public struct FeedRefreshService: Sendable {
         self.session = session
     }
 
+    /// Feeds fetched at once. One after another, a library of fifty feeds
+    /// took most of a minute; a few at a time it takes as long as the slowest.
+    static let refreshConcurrency = 8
+    /// How long one feed may take before it is skipped until the next refresh.
+    static let fetchTimeout: TimeInterval = 20
+
     public func refreshAll(store: some FeedStore) async throws {
         let feeds = try await store.listFeeds()
-        for feed in feeds {
-            do {
-                try await refresh(feed: feed, store: store)
-            } catch {
-                continue
+        await withTaskGroup(of: Void.self) { group in
+            var running = 0
+            for feed in feeds {
+                if running >= Self.refreshConcurrency {
+                    _ = await group.next()
+                    running -= 1
+                }
+                group.addTask { try? await refresh(feed: feed, store: store) }
+                running += 1
             }
         }
     }
@@ -94,7 +104,7 @@ public struct FeedRefreshService: Sendable {
 
     private func fetchFeed(startingAt url: URL, fallbackTitle: String) async throws -> (URL, ParsedFeed) {
         let initialURL = url.upgradingHTTPToHTTPS()
-        let (data, response) = try await session.data(from: initialURL)
+        let (data, response) = try await session.data(for: URLRequest(url: initialURL, timeoutInterval: Self.fetchTimeout))
         if let parsed = try? FeedParser().parse(data: data, fallbackTitle: fallbackTitle) {
             return (response.url ?? initialURL, parsed)
         }
@@ -109,7 +119,7 @@ public struct FeedRefreshService: Sendable {
         for candidate in discovered {
             do {
                 let fetchURL = candidate.upgradingHTTPToHTTPS()
-                let (candidateData, candidateResponse) = try await session.data(from: fetchURL)
+                let (candidateData, candidateResponse) = try await session.data(for: URLRequest(url: fetchURL, timeoutInterval: Self.fetchTimeout))
                 let parsed = try FeedParser().parse(data: candidateData, fallbackTitle: fallbackTitle)
                 return (candidateResponse.url ?? fetchURL, parsed)
             } catch {

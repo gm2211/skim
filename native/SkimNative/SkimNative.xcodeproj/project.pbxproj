@@ -26,6 +26,7 @@
 		6048C096F85B46DFAF8590AF /* Style.swift in Sources */ = {isa = PBXBuildFile; fileRef = 038284DEE00F91A360324653 /* Style.swift */; };
 		61BAB9A8624266289CDE71CA /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB4C7BF5DF27052F2C1D6463 /* AppModel.swift */; };
 		6D3770441D3294FF7F64A6E4 /* DiscoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13CA09D1BB9E6DBD9C3B3CB6 /* DiscoverView.swift */; };
+		6F0A2A0C01059A4CECBD1859 /* UnfollowConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = C45A7534F6218BF2731654AB /* UnfollowConfirmation.swift */; };
 		705834903C7D5B0F2442C2D8 /* SkimMacOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911315535A4F45B6C42EEABC /* SkimMacOSApp.swift */; };
 		7487CDA38AA993612EB4880B /* AIBootDisclaimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 959A59B5B27E8C969D084B8F /* AIBootDisclaimerView.swift */; };
 		751B168D630209B01DAFF073 /* ArticleExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F51D9DF00B8808F7E2D215A /* ArticleExtractor.swift */; };
@@ -124,6 +125,7 @@
 		B8032BBB8C684F4215B89C95 /* NativeChatGPT.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeChatGPT.swift; sourceTree = "<group>"; };
 		B9167BE3C78659C05031D238 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSheet.swift; sourceTree = "<group>"; };
 		BFC1D459A8E191D2264A703F /* NativeAIDegenerateRepetitionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAIDegenerateRepetitionTests.swift; sourceTree = "<group>"; };
+		C45A7534F6218BF2731654AB /* UnfollowConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnfollowConfirmation.swift; sourceTree = "<group>"; };
 		CAB966C027C845488FBAF8FD /* SkimInferencePolicy */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SkimInferencePolicy; path = ../../shared/SkimInferencePolicy; sourceTree = SOURCE_ROOT; };
 		D209DCB83B5C440977AFE70A /* ArticleDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArticleDetailView.swift; sourceTree = "<group>"; };
 		D60276D39C8ED76452B2EB26 /* Skim iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "Skim iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -312,6 +314,7 @@
 				B9167BE3C78659C05031D238 /* SettingsSheet.swift */,
 				1288194EF90A1E8E96E9F26A /* SmartFolderEditor.swift */,
 				8E9B482B07ABFB0BD983D016 /* TodayEditionView.swift */,
+				C45A7534F6218BF2731654AB /* UnfollowConfirmation.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -513,6 +516,7 @@
 				6048C096F85B46DFAF8590AF /* Style.swift in Sources */,
 				7C87C81EDE030A9459473E8D /* TasteModel.swift in Sources */,
 				434D05C938D50201696ECD5A /* TodayEditionView.swift in Sources */,
+				6F0A2A0C01059A4CECBD1859 /* UnfollowConfirmation.swift in Sources */,
 				8ED4B358481AC4273C225054 /* WebView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

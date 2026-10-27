@@ -198,6 +198,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::feeds::feed_catalog,
             commands::feeds::list_feeds,
             commands::feeds::remove_feed,
+            commands::feeds::subscribed_feed,
             commands::feeds::rename_feed,
             commands::feeds::count_starred_in_feed,
             commands::feeds::refresh_feed,

@@ -25,6 +25,7 @@ import { feedsForFolder } from "../../lib/smartFolder";
 import { SmartFolderEditor } from "./SmartFolderEditor";
 import { Select } from "../ui/Select";
 import { AiErrorText, AiSettingsButton } from "../common/AiSettingsButton";
+import { UnfollowDialog } from "../common/UnfollowDialog";
 
 type FeedContextMenu = { feedId: string; x: number; y: number } | null;
 type FolderContextMenu = { folderId: string; x: number; y: number } | null;
@@ -439,7 +440,7 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
               label="Move to folder ▸"
             />
             <div className="border-t border-white/5 my-1" />
-            <MenuButton onClick={() => startRemoveFeed(feed)} label="Remove feed..." danger />
+            <MenuButton onClick={() => startRemoveFeed(feed)} label="Unfollow..." danger />
           </div>
         );
       })()}
@@ -511,55 +512,14 @@ export function FeedsSection({ sidebarView, setSidebarView, isActive, setShowAdd
         );
       })()}
 
-      {/* Remove confirm */}
       {removeConfirm && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
-          onClick={() => setRemoveConfirm(null)}
-        >
-          <div
-            className="border border-white/10 rounded-2xl shadow-2xl"
-            style={{ background: "rgba(22, 27, 34, 0.98)", maxWidth: 420, width: "100%", margin: "0 20px" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ padding: "20px 24px 16px" }}>
-              <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
-                Remove "{removeConfirm.feed.title}"?
-              </h3>
-              {removeConfirm.starredCount > 0 ? (
-                <p className="text-text-secondary" style={{ fontSize: 13 }}>
-                  This feed has{" "}
-                  <strong className="text-amber-400">
-                    {removeConfirm.starredCount} starred article
-                    {removeConfirm.starredCount !== 1 ? "s" : ""}
-                  </strong>
-                  . Removing deletes all its articles including the starred ones. This cannot be undone.
-                </p>
-              ) : (
-                <p className="text-text-muted" style={{ fontSize: 13 }}>
-                  All articles from this feed will be deleted. This cannot be undone.
-                </p>
-              )}
-            </div>
-            <div className="flex justify-end gap-2 border-t border-white/5" style={{ padding: "12px 20px" }}>
-              <button
-                onClick={() => setRemoveConfirm(null)}
-                className="text-text-secondary hover:text-text-primary rounded-lg hover:bg-white/5 transition-colors"
-                style={{ padding: "8px 16px", fontSize: 13 }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmRemoveFeed}
-                disabled={removeFeedMut.isPending}
-                className="bg-danger text-white rounded-lg hover:bg-red-600 disabled:opacity-40 transition-colors font-medium"
-                style={{ padding: "8px 16px", fontSize: 13 }}
-              >
-                {removeFeedMut.isPending ? "Removing..." : "Remove"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <UnfollowDialog
+          title={removeConfirm.feed.title}
+          starredCount={removeConfirm.starredCount}
+          pending={removeFeedMut.isPending}
+          onCancel={() => setRemoveConfirm(null)}
+          onConfirm={confirmRemoveFeed}
+        />
       )}
 
       {/* New folder dialogs */}

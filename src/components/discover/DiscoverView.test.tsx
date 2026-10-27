@@ -14,6 +14,9 @@ vi.mock("../../services/commands", () => ({
   searchFeeds: vi.fn(),
   previewFeed: vi.fn(),
   feedCatalog: vi.fn(),
+  subscribedFeed: vi.fn(),
+  countStarredInFeed: vi.fn(),
+  removeFeed: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 
@@ -77,7 +80,7 @@ describe("Discover", () => {
 
     await user.click(screen.getByRole("button", { name: "Follow NASA" }));
     expect(commands.addFeed).toHaveBeenCalledWith("https://www.nasa.gov/feed/");
-    expect(await screen.findByLabelText("Following NASA")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Unfollow NASA" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Artemis update/ }));
     expect(openUrl).toHaveBeenCalledWith("https://example.com/Artemis%20update");
@@ -98,7 +101,34 @@ describe("Discover", () => {
     expect(await screen.findByText("Example Blog", {}, { timeout: 2000 })).toBeInTheDocument();
     expect(commands.discoverFeeds).toHaveBeenCalledWith("example.com");
     expect(screen.getByText("2 feeds found")).toBeInTheDocument();
-    expect(screen.getByLabelText("Following Comments")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unfollow Comments" })).toBeInTheDocument();
+  });
+
+  it("unfollows from the Following button after asking", async () => {
+    const user = userEvent.setup();
+    vi.mocked(commands.discoverFeeds).mockResolvedValue([
+      feed({ title: "Comments", url: "https://example.com/comments.xml", already_subscribed: true }),
+    ]);
+    vi.mocked(commands.subscribedFeed).mockResolvedValue({ id: "feed-7", title: "Comments" } as never);
+    vi.mocked(commands.countStarredInFeed).mockResolvedValue(2);
+    vi.mocked(commands.removeFeed).mockResolvedValue(undefined);
+    renderView();
+
+    await user.type(screen.getByRole("textbox", { name: /paste a website/ }), "example.com");
+    await user.click(await screen.findByRole("button", { name: "Unfollow Comments" }, { timeout: 2000 }));
+    expect(commands.subscribedFeed).toHaveBeenCalledWith("https://example.com/comments.xml");
+    expect(await screen.findByRole("dialog", { name: 'Unfollow Comments?' })).toBeInTheDocument();
+    expect(screen.getByText("2 starred articles")).toBeInTheDocument();
+
+    // Cancel keeps it.
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(commands.removeFeed).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Unfollow Comments" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Unfollow Comments" }));
+    await user.click(await screen.findByRole("button", { name: "Unfollow" }));
+    expect(commands.removeFeed).toHaveBeenCalledWith("feed-7");
+    expect(await screen.findByRole("button", { name: "Follow Comments" })).toBeInTheDocument();
   });
 
   it("searches by words and shows follower counts", async () => {

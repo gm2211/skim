@@ -250,6 +250,18 @@ pub async fn list_feeds(db: State<'_, Database>) -> Result<Vec<FeedWithCount>, S
     Ok(result)
 }
 
+/// The library feed with this address, if the reader follows it. Discover
+/// uses it to unfollow a feed it only knows by URL.
+#[tauri::command]
+pub async fn subscribed_feed(db: State<'_, Database>, url: String) -> Result<Option<Feed>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let wanted = normalize_feed_url(&url);
+    Ok(queries::list_feeds(&conn)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .find(|f| normalize_feed_url(&f.url) == wanted))
+}
+
 #[tauri::command]
 pub async fn remove_feed(db: State<'_, Database>, feed_id: String) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;

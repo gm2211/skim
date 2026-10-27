@@ -92,6 +92,17 @@
 button.discover-follow:hover { background: color-mix(in srgb, var(--color-accent) 14%, transparent); }
 button.discover-follow:disabled { opacity: 0.6; }
 .discover-follow--on { color: var(--color-success); border-color: transparent; background: color-mix(in srgb, var(--color-success) 12%, transparent); }
+/* Following turns into Unfollow on hover; both labels share one grid cell so the width holds still. */
+button.discover-follow--on { display: inline-grid; }
+.discover-follow-label { grid-area: 1 / 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.discover-follow-label--hover { visibility: hidden; }
+button.discover-follow--on:hover, button.discover-follow--on:focus-visible {
+  color: var(--color-danger); background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+}
+button.discover-follow--on:hover .discover-follow-label:not(.discover-follow-label--hover),
+button.discover-follow--on:focus-visible .discover-follow-label:not(.discover-follow-label--hover) { visibility: hidden; }
+button.discover-follow--on:hover .discover-follow-label--hover,
+button.discover-follow--on:focus-visible .discover-follow-label--hover { visibility: visible; }
 .discover-follow--large { height: 38px; min-width: 116px; font-size: 14px; }
 
 .discover-feed-header { display: flex; align-items: flex-start; gap: 16px; margin-top: 6px; }

@@ -15,7 +15,7 @@ behaviors:
       ("Type a name, topic, or paste a URL"), featured topics and a topic list. A topic page lists
       its top feeds; a feed page shows the feed's recent posts grouped by day. Every feed row and
       feed page has a Follow button that adds the feed in place; feeds already in the library show
-      "Following".
+      "Following". Tapping Following unfollows the feed after a confirmation.
     details: >-
       Pasting a website (or `theverge.com`, `r/rust`) lists every feed Skim finds on it; typing
       words searches feeds by topic or name. Discovery reads the page's `<link rel="alternate">`
@@ -40,6 +40,17 @@ behaviors:
         Add feeds should not be a modal - it should be a dedicated browsing view where I can see
         categories of feeds, open feeds and also start "following" feeds
       reference: Giulio, feed discovery thread, 2026-10-14
+  - id: unfollow-feed
+    description: >-
+      Unfollowing a feed, from Discover's Following button or the feed list's menu, asks first
+      ("Unfollow <feed>?") because it deletes the feed's articles, starred ones included; the dialog
+      says how many starred articles go. Cancel keeps everything.
+    details: >-
+      Desktop shows "Unfollow" in red when the pointer is over Following. On iOS the confirmation is
+      an action sheet. Unfollowing the feed that is open returns the list to All.
+    source:
+      text: I should be able to unfollow a topic
+      reference: Giulio, Unfollow feeds from Discover thread, 2026-10-27
   - id: opml-import-with-preview
     description: >-
       A reader can import an OPML file and preview the feeds before importing them. iOS offers
@@ -77,4 +88,5 @@ behaviors:
       offers to merge them.
   - id: feed-menu
     description: >-
-      Desktop: a feed's menu offers Rename, Move to folder, and Remove feed.
+      Desktop: a feed's menu offers Rename, Move to folder, and Unfollow. iOS: long-pressing a feed in
+      the feed list offers Move to Folder and Unfollow.

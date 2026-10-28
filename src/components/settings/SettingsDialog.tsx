@@ -8,6 +8,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useSystemInfo } from "../../hooks/useModels";
+import { useAppStoreInstall } from "../../hooks/useAppStoreInstall";
 import { useUiStore, type SettingsTab } from "../../stores/uiStore";
 import type { AppSettings, FeedlyConnectionStatus } from "../../services/types";
 import {
@@ -52,7 +53,9 @@ import { useDialogFocus } from "../../hooks/useDialogFocus";
 import { DISPATCH_DAY_CHOICES, dispatchDays } from "../../lib/dispatch";
 import {
   AI_PROVIDERS,
+  APP_STORE_AI_POLICY,
   aiProvidersForRuntime,
+  appStoreAllowsApiKeys,
   REMOTE_LIST_PROVIDERS,
   defaultMlxModel,
   mlxModelsFor,
@@ -177,6 +180,7 @@ export function SettingsDialog() {
   const qc = useQueryClient();
   const setShowSettings = useUiStore((s) => s.setShowSettings);
   const isPhone = useUiStore((s) => s.isPhone);
+  const appStore = useAppStoreInstall() ? APP_STORE_AI_POLICY : null;
 
   const [local, setLocal] = useState<AppSettings | null>(null);
   // Subscription sign-in reported by the provider's Account section once its status check resolves.
@@ -253,7 +257,7 @@ export function SettingsDialog() {
         ? savedKey
         : undefined;
 
-  const availableProviders = aiProvidersForRuntime({ native: isTauri(), isIOS, isMacOS, isPhone });
+  const availableProviders = aiProvidersForRuntime({ native: isTauri(), isIOS, isMacOS, isPhone, appStore });
   const providerSupported = availableProviders.some((provider) => provider.value === local.ai.provider);
 
   const inputStyle = {
@@ -327,7 +331,7 @@ export function SettingsDialog() {
                   </div>
                 )}
 
-                {needsApiKey(local.ai.provider) && (
+                {needsApiKey(local.ai.provider) && appStoreAllowsApiKeys(appStore) && (
                   <InputField
                     label={
                       local.ai.provider === "claude-cli"

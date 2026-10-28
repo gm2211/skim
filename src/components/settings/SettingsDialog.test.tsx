@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SettingsDialog } from "./SettingsDialog";
 import { useUiStore } from "../../stores/uiStore";
-import { claudeOauthBeginPaste, claudeOauthStatus, getSystemInfo, listRemoteModels, mlxAvailability } from "../../services/commands";
+import { appStoreInstall, claudeOauthBeginPaste, claudeOauthStatus, getSystemInfo, listRemoteModels, mlxAvailability } from "../../services/commands";
 
 function renderDialog() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -37,6 +37,7 @@ vi.mock("../../services/commands", async (original) => ({
   claudeOauthBeginPaste: vi.fn().mockResolvedValue({ authorizeUrl: "https://example.invalid/auth" }),
   mlxAvailability: vi.fn().mockResolvedValue({ available: true }),
   mlxIsModelDownloaded: vi.fn().mockResolvedValue(false),
+  appStoreInstall: vi.fn().mockResolvedValue(false),
 }));
 
 beforeEach(() => {
@@ -50,6 +51,18 @@ beforeEach(() => {
 });
 
 describe("Settings provider drafts", () => {
+  it("offers no API keys in a Mac App Store copy and flags a saved key provider (guideline 3.1.1)", async () => {
+    vi.mocked(appStoreInstall).mockResolvedValueOnce(true);
+    renderDialog();
+    await screen.findByRole("group", { name: "Choose an AI service" });
+    expect(screen.getByRole("status")).toHaveTextContent("OpenAI is unavailable here");
+    expect(screen.queryByDisplayValue("test-openai-secret")).not.toBeInTheDocument();
+    for (const name of [/^OpenAI/, /^OpenRouter/, /^Claude \(API Key\)/, /^Custom/]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+    expect(screen.getByRole("button", { name: /^Claude Pro\/Max/ })).toBeInTheDocument();
+  });
+
   it("hides native options in browsers and retains an unavailable saved choice without starting its engine", async () => {
     nativeRuntime.mockReturnValue(false);
     settings.ai.provider = "mlx";

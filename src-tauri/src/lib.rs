@@ -295,6 +295,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::settings::get_settings,
             commands::settings::update_settings,
             commands::settings::list_remote_models,
+            commands::settings::app_store_install,
             // Models
             commands::models::search_hf_models,
             commands::models::get_hf_model_files,

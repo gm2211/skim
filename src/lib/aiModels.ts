@@ -22,12 +22,32 @@ export const AI_PROVIDERS = [
   { value: "custom", label: "Custom", description: "Any OpenAI-compatible endpoint" },
 ];
 
+/**
+ * What a Mac App Store or TestFlight copy may offer under App Review guideline 3.1.1: keys or
+ * accounts may unlock features only when they can be bought through In-App Purchase, in Skim or
+ * in the provider's own App Store app. "subscriptions" keeps sign-in to Claude, ChatGPT and
+ * SuperGrok plans (each sold through IAP in that provider's app) and drops raw API keys;
+ * "on-device" keeps only models that run on the Mac.
+ */
+export type AppStoreAiPolicy = "subscriptions" | "on-device";
+export const APP_STORE_AI_POLICY: AppStoreAiPolicy = "subscriptions";
+
+const APP_STORE_PROVIDERS: Record<AppStoreAiPolicy, readonly string[]> = {
+  "on-device": ["none", "ollama", "ds4"],
+  subscriptions: ["none", "ollama", "ds4", "claude-subscription", "chatgpt-subscription", "xai"],
+};
+
+/** Whether an App Store copy shows API key fields at all (xAI keeps only its SuperGrok sign-in). */
+export const appStoreAllowsApiKeys = (appStore: AppStoreAiPolicy | null) => appStore === null;
+
 /** Skim supplies native bindings; browser user agents alone cannot enable them. */
 export function aiProvidersForRuntime(runtime: {
   native: boolean;
   isIOS: boolean;
   isMacOS: boolean;
   isPhone: boolean;
+  /** Set for a Mac App Store or TestFlight install. */
+  appStore?: AppStoreAiPolicy | null;
 }) {
   const apple = runtime.isIOS || runtime.isMacOS;
   const supportedProviders = onDeviceProvidersFor({
@@ -41,6 +61,7 @@ export function aiProvidersForRuntime(runtime: {
     if (ON_DEVICE_PROVIDERS.some((entry) => entry.id === provider.value)) {
       return supportedProviders.some((entry) => entry.id === provider.value);
     }
+    if (runtime.appStore && !APP_STORE_PROVIDERS[runtime.appStore].includes(provider.value)) return false;
     if (provider.value === "ds4") return runtime.native && runtime.isMacOS;
     if (["ollama", "claude-cli"].includes(provider.value)) {
       return runtime.native && !runtime.isIOS && !runtime.isPhone;

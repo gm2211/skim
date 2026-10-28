@@ -3273,7 +3273,12 @@ enum NativeAI {
         var attempt = 0
         while true {
             try Task.checkCancellation()
-            let (data, response) = try await debugSimulatedRateLimit(request) ?? session.data(for: request)
+            let (data, response): (Data, URLResponse)
+            if let simulated = debugSimulatedRateLimit(request) {
+                (data, response) = simulated
+            } else {
+                (data, response) = try await session.data(for: request)
+            }
             guard let http = response as? HTTPURLResponse else { return (data, response) }
             if (200..<300).contains(http.statusCode) {
                 await pacer.clearLimit(for: provider)

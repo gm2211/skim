@@ -3273,7 +3273,7 @@ enum NativeAI {
         var attempt = 0
         while true {
             try Task.checkCancellation()
-            let (data, response) = try await session.data(for: request)
+            let (data, response) = try await debugSimulatedRateLimit(request) ?? session.data(for: request)
             guard let http = response as? HTTPURLResponse else { return (data, response) }
             if (200..<300).contains(http.statusCode) {
                 await pacer.clearLimit(for: provider)
@@ -3299,6 +3299,19 @@ enum NativeAI {
             try await Task.sleep(for: .seconds(max(wait ?? 0, backoff[attempt])))
             attempt += 1
         }
+    }
+
+    /// Debug builds launched with SKIM_SIMULATE_AI_429=1 get Claude's 429 for
+    /// every cloud request, so the rate-limit screens can be checked by eye.
+    private static func debugSimulatedRateLimit(_ request: URLRequest) -> (Data, URLResponse)? {
+#if DEBUG
+        guard ProcessInfo.processInfo.environment["SKIM_SIMULATE_AI_429"] == "1", let url = request.url,
+              let response = HTTPURLResponse(url: url, statusCode: 429, httpVersion: nil, headerFields: nil) else { return nil }
+        let body = #"{"type":"error","error":{"type":"rate_limit_error","message":"This request would exceed your account's rate limit. Please try again later."}}"#
+        return (Data(body.utf8), response)
+#else
+        return nil
+#endif
     }
 
     /// A 429 that says nothing about a limit: no `retry-after`, no usage

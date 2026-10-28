@@ -115,12 +115,18 @@ struct NativeAIAnthropicRequestTests {
     @Test func real429WithRetryAfterSaysWhenToRetry() {
         let data = Data(#"{"type":"error","error":{"type":"rate_limit_error","message":"Error"}}"#.utf8)
         let message = NativeAI.friendlyErrorMessage(status: 429, data: data, provider: "Claude subscription", retryAfter: "150")
-        #expect(message == "Claude is rate-limited right now. Try again in 3 minutes.")
+        #expect(message == "Claude has hit your account's rate limit. Try again in 3 minutes.")
     }
 
-    @Test func real429WithAReasonShowsIt() {
+    @Test func real429LeavesOutTheProvidersBoilerplate() {
         let data = Data(#"{"type":"error","error":{"type":"rate_limit_error","message":"This request would exceed your account's rate limit."}}"#.utf8)
         let message = NativeAI.friendlyErrorMessage(status: 429, data: data, provider: "Claude subscription")
-        #expect(message == "Claude is rate-limited right now. Wait a bit and try again. (This request would exceed your account's rate limit.)")
+        #expect(message == "Claude has hit your account's rate limit for the moment. Try again in a minute.")
+    }
+
+    @Test func real429WithASpecificReasonShowsIt() {
+        let data = Data(#"{"type":"error","error":{"type":"rate_limit_error","message":"Number of request tokens has exceeded your per-minute rate limit."}}"#.utf8)
+        let message = NativeAI.friendlyErrorMessage(status: 429, data: data, provider: "Claude API")
+        #expect(message == "Claude has hit your account's rate limit for the moment. Try again in a minute. (Number of request tokens has exceeded your per-minute rate limit.)")
     }
 }

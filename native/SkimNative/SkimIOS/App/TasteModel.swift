@@ -269,7 +269,7 @@ extension AppModel {
             if force { throw NativeAIError.unavailable("Nothing new to learn from yet. Read a few articles first.") }
             return
         }
-        let note = try await NativeAI.learnedPreferencesNote(current: prefs.text, evidence: evidence, settings: settings)
+        let note = try await NativeAI.inBackground { try await NativeAI.learnedPreferencesNote(current: prefs.text, evidence: evidence, settings: settings) }
         guard !note.isEmpty else { throw NativeAIError.unavailable("The AI model returned an empty note.") }
         // The reader may have edited or deleted the note while the model wrote.
         guard learnedPreferences.value == prefs else { return }

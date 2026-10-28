@@ -34,6 +34,14 @@ struct AIResultRequest: Identifiable {
 struct AIResultAnswer {
     var text: String
     var articles: [Article]
+    /// A line under the result, e.g. that the on-device model stood in.
+    var note: String? = nil
+}
+
+struct AISummaryText: Sendable {
+    var text: String
+    /// Set when a model other than the chosen one wrote the summary.
+    var note: String? = nil
 }
 
 /// Where a quoted passage in a chat question came from: a sentence of an
@@ -352,6 +360,16 @@ private final class TodaySemanticCompletion: @unchecked Sendable {
 }
 
 enum NativeAI {
+    /// Runs `operation` with its cloud AI requests in the background lane:
+    /// they wait behind anything the reader asked for and stop during a rate
+    /// limit cooldown instead of asking again (see `CloudAIPacer`).
+    static func inBackground<T>(
+        isolation: isolated (any Actor)? = #isolation,
+        _ operation: () async throws -> T
+    ) async rethrows -> T {
+        try await AIRequestLane.$current.withValue(.background, operation: operation, isolation: isolation)
+    }
+
     static func verifyToday(plan: TodaySemanticPolicy.VerificationPlan, provider: String,
         complete: @Sendable (String, String, Int) async throws -> String) async throws -> [TodaySemanticGroup] {
         let batches = try TodaySemanticPolicy.verificationBatches(plan: plan)
@@ -1366,7 +1384,67 @@ enum NativeAI {
         return withoutFences
     }
 
-    static func summarize(article: Article, settings: AppSettings) async throws -> String {
+    /// Summarizes `article`. When the cloud provider is rate-limited even
+    /// after Skim asked again, the on-device model writes it instead and
+    /// `note` says so, rather than leaving the reader with only an error.
+    static func summarize(article: Article, settings: AppSettings) async throws -> AISummaryText {
+        do {
+            return AISummaryText(text: try await summarizeOnce(article: article, settings: settings))
+        } catch NativeAIError.providerBusy(let message) {
+            guard let local = busyFallback(for: settings) else { throw NativeAIError.providerBusy(message) }
+            let text: String
+            do {
+                text = try await summarizeOnce(article: article, settings: local)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // The reader asked for the chosen provider; its error says more than the stand-in's.
+                print("[NativeAI] On-device summary fallback failed: \(error)")
+                throw NativeAIError.providerBusy(message)
+            }
+            return AISummaryText(text: text, note: busyFallbackNote(cloud: settings.ai, local: local.ai))
+        }
+    }
+
+    static func summarizeStreaming(
+        article: Article,
+        settings: AppSettings,
+        onToken: @MainActor @escaping (String) -> Void
+    ) async throws -> AISummaryText {
+        do {
+            return AISummaryText(text: try await summarizeStreamingOnce(article: article, settings: settings, onToken: onToken))
+        } catch NativeAIError.providerBusy(let message) {
+            guard let local = busyFallback(for: settings) else { throw NativeAIError.providerBusy(message) }
+            let text: String
+            do {
+                text = try await summarizeStreamingOnce(article: article, settings: local, onToken: onToken)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // The reader asked for the chosen provider; its error says more than the stand-in's.
+                print("[NativeAI] On-device summary fallback failed: \(error)")
+                throw NativeAIError.providerBusy(message)
+            }
+            return AISummaryText(text: text, note: busyFallbackNote(cloud: settings.ai, local: local.ai))
+        }
+    }
+
+    /// `settings` pointed at the on-device model, when the provider is a
+    /// cloud one and an on-device model is ready.
+    static func busyFallback(for settings: AppSettings) -> AppSettings? {
+        let current = OfflineAIFallback.effective(settings)
+        guard OfflineAIFallback.needsConnection(current.ai), let local = OfflineAIFallback.onDevice(current.ai) else { return nil }
+        var fallback = current
+        fallback.ai = local
+        return fallback
+    }
+
+    static func busyFallbackNote(cloud: AISettings, local: AISettings) -> String {
+        let name = cloud.provider.hasPrefix("claude") || cloud.provider == "anthropic" ? "Claude" : providerDisplayName(cloud.provider)
+        return "\(name) is rate-limited right now, so \(OfflineAIFallback.label(for: local.provider)) wrote this summary on this device. Open the summary again later for \(name)'s."
+    }
+
+    private static func summarizeOnce(article: Article, settings: AppSettings) async throws -> String {
         let settings = OfflineAIFallback.effective(settings)
         let publication = AIPublicationGate()
         defer { publication.cancel() }
@@ -1401,7 +1479,7 @@ enum NativeAI {
     /// with each decoded chunk. For non-MLX providers the result is delivered in one shot
     /// (onToken is not called during generation; the final text is returned normally).
     /// Returns the full sanitized summary and writes it to the LRU cache.
-    static func summarizeStreaming(
+    private static func summarizeStreamingOnce(
         article: Article,
         settings: AppSettings,
         onToken: @MainActor @escaping (String) -> Void
@@ -2482,7 +2560,7 @@ enum NativeAI {
                 messages: messages,
                 bearerToken: token
             )
-            return try await urlSession.data(for: request)
+            return try await sendPaced(request, provider: provider, session: urlSession)
         }
 
         var (data, response) = try await send(credential.token)
@@ -2546,7 +2624,7 @@ enum NativeAI {
             throw NativeAIError.unavailable("Add a Claude API key in Settings.")
         }
         let request = try buildAnthropicRequest(settings: settings, accessToken: key, isSubscription: false, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature, messages: messages)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await sendPaced(request, provider: settings.provider)
         try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
         return try decodeAnthropicContent(data: data)
     }
@@ -2572,7 +2650,7 @@ enum NativeAI {
         }
 
         let request = try buildAnthropicRequest(settings: settings, accessToken: accessToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature, messages: messages)
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await sendPaced(request, provider: settings.provider)
 
         // On 401, attempt token refresh and retry once.
         if let http = response as? HTTPURLResponse, http.statusCode == 401 {
@@ -2584,7 +2662,7 @@ enum NativeAI {
                 throw NativeAIError.requiresReauthentication
             }
             let retryRequest = try buildAnthropicRequest(settings: settings, accessToken: newToken, isSubscription: true, instructions: instructions, prompt: prompt, maxTokens: maxTokens, temperature: temperature, messages: messages)
-            let (retryData, retryResponse) = try await URLSession.shared.data(for: retryRequest)
+            let (retryData, retryResponse) = try await sendPaced(retryRequest, provider: settings.provider)
             try validate(response: retryResponse, data: retryData, provider: providerDisplayName(settings.provider))
             return try decodeAnthropicContent(data: retryData)
         }
@@ -2973,7 +3051,7 @@ enum NativeAI {
             // Execute the request, handling subscription 401 refresh once per iteration.
             var data: Data
             var response: URLResponse
-            (data, response) = try await urlSession.data(for: request)
+            (data, response) = try await sendPaced(request, provider: settings.provider, session: urlSession)
 
             if isSubscription, let http = response as? HTTPURLResponse, http.statusCode == 401 {
                 let newToken: String
@@ -2996,7 +3074,7 @@ enum NativeAI {
                     maxTokens: maxTokens,
                     tools: tools
                 )
-                (data, response) = try await urlSession.data(for: retryRequest)
+                (data, response) = try await sendPaced(retryRequest, provider: settings.provider, session: urlSession)
             }
 
             try validate(response: response, data: data, provider: providerDisplayName(settings.provider))
@@ -3150,6 +3228,86 @@ enum NativeAI {
         return URL(string: base.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/v1/chat/completions")!
     }
 
+    /// Backoff before each automatic retry of a busy provider, in seconds. A
+    /// foreground request is asked again this many times before the reader
+    /// sees an error; background work isn't retried and waits out the cooldown.
+    nonisolated(unsafe) static var busyRetryBackoff: [TimeInterval] = [2, 6]
+
+    /// Sends a cloud AI request through `CloudAIPacer`, so the reader's own
+    /// requests go ahead of background work, and asks again after a short wait
+    /// (honouring `retry-after`) when the provider answers 429 or overloaded.
+    static func sendPaced(
+        _ request: URLRequest,
+        provider: String,
+        session: URLSession = .shared,
+        pacer: CloudAIPacer = .shared
+    ) async throws -> (Data, URLResponse) {
+        let lane = AIRequestLane.current
+        if let limit = await pacer.limit(for: provider) {
+            let remaining = limit.until.timeIntervalSinceNow
+            guard lane == .foreground, remaining <= CloudAIPacer.foregroundWaitLimit else {
+                print("[NativeAI] \(provider) is cooling down for \(Int(remaining))s; not sending this \(lane) request.")
+                throw NativeAIError.providerBusy(limit.message)
+            }
+            try await Task.sleep(for: .seconds(max(0, remaining)))
+        }
+        await pacer.start(lane)
+        do {
+            let result = try await sendRetryingWhenBusy(request, provider: provider, lane: lane, session: session, pacer: pacer)
+            await pacer.finish(lane)
+            return result
+        } catch {
+            await pacer.finish(lane)
+            throw error
+        }
+    }
+
+    private static func sendRetryingWhenBusy(
+        _ request: URLRequest,
+        provider: String,
+        lane: AIRequestLane,
+        session: URLSession,
+        pacer: CloudAIPacer
+    ) async throws -> (Data, URLResponse) {
+        let backoff = lane == .foreground ? busyRetryBackoff : []
+        var attempt = 0
+        while true {
+            try Task.checkCancellation()
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { return (data, response) }
+            if (200..<300).contains(http.statusCode) {
+                await pacer.clearLimit(for: provider)
+                return (data, response)
+            }
+            guard [429, 503, 529].contains(http.statusCode) else { return (data, response) }
+            let signal = ProviderBusySignal.from(http)
+            // Claude's bare 429 "Error" turns down the request itself; asking
+            // again gets the same answer, and it closes no window.
+            if http.statusCode == 429, isRefusal429(data: data, signal: signal) { return (data, response) }
+            let wait = signal.wait()
+            print("[NativeAI] \(provider) busy (\(http.statusCode)), attempt \(attempt + 1), wait \(wait.map { "\(Int($0))s" } ?? "unknown"), unified-status \(http.value(forHTTPHeaderField: "anthropic-ratelimit-unified-status") ?? "-"), claim \(http.value(forHTTPHeaderField: "anthropic-ratelimit-unified-representative-claim") ?? "-")")
+            let canRetry = attempt < backoff.count && !signal.planLimitReached
+                && (wait ?? 0) <= CloudAIPacer.foregroundWaitLimit
+            guard canRetry else {
+                if http.statusCode == 429 {
+                    let message = friendlyErrorMessage(status: 429, data: data, provider: providerDisplayName(provider), signal: signal)
+                    let cooldown = wait ?? CloudAIPacer.defaultCooldown
+                    await pacer.recordLimit(.init(until: Date().addingTimeInterval(cooldown), message: message), for: provider)
+                }
+                return (data, response)
+            }
+            try await Task.sleep(for: .seconds(max(wait ?? 0, backoff[attempt])))
+            attempt += 1
+        }
+    }
+
+    /// A 429 that says nothing about a limit: no `retry-after`, no usage
+    /// window, and only a placeholder message.
+    static func isRefusal429(data: Data, signal: ProviderBusySignal) -> Bool {
+        let detail = parsedErrorMessage(from: data).flatMap { isInformativeErrorDetail($0) ? $0 : nil }
+        return detail == nil && signal.retryAfter == nil && signal.resetsAt == nil && !signal.planLimitReached
+    }
+
     private static func validate(response: URLResponse, data: Data, provider: String) throws {
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
@@ -3158,8 +3316,12 @@ enum NativeAI {
             // would look bad in App Store review) — log the full body for debugging and
             // throw a friendly, actionable message instead.
             print("[NativeAI] \(provider) request failed (\(status)): \(rawBody.prefix(2000))")
-            let retryAfter = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "retry-after")
-            throw NativeAIError.unavailable(friendlyErrorMessage(status: status, data: data, provider: provider, retryAfter: retryAfter))
+            let signal = (response as? HTTPURLResponse).map { ProviderBusySignal.from($0) }
+                ?? ProviderBusySignal(retryAfter: nil, resetsAt: nil, planLimitReached: false)
+            let message = friendlyErrorMessage(status: status, data: data, provider: provider, signal: signal)
+            let busy = (status == 429 && !isRefusal429(data: data, signal: signal))
+                || (500...599).contains(status) || parsedErrorType(from: data) == "overloaded_error"
+            throw busy ? NativeAIError.providerBusy(message) : NativeAIError.unavailable(message)
         }
     }
 
@@ -3168,6 +3330,13 @@ enum NativeAI {
     /// Anthropic API and OpenAI-compatible providers when possible, but always falls back
     /// to a generic message — raw JSON error bodies must never reach the UI.
     static func friendlyErrorMessage(status: Int, data: Data, provider: String, retryAfter: String? = nil) -> String {
+        let signal = ProviderBusySignal(
+            retryAfter: retryAfter.flatMap { TimeInterval($0.trimmingCharacters(in: .whitespaces)) },
+            resetsAt: nil, planLimitReached: false)
+        return friendlyErrorMessage(status: status, data: data, provider: provider, signal: signal)
+    }
+
+    static func friendlyErrorMessage(status: Int, data: Data, provider: String, signal: ProviderBusySignal, now: Date = Date()) -> String {
         let isClaude = provider.hasPrefix("Claude")
         let errorType = parsedErrorType(from: data)
         let errorMessage = parsedErrorMessage(from: data)
@@ -3182,28 +3351,16 @@ enum NativeAI {
                 ? "Your Claude plan doesn't allow this request."
                 : "Your \(provider) plan doesn't allow this request."
         case 429:
-            // A real rate limit carries a `retry-after` header or says what was exceeded. A
-            // bare 429 "Error" is Claude refusing the request itself (e.g. a subscription
-            // request it doesn't accept), so don't tell someone with no limits to wait.
-            let detail = errorMessage.flatMap { isInformativeErrorDetail($0) ? $0 : nil }
-            let wait = retryAfter.flatMap { Int($0.trimmingCharacters(in: .whitespaces)) }
-            if detail == nil, wait == nil {
+            // A real rate limit carries a `retry-after` header, a usage window, or says
+            // what was exceeded. A bare 429 "Error" is Claude refusing the request itself
+            // (e.g. a subscription request it doesn't accept), so don't tell someone with
+            // no limits to wait.
+            if isRefusal429(data: data, signal: signal) {
                 return isClaude
                     ? "Claude turned down this request without saying why (429). Try another model, or sign in to Claude again in Settings."
                     : "\(provider) turned down this request without saying why (429). Try another model, or check your account in Settings."
             }
-            let name = isClaude ? "Claude" : provider
-            // If the provider included a specific, human-readable detail (e.g. a
-            // subscription usage limit reset time), surface it — but never the raw
-            // JSON envelope, and never a non-descriptive placeholder like "Error".
-            if let detail {
-                return "\(name) is rate-limited right now. Wait a bit and try again. (\(detail))"
-            }
-            if let wait, wait > 0 {
-                let minutes = (wait + 59) / 60
-                return "\(name) is rate-limited right now. Try again in \(minutes == 1 ? "a minute" : "\(minutes) minutes")."
-            }
-            return "\(name) is rate-limited right now. Wait a bit and try again."
+            return rateLimitMessage(provider: provider, data: data, signal: signal, now: now)
         case 500...599:
             return isClaude
                 ? "Claude is temporarily unavailable. Try again shortly."
@@ -3239,7 +3396,8 @@ enum NativeAI {
         if let aiError = error as? NativeAIError {
             switch aiError {
             case .unavailable(let message) where isPresentableErrorText(message): return message
-            case .unavailable: break
+            case .providerBusy(let message) where isPresentableErrorText(message): return message
+            case .unavailable, .providerBusy: break
             case .requiresReauthentication: return "Your Claude session expired. Sign in again."
             }
         }
@@ -3294,6 +3452,36 @@ enum NativeAI {
         if dumpMarkers.contains(where: lowered.contains) { return false }
         // `"\(error)"` on an enum case with a payload, e.g. `unavailable("…")`.
         return !(trimmed.contains("(") && trimmed.hasSuffix(")") && !trimmed.contains(" "))
+    }
+
+    /// The reader-facing message for a real rate limit: when it lifts if the
+    /// provider said, never the provider's boilerplate ("This request would
+    /// exceed your account's rate limit"), which only repeats the headline.
+    static func rateLimitMessage(provider: String, data: Data, signal: ProviderBusySignal, now: Date = Date()) -> String {
+        let isClaude = provider.hasPrefix("Claude")
+        let name = isClaude ? "Claude" : provider
+        let wait = signal.wait(now: now)
+        if let resetsAt = signal.resetsAt, signal.planLimitReached || (wait ?? 0) > 15 * 60 {
+            let sameDay = Calendar.current.isDate(resetsAt, inSameDayAs: now)
+            let when = sameDay
+                ? resetsAt.formatted(.dateTime.hour().minute())
+                : resetsAt.formatted(.dateTime.weekday(.wide).hour().minute())
+            let shared = provider == "Claude subscription" ? " Claude.ai and Claude Code count toward the same limit." : ""
+            return "You've reached your \(name) plan's usage limit. It resets \(sameDay ? "at" : "on") \(when).\(shared)"
+        }
+        var message: String
+        if let wait, wait > 0 {
+            let minutes = Int((wait + 59) / 60)
+            message = "\(name) has hit your account's rate limit. Try again in \(minutes <= 1 ? "a minute" : "\(minutes) minutes")."
+        } else {
+            message = "\(name) has hit your account's rate limit for the moment. Try again in a minute."
+        }
+        if let detail = parsedErrorMessage(from: data), isInformativeErrorDetail(detail),
+           !detail.lowercased().contains("would exceed your account's rate limit") {
+            let reason = detail.count > 160 ? String(detail.prefix(160)) + "…" : detail
+            message += " (\(reason))"
+        }
+        return message
     }
 
     /// Parses the `error` object out of a provider error body, e.g.
@@ -3633,13 +3821,15 @@ enum NativeAI {
 
 enum NativeAIError: LocalizedError {
     case unavailable(String)
+    /// The provider is rate-limited or overloaded; asking again later can work.
+    case providerBusy(String)
     /// The Claude subscription token has expired and the refresh token is invalid.
     /// The user must sign in again.
     case requiresReauthentication
 
     var errorDescription: String? {
         switch self {
-        case .unavailable(let message):
+        case .unavailable(let message), .providerBusy(let message):
             message
         case .requiresReauthentication:
             "Claude sign-in expired. Sign in again in Settings."
@@ -3654,12 +3844,16 @@ enum AIErrorRemedy: Equatable {
     case reauthenticate
     /// Provider is missing, disabled, or lacks credentials; open the AI settings.
     case openAISettings
+    /// Provider is rate-limited or overloaded; offer to try again.
+    case retry
 
     static func classify(_ error: Error) -> AIErrorRemedy {
         guard let aiError = error as? NativeAIError else { return .none }
         switch aiError {
         case .requiresReauthentication:
             return .reauthenticate
+        case .providerBusy:
+            return .retry
         case .unavailable(let message):
             let needle = message.lowercased()
             let mentionsSettings = needle.contains("in settings")
@@ -3808,6 +4002,7 @@ struct AIResultSheet: View {
     @State private var isLoading = true
     @State private var result = ""
     @State private var referencedArticles: [Article] = []
+    @State private var note: String?
     @State private var errorMessage: String?
     @State private var errorRemedy: AIErrorRemedy = .none
     @State private var showAISettings = false
@@ -3835,6 +4030,13 @@ struct AIResultSheet: View {
                         AIErrorBox(message: errorMessage, remedy: errorRemedy, onResolved: { retryTask = Task { await run() } })
                     } else {
                         PrettyAIText(result)
+
+                        if let note, !isLoading {
+                            Label(note, systemImage: "iphone")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(SkimStyle.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
 
                         if !referencedArticles.isEmpty {
                             VStack(alignment: .leading, spacing: 10) {
@@ -3940,6 +4142,7 @@ struct AIResultSheet: View {
             errorRemedy = .none
             result = ""
             referencedArticles = []
+            note = nil
             do {
                 let answer: AIResultAnswer
                 if let streamAction = request.streamAction {
@@ -3952,6 +4155,7 @@ struct AIResultSheet: View {
                 try Task.checkCancellation()
                 current.publish {
                     result = answer.text
+                    note = answer.note
                     referencedArticles = ArticleReferenceExtractor.references(in: answer.text, articles: answer.articles)
                     isLoading = false
                 }

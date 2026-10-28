@@ -115,7 +115,26 @@ behaviors:
     description: >-
       Skim says a provider is rate-limited only when the provider says so: a retry-after time or a
       message naming the limit. A bare 429 says the request was turned down instead.
-    details: With a retry-after header the message says how many minutes to wait.
+    details: >-
+      With a retry-after header the message says how many minutes to wait; when Claude sign-in says
+      the plan's usage window is closed, it says when the limit resets. Claude's boilerplate ("This
+      request would exceed your account's rate limit") is never repeated after the headline.
+  - id: rate-limits-retry-and-yield
+    description: >-
+      A rate-limited or overloaded cloud request is asked again after a short wait before the
+      reader sees an error, and that error offers Try Again. Background AI work (Smart sort, Today,
+      learned preferences) yields to what the reader asked for and stops during a rate-limit cooldown.
+    details: >-
+      Foreground requests retry twice (about 2 and 6 seconds, longer when retry-after says so, never
+      past 20 seconds); background requests are not retried. A 429 that outlasts the retries starts
+      a cooldown (retry-after, the plan's reset, or a minute) during which background work does not
+      call the provider. On iOS, background work runs one request at a time and waits while a
+      foreground request is in flight, and a rate-limited AI Summary is written by the on-device model
+      (Apple Intelligence or a downloaded MLX model) with a line saying so. Desktop retries and
+      cools down the same way and shows Try again on a rate-limited summary.
+    source:
+      text: 'Screenshot: iOS AI Summary showing "Claude is rate-limited right now. Wait a bit and try again. (This request would exceed your account''s rate limit. Please try again later.)" with only an AI Settings button. "Wtf"'
+      reference: Giulio, project thread "Fix Claude rate-limit errors in AI Summary", 2026-10-28
   - id: desktop-local-models
     description: >-
       Desktop local models come from a curated list (Qwen3.5 2B, 4B recommended, 9B, 35B-A3B on Macs

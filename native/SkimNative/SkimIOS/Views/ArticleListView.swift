@@ -308,14 +308,14 @@ struct ArticleListView: View {
                 statusLabel: NativeAI.loadingStatusLabel(for: settings.ai),
                 action: {
                     let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot, store: model.store)
-                    let text = try await NativeAI.summarize(article: contextArticle, settings: settings)
-                    return AIResultAnswer(text: text, articles: [contextArticle])
+                    let summary = try await NativeAI.summarize(article: contextArticle, settings: settings)
+                    return AIResultAnswer(text: summary.text, articles: [contextArticle], note: summary.note)
                 },
                 streamAction: { onToken in
                     let contextArticle = try await WebAIContext.article(base: article, preferWeb: false, snapshot: snapshot, store: model.store)
-                    let text = try await NativeAI.summarizeStreaming(
+                    let summary = try await NativeAI.summarizeStreaming(
                         article: contextArticle, settings: settings, onToken: onToken)
-                    return AIResultAnswer(text: text, articles: [contextArticle])
+                    return AIResultAnswer(text: summary.text, articles: [contextArticle], note: summary.note)
                 },
                 clearAction: {
                     NativeAI.clearSummaryCache(

@@ -2,8 +2,9 @@ import SkimCore
 import SwiftUI
 
 /// Red error text plus the action that fixes it: "Sign in again" for an expired
-/// Claude session, "Open AI Settings" for missing providers or keys, and a
-/// quieter "AI Settings" button for any other AI failure.
+/// Claude session, "Open AI Settings" for missing providers or keys, "Try
+/// Again" for a rate-limited or overloaded provider, and a quieter "AI
+/// Settings" button for any other AI failure.
 /// Runs `onResolved` after the fix sheet is dismissed so callers can retry.
 struct AIErrorBox: View {
     var message: String
@@ -17,7 +18,8 @@ struct AIErrorBox: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(message)
                 .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(Color.red.opacity(0.92))
+                // A rate limit is a wait, not a breakage: plain text, not red.
+                .foregroundStyle(remedy == .retry ? SkimStyle.text : Color.red.opacity(0.92))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             switch remedy {
@@ -25,17 +27,15 @@ struct AIErrorBox: View {
                 actionButton("Sign in again", systemImage: "person.crop.circle") { showReauth = true }
             case .openAISettings:
                 actionButton("Open AI Settings", systemImage: "gearshape") { showAISettings = true }
-            case .none:
+            case .retry where onResolved != nil:
+                // Rate-limited or overloaded: asking again is the fix, and
+                // settings stay one tap away for switching models.
+                actionButton("Try Again", systemImage: "arrow.clockwise") { onResolved?() }
+                settingsButton
+            case .none, .retry:
                 // Any other AI failure may still be a provider or model
                 // problem, so settings stay one tap away.
-                Button { showAISettings = true } label: {
-                    Label("AI Settings", systemImage: "gearshape")
-                        .font(.system(size: 15, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                }
-                .buttonStyle(.bordered)
-                .tint(SkimStyle.accent)
+                settingsButton
             }
         }
         .padding(16)
@@ -47,6 +47,17 @@ struct AIErrorBox: View {
         .sheet(isPresented: $showAISettings, onDismiss: { onResolved?() }) {
             SettingsSheet(isPresented: $showAISettings, aiOnly: true)
         }
+    }
+
+    private var settingsButton: some View {
+        Button { showAISettings = true } label: {
+            Label("AI Settings", systemImage: "gearshape")
+                .font(.system(size: 15, weight: .semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+        }
+        .buttonStyle(.bordered)
+        .tint(SkimStyle.accent)
     }
 
     private func actionButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {

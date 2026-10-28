@@ -516,22 +516,23 @@ impl AiProvider for AnthropicProvider {
             }
         }
 
-        let response = self.client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| format!("Anthropic request failed: {}", e))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            log::error!("Anthropic API error: status={}", status);
-            return Err(format!("Anthropic API error ({}): {}", status, anthropic_error_reason(&body)));
-        }
+        let response = super::busy::send(
+            "anthropic",
+            false,
+            || {
+                self.client
+                    .post("https://api.anthropic.com/v1/messages")
+                    .header("x-api-key", &self.api_key)
+                    .header("anthropic-version", "2023-06-01")
+                    .header("content-type", "application/json")
+                    .json(&body)
+            },
+            |status, body| {
+                log::error!("Anthropic API error: status={}", status);
+                format!("Anthropic API error ({}): {}", status, anthropic_error_reason(body))
+            },
+        )
+        .await?;
 
         let raw: serde_json::Value = response
             .json()
@@ -610,22 +611,21 @@ impl AiProvider for ClaudeSubscriptionProvider {
             }
         }
 
-        let resp = self.client
-            .post("https://api.anthropic.com/v1/messages")
-            .header("Authorization", format!("Bearer {}", token))
-            .header("anthropic-version", "2023-06-01")
-            .header("anthropic-beta", BETA_HEADER)
-            .header("content-type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| format!("Claude subscription request failed: {}", e))?;
-
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let body = resp.text().await.unwrap_or_default();
-            return Err(format!("Claude subscription API {}: {}", status, anthropic_error_reason(&body)));
-        }
+        let resp = super::busy::send(
+            "claude-subscription",
+            true,
+            || {
+                self.client
+                    .post("https://api.anthropic.com/v1/messages")
+                    .header("Authorization", format!("Bearer {}", token))
+                    .header("anthropic-version", "2023-06-01")
+                    .header("anthropic-beta", BETA_HEADER)
+                    .header("content-type", "application/json")
+                    .json(&body)
+            },
+            |status, body| format!("Claude subscription API {}: {}", status, anthropic_error_reason(body)),
+        )
+        .await?;
 
         let raw: serde_json::Value = resp.json().await
             .map_err(|e| format!("Parse Claude subscription response: {}", e))?;

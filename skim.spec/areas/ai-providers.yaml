@@ -9,6 +9,18 @@ behaviors:
       Desktop providers: None, Local (llama.cpp), On-device MLX, Apple Intelligence, Ollama, Claude
       Pro/Max (OAuth), ChatGPT Plus/Pro, Claude CLI (legacy), Claude API key, OpenAI, Grok (xAI), DeepSeek DS4 (Mac
       only), OpenRouter, and Custom (any OpenAI-compatible endpoint).
+  - id: app-store-providers
+    description: >-
+      A Mac App Store or TestFlight copy offers no API key entry: it keeps on-device engines,
+      Ollama, and sign-in to Claude, ChatGPT and SuperGrok plans. Local and direct-download builds
+      keep every provider.
+    details: >-
+      App Review rejected macOS 0.1.4 under guideline 3.1.1: API keys may unlock features only if
+      they can be bought through In-App Purchase, in Skim or in the provider's own App Store app.
+      Those three plans are sold through IAP in their providers' apps; raw API keys are not. A copy
+      counts as App Store when Contents/_MASReceipt/receipt exists. A saved provider that the copy
+      hides shows as unavailable. Proposal pending Giulio's choice between this and on-device only
+      (APP_STORE_AI_POLICY in src/lib/aiModels.ts).
   - id: ios-providers
     description: >-
       iOS providers: Apple Intelligence (default), On-device MLX, Claude Pro/Max, ChatGPT Plus/Pro, Grok

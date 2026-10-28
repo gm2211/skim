@@ -3,6 +3,7 @@ import {
   MLX_MODELS,
   RETIRED_MLX_MODELS,
   aiProvidersForRuntime,
+  appStoreAllowsApiKeys,
   hasChatOverride,
   mlxModelsFor,
   modelPatch,
@@ -13,7 +14,7 @@ import type { AiSettings } from "../services/types";
 
 describe("native provider capabilities", () => {
   const mac = { native: true, isIOS: false, isMacOS: true, isPhone: false };
-  const ids = (runtime: typeof mac) => aiProvidersForRuntime(runtime).map((provider) => provider.value);
+  const ids = (runtime: Parameters<typeof aiProvidersForRuntime>[0]) => aiProvidersForRuntime(runtime).map((provider) => provider.value);
 
   it("hides native engines in a browser even with a Mac user agent", () => {
     const browser = ids({ ...mac, native: false });
@@ -37,6 +38,23 @@ describe("native provider capabilities", () => {
     expect(desktop).not.toContain("mlx");
     expect(desktop).not.toContain("foundation-models");
     expect(ids(mac)).toEqual(expect.arrayContaining(["local", "mlx", "foundation-models", "ds4"]));
+  });
+
+  it("drops raw API keys from an App Store copy and keeps provider-app subscriptions (guideline 3.1.1)", () => {
+    const store = ids({ ...mac, appStore: "subscriptions" });
+    expect(store).toEqual(["none", "local", "mlx", "foundation-models", "ollama",
+      "claude-subscription", "chatgpt-subscription", "xai", "ds4"]);
+    expect(appStoreAllowsApiKeys("subscriptions")).toBe(false);
+    expect(appStoreAllowsApiKeys(null)).toBe(true);
+  });
+
+  it("keeps only on-device engines in an on-device App Store copy", () => {
+    expect(ids({ ...mac, appStore: "on-device" })).toEqual(["none", "local", "mlx", "foundation-models", "ollama", "ds4"]);
+  });
+
+  it("offers everything outside the App Store", () => {
+    expect(ids({ ...mac, appStore: null })).toEqual(ids(mac));
+    expect(ids(mac)).toEqual(expect.arrayContaining(["anthropic", "openai", "openrouter", "custom"]));
   });
 });
 

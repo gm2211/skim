@@ -610,3 +610,6 @@ export const getSystemInfo = () => invoke<SystemInfo>("get_system_info");
 export const ds4Status = () => invoke<Ds4Status>("ds4_status");
 export const ds4Start = (modelPath: string) => invoke<Ds4Status>("ds4_start", { modelPath });
 export const ds4Stop = () => invoke<Ds4Status>("ds4_stop");
+
+/** True for a Mac App Store or TestFlight copy (it carries an App Store receipt). */
+export const appStoreInstall = () => invoke<boolean>("app_store_install");

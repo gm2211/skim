@@ -214,3 +214,21 @@ pub async fn update_settings(
 
     Ok(())
 }
+
+/// True when this copy came from the Mac App Store or TestFlight, which install a
+/// receipt in `Contents/_MASReceipt`. Local and direct-download builds have none.
+/// App Review guideline 3.1.1 limits which AI accounts such a build may offer.
+#[tauri::command]
+pub fn app_store_install() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent()?.parent().map(|c| c.join("_MASReceipt/receipt")))
+            .is_some_and(|receipt| receipt.exists())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}

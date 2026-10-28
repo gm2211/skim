@@ -45,12 +45,17 @@ behaviors:
       Discover's home has a Newspapers list with The New York Times, The Wall Street Journal, The
       Washington Post, the Financial Times and The Guardian. A paper's page lists its official RSS
       sections, each with a Follow button, plus "Follow all sections", and says whether the paper is
-      free or needs a subscription and whether the reader is signed in.
+      free or needs a subscription and whether the reader is signed in. A paper whose feeds Skim
+      cannot load shows "No RSS feeds" and a note saying why, and keeps only its sign-in.
     details: >-
       The papers and sections live in shared/newspapers.json, read by desktop and iOS. Sections are
       the papers' own feeds, checked October 2026: WSJ moved from feeds.a.dj.com (stale since
-      January 2025) to feeds.content.dowjones.io; The Washington Post's homepage feed stopped in July
-      2026, so its all-stories feed is washingtonpost.com/arcio/rss/; FT sections use ?format=rss.
+      January 2025) to feeds.content.dowjones.io; FT sections use ?format=rss. The Washington Post
+      has no sections: on 27 October 2026 every feeds.washingtonpost.com/rss/* URL returned 502 and
+      every washingtonpost.com/arcio/rss/ URL failed (HTTP/2 INTERNAL_ERROR, HTTP/1.1 timeout) for
+      Skim's own user agent, while other papers' feeds returned 200 from the same Mac. Skim does not
+      pose as a browser to get past that, so the Post keeps only its sign-in, which still loads
+      Post articles opened from other feeds in full.
     source:
       text: I wanna be able to easily connect my major newspapers subscriptions / follow free newspapers (wsj, ny times, wp post, ft, guardian)
       reference: Giulio, Connect major newspaper subscriptions thread, 2026-10-27

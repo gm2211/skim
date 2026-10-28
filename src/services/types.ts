@@ -507,6 +507,7 @@ export interface Newspaper {
   can_sign_in: boolean;
   signed_in: boolean;
   sections: DiscoveredFeed[];
+  note: string | null;
 }
 
 export interface FeedCatalogTopic {

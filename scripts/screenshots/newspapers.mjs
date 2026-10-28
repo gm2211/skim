@@ -1,6 +1,6 @@
 // Captures Discover's Newspapers shelf for the visual check before a ship: the
 // Discover home with the papers list, a subscription paper signed out (NYT) and
-// a free paper (Guardian).
+// a free paper (Guardian) and a paper with no RSS feeds (Washington Post).
 //   pnpm dev; OUT=/tmp/newspapers WIDTHS=1440,900,390 node scripts/screenshots/newspapers.mjs
 import { chromium } from "playwright";
 import path from "node:path";
@@ -68,6 +68,11 @@ const main = async () => {
       await p.getByRole("heading", { name: "The Guardian" }).waitFor();
       await p.waitForTimeout(400);
       await p.screenshot({ path: `${OUT}/3-guardian-${width}.png` });
+      await back(p);
+      await p.locator(".discover-paper", { hasText: "Washington Post" }).click();
+      await p.getByRole("heading", { name: "The Washington Post" }).waitFor();
+      await p.waitForTimeout(400);
+      await p.screenshot({ path: `${OUT}/4-wapo-${width}.png` });
       await ctx.close();
       console.log(`captured ${width}`);
     }

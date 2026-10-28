@@ -49,16 +49,8 @@
       "access": "subscription",
       "signIn": "https://www.washingtonpost.com/subscribe/signin/",
       "sessionCookies": [],
-      "sections": [
-        { "title": "All Stories", "url": "https://www.washingtonpost.com/arcio/rss/" },
-        { "title": "Politics", "url": "https://feeds.washingtonpost.com/rss/politics" },
-        { "title": "World", "url": "https://feeds.washingtonpost.com/rss/world" },
-        { "title": "U.S.", "url": "https://feeds.washingtonpost.com/rss/national" },
-        { "title": "Business", "url": "https://feeds.washingtonpost.com/rss/business" },
-        { "title": "Technology", "url": "https://feeds.washingtonpost.com/rss/business/technology" },
-        { "title": "Climate", "url": "https://feeds.washingtonpost.com/rss/national/energy-environment" },
-        { "title": "Opinions", "url": "https://feeds.washingtonpost.com/rss/opinions" }
-      ]
+      "sections": [],
+      "note": "The Post's servers turn away RSS readers, so Skim can't follow its sections. Sign in so Post articles you open from other feeds load in full."
     },
     {
       "id": "ft",

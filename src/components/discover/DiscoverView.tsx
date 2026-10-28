@@ -440,7 +440,7 @@ function TopicPage({ topic, topics, onTopic, onFeed, followProps }: {
 // MARK: Newspaper
 
 function paperStatusText(paper: Newspaper): string {
-  const count = `${paper.sections.length} sections`;
+  const count = paper.sections.length ? `${paper.sections.length} sections` : "No RSS feeds";
   if (paper.free) return `Free to read · ${count}`;
   return paper.signed_in ? `Signed in · ${count}` : `Subscription · ${count}`;
 }
@@ -505,14 +505,16 @@ function NewspaperPage({ paper, onFeed, followProps, onFollowAll }: {
           <h1 className="text-text-primary">{paper.name}</h1>
           <p className="text-text-muted" style={{ fontSize: 13 }}>{displayHost(paper.site)}</p>
         </div>
-        <button
-          type="button"
-          className={`discover-follow discover-follow--large ${allFollowing ? "discover-follow--on" : ""}`}
-          disabled={allFollowing || anyAdding}
-          onClick={() => onFollowAll(paper.sections)}
-        >
-          {allFollowing ? "Following all sections" : anyAdding ? "Following…" : "Follow all sections"}
-        </button>
+        {paper.sections.length > 0 && (
+          <button
+            type="button"
+            className={`discover-follow discover-follow--large ${allFollowing ? "discover-follow--on" : ""}`}
+            disabled={allFollowing || anyAdding}
+            onClick={() => onFollowAll(paper.sections)}
+          >
+            {allFollowing ? "Following all sections" : anyAdding ? "Following…" : "Follow all sections"}
+          </button>
+        )}
       </header>
 
       <div className={`discover-account ${paper.signed_in ? "discover-account--on" : ""}`}>
@@ -550,7 +552,11 @@ function NewspaperPage({ paper, onFeed, followProps, onFollowAll }: {
       {error && <ErrorBox>{error}</ErrorBox>}
 
       <h2 className="discover-label">Sections</h2>
-      <FeedList feeds={paper.sections} onOpen={(f) => onFeed(f, paper.name)} followProps={followProps} />
+      {paper.sections.length > 0 ? (
+        <FeedList feeds={paper.sections} onOpen={(f) => onFeed(f, paper.name)} followProps={followProps} />
+      ) : (
+        <p className="text-text-secondary" style={{ fontSize: 13.5, lineHeight: 1.5 }}>{paper.note}</p>
+      )}
     </>
   );
 }

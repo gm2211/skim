@@ -363,6 +363,7 @@
       id: n.id, name: n.name, site: n.site, icon_url: null,
       free: n.access === "free", can_sign_in: !!n.signIn, signed_in: false,
       sections: n.sections.map((s) => ({ ...discoverEntry({ title: s.title, url: s.url, site: n.site }), already_subscribed: false })),
+      note: n.note ?? null,
     })),
     sign_in_newspaper: () => null,
     sign_out_newspaper: () => null,

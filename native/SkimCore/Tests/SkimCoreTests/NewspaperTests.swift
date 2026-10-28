@@ -15,7 +15,12 @@ struct NewspaperTests {
         let papers = try catalog().newspapers
         #expect(papers.map(\.id) == ["nyt", "wsj", "wapo", "ft", "guardian"])
         for paper in papers {
-            #expect(paper.sections.count >= 5)
+            // A paper without followable feeds says why instead.
+            if paper.sections.isEmpty {
+                #expect(paper.note != nil)
+            } else {
+                #expect(paper.sections.count >= 5)
+            }
             #expect((paper.signIn != nil) == !paper.isFree)
         }
     }

@@ -1,0 +1,11 @@
+Thank you for reviewing Skim. This build addresses every item from the previous macOS review (submission ee862d39-828d-4dc9-80cd-260068a9887a):
+
+Guideline 2.4.5(i), sandboxing: the main app no longer carries the com.apple.security.inherit entitlement. Only the helper executables that Skim launches (its on-device AI helpers) are signed with com.apple.security.app-sandbox plus com.apple.security.inherit, as described in QA1773.
+
+Guideline 2.1(a), Help menu: the default Help menu, which pointed to a help book that did not exist, is replaced. Help > Skim Support opens https://gm2211.github.io/skim/#support and Help > Report an Issue opens https://github.com/gm2211/skim/issues in the browser.
+
+Guideline 1.5, Support URL: the Support URL is https://gm2211.github.io/skim/#support. That page has a Support section explaining how to contact the developer.
+
+Guideline 3.1.1, AI provider accounts: Skim is free, sells nothing, has no in-app purchases and no paid tiers, and does not link to or encourage any purchase. Every reading feature (feeds, reader, folders, search, OPML import/export) works without AI. AI features are optional and off until the user turns them on. They run either on device at no cost and with no account (Apple Foundation Models, MLX or llama.cpp models), or through an account the user already has with an AI provider such as Anthropic, OpenAI, xAI or OpenRouter. Skim does not sell, resell, unlock or gate any content or feature with those credentials; it acts only as a client for a service the user signed up for directly with that provider, in the spirit of 3.1.3(f). Those providers sell their own subscriptions through in-app purchase in their App Store apps (for example Claude and ChatGPT).
+
+How to test (no account needed): open Discover and follow any feed, or use Import OPML there. Open an article to read it. To try AI without an account, open Settings > AI and choose Apple Foundation Models (macOS 26 with Apple Intelligence on) or an on-device MLX model, then use Summarize or Ask on an article.

@@ -34,7 +34,7 @@ pub type Rt = tauri::test::MockRuntime;
 pub type AppHandle = tauri::AppHandle<Rt>;
 
 #[cfg(all(desktop, not(feature = "devbridge")))]
-const SUPPORT_URL: &str = "https://gm2211.github.io/skim/";
+const SUPPORT_URL: &str = "https://gm2211.github.io/skim/#support";
 #[cfg(all(desktop, not(feature = "devbridge")))]
 const ISSUES_URL: &str = "https://github.com/gm2211/skim/issues";
 

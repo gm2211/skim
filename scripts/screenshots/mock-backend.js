@@ -434,14 +434,18 @@
     get_cached_reader_content: () => ({ html: ARTICLE_BODY, raw_html: ARTICLE_BODY }),
     fetch_full_article: () => ({ html: ARTICLE_BODY, raw_html: ARTICLE_BODY }),
     fetch_aggregator_details: () => null,
-    summarize_article: ({ articleId }) => ({
+    // __SKIM_SUMMARY_ERROR__ (string) makes the summary fail with that message.
+    summarize_article: ({ articleId }) => {
+      if (window.__SKIM_SUMMARY_ERROR__) throw window.__SKIM_SUMMARY_ERROR__;
+      return {
       article_id: articleId,
       bullet_summary: SUMMARY_BULLETS,
       full_summary: SUMMARY_PROSE,
       provider: "anthropic",
       model: "claude-sonnet-5",
       created_at: D.now,
-    }),
+      };
+    },
     // __SKIM_SLOW_EDITORIAL__ (ms) shows the page while summaries are still being written.
     get_or_generate_today_edition: (args) => {
       const view = todayView(args);

@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { AiErrorText, AiSettingsButton } from "./AiSettingsButton";
+import { AiErrorText, AiSettingsButton, isBusyAiError } from "./AiSettingsButton";
 import { useUiStore } from "../../stores/uiStore";
 
 describe("AI settings shortcuts", () => {
@@ -18,5 +18,18 @@ describe("AI settings shortcuts", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("No AI provider configured");
     await userEvent.click(screen.getByRole("button", { name: "AI settings" }));
     expect(useUiStore.getState()).toMatchObject({ showSettings: true, settingsTab: "ai" });
+  });
+
+  it("a rate limit offers Try again next to AI settings", async () => {
+    const retry = vi.fn();
+    const message = "Claude has hit your account's rate limit for the moment. Try again in a minute.";
+    expect(isBusyAiError(message)).toBe(true);
+    expect(isBusyAiError("You've reached your Claude plan's usage limit. It resets at 9:40 PM.")).toBe(true);
+    expect(isBusyAiError("Claude is overloaded right now. Try again in a minute.")).toBe(true);
+    expect(isBusyAiError("Not signed in to Claude")).toBe(false);
+    render(<AiErrorText error={message} onRetry={retry} />);
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(retry).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "AI settings" })).toBeInTheDocument();
   });
 });

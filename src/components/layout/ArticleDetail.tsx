@@ -17,7 +17,7 @@ import { ModelPicker } from "../common/ModelPicker";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { ArticleLearningActions } from "../article/ArticleLearningActions";
 import { CogIcon, CopyIcon, MoreIcon, ShareIcon, TickIcon } from "../ui/icons";
-import { AiErrorText, AiSettingsButton, openAiSettings } from "../common/AiSettingsButton";
+import { AiErrorText, AiSettingsButton, isBusyAiError, openAiSettings } from "../common/AiSettingsButton";
 import { shareArticle } from "../../lib/shareArticle";
 import { AggregatorPostView } from "../article/AggregatorPostView";
 import { parseAggregatorPost } from "../../lib/aggregatorPost";
@@ -1647,6 +1647,10 @@ export function ArticleDetail() {
                     paste it into Settings → AI Provider → Model
                   </button>.
                 </div>
+              </div>
+            ) : isBusyAiError(msg) ? (
+              <div className="rounded-xl border border-white/10" style={{ padding: "12px 16px", background: "rgba(255,255,255,0.03)" }}>
+                <AiErrorText error={msg} style={{ fontSize: 14 }} onRetry={() => doSummarize()} />
               </div>
             ) : (
               <div className="rounded-xl border border-danger/30" style={{ padding: "12px 16px", background: "rgba(248, 81, 73, 0.1)" }}>

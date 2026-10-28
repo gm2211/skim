@@ -204,7 +204,7 @@ struct AIInboxView: View {
         var unrated = 0
         var firstError: Error?
         defer { ratingStatus = nil }
-        for start in stride(from: 0, to: pending.count, by: batchSize) {
+        batches: for start in stride(from: 0, to: pending.count, by: batchSize) {
             guard !Task.isCancelled else { return }
             let batch = Array(pending[start..<min(start + batchSize, pending.count)])
             ratingStatus = "Rating \(rated + unrated + 1)–\(rated + unrated + batch.count) of \(pending.count)…"
@@ -214,14 +214,21 @@ struct AIInboxView: View {
             while !parts.isEmpty {
                 let (part, canSplit) = parts.removeFirst()
                 do {
-                    let ratings = try await NativeAI.inboxRatings(
-                        articles: part, readerContext: readerContext, settings: model.settings)
+                    let settings = model.settings
+                    let ratings = try await NativeAI.inBackground { try await NativeAI.inboxRatings(
+                        articles: part, readerContext: readerContext, settings: settings) }
                     store(ratings, for: part)
                     rated += ratings.count
                     unrated += part.count - ratings.count
                     await rank()
                 } catch {
                     if Task.isCancelled { return }
+                    // Rate-limited: the rest would only meet the same limit.
+                    if case NativeAIError.providerBusy = error {
+                        firstError = firstError ?? error
+                        unrated = pending.count - rated
+                        break batches
+                    }
                     if canSplit, part.count > 1 {
                         let half = part.count / 2
                         parts = [(Array(part[..<half]), false), (Array(part[half...]), false)] + parts

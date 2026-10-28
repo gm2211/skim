@@ -312,7 +312,7 @@ final class AppModel: ObservableObject {
             if aiSettings.ai.provider != "none" {
                 evaluator = { [weak self] candidates in
                     do {
-                        let result = try await NativeAI.evaluateToday(candidates: candidates, settings: aiSettings)
+                        let result = try await NativeAI.inBackground { try await NativeAI.evaluateToday(candidates: candidates, settings: aiSettings) }
                         guard await self?.todayLoadID == requestID else { throw CancellationError() }
                         return result
                     } catch {
@@ -414,9 +414,9 @@ final class AppModel: ObservableObject {
             // verified passage from a report instead of staying blank.
             do {
                 let themes = Array(Set((todayEdition?.items ?? []).compactMap { $0.snapshot.editorial?.theme })).sorted()
-                if let editorial = try await NativeAI.todayEditorial(
+                if let editorial = try await NativeAI.inBackground({ try await NativeAI.todayEditorial(
                     headline: item.snapshot.snapshotTitle, articles: articles, themes: themes, settings: settings
-                ) {
+                ) }) {
                     guard !Task.isCancelled, todayLoadID == requestID, todayEdition?.id == editionID else { return }
                     if let updated = try? await store.setTodayEditionItemEditorial(
                         editionID: editionID, storyID: item.snapshot.storyID, editorial: editorial
@@ -437,11 +437,11 @@ final class AppModel: ObservableObject {
             // nil preview means no report has a whole sentence to quote.
             let preview: NativeAI.TodayPreview?
             do {
-                preview = try await NativeAI.catchUpPreview(
+                preview = try await NativeAI.inBackground { try await NativeAI.catchUpPreview(
                     headline: item.snapshot.snapshotTitle,
                     articles: articles,
                     settings: settings
-                )
+                ) }
             } catch {
                 if Task.isCancelled { return }
                 continue

@@ -1578,6 +1578,27 @@ private struct AutoGroupProposal: Identifiable {
         }
         return style.formatName(baseName)
     }
+
+    /// Keeps the reader's renames across a regroup or revision: a new folder takes the rename of
+    /// the old folder it matches by name (the AI's name, or the rename the AI was sent back) or by
+    /// exactly the same feeds.
+    static func carryingRenames(from old: [AutoGroupProposal], into new: [AutoGroupProposal]) -> [AutoGroupProposal] {
+        let renamed = old.filter { $0.customName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
+        guard !renamed.isEmpty else { return new }
+        let key: (String) -> String = { AutoGroupNameStyle.snakeCase.formatName($0) }
+        return new.map { proposal in
+            var proposal = proposal
+            let feedIDs = Set(proposal.feeds.map(\.id))
+            if let match = renamed.first(where: {
+                key($0.baseName) == key(proposal.baseName)
+                    || key($0.customName ?? "") == key(proposal.baseName)
+                    || Set($0.feeds.map(\.id)) == feedIDs
+            }) {
+                proposal.customName = match.customName
+            }
+            return proposal
+        }
+    }
 }
 
 private struct AutoGroupSheet: View {
@@ -1606,7 +1627,7 @@ private struct AutoGroupSheet: View {
                         .font(.system(size: 27, weight: .heavy))
                         .foregroundStyle(SkimStyle.text)
                     if !isEditingFeedback {
-                        Text("Use AI to classify feeds into folder proposals, then choose the folder naming style.")
+                        Text("AI proposes folders for your feeds. Tap a folder name to rename it, drag feeds between folders, then apply.")
                             .font(.system(size: 15, weight: .regular))
                             .foregroundStyle(SkimStyle.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -1649,6 +1670,13 @@ private struct AutoGroupSheet: View {
                                 Button {
                                     withAnimation(.smooth(duration: 0.18)) {
                                         nameStyle = style
+                                        // A rename keeps its words and takes the newly picked style.
+                                        for index in proposals.indices {
+                                            if let custom = proposals[index].customName,
+                                               !custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                                proposals[index].customName = style.formatName(custom)
+                                            }
+                                        }
                                     }
                                 } label: {
                                     Text(style.label)
@@ -1767,12 +1795,8 @@ private struct AutoGroupSheet: View {
                                 .stroke(Color.white.opacity(0.28), lineWidth: 1)
                         }
                         .disabled(isRunningAI || isApplying)
+                        .accessibilityHint("Creates these folders and closes the sheet")
                     }
-
-                    Button("Done") {
-                        isPresented = false
-                    }
-                    .buttonStyle(.glassProminent)
                 }
                 .padding(.top, 2)
             }
@@ -1887,18 +1911,20 @@ private struct AutoGroupSheet: View {
         dismissUIKitKeyboard()
         feedbackFocused = false
 
+        let previous = proposals
         let current = proposals.map { (name: $0.displayName(style: nameStyle), feeds: $0.feeds) }
         isRevising = true
         isRunningAI = true
         aiMessage = nil
 
         do {
-            proposals = try await AutoGroupClassifier.revisedProposals(
+            let revised = try await AutoGroupClassifier.revisedProposals(
                 current: current,
                 feedback: feedback,
                 feeds: model.feeds,
                 settings: model.settings
             )
+            proposals = AutoGroupProposal.carryingRenames(from: previous, into: revised)
             usedFallback = false
             feedbackText = ""
             aiMessage = "Revised with \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider)): \u{201C}\(feedback)\u{201D}"
@@ -1952,7 +1978,7 @@ private struct AutoGroupSheet: View {
 
         do {
             let result = try await AutoGroupClassifier.aiProposals(for: model.feeds, settings: model.settings)
-            proposals = result
+            proposals = AutoGroupProposal.carryingRenames(from: proposals, into: result)
             aiMessage = "Grouped with \(AutoGroupClassifier.providerLabel(for: model.settings.ai.provider))."
             aiFailed = false
         } catch {
@@ -1974,11 +2000,24 @@ private struct AutoGroupProposalRow: View {
     @Binding var draggingFeedID: String?
     var isDropTarget: Bool
 
+    @FocusState private var nameFocused: Bool
+
     private var editingName: Binding<String> {
         Binding(
             get: { proposal.customName ?? proposal.displayName(style: nameStyle) },
             set: { proposal.customName = $0 }
         )
+    }
+
+    private var isRenamed: Bool {
+        proposal.customName.map { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? false
+    }
+
+    /// An emptied name goes back to the AI's suggestion rather than an unnamed folder.
+    private func commitName() {
+        guard let custom = proposal.customName else { return }
+        let trimmed = custom.trimmingCharacters(in: .whitespacesAndNewlines)
+        proposal.customName = trimmed.isEmpty || trimmed == nameStyle.formatName(proposal.baseName) ? nil : trimmed
     }
 
     var body: some View {
@@ -1994,8 +2033,37 @@ private struct AutoGroupProposalRow: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(SkimStyle.text)
                     .submitLabel(.done)
+                    .focused($nameFocused)
+                    .onSubmit(commitName)
+                    .onChange(of: nameFocused) { _, focused in
+                        if !focused { commitName() }
+                    }
+                    .accessibilityLabel("Folder name")
+                    .accessibilityHint("Rename this folder")
 
-                Spacer()
+                if isRenamed && !nameFocused {
+                    Button {
+                        proposal.customName = nil
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Use AI's name, \(nameStyle.formatName(proposal.baseName))")
+                } else if !nameFocused {
+                    Button {
+                        nameFocused = true
+                    } label: {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(SkimStyle.secondary)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Rename folder")
+                }
 
                 Text("\(proposal.feeds.count)")
                     .font(.system(size: 15, weight: .semibold))

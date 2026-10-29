@@ -19,6 +19,26 @@ behaviors:
       or by reorganizing everything. The reader can choose a name casing style, skip individual
       proposed folders, and then apply or cancel. iOS shows a local fallback preview when AI is
       unavailable.
+  - id: auto-organize-single-action
+    description: >-
+      The auto-group sheet (iOS) and Auto-organize dialog (desktop) have one primary action, Apply,
+      which creates the folders and closes the sheet when it finishes. Closing without applying is
+      the close button (iOS) or Cancel (desktop); Regroup / Re-run asks the AI again. There is no
+      separate Done button.
+    source:
+      text: both apply and done is a bit confusing
+      reference: Giulio, project thread "Simplify Auto-group feeds sheet actions", 2026-10-29
+  - id: auto-organize-rename
+    description: >-
+      The reader can rename any AI-proposed folder inline before applying: tap or click the folder
+      name (shown with a pencil and a dashed underline) and type. The name is applied as typed.
+      Picking another naming style re-cases every name, renames included, keeping the reader's
+      words. A rename survives Regroup / Re-run and feedback revisions when the new proposal has
+      the same AI name, the renamed name, or exactly the same feeds. Clearing a name returns to the
+      AI's name; on iOS an undo arrow also restores it.
+    source:
+      text: I would like the ability to rename the names suggested by AI
+      reference: Giulio, project thread "Simplify Auto-group feeds sheet actions", 2026-10-29
   - id: auto-organize-feedback
     description: >-
       In the auto-group sheet (iOS) and the Auto-organize dialog (desktop), the reader can type free

@@ -1077,7 +1077,9 @@ function splitWords(s: string): string[] {
 }
 
 function applyCase(name: string, style: CaseStyle): string {
-  const words = splitWords(name);
+  const spaced = style === "title" || style === "sentence" || style === "lower" || style === "upper";
+  // A lone "&" reads fine between spaces but not as "ai-&-models".
+  const words = splitWords(name).filter((w) => spaced || /[\p{L}\p{N}]/u.test(w));
   switch (style) {
     case "title":
       return words.map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ");
@@ -1189,14 +1191,25 @@ function AutoOrganizeDialog({
   }, [scope, runSeq]);
 
   const showProposals = (result: FolderProposal[]) => {
+    // Renames survive a re-run or revision: a new folder keeps the rename of
+    // the old one it matches by name (the AI's, or the rename sent back to it)
+    // or by exactly the same feeds.
+    const key = (n: string) => applyCase(n, "snake");
+    const renamed = proposals
+      .map((p, idx) => ({ aiName: p.name, feeds: [...p.feed_ids].sort().join(","), name: (names[idx] ?? "").trim() }))
+      .filter((r) => r.name && r.name !== applyCase(r.aiName, caseStyle));
     setProposals(result);
     const initSel: Record<number, Set<string>> = {};
     const initNames: Record<number, string> = {};
     result.forEach((p, i) => {
       initSel[i] = new Set(p.feed_ids);
+      const feeds = [...p.feed_ids].sort().join(",");
+      const rename = renamed.find(
+        (r) => key(r.aiName) === key(p.name) || key(r.name) === key(p.name) || r.feeds === feeds,
+      );
       // Apply current case style to the LLM's raw proposal names so the
       // preview matches what the user will see post-apply.
-      initNames[i] = applyCase(p.name, caseStyle);
+      initNames[i] = rename ? rename.name : applyCase(p.name, caseStyle);
     });
     setSelected(initSel);
     setNames(initNames);
@@ -1267,7 +1280,8 @@ function AutoOrganizeDialog({
   const handleApply = async () => {
     const filtered: FolderProposal[] = proposals
       .map((_p, idx) => ({
-        name: applyCase((names[idx] ?? "").trim(), caseStyle),
+        // Names are already in the chosen case; a rename is applied as typed.
+        name: (names[idx] ?? "").trim() || applyCase(proposals[idx].name, caseStyle),
         feed_ids: Array.from(selected[idx] ?? new Set<string>()),
       }))
       .filter((p) => p.name && p.feed_ids.length > 0);
@@ -1312,7 +1326,7 @@ function AutoOrganizeDialog({
             <AiSettingsButton />
           </div>
           <p className="text-text-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-            AI proposes folders based on your feeds. Rename, uncheck, or drop folders before applying.
+            AI proposes folders based on your feeds. Click a folder name to rename it, uncheck feeds, or drop folders before applying.
           </p>
 
           {/* Scope + Case controls */}
@@ -1328,8 +1342,9 @@ function AutoOrganizeDialog({
                   onChange={() => setScope("unassigned")}
                   className="accent-accent"
                 />
-                <span className="text-text-primary">Only unassigned feeds</span>
-                <span className="text-text-muted">— keep existing folders</span>
+                <span className="text-text-primary">
+                  Only unassigned feeds <span className="text-text-muted">— keep existing folders</span>
+                </span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -1338,13 +1353,14 @@ function AutoOrganizeDialog({
                   onChange={() => setScope("all")}
                   className="accent-accent"
                 />
-                <span className="text-text-primary">Reorganize everything</span>
-                <span className="text-text-muted">— deletes existing folders on apply</span>
+                <span className="text-text-primary">
+                  Reorganize everything <span className="text-text-muted">— deletes existing folders on apply</span>
+                </span>
               </label>
             </div>
 
-            <div className="flex items-center gap-2" style={{ marginTop: 10 }}>
-              <span className="text-text-muted" style={{ fontSize: 12 }}>Folder name case:</span>
+            <div className="flex flex-wrap items-center gap-2" style={{ marginTop: 10 }}>
+              <span className="text-text-muted whitespace-nowrap" style={{ fontSize: 12 }}>Folder name case:</span>
               <Select
                 aria-label="Folder name case"
                 value={caseStyle}
@@ -1363,7 +1379,7 @@ function AutoOrganizeDialog({
               <button
                 onClick={() => setRunSeq((n) => n + 1)}
                 disabled={loading || revising}
-                className="ml-auto bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium"
+                className="ml-auto flex-shrink-0 whitespace-nowrap bg-accent text-white rounded-lg hover:bg-accent-hover disabled:opacity-40 transition-colors font-medium"
                 style={{ padding: "4px 12px", fontSize: 12 }}
                 title="Run AI with current scope"
               >
@@ -1418,13 +1434,22 @@ function AutoOrganizeDialog({
                 className="border border-white/5 rounded-xl"
                 style={{ marginBottom: 12, background: "rgba(255,255,255,0.02)" }}
               >
-                <div className="flex items-center gap-2" style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                  <input
-                    value={names[idx] ?? ""}
-                    onChange={(e) => updateName(idx, e.target.value)}
-                    className="flex-1 bg-transparent text-text-primary outline-none border-b border-white/0 focus:border-accent/40"
-                    style={{ fontSize: 14, fontWeight: 600, padding: "2px 0" }}
-                  />
+                <div className="group flex items-center gap-2" style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                  <label className="flex flex-1 min-w-0 items-center gap-1.5 cursor-text">
+                    <input
+                      aria-label="Folder name"
+                      title="Rename folder"
+                      value={names[idx] ?? ""}
+                      placeholder={applyCase(p.name, caseStyle)}
+                      onChange={(e) => updateName(idx, e.target.value)}
+                      onBlur={(e) => { if (!e.target.value.trim()) updateName(idx, applyCase(p.name, caseStyle)); }}
+                      className="peer min-w-0 flex-1 bg-transparent text-text-primary outline-none border-b border-dashed border-white/15 hover:border-white/30 focus:border-solid focus:border-accent/60"
+                      style={{ fontSize: 14, fontWeight: 600, padding: "2px 0" }}
+                    />
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 text-text-muted peer-focus:opacity-0" aria-hidden="true">
+                      <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+                    </svg>
+                  </label>
                   <span className="text-text-muted tabular-nums" style={{ fontSize: 12 }}>
                     {selected[idx]?.size ?? 0} / {p.feed_ids.length}
                   </span>

@@ -336,3 +336,5 @@ footer a {
   .hero { padding-top: 56px; }
   .features { padding: 64px 20px; }
 }
+
+.feature p a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }

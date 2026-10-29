@@ -21,6 +21,7 @@ struct ArticleListView: View {
     @State private var showAddFeed = false
     @State private var showAutoGroup = false
     @State private var showSettings = false
+    @State private var showSmartSortSettings = false
     @State private var activeAIResult: AIResultRequest?
     @State private var activeAIChat: AIChatRequest?
     @State private var chatMessagesBySession: [String: [AIChatMessage]] = [:]
@@ -141,6 +142,10 @@ struct ArticleListView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(SkimStyle.chrome)
+        }
+        .sheet(isPresented: $showSmartSortSettings) {
+            SmartSortSettingsSheet(isPresented: $showSmartSortSettings)
+                .environmentObject(model)
         }
         .sheet(isPresented: $showSettings) {
             SettingsSheet(
@@ -349,7 +354,12 @@ struct ArticleListView: View {
                 sessionKey: scope.sessionKey,
                 title: "Chat with Articles",
                 placeholder: "Find or ask about articles in this view.",
-                suggestedPrompts: LibraryChatPolicy.starterPrompts
+                suggestedPrompts: LibraryChatPolicy.starterPrompts,
+                research: { [model] conversation, progress in
+                    try await NativeAI.research(conversation: conversation, settings: model.settings, store: model.store,
+                                                fullest: { [model] articles in await model.articlesForTodayChat(articles) },
+                                                progress: progress)
+                }
             ) { conversation in
                 let context = try await model.articlesForLibraryChat(scope: scope, conversation: conversation)
                 guard !context.isEmpty else {
@@ -410,18 +420,9 @@ struct ArticleListView: View {
 
     private var topBar: some View {
         ZStack {
-            // On Today the title sits between the clusters (the way a
-            // navigation bar does when its buttons leave no room to centre it
-            // on the screen); elsewhere it is centred on the screen.
-            if !showToday {
-                HStack {
-                    Spacer()
-                    topBarTitle.frame(maxWidth: model.canSortForYou ? 160 : 190)
-                    Spacer()
-                }
-            }
-
-            HStack(alignment: .center, spacing: showToday ? 12 : 18) {
+            // The title sits between the clusters, the way a navigation bar
+            // does when its buttons leave no room to centre it on the screen.
+            HStack(alignment: .center, spacing: 12) {
                 BorderlessIconButton(systemName: SkimIcon.feeds, title: "Feeds", size: 20, tapSize: 42) {
                     dismissTextEntry()
                     withAnimation(.smooth(duration: 0.26)) {
@@ -435,18 +436,24 @@ struct ArticleListView: View {
                         showTodaySettings = true
                     }
                 } else {
-                    Spacer()
-                    if model.canSortForYou {
-                        BorderlessIconButton(systemName: "sparkles",
-                                             title: "Smart sorting",
-                                             isActive: model.isForYou,
-                                             size: 17, tapSize: 36) {
-                            dismissTextEntry()
-                            smartSortingBinding.wrappedValue.toggle()
+                    topBarTitle.frame(maxWidth: .infinity)
+                    HStack(spacing: 4) {
+                        BorderlessIconButton(systemName: SkimIcon.chat, title: "Chat with Articles",
+                                             size: 19, tapSize: 38) {
+                            presentArticleChat()
                         }
-                        .opacity(model.isForYou ? 1 : 0.55)
-                        .accessibilityValue(model.isForYou ? "On" : "Off")
-                        .accessibilityHint("Ranks unread articles for you when on; newest first when off")
+                        if model.canSortForYou {
+                            SmartSortToggle(isOn: model.isForYou) {
+                                dismissTextEntry()
+                                smartSortingBinding.wrappedValue.toggle()
+                            }
+                            .contextMenu {
+                                Button("Smart sort settings", systemImage: SkimIcon.settings) {
+                                    dismissTextEntry()
+                                    showSmartSortSettings = true
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -468,22 +475,27 @@ struct ArticleListView: View {
                         }
                         Divider()
                     }
-                    Button("Chat with Articles", systemImage: SkimIcon.chat) {
-                        presentArticleChat()
-                    }
-                    if !showToday && model.canSortForYou {
-                        Toggle(isOn: smartSortingBinding) {
-                            Label("Smart Sorting", systemImage: "sparkles")
+                    // Chat and Smart sorting are toolbar buttons on the lists.
+                    if showToday {
+                        Button("Chat with Articles", systemImage: SkimIcon.chat) {
+                            presentArticleChat()
                         }
-                    } else {
+                    }
+                    if showToday || !model.canSortForYou {
                         Button("For you", systemImage: SkimIcon.aiInbox) {
                             presentAIInbox()
                         }
+                        Divider()
                     }
-                    Divider()
                     Button("Discover Feeds", systemImage: SkimIcon.addFeed) {
                         dismissTextEntry()
                         showAddFeed = true
+                    }
+                    if !showToday, model.canSortForYou {
+                        Button("Smart sort settings", systemImage: "sparkles") {
+                            dismissTextEntry()
+                            showSmartSortSettings = true
+                        }
                     }
                     Button("Customize Bottom Bar", systemImage: "slider.horizontal.3") {
                         dismissTextEntry()
@@ -645,7 +657,7 @@ struct ArticleListView: View {
             .padding(.horizontal, 32)
             .padding(.bottom, 18)
         } else if model.isForYou {
-            AIInboxView()
+            AIInboxView(onSummarize: { presentSummary(for: $0) })
                 .environmentObject(model)
                 // A new feed or folder is a new ranking.
                 .id("\(model.selectedFeedID ?? "")|\(model.selectedFolderID ?? "")")
@@ -675,10 +687,16 @@ struct ArticleListView: View {
                             .tracking(1.15)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
-                            .padding(.leading, 72)
+                            // Lines up with the row titles: 18 inset + 34 icon + 12 gap.
+                            .padding(.leading, 64)
                             .padding(.trailing, 18)
                             .padding(.top, 13)
                             .padding(.bottom, 7)
+                            // The header pins while rows scroll under it, and the
+                            // list's own background is hidden, so it needs one.
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(SkimStyle.chrome)
+                            .listRowInsets(EdgeInsets())
                     }
                 }
             }
@@ -686,6 +704,11 @@ struct ArticleListView: View {
             .scrollDismissesKeyboard(.immediately)
             .scrollContentBackground(.hidden)
             .background(SkimStyle.chrome)
+            .overlay {
+                if model.articles.isEmpty && !model.isLoading {
+                    emptyListState
+                }
+            }
             .refreshable {
                 await model.refreshAll()
             }
@@ -694,6 +717,25 @@ struct ArticleListView: View {
                 ArticleDetailView(articleID: id)
             }
         }
+    }
+
+    /// What an empty list says, so it never reads as a blank screen.
+    private var emptyListState: some View {
+        let (title, icon, detail): (String, String, String) = {
+            if isSearchActive {
+                return ("No results", "magnifyingglass", "Try another word, source or URL.")
+            }
+            switch model.listMode {
+            case .unread: return ("Nothing unread", "checkmark.circle", "You're all caught up here.")
+            case .starred: return ("No starred articles", "star", "Star an article to keep it here.")
+            case .recent: return ("Nothing read yet", "clock", "Articles you open show up here.")
+            case .all: return ("No articles", "tray", "Pull to refresh to check for new ones.")
+            }
+        }()
+        return ContentUnavailableView(title, systemImage: icon, description: Text(detail))
+            .foregroundStyle(SkimStyle.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
     }
 
     private var bottomSafeAreaInset: CGFloat {
@@ -966,7 +1008,7 @@ private struct FeedPickerSheet: View {
                                         count: model.unreadCounts[feed.id],
                                         isSelected: model.selectedFeedID == feed.id
                                     ) { selectFeed(feed) }
-                                    .contextMenu { MoveToFolderMenu(model: model, feed: feed) }
+                                    .contextMenu { FeedRowMenu(model: model, feed: feed) }
                                 }
                             }
                             .padding(.bottom, 34)
@@ -1009,7 +1051,7 @@ private struct FeedPickerSheet: View {
                                                 count: model.unreadCounts[feed.id],
                                                 isSelected: model.selectedFeedID == feed.id
                                             ) { selectFeed(feed) }
-                                            .contextMenu { MoveToFolderMenu(model: model, feed: feed) }
+                                            .contextMenu { FeedRowMenu(model: model, feed: feed) }
                                         }
                                     }
                                 }
@@ -1062,6 +1104,7 @@ private struct FeedPickerSheet: View {
             .presentationDragIndicator(.visible)
             .presentationBackground(SkimStyle.chrome)
         }
+        .unfollowConfirmation(model: model, feed: $model.feedToUnfollow)
     }
 
     private enum NewFolderKind {
@@ -1180,7 +1223,9 @@ private struct FeedPickerSheet: View {
         dismissUIKitKeyboard()
         model.selectedFeedID = feed.id
         model.selectedFolderID = nil
-        if model.listMode == .recent {
+        // Starred and Recent are library-wide views; picking a feed means
+        // reading it, so the list opens on its unread articles.
+        if model.listMode == .recent || model.listMode == .starred {
             model.listMode = .unread
         }
         onShowList()
@@ -1348,7 +1393,7 @@ private struct FolderSection: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .contextMenu { MoveToFolderMenu(model: model, feed: feed) }
+                        .contextMenu { FeedRowMenu(model: model, feed: feed) }
                     }
                 }
             }
@@ -1457,7 +1502,23 @@ private enum AutoGroupNameStyle: String, CaseIterable, Identifiable {
     }
 }
 
-/// Long-press menu on a feed: move it into a regular folder, or out of its folder.
+/// Long-press menu on a feed in the feed list.
+private struct FeedRowMenu: View {
+    @ObservedObject var model: AppModel
+    let feed: Feed
+
+    var body: some View {
+        MoveToFolderMenu(model: model, feed: feed)
+        Divider()
+        Button("Unfollow", systemImage: "minus.circle", role: .destructive) {
+            model.feedToUnfollow = feed
+        }
+        // The app's accent tint would otherwise paint the icon blue beside a red label.
+        .tint(.red)
+    }
+}
+
+/// Moves a feed it into a regular folder, or out of its folder.
 private struct MoveToFolderMenu: View {
     @ObservedObject var model: AppModel
     let feed: Feed
@@ -2722,7 +2783,7 @@ private struct FeedIcon: View {
     }
 }
 
-private struct ArticleRow: View {
+struct ArticleRow: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openURL) private var openURL
 
@@ -2785,7 +2846,7 @@ private struct ArticleRow: View {
             // image-less rows let the title block expand to the full row width.
             if let imageURL = article.imageURL {
                 Spacer(minLength: 4)
-                AsyncImage(url: imageURL) { phase in
+                CachedAsyncImage(url: imageURL) { phase in
                     switch phase {
                     case .success(let image):
                         image

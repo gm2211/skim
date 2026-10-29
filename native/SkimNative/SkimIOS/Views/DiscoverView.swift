@@ -31,6 +31,7 @@ struct DiscoverView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @StateObject private var follow = DiscoverFollowState()
+    @StateObject private var accounts = NewspaperAccounts()
     @State private var query = ""
     @State private var results: [DiscoveredFeed]?
     @State private var resultsQuery = ""
@@ -71,6 +72,7 @@ struct DiscoverView: View {
                     if trimmedQuery.count >= 2 {
                         searchResults
                     } else {
+                        newspaperList
                         featured
                         topicList
                     }
@@ -84,6 +86,8 @@ struct DiscoverView: View {
         .navigationBarBackButtonHidden()
         .toolbar(.hidden, for: .navigationBar)
         .environmentObject(follow)
+        .environmentObject(accounts)
+        .task { await accounts.refresh() }
         .onChange(of: query) { _, _ in scheduleSearch() }
         .onDisappear { searchTask?.cancel() }
         .sheet(isPresented: $showImport) {
@@ -210,6 +214,45 @@ struct DiscoverView: View {
     }
 
     // MARK: Browse
+
+    @ViewBuilder
+    private var newspaperList: some View {
+        if !accounts.newspapers.isEmpty {
+            DiscoverSectionLabel("Newspapers")
+            VStack(spacing: 0) {
+                ForEach(accounts.newspapers) { paper in
+                    NavigationLink {
+                        DiscoverNewspaperView(paper: paper)
+                            // Pushed views don't inherit objects set below the stack.
+                            .environmentObject(model)
+                            .environmentObject(follow)
+                            .environmentObject(accounts)
+                    } label: {
+                        HStack(spacing: 14) {
+                            NewspaperIcon(paper: paper, size: 46)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(paper.name)
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(SkimStyle.text)
+                                    .lineLimit(1)
+                                Text(newspaperStatus(paper, signedIn: accounts.signedIn.contains(paper.id)))
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(accounts.signedIn.contains(paper.id) ? Color.green : SkimStyle.secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 4)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(SkimStyle.secondary)
+                        }
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
 
     @ViewBuilder
     private var featured: some View {
@@ -347,6 +390,164 @@ struct DiscoverTopicView: View {
             isLoadingMore = true
             more = await model.discovery.search(name, catalog: nil)
             isLoadingMore = false
+        }
+    }
+}
+
+// MARK: Newspaper
+
+private func newspaperStatus(_ paper: Newspaper, signedIn: Bool) -> String {
+    let count = "\(paper.sections.count) sections"
+    if paper.isFree { return "Free to read · \(count)" }
+    return signedIn ? "Signed in · \(count)" : "Subscription · \(count)"
+}
+
+private struct NewspaperIcon: View {
+    let paper: Newspaper
+    let size: CGFloat
+
+    var body: some View {
+        DiscoverFeedIcon(feed: DiscoveredFeed(url: paper.site, title: paper.name.replacingOccurrences(of: "The ", with: ""), siteURL: paper.site), size: size)
+    }
+}
+
+/// A newspaper's sections to follow, and the sign-in that opens its full
+/// articles in the reader.
+struct DiscoverNewspaperView: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var follow: DiscoverFollowState
+    @EnvironmentObject private var accounts: NewspaperAccounts
+    @Environment(\.dismiss) private var dismiss
+    let paper: Newspaper
+    @State private var showSignIn = false
+    @State private var signingOut = false
+
+    private var sections: [DiscoveredFeed] { paper.sectionFeeds }
+    private var signedIn: Bool { accounts.signedIn.contains(paper.id) }
+    private func isFollowing(_ feed: DiscoveredFeed) -> Bool {
+        follow.states[feed.id] == .following || model.isSubscribed(feed.url)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            DiscoverHeader(backTitle: "Discover", onBack: { dismiss() }) { EmptyView() }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 14) {
+                        NewspaperIcon(paper: paper, size: 60)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(paper.name)
+                                .font(.system(size: 26, weight: .heavy))
+                                .foregroundStyle(SkimStyle.text)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.8)
+                            Text(paper.site.host()?.replacingOccurrences(of: "www.", with: "") ?? "")
+                                .font(.system(size: 14))
+                                .foregroundStyle(SkimStyle.secondary)
+                        }
+                    }
+
+                    followAllButton
+                        .padding(.top, 16)
+
+                    accountCard
+                        .padding(.top, 14)
+
+                    DiscoverSectionLabel("Sections")
+                    DiscoverFeedList(feeds: sections, backTitle: paper.name)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 32)
+            }
+        }
+        .background(SkimStyle.background)
+        .navigationBarBackButtonHidden()
+        .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $showSignIn) {
+            NewspaperSignInSheet(paper: paper) { finished in
+                Task { await accounts.signInEnded(paper, finished: finished, store: model.store) }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var followAllButton: some View {
+        let all = sections.allSatisfy(isFollowing)
+        let adding = sections.contains { follow.states[$0.id] == .adding }
+        Button {
+            for feed in sections where !isFollowing(feed) && follow.states[feed.id] != .adding {
+                Task { await follow.follow(feed, model: model) }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                if adding {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: all ? "checkmark" : "plus")
+                }
+                Text(all ? "Following all sections" : "Follow all sections")
+            }
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(all ? Color.green : SkimStyle.accent)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(all ? Color.green.opacity(0.12) : Color.clear, in: Capsule())
+            .overlay { if !all { Capsule().stroke(SkimStyle.accent.opacity(0.6), lineWidth: 1) } }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(all || adding)
+    }
+
+    private var accountCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: paper.isFree ? "newspaper" : signedIn ? "checkmark" : "lock")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(signedIn ? Color.green : SkimStyle.accent)
+                .frame(width: 36, height: 36)
+                .background((signedIn ? Color.green : SkimStyle.accent).opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(paper.isFree ? "Free to read" : signedIn ? "Signed in" : "Have a subscription?")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(SkimStyle.text)
+                Text(paper.isFree
+                     ? "Full articles open in Skim's reader without an account."
+                     : signedIn
+                        ? "Full articles open in Skim's reader with your subscription."
+                        : "Sign in to \(paper.name) so full articles open in Skim's reader.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if paper.signIn != nil {
+                    if signedIn {
+                        Button(signingOut ? "Signing out…" : "Sign out") {
+                            signingOut = true
+                            Task {
+                                await accounts.signOut(paper, store: model.store)
+                                signingOut = false
+                            }
+                        }
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(SkimStyle.secondary)
+                        .disabled(signingOut)
+                        .frame(minHeight: 36)
+                    } else {
+                        Button("Sign in") { showSignIn = true }
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(SkimStyle.accent)
+                            .padding(.horizontal, 16)
+                            .frame(minHeight: 36)
+                            .overlay { Capsule().stroke(SkimStyle.accent.opacity(0.6), lineWidth: 1) }
+                            .padding(.top, 6)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(SkimStyle.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(signedIn ? Color.green.opacity(0.35) : SkimStyle.separator, lineWidth: 1)
         }
     }
 }
@@ -554,17 +755,27 @@ struct FollowButton: View {
     @EnvironmentObject private var follow: DiscoverFollowState
     let feed: DiscoveredFeed
     var large = false
+    @State private var unfollowing: Feed?
 
     var body: some View {
         let state = follow.states[feed.id]
         VStack(alignment: .trailing, spacing: 4) {
             if state == .following || model.isSubscribed(feed.url) {
-                Label("Following", systemImage: "checkmark")
-                    .font(.system(size: large ? 16 : 14, weight: .semibold))
-                    .foregroundStyle(.green)
-                    .frame(maxWidth: large ? .infinity : nil)
-                    .frame(minWidth: 104, minHeight: large ? 44 : 34)
-                    .background(Color.green.opacity(0.12), in: Capsule())
+                // Tapping Following asks to unfollow, so a stray tap loses nothing.
+                Button {
+                    unfollowing = model.libraryFeed(for: feed)
+                } label: {
+                    Label("Following", systemImage: "checkmark")
+                        .font(.system(size: large ? 16 : 14, weight: .semibold))
+                        .foregroundStyle(.green)
+                        .frame(maxWidth: large ? .infinity : nil)
+                        .frame(minWidth: 104, minHeight: large ? 44 : 34)
+                        .background(Color.green.opacity(0.12), in: Capsule())
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Following \(feed.title)")
+                .accessibilityHint("Unfollow")
             } else {
                 Button {
                     Task { await follow.follow(feed, model: model) }
@@ -593,8 +804,14 @@ struct FollowButton: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.red)
                     .lineLimit(2)
-                    .frame(maxWidth: 220, alignment: .trailing)
+                    .multilineTextAlignment(.trailing)
+                    // In a list row, wrap under the button rather than widen it and squeeze the title.
+                    .frame(maxWidth: large ? 220 : 104, alignment: .trailing)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+        }
+        .unfollowConfirmation(model: model, feed: $unfollowing) { _ in
+            follow.states[feed.id] = nil
         }
     }
 }

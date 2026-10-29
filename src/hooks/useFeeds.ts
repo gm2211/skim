@@ -1,3 +1,4 @@
+import { preloadAfterRefresh } from "../lib/offlinePreload";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import * as commands from "../services/commands";
 
@@ -60,6 +61,7 @@ export function useRefreshAllFeeds() {
   return useMutation({
     mutationFn: commands.refreshAllFeeds,
     onSuccess: () => {
+      preloadAfterRefresh();
       qc.invalidateQueries({ queryKey: ["feeds"] });
       qc.invalidateQueries({ queryKey: ["articles"] });
       qc.invalidateQueries({ queryKey: ["todayEdition"] });

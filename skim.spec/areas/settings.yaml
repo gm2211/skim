@@ -3,7 +3,7 @@ name: Settings
 behaviors:
   - id: desktop-settings-tabs
     description: >-
-      Desktop Settings has Reading, AI Provider (opened by default), Sync, and Appearance tabs.
+      Desktop Settings has Reading, AI Provider (opened by default), Smart sort, Sync, and Appearance tabs.
   - id: ios-settings-tabs
     description: >-
       iOS Settings is tabbed, not one long scroll: AI, Library (feeds and offline preload), and About
@@ -19,3 +19,16 @@ behaviors:
       text: "model selection sucks in ios - does not look like we're using byos properly there - especially no clear way to use subscriptions"
   - id: polished-dropdowns
     description: Every dropdown in Settings and AI surfaces uses Skim's own styled menu.
+  - id: desktop-settings-frosted-glass
+    description: >-
+      Desktop Settings is a frosted Liquid Glass sheet: the app shows through blurred behind it, and
+      its controls follow macOS Golden Gate shapes (rounded-rect buttons, switches instead of
+      checkboxes, a thin slider with a round knob, segmented controls, coloured sidebar icons with a
+      bold selection). The main UI keeps its current look.
+    details: >-
+      The primary action (Save, Preload articles, Sign in with Feedly) is a white button with dark
+      text, and no button in Settings is blue. Giulio picked this from comparison sheets of four
+      Settings-only variants (frosted glass with a white Save).
+    source:
+      text: "I like current the best for the main ui, stick to settings - also main thing not a fan of is the blue buttons"
+      reference: "Skim project thread, 2026-10-27; follow-ups: \"Don't forget some frosting and liquid glass transparency\", \"Frosted with white save\""

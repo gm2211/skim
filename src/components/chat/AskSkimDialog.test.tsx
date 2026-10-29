@@ -4,12 +4,19 @@ import userEvent from "@testing-library/user-event";
 import { AskSkimDialog } from "./AskSkimDialog";
 import { selectChatText } from "../../test/selectChatText";
 import { useUiStore } from "../../stores/uiStore";
-import { askAgent, chatWithArticles } from "../../services/commands";
+import { askAgent, chatWithArticles, researchTopic } from "../../services/commands";
 import { useAgentChatStore } from "../../stores/agentChatStore";
 
 let settings = { ai: { provider: "none", chat_provider: "same" } };
 vi.mock("../../hooks/useSettings", () => ({ useSettings: () => ({ data: settings }) }));
-vi.mock("../../services/commands", () => ({ chatWithArticles: vi.fn(), askAgent: vi.fn() }));
+vi.mock("../../services/commands", () => ({ chatWithArticles: vi.fn(), askAgent: vi.fn(), researchTopic: vi.fn(), RESEARCH_PROGRESS_EVENT: "research-progress" }));
+const progressListeners: Array<(event: { payload: { request_id: string; label: string } }) => void> = [];
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async (_name: string, handler: (event: { payload: { request_id: string; label: string } }) => void) => {
+    progressListeners.push(handler);
+    return () => { progressListeners.splice(progressListeners.indexOf(handler), 1); };
+  }),
+}));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 vi.mock("../common/ModelPicker", () => ({
   ModelPicker: (p: { surface: string; disabled?: boolean }) => (
@@ -47,6 +54,26 @@ describe("AskSkimDialog setup recovery", () => {
     await user.click(screen.getByText("Also searched (2)"));
     await user.click(screen.getByRole("button", { name: /Phone colors/ }));
     expect(onOpenArticle).toHaveBeenCalledWith("source-2");
+  });
+
+  it("queues a question asked mid-answer and sends it when the answer lands", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    let finish!: (value: Awaited<ReturnType<typeof chatWithArticles>>) => void;
+    vi.mocked(chatWithArticles)
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }))
+      .mockResolvedValueOnce({ content: "Second answer", sources: [], provider: "openai", model: "test", article_ids: [] });
+    const user = userEvent.setup();
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    const input = screen.getByRole("textbox", { name: "Question about your articles" });
+    await user.type(input, "First{Enter}");
+    await user.type(input, "Follow-up");
+    await user.click(screen.getByRole("button", { name: "Queue" }));
+    expect(screen.getByRole("listitem", { name: "Queued message 1" })).toHaveTextContent("Follow-up");
+    expect(chatWithArticles).toHaveBeenCalledTimes(1);
+    await act(async () => finish({ content: "First answer", sources: [], provider: "openai", model: "test", article_ids: [] }));
+    expect(await screen.findByText("Second answer")).toBeInTheDocument();
+    expect(vi.mocked(chatWithArticles).mock.calls[1][1]).toBe("Follow-up");
+    expect(screen.queryByRole("list", { name: "Queued messages" })).not.toBeInTheDocument();
   });
 
   it("asks a starter question as soon as it is clicked", async () => {
@@ -280,6 +307,23 @@ describe("AskSkimDialog continuing an agent conversation", () => {
     expect(onSend).toHaveBeenCalledTimes(1);
   });
 
+  it("focuses the box for a passage asked about from a selection, even on a phone", () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    useUiStore.setState({ isPhone: true });
+    useAgentChatStore.setState({ seed: { context: { view: "today", story: { story_id: "s1", title: "Async Rust", article_ids: ["r1"] } }, reply: { role: "story", text: "Tokio is the default" } } });
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(screen.getByText("Tokio is the default")).toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveFocus();
+  });
+
+  it("leaves the keyboard down on a phone when the chat opens without a quote", () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    useUiStore.setState({ isPhone: true });
+    useAgentChatStore.setState({ seed: { context: { view: "today" } } });
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(screen.getByRole("textbox")).not.toHaveFocus();
+  });
+
   it("sends a handed-over question straight away", async () => {
     settings = { ai: { provider: "openai", chat_provider: "same" } };
     vi.mocked(askAgent).mockResolvedValue(agentAnswer);
@@ -287,5 +331,64 @@ describe("AskSkimDialog continuing an agent conversation", () => {
     render(<AskSkimDialog onClose={vi.fn()} />);
     expect(await screen.findByText(/compares Tokio and smol/)).toBeInTheDocument();
     expect(vi.mocked(askAgent).mock.calls[0][0]).toEqual([{ role: "user", content: "what's new in rust?" }]);
+  });
+});
+
+describe("AskSkimDialog deep research", () => {
+  const BRIEFING = {
+    content: "Fusion is still years off [1], though ITER now targets 2034 [w1].\n\n## What's happening\nPrivate firms raised more [2].",
+    provider: "openai", model: "m", article_ids: ["a1", "a2"], actions: [],
+    steps: [{ tool: "plan", label: "Planning the research" }, { tool: "web_search", label: "Searched the web for “ITER timeline”" }],
+    sources: [
+      { id: "a1", title: "Fusion's long road", feed_title: "Ars Technica", url: null, published_at: null, source_type: "article" as const },
+      { id: "a2", title: "Fusion startups raise billions", feed_title: "The Verge", url: null, published_at: null, source_type: "article" as const },
+      { id: "web-0", title: "ITER timeline", feed_title: "iter.org", url: "https://iter.org/t", published_at: null, source_type: "web" as const },
+      { id: "web-1", title: "Uncited result", feed_title: "example.com", url: "https://example.com", published_at: null, source_type: "web" as const },
+    ],
+  };
+
+  it("researches with live progress and shows a briefing citing feeds and the web", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    let finish: (value: typeof BRIEFING) => void = () => {};
+    vi.mocked(researchTopic).mockImplementation((_messages, _context, requestId) => {
+      queueMicrotask(() => progressListeners.forEach((fire) => {
+        fire({ payload: { request_id: requestId, label: "Searched your feeds for “fusion”" } });
+        fire({ payload: { request_id: "someone-else", label: "Not ours" } });
+      }));
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    const user = userEvent.setup();
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Deep research" }));
+    expect(screen.getByRole("button", { name: "Deep research" })).toHaveAttribute("aria-pressed", "true");
+    await user.type(screen.getByRole("textbox", { name: "Topic to research" }), "Where is fusion power at?");
+    await user.click(screen.getByRole("button", { name: "Research" }));
+
+    expect(await screen.findByText("Searched your feeds for “fusion”")).toBeVisible();
+    expect(screen.queryByText("Not ours")).toBeNull();
+    expect(screen.getByText(/takes a minute or two/)).toBeVisible();
+    const [messages, context] = vi.mocked(researchTopic).mock.calls[0];
+    expect(messages).toEqual([{ role: "user", content: "Where is fusion power at?" }]);
+    expect(context).toEqual({});
+
+    await act(async () => finish(BRIEFING));
+    expect(await screen.findByText("Research briefing")).toBeVisible();
+    expect(screen.getByText("How Skim researched this (2 steps)")).toBeInTheDocument();
+    // [1], [w1], [2] become chips 1, 2, 3 in reading order, each matching a card.
+    expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual(["1", "2", "3"]);
+    expect(screen.getByRole("link", { name: "2" })).toHaveAttribute("title", "ITER timeline");
+    expect(screen.getByRole("button", { name: /^2.*iter\.org.*ITER timeline/ })).toBeVisible();
+    expect(screen.getByText("Also searched (1)")).toBeInTheDocument();
+    expect(askAgent).not.toHaveBeenCalled();
+    expect(chatWithArticles).not.toHaveBeenCalled();
+  });
+
+  it("starts in deep research when the palette asks for it", async () => {
+    settings = { ai: { provider: "openai", chat_provider: "same" } };
+    vi.mocked(researchTopic).mockResolvedValue(BRIEFING);
+    useAgentChatStore.setState({ seed: { context: { view: "today" }, prompt: "fusion power", autoSend: true, research: true } });
+    render(<AskSkimDialog onClose={vi.fn()} />);
+    expect(await screen.findByText("Research briefing")).toBeVisible();
+    expect(vi.mocked(researchTopic).mock.calls[0][1]).toEqual({ view: "today" });
   });
 });

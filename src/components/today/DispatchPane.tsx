@@ -12,6 +12,7 @@ import type { DispatchArticle, DispatchEdition, DispatchTheme } from "../../serv
 import { ModelPicker } from "../common/ModelPicker";
 import { ChatIcon, RefreshIcon } from "../ui/icons";
 import { openAgentChat } from "../../stores/agentChatStore";
+import { ReaderSelectionAsk } from "../article/ReaderSelectionAsk";
 import { useAgentContext } from "../../hooks/useAgentContext";
 import type { AgentStory } from "../../services/commands";
 import { IconButton } from "../common/IconButton";
@@ -50,15 +51,18 @@ function Bars({ widths }: { widths: string[] }) {
   </div>;
 }
 
-function Piece({ theme, index, edition, isWriting, onOpen, onAsk, image }: {
+function Piece({ theme, index, edition, isWriting, onOpen, onAsk, onAskAbout, image }: {
   theme: DispatchTheme;
   index: number;
   edition: DispatchEdition;
   isWriting: boolean;
   onOpen: (id: string) => void;
   onAsk: () => void;
+  /** Ask about a passage highlighted in the piece. */
+  onAskAbout: (text: string) => void;
   image?: string | null;
 }) {
+  const pieceRef = useRef<HTMLElement>(null);
   const lead = index === 0;
   const byId = new Map(edition.articles.map((article) => [article.id, article]));
   const articles = theme.article_ids.map((id) => byId.get(id));
@@ -66,22 +70,22 @@ function Piece({ theme, index, edition, isWriting, onOpen, onAsk, image }: {
   const color = themeColor(theme.kicker);
   const reports = articles.filter(Boolean).length;
   return (
-    <article className={`dispatch-piece ${lead ? "dispatch-piece--lead" : ""}`} style={{ ["--today-theme" as string]: color }} aria-busy={!written && isWriting}>
+    <article ref={pieceRef} className={`dispatch-piece ${lead ? "dispatch-piece--lead" : ""}`} style={{ ["--today-theme" as string]: color, position: "relative" }} aria-busy={!written && isWriting}>
       <div className="dispatch-kicker">
         <span>{theme.kicker}</span>
         <span className="dispatch-kicker-count"> · {reports} {reports === 1 ? "report" : "reports"}</span>
       </div>
-      <h3 className="dispatch-headline">{theme.headline}</h3>
-      {theme.dek && <p className="dispatch-dek">{theme.dek}</p>}
+      <h3 className="dispatch-headline selectable-text">{theme.headline}</h3>
+      {theme.dek && <p className="dispatch-dek selectable-text">{theme.dek}</p>}
       {lead && image && <img className="dispatch-image" src={image} alt="" loading="lazy" onError={(event) => { event.currentTarget.style.display = "none"; }} />}
       {written ? (
         <div className="dispatch-columns">
-          <div className="dispatch-body">
+          <div className="dispatch-body selectable-text">
             {theme.body.map((paragraph, i) => <p key={i}><Cited text={paragraph} articles={articles} onOpen={onOpen} /></p>)}
           </div>
           {theme.takeaways.length > 0 && <aside className="dispatch-takeaways" aria-label="Takeaways">
             <h4>What it means</h4>
-            <ul>{theme.takeaways.map((line, i) => <li key={i}><Cited text={line} articles={articles} onOpen={onOpen} /></li>)}</ul>
+            <ul className="selectable-text">{theme.takeaways.map((line, i) => <li key={i}><Cited text={line} articles={articles} onOpen={onOpen} /></li>)}</ul>
           </aside>}
         </div>
       ) : theme.error ? (
@@ -101,6 +105,7 @@ function Piece({ theme, index, edition, isWriting, onOpen, onAsk, image }: {
         ))}
       </ol>
       {written && <button type="button" className="today-story-control dispatch-ask" onClick={onAsk}><ChatIcon size={14} /> Ask about this</button>}
+      {written && <ReaderSelectionAsk containerRef={pieceRef} onAsk={onAskAbout} />}
     </article>
   );
 }
@@ -268,12 +273,14 @@ export function DispatchPane() {
             <div className="dispatch-front">
               <Piece theme={shownThemes[0]} index={0} edition={shown} isWriting={isWriting} image={leadImage}
                 onOpen={openArticleFromToday}
-                onAsk={() => openAgentChat({ context: { ...pageContext, story: themeForAgent(shownThemes[0], 0) } })} />
+                onAsk={() => openAgentChat({ context: { ...pageContext, story: themeForAgent(shownThemes[0], 0) } })}
+                onAskAbout={(text) => openAgentChat({ context: { ...pageContext, story: themeForAgent(shownThemes[0], 0) }, reply: { role: "story", text } })} />
               {shownThemes.length > 1 && <div className="dispatch-grid">
                 {shownThemes.slice(1).map((theme, i) => (
                   <Piece key={`${i + 1}-${theme.headline}`} theme={theme} index={i + 1} edition={shown} isWriting={isWriting}
                     onOpen={openArticleFromToday}
-                    onAsk={() => openAgentChat({ context: { ...pageContext, story: themeForAgent(theme, i + 1) } })} />
+                    onAsk={() => openAgentChat({ context: { ...pageContext, story: themeForAgent(theme, i + 1) } })}
+                    onAskAbout={(text) => openAgentChat({ context: { ...pageContext, story: themeForAgent(theme, i + 1) }, reply: { role: "story", text } })} />
                 ))}
               </div>}
               {shown.briefs.length > 0 && (
@@ -283,7 +290,7 @@ export function DispatchPane() {
                     {shown.briefs.map((brief, i) => {
                       const article = shown.articles.find((candidate) => candidate.id === brief.article_ids[0]);
                       return <li key={i}>
-                        <span>{brief.text}</span>
+                        <span className="selectable-text">{brief.text}</span>
                         {article && <button type="button" className="dispatch-brief-source" onClick={() => openArticleFromToday(article.id)}>{article.publication}</button>}
                       </li>;
                     })}
@@ -298,11 +305,11 @@ export function DispatchPane() {
         </div>
       </div>
       <nav className="today-pagination" aria-label="Newspaper pages">
-        <button className="today-story-control" disabled={todayPage <= 1} onClick={() => turnTo(todayPage - 1)}>{todayPage === 2 ? "Latest" : "Newer"}</button>
+        <button className="today-story-control" disabled={todayPage <= 1} onClick={() => turnTo(todayPage - 1)}>Previous page</button>
         <div className="today-page-position">
           <span role="status" aria-live="polite">{todayPage === 1 ? "Front page" : `Page ${todayPage}`}<span className="text-text-muted"> · {formatWindowDate(win)}</span></span>
         </div>
-        <button className="today-story-control" disabled={todayPage >= TODAY_PAGE_COUNT} onClick={() => turnTo(todayPage + 1)}>{todayPage === 1 ? "Previous edition" : "Older"}</button>
+        <button className="today-story-control" disabled={todayPage >= TODAY_PAGE_COUNT} onClick={() => turnTo(todayPage + 1)}>Next page</button>
       </nav>
     </div>
   );

@@ -10,6 +10,16 @@ behaviors:
     description: >-
       The list filters to Unread (default), Starred, or All. The Starred view shows starred articles
       whether or not they are read.
+  - id: open-article-stays-listed
+    description: >-
+      In an unread-only list, the article open in the reader stays listed (styled as read) while it
+      is open. After the reader moves to another article, it lingers briefly (2 minutes on desktop,
+      30 on iOS) and then drops out.
+    source:
+      text: >-
+        read article reaper in the sidebar should not reap open article / it should then be reaped
+        after some time that i move to another article
+      reference: Giulio, project thread "Keep open article in sidebar", 2026-10-25
   - id: recent-view
     description: >-
       Desktop: Recent lists articles the reader engaged with, ordered by engagement or by recency,
@@ -32,3 +42,16 @@ behaviors:
     description: >-
       On iOS a Hacker News, Lobsters or Reddit row names the site the story links to (ipinfo.io)
       under its title, never the feed's "Comments" stub.
+  - id: ios-empty-list-state
+    description: >-
+      On iOS an empty article list says why it is empty (nothing unread, no starred articles,
+      nothing read yet, no results) instead of showing a blank screen.
+    details: >-
+      Picking a feed from the feed picker while in Starred or Recent opens that feed's Unread list,
+      since those views are library-wide and the title bar gives no sign of the mode. (Picking a
+      folder already switches them to All.)
+    source:
+      text: sure fix
+      reference: >-
+        Giulio, project thread "Surface chat and smart sort on iOS", 2026-10-27, approving the fix
+        for a blank list after picking a feed from Starred

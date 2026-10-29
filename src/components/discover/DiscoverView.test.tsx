@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DiscoverView } from "./DiscoverView";
@@ -14,8 +14,21 @@ vi.mock("../../services/commands", () => ({
   searchFeeds: vi.fn(),
   previewFeed: vi.fn(),
   feedCatalog: vi.fn(),
+  subscribedFeed: vi.fn(),
+  countStarredInFeed: vi.fn(),
+  removeFeed: vi.fn(),
+  listNewspapers: vi.fn(),
+  signInNewspaper: vi.fn(),
+  signOutNewspaper: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
+const events = vi.hoisted(() => ({ handlers: new Map<string, () => void>() }));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn((name: string, handler: () => void) => {
+    events.handlers.set(name, handler);
+    return Promise.resolve(() => {});
+  }),
+}));
 
 function feed(over: Partial<DiscoveredFeed> = {}): DiscoveredFeed {
   return {
@@ -54,11 +67,52 @@ beforeEach(() => {
     { id: "space", name: "Space", feeds: [nasa] },
   ]);
   vi.mocked(commands.searchFeeds).mockResolvedValue([]);
+  vi.mocked(commands.listNewspapers).mockResolvedValue([]);
   vi.mocked(commands.previewFeed).mockResolvedValue(feed({ items: [] }));
   vi.mocked(openUrl).mockResolvedValue(undefined);
 });
 
 describe("Discover", () => {
+  it("follows every section of a newspaper and signs in to it", async () => {
+    const user = userEvent.setup();
+    const nyt = (signedIn: boolean) => ({
+      id: "nyt",
+      name: "The New York Times",
+      site: "https://www.nytimes.com",
+      icon_url: null,
+      free: false,
+      can_sign_in: true,
+      signed_in: signedIn,
+      sections: [
+        feed({ title: "Top Stories", url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", site_url: "https://www.nytimes.com" }),
+        feed({ title: "World", url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", site_url: "https://www.nytimes.com", already_subscribed: true }),
+      ],
+    });
+    vi.mocked(commands.listNewspapers).mockResolvedValue([nyt(false)]);
+    vi.mocked(commands.addFeed).mockResolvedValue({} as never);
+    vi.mocked(commands.signInNewspaper).mockResolvedValue(undefined);
+    vi.mocked(commands.signOutNewspaper).mockResolvedValue(undefined);
+    renderView();
+
+    expect(await screen.findByText("Subscription · 2 sections")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /The New York Times/ }));
+    expect(screen.getByRole("heading", { name: "The New York Times" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Follow all sections" }));
+    expect(commands.addFeed).toHaveBeenCalledTimes(1);
+    expect(commands.addFeed).toHaveBeenCalledWith("https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml");
+
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(commands.signInNewspaper).toHaveBeenCalledWith("nyt");
+
+    // Closing the sign-in window tells Discover to reload sign-in state.
+    vi.mocked(commands.listNewspapers).mockResolvedValue([nyt(true)]);
+    act(() => events.handlers.get("newspaper-auth-changed")?.());
+    expect(await screen.findByText("Signed in")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Sign out" }));
+    expect(commands.signOutNewspaper).toHaveBeenCalledWith("nyt");
+  });
+
   it("opens a topic, then a feed's page, and follows it", async () => {
     const user = userEvent.setup();
     vi.mocked(commands.addFeed).mockResolvedValue({} as never);
@@ -77,7 +131,7 @@ describe("Discover", () => {
 
     await user.click(screen.getByRole("button", { name: "Follow NASA" }));
     expect(commands.addFeed).toHaveBeenCalledWith("https://www.nasa.gov/feed/");
-    expect(await screen.findByLabelText("Following NASA")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Unfollow NASA" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /Artemis update/ }));
     expect(openUrl).toHaveBeenCalledWith("https://example.com/Artemis%20update");
@@ -98,7 +152,34 @@ describe("Discover", () => {
     expect(await screen.findByText("Example Blog", {}, { timeout: 2000 })).toBeInTheDocument();
     expect(commands.discoverFeeds).toHaveBeenCalledWith("example.com");
     expect(screen.getByText("2 feeds found")).toBeInTheDocument();
-    expect(screen.getByLabelText("Following Comments")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Unfollow Comments" })).toBeInTheDocument();
+  });
+
+  it("unfollows from the Following button after asking", async () => {
+    const user = userEvent.setup();
+    vi.mocked(commands.discoverFeeds).mockResolvedValue([
+      feed({ title: "Comments", url: "https://example.com/comments.xml", already_subscribed: true }),
+    ]);
+    vi.mocked(commands.subscribedFeed).mockResolvedValue({ id: "feed-7", title: "Comments" } as never);
+    vi.mocked(commands.countStarredInFeed).mockResolvedValue(2);
+    vi.mocked(commands.removeFeed).mockResolvedValue(undefined);
+    renderView();
+
+    await user.type(screen.getByRole("textbox", { name: /paste a website/ }), "example.com");
+    await user.click(await screen.findByRole("button", { name: "Unfollow Comments" }, { timeout: 2000 }));
+    expect(commands.subscribedFeed).toHaveBeenCalledWith("https://example.com/comments.xml");
+    expect(await screen.findByRole("dialog", { name: 'Unfollow Comments?' })).toBeInTheDocument();
+    expect(screen.getByText("2 starred articles")).toBeInTheDocument();
+
+    // Cancel keeps it.
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(commands.removeFeed).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Unfollow Comments" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Unfollow Comments" }));
+    await user.click(await screen.findByRole("button", { name: "Unfollow" }));
+    expect(commands.removeFeed).toHaveBeenCalledWith("feed-7");
+    expect(await screen.findByRole("button", { name: "Follow Comments" })).toBeInTheDocument();
   });
 
   it("searches by words and shows follower counts", async () => {

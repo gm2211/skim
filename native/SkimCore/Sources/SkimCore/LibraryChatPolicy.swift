@@ -145,8 +145,7 @@ public enum LibraryChatPolicy {
             let range = NSRange(plain.startIndex..<plain.endIndex, in: plain)
             plain = tags.stringByReplacingMatches(in: plain, range: range, withTemplate: " ")
         }
-        let entities = ["&nbsp;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&apos;": "'"]
-        for (entity, replacement) in entities { plain = plain.replacingOccurrences(of: entity, with: replacement) }
+        plain = HTMLEntities.decode(plain)
         return plain.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 

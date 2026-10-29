@@ -291,6 +291,23 @@ export interface ArticleWithTriage extends Article {
   score: number;
 }
 
+/** Smart sort's learned layer: a note of what the reader likes and skips. */
+export interface LearnedPreferences {
+  text: string;
+  learning: boolean;
+  updated_at: number | null;
+  since: number | null;
+}
+
+/** Smart sort's prompts: the built-in base and the learned note. The reader's
+ * own prompt is `AiSettings.triage_user_prompt`. */
+export interface SmartSortPrompts {
+  base_prompt: string;
+  learned: LearnedPreferences;
+  /** Reader signals the learned note has not seen yet. */
+  new_signals: number;
+}
+
 export interface TriageResult {
   triaged_count: number;
   batches: number;
@@ -478,6 +495,18 @@ export interface DiscoveredFeed {
   /** Latest headlines; empty until the feed has been fetched. */
   items: FeedPreviewItem[];
   already_subscribed: boolean;
+}
+
+/** A major newspaper: its official RSS sections and the reader's sign-in. */
+export interface Newspaper {
+  id: string;
+  name: string;
+  site: string;
+  icon_url: string | null;
+  free: boolean;
+  can_sign_in: boolean;
+  signed_in: boolean;
+  sections: DiscoveredFeed[];
 }
 
 export interface FeedCatalogTopic {

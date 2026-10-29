@@ -1,4 +1,5 @@
 import Foundation
+import SkimCore
 
 /// Lightweight, synchronous HTML → plain-text extractor used for fetching linked
 /// articles from aggregator posts (HN, Reddit, Lobsters).
@@ -311,34 +312,7 @@ private extension String {
     }
 
     func decodingBasicHTMLEntities() -> String {
-        var s = self
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-            .replacingOccurrences(of: "&#160;", with: " ")
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
-            .replacingOccurrences(of: "&apos;", with: "'")
-
-        // Numeric entities
-        let pattern = #"&#(x?[0-9A-Fa-f]+);"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return s }
-        let matches = regex.matches(in: s, range: NSRange(s.startIndex..<s.endIndex, in: s)).reversed()
-        for match in matches {
-            guard match.numberOfRanges == 2,
-                  let fullRange = Range(match.range(at: 0), in: s),
-                  let valueRange = Range(match.range(at: 1), in: s)
-            else { continue }
-            let value = s[valueRange]
-            let radix = value.lowercased().hasPrefix("x") ? 16 : 10
-            let scalarText = radix == 16 ? value.dropFirst() : Substring(value)
-            guard let codepoint = UInt32(scalarText, radix: radix),
-                  let scalar = UnicodeScalar(codepoint)
-            else { continue }
-            s.replaceSubrange(fullRange, with: String(scalar))
-        }
-        return s
+        HTMLEntities.decode(self)
     }
 
     func collapsingWhitespace() -> String {

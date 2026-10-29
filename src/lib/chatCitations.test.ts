@@ -70,3 +70,24 @@ describe("citationOrder", () => {
     expect(citationOrder([article(1)], "See [7] and [1].").map((c) => c.source.id)).toEqual(["a1"]);
   });
 });
+
+describe("web citations", () => {
+  const webResult = (n: number) => ({ ...web, id: `web-${n}`, title: `Web ${n}` });
+  const sources = [article(1), article(2), webResult(0), webResult(1), webResult(2)];
+
+  it("numbers [wN] web citations in reading order alongside articles", () => {
+    const order = citationOrder(sources, "From the web [w2], and your feeds [2], then [w1].");
+    expect(order.map(({ source, label }) => [source.id, label])).toEqual([["web-1", 1], ["a2", 2], ["web-0", 3]]);
+  });
+
+  it("leaves web results the answer did not cite under searched", () => {
+    const { cited, searched } = partitionSources(sources, "Only the web here [w3].");
+    expect(cited.map((s) => s.source.id)).toEqual(["web-2"]);
+    expect(searched.map((s) => s.source.id)).toEqual(["a1", "a2", "web-0", "web-1"]);
+  });
+
+  it("never reads [n] as a web result", () => {
+    // [3] is the first web result's position, but only [w1] names it.
+    expect(citationOrder(sources, "See [3] [w9].").map((c) => c.source.id)).toEqual([]);
+  });
+});

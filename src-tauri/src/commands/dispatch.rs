@@ -676,6 +676,7 @@ pub async fn write_dispatch(
     }
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
     let on_device = runs_on_device(&ai_settings.provider);

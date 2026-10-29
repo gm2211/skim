@@ -47,6 +47,21 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
         try db.listFeeds()
     }
 
+    /// Unfollows a feed. Its articles, starred ones included, go with it.
+    public func deleteFeed(id: String) async throws {
+        try db.transaction {
+            try db.execute("DELETE FROM articles WHERE feed_id = ?", [.text(id)])
+            try db.execute("DELETE FROM feeds WHERE id = ?", [.text(id)])
+        }
+    }
+
+    /// How many starred articles unfollowing this feed would delete.
+    public func countStarred(feedID: String) async throws -> Int {
+        try db.query("SELECT COUNT(*) FROM articles WHERE feed_id = ? AND is_starred = 1", [.text(feedID)]) { statement in
+            Int(sqlite3_column_int(statement, 0))
+        }.first ?? 0
+    }
+
     public func importFeeds(_ feeds: [ImportedFeed]) async throws {
         try db.transaction {
             for imported in feeds {
@@ -167,6 +182,18 @@ public actor SkimStore: FeedStore, ArticleStore, SettingsStore, FolderStore {
 
     public func cacheReaderText(articleID: String, url: URL?, text: String) async throws {
         try db.cacheReaderText(articleID: articleID, url: url, text: text, cachedAt: Date())
+    }
+
+    /// Drops saved reader copies fetched from these pages, so they load again,
+    /// say after the reader signs in to the newspaper that published them.
+    public func forgetReaderTexts(where matches: @Sendable (URL) -> Bool) async throws {
+        let rows = try db.query("SELECT article_id, url FROM article_reader_cache WHERE url IS NOT NULL") { statement in
+            (columnText(statement, 0), columnText(statement, 1))
+        }
+        for (id, raw) in rows {
+            guard let url = URL(string: raw), matches(url) else { continue }
+            try db.execute("DELETE FROM article_reader_cache WHERE article_id = ?", [.text(id)])
+        }
     }
 
     public func countCachedReaderTexts() async throws -> Int {

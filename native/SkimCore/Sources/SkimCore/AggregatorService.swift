@@ -191,7 +191,7 @@ public struct AggregatorService: Sendable {
         let candidate = (postData["url_overridden_by_dest"] as? String)
             ?? (postData["url"] as? String)
         guard let candidate,
-              let url = URL(string: candidate.decodingHTMLEntities()),
+              let url = URL(string: candidate.decodingHTMLEntities),
               let host = url.host?.lowercased(),
               !Self.isRedditHost(host)
         else { return nil }
@@ -422,7 +422,7 @@ public struct AggregatorService: Sendable {
             .replacingOccurrences(of: "(?i)</p>\\s*<p(\\s[^>]*)?>|<p(\\s[^>]*)?>", with: "\n\n", options: .regularExpression)
             .replacingOccurrences(of: "(?i)<br\\s*/?>", with: "\n", options: .regularExpression)
             .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-            .decodingHTMLEntities()
+            .decodingHTMLEntities
             .replacingOccurrences(of: "[ \\t]+", with: " ", options: .regularExpression)
             .replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)

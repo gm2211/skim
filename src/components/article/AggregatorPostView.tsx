@@ -177,7 +177,7 @@ function CommentRow({ comment }: { comment: AggregatorComment }) {
           <span className="flex items-center gap-1 text-text-muted"><UpIcon />{formatCount(comment.score)}</span>
         )}
       </div>
-      <p className="text-text-primary whitespace-pre-wrap break-words" style={{ fontSize: 15, lineHeight: 1.6 }}>{comment.body}</p>
+      <p className="selectable-text text-text-primary whitespace-pre-wrap break-words" style={{ fontSize: 15, lineHeight: 1.6 }}>{comment.body}</p>
     </div>
   );
 }

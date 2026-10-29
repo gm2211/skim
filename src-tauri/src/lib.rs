@@ -34,7 +34,7 @@ pub type Rt = tauri::test::MockRuntime;
 pub type AppHandle = tauri::AppHandle<Rt>;
 
 #[cfg(all(desktop, not(feature = "devbridge")))]
-const SUPPORT_URL: &str = "https://gm2211.github.io/skim/";
+const SUPPORT_URL: &str = "https://gm2211.github.io/skim/#support";
 #[cfg(all(desktop, not(feature = "devbridge")))]
 const ISSUES_URL: &str = "https://github.com/gm2211/skim/issues";
 
@@ -196,8 +196,12 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::feeds::search_feeds,
             commands::feeds::preview_feed,
             commands::feeds::feed_catalog,
+            commands::newspapers::list_newspapers,
+            commands::newspapers::sign_in_newspaper,
+            commands::newspapers::sign_out_newspaper,
             commands::feeds::list_feeds,
             commands::feeds::remove_feed,
+            commands::feeds::subscribed_feed,
             commands::feeds::rename_feed,
             commands::feeds::count_starred_in_feed,
             commands::feeds::refresh_feed,
@@ -248,6 +252,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::offline::get_cached_reader_content,
             commands::offline::get_or_fetch_reader_content,
             commands::offline::preload_articles_for_offline,
+            ai::offline::get_offline_ai_status,
             // Editions
             commands::editions::get_or_generate_today_edition,
             commands::editions::generate_today_ledes,
@@ -265,6 +270,9 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::ai::get_themes,
             commands::ai::get_article_theme_tags,
             commands::ai::triage_articles,
+            commands::ai::get_smart_sort_prompts,
+            commands::ai::save_learned_preferences,
+            commands::ai::learn_preferences_now,
             commands::ai::get_inbox_articles,
             commands::ai::get_triage_stats,
             commands::ai::record_reading_time,
@@ -282,6 +290,7 @@ pub fn invoke_handler() -> impl Fn(tauri::ipc::Invoke<Rt>) -> bool + Send + Sync
             commands::chat::chat_with_articles,
             commands::chat::web_search,
             commands::agent::ask_agent,
+            commands::research::research_topic,
             // Settings
             commands::settings::get_settings,
             commands::settings::update_settings,
@@ -403,6 +412,12 @@ pub fn run() {
                 .app_data_dir()
                 .expect("Failed to get app data directory");
             init_state(&app.handle().clone(), app_dir);
+            // Load newspaper sign-ins once the main window's cookie store is up.
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                commands::newspapers::refresh_cookie_jar(&handle);
+            });
             Ok(())
         })
         .invoke_handler(invoke_handler())

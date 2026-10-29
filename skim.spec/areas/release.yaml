@@ -17,7 +17,37 @@ behaviors:
     description: >-
       Every App Store Connect or TestFlight archive carries a bumped version or build number; the
       upload refuses an unchanged one.
+  - id: version-bump-every-build
+    description: >-
+      Every new TestFlight build, iOS and macOS, ships under a new version, not only a new build
+      number, so each build shows up as new in TestFlight. Both platforms share one version.
+    details: >-
+      scripts/bump-version.sh moves iOS and macOS to the next patch after the higher current
+      version and bumps both build numbers; the iOS upload refuses an unchanged version except for
+      per-PR builds from scripts/tf-pr.sh. Sharing one version across platforms is an agent choice
+      made with this rule, not a separate request.
+    source:
+      text: >-
+        even on macos and please let's alwasy bump the version when having new builds
+      reference: Giulio, project thread "Bump version on every TestFlight build", 2026-10-25
   - id: desktop-release-checks
     description: >-
       A desktop release is signed, passes codesign verification and the on-device AI self-check, and
       never bundles model weights.
+  - id: app-store-review-approval
+    description: >-
+      Submitting a build for App Store review or public release needs Giulio's explicit go-ahead;
+      TestFlight uploads do not.
+    details: >-
+      His request to address App Store Connect feedback and resubmit (2026-10-27) is that go-ahead
+      for the builds fixing that feedback.
+    source:
+      text: Address all feedback from apple connect and resubmit
+      reference: Giulio, project thread "Fix App Store review feedback and resubmit", 2026-10-27
+  - id: support-page
+    description: >-
+      The Support URL given to App Store Connect, gm2211.github.io/skim/#support, says how to reach
+      the developer (GitHub issues), and the Mac Help menu opens it and the issue tracker.
+    details: >-
+      App Review rejected macOS 0.1.4 (May 2026) under 1.5 for a broken Support URL and 2.1(a) for a
+      Help menu that did nothing.

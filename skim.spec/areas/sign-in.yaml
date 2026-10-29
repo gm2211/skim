@@ -74,6 +74,24 @@ behaviors:
     source:
       text: "I complete the flow but get [The network connection was lost.]"
       reference: Giulio, project chat, 2026-10-13
+  - id: newspaper-subscription-sign-in
+    description: >-
+      A reader can sign in to a paid newspaper (NYT, WSJ, Washington Post, FT) from its Discover page,
+      on desktop and iOS, so that paper's full articles load in Skim's reader. Signing out forgets the
+      paper's cookies. The Guardian is free and has no sign-in.
+    details: >-
+      None of these papers offers a third-party sign-in API, so Skim opens the paper's own login page
+      in an in-app browser (a Skim window on desktop, a WKWebView sheet on iOS) on the app's default
+      WebKit data store. The window closes itself when the paper sends the reader on to its own
+      site; closing it by hand also ends the attempt. Skim reads the paper's cookies back and sends
+      them only with reader fetches of that paper's domains, and drops reader copies of that paper
+      saved before the change. "Signed in" means the paper's login cookie is present (NYT-S, FTSession_s);
+      for WSJ and the Post, whose login cookie Skim does not know, it means the sign-in reached the
+      paper's site and the paper still has cookies. A paper can still refuse a fetch (for example WSJ's
+      bot check), in which case the reader falls back as it does for any page it can't extract.
+    source:
+      text: I wanna be able to easily connect my major newspapers subscriptions / follow free newspapers (wsj, ny times, wp post, ft, guardian)
+      reference: Giulio, Connect major newspaper subscriptions thread, 2026-10-27
   - id: feedly-sign-in
     description: >-
       Desktop: Feedly sign-in uses OAuth with a local callback and refreshes its token before it

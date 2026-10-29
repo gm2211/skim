@@ -428,7 +428,7 @@ pub async fn fetch_full_article(url: String) -> Result<FullArticleContent, Strin
 type ReaderResult = Result<FullArticleContent, String>;
 type PendingReader = tokio::sync::OnceCell<ReaderResult>;
 
-fn reader_http_client() -> Result<&'static reqwest::Client, String> {
+pub(crate) fn reader_http_client() -> Result<&'static reqwest::Client, String> {
     static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
     CLIENT.get_or_init(|| reqwest::Client::builder()
         // Preserve the existing browser identity and complete fetch timeout.
@@ -466,8 +466,13 @@ async fn fetch_article_content_uncached(url: &str) -> ReaderResult {
         .unwrap_or_else(|| url.to_string());
     let effective_url = rewrite_for_static(&target_url);
 
-    let response = client
-        .get(&effective_url)
+    let mut request = client.get(&effective_url);
+    // A newspaper the reader signed in to gets its own cookies, so a
+    // subscriber's article loads in full. No other site sees them.
+    if let Some(cookie) = super::newspapers::cookie_header_for(&effective_url) {
+        request = request.header(reqwest::header::COOKIE, cookie);
+    }
+    let response = request
         .send()
         .await
         .map_err(|e| format!("Failed to fetch article: {}", e))?;

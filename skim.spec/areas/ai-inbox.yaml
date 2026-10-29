@@ -14,8 +14,8 @@ behaviors:
       articles.
     details: >-
       Desktop puts a small "Smart sort" switch beside the list title (replacing the old Sort row)
-      and keeps a "For you" command in the palette. iOS has a sparkles button in the list's top bar
-      and a Smart Sorting toggle in the list's actions menu, plus a For you row in the feed picker
+      and keeps a "For you" command in the palette. iOS has an on/off sparkles capsule in the list's top bar
+      (filled with the accent when on, outlined when off) instead of a row in the actions menu, plus a For you row in the feed picker
       and an optional For you bottom bar item. Choosing For you from Starred or Recent switches to
       Unread first, since those lists are not ranked. Desktop no longer has an AI Inbox row in the
       sidebar.
@@ -26,6 +26,34 @@ behaviors:
       reference: >-
         Giulio, project chat, 2026-10-22 (earlier: "Do both" on the decision card "Unify Skim's
         taste ranking across Today and the AI Inbox?", 2026-10-14)
+  - id: sort-keeps-the-look
+    description: >-
+      Smart sorting only reorders the list. Rows look exactly as in the plain list (feed icon,
+      source, date, thumbnail), with no rank numbers, rating meters, reasons, "Not rated yet"
+      lines, tier headers or extra header and disclaimer.
+    details: >-
+      Date headers are dropped while smart sorted, since the order is no longer by date. iOS shows
+      one status line, aligned with the row titles, only while rating runs or after it failed;
+      pull to refresh rates new articles. Desktop keeps the theme chips above the list. Replaces
+      the earlier desktop tiers (Top picks, Worth reading, When you have time, Low priority) with
+      Importance and For you meters, and iOS's numbered rows.
+    source:
+      text: Sorting should just sort not change the looks
+      reference: Giulio, project thread "Customize smart sort with layered prompts", 2026-10-27
+  - id: ios-list-toolbar-actions
+    description: >-
+      On iOS the Unread and All lists put Chat with Articles and the Smart sorting switch directly
+      in the top bar, not behind the actions menu.
+    details: >-
+      The top bar reads Feeds, the list title, Chat, the Smart sorting capsule and the actions
+      menu; the title sits between the buttons so they fit on an iPhone SE. The menu keeps Discover
+      Feeds, Customize Bottom Bar and Settings, plus a For you row on lists that cannot be smart
+      sorted. Today keeps its own chat entries in its menu.
+    source:
+      text: >-
+        Some of these actions in ios app (like chat and smart sort toggle) would be nice to have
+        right there instead of hidden behind menu
+      reference: Giulio, project thread "Surface chat and smart sort on iOS", 2026-10-26
   - id: ranks-by-relevance-and-importance
     description: >-
       The model assesses each unread article's relevance to the reader and its importance, and the
@@ -36,10 +64,9 @@ behaviors:
       head start; see today.yaml ranked-by-consequence) and relevance (fit with this reader), plus a
       one-line reason. Both apps
       rank by the shared skim_inbox_score in SkimStoryPolicy, which blends the two ratings with
-      learned taste and a small recency decay; pinned articles stay on top. Desktop groups the
-      ranked list into Top picks, Worth reading, When you have time and Low priority, and each
-      card shows Importance and For you meters. iOS opens the AI Inbox full screen, stores each
-      article's rating so it is rated once, and re-ranks on every visit. The legacy priority is
+      learned taste and a small recency decay; pinned articles stay on top. The ranked list
+      looks like the plain list (see sort-keeps-the-look). iOS stores each article's rating so it
+      is rated once, and re-ranks on every visit. The legacy priority is
       derived from the two ratings. Contract: shared/fixtures/inbox-ranking.json.
     source:
       text: >-
@@ -59,8 +86,50 @@ behaviors:
       earlier feedback still counts.
   - id: explicit-interests
     description: >-
-      The reader can describe their interests in Settings > AI, and ranking uses that text alongside
-      the learned preferences.
+      The reader can write their own smart sort prompt (for example "prioritize AI infra,
+      deprioritize sports"), and ranking uses it ahead of the learned preferences.
+    details: >-
+      It is layer 2 of smart-sort-prompt-layers and lives in the Smart sort settings (desktop
+      Settings > Smart sort; iOS Smart sort settings), no longer in Settings > AI.
+  - id: smart-sort-prompt-layers
+    description: >-
+      Smart sort ranks with three prompts, in this order: a built-in base prompt, an optional prompt
+      the reader writes, and a "learned preferences" note generated from the reader's reading. A
+      Smart sort settings surface on desktop and iOS, reachable from the Smart sort switch, shows all
+      three; the base prompt is shown read-only.
+    details: >-
+      The base prompt is skim_inbox_triage_prompt in SkimStoryPolicy, shared by both apps. The
+      reader's prompt is AiSettings.triage_user_prompt. Desktop: a cog at the end of the Smart sort switch's pill
+      opens Settings on its Smart sort tab, which also names the AI model ranking uses and links to
+      AI Provider; edits there save with Settings' Save. iOS: a Smart sort settings row in the list's actions menu, a long press on the sparkles
+      capsule, and Settings > AI > Preferences > Smart sort all open the same screen, which saves as
+      you go. The raw learned titles the triage prompt used to carry are replaced by the note.
+    source:
+      text: >-
+        there should be some sort of base prompt for smart sort and then an additional prompt that
+        users can provide and also a learnt "user preferences" prompt that can still be deleted /
+        modified
+      reference: Giulio, project thread "Customize smart sort with layered prompts", 2026-10-27
+  - id: learned-preferences-note
+    description: >-
+      The learned preferences are a short plain-text note of what the reader likes and skips. The
+      reader can read, edit or delete it, and smart sort keeps learning afterward: it rewrites the
+      note from new reading while keeping the reader's edits.
+    details: >-
+      The note is at most 8 lines and 800 characters, rewritten by the reader's AI model with the
+      shared skim_inbox_learn_prompt from the current note plus only the signals recorded since it
+      was last written or edited (desktop: reading time, chats, more/less feedback and pins; iOS:
+      reading time, chats, pins and dismissals). skim_inbox_learn_due decides when: 20 new signals
+      for a first note, 15 for a rewrite, and at least 6 hours apart. It runs before a triage run
+      and from a Learn now button. Deleting clears the note and learning restarts from reading after
+      the delete, never from older history. Turning off "Keep learning from my reading" freezes the
+      note. A rewrite that finishes after the reader edited the note is dropped. Each device keeps
+      its own note (desktop in its settings table, iOS in UserDefaults). Learned taste in the
+      ranking score itself (learns-preferences) is separate and unaffected.
+    source:
+      text: >-
+        a learnt "user preferences" prompt that can still be deleted / modified
+      reference: Giulio, project thread "Customize smart sort with layered prompts", 2026-10-27
   - id: triage-on-open
     description: >-
       Opening the AI Inbox runs triage on new unread articles with visible progress, and the reader

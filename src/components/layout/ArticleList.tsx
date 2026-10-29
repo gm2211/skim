@@ -8,28 +8,15 @@ import { useRecentArticles, useRemoveRecent } from "../../hooks/useRecent";
 import { useFeeds, useRefreshAllFeeds } from "../../hooks/useFeeds";
 import { useFolders } from "../../hooks/useFolders";
 import { feedsForFolder } from "../../lib/smartFolder";
-import { CheckCircleIcon, ChatIcon, NewspaperIcon, PlusIcon, SearchIcon, SparkleIcon } from "../ui/icons";
+import { CheckCircleIcon, ChatIcon, CogIcon, NewspaperIcon, PlusIcon, SearchIcon, SparkleIcon } from "../ui/icons";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleCard } from "../article/ArticleCard";
 import { ArticleContextMenu } from "../article/ArticleContextMenu";
 import { AskSkimDialog } from "../chat/AskSkimDialog";
-import type { ArticleFilter, ArticleWithTriage, ArticleWithInteraction, SidebarView } from "../../services/types";
-import { AiSettingsButton } from "../common/AiSettingsButton";
+import type { ArticleFilter, ArticleWithInteraction, SidebarView } from "../../services/types";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { useAppCommand } from "../../lib/appCommands";
 import { PAPER_NAME } from "../../lib/dispatch";
-
-/** AI Inbox tiers by rank score, highest first. The list arrives sorted by score. */
-const SCORE_TIERS: { min: number; label: string }[] = [
-  { min: 75, label: "TOP PICKS" },
-  { min: 55, label: "WORTH READING" },
-  { min: 35, label: "WHEN YOU HAVE TIME" },
-  { min: -Infinity, label: "LOW PRIORITY" },
-];
-
-function inboxTierLabel(score: number) {
-  return SCORE_TIERS.find((tier) => score >= tier.min)!.label;
-}
 
 const STICKY_READ_TTL_MS = 2 * 60 * 1000;
 
@@ -175,16 +162,6 @@ function EmptyArticleState({
       )}
     </div>
   );
-}
-
-function groupByScore(articles: ArticleWithTriage[]) {
-  const groups: { label: string; indices: number[] }[] = [];
-  articles.forEach((article, i) => {
-    const label = inboxTierLabel(article.score ?? 0);
-    if (groups[groups.length - 1]?.label !== label) groups.push({ label, indices: [] });
-    groups[groups.length - 1].indices.push(i);
-  });
-  return groups;
 }
 
 function groupByDate(articles: { published_at: number | null; fetched_at: number }[]) {
@@ -359,13 +336,19 @@ export function ArticleList() {
   // Bumped whenever we deliberately want to drop the sticky map and
   // re-derive `articles` from rawArticles only.
   const [stickyEpoch, setStickyEpoch] = useState(0);
-  const clearStickyArticles = useCallback(() => {
-    stickyMapRef.current = new Map();
+  const selectedArticleIdRef = useRef(selectedArticleId);
+  selectedArticleIdRef.current = selectedArticleId;
+  // Refreshing the same list keeps the article open in the reader; a new
+  // scope, filter, sort or search starts from an empty map.
+  const clearStickyArticles = useCallback((keepOpenArticle = true) => {
+    const openId = selectedArticleIdRef.current;
+    const open = keepOpenArticle && openId ? stickyMapRef.current.get(openId) : undefined;
+    stickyMapRef.current = open && openId ? new Map([[openId, open]]) : new Map();
     setStickyEpoch((n) => n + 1);
   }, []);
 
   useEffect(() => {
-    clearStickyArticles();
+    clearStickyArticles(false);
   }, [clearStickyArticles, sidebarView, listFilter, listSort, normalizedSearch]);
 
   // Only accumulate sticky entries while we are actually in an
@@ -379,16 +362,28 @@ export function ArticleList() {
     }
   }
 
+  // The article open in the reader never lingers out: it stays in the list
+  // while it is open, and its linger timer restarts when the user moves on.
+  const previousSelectedRef = useRef(selectedArticleId);
+  if (previousSelectedRef.current !== selectedArticleId) {
+    const left = previousSelectedRef.current && stickyMapRef.current.get(previousSelectedRef.current);
+    if (left) left.expiresAt = Date.now() + STICKY_READ_TTL_MS;
+    previousSelectedRef.current = selectedArticleId;
+  }
+
   useEffect(() => {
-    if (!stickyEnabled || stickyMapRef.current.size === 0) return;
+    const expiring = Array.from(stickyMapRef.current)
+      .filter(([id]) => id !== selectedArticleId)
+      .map(([, entry]) => entry.expiresAt);
+    if (!stickyEnabled || expiring.length === 0) return;
 
     const now = Date.now();
-    const nextExpiry = Math.min(...Array.from(stickyMapRef.current.values(), (entry) => entry.expiresAt));
+    const nextExpiry = Math.min(...expiring);
     const timeout = window.setTimeout(() => {
       const cutoff = Date.now();
       let changed = false;
       for (const [id, entry] of stickyMapRef.current) {
-        if (entry.expiresAt <= cutoff) {
+        if (id !== selectedArticleId && entry.expiresAt <= cutoff) {
           stickyMapRef.current.delete(id);
           changed = true;
         }
@@ -397,7 +392,7 @@ export function ArticleList() {
     }, Math.max(0, nextExpiry - now) + 50);
 
     return () => window.clearTimeout(timeout);
-  }, [rawArticles, stickyEnabled, stickyEpoch]);
+  }, [rawArticles, stickyEnabled, stickyEpoch, selectedArticleId]);
 
   const articles = useMemo(() => {
     if (!rawArticles) return rawArticles;
@@ -412,7 +407,7 @@ export function ArticleList() {
     const unreadOnly = stickyEnabled;
     if (unreadOnly) {
       for (const [id, entry] of stickyMapRef.current) {
-        if (entry.expiresAt <= now) {
+        if (id !== selectedArticleId && entry.expiresAt <= now) {
           stickyMapRef.current.delete(id);
         } else if (!have.has(id)) {
           injected.push({ ...entry.article, is_read: true });
@@ -420,7 +415,7 @@ export function ArticleList() {
       }
     } else if (!isSearchActive && selectedArticleId && !have.has(selectedArticleId)) {
       const cached = stickyMapRef.current.get(selectedArticleId);
-      if (cached && cached.expiresAt > now) injected.push(cached.article);
+      if (cached) injected.push(cached.article);
     }
     if (injected.length === 0) return rawArticles;
     const combined = [...(rawArticles as any[]), ...injected];
@@ -498,7 +493,8 @@ export function ArticleList() {
 
   const articleGroups = useMemo(() => {
     if (!filteredArticles) return [];
-    if (isForYou) return groupByScore(filteredArticles as ArticleWithTriage[]);
+    // Smart sort only reorders: one run of the usual cards, no tier headers.
+    if (isForYou) return [{ label: "", indices: filteredArticles.map((_, i) => i) }];
     if (isRecent && recentOrder === "engagement") {
       return [{ label: "MOST ENGAGED", indices: filteredArticles.map((_, i) => i) }];
     }
@@ -507,13 +503,13 @@ export function ArticleList() {
 
   const handleMarkAllRead = () => {
     if (sidebarView.type === "all" && !isSearchActive && listFilter !== "starred" && !(isForYou && activeThemeId)) {
-      markAllRead.mutate(null, { onSuccess: clearStickyArticles });
+      markAllRead.mutate(null, { onSuccess: () => clearStickyArticles() });
       return;
     }
     markAllRead.mutate(buildMarkAllReadScope({
       sidebarView, listFilter, searchQuery, folderFeedIds: selectedFolderFeedIds, activeThemeId,
       forYou: isForYou,
-    }), { onSuccess: clearStickyArticles });
+    }), { onSuccess: () => clearStickyArticles() });
   };
 
   useAppCommand("mark-all-read", handleMarkAllRead);
@@ -612,8 +608,7 @@ export function ArticleList() {
     enabled: isPhone,
     canStart: () => (scrollRef.current?.scrollTop ?? 0) <= 0 && !refreshAllFeeds.isPending,
     onRefresh: async () => {
-      stickyMapRef.current = new Map();
-      setStickyEpoch((n) => n + 1);
+      clearStickyArticles();
       await refreshAllFeeds.mutateAsync();
     },
   });
@@ -707,10 +702,21 @@ export function ArticleList() {
             {displayTitle}
           </h2>
           {canSortForYou && (
-            <>
-              {isForYou && <AiSettingsButton size={14} />}
+            // One quiet pill: the switch, then its settings cog.
+            <div className="shrink-0 flex items-center rounded-full border border-white/10">
               <SmartSortSwitch on={isForYou} onChange={(on) => setListSort(on ? "forYou" : "newest")} />
-            </>
+              <span aria-hidden className="bg-white/10" style={{ width: 1, height: 12 }} />
+              <button
+                type="button"
+                aria-label="Smart sort settings"
+                title="Smart sort settings"
+                onClick={() => useUiStore.getState().setShowSettings(true, "smartSort")}
+                className="flex items-center rounded-full text-text-muted hover:text-text-primary transition-colors focus-visible:outline-2 focus-visible:outline-accent"
+                style={{ padding: "4px 8px 4px 6px" }}
+              >
+                <CogIcon size={13} />
+              </button>
+            </div>
           )}
         </div>
         {unreadCount > 0 && (
@@ -835,27 +841,20 @@ export function ArticleList() {
           ) : filteredArticles && filteredArticles.length > 0 ? (
             articleGroups.map((group) => (
               <div key={group.label}>
-                <div
-                  className="text-text-muted uppercase tracking-wider font-semibold"
-                  style={{ fontSize: 11, padding: "16px 24px 8px" }}
-                >
-                  {group.label}
-                </div>
+                {group.label && (
+                  <div
+                    className="text-text-muted uppercase tracking-wider font-semibold"
+                    style={{ fontSize: 11, padding: "16px 24px 8px" }}
+                  >
+                    {group.label}
+                  </div>
+                )}
                 {group.indices.map((i) => {
                   const article = filteredArticles[i];
-                  const ranked = article as ArticleWithTriage;
-                  const triageData = isForYou ? {
-                    priority: ranked.priority ?? 3,
-                    reason: ranked.reason ?? "",
-                    importance: ranked.importance,
-                    relevance: ranked.relevance,
-                  } : null;
                   return (
                     <ArticleCard
                       key={article.id}
                       article={article}
-                      triage={triageData}
-                      themeTags={isForYou ? themeTagsByArticle.get(article.id) : undefined}
                       isSelected={selectedArticleId === article.id}
                       onSelect={() => setSelectedArticleId(article.id)}
                       onContextMenu={(e) => handleArticleContextMenu(e, i)}

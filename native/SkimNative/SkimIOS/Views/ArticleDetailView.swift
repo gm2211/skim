@@ -72,6 +72,7 @@ struct ArticleDetailView: View {
         }
         .onAppear {
             openedAt = Date()
+            model.readerOpened(articleID: articleID)
             if let article {
                 let signal = model.tasteStore.signal(for: article.id)
                 currentPriorityOverride = signal?.priorityOverride ?? .none
@@ -79,6 +80,7 @@ struct ArticleDetailView: View {
         }
         .onDisappear {
             recordDwell()
+            model.readerClosed(articleID: articleID)
         }
         .alert("Skim", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) {}
@@ -257,9 +259,13 @@ struct ArticleDetailView: View {
                 presentArticleChat()
             }
 
-            if let url = article.url {
-                Divider()
+            Divider()
 
+            Button("Copy Title", systemImage: SkimIcon.copy) {
+                UIPasteboard.general.string = article.title
+            }
+
+            if let url = article.url {
                 Button("Open in Browser", systemImage: SkimIcon.openExternal) {
                     openURL(url)
                 }
@@ -1256,7 +1262,7 @@ private struct ReaderPage<HeaderMenu: View, HeaderMenuPreview: View>: View {
     private func linkCard(url: URL, article: Article) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             if let imageURL = article.imageURL {
-                AsyncImage(url: imageURL) { phase in
+                CachedAsyncImage(url: imageURL) { phase in
                     if let image = phase.image {
                         image
                             .resizable()
@@ -1831,6 +1837,7 @@ private struct ReaderSelectableText: UIViewRepresentable {
                       let quote = textView.text(in: selection)?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !quote.isEmpty else { return }
                 textView.selectedTextRange = nil
+                textView.resignFirstResponder()
                 self.onSelectionChange(false)
                 onAsk(quote)
             }
@@ -2005,40 +2012,6 @@ private extension String {
             .decodingHTMLEntities
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    var decodingHTMLEntities: String {
-        var decoded = self
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-            .replacingOccurrences(of: "&#160;", with: " ")
-            .replacingOccurrences(of: "&amp;", with: "&")
-            .replacingOccurrences(of: "&lt;", with: "<")
-            .replacingOccurrences(of: "&gt;", with: ">")
-            .replacingOccurrences(of: "&quot;", with: "\"")
-            .replacingOccurrences(of: "&#39;", with: "'")
-            .replacingOccurrences(of: "&apos;", with: "'")
-
-        let pattern = #"&#(x?[0-9A-Fa-f]+);"#
-        guard let regex = try? NSRegularExpression(pattern: pattern) else { return decoded }
-        let matches = regex.matches(in: decoded, range: NSRange(decoded.startIndex..<decoded.endIndex, in: decoded)).reversed()
-
-        for match in matches {
-            guard match.numberOfRanges == 2,
-                  let fullRange = Range(match.range(at: 0), in: decoded),
-                  let valueRange = Range(match.range(at: 1), in: decoded)
-            else { continue }
-
-            let value = decoded[valueRange]
-            let radix = value.lowercased().hasPrefix("x") ? 16 : 10
-            let scalarText = radix == 16 ? value.dropFirst() : Substring(value)
-            guard let codepoint = UInt32(scalarText, radix: radix),
-                  let scalar = UnicodeScalar(codepoint)
-            else { continue }
-
-            decoded.replaceSubrange(fullRange, with: String(scalar))
-        }
-
-        return decoded
     }
 }
 

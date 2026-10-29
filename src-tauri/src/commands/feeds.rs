@@ -250,6 +250,18 @@ pub async fn list_feeds(db: State<'_, Database>) -> Result<Vec<FeedWithCount>, S
     Ok(result)
 }
 
+/// The library feed with this address, if the reader follows it. Discover
+/// uses it to unfollow a feed it only knows by URL.
+#[tauri::command]
+pub async fn subscribed_feed(db: State<'_, Database>, url: String) -> Result<Option<Feed>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let wanted = normalize_feed_url(&url);
+    Ok(queries::list_feeds(&conn)
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .find(|f| normalize_feed_url(&f.url) == wanted))
+}
+
 #[tauri::command]
 pub async fn remove_feed(db: State<'_, Database>, feed_id: String) -> Result<(), String> {
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
@@ -1381,6 +1393,7 @@ pub async fn ai_auto_organize_feeds(
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
 
@@ -1532,6 +1545,7 @@ pub async fn ai_match_feeds_for_topic(
 
     let mut ai_settings = settings.ai.clone();
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings.model.clone().unwrap_or_else(|| default_model(&ai_settings.provider));
 

@@ -4,6 +4,7 @@ export type RemoteModel = { id: string; display_name: string };
 export const listRemoteModels = (provider: string, apiKey: string | null, endpoint: string | null) =>
   invoke<RemoteModel[]>("list_remote_models", { provider, apiKey, endpoint });
 import type {
+  SmartSortPrompts,
   Feed,
   Article,
   ArticleSummary,
@@ -36,6 +37,7 @@ import type {
   Ds4Status,
   DiscoveredFeed,
   FeedCatalogTopic,
+  Newspaper,
 } from "./types";
 
 // Feeds
@@ -48,6 +50,11 @@ export const searchFeeds = (query: string) =>
 export const previewFeed = (url: string) =>
   invoke<DiscoveredFeed>("preview_feed", { url });
 export const feedCatalog = () => invoke<FeedCatalogTopic[]>("feed_catalog");
+export const listNewspapers = () => invoke<Newspaper[]>("list_newspapers");
+export const signInNewspaper = (id: string) => invoke<void>("sign_in_newspaper", { id });
+export const signOutNewspaper = (id: string) => invoke<void>("sign_out_newspaper", { id });
+export const subscribedFeed = (url: string) =>
+  invoke<Feed | null>("subscribed_feed", { url });
 export const removeFeed = (feedId: string) =>
   invoke<void>("remove_feed", { feedId });
 export const renameFeed = (feedId: string, title: string) =>
@@ -352,7 +359,7 @@ export const getCachedReaderContent = (articleId: string) =>
 export const getOrFetchReaderContent = (articleId: string, url: string, forceRefresh = false) =>
   invoke<{ html: string; raw_html: string }>("get_or_fetch_reader_content", { articleId, url, forceRefresh });
 
-export interface OfflineCacheStats { extracted_articles: number }
+export interface OfflineCacheStats { extracted_articles: number; image_bytes?: number }
 export interface OfflinePreloadProgress {
   completed: number;
   total: number;
@@ -365,6 +372,13 @@ export const OFFLINE_PRELOAD_PROGRESS_EVENT = "skim-reader://offline-preload-pro
 export const getOfflineCacheStats = () => invoke<OfflineCacheStats>("get_offline_cache_stats");
 export const preloadArticlesForOffline = (limit: number) =>
   invoke<OfflinePreloadProgress>("preload_articles_for_offline", { limit });
+
+export interface OfflineAiStatus {
+  offline: boolean;
+  fallback_provider: string | null;
+  fallback_label: string | null;
+}
+export const getOfflineAiStatus = () => invoke<OfflineAiStatus>("get_offline_ai_status");
 
 // AI
 export const summarizeArticle = (
@@ -390,6 +404,10 @@ export interface ArticleThemeTag {
 }
 export const getArticleThemeTags = () =>
   invoke<ArticleThemeTag[]>("get_article_theme_tags");
+export const getSmartSortPrompts = () => invoke<SmartSortPrompts>("get_smart_sort_prompts");
+export const saveLearnedPreferences = (text: string, learning: boolean) =>
+  invoke<SmartSortPrompts>("save_learned_preferences", { text, learning });
+export const learnPreferencesNow = () => invoke<SmartSortPrompts>("learn_preferences_now");
 export const triageArticles = (force?: boolean) =>
   invoke<TriageResult>("triage_articles", { force: force ?? null });
 export const getInboxArticles = (opts?: {
@@ -561,6 +579,14 @@ export interface AgentResponse {
 }
 export const askAgent = (messages: ChatMessageInput[], context: AgentContext, priorArticleIds?: string[]) =>
   invoke<AgentResponse>("ask_agent", { messages, context, priorArticleIds: priorArticleIds ?? null });
+/** Deep research: the reader's feeds first, then the web for what they leave open, written up as a cited briefing. */
+export const researchTopic = (messages: ChatMessageInput[], context: AgentContext, requestId: string) =>
+  invoke<AgentResponse>("research_topic", { messages, context, requestId });
+export const RESEARCH_PROGRESS_EVENT = "research-progress";
+export interface ResearchProgress {
+  request_id: string;
+  label: string;
+}
 export const webSearch = (query: string) =>
   invoke<SearchResult[]>("web_search", { query });
 

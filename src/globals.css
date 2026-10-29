@@ -48,6 +48,25 @@ html, body, #root {
   color: var(--color-text-primary);
 }
 
+/* App chrome (headers, counts, labels, toggles, placeholders) is not text.
+   Only reading content opts back in: the article title and body, comments,
+   summaries and chat answers, plus anything you can type into. */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input,
+textarea,
+[contenteditable]:not([contenteditable="false"]),
+.selectable-text,
+.article-reader-title,
+.article-content,
+.full-article-content {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 /* iOS safe-area: pad content away from notch and home indicator. */
 #root {
   padding-top: env(safe-area-inset-top);

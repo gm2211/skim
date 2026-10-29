@@ -27,6 +27,8 @@ private struct InboxFixture: Decodable {
     var priority: [Priority]
     var story_preference: [StoryPreference]
     var terms: [Terms]
+    struct LearnDue: Decodable { var name: String; var new_signals: Int; var hours: Double?; var has_note: Bool; var due: Bool }
+    var learn_due: [LearnDue]
 }
 
 @Test func inboxRankingMatchesSharedFixture() throws {
@@ -62,7 +64,11 @@ private struct InboxFixture: Decodable {
     for c in fixture.terms {
         #expect(InboxRanking.terms(c.title) == c.terms)
     }
+    for c in fixture.learn_due {
+        #expect(InboxRanking.learnDue(newSignals: c.new_signals, hoursSinceUpdate: c.hours, hasNote: c.has_note) == c.due, "\(c.name)")
+    }
     #expect(InboxRanking.triagePrompt.contains("importance"))
+    #expect(InboxRanking.learnPrompt.contains("edited the note"))
 }
 
 @Test func inboxTasteLearnsFromReadingAndDismissals() {

@@ -13,6 +13,23 @@ behaviors:
     description: >-
       iOS providers: Apple Intelligence (default), On-device MLX, Claude Pro/Max, ChatGPT Plus/Pro, Grok
       (xAI), Claude API key, OpenAI, OpenRouter, and Custom.
+  - id: offline-falls-back-on-device
+    description: >-
+      With no internet connection, requests meant for a cloud provider run on the on-device model
+      instead, and the model picker says so with a subtle offline marker. The chosen provider
+      answers again once the connection is back; settings never change.
+    details: >-
+      Order: Apple Intelligence where it is available, then a downloaded MLX model, then (desktop)
+      a downloaded llama.cpp model; with none ready the cloud request fails as before. iOS goes by
+      the system's network status and also retries on device when a cloud request fails for want
+      of a connection. Desktop checks that the provider's host (or the system proxy) answers,
+      rechecking every few seconds while it does not. Custom endpoints on this machine or the
+      local network count as local. iOS shows "Apple Intelligence · offline" with a no-Wi-Fi icon
+      on the picker chip; desktop shows a no-Wi-Fi icon beside compact pickers and "Offline · using
+      Apple Intelligence" under the Summarize picker.
+    source:
+      text: I want ai provider to fallback to local if no internet connection
+      reference: Giulio, project thread "Read and use AI offline", 2026-10-26
   - id: keys-kept-per-provider
     description: >-
       Each provider keeps its own API key, endpoint, and model, so switching away and back does not
@@ -27,6 +44,20 @@ behaviors:
     source:
       text: "also why am i not getting dropdown with model names ?"
       reference: Giulio, project chat, 2026-10-15 (desktop Claude Pro/Max showed a plain text box)
+  - id: model-lists-load-on-their-own
+    description: >-
+      Every model picker loads its provider's model list on its own, with no refresh button to
+      press: AI settings when it opens and whenever the provider, key, or endpoint changes, and the
+      inline pickers each time they open after an empty or failed load.
+    details: >-
+      Settings and the inline pickers share one cached list per provider, endpoint and key, so a
+      list one loads shows up in the others. In desktop AI settings the list shows as a menu under
+      the Model field with the friendly name first and the id beneath, the current model checked,
+      and whole rows that scroll; typing filters it and any model id can still be entered. iOS
+      settings reload the list when the provider, key, endpoint, or sign-in changes.
+    source:
+      text: "models should always autorefresh without having to hit refresh - also the dropdown should look better"
+      reference: Giulio, project thread "Auto-refresh model list and polish picker", 2026-10-25 (also "this dropdown from chat config wasn't showing models till i opened the ai settings and hit refresh")
   - id: model-list-provider-order
     description: >-
       Model pickers list a provider's models in the order its API returns them, and leave out

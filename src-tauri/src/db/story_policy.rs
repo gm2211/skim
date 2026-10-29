@@ -36,6 +36,8 @@ extern "C" {
     fn skim_summary_custom_words_valid(words: i64) -> i32;
     fn skim_summary_style_prompt(tone: *const std::os::raw::c_char) -> *const std::os::raw::c_char;
     fn skim_ai_request_max_tokens(budget: i32, provider: *const std::os::raw::c_char) -> i32;
+    fn skim_article_chat_evidence_scalars(provider: *const std::os::raw::c_char) -> usize;
+    fn skim_article_chat_source_rules(complete: i32) -> *const std::os::raw::c_char;
     fn skim_summary_complete_length(text: *const u8, len: usize) -> usize;
     #[cfg(test)]
     fn skim_today_lede_excerpt_valid(source: *const u8, source_len: usize, excerpt: *const u8, excerpt_len: usize) -> i32;
@@ -194,6 +196,20 @@ pub fn ai_request_max_tokens(budget: i64, provider: &str) -> i64 {
     let provider = std::ffi::CString::new(provider).ok();
     let ptr = provider.as_ref().map_or(std::ptr::null(), |provider| provider.as_ptr());
     i64::from(unsafe { skim_ai_request_max_tokens(plan, ptr) })
+}
+
+/// How much article text one article chat request to `provider` may carry.
+pub fn article_chat_evidence_scalars(provider: &str) -> usize {
+    let provider = std::ffi::CString::new(provider).ok();
+    let ptr = provider.as_ref().map_or(std::ptr::null(), |provider| provider.as_ptr());
+    unsafe { skim_article_chat_evidence_scalars(ptr) }
+}
+
+/// What the article text in an article chat is, and how to keep sources apart.
+pub fn article_chat_source_rules(complete: bool) -> &'static str {
+    // C returns immutable, static NUL-terminated UTF-8 storage.
+    unsafe { std::ffi::CStr::from_ptr(skim_article_chat_source_rules(i32::from(complete))) }
+        .to_str().expect("shared article chat rules are UTF-8")
 }
 
 /// Drops an unfinished final sentence left by a token cutoff.

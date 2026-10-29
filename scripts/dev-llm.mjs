@@ -242,6 +242,46 @@ function dispatchPieceFor(user) {
   return JSON.stringify({ body: body.length ? body : ["The reports say little beyond their headlines [1]."], takeaways });
 }
 
+/** Deep research: plan library searches from the question's longer words. */
+function researchPlanFor(user) {
+  const words = user.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 4);
+  const unique = [...new Set(words)];
+  const queries = [unique.slice(0, 2).join(" "), unique[0], unique.slice(2, 4).join(" ")].filter(Boolean);
+  return JSON.stringify({ topic: unique.slice(0, 3).join(" ") || "the question", library_queries: queries });
+}
+
+function researchGapsFor(user) {
+  const topic = (user.match(/^Topic: (.*)$/m) || [])[1] || "the topic";
+  return JSON.stringify({
+    gaps: ["background on how the fees work", "the regulatory timeline"],
+    web_queries: [`${topic} explained`, `${topic} regulation timeline`],
+  });
+}
+
+/** Deep research: a synthetic briefing that cites what it was given. */
+function researchBriefingFor(user) {
+  const articles = [...user.matchAll(/^\[(\d+)\] (.+?) \(([^,)\n]+)(?:, |\)$)/gm)].map((m) => ({ n: m[1], title: m[2], feed: m[3] }));
+  const web = [...user.matchAll(/^\[w(\d+)\] (.+?) \(([^)]+)\)$/gm)].map((m) => ({ n: m[1], title: m[2], site: m[3] }));
+  const a = (i) => (articles[i] ? `[${articles[i].n}]` : "");
+  const w = (i) => (web[i] ? `[w${web[i].n}]` : "");
+  const lead = articles[0]?.title ?? web[0]?.title ?? "this topic";
+  return [
+    `Your feeds lead with \u201c${lead}\u201d ${a(0)}, and ${articles.length} of your articles cover the story in some form ${a(1)}. The web fills in the background they assume ${w(0)} and the timeline ahead ${w(1)}.`,
+    "",
+    "## What's happening",
+    ...articles.slice(0, 4).map((x, i) => `- ${x.title}, as ${x.feed} reports ${a(i)}.`),
+    "",
+    "## Background",
+    ...web.slice(0, 3).map((x, i) => `- ${x.title} (${x.site}) ${w(i)}.`),
+    "",
+    "## Where sources differ",
+    `${articles[1]?.feed ?? "One outlet"} frames it as a pricing story ${a(1)}, while ${articles[2]?.feed ?? "another"} treats it as lock-in ${a(2)}.`,
+    "",
+    "## What to watch",
+    `Whether the rules arrive on schedule ${w(1)}, and how providers respond ${a(3)}.`,
+  ].join("\n");
+}
+
 function respond(messages) {
   const user = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const all = messages.map((m) => m.content).join("\n");
@@ -253,6 +293,9 @@ function respond(messages) {
     return JSON.stringify(lead ?? {});
   }
   if (/editor-in-chief of The Briefing/.test(system)) return dispatchPlanFor(parseListing(messages.find((m) => m.role === "user")?.content ?? ""));
+  if (/You plan research in a reader's RSS library/.test(system)) return researchPlanFor(user);
+  if (/what a complete briefing still needs/.test(system)) return researchGapsFor(user);
+  if (/Skim's research desk/.test(system)) return researchBriefingFor(user);
   if (/journalist at The Briefing/.test(system)) return dispatchPieceFor(messages.find((m) => m.role === "user")?.content ?? "");
 
   if (/"themes"\s*:/.test(user)) return themesFor(parseListing(user));

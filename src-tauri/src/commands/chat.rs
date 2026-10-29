@@ -26,6 +26,17 @@ pub struct ChatResponse {
     pub web_citations: Vec<WebCitation>,
 }
 
+/// Lets the model fix an earlier reply in place instead of appending a
+/// correction paragraph. The app strikes the wrong words through in that reply
+/// and shows the fix beside them (src/lib/chatCorrections.ts; iOS mirrors this
+/// in ChatCorrections.swift).
+pub const CORRECTION_GUIDE: &str = "If you find that something you said in an earlier reply was wrong, \
+fix it in place rather than writing a paragraph about the mistake: add \
+<correction><was>the wrong words, copied exactly from your earlier reply</was><now>what is right</now></correction> \
+anywhere in your answer, one block per fix. Keep <was> to the shortest phrase or sentence that is wrong, \
+and put no citation numbers in <now>. Skim strikes the wrong words through in the earlier reply and shows \
+your fix beside them, so do not also explain the correction in prose; answer the new question as usual.";
+
 #[tauri::command]
 pub async fn chat_with_article(
     app: AppHandle,
@@ -60,6 +71,8 @@ pub async fn chat_with_article(
     }
 
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider_kind = ai_settings.provider.clone();
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
@@ -73,22 +86,30 @@ pub async fn chat_with_article(
     // not answering.
     let text = crate::commands::article_body::resolve_article_text(db.inner(), &article.article).await;
 
-    // Select original source passages across the article rather than discarding
-    // late evidence before the question is considered.
-    let article_text = article_chat_evidence(&text, &messages, 12000);
+    // Hosted models get the whole article, so every turn sees the same text and
+    // "read the article" means the article. Small local models get passages
+    // selected for the question from across the full source.
+    let budget = crate::db::story_policy::article_chat_evidence_scalars(&provider_kind);
+    let article_text = article_chat_evidence(&text, &messages, budget);
     require_selected_evidence(&text, &article_text)?;
 
     let tool_hint = if provider_supports_tools(&provider_kind) {
         "When the article doesn't contain enough information to answer, you may call the \
-         `web_search` tool to pull in fresh results. Prefer article context when it suffices.\n\n"
+         `web_search` tool to pull in fresh results. Prefer article context when it suffices. \
+         Cite each web result you use by its number, like [w2], right after the claim it \
+         supports; Skim links the number to the source.\n\n"
     } else {
         ""
     };
     let mut system_prompt = format!(
         "You are a helpful assistant discussing a news article. Answer questions about the article, \
          provide context, and help the user understand the topic better. Be concise and direct. \
-         No emoji.\n\n{tool_hint}{context}",
-        context = article_chat_context(&article, &article_text),
+         No emoji.
+
+{tool_hint}{CORRECTION_GUIDE}
+
+{context}",
+        context = article_chat_context(&article, &text, &article_text),
     );
 
     system_prompt.push_str(&generated_summary_context(summary_context.as_deref()));
@@ -116,7 +137,7 @@ pub async fn chat_with_article(
         chat_messages.push(ChatMessage::text(msg.role.clone(), msg.content.clone()));
     }
 
-    let (content, mut web_citations) = invoke_chat_with_tools(
+    let (content, tool_citations) = invoke_chat_with_tools(
         provider.as_ref(),
         &provider_kind,
         chat_messages,
@@ -125,7 +146,9 @@ pub async fn chat_with_article(
         Some(crate::db::story_policy::ai_request_max_tokens(2048, &provider_kind)),
     )
     .await?;
-    web_citations.extend(local_citations);
+    // The local search block numbers its results [w1].. in the prompt, so they come first.
+    let mut web_citations = local_citations;
+    web_citations.extend(tool_citations);
 
     // Track chat interaction for learning system
     {
@@ -185,11 +208,16 @@ pub(crate) fn publication_context(published_at: Option<i64>) -> String {
     format!("Publication time (UTC): {date} (article metadata, not the event time)")
 }
 
-fn article_chat_context(article: &crate::db::models::ArticleWithFeed, body: &str) -> String {
-    format!("Article Title: {}\nSource: {}\nAuthor: {}\n{}\n\nArticle Content:\n{}",
+/// `body` is what was selected from `source`; the label and the source rules
+/// tell the model whether it holds the whole article or only passages.
+fn article_chat_context(article: &crate::db::models::ArticleWithFeed, source: &str, body: &str) -> String {
+    let complete = body.trim() == source.trim();
+    let label = if complete { "Article text (complete)" } else { "Article passages (selected, not the full article)" };
+    format!("Article Title: {}\nSource: {}\nAuthor: {}\n{}\n\n{label}:\n{}\n\n{}",
         article.article.title, article.feed_title,
         article.article.author.as_deref().unwrap_or("Unknown"),
-        publication_context(article.article.published_at), body)
+        publication_context(article.article.published_at), body,
+        crate::db::story_policy::article_chat_source_rules(complete))
 }
 
 /// The visible summary is conversational context, never independent evidence.
@@ -530,6 +558,8 @@ pub async fn chat_with_articles(
     }
 
     ai_settings.oauth_access_token = crate::ai::subscription_access_token(&db, &ai_settings.provider);
+
+    crate::ai::offline::fallback_when_offline(&mut ai_settings, &app).await;
     let provider_kind = ai_settings.provider.clone();
     let provider = create_provider_with_app(&ai_settings, Some(model_state.inner().clone()), &app)?;
     let model = ai_settings
@@ -561,14 +591,15 @@ pub async fn chat_with_articles(
 
     let tool_clause = if provider_supports_tools(&provider_kind) {
         "If the articles don't contain the answer, call the `web_search` tool to pull in fresh \
-         web results before saying you can't answer. "
+         web results before saying you can't answer, and cite each web result you use by its \
+         number, like [w2]. "
     } else {
         ""
     };
     let system_prompt = format!(
         "You answer the user's questions about articles from their RSS feed. Prefer the articles \
          below as evidence and cite them with their bracket number like [2]. \
-         {tool_clause}Be concise. No emoji.\n\n{context}",
+         {tool_clause}Be concise. No emoji.\n\n{CORRECTION_GUIDE}\n\n{context}",
         tool_clause = tool_clause,
         context = context,
     );
@@ -667,11 +698,14 @@ fn format_web_results_block(results: &[SearchResult]) -> String {
         .iter()
         .enumerate()
         .map(|(index, result)| {
-            format!("(W{}) {}\n    {}\n    {}", index + 1, result.title, result.snippet, result.url)
+            format!("[w{}] {}\n    {}\n    {}", index + 1, result.title, result.snippet, result.url)
         })
         .collect::<Vec<_>>()
         .join("\n");
-    format!("Web search results (use for facts not in the article; answer in prose):\n{body}")
+    format!(
+        "Web search results (use for facts not in the article; answer in prose, and cite a result \
+         you use by its number, like [w1], right after the claim):\n{body}"
+    )
 }
 
 async fn local_chat_search(
@@ -873,26 +907,32 @@ async fn execute_tool(tu: &ToolUse, citations: &mut Vec<WebCitation>) -> serde_j
             }
             match run_web_search(&query, max_results).await {
                 Ok(results) => {
-                    // Capture citations for the UI.
+                    // Capture citations for the UI, deduped across iterations. Each
+                    // result is numbered by its place in that list, so the model's
+                    // [wN] names the card the UI shows as the N-th web source.
+                    let mut lines = Vec::new();
                     for r in &results {
-                        // Avoid duplicates across iterations.
-                        if !citations.iter().any(|c| c.url == r.url) {
-                            citations.push(WebCitation {
-                                title: r.title.clone(),
-                                url: r.url.clone(),
-                                snippet: r.snippet.clone(),
-                                query: query.clone(),
-                            });
-                        }
+                        let index = match citations.iter().position(|c| c.url == r.url) {
+                            Some(index) => index,
+                            None => {
+                                citations.push(WebCitation {
+                                    title: r.title.clone(),
+                                    url: r.url.clone(),
+                                    snippet: r.snippet.clone(),
+                                    query: query.clone(),
+                                });
+                                citations.len() - 1
+                            }
+                        };
+                        lines.push(format!("[w{}] {} ({})\n    {}", index + 1, r.title, r.url, r.snippet));
                     }
-                    let payload = serde_json::json!({
-                        "query": query,
-                        "results": results,
-                    });
                     serde_json::json!({
                         "type": "tool_result",
                         "tool_use_id": tu.id,
-                        "content": payload.to_string(),
+                        "content": format!(
+                            "Results for \u{201c}{query}\u{201d} (cite one you use as [wN]):\n{}",
+                            lines.join("\n")
+                        ),
                     })
                 }
                 Err(e) => serde_json::json!({
@@ -919,6 +959,16 @@ pub async fn web_search(query: String) -> Result<Vec<SearchResult>, String> {
 
 /// Actual DuckDuckGo HTML scrape. Factored out of the Tauri command so the
 /// tool-use loop and the direct UI call share one implementation.
+/// DuckDuckGo's HTML endpoint. A dev bridge build can point it at a local
+/// stand-in (`SKIM_DEV_WEB_SEARCH`), since sandboxes have no route to the web.
+fn web_search_endpoint() -> String {
+    #[cfg(feature = "devbridge")]
+    if let Ok(url) = std::env::var("SKIM_DEV_WEB_SEARCH") {
+        return url;
+    }
+    "https://html.duckduckgo.com/html/".into()
+}
+
 pub async fn run_web_search(query: &str, max_results: usize) -> Result<Vec<SearchResult>, String> {
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
@@ -928,7 +978,7 @@ pub async fn run_web_search(query: &str, max_results: usize) -> Result<Vec<Searc
     // POST, not GET: DuckDuckGo answers a GET of /html/?q= with its 202
     // bot-check page from many IPs while still serving the form POST.
     let response = client
-        .post("https://html.duckduckgo.com/html/")
+        .post(web_search_endpoint())
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(format!("q={}", urlencoding::encode(query)))
         .send()
@@ -1219,23 +1269,72 @@ mod tests {
         let source = format!("{} The event happened on September 20.", "Background. ".repeat(2000));
         let messages = vec![ChatMessageInput { role: "user".into(), content: "When was this published?".into() }];
         let selected = article_chat_evidence(&source, &messages, 80);
-        let context = article_chat_context(&article, &selected);
+        let context = article_chat_context(&article, &source, &selected);
         assert!(context.contains("Publication time (UTC): 2026-09-24T00:30:00Z (article metadata, not the event time)"));
-        assert!(context.ends_with(&selected));
+        assert!(context.contains(&format!("Article passages (selected, not the full article):\n{selected}\n\n")));
         require_selected_evidence("", "").unwrap();
-        assert!(article_chat_context(&article, "").contains("Publication time (UTC): 2026-09-24T00:30:00Z"));
+        assert!(article_chat_context(&article, "", "").contains("Publication time (UTC): 2026-09-24T00:30:00Z"));
         assert!(selected.chars().count() <= 80);
-        let earlier = article_chat_context(&article, "");
+        let earlier = article_chat_context(&article, "", "");
         article.article.published_at = Some(timestamp + 3600);
-        let later = article_chat_context(&article, "");
+        let later = article_chat_context(&article, "", "");
         assert!(earlier.contains("2026-09-24T00:30:00Z"));
         assert!(later.contains("2026-09-24T01:30:00Z"));
         assert_ne!(publication_context(Some(timestamp)), publication_context(Some(timestamp + 3600)));
         article.article.published_at = None;
-        let unknown = article_chat_context(&article, &selected);
+        let unknown = article_chat_context(&article, &source, &selected);
         assert!(unknown.contains("Publication time (UTC): unknown"));
         assert!(!unknown.contains("1970-01-01"));
         assert!(publication_context(Some(i64::MAX)).contains("unknown"));
+    }
+
+    /// Giulio's Lambda networking chat: a ~17k-character article, a question about
+    /// pooling, then "read the article". With the old fixed 12,000-scalar
+    /// selection each turn saw different passages, so the model kept revising what
+    /// "the excerpt" said. Hosted providers now see the whole article every turn.
+    #[test]
+    fn hosted_article_chat_sends_the_same_complete_article_every_turn() {
+        let filler = "The team measured the change across many worker hosts and compared results week by week. ";
+        let section = |fact: &str| format!("{}{fact}\n\n", filler.repeat(30));
+        let source = [
+            "SnapStart clones need a network namespace with tap, bridge, veth and tunnel devices ready before the VM starts.",
+            "Creating thousands of devices in parallel at boot queued behind the global RTNL lock.",
+            "All 4,000 networks are now created when the worker boots, which takes about three minutes.",
+            "Stateless eBPF header rewriting replaced double NAT and made NAT setup 100x faster.",
+            "Root namespace iptables rules fell from more than 125,000 to 144.",
+            "Reordering veth operations and batching eBPF attachments cut RTNL contention.",
+        ].iter().map(|fact| section(fact)).collect::<String>();
+        assert!(source.chars().count() > 12000);
+        let turn = |questions: &[&str]| questions.iter().map(|q| ChatMessageInput { role: "user".into(), content: (*q).into() }).collect::<Vec<_>>();
+        let pooling = turn(&["ok so by pooling we increase parallel actions"]);
+        let reread = turn(&["ok so by pooling we increase parallel actions", "read the article"]);
+        assert_eq!(article_chat_evidence(&source, &pooling, 120000), source);
+
+        let local = crate::db::story_policy::article_chat_evidence_scalars("mlx");
+        assert_eq!(local, 12000);
+        let veth = turn(&["ok so by pooling we increase parallel actions", "what about veth ordering and batching?"]);
+        let before_reread = article_chat_evidence(&source, &reread, local);
+        let before_veth = article_chat_evidence(&source, &veth, local);
+        assert_ne!(before_reread, before_veth, "the old budget shifted the evidence between turns");
+        assert!(!before_reread.contains("batching eBPF attachments"), "\"read the article\" missed the RTNL fix");
+
+        for provider in ["anthropic", "claude-subscription", "openai", "xai", "claude-cli"] {
+            let budget = crate::db::story_policy::article_chat_evidence_scalars(provider);
+            let first = article_chat_evidence(&source, &pooling, budget);
+            let second = article_chat_evidence(&source, &reread, budget);
+            assert_eq!(first, source, "{provider}");
+            assert_eq!(second, source, "{provider}");
+        }
+
+        let conn = retrieval_database();
+        let article = queries::get_article_by_id(&conn, "old").unwrap().unwrap();
+        let complete = article_chat_context(&article, &source, &source);
+        assert!(complete.contains("Article text (complete):\n"));
+        assert!(complete.contains("never describe it as an excerpt"));
+        assert!(complete.contains("Earlier replies in this conversation are not evidence"));
+        let partial = article_chat_context(&article, &source, &before_reread);
+        assert!(partial.contains("Article passages (selected, not the full article):\n"));
+        assert!(partial.contains("never that the article does not mention it"));
     }
 
     fn retrieval_database() -> rusqlite::Connection {
@@ -1580,7 +1679,7 @@ mod tests {
             snippet: "A snippet".into(),
         }];
         let block = format_web_results_block(&results);
-        assert!(block.contains("(W1) A result"));
+        assert!(block.contains("[w1] A result"));
         assert!(block.contains("https://example.com/a"));
     }
 }

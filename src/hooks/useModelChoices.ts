@@ -1,6 +1,7 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import type { AiSettings } from "../services/types";
-import { listRemoteModels, mlxIsModelDownloaded } from "../services/commands";
+import { mlxIsModelDownloaded } from "../services/commands";
+import { useRemoteModels } from "./useRemoteModels";
 import {
   REMOTE_LIST_PROVIDERS,
   hasChatOverride,
@@ -66,13 +67,7 @@ export function useModelChoices(
       : [],
   });
   const localModelsQuery = useLocalModels();
-  const remoteQuery = useQuery({
-    queryKey: ["remote-models", provider, ai.endpoint],
-    queryFn: () => listRemoteModels(provider, ai.api_key, ai.endpoint),
-    enabled: isRemote,
-    staleTime: 600_000,
-    retry: false,
-  });
+  const remoteQuery = useRemoteModels(provider, ai.api_key, ai.endpoint, isRemote);
 
   if (chatOverrideActive) {
     const current = ai.chat_model ?? "";

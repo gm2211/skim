@@ -46,6 +46,17 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
         CREATE INDEX IF NOT EXISTS idx_article_reader_cache_cached_at
             ON article_reader_cache(cached_at DESC);
 
+        CREATE TABLE IF NOT EXISTS offline_images (
+            url        TEXT PRIMARY KEY,
+            mime       TEXT NOT NULL,
+            data       BLOB NOT NULL,
+            bytes      INTEGER NOT NULL,
+            cached_at  INTEGER NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_offline_images_cached_at
+            ON offline_images(cached_at);
+
         CREATE TABLE IF NOT EXISTS themes (
             id          TEXT PRIMARY KEY,
             label       TEXT NOT NULL,

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useUiStore } from "../../stores/uiStore";
 import { ArticleList, buildArticleFilter, buildMarkAllReadScope } from "./ArticleList";
@@ -55,13 +55,13 @@ describe("buildArticleFilter", () => {
 });
 
 
-const mock = vi.hoisted(() => ({ markAll: vi.fn() }));
+const mock = vi.hoisted(() => ({ markAll: vi.fn(), list: [] as unknown[] }));
 const mutation = () => ({ mutate: vi.fn(), isPending: false });
 vi.mock("../../hooks/useArticles", () => ({
   useArticles: (filter: { search?: string }) => ({ data: filter.search ? [{
     id: "url-match", title: "Unrelated title", feed_title: "Source", content_text: "Body",
     url: "https://unique-domain.example/story", is_read: true, fetched_at: 100,
-  }] : [] }),
+  }] : mock.list }),
   useArticleCount: () => ({ data: 0 }),
   useMarkAllRead: () => ({ mutate: mock.markAll, isPending: false }),
   useMarkRead: () => mutation(), useMarkUnread: () => mutation(),
@@ -90,6 +90,7 @@ vi.mock("../chat/AskSkimDialog", () => ({ AskSkimDialog: () => null }));
 const initialState = useUiStore.getState();
 beforeEach(() => {
   mock.markAll.mockClear();
+  mock.list = [];
   useUiStore.setState({ ...initialState, sidebarView: { type: "all" }, listFilter: "unread" }, true);
 });
 afterEach(cleanup);
@@ -166,6 +167,9 @@ describe("article list scope regressions", () => {
     await userEvent.click(screen.getByRole("switch", { name: "Smart sorting" }));
     expect(useUiStore.getState().listSort).toBe("newest");
     expect(localStorage.getItem("skim.listSort")).toBe("newest");
+    // The cog beside the switch opens Smart sort's own settings.
+    await userEvent.click(screen.getByRole("button", { name: "Smart sort settings" }));
+    expect(useUiStore.getState()).toMatchObject({ showSettings: true, settingsTab: "smartSort" });
     cleanup();
     useUiStore.setState({ sidebarView: { type: "starred" } });
     render(<ArticleList />);
@@ -204,5 +208,36 @@ describe("article list toolbar", () => {
     useUiStore.setState({ sidebarView: { type: "all" }, isPhone: true, sidebarCollapsed: false });
     render(<ArticleList />);
     expect(screen.getByRole("button", { name: "The Briefing" })).toBeInTheDocument();
+  });
+});
+
+describe("read article linger in the unread list", () => {
+  const story = (id: string, fetched_at: number) => ({
+    id, title: `Story ${id}`, feed_id: "f1", feed_title: "Source", is_read: false, fetched_at,
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("keeps the open article until the user moves on, then lets it linger out", () => {
+    vi.useFakeTimers();
+    mock.list = [story("a", 300), story("b", 200), story("c", 100)];
+    const { rerender } = render(<ArticleList />);
+    act(() => useUiStore.setState({ selectedArticleId: "a" }));
+
+    // Opening "a" marks it read, so the unread query no longer returns it.
+    mock.list = [story("b", 200), story("c", 100)];
+    rerender(<ArticleList />);
+    act(() => { vi.advanceTimersByTime(10 * 60 * 1000); });
+    rerender(<ArticleList />);
+    expect(screen.getByText("Story a")).toBeInTheDocument();
+
+    act(() => useUiStore.setState({ selectedArticleId: "b" }));
+    mock.list = [story("c", 100)];
+    rerender(<ArticleList />);
+    act(() => { vi.advanceTimersByTime(60 * 1000); });
+    expect(screen.getByText("Story a")).toBeInTheDocument();
+
+    act(() => { vi.advanceTimersByTime(2 * 60 * 1000); });
+    expect(screen.queryByText("Story a")).not.toBeInTheDocument();
+    expect(screen.getByText("Story b")).toBeInTheDocument();
   });
 });

@@ -10,6 +10,7 @@ import type { AppSettings, TodayEditionItem, TodayEditionView } from "../../serv
 import { todayWindow } from "../../lib/todayEdition";
 import { useUiStore } from "../../stores/uiStore";
 import { useAgentChatStore } from "../../stores/agentChatStore";
+import { selectChatText } from "../../test/selectChatText";
 
 vi.mock("../../services/commands", () => ({
   getOrGenerateTodayEdition: vi.fn(),
@@ -210,6 +211,20 @@ describe("TodayEditionPane", () => {
     expect(story?.article_ids).toEqual(["two-lead", "two-other"]);
   });
 
+  it("asks about a passage highlighted in a story's summary", async () => {
+    vi.mocked(commands.getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } });
+    vi.mocked(commands.getOrGenerateTodayEdition).mockResolvedValue(makeView([makeItem({ editorial: editorial("First summary of the day.") })]));
+    useUiStore.setState({ sidebarView: { type: "today" } });
+    renderPane();
+    const summary = await screen.findByText("First summary of the day.");
+    expect(summary.closest(".selectable-text")).not.toBeNull();
+    selectChatText(summary.firstChild!, 6, 13);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Ask in chat" }));
+    const seed = useAgentChatStore.getState().seed;
+    expect(seed?.reply).toEqual({ role: "story", text: "summary" });
+    expect(seed?.context.story?.story_id).toBe("story-default");
+  });
+
   it("marks a story read when its report is opened or a question about it is sent, not when the chat just opens", async () => {
     vi.mocked(commands.getSettings).mockResolvedValue({ ...DEFAULT_SETTINGS, ai: { ...DEFAULT_SETTINGS.ai, provider: "ollama" } });
     const member = makeItem({}).member_articles[0];
@@ -389,7 +404,7 @@ describe("TodayEditionPane", () => {
     expect(screen.getByRole("button", { name: "Previous page" })).toBeDisabled();
 
     // Page 2 is the seven days before today.
-    await userEvent.click(screen.getByRole("button", { name: "Last week" }));
+    await userEvent.click(screen.getByRole("button", { name: "Next page" }));
     expect(useUiStore.getState().todayPage).toBe(2);
     await waitFor(() => {
       const last = calls[calls.length - 1];

@@ -39,6 +39,36 @@ behaviors:
         tiles, so I don't have to read everything to figure out what's going on. what I was
         thinking more was something along the lines of how perplexity responds to questions
       reference: Giulio, project thread "Chat answer citation design", 2026-10-23 (mock approved 2026-10-24); earlier "I want to be able to click the whole thing too not just the number"
+  - id: web-sources-cited-inline
+    description: >-
+      When a chat answer uses web search, it cites each web result inline as a numbered chip that
+      opens the page, and shows the cited results as cards with their site, title and a snippet.
+    details: >-
+      Web results reach the model numbered [w1], [w2] and it is asked to cite them right after the
+      claim they support. Chips are numbered in reading order like article chips, so a chip and its
+      card match. Desktop article chat: cards fill the panel width (as many across as fit), chips
+      and cards light each other up on hover, and results the answer did not cite fold under
+      "Also found on the web (n)". iOS: the same chips in every web-enabled answer, and the cards
+      scroll in a row under it, replacing the plain link pills.
+    source:
+      text: would be nice to have links to refrences also in text and better looking sources
+      reference: Giulio, project thread "Chat answer citation design", 2026-10-25
+  - id: inline-corrections
+    description: >-
+      When the assistant finds that something it said in an earlier reply was wrong, it fixes that
+      reply in place: the wrong words are struck through and "[updated]: ..." with the right words
+      sits beside them, instead of a correction paragraph in the new answer.
+    details: >-
+      The model adds <correction><was>wrong words</was><now>fix</now></correction> to its answer;
+      the app takes the block out and edits the latest earlier reply containing those words (exactly,
+      else ignoring spacing and case), rendering "~~wrong~~ **[updated]:** fix". A correction that
+      matches no earlier reply stays visible in the new answer in the same form, and an answer that
+      only corrected earlier replies says "Updated my earlier reply above." The edited reply is what
+      later turns send back to the model. Desktop article chat, Ask Skim and the command palette,
+      and iOS chat on hosted providers; the small on-device grounded prompt does not ask for it.
+    source:
+      text: "chat should be albe to make corrections (with strikethrough and [updated]: ....) to previous text"
+      reference: Giulio, project thread "Let chat correct earlier replies inline", 2026-10-27
   - id: chat-starter-prompts
     description: >-
       An empty library chat offers a few built-in starter questions, and tapping one asks it right
@@ -78,10 +108,36 @@ behaviors:
     source:
       text: can we have cog icon instead of model selector?
       reference: Giulio, project chat about the article chat header, 2026-10-12
+  - id: chat-collapse-not-clear
+    description: >-
+      The article chat collapses from a click anywhere on its header row, and clearing the
+      conversation sits inside the cog with an Undo, so a quick click near collapse never wipes it.
+    details: >-
+      Desktop and the narrow web layout: the header row (Chat, ephemeral, chevron) is one collapse
+      button with a 32px chevron target (44px on phones). The cog sits over the row; "Clear
+      conversation" is the last item in its popover, in red. After clearing, a "Conversation
+      cleared. Undo" line sits under the header until the reader sends again or changes article.
+      The iOS chat sheet has no Clear button, so it is unaffected.
+    source:
+      text: collaps button should be easier to click and it should be hard to misclick "Clear" instead
+      reference: Giulio, project thread "Make chat collapse easy, Clear hard to misclick", 2026-10-27
   - id: article-chat
     description: >-
       A reader can chat with any article; answers are grounded in the article's full text and the
       conversation so far, not just the feed teaser.
+    details: >-
+      Hosted models (Claude, OpenAI, xAI, OpenRouter, ChatGPT) receive the whole reader text, up to
+      120,000 characters, on every turn, labelled as the complete article, so asking it to "read the
+      article" answers from the article rather than a shifting excerpt. On-device and self-hosted
+      models keep 12,000 characters of passages chosen for the question, labelled as selected
+      passages. Both platforms share these budgets and the prompt's source rules: say the article
+      says something only when its text does, cite web results as [wN], label background knowledge,
+      treat earlier replies as unverified, and correct one that misstated the article. An earlier
+      answer that cited web results carries a note naming them, so later turns keep web facts apart
+      from the article's.
+    source:
+      text: i started with haiku and ended with opus and still BS
+      reference: Giulio, project thread "Stop article chat contradicting itself", 2026-10-27
   - id: ask-about-highlight
     description: >-
       A reader can highlight a passage in the article and ask about it in chat: the chat opens with
@@ -99,6 +155,31 @@ behaviors:
     source:
       text: I'd like the ability to easily highlight text and ask about it in chat
       reference: Giulio, project thread "highlight text and ask in chat", 2026-10-14
+  - id: ask-about-briefing-highlight
+    description: >-
+      A reader can highlight a passage in an AI-written Briefing or Today story and ask about it in
+      chat: the chat about that story opens with the passage quoted above the composer.
+    details: >-
+      The story's headline, dek, body, takeaways, pull quotes and briefs stay selectable even though
+      app chrome is not. Desktop shows the same floating "Ask" pill as the reader, above the
+      selection inside the story; iOS Briefing paragraphs and takeaways offer "Ask in Chat" first in
+      the selection menu, and their citation numbers still open the report. The quote is sent as
+      "About this passage from the story" and labelled "From the story".
+    source:
+      text: i wanna be able to select and ask
+      reference: Giulio, project thread "Select and ask in briefings", 2026-10-26
+  - id: quote-focuses-composer
+    description: >-
+      Asking about a highlighted passage, or replying to a selection in one of Skim's answers, puts
+      the cursor in the chat's text box so the reader can type the question straight away.
+    details: >-
+      Applies to the reader, Briefing and Today stories, and chat answers, on desktop and iOS. On
+      iOS the keyboard comes up with the quote; the selected text lets go of its selection first so
+      the keyboard is not held by it. Desktop focuses the box at every window width, including the
+      phone-width layout, where opening Ask Skim without a quote still leaves the keyboard down.
+    source:
+      text: when I select text and hit Ask or Reply to selection, focus should move to the chat textbox so I can type right away
+      reference: Giulio, project thread "Focus chat box after Ask on selection", 2026-10-27
   - id: web-search
     description: >-
       Chat can search the web when the library does not cover a question, and web sources are marked
@@ -113,6 +194,29 @@ behaviors:
       sponsored and duplicate links, and a DuckDuckGo bot check is reported as a failed search
       rather than as no results (Giulio, 2026-10-19: "consistently only finds one result, bug
       with tool?").
+  - id: deep-research
+    description: >-
+      The reader can ask for deep research on a topic: Skim searches and reads their feeds first,
+      then searches and reads the web for what the feeds leave out, and writes a full briefing that
+      cites both.
+    details: >-
+      Opt-in and slower than a chat answer (a minute or two), with every step shown as it happens.
+      The steps are fixed so every provider follows them: plan library searches, search the feeds
+      (up to 14 articles, the best 8 read in full), find the gaps, run up to 3 web searches, read up
+      to 4 web pages, then write. The briefing opens with a 2 to 3 sentence bottom line, then
+      sections such as What's happening, Background, Where sources differ and What to watch. Articles
+      are cited [n] and web sources [wN]; both become the same numbered chips and cards, numbered in
+      reading order, and web results the briefing never cites stay under "Also searched". Desktop:
+      the Cmd+K palette offers "Research in depth" under the Ask row and on Option-Enter, which opens
+      the full Ask Skim chat in research mode; Ask Skim has a Deep research toggle by the composer.
+      iOS: Chat with Articles has the same toggle. A failed web search still produces a briefing
+      from the feeds and says the search failed. Follow-up questions continue as ordinary chat.
+    source:
+      text: >-
+        I would also like to request a full briefing on a topic (a bit like cmd+k + type question,
+        but having the option of requesting a slower and more complete research and briefing that
+        extends past just the feeds, into websearch to fill any gaps
+      reference: Giulio, project thread "Add deep research topic briefings", 2026-10-24
   - id: answer-first-on-small-models
     description: >-
       On-device models answer first, stay grounded in exact source passages, and drop chatbot
@@ -138,3 +242,18 @@ behaviors:
         scroll back up. / Pasting a message in chat scrolls to empty screen and i have to
         manually scroll back up to find message and response and it's weird
       reference: Giulio, project chat, 2026-10-14; project thread, 2026-10-15
+  - id: queue-chat-messages
+    description: >-
+      While Skim is still answering, the reader can keep typing and sending; each question waits in
+      a visible queue and sends in order as the answer before it lands.
+    details: >-
+      Every chat: desktop article chat and Ask Skim, and the iOS chat sheet. Queued questions sit
+      under the conversation as outlined, dimmed bubbles labelled "Queued", each with edit (in place)
+      and remove; the composer reads "Queue a follow-up" and the send button queues. A question
+      keeps the quote it was asked with. If an answer fails, the failed question returns to the
+      composer (or to the front of the queue when the reader is already typing the next one) and the
+      queue pauses until the reader taps Resume or sends again. The queue is dropped when the
+      article changes or the chat is cleared.
+    source:
+      text: would be nice to be able to queue messages
+      reference: Giulio, project thread "Queue chat messages while answering", 2026-10-27, with a screenshot of the desktop article chat

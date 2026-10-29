@@ -484,6 +484,42 @@ pub struct UserPreferenceProfile {
     pub total_interactions: i64,
 }
 
+/// Smart sort's learned layer: a short note of what the reader likes and
+/// skips, written by the model from reading history. The reader can read,
+/// edit or delete it; while `learning` is on it keeps being rewritten from
+/// new reading, keeping the reader's edits.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LearnedPreferences {
+    #[serde(default)]
+    pub text: String,
+    #[serde(default = "learning_default")]
+    pub learning: bool,
+    /// When the note was last written or edited (Unix seconds). It learns
+    /// from signals recorded after this.
+    #[serde(default)]
+    pub updated_at: Option<i64>,
+    /// Set on delete: never learn from signals before this (Unix seconds).
+    #[serde(default)]
+    pub since: Option<i64>,
+}
+
+fn learning_default() -> bool {
+    true
+}
+
+impl Default for LearnedPreferences {
+    fn default() -> Self {
+        Self { text: String::new(), learning: true, updated_at: None, since: None }
+    }
+}
+
+impl LearnedPreferences {
+    /// Signals newer than this are new to the note.
+    pub fn learned_through(&self) -> i64 {
+        self.updated_at.unwrap_or(0).max(self.since.unwrap_or(0))
+    }
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {

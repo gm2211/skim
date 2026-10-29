@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { addFeed, discoverFeeds, feedCatalog, previewFeed, searchFeeds } from "../../services/commands";
-import type { DiscoveredFeed, FeedCatalogTopic, FeedPreviewItem } from "../../services/types";
+import {
+  addFeed, countStarredInFeed, discoverFeeds, feedCatalog, listNewspapers, previewFeed, removeFeed, searchFeeds,
+  signInNewspaper, signOutNewspaper, subscribedFeed,
+} from "../../services/commands";
+import type { DiscoveredFeed, Feed, FeedCatalogTopic, FeedPreviewItem, Newspaper } from "../../services/types";
 import { useUiStore } from "../../stores/uiStore";
 import { CollapsedSidebarTitlebar } from "../layout/CollapsedSidebarTitlebar";
+import { UnfollowDialog } from "../common/UnfollowDialog";
 import { compactCount, dayLabel, displayHost, looksLikeUrl, shortAge } from "../../lib/feedDiscovery";
 import { topicStyle, TopicGlyph } from "./topicStyle";
 import "./DiscoverView.css";
@@ -13,9 +18,11 @@ import "./DiscoverView.css";
 type Page =
   | { kind: "home" }
   | { kind: "topic"; topicId: string }
+  | { kind: "paper"; paperId: string }
   | { kind: "feed"; feed: DiscoveredFeed; from: string };
 
-type FollowState = "following" | "adding" | { error: string };
+/** "unfollowed" outlives the cached `already_subscribed` until the lists refetch. */
+type FollowState = "following" | "adding" | "unfollowed" | { error: string };
 
 const errorText = (e: unknown) => String(e instanceof Error ? e.message : e);
 
@@ -36,12 +43,16 @@ function useDebounced<T>(value: T, ms: number): T {
 export function DiscoverView() {
   const [stack, setStack] = useState<Page[]>([{ kind: "home" }]);
   const [follow, setFollow] = useState<Record<string, FollowState>>({});
+  const [unfollowAsk, setUnfollowAsk] = useState<{ url: string; title: string; feed: Feed; starredCount: number } | null>(null);
+  const [unfollowing, setUnfollowing] = useState(false);
   const isPhone = useUiStore((s) => s.isPhone);
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const scrollRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
   const catalog = useQuery({ queryKey: ["feedCatalog"], queryFn: feedCatalog, staleTime: 60_000 });
   const topics = catalog.data ?? [];
+  const newspapers = useQuery({ queryKey: ["newspapers"], queryFn: listNewspapers, staleTime: 60_000 });
+  const papers = newspapers.data ?? [];
   const page = stack[stack.length - 1];
 
   const push = (next: Page) => {
@@ -49,6 +60,15 @@ export function DiscoverView() {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   };
   const pop = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
+
+  // The sign-in window closing changes what the reader is signed in to.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen("newspaper-auth-changed", () => void qc.invalidateQueries({ queryKey: ["newspapers"] }))
+      .then((fn) => { unlisten = fn; })
+      .catch(() => {});
+    return () => { if (unlisten) unlisten(); };
+  }, [qc]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -61,7 +81,15 @@ export function DiscoverView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [stack.length]);
 
-  const isFollowing = (feed: DiscoveredFeed) => feed.already_subscribed || follow[feed.url] === "following";
+  const isFollowing = (feed: DiscoveredFeed) =>
+    follow[feed.url] === "following" || (feed.already_subscribed && follow[feed.url] !== "unfollowed");
+
+  const refreshLibrary = () =>
+    Promise.all(
+      ["feeds", "articles", "articleCount", "todayEdition", "feedCatalog", "newspapers"].map((key) =>
+        qc.invalidateQueries({ queryKey: [key] }),
+      ),
+    );
 
   const followFeed = async (feed: DiscoveredFeed) => {
     setFollow((s) => ({ ...s, [feed.url]: "adding" }));
@@ -74,17 +102,48 @@ export function DiscoverView() {
       setFollow((s) => ({ ...s, [feed.url]: message.startsWith("Already subscribed") ? "following" : { error: message } }));
       if (!message.startsWith("Already subscribed")) return;
     }
-    await Promise.all(
-      ["feeds", "articles", "articleCount", "todayEdition", "feedCatalog"].map((key) =>
-        qc.invalidateQueries({ queryKey: [key] }),
-      ),
-    );
+    await refreshLibrary();
+  };
+
+  // Tapping Following asks first, since unfollowing deletes the feed's articles.
+  const askUnfollow = async (feed: DiscoveredFeed) => {
+    try {
+      const subscribed = await subscribedFeed(feed.url);
+      if (!subscribed) {
+        setFollow((s) => ({ ...s, [feed.url]: "unfollowed" }));
+        return;
+      }
+      const starredCount = await countStarredInFeed(subscribed.id).catch(() => 0);
+      // The dialog names the feed as the row the reader tapped does.
+      setUnfollowAsk({ url: feed.url, title: feed.title, feed: subscribed, starredCount });
+    } catch (e) {
+      setFollow((s) => ({ ...s, [feed.url]: { error: errorText(e) } }));
+    }
+  };
+
+  const confirmUnfollow = async () => {
+    if (!unfollowAsk) return;
+    const { url, feed } = unfollowAsk;
+    setUnfollowing(true);
+    try {
+      await removeFeed(feed.id);
+      setFollow((s) => ({ ...s, [url]: "unfollowed" }));
+      const view = useUiStore.getState().sidebarView;
+      if (view.type === "feed" && view.feedId === feed.id) useUiStore.getState().setSidebarView({ type: "all" });
+      await refreshLibrary();
+    } catch (e) {
+      setFollow((s) => ({ ...s, [url]: { error: errorText(e) } }));
+    } finally {
+      setUnfollowing(false);
+      setUnfollowAsk(null);
+    }
   };
 
   const followProps = (feed: DiscoveredFeed) => ({
     following: isFollowing(feed),
     state: follow[feed.url],
     onFollow: () => void followFeed(feed),
+    onUnfollow: () => void askUnfollow(feed),
   });
 
   const openFeed = (feed: DiscoveredFeed, from: string) => push({ kind: "feed", feed, from });
@@ -109,7 +168,7 @@ export function DiscoverView() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
               <path d="m15 6-6 6 6 6" />
             </svg>
-            {backLabel(stack[stack.length - 2], topics)}
+            {backLabel(stack[stack.length - 2], topics, papers)}
           </button>
         )}
         <div className="flex-1" />
@@ -127,8 +186,10 @@ export function DiscoverView() {
           {page.kind === "home" && (
             <HomePage
               topics={topics}
+              papers={papers}
               loading={catalog.isLoading}
               onTopic={(id) => push({ kind: "topic", topicId: id })}
+              onPaper={(id) => push({ kind: "paper", paperId: id })}
               onFeed={(feed) => openFeed(feed, "Discover")}
               followProps={followProps}
             />
@@ -142,27 +203,54 @@ export function DiscoverView() {
               followProps={followProps}
             />
           )}
+          {page.kind === "paper" && (
+            <NewspaperPage
+              paper={papers.find((p) => p.id === page.paperId)}
+              onFeed={(feed, from) => openFeed(feed, from)}
+              followProps={followProps}
+              onFollowAll={(feeds) => {
+                for (const feed of feeds) if (!isFollowing(feed) && follow[feed.url] !== "adding") void followFeed(feed);
+              }}
+            />
+          )}
           {page.kind === "feed" && <FeedPage feed={page.feed} {...followProps(page.feed)} />}
         </div>
       </div>
+      {unfollowAsk && (
+        <UnfollowDialog
+          title={unfollowAsk.title}
+          starredCount={unfollowAsk.starredCount}
+          pending={unfollowing}
+          onCancel={() => setUnfollowAsk(null)}
+          onConfirm={() => void confirmUnfollow()}
+        />
+      )}
     </div>
   );
 }
 
-function backLabel(page: Page, topics: FeedCatalogTopic[]): string {
+function backLabel(page: Page, topics: FeedCatalogTopic[], papers: Newspaper[] = []): string {
   if (page.kind === "home") return "Discover";
+  if (page.kind === "paper") return papers.find((p) => p.id === page.paperId)?.name ?? "Back";
   if (page.kind === "topic") return topics.find((t) => t.id === page.topicId)?.name ?? "Back";
   return page.feed.title;
 }
 
-type FollowProps = (feed: DiscoveredFeed) => { following: boolean; state: FollowState | undefined; onFollow: () => void };
+type FollowProps = (feed: DiscoveredFeed) => {
+  following: boolean;
+  state: FollowState | undefined;
+  onFollow: () => void;
+  onUnfollow: () => void;
+};
 
 // MARK: Home
 
-function HomePage({ topics, loading, onTopic, onFeed, followProps }: {
+function HomePage({ topics, papers, loading, onTopic, onPaper, onFeed, followProps }: {
   topics: FeedCatalogTopic[];
+  papers: Newspaper[];
   loading: boolean;
   onTopic: (id: string) => void;
+  onPaper: (id: string) => void;
   onFeed: (feed: DiscoveredFeed) => void;
   followProps: FollowProps;
 }) {
@@ -213,6 +301,24 @@ function HomePage({ topics, loading, onTopic, onFeed, followProps }: {
         </section>
       ) : (
         <>
+          {papers.length > 0 && (
+            <>
+              <h2 className="discover-label">Newspapers</h2>
+              <div className="discover-papers">
+                {papers.map((paper) => (
+                  <button key={paper.id} className="discover-paper" onClick={() => onPaper(paper.id)}>
+                    <PaperIcon paper={paper} size={44} />
+                    <span className="flex-1 min-w-0 text-left">
+                      <span className="block text-text-primary truncate" style={{ fontSize: 15, fontWeight: 600 }}>{paper.name}</span>
+                      <PaperStatus paper={paper} />
+                    </span>
+                    <Chevron />
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
           <h2 className="discover-label">Featured</h2>
           <div className="discover-featured">
             {loading
@@ -331,13 +437,132 @@ function TopicPage({ topic, topics, onTopic, onFeed, followProps }: {
   );
 }
 
+// MARK: Newspaper
+
+function paperStatusText(paper: Newspaper): string {
+  const count = `${paper.sections.length} sections`;
+  if (paper.free) return `Free to read · ${count}`;
+  return paper.signed_in ? `Signed in · ${count}` : `Subscription · ${count}`;
+}
+
+function PaperStatus({ paper }: { paper: Newspaper }) {
+  return (
+    <span className={`block truncate ${paper.signed_in ? "text-success" : "text-text-muted"}`} style={{ fontSize: 12.5 }}>
+      {paperStatusText(paper)}
+    </span>
+  );
+}
+
+function PaperIcon({ paper, size }: { paper: Newspaper; size: number }) {
+  return (
+    <FeedIcon
+      feed={{ url: paper.site, title: paper.name.replace(/^The /, ""), site_url: paper.site, description: null, icon_url: paper.icon_url, subscribers: null, items: [], already_subscribed: false }}
+      size={size}
+    />
+  );
+}
+
+function NewspaperPage({ paper, onFeed, followProps, onFollowAll }: {
+  paper: Newspaper | undefined;
+  onFeed: (feed: DiscoveredFeed, from: string) => void;
+  followProps: FollowProps;
+  onFollowAll: (feeds: DiscoveredFeed[]) => void;
+}) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!paper) return <SkeletonRows />;
+  const states = paper.sections.map(followProps);
+  const allFollowing = states.every((s) => s.following);
+  const anyAdding = states.some((s) => s.state === "adding");
+
+  const signIn = async () => {
+    setError(null);
+    try {
+      await signInNewspaper(paper.id);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+  const signOut = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      await signOutNewspaper(paper.id);
+      await qc.invalidateQueries({ queryKey: ["newspapers"] });
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <header className="discover-feed-header">
+        <PaperIcon paper={paper} size={56} />
+        <div className="flex-1 min-w-0">
+          <h1 className="text-text-primary">{paper.name}</h1>
+          <p className="text-text-muted" style={{ fontSize: 13 }}>{displayHost(paper.site)}</p>
+        </div>
+        <button
+          type="button"
+          className={`discover-follow discover-follow--large ${allFollowing ? "discover-follow--on" : ""}`}
+          disabled={allFollowing || anyAdding}
+          onClick={() => onFollowAll(paper.sections)}
+        >
+          {allFollowing ? "Following all sections" : anyAdding ? "Following…" : "Follow all sections"}
+        </button>
+      </header>
+
+      <div className={`discover-account ${paper.signed_in ? "discover-account--on" : ""}`}>
+        <span className="discover-account-icon" aria-hidden="true">
+          {paper.free ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 5h16v14H4zM8 9h8M8 13h8M8 17h5" /></svg>
+          ) : paper.signed_in ? (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="m5 12 4 4L19 6" /></svg>
+          ) : (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="5" y="11" width="14" height="9" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+          )}
+        </span>
+        <span className="discover-account-text flex-1 min-w-0">
+          <span className="block text-text-primary" style={{ fontSize: 14.5, fontWeight: 600 }}>
+            {paper.free ? "Free to read" : paper.signed_in ? "Signed in" : "Have a subscription?"}
+          </span>
+          <span className="block text-text-secondary" style={{ fontSize: 13, marginTop: 2 }}>
+            {paper.free
+              ? "Full articles open in Skim's reader without an account."
+              : paper.signed_in
+                ? "Full articles open in Skim's reader with your subscription."
+                : `Sign in to ${paper.name} so full articles open in Skim's reader.`}
+          </span>
+        </span>
+        {paper.can_sign_in && (
+          paper.signed_in ? (
+            <button type="button" className="discover-account-action text-text-secondary hover:text-text-primary" disabled={busy} onClick={() => void signOut()}>
+              {busy ? "Signing out…" : "Sign out"}
+            </button>
+          ) : (
+            <button type="button" className="discover-follow" onClick={() => void signIn()}>Sign in</button>
+          )
+        )}
+      </div>
+      {error && <ErrorBox>{error}</ErrorBox>}
+
+      <h2 className="discover-label">Sections</h2>
+      <FeedList feeds={paper.sections} onOpen={(f) => onFeed(f, paper.name)} followProps={followProps} />
+    </>
+  );
+}
+
 // MARK: Feed
 
-function FeedPage({ feed, following, state, onFollow }: {
+function FeedPage({ feed, following, state, onFollow, onUnfollow }: {
   feed: DiscoveredFeed;
   following: boolean;
   state: FollowState | undefined;
   onFollow: () => void;
+  onUnfollow: () => void;
 }) {
   const preview = useQuery({
     queryKey: ["feedPreview", feed.url],
@@ -364,7 +589,7 @@ function FeedPage({ feed, following, state, onFollow }: {
           </p>
           {description && <p className="text-text-secondary discover-feed-description">{description}</p>}
         </div>
-        <FollowButton title={feed.title} following={following} state={state} onFollow={onFollow} large />
+        <FollowButton title={feed.title} following={following} state={state} onFollow={onFollow} onUnfollow={onUnfollow} large />
       </header>
       {typeof state === "object" && <ErrorBox>{state.error}</ErrorBox>}
 
@@ -458,21 +683,32 @@ function FeedList({ feeds, onOpen, followProps }: {
   );
 }
 
-function FollowButton({ title, following, state, onFollow, large = false }: {
+function FollowButton({ title, following, state, onFollow, onUnfollow, large = false }: {
   title: string;
   following: boolean;
   state: FollowState | undefined;
   onFollow: () => void;
+  onUnfollow: () => void;
   large?: boolean;
 }) {
   if (following) {
+    // Reads "Following"; on hover it offers Unfollow, which asks before deleting anything.
     return (
-      <span className={`discover-follow discover-follow--on ${large ? "discover-follow--large" : ""}`} aria-label={`Following ${title}`}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">
-          <path d="m5 12 4 4L19 6" />
-        </svg>
-        Following
-      </span>
+      <button
+        type="button"
+        onClick={onUnfollow}
+        aria-label={`Unfollow ${title}`}
+        title="Unfollow"
+        className={`discover-follow discover-follow--on ${large ? "discover-follow--large" : ""}`}
+      >
+        <span className="discover-follow-label">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">
+            <path d="m5 12 4 4L19 6" />
+          </svg>
+          Following
+        </span>
+        <span className="discover-follow-label discover-follow-label--hover" aria-hidden="true">Unfollow</span>
+      </button>
     );
   }
   const adding = state === "adding";

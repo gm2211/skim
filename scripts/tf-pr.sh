@@ -73,6 +73,8 @@ export SKIM_BUILD_NUMBER="${SKIM_BUILD_NUMBER:-$(date +%s)}"
 
 # ── Internal-only, always ───────────────────────────────────────────────────
 export TESTFLIGHT_INTERNAL_ONLY=true
+# Per-PR builds reuse the current version with an epoch build number.
+export SKIM_ALLOW_SAME_VERSION="${SKIM_ALLOW_SAME_VERSION:-true}"
 
 # ── iOS build env (per ios-build-env memory) ────────────────────────────────
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"

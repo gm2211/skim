@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { AiAccountSettings, AiProviderPicker, DeviceCodeSignIn, type DeviceCode, type DeviceCodeStatus } from "@byos/react";
 import "@byos/react/styles.css";
 import "./byos-settings.css";
+import "./settings-glass.css";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "@tauri-apps/api/core";
 import { useQueryClient } from "@tanstack/react-query";
@@ -40,6 +41,8 @@ import { ModelBrowser } from "./ModelBrowser";
 import { Ds4Settings } from "./Ds4Settings";
 import { RemoteModelPicker } from "./RemoteModelPicker";
 import { OfflineReaderSettings } from "./OfflineReaderSettings";
+import { SmartSortSettings, useSmartSortDraft } from "./SmartSortSettings";
+import { SparkleIcon } from "../ui/icons";
 import { NumberInput } from "../ui/NumberInput";
 import { Select } from "../ui/Select";
 import { AIDisclaimer } from "../common/AIDisclaimer";
@@ -78,6 +81,11 @@ const TABS: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
         <circle cx="12" cy="14" r="1" />
       </svg>
     ),
+  },
+  {
+    id: "smartSort",
+    label: "Smart sort",
+    icon: <SparkleIcon size={16} />,
   },
   {
     id: "sync",
@@ -136,6 +144,12 @@ function summaryHint(ai: AppSettings["ai"]): string {
   return parts.join(" · ");
 }
 
+function smartSortModelLabel(ai: AppSettings["ai"]): string | null {
+  if (!ai.provider || ai.provider === "none") return null;
+  const provider = AI_PROVIDERS.find((p) => p.value === ai.provider)?.label ?? ai.provider;
+  return ai.model ? `${provider} · ${ai.model}` : provider;
+}
+
 /** Collapsed-by-default group so the common provider setup fits without scrolling. */
 function SettingsDisclosure({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -169,6 +183,7 @@ export function SettingsDialog() {
   const [subscription, setSubscription] = useState<{ provider: string; signedIn: boolean } | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => useUiStore.getState().settingsTab);
   const [choosingProvider, setChoosingProvider] = useState(false);
+  const smartSort = useSmartSortDraft();
   const providerPickerRef = useRef<HTMLDivElement>(null);
   const settingsPaneRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -208,6 +223,7 @@ export function SettingsDialog() {
   const handleSave = async () => {
     try {
       await updateSettings.mutateAsync(local);
+      await smartSort.commit();
       // A saved provider/key/endpoint change invalidates any cached remote
       // model list fetched under the old credentials.
       qc.invalidateQueries({ queryKey: ["remote-models"] });
@@ -264,7 +280,7 @@ export function SettingsDialog() {
                     <label className="flex items-start gap-3 text-text-primary" style={{ minHeight: 44, marginBottom: 16, fontSize: 14 }}>
                       <input type="checkbox" checked={local.ai.local_chat_web_search ?? true}
                         onChange={(event) => updateAi({ local_chat_web_search: event.target.checked })}
-                        className="accent-accent" style={{ marginTop: 4 }} />
+                        style={{ marginTop: 2 }} />
                       <span>Web search in chat<span className="block text-text-secondary" style={{ fontSize: 12, marginTop: 4 }}>Look up current information when the article cannot answer.</span></span>
                     </label>
                   </>
@@ -455,24 +471,6 @@ export function SettingsDialog() {
                     </InputField>
                     </SettingsDisclosure>
 
-                    <SettingsDisclosure
-                      title="AI Inbox interests"
-                      hint={local.ai.triage_user_prompt ? "Custom" : "Learned from your reading"}
-                    >
-                    <InputField
-                      label="Your interests"
-                      description="This prompt runs alongside the preferences learned from your reading habits."
-                    >
-                      <textarea
-                        value={local.ai.triage_user_prompt ?? ""}
-                        onChange={(e) => updateAi({ triage_user_prompt: e.target.value || null })}
-                        placeholder="e.g., Prioritize distributed systems, Rust/Go internals, Claude/Anthropic news. Deprioritize crypto drama and celebrity tech."
-                        className={inputClass}
-                        style={{ ...inputStyle, minHeight: 120, resize: "vertical" }}
-                        rows={5}
-                      />
-                    </InputField>
-                    </SettingsDisclosure>
                   </>
                 )}
   </>);
@@ -482,7 +480,7 @@ export function SettingsDialog() {
       className={
         isPhone
           ? "fixed inset-0 z-50 flex flex-col bg-bg-primary"
-          : "fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
+          : "fixed inset-0 settings-glass-backdrop flex items-center justify-center z-50"
       }
       style={
         isPhone
@@ -503,13 +501,13 @@ export function SettingsDialog() {
         tabIndex={-1}
         className={
           isPhone
-            ? "flex flex-col flex-1 min-h-0 overflow-hidden"
-            : "border border-white/10 rounded-2xl w-full max-w-2xl mx-4 shadow-2xl overflow-hidden flex flex-col backdrop-blur-xl backdrop-saturate-150"
+            ? "skim-settings-glass flex flex-col flex-1 min-h-0 overflow-hidden"
+            : "skim-settings-glass settings-glass-surface w-full max-w-2xl mx-4 overflow-hidden flex flex-col"
         }
         style={
           isPhone
             ? swipeToDismissStyle
-            : { background: "var(--color-bg-secondary)", height: 640, maxHeight: "90vh" }
+            : { height: 640, maxHeight: "90vh" }
         }
       >
         {/* Header */}
@@ -537,7 +535,7 @@ export function SettingsDialog() {
             className={
               isPhone
                 ? "grid grid-cols-2 gap-1 border-b border-white/5 overflow-hidden"
-                : "border-r border-white/5 flex flex-col"
+                : "settings-tabs border-r border-white/5 flex flex-col"
             }
             style={isPhone ? { padding: "8px 10px" } : { width: 180, padding: "12px 8px" }}
           >
@@ -545,14 +543,11 @@ export function SettingsDialog() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center ${isPhone ? "justify-center min-w-0" : "gap-3 w-full text-left"} rounded-lg transition-colors ${
-                  activeTab === tab.id
-                    ? "bg-white/10 text-text-primary"
-                    : "text-text-muted hover:text-text-primary hover:bg-white/5"
-                }`}
-                style={{ padding: isPhone ? "10px 6px" : "10px 12px", fontSize: isPhone ? 13 : 14, gap: isPhone ? 6 : 12 }}
+                aria-current={activeTab === tab.id ? "page" : undefined}
+                className={`settings-tab flex items-center ${isPhone ? "justify-center min-w-0" : "gap-3 w-full text-left"} transition-colors`}
+                style={{ padding: isPhone ? "10px 6px" : "8px 10px", fontSize: isPhone ? 13 : 14, gap: isPhone ? 6 : 10 }}
               >
-                <span className="opacity-70 flex-shrink-0">{tab.icon}</span>
+                <span className="settings-tab-icon flex-shrink-0" data-tab={tab.id}>{tab.icon}</span>
                 <span className={isPhone ? "truncate" : undefined}>{tab.label}</span>
               </button>
             ))}
@@ -603,6 +598,18 @@ export function SettingsDialog() {
               </>
             )}
 
+            {activeTab === "smartSort" && (
+              <SmartSortSettings
+                interests={local.ai.triage_user_prompt ?? ""}
+                onInterestsChange={(value) => updateAi({ triage_user_prompt: value || null })}
+                state={smartSort}
+                modelLabel={smartSortModelLabel(local.ai)}
+                onChangeModel={() => setActiveTab("ai")}
+                inputClass={inputClass}
+                inputStyle={inputStyle}
+              />
+            )}
+
             {activeTab === "sync" && (
               <SyncTab local={local} setLocal={setLocal} inputClass={inputClass} inputStyle={inputStyle} />
             )}
@@ -614,10 +621,7 @@ export function SettingsDialog() {
                 <h3 className="text-text-primary" style={{ fontSize: 16, fontWeight: 600, marginBottom: 20 }}>
                   Appearance
                 </h3>
-                <label
-                  className="flex items-start gap-3 cursor-pointer"
-                  style={{ marginBottom: 16 }}
-                >
+                <label className="settings-row cursor-pointer" style={{ marginBottom: 16 }}>
                   <input
                     type="checkbox"
                     checked={local.appearance?.show_excerpt_in_list ?? false}
@@ -630,8 +634,6 @@ export function SettingsDialog() {
                         },
                       })
                     }
-                    className="accent-accent flex-shrink-0"
-                    style={{ marginTop: 3 }}
                   />
                   <div>
                     <div className="text-text-primary" style={{ fontSize: 14, fontWeight: 500 }}>
@@ -650,20 +652,11 @@ export function SettingsDialog() {
 
         {/* Footer */}
         {updateSettings.error && <p role="alert" className="text-danger" style={{ padding: "8px 24px", fontSize: 13 }}>Could not save settings. Your edits are still here; try Save again.</p>}
-        <div className="flex justify-end gap-3 border-t border-white/5" style={{ padding: "14px 24px" }}>
-          <button
-            onClick={() => setShowSettings(false)}
-            className="text-text-secondary hover:text-text-primary rounded-xl hover:bg-white/5 transition-colors"
-            style={{ padding: "10px 20px", fontSize: 14 }}
-          >
+        <div className="flex justify-end gap-3 border-t border-white/5" style={{ padding: "12px 20px" }}>
+          <button onClick={() => setShowSettings(false)} className="settings-btn">
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            disabled={updateSettings.isPending}
-            className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors"
-            style={{ padding: "10px 24px", fontSize: 14 }}
-          >
+          <button onClick={handleSave} disabled={updateSettings.isPending} className="settings-btn settings-btn-primary">
             {updateSettings.isPending ? "Saving..." : "Save"}
           </button>
         </div>
@@ -755,8 +748,8 @@ function SyncTab({
               <button
                 onClick={handleLogin}
                 disabled={connecting}
-                className="bg-accent text-white rounded-xl hover:bg-accent-hover disabled:opacity-40 font-medium transition-colors flex items-center gap-2 w-fit"
-                style={{ padding: "10px 20px", fontSize: 13, marginBottom: 12 }}
+                className="settings-btn settings-btn-primary flex items-center gap-2 w-fit"
+                style={{ marginBottom: 12 }}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
@@ -832,7 +825,7 @@ function SyncTab({
         label="Story page size"
         description="How many stories the story page shows each day when AI is off. Changing this starts a brand-new edition for today with its own fresh completion state — it does not resize or reset today's edition you already have."
       >
-        <div className="inline-flex rounded-lg bg-white/5 border border-white/10" style={{ padding: 2 }}>
+        <div className="settings-segmented">
           {([5, 10, 20] as const).map((size) => (
             <button
               key={size}
@@ -846,9 +839,7 @@ function SyncTab({
                 })
               }
               className={`rounded-md transition-colors ${
-                local.sync.today_story_limit === size
-                  ? "bg-accent text-white"
-                  : "text-text-secondary hover:text-text-primary"
+                local.sync.today_story_limit === size ? "is-active" : ""
               }`}
               style={{ padding: "6px 18px", fontSize: 13, fontWeight: 500 }}
             >
@@ -861,15 +852,13 @@ function SyncTab({
         label="The Briefing covers"
         description="How many days of articles the AI reads for each edition of The Briefing. Each page turned goes back one more edition."
       >
-        <div className="inline-flex rounded-lg bg-white/5 border border-white/10" style={{ padding: 2 }}>
+        <div className="settings-segmented">
           {DISPATCH_DAY_CHOICES.map((days) => (
             <button
               key={days}
               onClick={() => setLocal({ ...local, sync: { ...local.sync, dispatch_days: days } })}
               className={`rounded-md transition-colors ${
-                dispatchDays(local.sync.dispatch_days) === days
-                  ? "bg-accent text-white"
-                  : "text-text-secondary hover:text-text-primary"
+                dispatchDays(local.sync.dispatch_days) === days ? "is-active" : ""
               }`}
               style={{ padding: "6px 14px", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap" }}
             >

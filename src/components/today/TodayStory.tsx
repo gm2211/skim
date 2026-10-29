@@ -1,9 +1,10 @@
-import { useId, useState, type CSSProperties } from "react";
+import { useId, useRef, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { IconButton, RefreshIcon } from "../common/IconButton";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import * as commands from "../../services/commands";
 import { ChatIcon } from "../ui/icons";
+import { ReaderSelectionAsk } from "../article/ReaderSelectionAsk";
 import type { TodayEditionItem, TodayEditionMemberArticle } from "../../services/types";
 import { firstSentence, isReadableExcerpt, themeColor, type StoryRank } from "../../lib/todayEdition";
 import "./TodayStorySkeleton.css";
@@ -16,6 +17,8 @@ interface Props {
   onOpenArticle: (articleId: string) => void;
   /** Opens a chat that reads this story's reports. */
   onAsk?: () => void;
+  /** Ask about a passage highlighted in the story. */
+  onAskAbout?: (text: string) => void;
   /** The story's AI summary is being written; its slot shimmers meanwhile. */
   isWritingSummary?: boolean;
 }
@@ -126,7 +129,7 @@ function ReportImage({ articleIds, title }: { articleIds: string[]; title: strin
 /** A report's own sentence, set large where a picture would otherwise go. */
 function PullQuote({ quote, source, large = false }: { quote: string; source?: string; large?: boolean }) {
   return (
-    <blockquote className={`today-pull-quote ${large ? "today-pull-quote--large" : ""}`}>
+    <blockquote className={`today-pull-quote selectable-text ${large ? "today-pull-quote--large" : ""}`}>
       <p>{quote}</p>
       {source && <cite>{source}</cite>}
     </blockquote>
@@ -141,8 +144,9 @@ function Figure({ value, label }: { value: string; label: string }) {
 const LEAD_SHORT_CHARS = 320;
 const LEAD_COLUMNS_MIN_CHARS = 260;
 
-export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onOpenArticle, onAsk, isWritingSummary = false }: Props) {
+export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onOpenArticle, onAsk, onAskAbout, isWritingSummary = false }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const storyRef = useRef<HTMLElement>(null);
   const referencesId = useId();
   // Every report remains available on request, including syndicated copies.
   // The collapsed newspaper presents the story once.
@@ -189,8 +193,8 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
   const short = lead && !isWritingSummary && body.length < LEAD_SHORT_CHARS && !quotes.length && !figure;
 
   return (
-    <article className={`story-rise-in today-story today-story--${rank} ${short ? "today-story--short" : ""} ${item.is_consumed ? "today-story--read" : ""}`}
-      style={accent ? { "--today-theme": accent } as CSSProperties : undefined}>
+    <article ref={storyRef} className={`story-rise-in today-story today-story--${rank} ${short ? "today-story--short" : ""} ${item.is_consumed ? "today-story--read" : ""}`}
+      style={{ position: "relative", ...(accent ? { "--today-theme": accent } as CSSProperties : {}) }}>
       {showsImage && <ReportImage key={imageArticleIds.join(",")} articleIds={imageArticleIds} title={item.snapshot_title} />}
       <div className="today-byline today-kicker">
         {kicker}
@@ -211,7 +215,7 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
       {/* A lead without a picture runs its lede in two columns, but only when
           there is enough of it: a short lede balanced across two columns can
           push the drop cap into the second one. */}
-      {body && <p className={`today-body text-text-primary ${lead ? "today-lead-summary" : ""} ${lead && body.length >= LEAD_COLUMNS_MIN_CHARS ? "today-body--columns" : ""}`}>{body}</p>}
+      {body && <p className={`today-body selectable-text text-text-primary ${lead ? "today-lead-summary" : ""} ${lead && body.length >= LEAD_COLUMNS_MIN_CHARS ? "today-body--columns" : ""}`}>{body}</p>}
       {lead && figure && <Figure value={figure.value} label={figure.label} />}
       {lead && quotes.length > 0 && (
         <div className="today-lead-quotes">
@@ -280,11 +284,12 @@ export function TodayStory({ item, rank, isSaving = false, onToggleConsumed, onO
           {members.map((member) => <div key={member.article_id}>
             <Reference member={member} onOpenArticle={onOpenArticle} />
             {item.editorial?.sources.filter((source) => source.article_id === member.article_id).map((source, index) => (
-              <blockquote className="today-evidence" key={index}>{source.quote}</blockquote>
+              <blockquote className="today-evidence selectable-text" key={index}>{source.quote}</blockquote>
             ))}
           </div>)}
         </div>
       )}
+      {onAskAbout && <ReaderSelectionAsk containerRef={storyRef} onAsk={onAskAbout} />}
     </article>
   );
 }

@@ -98,6 +98,14 @@ export const ShareIcon = (p: IconProps) => (
   </Icon>
 );
 
+/** Two stacked sheets: copy. */
+export const CopyIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="9" y="9" width="12" height="12" rx="2" />
+    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+  </Icon>
+);
+
 /** A bare tick: done. */
 export const TickIcon = (p: IconProps) => (
   <Icon {...p}>
@@ -214,6 +222,15 @@ export const ImportIcon = (p: IconProps) => (
   </Icon>
 );
 
+/** A magnifier over a page: deep research, which reads widely before it answers. */
+export const ResearchIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5M8 8h6M8 12h3" />
+    <circle cx="16.5" cy="15.5" r="3.5" />
+    <path d="M19 18l2.5 2.5" />
+  </Icon>
+);
+
 /** Three dots: the overflow menu that holds a toolbar's lesser actions. */
 export const MoreIcon = (p: IconProps) => (
   <Icon {...p}>
@@ -251,4 +268,5 @@ export const PALETTE_ICONS: Record<string, (p: IconProps) => ReactElement> = {
   eye: EyeIcon,
   import: ImportIcon,
   more: MoreIcon,
+  research: ResearchIcon,
 };

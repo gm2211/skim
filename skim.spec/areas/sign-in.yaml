@@ -83,7 +83,11 @@ behaviors:
       None of these papers offers a third-party sign-in API, so Skim opens the paper's own login page
       in an in-app browser (a Skim window on desktop, a WKWebView sheet on iOS) on the app's default
       WebKit data store. The window closes itself when the paper sends the reader on to its own
-      site; closing it by hand also ends the attempt. Skim reads the paper's cookies back and sends
+      site (any address change counts, not only a finished page load, and the paper's account
+      hosts such as accounts.wsj.com don't); closing it by hand while on the paper's site counts as
+      signed in too. Giulio's first WSJ sign-in on iOS reached wsj.com but still showed "Have a
+      subscription?" until he reopened and closed the sheet several times (2026-10-29), because iOS
+      only checked finished page loads and the WSJ homepage had not finished loading. Skim reads the paper's cookies back and sends
       them only with reader fetches of that paper's domains, and drops reader copies of that paper
       saved before the change. "Signed in" means the paper's login cookie is present (NYT-S, FTSession_s);
       for WSJ and the Post, whose login cookie Skim does not know, it means the sign-in reached the

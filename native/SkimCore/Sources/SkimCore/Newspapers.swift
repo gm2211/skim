@@ -43,11 +43,16 @@ public struct Newspaper: Identifiable, Hashable, Sendable {
     }
 
     /// True once the sign-in page has sent the reader on to the paper's own
-    /// site, which is where every paper lands a reader who signed in.
+    /// site, which is where every paper lands a reader who signed in. Its
+    /// account and login hosts (accounts.wsj.com, myaccount.nytimes.com) and
+    /// login-looking pages don't count; the bare domain and www do.
     public func finishedSignIn(at url: URL) -> Bool {
-        guard let host = url.host()?.lowercased(), host == site.host()?.lowercased() else { return false }
+        guard let host = url.host()?.lowercased(), owns(host: host) else { return false }
+        let labels = host.split(separator: ".").map(String.init)
+        let accountHosts = ["accounts", "account", "myaccount", "sso", "login", "auth", "id", "secure", "subscribe", "profile"]
+        if labels.contains(where: accountHosts.contains) { return false }
         let path = url.path().lowercased()
-        return !["login", "signin", "sign-in", "subscribe", "account", "auth", "register"].contains { path.contains($0) }
+        return !["login", "signin", "sign-in", "subscribe", "account", "auth", "register", "callback"].contains { path.contains($0) }
     }
 }
 

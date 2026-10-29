@@ -35,6 +35,12 @@ final class NewspaperAccounts: ObservableObject {
         }
         await forgetReaderCopies(of: paper, store: store)
         await refresh()
+        // WebKit can hand the sheet's last cookies to the store a moment after
+        // it closes, so look once more before settling on signed out.
+        if !signedIn.contains(paper.id) {
+            try? await Task.sleep(for: .seconds(1))
+            await refresh()
+        }
     }
 
     func signOut(_ paper: Newspaper, store: SkimStore) async {
@@ -63,70 +69,119 @@ final class NewspaperAccounts: ObservableObject {
     }
 }
 
+/// Tracks the sign-in browser's address. Sign-in is done once the paper sends
+/// the reader on to its own site, which some papers do with a script after the
+/// login form, so every address change counts, not just finished page loads.
+@MainActor
+final class NewspaperSignInBrowser: ObservableObject {
+    let paper: Newspaper
+    @Published private(set) var finished = false
+    private var observation: NSKeyValueObservation?
+
+    init(paper: Newspaper) {
+        self.paper = paper
+    }
+
+    func attach(_ webView: WKWebView) {
+        observation = webView.observe(\.url, options: [.new]) { [weak self] webView, _ in
+            let url = webView.url
+            Task { @MainActor in self?.saw(url) }
+        }
+    }
+
+    func saw(_ url: URL?) {
+        guard !finished, let url, paper.finishedSignIn(at: url) else { return }
+        finished = true
+    }
+}
+
 /// The paper's own login page, in Skim. It closes itself once the paper sends
-/// the reader on to its site.
+/// the reader on to its site; closing it there by hand counts as signed in too.
 struct NewspaperSignInSheet: View {
     let paper: Newspaper
     let onEnd: (_ finished: Bool) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var finished = false
+    @StateObject private var browser: NewspaperSignInBrowser
+
+    init(paper: Newspaper, onEnd: @escaping (_ finished: Bool) -> Void) {
+        self.paper = paper
+        self.onEnd = onEnd
+        _browser = StateObject(wrappedValue: NewspaperSignInBrowser(paper: paper))
+    }
 
     var body: some View {
         NavigationStack {
-            NewspaperSignInWebView(paper: paper) {
-                guard !finished else { return }
-                finished = true
-                // Let the site finish setting its cookies before closing.
-                Task {
-                    try? await Task.sleep(for: .milliseconds(1500))
-                    dismiss()
+            NewspaperSignInWebView(paper: paper, browser: browser)
+                .ignoresSafeArea(edges: .bottom)
+                .navigationTitle(paper.name)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
                 }
-            }
-            .ignoresSafeArea(edges: .bottom)
-            .navigationTitle(paper.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
+        }
+        .onChange(of: browser.finished) { _, finished in
+            guard finished else { return }
+            // Let the site finish setting its cookies before closing.
+            Task {
+                try? await Task.sleep(for: .milliseconds(1500))
+                dismiss()
             }
         }
-        .onDisappear { onEnd(finished) }
+        .onDisappear { onEnd(browser.finished) }
     }
 }
 
 private struct NewspaperSignInWebView: UIViewRepresentable {
     let paper: Newspaper
-    let onFinished: () -> Void
+    let browser: NewspaperSignInBrowser
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
+        webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
+        browser.attach(webView)
         if let url = paper.signIn {
             webView.load(URLRequest(url: url))
         }
         return webView
     }
 
-    func updateUIView(_ webView: WKWebView, context: Context) {
-        context.coordinator.parent = self
-    }
+    func updateUIView(_ webView: WKWebView, context: Context) {}
 
-    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+    func makeCoordinator() -> Coordinator { Coordinator(browser: browser) }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
-        var parent: NewspaperSignInWebView
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+        let browser: NewspaperSignInBrowser
 
-        init(parent: NewspaperSignInWebView) {
-            self.parent = parent
+        init(browser: NewspaperSignInBrowser) {
+            self.browser = browser
+        }
+
+        func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+            browser.saw(webView.url)
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            guard let url = webView.url, parent.paper.finishedSignIn(at: url) else { return }
-            parent.onFinished()
+            browser.saw(webView.url)
+        }
+
+        /// "Sign in with Google/Apple" and similar buttons open a new window,
+        /// which a bare WKWebView drops. Load it in place instead.
+        func webView(
+            _ webView: WKWebView,
+            createWebViewWith configuration: WKWebViewConfiguration,
+            for navigationAction: WKNavigationAction,
+            windowFeatures: WKWindowFeatures
+        ) -> WKWebView? {
+            if navigationAction.targetFrame == nil {
+                webView.load(navigationAction.request)
+            }
+            return nil
         }
     }
 }

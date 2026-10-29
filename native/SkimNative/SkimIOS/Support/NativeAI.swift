@@ -4039,7 +4039,9 @@ struct AIChatSheet: View {
             VStack(spacing: 0) {
                 ScrollViewReader { proxy in
                     ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 14) {
+                        // Eager, not lazy: a lazy stack scrolls by estimated row heights,
+                        // so jumping to a long pasted question overshoots into blank space.
+                        VStack(alignment: .leading, spacing: 14) {
                             if messages.isEmpty {
                                 // Centered in the visible space above the input bar, so the
                                 // hint stays in view when the keyboard shrinks the sheet;
@@ -4111,11 +4113,9 @@ struct AIChatSheet: View {
                     .onChange(of: messages.last?.id) { _, _ in
                         scrollToLatest(proxy)
                     }
-                    .onChange(of: isSending) { _, sending in
-                        if sending { scrollToLatest(proxy) }
-                    }
                     .onChange(of: researchSteps.count) { _, _ in
-                        if isSending { scrollToLatest(proxy) }
+                        guard isSending else { return }
+                        withAnimation(.smooth(duration: 0.22)) { proxy.scrollTo(bottomAnchorID, anchor: .bottom) }
                     }
                     // Keep a queued question in view above the keyboard while it's edited.
                     .onChange(of: editingQueuedID) { _, id in
@@ -4287,19 +4287,15 @@ struct AIChatSheet: View {
         messages = [AIChatMessage(role: .assistant, text: seed)]
     }
 
-    /// A new answer is scrolled so its first line sits at the top, so the
-    /// reader starts at the beginning instead of the end of a long reply.
-    /// A question (and the "Thinking..." row) scrolls to the bottom.
+    /// The newest message, question or answer, is scrolled so its first line
+    /// sits at the top: the reader starts a long reply at its beginning, and a
+    /// long pasted question stays in view with "Thinking..." right below it.
     private func scrollToLatest(_ proxy: ScrollViewProxy) {
-        let answerID = messages.last.flatMap { $0.role == .assistant ? $0.id : nil }
+        guard let latestID = messages.last?.id else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(80))
             withAnimation(.smooth(duration: 0.22)) {
-                if let answerID {
-                    proxy.scrollTo(answerID, anchor: .top)
-                } else {
-                    proxy.scrollTo(bottomAnchorID, anchor: .bottom)
-                }
+                proxy.scrollTo(latestID, anchor: .top)
             }
         }
     }

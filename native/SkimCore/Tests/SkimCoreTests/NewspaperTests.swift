@@ -50,6 +50,13 @@ struct NewspaperTests {
         let wsj = try catalog().newspapers.first { $0.id == "wsj" }!
         #expect(!wsj.finishedSignIn(at: URL(string: "https://accounts.wsj.com/login")!))
         #expect(!wsj.finishedSignIn(at: URL(string: "https://www.wsj.com/client/login")!))
+        #expect(!wsj.finishedSignIn(at: URL(string: "https://sso.accounts.dowjones.com/authorize")!))
+        #expect(!wsj.finishedSignIn(at: URL(string: "https://www.wsj.com/client/auth?code=1")!))
         #expect(wsj.finishedSignIn(at: URL(string: "https://www.wsj.com/")!))
+        #expect(wsj.finishedSignIn(at: URL(string: "https://wsj.com/?mod=login")!))
+        #expect(wsj.finishedSignIn(at: URL(string: "https://www.wsj.com/news/world")!))
+        let nyt = try catalog().newspapers.first { $0.id == "nyt" }!
+        #expect(!nyt.finishedSignIn(at: URL(string: "https://myaccount.nytimes.com/auth/login")!))
+        #expect(nyt.finishedSignIn(at: URL(string: "https://www.nytimes.com/")!))
     }
 }

@@ -253,12 +253,17 @@ fn paper_by_id(id: &str) -> Result<&'static Newspaper, String> {
 /// own site, which is where every paper sends a reader who signed in.
 fn finished_sign_in(paper: &Newspaper, url: &url::Url) -> bool {
     let Some(host) = url.host_str() else { return false };
-    let site_host = url::Url::parse(&paper.site).ok().and_then(|u| u.host_str().map(str::to_string));
-    if site_host.as_deref() != Some(host) {
+    let host = host.to_ascii_lowercase();
+    if !paper.domains.iter().any(|d| host_matches(&host, d)) {
+        return false;
+    }
+    // The paper's account and login hosts (accounts.wsj.com) don't count.
+    const ACCOUNT_HOSTS: [&str; 10] = ["accounts", "account", "myaccount", "sso", "login", "auth", "id", "secure", "subscribe", "profile"];
+    if host.split('.').any(|label| ACCOUNT_HOSTS.contains(&label)) {
         return false;
     }
     let path = url.path().to_ascii_lowercase();
-    !["login", "signin", "sign-in", "subscribe", "account", "auth", "register"]
+    !["login", "signin", "sign-in", "subscribe", "account", "auth", "register", "callback"]
         .iter()
         .any(|word| path.contains(word))
 }
@@ -409,7 +414,9 @@ mod tests {
         assert!(!at("https://accounts.wsj.com/login"));
         assert!(!at("https://sso.accounts.dowjones.com/login-page?x=1"));
         assert!(!at("https://www.wsj.com/client/login"));
+        assert!(!at("https://www.wsj.com/client/auth?code=1"));
         assert!(at("https://www.wsj.com/"));
+        assert!(at("https://wsj.com/?mod=login"));
         assert!(at("https://www.wsj.com/news/world"));
     }
 }

@@ -21,10 +21,10 @@ struct AIInboxView: View {
     @EnvironmentObject private var model: AppModel
     var onSummarize: (Article) -> Void = { _ in }
 
-    /// Most articles rated per visit, so a big backlog doesn't stall the page.
-    private static let ratingsPerVisit = 60
-
     @State private var items: [InboxRankedArticle] = []
+    /// The unread articles last loaded, newest first, so re-ranking after a
+    /// rated batch doesn't reload the whole window from the store.
+    @State private var candidates: [Article] = []
     @State private var isLoading = true
     @State private var ratingStatus: String?
     @State private var errorMessage: String?
@@ -118,6 +118,20 @@ struct AIInboxView: View {
                     .tint(SkimStyle.secondary)
                 }
             }
+
+            if let note = InboxRatingQueue.windowNote(loaded: candidates.count, unread: model.currentUnreadCount) {
+                Text(note)
+                    .font(.system(size: 13))
+                    .foregroundStyle(SkimStyle.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 64)
+                    .padding(.trailing, 18)
+                    .padding(.vertical, 16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(SkimStyle.chrome)
+                    .listRowSeparator(.hidden)
+            }
         }
         .listStyle(.plain)
         .scrollDismissesKeyboard(.immediately)
@@ -127,15 +141,20 @@ struct AIInboxView: View {
 
     private func dismissArticle(_ article: Article) {
         withAnimation { items.removeAll { $0.id == article.id } }
+        candidates.removeAll { $0.id == article.id }
         Task { await model.dismissFromInbox(article) }
     }
 
     // MARK: Ranking
 
     /// Rank unread articles from stored ratings and current taste; no AI call.
-    private func rank() async {
+    /// `reload` re-reads the unread window from the store; without it the
+    /// articles already loaded are re-ordered with their new ratings.
+    private func rank(reload: Bool = true) async {
         do {
-            let candidates = try await model.inboxCandidates()
+            if reload || candidates.isEmpty {
+                candidates = try await model.inboxCandidates(limit: InboxRatingQueue.window)
+            }
             let starred = await model.starredForTaste()
             let taste = model.tasteStore.inboxTaste(starred: starred)
             let strength = taste.strength
@@ -163,7 +182,8 @@ struct AIInboxView: View {
         isLoading = false
     }
 
-    /// Rate unrated unread articles in small batches, re-ranking after each.
+    /// Rate unrated unread articles in small batches, newest first, re-ranking
+    /// as ratings come in.
     private func rateNewArticles(rerateAll: Bool = false) async {
         ratingTask?.cancel()
         let task = Task { await performRating(rerateAll: rerateAll) }
@@ -180,11 +200,9 @@ struct AIInboxView: View {
         }
         guard AIBootDisclaimerView.isAccepted else { return }
 
-        var pending = items.map(\.article)
-        if !rerateAll {
-            pending = pending.filter { model.inboxScores.score(for: $0.id) == nil }
+        let pending = InboxRatingQueue.pending(candidates, rerateAll: rerateAll) {
+            model.inboxScores.score(for: $0) != nil
         }
-        pending = Array(pending.prefix(Self.ratingsPerVisit))
         guard !pending.isEmpty else { return }
 
         let provider = model.settings.ai.provider
@@ -203,11 +221,18 @@ struct AIInboxView: View {
         var rated = 0
         var unrated = 0
         var firstError: Error?
+        var failedInARow = 0
+        var batchIndex = 0
         defer { ratingStatus = nil }
         for start in stride(from: 0, to: pending.count, by: batchSize) {
             guard !Task.isCancelled else { return }
+            // A provider that keeps failing (rate-limited, signed out, down)
+            // won't recover mid-run; stop rather than spend the rest of the
+            // backlog's requests against it.
+            if failedInARow >= InboxRatingQueue.maxFailedBatchesInARow { break }
             let batch = Array(pending[start..<min(start + batchSize, pending.count)])
-            ratingStatus = "Rating \(rated + unrated + 1)–\(rated + unrated + batch.count) of \(pending.count)…"
+            ratingStatus = InboxRatingQueue.status(done: rated + unrated, batch: batch.count, unrated: pending.count)
+            let ratedBefore = rated
             // A batch that fails is retried as two halves, so one bad response
             // costs at most that batch, never the rest of the visit.
             var parts: [(articles: [Article], canSplit: Bool)] = [(batch, true)]
@@ -219,7 +244,6 @@ struct AIInboxView: View {
                     store(ratings, for: part)
                     rated += ratings.count
                     unrated += part.count - ratings.count
-                    await rank()
                 } catch {
                     if Task.isCancelled { return }
                     if canSplit, part.count > 1 {
@@ -231,11 +255,21 @@ struct AIInboxView: View {
                     }
                 }
             }
+            failedInARow = rated > ratedBefore ? 0 : failedInARow + 1
+            // Re-order early so the newest show up ranked fast, then every few
+            // batches so a long backlog doesn't keep reshuffling the list.
+            if rated > ratedBefore, InboxRatingQueue.shouldReRank(afterBatch: batchIndex) {
+                await rank(reload: false)
+            }
+            batchIndex += 1
         }
+        await rank(reload: false)
+        let left = pending.count - rated
         if let firstError, rated == 0 {
             errorMessage = NativeAI.userFacingMessage(firstError)
-        } else if unrated > 0 {
-            errorMessage = "Rated \(rated) of \(pending.count). The rest stay ranked by what you read; rate again to retry them."
+        } else if left > 0 {
+            let reason = firstError.map { " " + NativeAI.userFacingMessage($0) } ?? ""
+            errorMessage = "Rated \(rated) of \(pending.count) unrated articles.\(reason) The rest stay ranked by what you read; pull to refresh to rate them."
         }
     }
 
@@ -248,5 +282,42 @@ struct AIInboxView: View {
                 reason: rating.reason, scoredAt: now)
         }
         model.inboxScores.set(stored)
+    }
+}
+
+// MARK: - Rating queue
+
+/// What smart sort loads and how it works through the unrated backlog. Pure,
+/// so the choices are testable without a model.
+enum InboxRatingQueue {
+    /// Most unread articles smart sort loads, ranks and rates: the newest
+    /// ones, matching desktop's per-run triage cap.
+    static let window = 1_000
+    /// Batches that rate nothing, back to back, before a run gives up.
+    static let maxFailedBatchesInARow = 2
+
+    /// Articles still to rate, newest first, so a backlog rates what's fresh
+    /// before what's old.
+    static func pending(_ articles: [Article], rerateAll: Bool = false, isRated: (String) -> Bool) -> [Article] {
+        let todo = rerateAll ? articles : articles.filter { !isRated($0.id) }
+        return todo.sorted { ($0.publishedAt ?? $0.fetchedAt) > ($1.publishedAt ?? $1.fetchedAt) }
+    }
+
+    /// "Rating 21–40 of 940 unrated…": the count is every unrated article
+    /// being worked through, not a per-visit slice.
+    static func status(done: Int, batch: Int, unrated: Int) -> String {
+        "Rating \((done + 1).formatted())–\((done + batch).formatted()) of \(unrated.formatted()) unrated…"
+    }
+
+    /// Re-rank after the first two batches, then every fifth.
+    static func shouldReRank(afterBatch index: Int) -> Bool {
+        index < 2 || (index + 1) % 5 == 0
+    }
+
+    /// Says so when the list holds fewer articles than are unread, so a
+    /// 6,024 unread title over a shorter list isn't a mystery.
+    static func windowNote(loaded: Int, unread: Int) -> String? {
+        guard loaded > 0, unread > loaded else { return nil }
+        return "Smart sort ranks your \(loaded.formatted()) newest unread articles. Turn it off to see all \(unread.formatted())."
     }
 }
